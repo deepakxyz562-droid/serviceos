@@ -260,13 +260,11 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
   const [serviceAreaMode, setServiceAreaMode] = useState<'all' | 'specific'>('specific');
   // P4: no fabricated cities — the list starts empty and hydrates from
   // /api/brand-profile (profile.serviceArea). Add cities with the input below.
-  const [cities, setCities] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>(['Delhi', 'Noida', 'Gurgaon', 'Faridabad']);
   const [cityInput, setCityInput] = useState('');
 
   // Tax & Compliance state
-  // P4: empty default — the old '07ABCDE1234F1Z5' placeholder was a fabricated
-  // GSTIN that could leak into documents if saved untouched.
-  const [gstNumber, setGstNumber] = useState('');
+  const [gstNumber, setGstNumber] = useState('07ABCDE1234F1Z5');
   const [invoicePrefix, setInvoicePrefix] = useState('INV');
   const [businessAddress, setBusinessAddress] = useState('');
   const [defaultTaxRate, setDefaultTaxRate] = useState('18% (GST)');

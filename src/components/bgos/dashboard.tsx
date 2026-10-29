@@ -314,8 +314,17 @@ export function BgosDashboard({ initialTasks, initialActivities, isDemo: isDemoP
     rating: '0.0',
     count: 0,
   });
+const DEMO_SOURCE_BREAKDOWN = [
+  { name: 'Website', pct: '38%', color: 'bg-teal-500', stroke: '#14B8A6', count: 38 },
+  { name: 'Google Business', pct: '28%', color: 'bg-blue-500', stroke: '#3B82F6', count: 28 },
+  { name: 'Social Media', pct: '18%', color: 'bg-purple-500', stroke: '#A855F7', count: 18 },
+  { name: 'Referral', pct: '16%', color: 'bg-amber-500', stroke: '#F59E0B', count: 16 },
+];
+
   const [upcomingAppointments, setUpcomingAppointments] = useState<any[]>([]);
-  const [sourceBreakdown, setSourceBreakdown] = useState<Array<{ name: string; pct: string; color: string; stroke: string; count: number }>>([]);
+  const [sourceBreakdown, setSourceBreakdown] = useState<Array<{ name: string; pct: string; color: string; stroke: string; count: number }>>(
+    isDemo ? DEMO_SOURCE_BREAKDOWN : []
+  );
 
   React.useEffect(() => {
     let mounted = true;

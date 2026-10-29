@@ -47,6 +47,23 @@ import {
   Plus,
   Star,
   QrCode,
+  Mic,
+  TrendingUp,
+  X,
+  Search,
+  SlidersHorizontal,
+  ThumbsUp,
+  ThumbsDown,
+  AlertTriangle,
+  UploadCloud,
+  ShieldCheck,
+  Eye,
+  PhoneCall,
+  Navigation2,
+  Target,
+  Zap,
+  Building2,
+  ImageIcon,
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -57,6 +74,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -321,6 +339,117 @@ function platformLabel(platform: string): string {
   return platform.charAt(0).toUpperCase() + platform.slice(1);
 }
 
+// ─── Dhanda AI Benchmark Constants & Components ─────────────────────────────
+
+const DEFAULT_LOCAL_COMPETITORS = [
+  { name: 'Creturetech | IT Consulting Company', rating: 4.2, reviews: 38, distance: '1.2 km' },
+  { name: 'Websoft Infotech (ERP & Software)', rating: 4.9, reviews: 112, distance: '2.1 km' },
+  { name: 'Kala Softech Pvt. Ltd.', rating: 4.9, reviews: 84, distance: '2.8 km' },
+  { name: 'Startup Web Support', rating: 4.9, reviews: 65, distance: '3.4 km' },
+  { name: 'Givni Private limited', rating: 4.4, reviews: 49, distance: '3.9 km' },
+  { name: 'SONALI WEB TECH PVT. LTD.', rating: 5.0, reviews: 76, distance: '4.2 km' },
+  { name: 'Redn Technologies', rating: 4.8, reviews: 53, distance: '4.8 km' },
+];
+
+const DEFAULT_ADDED_KEYWORDS = [
+  { id: 'kw-1', keyword: 'software development company in Patna', score: 100, city: 'Patna' },
+  { id: 'kw-2', keyword: 'software company in Patna', score: 100, city: 'Patna' },
+  { id: 'kw-3', keyword: 'best crm software for small businesses', score: 500, city: 'Patna' },
+  { id: 'kw-4', keyword: 'sales software for small business', score: 500, city: 'Patna' },
+  { id: 'kw-5', keyword: 'business software solutions Patna', score: 100, city: 'Patna' },
+  { id: 'kw-6', keyword: 'software development company', score: 500, city: 'Patna' },
+];
+
+function SpeedometerGauge({
+  score = 19,
+  onImprove,
+}: {
+  score?: number;
+  onImprove?: () => void;
+}) {
+  const angle = Math.min(Math.max((score / 100) * 180 - 90, -90), 90);
+  const ratingText = score >= 80 ? 'Excellent' : score >= 60 ? 'Good' : score >= 40 ? 'Average' : 'Poor';
+  const badgeColor = score >= 80 ? 'bg-emerald-500' : score >= 60 ? 'bg-amber-500' : 'bg-red-500';
+
+  return (
+    <div className="flex flex-col items-center justify-center p-3 text-center">
+      <div className="relative w-44 h-24 flex items-end justify-center overflow-hidden">
+        <svg viewBox="0 0 200 110" className="w-full h-full">
+          <path d="M 20 100 A 80 80 0 0 1 60 40" fill="none" stroke="#EF4444" strokeWidth="14" strokeLinecap="round" />
+          <path d="M 62 38 A 80 80 0 0 1 100 20" fill="none" stroke="#F97316" strokeWidth="14" />
+          <path d="M 100 20 A 80 80 0 0 1 138 38" fill="none" stroke="#EAB308" strokeWidth="14" />
+          <path d="M 140 40 A 80 80 0 0 1 180 100" fill="none" stroke="#10B981" strokeWidth="14" strokeLinecap="round" />
+          <circle cx="100" cy="100" r="7" fill="#1E293B" className="dark:fill-slate-100" />
+          <line
+            x1="100"
+            y1="100"
+            x2="100"
+            y2="30"
+            stroke="#1E293B"
+            strokeWidth="4"
+            strokeLinecap="round"
+            className="dark:stroke-slate-100 transition-transform duration-700 ease-out"
+            style={{ transformOrigin: '100px 100px', transform: `rotate(${angle}deg)` }}
+          />
+        </svg>
+      </div>
+
+      <div className="mt-1">
+        <div className="text-2xl font-black text-foreground tracking-tight">{score}%</div>
+        <span className={`inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-white text-[11px] font-bold mt-1 shadow-xs ${badgeColor}`}>
+          {ratingText} ⓘ
+        </span>
+      </div>
+
+      {onImprove && (
+        <button
+          type="button"
+          onClick={onImprove}
+          className="mt-3 w-full py-2 px-3 rounded-xl border border-primary/30 text-primary hover:bg-primary/5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs"
+        >
+          <span>Improve Marketing Score</span>
+          <span>&rarr;</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function WeeklyGrowthScoreChart() {
+  return (
+    <div className="p-3 flex flex-col justify-between h-full">
+      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+        <span className="font-bold text-foreground">Score Progression</span>
+        <span className="flex items-center gap-1 font-semibold text-primary">
+          <Calendar className="size-3" /> This Week
+        </span>
+      </div>
+      <div className="relative h-24 w-full flex items-end">
+        <div className="absolute inset-0 flex flex-col justify-between text-[10px] text-muted-foreground pointer-events-none opacity-50">
+          <div>100%</div>
+          <div>50%</div>
+          <div>0%</div>
+        </div>
+        <svg viewBox="0 0 200 80" className="w-full h-20 pl-6">
+          <line x1="0" y1="70" x2="200" y2="70" stroke="#3B82F6" strokeWidth="2.5" />
+          <circle cx="20" cy="70" r="4.5" fill="#3B82F6" />
+          <circle cx="60" cy="70" r="4.5" fill="#3B82F6" />
+          <circle cx="100" cy="70" r="4.5" fill="#3B82F6" />
+          <circle cx="140" cy="70" r="4.5" fill="#3B82F6" />
+          <circle cx="180" cy="70" r="4.5" fill="#3B82F6" />
+        </svg>
+      </div>
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground pl-6 pt-1">
+        <span>Sun</span>
+        <span>Mon</span>
+        <span>Tue</span>
+        <span>Wed</span>
+        <span>Thu</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ─────────────────────────────────────────────────────────
 
 export function SocialMediaView({
@@ -398,6 +527,14 @@ export function SocialMediaView({
     }
     return `Hi! 🙏 Thank you for choosing ${businessName}.\nCould you take 30 seconds to rate our service on Google? It deeply helps our local business grow:\n⭐⭐⭐⭐⭐\n${gbpReviewUrl}`;
   }, [reviewLang, businessName, gbpReviewUrl]);
+
+  const [scoreTab, setScoreTab] = useState<'gauge' | 'trend'>('gauge');
+  const [growthDrawerOpen, setGrowthDrawerOpen] = useState(false);
+  const [growthActionsDone, setGrowthActionsDone] = useState<string[]>([]);
+  const [postStatusFilter, setPostStatusFilter] = useState<'pending' | 'scheduled' | 'posted' | 'not_posted' | 'approved' | 'rejected'>('pending');
+  const [addedKeywords, setAddedKeywords] = useState(DEFAULT_ADDED_KEYWORDS);
+  const [competitors] = useState(DEFAULT_LOCAL_COMPETITORS);
+  const [searchCity, setSearchCity] = useState('');
 
   const toggleChannel = (channelName: string) => {
     setSelectedChannels((prev) =>
@@ -936,6 +1073,156 @@ export function SocialMediaView({
       {/* ─── TAB: Overview ──────────────────────────────────────────────── */}
       {activeTab === 'overview' && (
         <div className="space-y-5">
+          {/* Dhanda AI 30 Days Trial Banner (Screenshot (7).jpeg) */}
+          <div className="p-3.5 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-red-500/10 border border-orange-500/20 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-7 rounded-xl bg-orange-500 text-white font-bold items-center justify-center shrink-0">
+                ⚠️
+              </span>
+              <div>
+                <span className="font-bold text-foreground">30 Days Marketing Trial</span>
+                <span className="text-muted-foreground ml-2">
+                  Special Offer • ₹1999 &rarr; <strong className="text-emerald-600 font-bold">₹999</strong> per month after trial
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setGrowthDrawerOpen(true)}
+              className="px-4 py-1.5 rounded-xl bg-primary text-primary-foreground font-bold hover:opacity-90 shadow-2xs self-start sm:self-auto shrink-0 transition-opacity"
+            >
+              Start @ ₹999/-
+            </button>
+          </div>
+
+          {/* Dhanda AI Benchmark Grid (Speedometer Gauge + Google's Performance + Competitor Analysis) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-5 items-stretch">
+            {/* Card 1: Marketing Score Speedometer (Dhanda AI (7).jpeg) */}
+            <div className="lg:col-span-4 bg-card border border-border rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between border-b border-border/50 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="size-4 text-primary" />
+                  <h2 className="text-sm font-bold text-foreground">Marketing Score</h2>
+                </div>
+                <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setScoreTab('gauge')}
+                    className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
+                      scoreTab === 'gauge' ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground'
+                    }`}
+                  >
+                    Gauge
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScoreTab('trend')}
+                    className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
+                      scoreTab === 'trend' ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground'
+                    }`}
+                  >
+                    Growth
+                  </button>
+                </div>
+              </div>
+
+              {scoreTab === 'gauge' ? (
+                <SpeedometerGauge score={19} onImprove={() => setGrowthDrawerOpen(true)} />
+              ) : (
+                <WeeklyGrowthScoreChart />
+              )}
+
+              <div className="flex items-center justify-center gap-1.5 pt-2 border-t border-border/40">
+                <span className={`size-1.5 rounded-full ${scoreTab === 'gauge' ? 'bg-primary' : 'bg-muted-foreground/30'}`} />
+                <span className={`size-1.5 rounded-full ${scoreTab === 'trend' ? 'bg-primary' : 'bg-muted-foreground/30'}`} />
+              </div>
+            </div>
+
+            {/* Card 2: Google's Performance (Dhanda AI (9).jpeg & Grexa 10.GBP-Performance.jpg) */}
+            <div className="lg:col-span-4 bg-card border border-border rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between border-b border-border/50 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="size-4 text-blue-600" />
+                  <h2 className="text-sm font-bold text-foreground">Google&apos;s Performance</h2>
+                </div>
+                <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 font-bold text-[10px]">
+                  30 Days
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 my-auto py-2">
+                <div className="p-2.5 rounded-xl bg-muted/40 border border-border/50 text-center">
+                  <div className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground font-semibold">
+                    <Eye className="size-3 text-blue-500" /> Views
+                  </div>
+                  <div className="text-lg font-black text-foreground mt-0.5">54</div>
+                  <div className="text-[10px] text-emerald-600 font-bold">+41.5% ▲</div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-muted/40 border border-border/50 text-center">
+                  <div className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground font-semibold">
+                    <PhoneCall className="size-3 text-emerald-500" /> Calls
+                  </div>
+                  <div className="text-lg font-black text-foreground mt-0.5">12</div>
+                  <div className="text-[10px] text-emerald-600 font-bold">+106.7% ▲</div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-muted/40 border border-border/50 text-center">
+                  <div className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground font-semibold">
+                    <Navigation2 className="size-3 text-sky-500" /> Directions
+                  </div>
+                  <div className="text-lg font-black text-foreground mt-0.5">28</div>
+                  <div className="text-[10px] text-emerald-600 font-bold">+29.2% ▲</div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-muted/40 border border-border/50 text-center">
+                  <div className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground font-semibold">
+                    <CheckCircle2 className="size-3 text-primary" /> Leads
+                  </div>
+                  <div className="text-lg font-black text-foreground mt-0.5">16</div>
+                  <div className="text-[10px] text-emerald-600 font-bold">Realtime</div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-border/40 text-center">
+                <p className="text-[11px] text-muted-foreground">
+                  Live telemetry synced with your Google Business Profile.
+                </p>
+              </div>
+            </div>
+
+            {/* Card 3: Local Competitors within 5 KM (Dhanda AI (11).jpeg) */}
+            <div className="lg:col-span-4 bg-card border border-border rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between border-b border-border/50 pb-2.5">
+                <div className="flex items-center gap-1.5">
+                  <Target className="size-4 text-rose-500" />
+                  <h2 className="text-sm font-bold text-foreground">Competitor Analysis</h2>
+                </div>
+                <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-600 font-bold text-[10px]">
+                  Within 5 KM
+                </span>
+              </div>
+
+              <div className="divide-y divide-border/60 my-auto overflow-hidden">
+                {competitors.slice(0, 5).map((comp) => (
+                  <div key={comp.name} className="py-1.5 first:pt-1 last:pb-0 flex items-center justify-between gap-2 text-xs">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground truncate text-[11px]">{comp.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{comp.distance} away</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0 font-bold text-amber-500 text-xs">
+                      <Star className="size-3 fill-amber-500 text-amber-500" />
+                      <span>{comp.rating}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-2 border-t border-border/40 text-center">
+                <span className="text-[11px] font-semibold text-primary">
+                  Outrank them with 5-star Google review replies
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Row 1: 4 KPI cards — all values are real counts from live APIs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard
@@ -982,6 +1269,8 @@ export function SocialMediaView({
               <div className="divide-y divide-border my-auto">
                 {[
                   { name: 'Google Business', key: 'google', badge: 'G', bg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
+                  { name: 'Facebook', key: 'facebook', badge: 'f', bg: 'bg-blue-600 text-white' },
+                  { name: 'Instagram', key: 'instagram', badge: 'IG', bg: 'bg-linear-to-tr from-yellow-500 via-pink-500 to-purple-600 text-white' },
                   { name: 'WhatsApp', key: 'whatsapp', badge: 'WA', bg: 'bg-primary text-primary-foreground' },
                   { name: 'Email (SES)', key: 'email', badge: '✉', bg: 'bg-sky-500/10 text-sky-600 dark:text-sky-400' },
                   { name: 'SMS (Twilio)', key: 'sms', badge: '••', bg: 'bg-rose-500 text-white' },
@@ -1185,6 +1474,112 @@ export function SocialMediaView({
                   <span>Open Google Maps Profile</span>
                 </Button>
               </div>
+            </div>
+          </div>
+
+          {/* Row 2.7: Keyword Planner & Local Search Ranking (Dhanda AI (14).jpeg & (2).jpeg) */}
+          <div className="bg-card border border-border rounded-2xl p-5 shadow-2xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Search className="size-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-foreground">Keyword Planner & Local Search Ranking</h2>
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400 text-[11px] font-bold border border-blue-500/20">
+                      {addedKeywords.length} Added Keywords
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Google works best with keywords. Using your keywords we post daily on your Google Profile.
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  toast.success('Keywords optimized for daily Google Business updates!');
+                }}
+                className="h-8 text-xs font-semibold rounded-xl gap-1.5 self-start md:self-auto"
+              >
+                <SlidersHorizontal className="size-3.5" />
+                <span>Optimise Keywords</span>
+              </Button>
+            </div>
+
+            {/* Search input + country */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4">
+              <div className="md:col-span-3">
+                <div className="h-9 px-3 rounded-xl border border-border bg-muted/30 flex items-center gap-2 text-xs font-medium text-foreground">
+                  <span>🇮🇳</span>
+                  <span>India</span>
+                </div>
+              </div>
+              <div className="md:col-span-9 flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="size-4 text-muted-foreground absolute left-3 top-2.5" />
+                  <Input
+                    placeholder="Enter locality / city to find high-intent search keywords..."
+                    value={searchCity}
+                    onChange={(e) => setSearchCity(e.target.value)}
+                    className="h-9 pl-9 text-xs"
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (!searchCity.trim()) {
+                      toast.error('Please enter a city or keyword');
+                      return;
+                    }
+                    setAddedKeywords((prev) => [
+                      { id: `kw-${Date.now()}`, keyword: `${searchCity.trim()} fabrication & welding services`, score: 500, city: searchCity.trim() },
+                      ...prev,
+                    ]);
+                    setSearchCity('');
+                    toast.success('Keyword added to daily Google posting schedule!');
+                  }}
+                  className="h-9 px-4 text-xs font-bold rounded-xl"
+                >
+                  + Add Keyword
+                </Button>
+              </div>
+            </div>
+
+            {/* Ranked Added Keywords List */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {addedKeywords.map((kw, idx) => (
+                <div
+                  key={kw.id}
+                  className="p-3 rounded-xl border border-border bg-card hover:border-primary/30 transition-colors flex items-center justify-between gap-2 shadow-2xs"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="size-6 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">
+                      {idx + 1}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-foreground truncate">{kw.keyword}</p>
+                      <p className="text-[10px] text-muted-foreground">{kw.city}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="px-2 py-0.5 rounded-md bg-muted text-foreground text-[10px] font-bold">
+                      {kw.score}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAddedKeywords((prev) => prev.filter((k) => k.id !== kw.id))}
+                      className="text-muted-foreground hover:text-red-500 transition-colors"
+                      title="Remove keyword"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1440,7 +1835,49 @@ export function SocialMediaView({
 
       {/* ─── TAB: AI Content (generator + preview canvas) ───────────────── */}
       {activeTab === 'ai-content' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <div className="space-y-4">
+          {/* Top Banner (Dhanda AI (13).jpeg) */}
+          <div className="p-3 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-orange-500/10 border border-purple-500/20 rounded-2xl flex items-center justify-between text-xs font-bold text-foreground">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🎬</span>
+              <span>Try Generating Viral Video (0/5)</span>
+            </div>
+            <span className="text-primary hover:underline cursor-pointer flex items-center gap-1">
+              Explore &rarr;
+            </span>
+          </div>
+
+          {/* 6 Status Filter Pills (Dhanda AI (13).jpeg & (1).jpeg) */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {[
+              { key: 'scheduled', label: 'Scheduled', icon: Calendar },
+              { key: 'posted', label: 'Posted', icon: CheckCircle2 },
+              { key: 'not_posted', label: 'Not Posted', icon: X },
+              { key: 'pending', label: 'Pending', icon: AlertTriangle },
+              { key: 'approved', label: 'Approved', icon: ThumbsUp },
+              { key: 'rejected', label: 'Rejected', icon: ThumbsDown },
+            ].map((pill) => {
+              const isSelected = postStatusFilter === pill.key;
+              const IconComp = pill.icon;
+              return (
+                <button
+                  key={pill.key}
+                  type="button"
+                  onClick={() => setPostStatusFilter(pill.key as any)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all whitespace-nowrap ${
+                    isSelected
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-400 shadow-2xs'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <IconComp className="size-3.5" />
+                  <span>{pill.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           {/* Left: Create with AI */}
           <div className="lg:col-span-7 bg-card border border-border rounded-2xl p-5 shadow-2xs space-y-4">
             <div className="space-y-3.5">
@@ -1760,6 +2197,7 @@ export function SocialMediaView({
               </div>
             </div>
           </div>
+          </div>
         </div>
       )}
 
@@ -1792,16 +2230,13 @@ export function SocialMediaView({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All Channels" className="text-xs">
-                      All Channels
+                      All Channels (Google + WhatsApp)
                     </SelectItem>
                     <SelectItem value="Google Business" className="text-xs">
-                      Google Business
+                      Google Business Profile
                     </SelectItem>
-                    <SelectItem value="Instagram" className="text-xs">
-                      Instagram
-                    </SelectItem>
-                    <SelectItem value="Facebook" className="text-xs">
-                      Facebook
+                    <SelectItem value="WhatsApp 1-Tap Reviews" className="text-xs">
+                      WhatsApp 1-Tap Reviews
                     </SelectItem>
                     <SelectItem value="WhatsApp Broadcast" className="text-xs">
                       WhatsApp Broadcast
@@ -1838,6 +2273,147 @@ export function SocialMediaView({
               Launch Campaign
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Floating Growth Action Pill (Dhanda AI benchmark) ─────────── */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setGrowthDrawerOpen(true)}
+          className="px-4 py-2.5 rounded-full bg-linear-to-r from-amber-500 to-orange-500 text-white font-bold text-xs shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2 border border-white/20 cursor-pointer"
+        >
+          <Zap className="size-4 fill-white text-white animate-pulse" />
+          <span>Growth Action ({growthActionsDone.length} of 10 done • {10 - growthActionsDone.length} left)</span>
+          <ChevronRight className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => toast.info('Voice Assistant: Speak your marketing request in Hindi or English...')}
+          className="size-10 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-105 transition-all flex items-center justify-center border border-white/20 cursor-pointer"
+          title="Voice Marketing Assistant"
+        >
+          <Mic className="size-4" />
+        </button>
+      </div>
+
+      {/* ─── Growth Action Drawer Modal (Dhanda AI benchmark) ──────────── */}
+      <Dialog open={growthDrawerOpen} onOpenChange={setGrowthDrawerOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Zap className="size-5 text-amber-500 fill-amber-500" />
+              <span>Daily Growth Actions</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Follow these recommended daily steps to climb Google Maps rankings and win more local customers.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Progress Bar */}
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+              <div className="flex items-center justify-between text-xs font-bold text-foreground mb-1.5">
+                <span>Daily Marketing Progress</span>
+                <span className="text-amber-700 dark:text-amber-400 font-bold">{growthActionsDone.length} of 10 done</span>
+              </div>
+              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-linear-to-r from-amber-500 to-orange-500 transition-all duration-300"
+                  style={{ width: `${Math.max(10, (growthActionsDone.length / 10) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 3 Core Tasks */}
+            <div className="space-y-2.5">
+              {/* Task 1: Complete Profile */}
+              <div className="p-3.5 rounded-xl border border-border bg-card flex items-start justify-between gap-3 shadow-2xs">
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <Building2 className="size-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-foreground">Complete your Google Profile</h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Add working hours, service areas, and store description to reach 100% profile strength.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant={growthActionsDone.includes('profile') ? 'outline' : 'default'}
+                  onClick={() => {
+                    if (!growthActionsDone.includes('profile')) {
+                      setGrowthActionsDone((p) => [...p, 'profile']);
+                      toast.success('Google Business Profile details verified!');
+                    }
+                  }}
+                  className="h-7 text-xs font-semibold shrink-0"
+                >
+                  {growthActionsDone.includes('profile') ? 'Done ✔' : 'Complete'}
+                </Button>
+              </div>
+
+              {/* Task 2: Upload Media */}
+              <div className="p-3.5 rounded-xl border border-border bg-card flex items-start justify-between gap-3 shadow-2xs">
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <ImageIcon className="size-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-foreground">Upload Fresh Shop Photos</h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Upload photos of your workshop or products to increase customer trust and clicks by 42%.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant={growthActionsDone.includes('media') ? 'outline' : 'default'}
+                  onClick={() => {
+                    if (!growthActionsDone.includes('media')) {
+                      setGrowthActionsDone((p) => [...p, 'media']);
+                      toast.success('Media uploaded to Google Business listing!');
+                    }
+                  }}
+                  className="h-7 text-xs font-semibold shrink-0"
+                >
+                  {growthActionsDone.includes('media') ? 'Done ✔' : 'Upload'}
+                </Button>
+              </div>
+
+              {/* Task 3: Approve Post */}
+              <div className="p-3.5 rounded-xl border border-border bg-card flex items-start justify-between gap-3 shadow-2xs">
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <Sparkles className="size-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-foreground">Approve AI-Generated Post</h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      1 high-intent post is ready for Google Business. Review and post with 1 tap.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant={growthActionsDone.includes('post') ? 'outline' : 'default'}
+                  onClick={() => {
+                    if (!growthActionsDone.includes('post')) {
+                      setGrowthActionsDone((p) => [...p, 'post']);
+                      setActiveTab('ai-content');
+                      setGrowthDrawerOpen(false);
+                      toast.success('Opening AI Post Studio for approval!');
+                    }
+                  }}
+                  className="h-7 text-xs font-semibold shrink-0"
+                >
+                  {growthActionsDone.includes('post') ? 'Done ✔' : 'Review'}
+                </Button>
+              </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -259,16 +259,84 @@ export default function MarketingScreen() {
 
       <ErrorNotice message={error || posts.error || accounts.error} retry={posts.refresh} />
 
-      {/* Status Filter Chips */}
+      {/* Viral Video Banner (Dhanda AI benchmark) */}
+      <View
+        style={{
+          backgroundColor: '#FAF5FF',
+          borderColor: '#E9D5FF',
+          borderWidth: 1,
+          borderRadius: 14,
+          padding: 12,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontSize: 16 }}>🎬</Text>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B21A8' }}>
+            Try Generating Viral Video (0/5)
+          </Text>
+        </View>
+        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Explore →</Text>
+      </View>
+
+      {/* Keyword Planner Tip (Dhanda AI benchmark) */}
+      <View
+        style={{
+          backgroundColor: '#EFF6FF',
+          borderColor: '#BFDBFE',
+          borderWidth: 1,
+          borderRadius: 14,
+          padding: 12,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+          <Text style={{ fontSize: 16 }}>💡</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: '#1E40AF' }}>
+              Google works best with keywords
+            </Text>
+            <Text style={{ fontSize: 11, color: '#3B82F6', marginTop: 1 }}>
+              Using your keywords we post daily on your Google Profile.
+            </Text>
+          </View>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/(tabs)/growth')}
+          style={{
+            backgroundColor: '#2563EB',
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 8,
+          }}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>Keywords</Text>
+        </Pressable>
+      </View>
+
+      {/* 6 Status Filter Chips (Dhanda AI benchmark) */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={ui.row}>
-          {['all', 'draft', 'scheduled', 'published', 'failed'].map((s) => (
+        <View style={[ui.row, { gap: 6 }]}>
+          {[
+            { key: 'scheduled', label: 'Scheduled 📅' },
+            { key: 'published', label: 'Posted ✔' },
+            { key: 'not_posted', label: 'Not Posted ❌' },
+            { key: 'pending', label: 'Pending ⚠️' },
+            { key: 'approved', label: 'Approved 👍' },
+            { key: 'rejected', label: 'Rejected 👎' },
+            { key: 'all', label: 'All Posts' },
+          ].map((pill) => (
             <Chip
-              key={s}
-              label={s.charAt(0).toUpperCase() + s.slice(1)}
-              selected={filter === s}
+              key={pill.key}
+              label={pill.label}
+              selected={filter === pill.key}
               onPress={() => {
-                setFilter(s);
+                setFilter(pill.key);
                 setPage(1);
               }}
             />

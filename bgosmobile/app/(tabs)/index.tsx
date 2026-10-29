@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Modal, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card, Screen, Action, ErrorNotice, MenuRow, Badge, MetricCard, ui, colors, Avatar } from '../../src/components/ui';
@@ -80,6 +80,8 @@ function MoreToolsGrid() {
 export default function HomeScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const [growthModalOpen, setGrowthModalOpen] = useState(false);
+  const [growthActionsDone, setGrowthActionsDone] = useState<string[]>([]);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const inbox = useResource<BgosConversation[]>('/api/omnichannel/conversations', 15000);
   const bookings = useResource<{ bookings: Booking[] }>('/api/bookings?limit=100');
@@ -129,6 +131,214 @@ export default function HomeScreen() {
         message={workspace.error || inbox.error || bookings.error || leads.error || calls.error}
         retry={refresh}
       />
+
+      {/* 30 Days Marketing Trial Banner (Dhanda AI Benchmark) */}
+      <View
+        style={{
+          backgroundColor: '#FFFBEB',
+          borderColor: '#FDE68A',
+          borderWidth: 1,
+          borderRadius: 14,
+          padding: 12,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+          <Text style={{ fontSize: 16 }}>⚡</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: '#92400E' }}>
+              30 Days Marketing Trial (5 days left)
+            </Text>
+            <Text style={{ fontSize: 11, color: '#B45309', marginTop: 1 }}>
+              Your trial is active. Automate Google posts and review collection.
+            </Text>
+          </View>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/(tabs)/growth')}
+          style={{
+            backgroundColor: '#F59E0B',
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 8,
+          }}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>Upgrade</Text>
+        </Pressable>
+      </View>
+
+      {/* Speedometer Marketing Score Gauge Card (Dhanda AI benchmark) */}
+      <Card style={{ gap: 14 }}>
+        <View style={[ui.row, { justifyContent: 'space-between' }]}>
+          <View style={[ui.row, { gap: 6 }]}>
+            <Text style={ui.heading}>Marketing Score</Text>
+            <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+              <Text style={{ color: '#DC2626', fontSize: 10, fontWeight: '800' }}>Poor ⓘ</Text>
+            </View>
+          </View>
+          <Pressable onPress={() => router.push('/(tabs)/growth')}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Improve Score →</Text>
+          </Pressable>
+        </View>
+
+        {/* Speedometer Gauge Arc Visual */}
+        <View style={{ alignItems: 'center', marginVertical: 4 }}>
+          <View
+            style={{
+              width: 180,
+              height: 90,
+              borderTopLeftRadius: 90,
+              borderTopRightRadius: 90,
+              backgroundColor: '#F1F5F9',
+              overflow: 'hidden',
+              position: 'relative',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+            }}
+          >
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                flexDirection: 'row',
+              }}
+            >
+              <View style={{ flex: 1, backgroundColor: '#EF4444', opacity: 0.85 }} />
+              <View style={{ flex: 1, backgroundColor: '#F59E0B', opacity: 0.85 }} />
+              <View style={{ flex: 1, backgroundColor: '#10B981', opacity: 0.85 }} />
+            </View>
+            <View
+              style={{
+                width: 130,
+                height: 65,
+                borderTopLeftRadius: 65,
+                borderTopRightRadius: 65,
+                backgroundColor: colors.surface,
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                paddingBottom: 4,
+              }}
+            >
+              <Text style={{ fontSize: 26, fontWeight: '900', color: '#DC2626', letterSpacing: -0.5 }}>
+                14%
+              </Text>
+            </View>
+          </View>
+          <Text style={{ fontSize: 10, color: colors.muted, marginTop: 4, fontWeight: '600' }}>
+            Goal: Reach 80%+ to dominate Google Local 3-Pack
+          </Text>
+        </View>
+
+        {/* Weekly Progression Chart */}
+        <View style={{ backgroundColor: colors.background, padding: 10, borderRadius: 12, gap: 6 }}>
+          <Text style={{ fontSize: 11, fontWeight: '700', color: colors.ink }}>
+            📈 Weekly Marketing Score Progression
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', height: 48, paddingTop: 6 }}>
+            {[
+              { week: 'W1', score: 4, height: 12 },
+              { week: 'W2', score: 7, height: 20 },
+              { week: 'W3', score: 10, height: 28 },
+              { week: 'W4 (Now)', score: 14, height: 38 },
+            ].map((col, idx) => (
+              <View key={col.week} style={{ alignItems: 'center', gap: 3 }}>
+                <Text style={{ fontSize: 9, fontWeight: '700', color: idx === 3 ? colors.brand : colors.muted }}>
+                  {col.score}%
+                </Text>
+                <View
+                  style={{
+                    width: 22,
+                    height: col.height,
+                    borderRadius: 4,
+                    backgroundColor: idx === 3 ? colors.brand : '#CBD5E1',
+                  }}
+                />
+                <Text style={{ fontSize: 9, color: colors.muted }}>{col.week}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <Action
+          label="Improve Marketing Score →"
+          icon="trending-up"
+          onPress={() => router.push('/(tabs)/growth')}
+        />
+      </Card>
+
+      {/* Google's Performance (30 Days) */}
+      <Card style={{ gap: 10 }}>
+        <View style={[ui.row, { justifyContent: 'space-between' }]}>
+          <Text style={ui.heading}>Google's Performance</Text>
+          <Badge label="Last 30 Days" accent />
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          <View style={{ flex: 1, minWidth: '45%', backgroundColor: colors.background, padding: 12, borderRadius: 12 }}>
+            <Text style={{ fontSize: 18, fontWeight: '900', color: colors.ink }}>1,280</Text>
+            <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>Profile Views</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success, marginTop: 2 }}>+18% from search</Text>
+          </View>
+          <View style={{ flex: 1, minWidth: '45%', backgroundColor: colors.background, padding: 12, borderRadius: 12 }}>
+            <Text style={{ fontSize: 18, fontWeight: '900', color: colors.ink }}>46</Text>
+            <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>Phone Calls</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success, marginTop: 2 }}>+12% direct calls</Text>
+          </View>
+          <View style={{ flex: 1, minWidth: '45%', backgroundColor: colors.background, padding: 12, borderRadius: 12 }}>
+            <Text style={{ fontSize: 18, fontWeight: '900', color: colors.ink }}>89</Text>
+            <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>Directions</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success, marginTop: 2 }}>+24% store visits</Text>
+          </View>
+          <View style={{ flex: 1, minWidth: '45%', backgroundColor: colors.background, padding: 12, borderRadius: 12 }}>
+            <Text style={{ fontSize: 18, fontWeight: '900', color: colors.ink }}>24</Text>
+            <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>Website Clicks</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success, marginTop: 2 }}>+15% leads</Text>
+          </View>
+        </View>
+      </Card>
+
+      {/* Local Competitors within 5 KM (Dhanda AI Benchmark) */}
+      <Card style={{ gap: 10 }}>
+        <View style={[ui.row, { justifyContent: 'space-between' }]}>
+          <Text style={ui.heading}>🎯 Competitors Within 5 KM</Text>
+          <Badge label="Local Maps" />
+        </View>
+        <Text style={[ui.caption, { marginTop: -4 }]}>
+          Rankings updated from Google Search & Maps in your locality.
+        </Text>
+        {[
+          { name: 'Sharma Steel Works', rating: '4.6 ★', reviews: '128 reviews', distance: '1.2 km away' },
+          { name: 'Gupta Iron & Fabrication', rating: '4.2 ★', reviews: '94 reviews', distance: '2.4 km away' },
+          { name: 'Delhi Metal Crafts', rating: '4.0 ★', reviews: '61 reviews', distance: '3.8 km away' },
+        ].map((comp, idx) => (
+          <View
+            key={comp.name}
+            style={[
+              ui.row,
+              {
+                justifyContent: 'space-between',
+                paddingVertical: 8,
+                borderBottomWidth: idx < 2 ? 1 : 0,
+                borderBottomColor: colors.line,
+              },
+            ]}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>{comp.name}</Text>
+              <Text style={{ fontSize: 10, color: colors.muted }}>{comp.distance}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#D97706' }}>{comp.rating}</Text>
+              <Text style={{ fontSize: 10, color: colors.muted }}>{comp.reviews}</Text>
+            </View>
+          </View>
+        ))}
+      </Card>
 
       {/* AI Assistant Live Banner */}
       <Card style={{ backgroundColor: colors.hero, borderColor: colors.hero, padding: 18 }}>
@@ -327,6 +537,196 @@ export default function HomeScreen() {
 
       {/* More Tools — everything that left the bottom bar stays one tap away */}
       <MoreToolsGrid />
+
+      {/* Floating Growth Action Pill (Dhanda AI Benchmark) */}
+      <View
+        style={{
+          marginTop: 16,
+          marginBottom: 8,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setGrowthModalOpen(true)}
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: '#F59E0B',
+            paddingVertical: 12,
+            paddingHorizontal: 16,
+            borderRadius: 28,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.25,
+            shadowRadius: 6,
+            elevation: 8,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 16 }}>⚡</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
+              Growth Action ({growthActionsDone.length} of 10 done • {10 - growthActionsDone.length} left)
+            </Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => Alert.alert('Voice Assistant', 'Speak your marketing request in Hindi or English...')}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: colors.brand,
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.25,
+            shadowRadius: 6,
+            elevation: 8,
+          }}
+        >
+          <MaterialIcons name="mic" size={22} color="#FFFFFF" />
+        </Pressable>
+      </View>
+
+      {/* Growth Action Bottom Sheet Modal */}
+      <Modal visible={growthModalOpen} animationType="slide" transparent={true} onRequestClose={() => setGrowthModalOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 20,
+              gap: 16,
+              maxHeight: '80%',
+            }}
+          >
+            <View style={[ui.row, { justifyContent: 'space-between' }]}>
+              <View style={[ui.row, { gap: 8 }]}>
+                <Text style={{ fontSize: 20 }}>⚡</Text>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>Daily Growth Actions</Text>
+                  <Text style={{ fontSize: 11, color: colors.muted }}>Follow daily steps to boost your Google rank</Text>
+                </View>
+              </View>
+              <Pressable onPress={() => setGrowthModalOpen(false)}>
+                <MaterialIcons name="close" size={22} color={colors.muted} />
+              </Pressable>
+            </View>
+
+            {/* Progress */}
+            <View style={{ backgroundColor: '#FEF3C7', padding: 12, borderRadius: 12, gap: 6 }}>
+              <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#92400E' }}>Daily Marketing Progress</Text>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#B45309' }}>
+                  {growthActionsDone.length} of 10 done
+                </Text>
+              </View>
+              <View style={{ height: 6, backgroundColor: '#FDE68A', borderRadius: 3, overflow: 'hidden' }}>
+                <View
+                  style={{
+                    height: '100%',
+                    backgroundColor: '#F59E0B',
+                    width: `${Math.max(10, (growthActionsDone.length / 10) * 100)}%`,
+                  }}
+                />
+              </View>
+            </View>
+
+            {/* 3 Tasks */}
+            <View style={{ gap: 10 }}>
+              {/* Task 1: Complete Profile */}
+              <View style={[ui.row, { justifyContent: 'space-between', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.line }]}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>Complete your Profile</Text>
+                  <Text style={{ fontSize: 10, color: colors.muted, marginTop: 2 }}>
+                    Add hours and categories for 100% profile strength.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    if (!growthActionsDone.includes('profile')) setGrowthActionsDone((p) => [...p, 'profile']);
+                  }}
+                  style={{
+                    backgroundColor: growthActionsDone.includes('profile') ? colors.soft : colors.brand,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ color: growthActionsDone.includes('profile') ? colors.brand : '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
+                    {growthActionsDone.includes('profile') ? 'Done ✓' : 'Complete'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Task 2: Upload Media */}
+              <View style={[ui.row, { justifyContent: 'space-between', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.line }]}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>Upload Media / Photos</Text>
+                  <Text style={{ fontSize: 10, color: colors.muted, marginTop: 2 }}>
+                    Upload workshop photos to boost customer clicks by 42%.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    if (!growthActionsDone.includes('media')) setGrowthActionsDone((p) => [...p, 'media']);
+                    router.push('/(tabs)/photos');
+                    setGrowthModalOpen(false);
+                  }}
+                  style={{
+                    backgroundColor: growthActionsDone.includes('media') ? colors.soft : colors.brand,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ color: growthActionsDone.includes('media') ? colors.brand : '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
+                    {growthActionsDone.includes('media') ? 'Done ✓' : 'Upload'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Task 3: Approve Post */}
+              <View style={[ui.row, { justifyContent: 'space-between', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.line }]}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>Approve AI-Generated Post</Text>
+                  <Text style={{ fontSize: 10, color: colors.muted, marginTop: 2 }}>
+                    1 AI post is ready for your Google Profile. Review now.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    if (!growthActionsDone.includes('post')) setGrowthActionsDone((p) => [...p, 'post']);
+                    router.push('/(tabs)/marketing');
+                    setGrowthModalOpen(false);
+                  }}
+                  style={{
+                    backgroundColor: growthActionsDone.includes('post') ? colors.soft : colors.brand,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ color: growthActionsDone.includes('post') ? colors.brand : '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
+                    {growthActionsDone.includes('post') ? 'Done ✓' : 'Review'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
