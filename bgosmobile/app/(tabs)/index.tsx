@@ -7,6 +7,7 @@ import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { useAuthStore } from '../../src/stores/auth-store';
 import { Speedometer, WeekScoreBars, scoreBandColor } from '../../src/components/gbp/speedometer';
+import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import type { BgosConversation, BgosWorkspace } from '../../../shared/bgos-contracts';
 
 type Booking = { id: string; title?: string; customerName?: string; scheduledAt?: string; status: string };
@@ -254,6 +255,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const [growthModalOpen, setGrowthModalOpen] = useState(false);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [expandedCompetitor, setExpandedCompetitor] = useState<string | null>(null);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
@@ -594,41 +596,195 @@ export default function HomeScreen() {
         />
       </View>
 
-      {/* Quick Action Pills */}
-      <Text style={ui.heading}>Quick Actions</Text>
-      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-        <View style={{ flex: 1, minWidth: '22%' }}>
-          <Action
-            label="AI Post"
-            icon="auto-awesome"
-            secondary
+      {/* Quick Action Launcher Card */}
+      <Card style={{ padding: 14, gap: 12 }}>
+        <View style={[ui.row, { justifyContent: 'space-between' }]}>
+          <Text style={ui.heading}>⚡ Quick Actions</Text>
+          <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted }}>Instant Shortcuts</Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          {/* AI Post */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Create AI Post"
             onPress={() => router.push('/(tabs)/marketing')}
-          />
-        </View>
-        <View style={{ flex: 1, minWidth: '22%' }}>
-          <Action
-            label="Add Lead"
-            icon="person-add"
+            style={({ pressed }) => ({
+              flex: 1,
+              alignItems: 'center',
+              opacity: pressed ? 0.75 : 1,
+            })}
+          >
+            <View
+              style={{
+                width: 50,
+                height: 50,
+                borderRadius: 25,
+                backgroundColor: '#F3E8FF',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 6,
+                shadowColor: '#8B5CF6',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.12,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              <MaterialIcons name="auto-awesome" size={24} color="#7C3AED" />
+            </View>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '700',
+                color: colors.ink,
+                textAlign: 'center',
+              }}
+              numberOfLines={1}
+            >
+              AI Post
+            </Text>
+            <Text style={{ fontSize: 10, color: colors.muted, textAlign: 'center', marginTop: 1 }}>
+              Generate
+            </Text>
+          </Pressable>
+
+          {/* Add Lead */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add New Lead"
             onPress={() => router.push('/(tabs)/leads?create=1')}
-          />
-        </View>
-        <View style={{ flex: 1, minWidth: '22%' }}>
-          <Action
-            label="Call"
-            icon="call"
-            secondary
+            style={({ pressed }) => ({
+              flex: 1,
+              alignItems: 'center',
+              opacity: pressed ? 0.75 : 1,
+            })}
+          >
+            <View
+              style={{
+                width: 50,
+                height: 50,
+                borderRadius: 25,
+                backgroundColor: '#EFF6FF',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 6,
+                shadowColor: '#3B82F6',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.12,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              <MaterialIcons name="person-add" size={24} color="#2563EB" />
+            </View>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '700',
+                color: colors.ink,
+                textAlign: 'center',
+              }}
+              numberOfLines={1}
+            >
+              Add Lead
+            </Text>
+            <Text style={{ fontSize: 10, color: colors.muted, textAlign: 'center', marginTop: 1 }}>
+              CRM
+            </Text>
+          </Pressable>
+
+          {/* Make Call */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Phone Dialer"
             onPress={() => router.push('/(tabs)/phone')}
-          />
+            style={({ pressed }) => ({
+              flex: 1,
+              alignItems: 'center',
+              opacity: pressed ? 0.75 : 1,
+            })}
+          >
+            <View
+              style={{
+                width: 50,
+                height: 50,
+                borderRadius: 25,
+                backgroundColor: '#ECFDF5',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 6,
+                shadowColor: '#10B981',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.12,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              <MaterialIcons name="phone-in-talk" size={24} color="#059669" />
+            </View>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '700',
+                color: colors.ink,
+                textAlign: 'center',
+              }}
+              numberOfLines={1}
+            >
+              Call
+            </Text>
+            <Text style={{ fontSize: 10, color: colors.muted, textAlign: 'center', marginTop: 1 }}>
+              Dialer
+            </Text>
+          </Pressable>
+
+          {/* Ask Review */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ask Review on WhatsApp"
+            onPress={() => setReviewModalOpen(true)}
+            style={({ pressed }) => ({
+              flex: 1,
+              alignItems: 'center',
+              opacity: pressed ? 0.75 : 1,
+            })}
+          >
+            <View
+              style={{
+                width: 50,
+                height: 50,
+                borderRadius: 25,
+                backgroundColor: '#FEF3C7',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 6,
+                shadowColor: '#F59E0B',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              <MaterialIcons name="star" size={24} color="#D97706" />
+            </View>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '700',
+                color: colors.ink,
+                textAlign: 'center',
+              }}
+              numberOfLines={1}
+            >
+              Ask Review
+            </Text>
+            <Text style={{ fontSize: 10, color: '#059669', fontWeight: '700', textAlign: 'center', marginTop: 1 }}>
+              WhatsApp
+            </Text>
+          </Pressable>
         </View>
-        <View style={{ flex: 1, minWidth: '22%' }}>
-          <Action
-            label="Ask Review"
-            icon="star-outline"
-            secondary
-            onPress={() => router.push('/(tabs)/growth')}
-          />
-        </View>
-      </View>
+      </Card>
 
       {/* Today's Appointments or Next Conversations */}
       <Card>
@@ -913,6 +1069,15 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* 1-Tap WhatsApp Google Review Request Sheet */}
+      <ReviewRequestSheet
+        visible={reviewModalOpen}
+        onClose={() => setReviewModalOpen(false)}
+        businessName={workspace.data?.name || user?.name || 'Singh Fabrication'}
+        reviewUrl="https://search.google.com/local/writereview"
+        apiRequest={apiRequest}
+      />
     </Screen>
   );
 }
