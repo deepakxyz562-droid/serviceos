@@ -45,6 +45,8 @@ import {
   Copy,
   ExternalLink,
   Plus,
+  Star,
+  QrCode,
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -190,13 +192,64 @@ const QUICK_PROMPTS = [
   },
 ];
 
-const AI_TONES = ['Friendly', 'Professional', 'Playful', 'Urgent', 'Luxury'];
+/**
+ * Top local offerings benchmarked against Grexa & Dhanda AI.
+ * Allows Indian SMBs (fabricators, tradies, clinics, salons, cafes)
+ * to draft high-converting Google posts in 2 clicks.
+ */
+export const BEST_SELLER_OFFERINGS = [
+  {
+    name: 'Gate & Grill Work',
+    icon: '🚪',
+    concept:
+      'Create a local promotion for custom gate, window grill, and safety door fabrication by {business}. Emphasize heavy-gauge steel, rust resistance, custom designs, and fast installation. Include a call to action to call for free site measurement.',
+    badge: 'Popular Work',
+    headline: 'Custom Gates & Grills',
+    type: 'Promo',
+  },
+  {
+    name: 'Stainless Steel Railings',
+    icon: '🛡️',
+    concept:
+      'Feature premium grade 304 stainless steel balcony, terrace, and staircase railing installation by {business}. Highlight mirror finish, lifetime strength, and competitive local rates. Call to book a consultation.',
+    badge: 'Best Quality',
+    headline: 'Premium SS Railings',
+    type: 'Showcase',
+  },
+  {
+    name: 'Industrial Sheds & Roofs',
+    icon: '🏭',
+    concept:
+      'Announce heavy-duty industrial factory shed, warehouse roofing, and tin shed structure erection by {business}. Highlight structural stability, certified welding, and on-time project completion.',
+    badge: 'Commercial',
+    headline: 'Factory Sheds & Roofing',
+    type: 'Announcement',
+  },
+  {
+    name: 'Laser Cutting Design',
+    icon: '✨',
+    concept:
+      'Promote precision CNC metal laser cutting and designer architectural screens by {business}. Modern geometric designs for main gates, partitions, and elevations. Contact for catalog.',
+    badge: 'CNC Precision',
+    headline: 'Designer Laser Cutting',
+    type: 'Showcase',
+  },
+  {
+    name: 'Welding & Repair Service',
+    icon: '🔧',
+    concept:
+      'Urgent on-site welding, rolling shutter repair, and structural metal maintenance by skilled welders from {business}. Prompt doorstep arrival across the local area. Call now for quick repair.',
+    badge: 'Fast Doorstep',
+    headline: 'Doorstep Welding Repair',
+    type: 'Urgent',
+  },
+];
+
+const AI_TONES = ['Friendly', 'Professional', 'Hinglish / Local', 'Urgent', 'Luxury'];
 const POST_TYPES = ['Promo', 'Announcement', 'Tips', 'Showcase', 'Urgent'];
 
 const CHANNEL_TARGETS = [
   { id: 'Google Business', badge: 'G', badgeColor: 'text-blue-600 font-extrabold' },
-  { id: 'Facebook', badge: 'f', badgeColor: 'text-blue-600 font-extrabold' },
-  { id: 'Instagram', badge: 'IG', badgeColor: 'text-pink-600 font-bold' },
   { id: 'WhatsApp', badge: 'WA', badgeColor: 'text-primary font-bold' },
   { id: 'Email', badge: '✉', badgeColor: 'text-muted-foreground' },
   { id: 'SMS', badge: '💬', badgeColor: 'text-muted-foreground' },
@@ -297,8 +350,6 @@ export function SocialMediaView({
   const [postType, setPostType] = useState('Promo');
   const [selectedChannels, setSelectedChannels] = useState<string[]>([
     'Google Business',
-    'Facebook',
-    'Instagram',
     'WhatsApp',
   ]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -306,7 +357,7 @@ export function SocialMediaView({
   const [generatedCaption, setGeneratedCaption] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
   const [studioPreviewTab, setStudioPreviewTab] = useState<
-    'Google Business' | 'Facebook' | 'Instagram' | 'WhatsApp'
+    'Google Business' | 'WhatsApp'
   >('Google Business');
   const [currentBadge, setCurrentBadge] = useState('');
   const [currentHeadline, setCurrentHeadline] = useState('');
@@ -334,6 +385,19 @@ export function SocialMediaView({
   const [newCampName, setNewCampName] = useState('');
   const [newCampChannel, setNewCampChannel] = useState('All Channels');
   const [newCampBudget, setNewCampBudget] = useState('$500');
+
+  // ── WhatsApp 1-Tap Google Reviews state (Dhanda AI Benchmark) ──
+  const [reviewLang, setReviewLang] = useState<'en' | 'hi'>('en');
+  const gbpReviewUrl = useMemo(() => {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(businessName)}`;
+  }, [businessName]);
+
+  const reviewMessageText = useMemo(() => {
+    if (reviewLang === 'hi') {
+      return `नमस्ते! 🙏 ${businessName} को चुनने के लिए आपका बहुत-बहुत धन्यवाद।\nक्या आप Google पर हमारे काम के लिए 30 सेकंड में अपनी रेटिंग दे सकते हैं? इससे हमारे लोकल बिजनेस को आगे बढ़ने में बहुत मदद मिलती है:\n⭐⭐⭐⭐⭐\n${gbpReviewUrl}`;
+    }
+    return `Hi! 🙏 Thank you for choosing ${businessName}.\nCould you take 30 seconds to rate our service on Google? It deeply helps our local business grow:\n⭐⭐⭐⭐⭐\n${gbpReviewUrl}`;
+  }, [reviewLang, businessName, gbpReviewUrl]);
 
   const toggleChannel = (channelName: string) => {
     setSelectedChannels((prev) =>
@@ -510,7 +574,7 @@ export function SocialMediaView({
           topic: promptToUse,
           platforms: targetPlatforms.length
             ? targetPlatforms
-            : ['googlebusiness', 'facebook', 'instagram'],
+            : ['googlebusiness'],
           tone: tone.toLowerCase(),
         }),
       });
@@ -918,8 +982,6 @@ export function SocialMediaView({
               <div className="divide-y divide-border my-auto">
                 {[
                   { name: 'Google Business', key: 'google', badge: 'G', bg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
-                  { name: 'Facebook', key: 'facebook', badge: 'f', bg: 'bg-blue-600 text-white' },
-                  { name: 'Instagram', key: 'instagram', badge: 'IG', bg: 'bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white' },
                   { name: 'WhatsApp', key: 'whatsapp', badge: 'WA', bg: 'bg-primary text-primary-foreground' },
                   { name: 'Email (SES)', key: 'email', badge: '✉', bg: 'bg-sky-500/10 text-sky-600 dark:text-sky-400' },
                   { name: 'SMS (Twilio)', key: 'sms', badge: '••', bg: 'bg-rose-500 text-white' },
@@ -1021,6 +1083,108 @@ export function SocialMediaView({
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Row 2.5: 1-Tap WhatsApp Google Reviews Workstation (Dhanda AI Benchmark) */}
+          <div className="bg-card border border-border rounded-2xl p-5 shadow-2xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <MessageSquare className="size-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-foreground">1-Tap WhatsApp Google Reviews</h2>
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 text-[11px] font-bold border border-emerald-500/20">
+                      Highest Local ROI
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Send customers a direct 5-star Google review invite via WhatsApp ($0 Meta API fees).
+                  </p>
+                </div>
+              </div>
+
+              {/* Language Switch */}
+              <div className="flex items-center gap-1.5 self-start md:self-auto bg-muted/50 p-1 rounded-xl border border-border text-xs">
+                <button
+                  type="button"
+                  onClick={() => setReviewLang('en')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                    reviewLang === 'en' ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  English
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReviewLang('hi')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                    reviewLang === 'hi' ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Hinglish (नमस्ते)
+                </button>
+              </div>
+            </div>
+
+            {/* WhatsApp message bubble card */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+              <div className="lg:col-span-8 rounded-xl border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 relative">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="size-6 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center">
+                      WA
+                    </div>
+                    <span className="text-xs font-bold text-foreground">WhatsApp Review Invite Preview</span>
+                  </div>
+                  <div className="flex items-center text-amber-500">
+                    <Star className="size-3.5 fill-amber-500 text-amber-500" />
+                    <Star className="size-3.5 fill-amber-500 text-amber-500" />
+                    <Star className="size-3.5 fill-amber-500 text-amber-500" />
+                    <Star className="size-3.5 fill-amber-500 text-amber-500" />
+                    <Star className="size-3.5 fill-amber-500 text-amber-500" />
+                  </div>
+                </div>
+                <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed font-sans">
+                  {reviewMessageText}
+                </p>
+              </div>
+
+              <div className="lg:col-span-4 flex flex-col gap-2">
+                <Button
+                  onClick={() => {
+                    const url = `https://wa.me/?text=${encodeURIComponent(reviewMessageText)}`;
+                    window.open(url, '_blank');
+                  }}
+                  className="w-full h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-2 shadow-xs"
+                >
+                  <Send className="size-3.5" />
+                  <span>Send on WhatsApp</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(reviewMessageText);
+                    toast.success('WhatsApp review invite copied to clipboard!');
+                  }}
+                  className="w-full h-9 rounded-xl text-xs font-semibold gap-2"
+                >
+                  <Copy className="size-3.5" />
+                  <span>Copy Message Text</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(businessName)}`, '_blank');
+                  }}
+                  className="w-full h-8 text-xs text-muted-foreground hover:text-foreground gap-1.5"
+                >
+                  <ExternalLink className="size-3" />
+                  <span>Open Google Maps Profile</span>
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -1311,6 +1475,37 @@ export function SocialMediaView({
                 </div>
               </div>
 
+              {/* 2-Click Offering Selector (Grexa & Dhanda AI Benchmark) */}
+              <div className="space-y-2 p-3 rounded-xl border border-primary/20 bg-(--primary-soft)/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs">🔥</span>
+                    <p className="text-xs font-bold text-foreground">Select Offering / Service to Promote</p>
+                  </div>
+                  <span className="text-[10px] font-bold text-primary px-2 py-0.5 rounded-full bg-card border border-primary/20">
+                    2-Click AI Draft
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {BEST_SELLER_OFFERINGS.map((item) => (
+                    <button
+                      key={item.name}
+                      type="button"
+                      onClick={() => {
+                        setStudioPrompt(fillBusiness(item.concept));
+                        setPostType(item.type);
+                        setCurrentBadge(item.badge);
+                        setCurrentHeadline(item.headline);
+                      }}
+                      className="px-2.5 py-1 rounded-lg border border-border bg-card hover:border-primary/50 text-xs font-medium text-foreground flex items-center gap-1.5 transition-all shadow-2xs hover:bg-(--primary-soft)"
+                    >
+                      <span>{item.icon}</span>
+                      <span>{item.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Prompt box with 0/500 counter */}
               <div className="relative rounded-xl border border-border bg-muted/30 p-3 pb-6">
                 <Textarea
@@ -1423,9 +1618,9 @@ export function SocialMediaView({
             <div>
               <h2 className="text-base font-bold text-foreground mb-2.5">Preview</h2>
 
-              {/* Channel Tabs: Google Business | Facebook | Instagram | WhatsApp */}
+              {/* Channel Tabs: Google Business | WhatsApp */}
               <div className="flex items-center gap-3 border-b border-border pb-2 text-xs overflow-x-auto">
-                {(['Google Business', 'Facebook', 'Instagram', 'WhatsApp'] as const).map((tab) => {
+                {(['Google Business', 'WhatsApp'] as const).map((tab) => {
                   const active = studioPreviewTab === tab;
                   return (
                     <button

@@ -21,7 +21,7 @@ const MORE_TOOLS: {
 }[] = [
   { label: 'GBP Hub', route: '/(tabs)/growth', icon: 'storefront' },
   { label: 'Photos', route: '/(tabs)/photos', icon: 'photo-library' },
-  { label: 'Marketing', route: '/(tabs)/marketing', icon: 'campaign' },
+  { label: 'Google Posts', route: '/(tabs)/marketing', icon: 'campaign' },
   { label: 'Inbox', route: '/(tabs)/inbox', icon: 'chat-bubble-outline' },
   { label: 'Phone', route: '/(tabs)/phone', icon: 'phone-in-talk' },
   { label: 'Leads', route: '/(tabs)/leads', icon: 'people-outline' },

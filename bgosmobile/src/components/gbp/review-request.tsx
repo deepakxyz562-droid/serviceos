@@ -52,10 +52,25 @@ export function ReviewRequestSheet({
   const [phone, setPhone] = useState('');
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [lang, setLang] = useState<'en' | 'hi'>('en');
 
   const firstName = customerName.trim().split(/\s+/)[0] || 'there';
 
   const inviteText = useMemo(() => {
+    if (lang === 'hi') {
+      return [
+        `👋 नमस्ते! ${businessName} को चुनने के लिए धन्यवाद।`,
+        '',
+        '⭐⭐⭐⭐⭐',
+        '',
+        `नमस्ते ${firstName},`,
+        '',
+        `हम आशा करते हैं कि आपको हमारा काम पसंद आया होगा।`,
+        'कृपया Google पर 30 सेकंड देकर अपनी 5-स्टार रेटिंग दें, इससे हमारे लोकल बिजनेस को आगे बढ़ने में मदद मिलती है।',
+        '',
+        `Write Review ↗️ ${reviewUrl}`,
+      ].join('\n');
+    }
     return [
       `👋 Hope you had a great experience with us!`,
       '',
@@ -68,7 +83,7 @@ export function ReviewRequestSheet({
       '',
       `Write Review ↗️ ${reviewUrl}`,
     ].join('\n');
-  }, [firstName, businessName, reviewUrl]);
+  }, [lang, firstName, businessName, reviewUrl]);
 
   const waHref = useMemo(() => {
     const digits = phone.replace(/[^\d]/g, '');
@@ -151,6 +166,28 @@ export function ReviewRequestSheet({
             </Pressable>
           </View>
 
+          {/* Language Switcher */}
+          <View style={styles.langRow}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setLang('en')}
+              style={[styles.langChip, lang === 'en' && styles.langChipActive]}
+            >
+              <Text style={[styles.langChipText, lang === 'en' && styles.langChipTextActive]}>
+                English
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setLang('hi')}
+              style={[styles.langChip, lang === 'hi' && styles.langChipActive]}
+            >
+              <Text style={[styles.langChipText, lang === 'hi' && styles.langChipTextActive]}>
+                Hinglish (नमस्ते)
+              </Text>
+            </Pressable>
+          </View>
+
           {/* WhatsApp-style preview */}
           <View style={styles.waCard}>
             <View style={styles.waHeader}>
@@ -165,10 +202,16 @@ export function ReviewRequestSheet({
             </View>
             <View style={styles.waBody}>
               <View style={styles.bubble}>
-                <Text style={styles.bubbleText}>👋 Hope you had a great experience with us!</Text>
+                <Text style={styles.bubbleText}>
+                  {lang === 'hi'
+                    ? `👋 नमस्ते! ${businessName} को चुनने के लिए धन्यवाद।`
+                    : '👋 Hope you had a great experience with us!'}
+                </Text>
                 <Text style={styles.bubbleStars}>⭐⭐⭐⭐⭐</Text>
                 <Text style={styles.bubbleText}>
-                  {`Hi ${firstName},\n\nThank you for choosing ${businessName}. How was our service?\nPlease give us a review on Google — it takes 30 seconds and helps our small business a lot.`}
+                  {lang === 'hi'
+                    ? `नमस्ते ${firstName},\n\nहम आशा करते हैं कि आपको हमारा काम पसंद आया होगा।\nकृपया Google पर 30 सेकंड देकर अपनी 5-स्टार रेटिंग दें, इससे हमारे लोकल बिजनेस को आगे बढ़ने में मदद मिलती है।`
+                    : `Hi ${firstName},\n\nThank you for choosing ${businessName}. How was our service?\nPlease give us a review on Google — it takes 30 seconds and helps our small business a lot.`}
                 </Text>
                 <Text style={styles.bubbleCta}>Write Review ↗️</Text>
               </View>
@@ -264,6 +307,32 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.line,
+  },
+  langRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 4,
+  },
+  langChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  langChipActive: {
+    backgroundColor: WA_GREEN,
+    borderColor: WA_GREEN,
+  },
+  langChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.ink,
+  },
+  langChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   waCard: { borderRadius: 14, overflow: 'hidden', backgroundColor: '#ECE5DD' },
   waHeader: {

@@ -23,10 +23,11 @@ import { getToken } from '../../src/lib/auth';
 import { WEB_URL } from '../../src/lib/constants';
 import { validateSocialPost } from '../../src/lib/social-validation';
 import { futureLocalTime } from '../../src/lib/dates';
+import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import type { BgosWorkspace } from '../../../shared/bgos-contracts';
+import type { GbpPlaceResult } from '../../src/components/gbp/types';
 
 type Account = { id: string; platform: string; accountName: string; isActive: boolean };
-type WhatsAppConfig = { isConfigured: boolean; mode: string };
 type Post = {
   id: string;
   content: string;
@@ -34,6 +35,7 @@ type Post = {
   scheduledAt?: string;
   failureReason?: string;
   mediaUrls: string[];
+  gbpPostType?: string;
   publishTargets?: { platform: string; status: string; error?: string }[];
 };
 
@@ -42,6 +44,7 @@ export default function MarketingScreen() {
   const pendingRequest = useRef<{ body: string; key: string } | null>(null);
   const saving = useRef(false);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
+  const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const [filter, setFilter] = useState('all');
   const [page, setPage] = useState(1);
   const posts = useResource<{ data: Post[]; pagination: { totalPages: number } }>(
@@ -49,23 +52,25 @@ export default function MarketingScreen() {
     15000
   );
   const accounts = useResource<{ data: Account[] }>('/api/social/accounts');
-  const waConfig = useResource<WhatsAppConfig>('/api/whatsapp/config');
-  const whatsappConfigured = Boolean(waConfig.data?.isConfigured);
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [topic, setTopic] = useState('');
   const [content, setContent] = useState('');
-  const [selected, setSelected] = useState<string[]>([]);
+  const [gbpPostType, setGbpPostType] = useState<'whats_new' | 'offer' | 'event'>('whats_new');
+  const [ctaType, setCtaType] = useState<'LEARN_MORE' | 'CALL' | 'BOOK' | 'ORDER_ONLINE'>('LEARN_MORE');
+  const [couponCode, setCouponCode] = useState('');
   const [media, setMedia] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const [requestOpen, setRequestOpen] = useState(false);
 
   const available = accounts.data?.data || [];
-  const targets = available.filter((a) => selected.includes(a.id)).map((a) => ({ platform: a.platform, socialAccountId: a.id }));
+  const gbpAccount = available.find((a) => a.platform === 'googlebusiness' && a.isActive);
+  const targets = gbpAccount ? [{ platform: 'googlebusiness', socialAccountId: gbpAccount.id }] : [];
   const mediaUrls = media.split('\n').map((s) => s.trim()).filter(Boolean);
 
   async function generate() {
@@ -76,7 +81,7 @@ export default function MarketingScreen() {
         method: 'POST',
         body: {
           topic,
-          platforms: targets.length ? targets.map((t) => t.platform) : ['googlebusiness', 'facebook', 'instagram'],
+          platforms: ['googlebusiness'],
           tone: 'Friendly and professional',
         },
       });
@@ -95,26 +100,36 @@ export default function MarketingScreen() {
   async function save(status: 'draft' | 'scheduled' | 'published') {
     if (busy || saving.current) return;
     setError(null);
-    const validation = validateSocialPost(content, targets.map((t) => t.platform), mediaUrls);
-    if (validation) {
-      setError(validation);
-      return;
-    }
     const scheduledAt = status === 'scheduled' ? futureLocalTime(date, time) : null;
     if (status === 'scheduled' && !scheduledAt) {
       setError('Choose a valid future date and time.');
       return;
     }
 
+    if (status !== 'draft' && !gbpAccount) {
+      setError(
+        'Connect your Google Business Profile to publish or schedule posts to Google. You can save as a Draft in the meantime.'
+      );
+      return;
+    }
+
     saving.current = true;
     setBusy(true);
-    const body = {
+    const body: Record<string, unknown> = {
       content: content.trim(),
       targets,
       mediaUrls,
       status,
+      gbpPostType,
       ...(scheduledAt ? { scheduledAt } : {}),
     };
+    if (gbpPostType === 'offer') {
+      body.gbpOfferData = {
+        title: topic.trim() || 'Special Offer',
+        couponCode: couponCode.trim(),
+      };
+    }
+
     const serialized = JSON.stringify(body);
     if (pendingRequest.current?.body !== serialized) {
       pendingRequest.current = { body: serialized, key: Crypto.randomUUID() };
@@ -130,15 +145,15 @@ export default function MarketingScreen() {
       setOpen(false);
       setContent('');
       setTopic('');
-      setSelected([]);
+      setCouponCode('');
       setDate('');
       setTime('');
       setStep(0);
       setNotice(
         status === 'published'
-          ? 'Post queued for publishing — broadcasting to selected channels...'
+          ? 'Post published to your Google Business Profile! 🚀'
           : status === 'scheduled'
-          ? 'Post scheduled successfully.'
+          ? 'Post scheduled for your Google Business Profile.'
           : 'Draft saved.'
       );
       await posts.refresh();
@@ -150,39 +165,29 @@ export default function MarketingScreen() {
     }
   }
 
-  // Opens the web OAuth connect flow with the app's access token so the
-  // browser session is authenticated — without it the flow bounces to login.
-  async function openOAuth(platform: 'googlebusiness' | 'facebook' | 'instagram') {
+  async function openGoogleConnect() {
     try {
       const token = await getToken();
       const authPart = token ? `&auth=${encodeURIComponent(token)}` : '';
-      await Linking.openURL(`${WEB_URL}/api/oauth/${platform}?product=bgos&returnView=socialMedia${authPart}`);
+      await Linking.openURL(`${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&returnView=socialMedia${authPart}`);
     } catch {
-      setError('Could not open the browser to connect. Try again or connect from BGOS web.');
+      setError('Could not open the browser to connect Google. Try again or connect from BGOS web.');
     }
   }
 
-  function handleChannelChipPress(platform: 'googlebusiness' | 'facebook' | 'instagram' | 'whatsapp') {
-    // WhatsApp status is real configuration (Meta Cloud API credentials) —
-    // the Integrations screen shows the actual state, no canned claims here.
-    if (platform === 'whatsapp') {
-      router.push('/(tabs)/integrations');
-      return;
-    }
-    const isConn = available.some((a) => a.platform === platform && a.isActive);
-    const label = platform === 'googlebusiness' ? 'Google Business' : platform === 'facebook' ? 'Facebook Page' : 'Instagram Business';
-    if (isConn) {
-      Alert.alert(`${label} Connected ✅`, `Your ${label} is active and ready to publish content.`);
+  function handleGoogleChipPress() {
+    if (gbpAccount) {
+      Alert.alert('Google Business Profile Connected ✅', 'Your Google Business Profile is active and ready to publish posts.');
     } else {
       Alert.alert(
-        `Connect ${label}`,
-        `Link your ${label} to publish posts and auto-reply directly from BGOS.`,
+        'Connect Google Business Profile',
+        'Link your verified Google profile to publish posts, local offers, and updates directly from BGOS.',
         [
           { text: 'Cancel', style: 'cancel' },
           {
             text: '1-Click Connect',
             onPress: () => {
-              void openOAuth(platform);
+              void openGoogleConnect();
             },
           },
         ]
@@ -192,11 +197,11 @@ export default function MarketingScreen() {
 
   return (
     <Screen
-      title="Marketing Studio"
-      subtitle="AI-powered posts, multi-channel publishing & calendar."
+      title="Google Post Studio"
+      subtitle="AI-powered Google updates, local offers & post scheduling."
       showBack={true}
       onRefresh={async () => {
-        await Promise.all([posts.refresh(), accounts.refresh(), workspace.refresh()]);
+        await Promise.all([posts.refresh(), accounts.refresh(), workspace.refresh(), gbpPlace.refresh()]);
       }}
       rightAction={
         <Action
@@ -205,7 +210,6 @@ export default function MarketingScreen() {
           icon="auto-awesome"
           onPress={() => {
             setError(null);
-            setSelected(available.slice(0, 3).map((a) => a.id));
             setOpen(true);
           }}
         />
@@ -216,44 +220,32 @@ export default function MarketingScreen() {
         <View style={[ui.row, { justifyContent: 'space-between' }]}>
           <View style={{ flex: 1 }}>
             <View style={[ui.row, { gap: 6 }]}>
-              <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFFFFF' }}>AI Marketing Studio</Text>
-              <Badge label="Popular" accent />
+              <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFFFFF' }}>Google Business Autopilot</Text>
+              <Badge label="GBP Focus" accent />
             </View>
             <Text style={{ fontSize: 13, color: '#D1EAE5', marginTop: 4 }}>
-              Craft high-converting captions, select social channels, and publish everywhere at once.
+              Craft high-converting Google updates, announcements, and local offers that boost your Google Maps ranking.
             </Text>
           </View>
           <MaterialIcons name="auto-awesome" size={32} color={colors.accent} />
         </View>
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-          <Pressable onPress={() => handleChannelChipPress('googlebusiness')} style={styles.channelChip}>
+          <Pressable onPress={handleGoogleChipPress} style={styles.channelChip}>
             <MaterialIcons name="store" size={14} color="#FFFFFF" />
             <Text style={styles.channelChipText}>
-              Google {available.some((a) => a.platform === 'googlebusiness' && a.isActive) ? '✓' : '+'}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => handleChannelChipPress('facebook')} style={styles.channelChip}>
-            <MaterialIcons name="facebook" size={14} color="#FFFFFF" />
-            <Text style={styles.channelChipText}>
-              Facebook {available.some((a) => a.platform === 'facebook' && a.isActive) ? '✓' : '+'}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => handleChannelChipPress('instagram')} style={styles.channelChip}>
-            <MaterialIcons name="camera-alt" size={14} color="#FFFFFF" />
-            <Text style={styles.channelChipText}>
-              Instagram {available.some((a) => a.platform === 'instagram' && a.isActive) ? '✓' : '+'}
+              Google Business {gbpAccount ? '✓' : '+'}
             </Text>
           </Pressable>
           <Pressable
-            onPress={() => handleChannelChipPress('whatsapp')}
-            style={[styles.channelChip, !whatsappConfigured && { opacity: 0.55 }]}
+            onPress={() => setRequestOpen(true)}
+            style={[styles.channelChip, { backgroundColor: '#25D366' }]}
             accessibilityRole="button"
-            accessibilityLabel={whatsappConfigured ? 'WhatsApp connected' : 'Connect WhatsApp'}
+            accessibilityLabel="Send 1-Tap Google Review Request via WhatsApp"
           >
             <MaterialIcons name="chat" size={14} color="#FFFFFF" />
             <Text style={styles.channelChipText}>
-              {whatsappConfigured ? 'WhatsApp ✓' : 'Connect WhatsApp'}
+              WhatsApp Review Invite ↗
             </Text>
           </Pressable>
         </View>
@@ -337,10 +329,10 @@ export default function MarketingScreen() {
         ))
       )}
 
-      {/* 3-Step Create / Preview Modal (Screens 15 & 16) */}
+      {/* 3-Step Create / Preview Modal (Google Post Studio) */}
       <Modal visible={open} animationType="slide" onRequestClose={() => { if (!busy) setOpen(false); }}>
         <Screen
-          title={step === 0 ? 'Create Post with AI' : step === 1 ? 'Select Publishing Channels' : 'Post Preview & Approve'}
+          title={step === 0 ? 'Create Google Post' : step === 1 ? 'Google Post Details' : 'Preview & Publish'}
           subtitle={`Step ${step + 1} of 3`}
           showBack={true}
           onBack={() => {
@@ -354,7 +346,7 @@ export default function MarketingScreen() {
         >
           {/* Visual Stepper */}
           <View style={[ui.row, { justifyContent: 'space-between', marginBottom: 12 }]}>
-            {['1. Content', '2. Channels', '3. Preview & Schedule'].map((name, i) => (
+            {['1. Content & AI', '2. Google Details', '3. Publish & Schedule'].map((name, i) => (
               <Text
                 key={name}
                 style={{
@@ -377,17 +369,36 @@ export default function MarketingScreen() {
           {step === 0 && (
             <Card style={{ gap: 12 }}>
               <Field
-                label="What would you like to share?"
+                label="What would you like to share on Google?"
                 value={topic}
                 onChangeText={setTopic}
                 multiline
-                placeholder="e.g. Diwali special offer on cakes. 20% off on all items. Friendly and festive tone…"
+                placeholder="e.g. Weekend special on plumbing tune-up. 15% discount for local homeowners. Call today…"
               />
 
-              {/* Quick Prompt Tags (Screen 15) */}
+              {/* 2-Click Offering Chips (Grexa / Dhanda AI Benchmark) */}
+              <Text style={ui.label}>🔥 Select Service to Promote (2-Click Draft)</Text>
+              <View style={[ui.row, { gap: 6, flexWrap: 'wrap' }]}>
+                {[
+                  { label: '🚪 Gates & Grills', val: 'custom gate and window grill fabrication' },
+                  { label: '🛡️ SS Railings', val: 'grade 304 stainless steel balcony and staircase railings' },
+                  { label: '🏭 Factory Sheds', val: 'heavy-duty industrial factory shed and roofing structure' },
+                  { label: '✨ Laser Cutting', val: 'designer CNC metal laser cutting and decorative screens' },
+                  { label: '🔧 Welding Repair', val: 'urgent on-site welding and rolling shutter repair service' },
+                ].map((item) => (
+                  <Chip
+                    key={item.label}
+                    label={item.label}
+                    selected={topic === item.val}
+                    onPress={() => setTopic(item.val)}
+                  />
+                ))}
+              </View>
+
+              {/* Quick Prompt Tags */}
               <Text style={ui.label}>Quick Topic Tags</Text>
               <View style={[ui.row, { gap: 6 }]}>
-                {['Offer', 'New Product', 'Festival', 'Weekend Special'].map((tag) => (
+                {['Special Offer', 'New Service', 'Weekend Discount', 'Local Update'].map((tag) => (
                   <Chip
                     key={tag}
                     label={tag}
@@ -400,13 +411,13 @@ export default function MarketingScreen() {
               <Action
                 secondary
                 icon="auto-awesome"
-                label={busy ? 'Generating Caption…' : '✨ Generate Caption with AI'}
+                label={busy ? 'Generating Caption…' : '✨ Generate with Google AI'}
                 disabled={busy}
                 onPress={generate}
               />
 
               <Field
-                label="Post Caption"
+                label="Post Caption (Local SEO Optimized)"
                 value={content}
                 onChangeText={setContent}
                 multiline
@@ -422,96 +433,95 @@ export default function MarketingScreen() {
               />
 
               <Action
-                label="Next: Select Channels →"
+                label="Next: Google Post Details →"
                 disabled={!content.trim()}
                 onPress={() => setStep(1)}
               />
             </Card>
           )}
 
-          {/* STEP 2: CHANNELS */}
+          {/* STEP 2: GOOGLE POST DETAILS */}
           {step === 1 && (
-            <Card style={{ gap: 12 }}>
-              <Text style={ui.heading}>Publishing Channels</Text>
-              <Text style={ui.body}>Choose where this post should be published automatically.</Text>
+            <Card style={{ gap: 14 }}>
+              <View>
+                <Text style={ui.heading}>Google Post Format</Text>
+                <Text style={ui.caption}>Select how this update appears on your Google Maps & Search profile.</Text>
+              </View>
 
-              {available.map((a) => {
-                const isSelected = selected.includes(a.id);
-                return (
-                  <Pressable
-                    key={a.id}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: isSelected }}
-                    onPress={() =>
-                      setSelected(
-                        isSelected ? selected.filter((id) => id !== a.id) : [...selected, a.id]
-                      )
-                    }
-                    style={[
-                      ui.row,
-                      {
-                        justifyContent: 'space-between',
-                        padding: 14,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: isSelected ? colors.brand : colors.line,
-                        backgroundColor: isSelected ? colors.soft : colors.surface,
-                      },
-                    ]}
-                  >
-                    <View style={[ui.row, { gap: 10 }]}>
-                      <MaterialIcons
-                        name={
-                          a.platform === 'googlebusiness'
-                            ? 'store'
-                            : a.platform === 'facebook'
-                            ? 'facebook'
-                            : a.platform === 'instagram'
-                            ? 'camera-alt'
-                            : 'chat'
-                        }
-                        size={22}
-                        color={colors.brand}
-                      />
-                      <View>
-                        <Text style={ui.heading}>{a.accountName}</Text>
-                        <Text style={ui.caption}>{a.platform.toUpperCase()}</Text>
-                      </View>
-                    </View>
-                    <MaterialIcons
-                      name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
-                      size={22}
-                      color={isSelected ? colors.brand : colors.muted}
-                    />
-                  </Pressable>
-                );
-              })}
-
-              <Action label="Next: Preview & Schedule →" disabled={!selected.length} onPress={() => setStep(2)} />
-              <Action secondary label="← Back" onPress={() => setStep(0)} />
-            </Card>
-          )}
-
-          {/* STEP 3: PREVIEW & SCHEDULE (Screen 16) */}
-          {step === 2 && (
-            <Card style={{ gap: 12 }}>
               <View style={[ui.row, { gap: 8 }]}>
-                {targets.map((t) => (
-                  <Badge key={t.platform} label={t.platform.toUpperCase()} accent />
+                {[
+                  { key: 'whats_new', label: "What's New" },
+                  { key: 'offer', label: 'Special Offer' },
+                  { key: 'event', label: 'Event' },
+                ].map((type) => (
+                  <Chip
+                    key={type.key}
+                    label={type.label}
+                    selected={gbpPostType === type.key}
+                    onPress={() => setGbpPostType(type.key as any)}
+                  />
                 ))}
               </View>
 
-              {/* Feed Card Simulation */}
+              <View style={{ gap: 8 }}>
+                <Text style={ui.label}>Call-to-Action (CTA) Button on Google</Text>
+                <View style={[ui.row, { gap: 6, flexWrap: 'wrap' }]}>
+                  {[
+                    { key: 'LEARN_MORE', label: 'Learn More' },
+                    { key: 'CALL', label: 'Call Now' },
+                    { key: 'BOOK', label: 'Book Online' },
+                    { key: 'ORDER_ONLINE', label: 'Order Online' },
+                  ].map((cta) => (
+                    <Chip
+                      key={cta.key}
+                      label={cta.label}
+                      selected={ctaType === cta.key}
+                      onPress={() => setCtaType(cta.key as any)}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              {gbpPostType === 'offer' && (
+                <Field
+                  label="Coupon / Discount Code (Optional)"
+                  value={couponCode}
+                  onChangeText={setCouponCode}
+                  placeholder="e.g. SUMMER20"
+                  autoCapitalize="characters"
+                />
+              )}
+
+              <Action label="Next: Preview & Publish →" onPress={() => setStep(2)} />
+              <Action secondary label="← Back to Content" onPress={() => setStep(0)} />
+            </Card>
+          )}
+
+          {/* STEP 3: PREVIEW & PUBLISH */}
+          {step === 2 && (
+            <Card style={{ gap: 12 }}>
+              <View style={[ui.row, { gap: 8 }]}>
+                <Badge label="GOOGLE BUSINESS" accent />
+                <Badge label={gbpPostType.toUpperCase().replace('_', ' ')} />
+              </View>
+
+              {/* Google Business Feed Preview Simulation */}
               <View style={[ui.card, { padding: 14, gap: 10, backgroundColor: colors.surface }]}>
                 <View style={[ui.row, { gap: 10 }]}>
                   <Avatar name={workspace.data?.name || 'Your Business'} size={38} />
                   <View>
                     <Text style={ui.heading}>{workspace.data?.name || 'Your Business'}</Text>
-                    <Text style={ui.caption}>Sponsored · Just now</Text>
+                    <Text style={ui.caption}>Google Business Profile · Live Update</Text>
                   </View>
                 </View>
 
                 <Text style={ui.body}>{content}</Text>
+
+                {couponCode ? (
+                  <View style={{ alignSelf: 'flex-start', backgroundColor: colors.brandSoft, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brandDark }}>Coupon: {couponCode}</Text>
+                  </View>
+                ) : null}
 
                 {mediaUrls[0] ? (
                   <Image
@@ -521,16 +531,21 @@ export default function MarketingScreen() {
                     alt="Post preview"
                   />
                 ) : null}
+
+                <View style={{ alignSelf: 'flex-start', backgroundColor: colors.brand, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
+                    {ctaType === 'CALL' ? '📞 Call Now' : ctaType === 'BOOK' ? '📅 Book' : ctaType === 'ORDER_ONLINE' ? '🛍️ Order' : '📖 Learn More'}
+                  </Text>
+                </View>
               </View>
 
               <Field label="Schedule Date (YYYY-MM-DD, Optional)" value={date} onChangeText={setDate} placeholder="2026-10-15" />
               <Field label="Schedule Time (HH:MM, Optional)" value={time} onChangeText={setTime} placeholder="14:30" />
 
-              {/* Approve / Schedule / Reject Actions (Screen 16) */}
               <View style={[ui.row, { gap: 10 }]}>
                 <View style={{ flex: 1 }}>
                   <Action
-                    label={busy ? 'Publishing…' : '✓ Approve & Publish'}
+                    label={busy ? 'Publishing…' : '✓ Publish to Google'}
                     disabled={busy}
                     onPress={() => save('published')}
                   />
@@ -538,21 +553,33 @@ export default function MarketingScreen() {
                 <View style={{ flex: 1 }}>
                   <Action
                     secondary
-                    label="Schedule Later"
+                    label="Schedule for Later"
                     disabled={busy || !date.trim()}
                     onPress={() => save('scheduled')}
                   />
                 </View>
               </View>
 
-              <Action secondary label="Save Draft" disabled={busy} onPress={() => save('draft')} />
-              <Action secondary label="← Edit Content" disabled={busy} onPress={() => setStep(0)} />
+              <Action secondary label="Save as Draft" disabled={busy} onPress={() => save('draft')} />
+              <Action secondary label="← Back to Post Details" disabled={busy} onPress={() => setStep(1)} />
             </Card>
           )}
 
           <Action secondary label="Close" onPress={() => setOpen(false)} />
         </Screen>
       </Modal>
+
+      {/* 1-Tap WhatsApp Review Request Sheet */}
+      <ReviewRequestSheet
+        visible={requestOpen}
+        onClose={() => setRequestOpen(false)}
+        businessName={workspace.data?.name || 'Your Business'}
+        reviewUrl={
+          gbpPlace.data?.place?.reviewUrl ||
+          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(workspace.data?.name || 'Your Business')}`
+        }
+        apiRequest={apiRequest}
+      />
     </Screen>
   );
 }
@@ -573,3 +600,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+

@@ -5,9 +5,7 @@ import {
   Facebook,
   Instagram,
   MapPin,
-  Linkedin,
-  Image as ImageIcon,
-  Twitter,
+  MessageSquare,
   Plus,
   MoreVertical,
   RefreshCw,
@@ -47,27 +45,17 @@ import { cn } from '@/lib/utils';
 /**
  * Social Accounts View
  * --------------------
- * Grid of platform cards (Facebook, Instagram, Google Business, LinkedIn,
- * Pinterest, X). Each card shows the platform icon, account name (if
- * connected), and a "Connect" or "Manage" button.
- *
- * Connect buttons redirect to `/api/oauth/{platform}` — the OAuth flow
- * is being built by other agents in parallel. Until those routes exist,
- * the connect button shows a "Coming soon" toast.
- *
- * Manage: shows account details (account ID, scopes, token expiry, last
- * 3 chars of access token for verification) + a disconnect button.
+ * High-ROI local marketing channels focused on Google Business Profile
+ * and WhatsApp 1-Tap Reviews for Indian SMBs and tradies.
  */
 
 // ─── Platform metadata ─────────────────────────────────────────────────────
 
 type PlatformKey =
-  | 'facebook'
-  | 'instagram'
   | 'googlebusiness'
-  | 'linkedin'
-  | 'pinterest'
-  | 'twitter';
+  | 'whatsapp'
+  | 'facebook'
+  | 'instagram';
 
 interface PlatformMeta {
   key: PlatformKey;
@@ -79,6 +67,22 @@ interface PlatformMeta {
 }
 
 const PLATFORMS: PlatformMeta[] = [
+  {
+    key: 'googlebusiness',
+    label: 'Google Business',
+    icon: MapPin,
+    color: 'bg-emerald-600',
+    description: 'Publish offers, events, photos and updates to your GBP listing and Google Maps.',
+    oauthScopes: 'business.manage',
+  },
+  {
+    key: 'whatsapp',
+    label: 'WhatsApp 1-Tap Reviews',
+    icon: MessageSquare,
+    color: 'bg-emerald-500',
+    description: 'Invite customers via WhatsApp to leave 5-star Google reviews ($0 cost, works natively).',
+    oauthScopes: 'direct_deeplink',
+  },
   {
     key: 'facebook',
     label: 'Facebook',
@@ -94,38 +98,6 @@ const PLATFORMS: PlatformMeta[] = [
     color: 'bg-pink-600',
     description: 'Publish photos and reels to Instagram Business.',
     oauthScopes: 'instagram_content_publish, instagram_basic',
-  },
-  {
-    key: 'googlebusiness',
-    label: 'Google Business',
-    icon: MapPin,
-    color: 'bg-emerald-600',
-    description: 'Publish offers, events, and updates to your GBP listing.',
-    oauthScopes: 'business.manage',
-  },
-  {
-    key: 'linkedin',
-    label: 'LinkedIn',
-    icon: Linkedin,
-    color: 'bg-sky-700',
-    description: 'Publish posts to your LinkedIn organization page.',
-    oauthScopes: 'w_organization_social, rw_organization',
-  },
-  {
-    key: 'pinterest',
-    label: 'Pinterest',
-    icon: ImageIcon,
-    color: 'bg-red-600',
-    description: 'Pin images to your Pinterest boards.',
-    oauthScopes: 'boards:read, pins:write',
-  },
-  {
-    key: 'twitter',
-    label: 'X (Twitter)',
-    icon: Twitter,
-    color: 'bg-zinc-900',
-    description: 'Post tweets and threads to your X account.',
-    oauthScopes: 'tweet.read, tweet.write, users.read',
   },
 ];
 
@@ -222,6 +194,10 @@ export function SocialAccountsView({ embedded = false }: { embedded?: boolean } 
   }, [loadAccounts]);
 
   const handleConnect = (platform: PlatformMeta) => {
+    if (platform.key === 'whatsapp') {
+      toast.success('WhatsApp 1-Tap Reviews is ready! Share direct 5-star review links with your customers.');
+      return;
+    }
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const token = getAuthToken();
     const authParam = token ? `&auth=${encodeURIComponent(token)}` : '';
@@ -363,6 +339,11 @@ export function SocialAccountsView({ embedded = false }: { embedded?: boolean } 
                         <CheckCircle2 className="size-3" />
                         Connected
                       </Badge>
+                    ) : platform.key === 'whatsapp' ? (
+                      <Badge variant="default" className="gap-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <CheckCircle2 className="size-3" />
+                        1-Tap Ready
+                      </Badge>
                     ) : (
                       <Badge variant="outline">Not connected</Badge>
                     )}
@@ -392,6 +373,26 @@ export function SocialAccountsView({ embedded = false }: { embedded?: boolean } 
                       >
                         <Plug className="size-3.5" />
                         Manage
+                      </Button>
+                    </>
+                  ) : platform.key === 'whatsapp' ? (
+                    <>
+                      <div className="text-sm">
+                        <div className="font-medium truncate">Native WhatsApp Intent</div>
+                        <div className="text-xs text-muted-foreground">
+                          Direct 5-star Google review requests with $0 Meta API fees
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-emerald-600 border-emerald-500/30 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                        onClick={() => {
+                          toast.success('WhatsApp 1-Tap Google Reviews is ready! Share direct review links with your customers.');
+                        }}
+                      >
+                        <MessageSquare className="size-3.5" />
+                        1-Tap Review Ready
                       </Button>
                     </>
                   ) : (
@@ -427,8 +428,8 @@ export function SocialAccountsView({ embedded = false }: { embedded?: boolean } 
             history of past posts for your analytics.
           </p>
           <p>
-            Some platforms (Facebook, Instagram) require a Business account for publishing.
-            LinkedIn requires an Organization Page (not a personal profile).
+            Google Business Profile requires an active listing verified on Google.
+            WhatsApp 1-Tap Reviews works directly via native links without requiring Meta developer verification.
           </p>
         </CardContent>
       </Card>
