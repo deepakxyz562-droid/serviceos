@@ -354,6 +354,11 @@ model Tenant {
   socialAccounts      SocialAccount[]
   socialPosts         SocialPost[]
 
+  // GBP Marketing Score history, competitor tracking, keyword planner
+  gbpScoreSnapshots   GbpScoreSnapshot[]
+  competitors         Competitor[]
+  trackedKeywords     TrackedKeyword[]
+
   @@index([slug])
   @@index([plan])
   @@index([planStatus])
@@ -7944,6 +7949,9 @@ model SocialPost {
   id              String   @id @default(cuid())
   tenantId        String
   status          String   @default("draft") // "draft" | "scheduled" | "publishing" | "published" | "failed" | "partial"
+  // AI-post review workflow (Dhanda-style Pending/Approved/Rejected pills).
+  // null = created directly by the user (no approval gate).
+  approvalStatus  String?  // "pending" | "approved" | "rejected"
   content         String   // caption/text
   mediaUrls       String   @default("[]") // JSON array of image URLs
   linkUrl         String?
@@ -7975,6 +7983,70 @@ model SocialPost {
 
 // Normalized metrics across platforms. One row per (post, platform, fetch).
 // Enables the Engagement Dashboard to show unified analytics.
+// Daily snapshot of the composite Marketing Score (0-100) for trend charts.
+// One row per tenant per day (upserted by /api/cron/gbp-score-snapshot).
+model GbpScoreSnapshot {
+  id                      String   @id @default(cuid())
+  tenantId                String
+  snapshotDate            DateTime // day bucket (UTC midnight)
+  overallScore            Int
+  label                   String   // "Poor" | "Average" | "Good" | "Great"
+  profileCompleteness     Int      // 0-100 from /api/gbp/audit style checks
+  engagementScore         Int      // 0-100 from GBP views/calls/directions momentum
+  responsivenessScore     Int      // 0-100 from review reply rate + speed
+  postingCadenceScore     Int      // 0-100 from posts + photos published recently
+  reviewRating            Float?   // avg star rating at snapshot time
+  reviewCount             Int      @default(0)
+  createdAt               DateTime @default(now())
+
+  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, snapshotDate])
+  @@index([tenantId, snapshotDate])
+}
+
+// Local competitor businesses (within ~5 KM) shown in the Competitor Analysis
+// table. Sourced from Google Places Nearby Search or entered manually.
+model Competitor {
+  id              String   @id @default(cuid())
+  tenantId        String
+  name            String
+  rating          Float?
+  reviewCount     Int?
+  distanceKm      Float?
+  address         String?
+  category        String?
+  placeId         String?
+  mapsUrl         String?
+  source          String   @default("manual") // "places" | "manual"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+// User-tracked SEO keywords in the Keyword Planner (ranked list with score + city).
+model TrackedKeyword {
+  id              String   @id @default(cuid())
+  tenantId        String
+  keyword         String
+  city            String?
+  country         String   @default("India")
+  score           Int?     // monthly search volume band (e.g. 100 / 500)
+  position        Int?     // display rank
+  source          String   @default("manual") // "manual" | "ai"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, keyword])
+  @@index([tenantId])
+}
+
 model SocialPostMetric {
   id              String   @id @default(cuid())
   tenantId        String

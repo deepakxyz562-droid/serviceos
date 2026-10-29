@@ -1,7 +1,20 @@
 import { db } from '@/lib/db';
-import { NextResponse } from 'next/server';
+import { isSuperAdminRequest } from '@/lib/admin-auth';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  if (!(await isSuperAdminRequest())) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.ENABLE_DEMO_SEEDING !== 'true'
+  ) {
+    return NextResponse.json(
+      { error: 'Demo seeding is disabled in production. Set ENABLE_DEMO_SEEDING=true to allow it.' },
+      { status: 403 },
+    );
+  }
   const results: Record<string, number> = {};
 
   try {

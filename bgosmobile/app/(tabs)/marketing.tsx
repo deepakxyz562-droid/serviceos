@@ -1,8 +1,8 @@
 import * as Crypto from 'expo-crypto';
-import React, { useState, useRef } from 'react';
-import { Alert, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Image, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Screen,
   Card,
@@ -10,9 +10,7 @@ import {
   Action,
   Badge,
   Chip,
-  Empty,
   ErrorNotice,
-  Loading,
   Avatar,
   ui,
   colors,
@@ -24,33 +22,21 @@ import { WEB_URL } from '../../src/lib/constants';
 import { validateSocialPost } from '../../src/lib/social-validation';
 import { futureLocalTime } from '../../src/lib/dates';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
+import { PostsBoard } from '../../src/components/gbp/posts-list';
 import type { BgosWorkspace } from '../../../shared/bgos-contracts';
 import type { GbpPlaceResult } from '../../src/components/gbp/types';
 
 type Account = { id: string; platform: string; accountName: string; isActive: boolean };
-type Post = {
-  id: string;
-  content: string;
-  status: string;
-  scheduledAt?: string;
-  failureReason?: string;
-  mediaUrls: string[];
-  gbpPostType?: string;
-  publishTargets?: { platform: string; status: string; error?: string }[];
-};
 
 export default function MarketingScreen() {
   const router = useRouter();
+  // "Generate text post" CTA on the Google Post tab lands here with ?generate=1
+  // → the composer opens straight away.
+  const params = useLocalSearchParams<{ generate?: string }>();
   const pendingRequest = useRef<{ body: string; key: string } | null>(null);
   const saving = useRef(false);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
-  const [filter, setFilter] = useState('all');
-  const [page, setPage] = useState(1);
-  const posts = useResource<{ data: Post[]; pagination: { totalPages: number } }>(
-    `/api/social/posts?limit=20&page=${page}${filter === 'all' ? '' : `&status=${filter}`}`,
-    15000
-  );
   const accounts = useResource<{ data: Account[] }>('/api/social/accounts');
 
   const [open, setOpen] = useState(false);
@@ -67,6 +53,16 @@ export default function MarketingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [requestOpen, setRequestOpen] = useState(false);
+  const [boardRefresh, setBoardRefresh] = useState(0);
+
+  useEffect(() => {
+    if (params.generate === '1') {
+      setError(null);
+      setOpen(true);
+      // Clear the flag so a later push with ?generate=1 re-triggers the composer.
+      router.setParams({ generate: '' });
+    }
+  }, [params.generate, router]);
 
   const available = accounts.data?.data || [];
   const gbpAccount = available.find((a) => a.platform === 'googlebusiness' && a.isActive);
@@ -88,7 +84,7 @@ export default function MarketingScreen() {
       setContent(data.caption);
     } catch (e) {
       // Never fabricate a caption when the AI service fails — surface the real
-      // error so the user can retry or write the caption manually.
+      // error so the user can retry or write the caption below manually.
       setError(
         `${(e as Error).message || 'AI caption generation failed.'} You can retry, or write the caption below manually.`
       );
@@ -110,6 +106,12 @@ export default function MarketingScreen() {
       setError(
         'Connect your Google Business Profile to publish or schedule posts to Google. You can save as a Draft in the meantime.'
       );
+      return;
+    }
+
+    const contentCheck = validateSocialPost(content.trim(), ['googlebusiness'], mediaUrls);
+    if (contentCheck) {
+      setError(contentCheck);
       return;
     }
 
@@ -154,9 +156,9 @@ export default function MarketingScreen() {
           ? 'Post published to your Google Business Profile! 🚀'
           : status === 'scheduled'
           ? 'Post scheduled for your Google Business Profile.'
-          : 'Draft saved.'
+          : 'Draft saved. Find it under the Not Posted pill.'
       );
-      await posts.refresh();
+      setBoardRefresh((k) => k + 1);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -195,206 +197,206 @@ export default function MarketingScreen() {
     }
   }
 
+  function openComposer() {
+    setError(null);
+    setOpen(true);
+  }
+
   return (
-    <Screen
-      title="Google Post Studio"
-      subtitle="AI-powered Google updates, local offers & post scheduling."
-      showBack={true}
-      onRefresh={async () => {
-        await Promise.all([posts.refresh(), accounts.refresh(), workspace.refresh(), gbpPlace.refresh()]);
-      }}
-      rightAction={
-        <Action
-          compact
-          label="＋ Post"
-          icon="auto-awesome"
-          onPress={() => {
-            setError(null);
-            setOpen(true);
-          }}
-        />
-      }
-    >
-      {/* Feature Navigation Cards (Screen 14) */}
-      <Card style={{ backgroundColor: colors.hero, borderColor: colors.hero, padding: 18 }}>
-        <View style={[ui.row, { justifyContent: 'space-between' }]}>
-          <View style={{ flex: 1 }}>
-            <View style={[ui.row, { gap: 6 }]}>
-              <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFFFFF' }}>Google Business Autopilot</Text>
-              <Badge label="GBP Focus" accent />
+    <View style={{ flex: 1 }}>
+      <Screen
+        title="AI Post"
+        subtitle="AI-powered Google updates, local offers & post scheduling."
+        showBack={true}
+        onBack={() => {
+          if (router.canGoBack?.()) router.back();
+          else router.push('/(tabs)/index');
+        }}
+        onRefresh={async () => {
+          await Promise.all([accounts.refresh(), workspace.refresh(), gbpPlace.refresh()]).catch(() => {});
+          setBoardRefresh((k) => k + 1);
+        }}
+        rightAction={
+          <Action
+            compact
+            label="＋ Post"
+            icon="auto-awesome"
+            onPress={openComposer}
+          />
+        }
+      >
+        {/* Feature Navigation Cards (Screen 14) */}
+        <Card style={{ backgroundColor: colors.hero, borderColor: colors.hero, padding: 18 }}>
+          <View style={[ui.row, { justifyContent: 'space-between' }]}>
+            <View style={{ flex: 1 }}>
+              <View style={[ui.row, { gap: 6 }]}>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFFFFF' }}>Google Business Autopilot</Text>
+                <Badge label="GBP Focus" accent />
+              </View>
+              <Text style={{ fontSize: 13, color: '#D1EAE5', marginTop: 4 }}>
+                Craft high-converting Google updates, announcements, and local offers that boost your Google Maps ranking.
+              </Text>
             </View>
-            <Text style={{ fontSize: 13, color: '#D1EAE5', marginTop: 4 }}>
-              Craft high-converting Google updates, announcements, and local offers that boost your Google Maps ranking.
-            </Text>
+            <MaterialIcons name="auto-awesome" size={32} color={colors.accent} />
           </View>
-          <MaterialIcons name="auto-awesome" size={32} color={colors.accent} />
-        </View>
 
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-          <Pressable onPress={handleGoogleChipPress} style={styles.channelChip}>
-            <MaterialIcons name="store" size={14} color="#FFFFFF" />
-            <Text style={styles.channelChipText}>
-              Google Business {gbpAccount ? '✓' : '+'}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setRequestOpen(true)}
-            style={[styles.channelChip, { backgroundColor: '#25D366' }]}
-            accessibilityRole="button"
-            accessibilityLabel="Send 1-Tap Google Review Request via WhatsApp"
-          >
-            <MaterialIcons name="chat" size={14} color="#FFFFFF" />
-            <Text style={styles.channelChipText}>
-              WhatsApp Review Invite ↗
-            </Text>
-          </Pressable>
-        </View>
-      </Card>
-
-      {notice ? (
-        <View style={{ backgroundColor: colors.successSoft, padding: 12, borderRadius: 12 }}>
-          <Text style={{ color: colors.success, fontWeight: '700' }}>✓ {notice}</Text>
-        </View>
-      ) : null}
-
-      <ErrorNotice message={error || posts.error || accounts.error} retry={posts.refresh} />
-
-      {/* Viral Video Banner (Dhanda AI benchmark) */}
-      <View
-        style={{
-          backgroundColor: '#FAF5FF',
-          borderColor: '#E9D5FF',
-          borderWidth: 1,
-          borderRadius: 14,
-          padding: 12,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontSize: 16 }}>🎬</Text>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B21A8' }}>
-            Try Generating Viral Video (0/5)
-          </Text>
-        </View>
-        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Explore →</Text>
-      </View>
-
-      {/* Keyword Planner Tip (Dhanda AI benchmark) */}
-      <View
-        style={{
-          backgroundColor: '#EFF6FF',
-          borderColor: '#BFDBFE',
-          borderWidth: 1,
-          borderRadius: 14,
-          padding: 12,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-          <Text style={{ fontSize: 16 }}>💡</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 12, fontWeight: '800', color: '#1E40AF' }}>
-              Google works best with keywords
-            </Text>
-            <Text style={{ fontSize: 11, color: '#3B82F6', marginTop: 1 }}>
-              Using your keywords we post daily on your Google Profile.
-            </Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            <Pressable onPress={handleGoogleChipPress} style={styles.channelChip}>
+              <MaterialIcons name="store" size={14} color="#FFFFFF" />
+              <Text style={styles.channelChipText}>
+                Google Business {gbpAccount ? '✓' : '+'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setRequestOpen(true)}
+              style={[styles.channelChip, { backgroundColor: '#25D366' }]}
+              accessibilityRole="button"
+              accessibilityLabel="Send 1-Tap Google Review Request via WhatsApp"
+            >
+              <MaterialIcons name="chat" size={14} color="#FFFFFF" />
+              <Text style={styles.channelChipText}>
+                WhatsApp Review Invite ↗
+              </Text>
+            </Pressable>
           </View>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/(tabs)/growth')}
+        </Card>
+
+        {notice ? (
+          <View style={{ backgroundColor: colors.successSoft, padding: 12, borderRadius: 12 }}>
+            <Text style={{ color: colors.success, fontWeight: '700' }}>✓ {notice}</Text>
+          </View>
+        ) : null}
+
+        <ErrorNotice message={error || accounts.error} retry={() => accounts.refresh()} />
+
+        {/* Viral Video Banner (Dhanda AI benchmark) */}
+        <View
           style={{
-            backgroundColor: '#2563EB',
-            paddingHorizontal: 10,
-            paddingVertical: 5,
-            borderRadius: 8,
+            backgroundColor: '#FAF5FF',
+            borderColor: '#E9D5FF',
+            borderWidth: 1,
+            borderRadius: 14,
+            padding: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>Keywords</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: 16 }}>🎬</Text>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B21A8' }}>
+              Try Generating Viral Video (0/5)
+            </Text>
+          </View>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Explore →</Text>
+        </View>
+
+        {/* Keyword Planner Tip (Dhanda AI benchmark) */}
+        <View
+          style={{
+            backgroundColor: '#EFF6FF',
+            borderColor: '#BFDBFE',
+            borderWidth: 1,
+            borderRadius: 14,
+            padding: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+            <Text style={{ fontSize: 16 }}>💡</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#1E40AF' }}>
+                Google works best with keywords
+              </Text>
+              <Text style={{ fontSize: 11, color: '#3B82F6', marginTop: 1 }}>
+                Using your keywords we post daily on your Google Profile.
+              </Text>
+            </View>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open Keyword Planner"
+            onPress={() => router.push('/keyword-planner')}
+            style={{
+              backgroundColor: '#2563EB',
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>Keywords</Text>
+          </Pressable>
+        </View>
+
+        {/* 6 status pills (2 rows) + fetched post list + Approve/Reject on Pending */}
+        <PostsBoard refreshKey={boardRefresh} />
+      </Screen>
+
+      {/* Floating full-width gradient CTA + voice mic (Dhanda AI benchmark) */}
+      <View
+        pointerEvents="box-none"
+        style={{
+          position: 'absolute',
+          left: 12,
+          right: 12,
+          bottom: 8,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Generate AI Post"
+          disabled={busy}
+          onPress={openComposer}
+          style={({ pressed }) => ({
+            flex: 1,
+            minHeight: 50,
+            borderRadius: 25,
+            overflow: 'hidden',
+            opacity: busy ? 0.6 : pressed ? 0.85 : 1,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.25,
+            shadowRadius: 6,
+            elevation: 8,
+          })}
+        >
+          <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row' }}>
+            <View style={{ flex: 1, backgroundColor: '#C084FC' }} />
+            <View style={{ flex: 1, backgroundColor: '#A855F7' }} />
+          </View>
+          <View style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <MaterialIcons name="auto-awesome" size={17} color="#FFFFFF" />
+            <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>Generate AI Post ✨</Text>
+          </View>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Voice assistant"
+          onPress={() => Alert.alert('Voice Assistant', 'Speak your marketing request in Hindi or English…')}
+          style={({ pressed }) => ({
+            width: 50,
+            height: 50,
+            borderRadius: 25,
+            backgroundColor: colors.brand,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.85 : 1,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.25,
+            shadowRadius: 6,
+            elevation: 8,
+          })}
+        >
+          <MaterialIcons name="mic" size={22} color="#FFFFFF" />
         </Pressable>
       </View>
-
-      {/* 6 Status Filter Chips (Dhanda AI benchmark) */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={[ui.row, { gap: 6 }]}>
-          {[
-            { key: 'scheduled', label: 'Scheduled 📅' },
-            { key: 'published', label: 'Posted ✔' },
-            { key: 'not_posted', label: 'Not Posted ❌' },
-            { key: 'pending', label: 'Pending ⚠️' },
-            { key: 'approved', label: 'Approved 👍' },
-            { key: 'rejected', label: 'Rejected 👎' },
-            { key: 'all', label: 'All Posts' },
-          ].map((pill) => (
-            <Chip
-              key={pill.key}
-              label={pill.label}
-              selected={filter === pill.key}
-              onPress={() => {
-                setFilter(pill.key);
-                setPage(1);
-              }}
-            />
-          ))}
-        </View>
-      </ScrollView>
-
-      {/* Post List */}
-      {posts.loading ? (
-        <Loading />
-      ) : !posts.data?.data.length ? (
-        !posts.error && (
-          <Empty
-            title="No posts published yet"
-            detail="Generate your first AI post and review before sharing."
-            actionLabel="＋ Create First Post"
-            onAction={() => {
-              setOpen(true);
-            }}
-          />
-        )
-      ) : (
-        posts.data.data.map((post) => (
-          <Card key={post.id} style={{ gap: 10 }}>
-            <View style={[ui.row, { justifyContent: 'space-between' }]}>
-              <Badge label={post.status.toUpperCase()} success={post.status === 'published'} />
-              {post.scheduledAt && (
-                <Text style={ui.caption}>
-                  📅 {new Date(post.scheduledAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              )}
-            </View>
-
-            <Text style={ui.body}>{post.content}</Text>
-
-            {post.mediaUrls?.[0] ? (
-              <Image
-                source={{ uri: post.mediaUrls[0] }}
-                style={{ width: '100%', height: 190, borderRadius: 12 }}
-                accessibilityLabel="Post image"
-                alt="Post image"
-              />
-            ) : null}
-
-            {post.publishTargets && (
-              <View style={[ui.row, { gap: 6, flexWrap: 'wrap' }]}>
-                {post.publishTargets.map((t, i) => (
-                  <View key={i} style={[ui.row, { gap: 4, backgroundColor: colors.soft, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }]}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.brand }}>
-                      {t.platform} · {t.status}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </Card>
-        ))
-      )}
 
       {/* 3-Step Create / Preview Modal (Google Post Studio) */}
       <Modal visible={open} animationType="slide" onRequestClose={() => { if (!busy) setOpen(false); }}>
@@ -647,7 +649,7 @@ export default function MarketingScreen() {
         }
         apiRequest={apiRequest}
       />
-    </Screen>
+    </View>
   );
 }
 
@@ -667,4 +669,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-

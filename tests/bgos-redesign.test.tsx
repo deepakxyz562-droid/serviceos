@@ -13,7 +13,7 @@ beforeEach(() => {
 });
 it('routes desktop CRM to existing lead records and keeps contacts under the same section', () => {
   render(<BgosNavigation />);
-  fireEvent.click(screen.getByRole('button', { name: 'Leads & CRM', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Leads & CRM' }));
   expect(useAppStore.getState().currentView).toBe('leads');
   expect(screen.queryByRole('button', { name: /store|inventory|invoice|jobs/i })).toBeNull();
 });
@@ -263,76 +263,288 @@ it('renders Tickets & Support Helpdesk workstation with status pills, 8-ticket q
   ).toBeDefined();
 });
 
-it('renders Marketing Studio with real KPI cards, honest tabs, and AI Content studio', async () => {
+it('renders Marketing Studio with Dhanda tabs, real API wiring, gauge, competitors, and growth actions', async () => {
+  // Injected fetch mocks — every number the UI shows comes from these payloads
+  // (Phase A APIs). No hardcoded business data in the component.
+  const apiCalls: string[] = [];
+  const okJson = (payload: unknown) =>
+    Promise.resolve({ ok: true, status: 200, json: async () => payload } as Response);
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string, options?: RequestInit) => {
+      apiCalls.push(`${(options?.method || 'GET').toUpperCase()} ${String(url)}`);
+      if (url.includes('/api/gbp/marketing-score')) {
+        return okJson({
+          isConnected: true,
+          score: 62,
+          label: 'Good',
+          components: { profileCompleteness: 80, engagementScore: 55, responsivenessScore: 60, postingCadenceScore: 50 },
+          reviewRating: 4.6,
+          reviewCount: 118,
+          reviewReplyRate: 72,
+          postsLast30Days: 6,
+          photosLast30Days: 4,
+          history: [
+            { date: '2026-10-24', score: 48 },
+            { date: '2026-10-26', score: 53 },
+            { date: '2026-10-28', score: 58 },
+            { date: '2026-10-29', score: 62 },
+          ],
+          weekHistory: [
+            { date: '2026-10-24', score: 48 },
+            { date: '2026-10-29', score: 62 },
+          ],
+        });
+      }
+      if (url.includes('/api/gbp/competitors')) {
+        return okJson({
+          competitors: [
+            { id: 'comp-1', name: 'Websoft Infotech (ERP & Software)', rating: 4.9, reviewCount: 112, distanceKm: 2.1, address: 'Boring Road, Patna', category: 'IT Services', mapsUrl: 'https://maps.google.com/?q=websoft', source: 'places' },
+            { id: 'comp-2', name: 'Kala Softech Pvt. Ltd.', rating: 4.8, reviewCount: 84, distanceKm: 2.8, address: 'Sri Krishna Puri, Patna', category: 'Software Company', mapsUrl: null, source: 'places' },
+          ],
+          source: 'places',
+          migrationRequired: false,
+          placesUnavailable: false,
+        });
+      }
+      if (url.includes('/api/gbp/growth-actions')) {
+        return okJson({
+          actions: [
+            { id: 'complete_profile', title: 'Complete your Profile', doneCount: 2, totalCount: 6, weeklyTarget: null, doneThisWeek: 0, cta: 'Complete now', href: '/app?view=settings', dismissed: false, completed: false },
+            { id: 'upload_media', title: 'Upload Media', doneCount: 2, totalCount: 5, weeklyTarget: 5, doneThisWeek: 2, cta: 'Upload', href: '/app?view=socialMedia', dismissed: false, completed: false },
+            { id: 'approve_post', title: 'Approve Post', doneCount: 0, totalCount: 5, weeklyTarget: 5, doneThisWeek: 0, cta: 'Approve', href: '/app?view=socialMedia', dismissed: false, completed: false },
+          ],
+          totalDone: 3,
+          totalTarget: 10,
+          leftCount: 7,
+          pendingApprovalCount: 3,
+        });
+      }
+      if (url.includes('/api/gbp/place')) {
+        return okJson({
+          isConnected: true,
+          isPendingApproval: false,
+          place: { title: 'Acme Fabricators', category: 'Metal Fabricator', address: 'Boring Road, Patna' },
+          metrics: {
+            totalViews: 66,
+            searchImpressions: 54,
+            mapsImpressions: 12,
+            callClicks: 5,
+            directionRequests: 9,
+            websiteClicks: 7,
+            totalReviews: 118,
+            avgRating: 4.6,
+            responseRate: 72,
+          },
+        });
+      }
+      if (url.includes('/api/gbp/keyword-plan')) {
+        return okJson({
+          keywords: [
+            { id: 'kw-1', keyword: 'software development company in patna', city: 'Patna', country: 'India', score: 500, position: 1, source: 'manual' },
+            { id: 'kw-2', keyword: 'best crm software patna', city: 'Patna', country: 'India', score: 100, position: 2, source: 'ai' },
+          ],
+          migrationRequired: false,
+        });
+      }
+      if (url.includes('/api/social/photos')) {
+        return okJson({
+          photos: [
+            { id: 'p-live-1', url: 'https://example.com/live-1.jpg', thumbnailUrl: 'https://example.com/live-1.jpg', category: 'ADDITIONAL', createdAt: '2026-10-28T10:00:00Z', source: 'google' },
+            { id: 'p-queue-1', url: 'https://example.com/q-1.jpg', thumbnailUrl: 'https://example.com/q-1.jpg', category: 'SCHEDULED_DRIP', createdAt: '2026-11-02T10:00:00Z', source: 'queue', status: 'scheduled', caption: 'Shop front after renovation' },
+          ],
+          liveCount: 1,
+          queuedCount: 1,
+        });
+      }
+      if (url.includes('/api/reviews')) {
+        return okJson({
+          reviews: [
+            { id: 'rev-1', rating: 5, comment: 'Amazing service! The team was professional and quick.', authorName: 'Priya Singh', createdAt: '2026-10-28T10:00:00Z', responseJson: '', source: 'google' },
+            { id: 'rev-2', rating: 4, comment: 'Good work, arrived slightly late.', authorName: 'Rahul Kumar', createdAt: '2026-10-25T09:00:00Z', responseJson: JSON.stringify({ text: 'Thank you Rahul — we will be on time next visit!' }), source: 'google' },
+          ],
+          pagination: { page: 1, limit: 50, total: 2, totalPages: 1 },
+        });
+      }
+      if (url.includes('/api/social/accounts')) {
+        return okJson({ data: [] });
+      }
+      if (url.includes('/api/campaigns/provider-status')) {
+        return okJson({ whatsapp: { configured: false, providerName: null }, email: { configured: true, providerName: 'AWS SES' }, sms: { configured: false, providerName: null } });
+      }
+      if (url.includes('/api/social/posts') || url.includes('/api/campaigns')) {
+        return okJson({ data: [], posts: [], campaigns: [], pagination: { page: 1, limit: 10, total: 0, totalPages: 0 } });
+      }
+      return okJson({});
+    })
+  );
+
   const { BgosSocialMarketing: SocialMediaView } = await import('@/components/bgos/social-marketing');
 
-  render(<SocialMediaView isDemo={true} />);
+  try {
+    render(<SocialMediaView isDemo={true} />);
 
-  // 1. Header & Primary Actions
-  expect(screen.getByRole('heading', { level: 1, name: /Marketing Studio/i })).toBeDefined();
-  expect(
-    screen.getByText('Create, publish and manage your marketing content across social, email, SMS and WhatsApp.')
-  ).toBeDefined();
-  expect(screen.getByText(/AI Enabled/i)).toBeDefined();
-  expect(screen.getByRole('button', { name: /\+ Create Content/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /\+ Create Campaign/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Create Post/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /View Analytics/i })).toBeDefined();
+    // 1. Header & Primary Actions (unchanged contract)
+    expect(screen.getByRole('heading', { level: 1, name: /Marketing Studio/i })).toBeDefined();
+    expect(
+      screen.getByText('Create, publish and manage your marketing content across social, email, SMS and WhatsApp.')
+    ).toBeDefined();
+    expect(screen.getByText(/AI Enabled/i)).toBeDefined();
+    expect(screen.getByRole('button', { name: /\+ Create Content/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /\+ Create Campaign/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /Create Post/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /View Analytics/i })).toBeDefined();
 
-  // 1b. Overview: real KPIs, Connected Channels, Campaigns, Recent Content, Upcoming Schedule
-  expect(screen.getByText('Total Posts')).toBeDefined();
-  expect(screen.getByText('Scheduled')).toBeDefined();
-  expect(screen.getByText('Published')).toBeDefined();
-  // "Connected Channels" appears as both a KPI card label and the card heading
-  expect(screen.getAllByText('Connected Channels').length).toBeGreaterThanOrEqual(1);
-  expect(screen.getByText('Email (SES)')).toBeDefined();
-  expect(screen.getByText('SMS (Twilio)')).toBeDefined();
-  expect(screen.getByText('Active Campaigns')).toBeDefined();
-  expect(screen.getByText('Spring Cleaning 2025')).toBeDefined();
-  expect(screen.getByText('Recent Content')).toBeDefined();
-  expect(screen.getByText('Upcoming Schedule')).toBeDefined();
+    // 2. NEW tab contract: 5 primary Dhanda tabs + Advanced overflow row
+    expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Review Replies$/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^AI Post$/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Google Post$/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Google Media$/i })).toBeDefined();
+    // Advanced overflow keeps every existing sub-view reachable
+    expect(screen.getByText(/^Advanced$/i)).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Composer$/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Analytics$/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Meta Templates$/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Accounts \(\d+\)$/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Posts \(\d+\)$/i })).toBeDefined();
+    // The old combined tab bar is gone
+    expect(screen.queryByRole('button', { name: /^AI Content$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Calendar$/i })).toBeNull();
 
-  // Fabricated rows/KPIs must NOT render
-  expect(screen.queryByText('✨ Diwali Special! ✨')).toBeNull();
-  expect(screen.queryByText('Diwali Cleaning Offer')).toBeNull();
-  expect(screen.queryByText('Festive Offer Reminder')).toBeNull();
-  expect(screen.queryByText('Total Reach')).toBeNull();
-  expect(screen.queryByText('Engagement Rate')).toBeNull();
+    // 3. Overview keeps the real KPI cards + channels + demo campaigns
+    expect(screen.getByText('Total Posts')).toBeDefined();
+    expect(screen.getByText('Scheduled')).toBeDefined();
+    expect(screen.getByText('Published')).toBeDefined();
+    expect(screen.getAllByText('Connected Channels').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Email (SES)')).toBeDefined();
+    expect(screen.getByText('SMS (Twilio)')).toBeDefined();
+    expect(screen.getByText('Active Campaigns')).toBeDefined();
+    expect(screen.getByText('Spring Cleaning 2025')).toBeDefined();
 
-  // 2. Sub-Navigation Tabs — honest tab set with live counts
-  expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^AI Content$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Composer$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Posts \(\d+\)$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Analytics$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Meta Templates$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Accounts \(\d+\)$/i })).toBeDefined();
-  expect(screen.queryByRole('button', { name: /^Calendar$/i })).toBeNull();
-  expect(screen.queryByRole('button', { name: /AI Post Generator/i })).toBeNull();
-  expect(screen.queryByRole('button', { name: /Posts Feed/i })).toBeNull();
+    // Fabricated rows/KPIs must NOT render
+    expect(screen.queryByText('✨ Diwali Special! ✨')).toBeNull();
+    expect(screen.queryByText('Diwali Cleaning Offer')).toBeNull();
+    expect(screen.queryByText('Total Reach')).toBeNull();
+    expect(screen.queryByText('Engagement Rate')).toBeNull();
 
-  // 3. Interactivity: AI Content tab renders generator + neutral preview
-  fireEvent.click(screen.getByRole('button', { name: /^AI Content$/i }));
-  expect(screen.getByText('Create with AI')).toBeDefined();
-  expect(screen.getByText('Quick start templates')).toBeDefined();
-  expect(screen.getByText('Choose channels (optional)')).toBeDefined();
-  expect(screen.getByRole('button', { name: /Generate Content/i })).toBeDefined();
-  expect(screen.getByText('Preview')).toBeDefined();
-  expect(screen.getByText(/Write a prompt and click Generate/i)).toBeDefined();
-  expect(screen.queryByText('✨ Diwali Special! ✨')).toBeNull();
+    // 4. Marketing Score gauge renders from the injected API score (no hardcodes)
+    await waitFor(() => expect(screen.getByText('62%')).toBeDefined());
+    expect(screen.getAllByText(/Good/).length).toBeGreaterThanOrEqual(1);
+    // NOT_CONNECTED honest state must NOT render while connected
+    expect(screen.queryByText('Not available')).toBeNull();
+    expect(screen.queryByText('NOT_CONNECTED')).toBeNull();
 
-  const promptInput = screen.getByPlaceholderText(/Announce a 20% discount week/i) as HTMLTextAreaElement;
-  fireEvent.change(promptInput, { target: { value: 'Diwali special home deep cleaning offer' } });
-  expect(screen.getByText('39/500')).toBeDefined();
+    // 5. Google's Performance renders REAL sums from /api/gbp/place
+    // (getAllByText: calendar day cells can share the same digits)
+    await waitFor(() => expect(screen.getByText('66')).toBeDefined()); // Views = 54 search + 12 maps
+    expect(screen.getAllByText('5').length).toBeGreaterThanOrEqual(1); // Calls
+    expect(screen.getAllByText('9').length).toBeGreaterThanOrEqual(1); // Directions
+    expect(screen.getAllByText('7').length).toBeGreaterThanOrEqual(1); // Website clicks
 
-  // 3b. Quick start templates fill the prompt with the workspace name
-  fireEvent.click(screen.getByRole('button', { name: 'Seasonal Offer' }));
-  expect(promptInput.value).toContain('Your Business');
+    // 6. Competitor Analysis renders the real table from injected mocks
+    await screen.findByText('Websoft Infotech (ERP & Software)');
+    expect(screen.getByText('Kala Softech Pvt. Ltd.')).toBeDefined();
+    expect(screen.getByText(/LOCAL COMPETITORS/i)).toBeDefined();
+    expect(screen.getByText('BUSINESS')).toBeDefined();
+    expect(screen.getByText('RATING')).toBeDefined();
+    // Expandable row reveals address/category/reviewCount + maps link
+    fireEvent.click(screen.getByText('Websoft Infotech (ERP & Software)'));
+    expect(screen.getByText('Boring Road, Patna')).toBeDefined();
+    expect(screen.getByText(/112 reviews/)).toBeDefined();
+    expect(screen.getByText('View on Google Maps')).toBeDefined();
 
-  // 4. Interactivity: Launch Campaign Dialog
-  fireEvent.click(screen.getByRole('button', { name: /\+ Create Campaign/i }));
-  expect(screen.getByText('Create Marketing Campaign')).toBeDefined();
-  fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
+    // 7. Social Calendar shows the pending-approval counter from growth-actions
+    await screen.findByText('3 posters pending for approval');
+
+    // 8. Growth Action floating pill + drawer wired to the real API
+    const growthPill = await screen.findByText(/Growth Action \(3 of 10 done • 7 left\)/i);
+    expect(growthPill).toBeDefined();
+    fireEvent.click(growthPill);
+    expect(screen.getByText('Daily Growth Actions')).toBeDefined();
+    expect(screen.getByText('Complete your Profile')).toBeDefined();
+    expect(screen.getByText('2/6 done')).toBeDefined();
+    expect(screen.getByText('Upload Media')).toBeDefined();
+    expect(screen.getByText('2 done / 5 this week')).toBeDefined();
+    expect(screen.getByText('Approve Post')).toBeDefined();
+    expect(screen.getByText('3 posts waiting for your approval')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Complete now' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Upload' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDefined();
+    // Dismiss buttons post to /api/gbp/growth-actions
+    expect(screen.getByRole('button', { name: /Dismiss Upload Media/i })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: /Dismiss Upload Media/i }));
+    await waitFor(() => {
+      expect(
+        apiCalls.some((u) => u.startsWith('POST') && u.includes('/api/gbp/growth-actions'))
+      ).toBe(true);
+    });
+    // Close the drawer via its Close button before switching tabs
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    // 9. Review Replies tab: summary strip, chips, AI reply affordance
+    fireEvent.click(screen.getByRole('button', { name: /^Review Replies$/i }));
+    await screen.findByText('Based on 2 ratings');
+    expect(screen.getByText('All (2)')).toBeDefined();
+    expect(screen.getByText('Pending 🔴1')).toBeDefined();
+    expect(screen.getByText('Replied (1)')).toBeDefined();
+    expect(screen.getByText('Priya Singh')).toBeDefined();
+    expect(screen.getAllByText(/Reply with AI/i).length).toBeGreaterThanOrEqual(1);
+    // Replied review shows the published reply block
+    expect(screen.getByText('YOUR REPLY')).toBeDefined();
+
+    // 10. AI Post tab: generator intact + FUNCTIONAL status pills hitting the API
+    fireEvent.click(screen.getByRole('button', { name: /^AI Post$/i }));
+    expect(screen.getByText('Create with AI')).toBeDefined();
+    expect(screen.getByText('Quick start templates')).toBeDefined();
+    expect(screen.getByRole('button', { name: /Generate Content/i })).toBeDefined();
+    expect(screen.getByText('Preview')).toBeDefined();
+
+    const promptInput = screen.getByPlaceholderText(/Announce a 20% discount week/i) as HTMLTextAreaElement;
+    fireEvent.change(promptInput, { target: { value: 'Diwali special home deep cleaning offer' } });
+    expect(screen.getByText('39/500')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Seasonal Offer' }));
+    expect(promptInput.value).toContain('Your Business');
+
+    const pendingPill = screen.getByRole('button', { name: /^Pending$/i });
+    fireEvent.click(pendingPill);
+    await screen.findByText('No Pending posts');
+    expect(
+      screen.getByText(/You've reviewed everything/i)
+    ).toBeDefined();
+    await waitFor(() => {
+      expect(apiCalls.some((u) => u.includes('/api/social/posts') && u.includes('approval=pending'))).toBe(true);
+    });
+
+    // 11. Google Post tab: keyword tip + planner rows from the API
+    fireEvent.click(screen.getByRole('button', { name: /^Google Post$/i }));
+    await screen.findByText(/Google works best with keywords/i);
+    await screen.findByText('software development company in patna');
+    expect(screen.getByText('best crm software patna')).toBeDefined();
+    expect(screen.getByRole('button', { name: /Add Keyword/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /Optimise keywords/i })).toBeDefined();
+
+    // 12. Google Media tab: pills + real photo grid
+    fireEvent.click(screen.getByRole('button', { name: /^Google Media$/i }));
+    expect(screen.getByText(/Uploaded ☁/)).toBeDefined();
+    expect(screen.getByText(/Scheduled 📅/)).toBeDefined();
+    expect(screen.getByText(/Not Posted ℹ/)).toBeDefined();
+    // Uploaded pill (default) shows the live Google photo
+    await screen.findByAltText('Google Business media');
+    // Scheduled pill shows the queued drip photo with its caption
+    fireEvent.click(screen.getByText(/Scheduled 📅/));
+    await screen.findByAltText('Shop front after renovation');
+    expect(screen.getByRole('button', { name: /Upload Media/i })).toBeDefined();
+
+    // 13. Launch Campaign Dialog still works
+    fireEvent.click(screen.getByRole('button', { name: /\+ Create Campaign/i }));
+    expect(screen.getByText('Create Marketing Campaign')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 
 it('renders Google Business & Reviews with 5 KPIs, Review Trend, triage feed, and AI Review Reply', async () => {

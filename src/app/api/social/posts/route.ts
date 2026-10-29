@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
+    const approval = searchParams.get('approval');
     const platform = searchParams.get('platform');
     const search = searchParams.get('search');
     const dateFrom = searchParams.get('dateFrom');
@@ -64,11 +65,18 @@ export async function GET(request: NextRequest) {
     const where: {
       tenantId: string;
       status?: string;
+      approvalStatus?: string;
       OR?: Array<Record<string, unknown>>;
       createdAt?: { gte?: Date; lte?: Date };
     } = { tenantId };
 
     if (status) where.status = status;
+
+    // AI-post review workflow (Pending / Approved / Rejected pills).
+    // No `approval` param (or `approval=any`) → no approval filter (legacy).
+    if (approval && approval !== 'any') {
+      where.approvalStatus = approval;
+    }
 
     // Platform filter — search the publishTargets JSON for an entry with that platform.
     // SQLite doesn't have JSON-path queries, so we use a `contains` on the raw JSON string.
@@ -98,6 +106,7 @@ export async function GET(request: NextRequest) {
         select: {
           id: true,
           status: true,
+          approvalStatus: true,
           content: true,
           mediaUrls: true,
           linkUrl: true,
@@ -152,6 +161,7 @@ interface CreatePostBody {
   targets: { platform: SocialPlatform; socialAccountId: string }[];
   scheduledAt?: string; // ISO
   status?: 'draft' | 'scheduled' | 'published';
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
   gbpPostType?: string;
   gbpOfferData?: { title: string; startDate: string; endDate: string; couponCode?: string };
   pinterestBoard?: string;
@@ -249,6 +259,7 @@ export async function POST(request: NextRequest) {
         ...(requestId ? { id: requestId } : {}),
         tenantId,
         status: initialStatus,
+        approvalStatus: body.approvalStatus || null,
         content: body.content,
         mediaUrls: JSON.stringify(body.mediaUrls || []),
         linkUrl: body.linkUrl || null,

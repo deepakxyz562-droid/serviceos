@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { hashPassword } from '@/lib/auth';
 
 /**
@@ -12,6 +13,18 @@ import { hashPassword } from '@/lib/auth';
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!(await isSuperAdminRequest())) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    if (
+      process.env.NODE_ENV === 'production' &&
+      process.env.ENABLE_DEMO_SEEDING !== 'true'
+    ) {
+      return NextResponse.json(
+        { error: 'Demo seeding is disabled in production. Set ENABLE_DEMO_SEEDING=true to allow it.' },
+        { status: 403 },
+      );
+    }
     const body = await request.json().catch(() => ({}));
     const force = body.force || false;
 

@@ -3,24 +3,26 @@ import { Tabs } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/components/ui';
+import { usePendingReplies } from '../../src/hooks/use-pending-replies';
 
 /**
- * Bottom navigation (design spec §5): 4 first-class tabs —
- *   Home / GBP / Photos / Leads.
- * Every other screen stays reachable from the "More Tools" grid on Home;
- * their routes are hidden from the tab bar but remain fully functional.
+ * Bottom navigation — Dhanda AI benchmark bar: Home / Review Replies /
+ * AI Post / Google Post / Google Media. Every other screen stays reachable
+ * from the "More Tools" grid on Home; their routes are hidden from the tab
+ * bar but remain fully functional.
  */
 const visible = [
   ['index', 'Home', 'home'],
-  ['growth', 'GBP', 'storefront'],
-  ['photos', 'Photos', 'photo-library'],
-  ['leads', 'Leads', 'people'],
-  ['tools', 'More', 'grid-view'],
+  ['reviews', 'Review Replies', 'chat-bubble'],
+  ['marketing', 'AI Post', 'auto-awesome'],
+  ['posts', 'Google Post', 'article'],
+  ['photos', 'Google Media', 'photo-library'],
 ] as const;
 
 const hidden = [
+  'growth',
+  'leads',
   'inbox',
-  'marketing',
   'phone',
   'outreach',
   'automations',
@@ -29,10 +31,15 @@ const hidden = [
   'integrations',
   'settings',
   'agents',
+  'tools',
 ] as const;
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  // Badge on Review Replies = Google reviews still awaiting a reply
+  // (lightweight fetch, fails silent → badge simply hidden).
+  const pendingReplies = usePendingReplies(60000);
+
   return (
     <Tabs
       screenOptions={{
@@ -51,7 +58,7 @@ export default function TabLayout() {
         },
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.muted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '700', marginTop: 2 },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '700', marginTop: 2 },
       }}
     >
       {visible.map(([name, title, icon]) => (
@@ -61,6 +68,9 @@ export default function TabLayout() {
           options={{
             title,
             tabBarIcon: ({ color, size }) => <MaterialIcons name={icon} color={color} size={size} />,
+            ...(name === 'reviews' && pendingReplies != null && pendingReplies > 0
+              ? { tabBarBadge: pendingReplies, tabBarBadgeBackgroundColor: colors.danger, tabBarBadgeTextColor: '#FFFFFF' }
+              : {}),
           }}
         />
       ))}

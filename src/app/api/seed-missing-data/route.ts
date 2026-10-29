@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { isSuperAdminRequest } from '@/lib/admin-auth';
 import crypto from 'crypto';
 
 const DEFAULT_TENANT_ID = 'cmq9m3wje0002oy0x8oenckvq';
@@ -7,6 +8,18 @@ const DEFAULT_WORKSPACE_ID = 'cmq9m3xrx000coy0xd1nvdbgf';
 const DEFAULT_USER_ID = 'cmq9m3ww30004oy0xkpbwt6zv';
 
 export async function POST(request: NextRequest) {
+  if (!(await isSuperAdminRequest())) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.ENABLE_DEMO_SEEDING !== 'true'
+  ) {
+    return NextResponse.json(
+      { error: 'Demo seeding is disabled in production. Set ENABLE_DEMO_SEEDING=true to allow it.' },
+      { status: 403 },
+    );
+  }
   const body = await request.json().catch(() => ({}));
   const tenantId = body.tenantId || DEFAULT_TENANT_ID;
   const workspaceId = body.workspaceId || DEFAULT_WORKSPACE_ID;

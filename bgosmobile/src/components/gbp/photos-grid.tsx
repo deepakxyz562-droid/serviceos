@@ -8,8 +8,14 @@ import { uploadFileToStorage, type PendingUpload } from '../../lib/upload';
 import { gbpColors, shortDate } from './bits';
 import type { GbpPhoto, PhotosResponse } from './types';
 
-type TabKey = 'soon' | 'published';
+type TabKey = 'soon' | 'published' | 'unposted';
 type ScheduleMode = 'instant' | 'daily' | 'weekly';
+/**
+ * variant 'default' — GBP AI Hub board: Publishing Soon / Published.
+ * variant 'dhanda' — Google Media tab pills: Scheduled 📅 / Uploaded ☁ /
+ * Not Posted ℹ (queue items saved as drafts that haven't been scheduled yet).
+ */
+type BoardVariant = 'default' | 'dhanda';
 
 const SCHEDULE_OPTIONS: {
   value: ScheduleMode;
@@ -141,6 +147,7 @@ export function PhotosBoard({
   refresh,
   connected,
   onNeedConnect,
+  variant = 'default',
 }: {
   data: PhotosResponse | null;
   loading: boolean;
@@ -149,6 +156,7 @@ export function PhotosBoard({
   connected: boolean;
   /** Fired when the user taps a connect CTA while GBP is not connected. */
   onNeedConnect?: () => void;
+  variant?: BoardVariant;
 }) {
   const [tab, setTab] = useState<TabKey>('soon');
   const [pending, setPending] = useState<PendingUpload[]>([]);
@@ -176,6 +184,29 @@ export function PhotosBoard({
 
   const publishedCount = data?.liveCount ?? published.length;
   const soonCount = data?.queuedCount ?? queued.length;
+  const dhanda = variant === 'dhanda';
+  // Dhanda pills split the queue: items with a publish time (scheduled /
+  // publishing) vs locally-saved drafts that were never sent (Not Posted).
+  const scheduledQueue = useMemo(
+    () => queued.filter((p) => p.status === 'scheduled' || p.status === 'publishing'),
+    [queued],
+  );
+  const unpostedQueue = useMemo(
+    () => queued.filter((p) => p.status !== 'scheduled' && p.status !== 'publishing'),
+    [queued],
+  );
+
+  type TabOption = { key: TabKey; label: string; count: number };
+  const tabOptions: TabOption[] = dhanda
+    ? [
+        { key: 'soon', label: 'Scheduled 📅', count: scheduledQueue.length },
+        { key: 'published', label: 'Uploaded ☁', count: publishedCount },
+        { key: 'unposted', label: 'Not Posted ℹ', count: unpostedQueue.length },
+      ]
+    : [
+        { key: 'soon', label: 'Publishing Soon', count: soonCount },
+        { key: 'published', label: 'Published', count: publishedCount },
+      ];
 
   async function pickPhotos() {
     setLocalError(null);
@@ -251,10 +282,7 @@ export function PhotosBoard({
   function SegmentedPills() {
     return (
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        {([
-          { key: 'soon' as TabKey, label: 'Publishing Soon', count: soonCount },
-          { key: 'published' as TabKey, label: 'Published', count: publishedCount },
-        ]).map((opt) => {
+        {tabOptions.map((opt) => {
           const active = opt.key === tab;
           return (
             <Pressable
@@ -301,7 +329,8 @@ export function PhotosBoard({
     );
   }
 
-  const activeList = tab === 'soon' ? queued : published;
+  const activeList =
+    tab === 'published' ? published : dhanda ? (tab === 'unposted' ? unpostedQueue : scheduledQueue) : queued;
 
   return (
     <View style={{ gap: 12 }}>
@@ -437,9 +466,25 @@ export function PhotosBoard({
         <Loading />
       ) : activeList.length === 0 ? (
         <Empty
-          title={tab === 'soon' ? 'Nothing scheduled' : 'No photos published'}
+          title={
+            dhanda
+              ? tab === 'published'
+                ? 'No uploaded photos yet'
+                : tab === 'unposted'
+                ? 'Nothing waiting to post'
+                : 'Nothing scheduled'
+              : tab === 'soon'
+              ? 'Nothing scheduled'
+              : 'No photos published'
+          }
           detail={
-            tab === 'soon'
+            dhanda
+              ? tab === 'published'
+                ? 'Photos uploaded to your Google Business Profile appear here.'
+                : tab === 'unposted'
+                ? 'Photos saved locally but not scheduled yet. Add a drip schedule to post them.'
+                : 'Photos queued on the AI drip will publish to Google automatically.'
+              : tab === 'soon'
               ? 'Upload photos and let AI publish them to your Google Business Profile on a daily or weekly drip.'
               : 'Published photos from your Google Business Profile appear here.'
           }
@@ -447,7 +492,11 @@ export function PhotosBoard({
           onAction={pickPhotos}
         />
       ) : (
-        <Grid photos={activeList} scheduled={tab === 'soon'} onAdd={pickPhotos} />
+        <Grid
+          photos={activeList}
+          scheduled={tab === 'soon' || tab === 'unposted'}
+          onAdd={pickPhotos}
+        />
       )}
     </View>
   );

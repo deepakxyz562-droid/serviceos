@@ -28,6 +28,8 @@ export default function Index() {
       <View style={styles.content}>
         <View style={styles.iconContainer}>
           <Image
+            /* Metro requires require() for static asset resolution in RN. */
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             source={require('../assets/app-icon.png')}
             style={styles.icon}
             accessibilityLabel="BGOS lowercase b logo"

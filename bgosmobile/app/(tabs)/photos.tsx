@@ -21,7 +21,7 @@ export default function PhotosScreen() {
 
   return (
     <Screen
-      title="Photos"
+      title="Google Media"
       subtitle="AI photo publishing to your Google Business Profile"
       onRefresh={async () => {
         await Promise.all([photosRes.refresh(), gbpPlace.refresh()]).catch(() => {});
@@ -52,6 +52,7 @@ export default function PhotosScreen() {
         refresh={photosRes.refresh}
         connected={Boolean(gbpPlace.data?.isConnected)}
         onNeedConnect={() => router.push('/(tabs)/growth')}
+        variant="dhanda"
       />
     </Screen>
   );
