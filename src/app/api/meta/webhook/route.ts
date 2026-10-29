@@ -28,6 +28,11 @@ export const dynamic = 'force-dynamic';
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || process.env.META_VERIFY_TOKEN;
 const APP_SECRET = process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET;
 
+// Well-known dev fallback tokens — accepted ONLY outside production so local
+// webhook setup keeps working. In production, verification requires a real
+// configured token (WHATSAPP_VERIFY_TOKEN / META_VERIFY_TOKEN).
+const DEV_FALLBACK_TOKENS = ['fieseros_verify_token', 'flowforge_verify_token'];
+
 function verifySignature(request: NextRequest, rawBody: string): boolean {
   if (!APP_SECRET) {
     console.error('[meta/webhook] META_APP_SECRET not set — REJECTING payload (fail-closed).');
@@ -55,14 +60,19 @@ export async function GET(request: NextRequest) {
   const mode = searchParams.get('hub.mode');
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
+  // Production (NODE_ENV=production) with no configured token rejects
+  // verification (fail-closed); outside production the dev fallback tokens
+  // above are still accepted so local webhook setup doesn't break.
+  const isProduction = process.env.NODE_ENV === 'production';
+  const candidates = [
+    VERIFY_TOKEN,
+    process.env.WHATSAPP_VERIFY_TOKEN,
+    process.env.META_VERIFY_TOKEN,
+    ...(isProduction ? [] : DEV_FALLBACK_TOKENS),
+  ].filter(Boolean) as string[];
+  // The well-known dev tokens must never verify a production webhook.
   const validTokens = new Set(
-    [
-      VERIFY_TOKEN,
-      process.env.WHATSAPP_VERIFY_TOKEN,
-      process.env.META_VERIFY_TOKEN,
-      'fieseros_verify_token',
-      'flowforge_verify_token',
-    ].filter(Boolean) as string[],
+    isProduction ? candidates.filter((t) => !DEV_FALLBACK_TOKENS.includes(t)) : candidates,
   );
 
   if (mode === 'subscribe' && token && validTokens.has(token)) {

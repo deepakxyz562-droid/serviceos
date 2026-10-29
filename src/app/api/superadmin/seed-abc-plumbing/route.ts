@@ -590,10 +590,26 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/seed-abc-plumbing — check if demo data exists
+ * GET /api/superadmin/seed-abc-plumbing — check if demo data exists
  */
 export async function GET() {
   try {
+    // Same guard as POST: super-admin only, and disabled in production
+    // unless ENABLE_DEMO_SEEDING=true (the GET leaks tenant row counts,
+    // so it must not be publicly reachable either).
+    if (!(await isSuperAdminRequest())) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    if (
+      process.env.NODE_ENV === 'production' &&
+      process.env.ENABLE_DEMO_SEEDING !== 'true'
+    ) {
+      return NextResponse.json(
+        { error: 'Demo seeding is disabled in production. Set ENABLE_DEMO_SEEDING=true to allow it.' },
+        { status: 403 },
+      );
+    }
+
     const tenant = await db.tenant.findFirst({ where: { slug: 'abc-plumbing-demo' } });
     if (!tenant) return NextResponse.json({ exists: false });
 

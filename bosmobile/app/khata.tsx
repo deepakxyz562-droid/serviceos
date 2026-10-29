@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   TextInput,
   RefreshControl,
@@ -50,6 +51,88 @@ interface KhataResponse {
     totalAapkoDenaHai: number;
   };
   customers: CustomerUdhaar[];
+}
+
+/**
+ * One khata party card — extracted so the parties list can live in a FlatList
+ * (rows render in isolated batches instead of one blocking map()).
+ */
+interface KhataRowProps {
+  c: CustomerUdhaar;
+  t: (en: string, hi: string) => string;
+  money: (amount: number) => string;
+  onSendReminder: (c: CustomerUdhaar) => void;
+  onRecordPayment: (c: CustomerUdhaar) => void;
+  onCall: (phone: string) => void;
+}
+
+function KhataRow({ c, t, money, onSendReminder, onRecordPayment, onCall }: KhataRowProps) {
+  const avatarLetter = (c.name || 'C').charAt(0).toUpperCase();
+
+  return (
+    <View style={styles.khataCard}>
+      {/* Card Header */}
+      <View style={styles.cardHeader}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{avatarLetter}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.customerName} numberOfLines={1}>
+              {c.name}
+            </Text>
+            <Text style={styles.customerPhone}>{c.phone}</Text>
+          </View>
+        </View>
+
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.balanceText}>{money(c.balance)}</Text>
+          <Text style={styles.daysOverdueText}>
+            {c.daysPending === 0
+              ? t('Today', 'आज')
+              : t(`${c.daysPending}d pending`, `${c.daysPending} दिन से बकाया`)}
+          </Text>
+        </View>
+      </View>
+
+      {/* Orders pill */}
+      <View style={styles.ordersPillRow}>
+        <Text style={styles.ordersPillText}>
+          {c.unpaidOrdersCount} {t('unpaid orders', 'बकाया ऑर्डर')}:{' '}
+          {c.unpaidOrders.map((o) => `#${o.number}`).join(', ')}
+        </Text>
+      </View>
+
+      {/* Action Buttons */}
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          onPress={() => onSendReminder(c)}
+          style={styles.reminderBtn}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="send" size={14} color="#059669" />
+          <Text style={styles.reminderBtnText}>{t('Send WhatsApp Reminder', 'WhatsApp रिमाइंडर')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => onRecordPayment(c)}
+          style={styles.receiveBtn}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="add" size={14} color="#ffffff" />
+          <Text style={styles.receiveBtnText}>{t('Got Payment', 'भुगतान मिला')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => onCall(c.phone)}
+          style={styles.callIconBtn}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="phone" size={16} color="#0f172a" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 }
 
 export default function KhataScreen() {
@@ -292,77 +375,27 @@ export default function KhataScreen() {
               </Text>
             </View>
           ) : (
-            filteredCustomers.map((c) => {
-              const avatarLetter = (c.name || 'C').charAt(0).toUpperCase();
-
-              return (
-                <View key={c.phone} style={styles.khataCard}>
-                  {/* Card Header */}
-                  <View style={styles.cardHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                      <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>{avatarLetter}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.customerName} numberOfLines={1}>
-                          {c.name}
-                        </Text>
-                        <Text style={styles.customerPhone}>{c.phone}</Text>
-                      </View>
-                    </View>
-
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.balanceText}>{money(c.balance)}</Text>
-                      <Text style={styles.daysOverdueText}>
-                        {c.daysPending === 0
-                          ? t('Today', 'आज')
-                          : t(`${c.daysPending}d pending`, `${c.daysPending} दिन से बकाया`)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Orders pill */}
-                  <View style={styles.ordersPillRow}>
-                    <Text style={styles.ordersPillText}>
-                      {c.unpaidOrdersCount} {t('unpaid orders', 'बकाया ऑर्डर')}:{' '}
-                      {c.unpaidOrders.map((o) => `#${o.number}`).join(', ')}
-                    </Text>
-                  </View>
-
-                  {/* Action Buttons */}
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity
-                      onPress={() => handleSendReminder(c)}
-                      style={styles.reminderBtn}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialIcons name="send" size={14} color="#059669" />
-                      <Text style={styles.reminderBtnText}>{t('Send WhatsApp Reminder', 'WhatsApp रिमाइंडर')}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => {
-                        setPaymentModalCustomer(c);
-                        setPaymentAmount(c.balance.toString());
-                      }}
-                      style={styles.receiveBtn}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialIcons name="add" size={14} color="#ffffff" />
-                      <Text style={styles.receiveBtnText}>{t('Got Payment', 'भुगतान मिला')}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => handleCall(c.phone)}
-                      style={styles.callIconBtn}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialIcons name="phone" size={16} color="#0f172a" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })
+            // The outer ScrollView remains the scroller (RefreshControl lives
+            // there), so the FlatList only virtualizes/batches the rows.
+            <FlatList
+              data={filteredCustomers}
+              keyExtractor={(c) => c.phone}
+              scrollEnabled={false}
+              nestedScrollEnabled
+              renderItem={({ item }) => (
+                <KhataRow
+                  c={item}
+                  t={t}
+                  money={money}
+                  onSendReminder={handleSendReminder}
+                  onRecordPayment={(c) => {
+                    setPaymentModalCustomer(c);
+                    setPaymentAmount(c.balance.toString());
+                  }}
+                  onCall={handleCall}
+                />
+              )}
+            />
           )}
         </ScrollView>
       )}

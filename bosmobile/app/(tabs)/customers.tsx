@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   TextInput,
   RefreshControl,
@@ -34,6 +35,7 @@ interface CustomerRecord {
   recentOrders?: { id: string; total: number; date: string; status: string }[];
   phone: string;
   name: string;
+  gstin?: string | null;
   deliveryAddress?: string | null;
   ordersCount: number;
   totalSpent: number;
@@ -53,6 +55,151 @@ interface CustomersResponse {
     repeatRate: number;
     totalRevenue: number;
   };
+}
+
+/**
+ * One customer card — extracted so the big customers list can live in a
+ * FlatList (rows render in isolated batches instead of one blocking map()).
+ */
+interface CustomerRowProps {
+  c: CustomerRecord;
+  expanded: boolean;
+  language?: string;
+  t: (en: string, hi: string) => string;
+  money: (value: number) => string;
+  formatRelativeDate: (dateStr: string | null) => string;
+  getTagStyle: (tag: string) => { bg: string; border: string; text: string; label: string };
+  onToggleExpanded: () => void;
+  onOpenHistory: (c: CustomerRecord) => void;
+  onEdit: (c: CustomerRecord) => void;
+  onWhatsApp: (c: CustomerRecord) => void;
+  onCall: (phone: string) => void;
+}
+
+function CustomerRow({
+  c,
+  expanded,
+  language,
+  t,
+  money,
+  formatRelativeDate,
+  getTagStyle,
+  onToggleExpanded,
+  onOpenHistory,
+  onEdit,
+  onWhatsApp,
+  onCall,
+}: CustomerRowProps) {
+  const tagStyle = getTagStyle(c.tag);
+  const avatarLetter = (c.name || 'C').charAt(0).toUpperCase();
+
+  return (
+    <View style={styles.customerCard}>
+      {/* Card Header */}
+      <View style={styles.cardHeader}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{avatarLetter}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.customerName} numberOfLines={1}>
+                {c.name}
+              </Text>
+              <View
+                style={[
+                  styles.tagBadge,
+                  { backgroundColor: tagStyle.bg, borderColor: tagStyle.border },
+                ]}
+              >
+                <Text style={[styles.tagText, { color: tagStyle.text }]}>
+                  {tagStyle.label}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.customerPhone}>{c.phone}</Text>
+          </View>
+        </View>
+
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.spentAmount}>{money(c.totalSpent)}</Text>
+          <Text style={styles.spentSub}>
+            {c.ordersCount} {t(c.ordersCount === 1 ? 'order' : 'orders', 'ऑर्डर')}
+          </Text>
+        </View>
+      </View>
+
+      {/* Favorite Dishes */}
+      {c.favoriteItems.length > 0 && (
+        <View style={styles.favoritesBox}>
+          <Text style={styles.favoritesLabel}>{t('Favorites:', 'पसंदीदा सामान:')}</Text>
+          <View style={styles.favTagsWrap}>
+            {c.favoriteItems.map((fav, i) => (
+              <View key={i} style={styles.favTag}>
+                <Text style={styles.favTagText}>
+                  {fav.name} <Text style={{ color: '#059669', fontWeight: '800' }}>×{fav.count}</Text>
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Address & Recency */}
+      <View style={styles.metaRow}>
+        <Text style={styles.metaText}>
+          {t('Last order:', 'पिछला ऑर्डर:')} {formatRelativeDate(c.lastVisit)}
+        </Text>
+        {c.deliveryAddress && (
+          <Text style={[styles.metaText, { maxWidth: '55%' }]} numberOfLines={1}>
+            📍 {c.deliveryAddress}
+          </Text>
+        )}
+      </View>
+
+      <TouchableOpacity accessibilityRole="button" onPress={onToggleExpanded} style={styles.searchBox}>
+        <Text>{t('Recent orders', 'हाल के ऑर्डर')}</Text>
+        <MaterialIcons name="expand-more" size={22} color="#64748b" />
+      </TouchableOpacity>
+      {expanded && (c.recentOrders?.length ? c.recentOrders.map(order => <View key={order.id} style={styles.metaRow}>
+        <Text style={styles.metaText}>{new Date(order.date).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}</Text>
+        <Text style={styles.metaText}>{t(({ PENDING: 'Received', CONFIRMED: 'Confirmed', PREPARING: 'Preparing', READY: 'Ready', DELIVERED: 'Delivered', CANCELLED: 'Cancelled', COMPLETED: 'Completed', PAID: 'Paid' } as Record<string, string>)[order.status] || 'Order', ({ PENDING: 'प्राप्त', CONFIRMED: 'पुष्टि हुई', PREPARING: 'तैयार हो रहा है', READY: 'तैयार', DELIVERED: 'पहुँचाया गया', CANCELLED: 'रद्द', COMPLETED: 'पूरा हुआ', PAID: 'भुगतान हुआ' } as Record<string, string>)[order.status] || 'ऑर्डर')}</Text>
+        <Text>{money(order.total)}</Text>
+      </View>) : <Text style={styles.metaText}>{t('No orders yet', 'अभी कोई ऑर्डर नहीं')}</Text>)}
+      {!!c.phone && <TouchableOpacity accessibilityRole="button" style={styles.waBtn} onPress={() => onOpenHistory(c)}><Text style={styles.waBtnText}>{t('All orders & ledger', 'सभी ऑर्डर और खाता विवरण')}</Text></TouchableOpacity>}
+      {/* Action Buttons */}
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          onPress={() => onEdit(c)}
+          style={styles.editBtn}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="edit" size={14} color="#059669" />
+          <Text style={styles.editBtnText}>{t('Edit', 'संपादित करें')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          disabled={!c.phone}
+          onPress={() => onWhatsApp(c)}
+          style={styles.waBtn}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="chat" size={14} color="#059669" />
+          <Text style={styles.waBtnText}>{t('WhatsApp', 'WhatsApp संदेश')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          disabled={!c.phone}
+          onPress={() => onCall(c.phone)}
+          style={styles.callBtn}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="phone" size={14} color="#0f172a" />
+          <Text style={styles.callBtnText}>{t('Call', 'कॉल')}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 }
 
 export default function CustomersScreen() {
@@ -89,7 +236,7 @@ export default function CustomersScreen() {
     setEditName(c.name || '');
     setEditPhone(c.phone || '');
     setEditAddress(c.deliveryAddress || '');
-    setEditGstin('');
+    setEditGstin(c.gstin || '');
     setEditEmail('');
     setEditError(null);
     setEditModalVisible(true);
@@ -403,118 +550,34 @@ export default function CustomersScreen() {
               </Text>
             </View>
           ) : (
-            filteredCustomers.map((c) => {
-              const tagStyle = getTagStyle(c.tag);
-              const avatarLetter = (c.name || 'C').charAt(0).toUpperCase();
-
-              return (
-                <View key={c.id || c.phone} style={styles.customerCard}>
-                  {/* Card Header */}
-                  <View style={styles.cardHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                      <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>{avatarLetter}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={styles.customerName} numberOfLines={1}>
-                            {c.name}
-                          </Text>
-                          <View
-                            style={[
-                              styles.tagBadge,
-                              { backgroundColor: tagStyle.bg, borderColor: tagStyle.border },
-                            ]}
-                          >
-                            <Text style={[styles.tagText, { color: tagStyle.text }]}>
-                              {tagStyle.label}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text style={styles.customerPhone}>{c.phone}</Text>
-                      </View>
-                    </View>
-
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.spentAmount}>{money(c.totalSpent)}</Text>
-                      <Text style={styles.spentSub}>
-                        {c.ordersCount} {t(c.ordersCount === 1 ? 'order' : 'orders', 'ऑर्डर')}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Favorite Dishes */}
-                  {c.favoriteItems.length > 0 && (
-                    <View style={styles.favoritesBox}>
-                      <Text style={styles.favoritesLabel}>{t('Favorites:', 'पसंदीदा सामान:')}</Text>
-                      <View style={styles.favTagsWrap}>
-                        {c.favoriteItems.map((fav, i) => (
-                          <View key={i} style={styles.favTag}>
-                            <Text style={styles.favTagText}>
-                              {fav.name} <Text style={{ color: '#059669', fontWeight: '800' }}>×{fav.count}</Text>
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Address & Recency */}
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaText}>
-                      {t('Last order:', 'पिछला ऑर्डर:')} {formatRelativeDate(c.lastVisit)}
-                    </Text>
-                    {c.deliveryAddress && (
-                      <Text style={[styles.metaText, { maxWidth: '55%' }]} numberOfLines={1}>
-                        📍 {c.deliveryAddress}
-                      </Text>
-                    )}
-                  </View>
-
-                  <TouchableOpacity accessibilityRole="button" onPress={() => setExpanded(expanded === (c.id || c.phone) ? null : (c.id || c.phone))} style={styles.searchBox}>
-                    <Text>{t('Recent orders', 'हाल के ऑर्डर')}</Text>
-                    <MaterialIcons name="expand-more" size={22} color="#64748b" />
-                  </TouchableOpacity>
-                  {expanded === (c.id || c.phone) && (c.recentOrders?.length ? c.recentOrders.map(order => <View key={order.id} style={styles.metaRow}>
-                    <Text style={styles.metaText}>{new Date(order.date).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}</Text>
-                    <Text style={styles.metaText}>{t(({ PENDING: 'Received', CONFIRMED: 'Confirmed', PREPARING: 'Preparing', READY: 'Ready', DELIVERED: 'Delivered', CANCELLED: 'Cancelled', COMPLETED: 'Completed', PAID: 'Paid' } as Record<string, string>)[order.status] || 'Order', ({ PENDING: 'प्राप्त', CONFIRMED: 'पुष्टि हुई', PREPARING: 'तैयार हो रहा है', READY: 'तैयार', DELIVERED: 'पहुँचाया गया', CANCELLED: 'रद्द', COMPLETED: 'पूरा हुआ', PAID: 'भुगतान हुआ' } as Record<string, string>)[order.status] || 'ऑर्डर')}</Text>
-                    <Text>{money(order.total)}</Text>
-                  </View>) : <Text style={styles.metaText}>{t('No orders yet', 'अभी कोई ऑर्डर नहीं')}</Text>)}
-                  {!!c.phone && <TouchableOpacity accessibilityRole="button" style={styles.waBtn} onPress={() => router.push({ pathname: '/customer-history', params: { phone: c.phone, name: c.name } })}><Text style={styles.waBtnText}>{t('All orders & ledger', 'सभी ऑर्डर और खाता विवरण')}</Text></TouchableOpacity>}
-                  {/* Action Buttons */}
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity
-                      onPress={() => handleOpenEdit(c)}
-                      style={styles.editBtn}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialIcons name="edit" size={14} color="#059669" />
-                      <Text style={styles.editBtnText}>{t('Edit', 'संपादित करें')}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      disabled={!c.phone}
-                      onPress={() => handleWhatsApp(c)}
-                      style={styles.waBtn}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialIcons name="chat" size={14} color="#059669" />
-                      <Text style={styles.waBtnText}>{t('WhatsApp', 'WhatsApp संदेश')}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      disabled={!c.phone}
-                      onPress={() => handleCall(c.phone)}
-                      style={styles.callBtn}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialIcons name="phone" size={14} color="#0f172a" />
-                      <Text style={styles.callBtnText}>{t('Call', 'कॉल')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })
+            // The outer ScrollView remains the scroller (RefreshControl lives
+            // there), so the FlatList only virtualizes/batches the rows.
+            <FlatList
+              data={filteredCustomers}
+              keyExtractor={(c) => c.id || c.phone}
+              scrollEnabled={false}
+              nestedScrollEnabled
+              renderItem={({ item }) => (
+                <CustomerRow
+                  c={item}
+                  expanded={expanded === (item.id || item.phone)}
+                  language={language}
+                  t={t}
+                  money={money}
+                  formatRelativeDate={formatRelativeDate}
+                  getTagStyle={getTagStyle}
+                  onToggleExpanded={() =>
+                    setExpanded(expanded === (item.id || item.phone) ? null : (item.id || item.phone))
+                  }
+                  onOpenHistory={(c) =>
+                    router.push({ pathname: '/customer-history', params: { phone: c.phone, name: c.name } })
+                  }
+                  onEdit={handleOpenEdit}
+                  onWhatsApp={handleWhatsApp}
+                  onCall={handleCall}
+                />
+              )}
+            />
           )}
         </ScrollView>
       )}

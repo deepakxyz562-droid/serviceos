@@ -97,8 +97,11 @@ export async function POST(req: Request) {
       });
     });
 
+    // Canonical math (computeInvoiceTotals): per-line GST rate with the
+    // invoice-level rate as fallback (items created here carry no per-line
+    // gstRate, so every line falls back to the invoice-level rate).
     const totals = computeTotals(
-      invoice?.items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice })) || [],
+      invoice?.items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice, taxRate: i.gstRate ?? invoice?.taxRate })) || [],
       invoice?.discountValue || 0,
       invoice?.discountType || 'AMOUNT',
       invoice?.taxRate || 0,

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDown,
@@ -487,6 +487,57 @@ export function BosCustomersKhataWorkstation({
     Record<string, string[]>
   >({});
 
+  // Server-side party ledger (per-phone history, same API mobile uses):
+  // hydrated for the selected party so the drill-down survives reloads.
+  // In-session entries (extraTxByCustomer) always stay on top.
+  const [ledgerByCustomer, setLedgerByCustomer] = useState<
+    Record<string, ShowcaseCustomerRow['transactions']>
+  >({});
+
+  useEffect(() => {
+    if (demoMode || !selectedCustomerId) return;
+    const row = customers.find((c) => c.id === selectedCustomerId);
+    if (!row) return;
+    const digits = String(row.phone || '').replace(/\D/g, '');
+    if (digits.length < 7 || digits.length > 15) return;
+    let cancelled = false;
+    authFetch(
+      `/api/commerce/customer-history?phone=${encodeURIComponent(digits)}&section=ledger`,
+      { credentials: 'include' }
+    )
+      .then(async (res) => {
+        // On failure keep the honest in-session entries only — never invent history.
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data || !Array.isArray(data.records)) return;
+        const txs = data.records.map((r: {
+          id: string;
+          createdAt: string;
+          kind?: string;
+          debit?: number;
+          credit?: number;
+        }) => ({
+          id: `ledger-${r.id}`,
+          title:
+            r.kind === 'SALE' ? 'Sale / credit bill' : 'Payment received',
+          subtitle: `${new Date(r.createdAt).toLocaleDateString('en-IN')} • ${
+            r.debit ? 'Debit' : 'Credit'
+          }`,
+          amount: Number(r.debit || r.credit || 0),
+          direction: (r.debit ? 'out' : 'in') as 'in' | 'out',
+        }));
+        if (!cancelled) {
+          setLedgerByCustomer((prev) => ({ ...prev, [selectedCustomerId]: txs }));
+        }
+      })
+      .catch(() => {
+        /* keep in-session entries only */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [demoMode, selectedCustomerId, customers]);
+
   // Modals / Inline Forms
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentModeChoice, setPaymentModeChoice] = useState<'upi' | 'cash'>('upi');
@@ -598,6 +649,11 @@ export function BosCustomersKhataWorkstation({
           amount: tx.amount,
           direction: (tx.type === 'got' ? 'in' : 'out') as 'in' | 'out',
         }));
+      // Server-side per-phone ledger (survives reloads), deduped against any
+      // in-session entries that carry the same source id.
+      const serverLedger = ledgerByCustomer[c.id] || [];
+      const sessionIds = new Set(realTx.map((tx) => tx.id));
+      const serverTx = serverLedger.filter((tx) => !sessionIds.has(tx.id));
 
       return {
         id: c.id,
@@ -613,10 +669,10 @@ export function BosCustomersKhataWorkstation({
         totalPaid,
         balance,
         status,
-        transactions: [...extraTx, ...realTx],
+        transactions: [...extraTx, ...realTx, ...serverTx],
       };
     });
-  }, [customers, demoMode, khataTransactions, paidOverrides, balanceOverrides, extraTxByCustomer]);
+  }, [customers, demoMode, khataTransactions, paidOverrides, balanceOverrides, extraTxByCustomer, ledgerByCustomer]);
 
   const filteredRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();

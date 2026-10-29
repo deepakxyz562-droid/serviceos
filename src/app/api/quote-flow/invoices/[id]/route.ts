@@ -43,8 +43,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
+    // Canonical math (computeInvoiceTotals): per-line GST rate with the
+    // invoice-level rate as fallback. The spread below already carries the
+    // persisted placeOfSupply/customerGstin columns to the response.
     const totals = computeTotals(
-      invoice.items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice })),
+      invoice.items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice, taxRate: i.gstRate ?? invoice.taxRate })),
       invoice.discountValue,
       invoice.discountType,
       invoice.taxRate,
@@ -97,7 +100,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (parsed.data.status === 'PAID') {
       if (parsed.data.items || parsed.data.taxRate !== undefined || parsed.data.discountValue !== undefined) return NextResponse.json({ error: 'Save invoice changes before recording payment.' }, { status: 400 });
-      const total=computeTotals(existing.items,existing.discountValue,existing.discountType,existing.taxRate,business.currency).total;
+      const total=computeTotals(
+        existing.items.map((i)=>({qty:i.qty,unitPrice:i.unitPrice,taxRate:i.gstRate??existing.taxRate})),
+        existing.discountValue,
+        existing.discountType,
+        existing.taxRate,
+        business.currency
+      ).total;
       const due=Math.max(0,total-existing.payments.reduce((sum,p)=>sum+p.amount,0));
       if(due>0){
         const response=await saveMoney(new Request(req.url,{method:'POST',headers:req.headers,body:JSON.stringify({kind:'INVOICE_PAYMENT',invoiceId:id,amount:due,account:parsed.data.paymentMethod==='CASH'?'CASH':'BANK',requestKey:`invoice-paid:${id}`})}));

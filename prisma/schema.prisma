@@ -9118,6 +9118,8 @@ model AiCustomer {
   phone      String?
   address    String?
   gstin      String?    // 15-char GST Identification Number (B2B invoicing). NULL → B2C.
+  partyType  String?    // CUSTOMER | SUPPLIER | BOTH
+  creditLimit Float?    // khata credit ceiling for this party (NULL → unlimited)
   notes      String?
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
@@ -9181,6 +9183,8 @@ model AiInvoice {
   discountType  String          @default("AMOUNT")
   taxRate       Float           @default(0)
   pdfTemplate   String          @default("modern")
+  placeOfSupply String?         // GST place of supply — 2-digit state code or state name; inter-state ⇒ IGST
+  customerGstin String?         // B2B customer GSTIN snapshot at invoicing time
   fromQuoteId   String?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
@@ -9188,6 +9192,7 @@ model AiInvoice {
   items         AiInvoiceItem[]
   payments      AiPayment[]
 
+  @@unique([businessId, number])
   @@index([businessId])
   @@index([customerId])
 }
@@ -9376,6 +9381,7 @@ model GptformCommerceOrder {
   status          String   @default("PENDING")  // PENDING, CONFIRMED, PAID, PREPARING, READY, DELIVERED, CANCELLED
   itemsJson       String   @default("[]")  // [{productId,name,qty,unit,price,amount}]
   total           Float    @default(0)
+  discountAmount  Float    @default(0)     // discount applied at checkout (promotion + manual); total is recomputed server-side
   deliveryAddress String?
   deliveryDate    String?  // ISO date or free text
   deliveryType    String?  // delivery | pickup

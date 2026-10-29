@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { qrSvgMarkup } from '@/lib/qr-svg';
 import {
   Barcode,
   Calendar,
@@ -259,6 +260,42 @@ function formatTwoDecimals(num: number): string {
   });
 }
 
+/** Settlement-card payment mode → payments-API method code. */
+const PAYMENT_MODE_TO_METHOD: Record<'cash' | 'upi' | 'card' | 'bank' | 'cheque', string> = {
+  cash: 'CASH',
+  upi: 'UPI',
+  card: 'CARD',
+  bank: 'BANK',
+  cheque: 'CHEQUE',
+};
+
+/** Human label for the settlement-card payment mode. */
+const PAYMENT_MODE_LABEL: Record<'cash' | 'upi' | 'card' | 'bank' | 'cheque', string> = {
+  cash: 'Cash',
+  upi: 'UPI',
+  card: 'Card',
+  bank: 'Bank',
+  cheque: 'Cheque',
+};
+
+/** Map a payments-API `summary.status` to the invoice list's display status. */
+function paymentSummaryToDisplayStatus(
+  summaryStatus: string,
+  balance: number,
+): SavedBosInvoice['status'] {
+  if (balance <= 0.01) return 'Paid';
+  switch (summaryStatus) {
+    case 'PAID':
+      return 'Paid';
+    case 'PARTIALLY_PAID':
+      return 'Partial';
+    case 'DRAFT':
+      return 'Draft';
+    default:
+      return 'Unpaid';
+  }
+}
+
 export function BosInvoicesWorkstation({
   storeSettings,
   customers = [],
@@ -463,11 +500,10 @@ export function BosInvoicesWorkstation({
   const [paymentMode, setPaymentMode] = useState<'cash' | 'upi' | 'card' | 'bank' | 'cheque'>('cash');
   const [receivedAmount, setReceivedAmount] = useState<number>(0);
   const [receivedAmountInitialized, setReceivedAmountInitialized] = useState(false);
-  const [invoiceNumber, setInvoiceNumber] = useState(() =>
-    demoMode
-      ? 'INV-2024-1068'
-      : `INV-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`
-  );
+  // Demo keeps its showcase number. Production numbers are assigned by the
+  // server sequence on save (POST /api/commerce/invoices) — the builder
+  // shows 'Auto' until then; no client-side fabrication.
+  const [invoiceNumber, setInvoiceNumber] = useState(() => (demoMode ? 'INV-2024-1068' : ''));
   const [invoiceDate, setInvoiceDate] = useState(() =>
     demoMode
       ? '12 Oct 2024'
@@ -488,27 +524,62 @@ export function BosInvoicesWorkstation({
   );
   const [salesType, setSalesType] = useState('B2B - Business');
 
+  // ── Saved-invoice tracking (production) ─────────────────────────────────
+  // Holds the server identity of the builder's persisted draft plus the live
+  // payment summary, so payment recording / sharing always target a REAL
+  // invoice and every displayed balance is the server's truth.
+  const [savedInvoiceRef, setSavedInvoiceRef] = useState<{ id: string; number: string } | null>(null);
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
+  const [savedPaymentSummary, setSavedPaymentSummary] = useState<{
+    total: number;
+    paid: number;
+    balance: number;
+    status: string;
+  } | null>(null);
+  const [recordingPayment, setRecordingPayment] = useState(false);
+  const [receivedCapped, setReceivedCapped] = useState(false);
+
   const handleSelectDocType = (type: InvoiceDocType) => {
     setDocType(type);
-    const prefixMap: Record<InvoiceDocType, string> = {
-      gst: 'INV',
-      quotation: 'EST',
-      proforma: 'PI',
-      delivery_challan: 'DC',
-      credit_note: 'CN',
-      non_gst: 'BILL',
-    };
-    const prefix = prefixMap[type] || 'INV';
-    setInvoiceNumber(`${prefix}-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`);
+    if (demoMode) {
+      // Demo showcase: deterministic per-document number (no fabrication).
+      const prefixMap: Record<InvoiceDocType, string> = {
+        gst: 'INV',
+        quotation: 'EST',
+        proforma: 'PI',
+        delivery_challan: 'DC',
+        credit_note: 'CN',
+        non_gst: 'BILL',
+      };
+      const prefix = prefixMap[type] || 'INV';
+      setInvoiceNumber(`${prefix}-2024-1068`);
+      return;
+    }
+    // Production: switching document type starts a NEW document — its number
+    // is assigned by the server on save, so any previously saved identity no
+    // longer describes the invoice on screen.
+    setInvoiceNumber('');
+    setSavedInvoiceRef(null);
+    setSavedSnapshot(null);
+    setSavedPaymentSummary(null);
   };
 
   const handleConvertToInvoice = () => {
     const oldQuote = invoiceNumber;
     setQuotationRef(oldQuote);
     setDocType('gst');
-    const newNum = `INV-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`;
-    setInvoiceNumber(newNum);
-    showToast(`Quotation ${oldQuote} converted to Tax Invoice ${newNum}!`);
+    if (demoMode) {
+      setInvoiceNumber('INV-2024-1068');
+      showToast(`Quotation ${oldQuote} converted to Tax Invoice INV-2024-1068!`);
+      return;
+    }
+    // Production: the converted invoice is a NEW document — its real number
+    // comes from the server sequence on save.
+    setInvoiceNumber('');
+    setSavedInvoiceRef(null);
+    setSavedSnapshot(null);
+    setSavedPaymentSummary(null);
+    showToast('Quotation converted to Tax Invoice — number assigned on save');
   };
 
   // Customer Details States
@@ -580,9 +651,10 @@ export function BosInvoicesWorkstation({
 
   // Additional Details States
   const [paymentTerms, setPaymentTerms] = useState('Immediate');
-  const [salesPerson, setSalesPerson] = useState(() =>
-    demoMode ? 'Ravi Kumar' : (storeSettings.businessName || 'Store Manager')
-  );
+  // Demo keeps its showcase salesperson. Production defaults to Unassigned —
+  // the real staff list is loaded from GET /api/commerce/staff below.
+  const [salesPerson, setSalesPerson] = useState(() => (demoMode ? 'Ravi Kumar' : ''));
+  const [staffOptions, setStaffOptions] = useState<string[]>([]);
   const [projectReference, setProjectReference] = useState('');
   const [remarks, setRemarks] = useState('Thank you for your business!');
 
@@ -596,6 +668,40 @@ export function BosInvoicesWorkstation({
       setBillingAddressLines(first.address ? [first.name, first.address] : [first.name]);
     }
   }, [customers, selectedCustomerName, demoMode]);
+
+  // Load the REAL staff list once (production only — skipped in demoMode).
+  // GET /api/commerce/staff requires staff-management permission; on 403,
+  // failure or an empty list we keep just the honest "Unassigned" option
+  // instead of inventing names.
+  useEffect(() => {
+    if (demoMode) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/commerce/staff', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        const staff: Array<Record<string, unknown>> = Array.isArray(data?.staff) ? data.staff : [];
+        const names = staff
+          .filter(
+            (s) =>
+              s &&
+              s.isActive !== false &&
+              typeof s.name === 'string' &&
+              (s.name as string).trim().length > 0,
+          )
+          .map((s) => String(s.name).trim());
+        if (!cancelled && names.length > 0) {
+          setStaffOptions(Array.from(new Set(names)));
+        }
+      } catch {
+        // Silent: the select keeps only the "Unassigned" option.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [demoMode]);
 
   // Right Panel Preview States
   const [rightTab, setRightTab] = useState<RightPreviewTab>('preview');
@@ -688,6 +794,65 @@ export function BosInvoicesWorkstation({
       amountInWordsText,
     };
   }, [items, gstEnabled, docType, discountPercent, storeSettings.gstin, storeSettings.state, placeOfSupply, selectedCustomerGstin]);
+
+  /** Everything the create-flow POST sends — used to detect post-save edits so
+   *  payments / sharing never silently target a stale saved invoice. */
+  const builderSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        customerName: selectedCustomerName,
+        customerPhone: selectedCustomerPhone,
+        customerGstin: selectedCustomerGstin,
+        address: billingAddressLines,
+        placeOfSupply,
+        dueDate,
+        remarks,
+        gstEnabled,
+        docType,
+        items,
+      }),
+    [
+      selectedCustomerName,
+      selectedCustomerPhone,
+      selectedCustomerGstin,
+      billingAddressLines,
+      placeOfSupply,
+      dueDate,
+      remarks,
+      gstEnabled,
+      docType,
+      items,
+    ],
+  );
+
+  /** True while the builder still matches the last persisted draft. */
+  const builderMatchesSaved = savedInvoiceRef !== null && savedSnapshot === builderSnapshot;
+
+  /** Label for the not-yet-assigned number: production invoices receive their
+   *  real sequence from the server only on save ('Auto' until then). */
+  const displayInvoiceNumber = invoiceNumber.trim() || 'Auto';
+
+  /** Settlement math shared by the builder card, preview totals and payment
+   *  tab. `outstanding` is the SERVER balance while the builder matches the
+   *  saved invoice, else the bill total (round2 — the same math the server
+   *  canonicalizes) — payment amounts are never guessed client-side. */
+  const settlement = useMemo(() => {
+    const roundedTotal = Math.round(calculations.totalAmount);
+    const summary = builderMatchesSaved ? savedPaymentSummary : null;
+    const priorPaid = summary ? summary.paid : 0;
+    const outstanding = summary ? summary.balance : calculations.totalAmount;
+    // The Received input holds THIS settlement's amount; until the user edits
+    // it, it defaults to the full outstanding balance (collect-in-full default).
+    const effectiveReceived = receivedAmountInitialized ? receivedAmount : outstanding;
+    const balanceDue = Math.max(0, +(outstanding - effectiveReceived).toFixed(2));
+    return { roundedTotal, priorPaid, outstanding, effectiveReceived, balanceDue };
+  }, [
+    calculations.totalAmount,
+    builderMatchesSaved,
+    savedPaymentSummary,
+    receivedAmountInitialized,
+    receivedAmount,
+  ]);
 
   const eWayPayload = useMemo<EWayBillPayload>(() => {
     return generateEWayBillPayload({
@@ -850,29 +1015,17 @@ export function BosInvoicesWorkstation({
   };
 
   const handleAddProductToInvoice = (product?: BosProductItem) => {
-    const pick =
-      product || products[items.length % Math.max(1, products.length)];
-    if (!pick) {
-      setItems((prev) => [
-        ...prev,
-        {
-          id: `inv-line-${Date.now()}`,
-          name: 'Tata Salt 1kg',
-          category: 'Grocery',
-          barcode: '8901030000019',
-          imageUrl: '/bos/products/tata-salt.png',
-          hsnSac: '25010010',
-          qty: 1,
-          unit: 'pkt',
-          rate: 28,
-          gstRate: 5,
-        },
-      ]);
+    // Quick-add (no explicit product) cycles the REAL catalog only. When the
+    // catalog is empty nothing is added and we say so honestly — we never
+    // fabricate an item that does not exist in the catalog.
+    if (!product && products.length === 0) {
+      showToast('No products in your catalog yet — add products first');
       return;
     }
+    const pick = product || products[items.length % products.length];
+    if (!pick) return;
 
     setItems((prev) => [
-      ...prev,
       {
         id: `inv-line-${Date.now()}`,
         name: pick.name.replace(/[()]/g, ''),
@@ -889,14 +1042,21 @@ export function BosInvoicesWorkstation({
     setItemSearchQuery('');
   };
 
-  const handlePrintOrDownload = async () => {
+  /**
+   * Persist the current builder as a DRAFT via POST /api/commerce/invoices —
+   * exactly the create-flow payload — and adopt the server-assigned number.
+   * Returns the saved invoice identity, or null (with an honest toast) when
+   * validation or the request fails. Each call persists a new draft, mirroring
+   * the create flow's behavior.
+   */
+  const persistDraftInvoice = async (): Promise<{ id: string; number: string } | null> => {
     if (!selectedCustomerName.trim()) {
       showToast('Please enter a customer name for the invoice.');
-      return;
+      return null;
     }
     if (items.length === 0) {
       showToast('Please add at least one item to the invoice.');
-      return;
+      return null;
     }
 
     // ── Real customer data only ──────────────────────────────────────
@@ -909,21 +1069,26 @@ export function BosInvoicesWorkstation({
     const cleanCustomerPhone = selectedCustomerPhone.trim();
     const cleanCustomerAddress = billingAddressLines.slice(1).join(', ').trim();
 
+    // Effective tax % of the taxable base — includes IGST for inter-state
+    // invoices (previously (cgst+sgst)/taxable evaluated to 0% inter-state).
     const calculatedTaxPercent =
       calculations.taxableAmount > 0
         ? Number(
             (
-              ((calculations.cgst + calculations.sgst) /
+              ((calculations.cgst + calculations.sgst + calculations.igst) /
                 calculations.taxableAmount) *
               100
             ).toFixed(1),
           )
         : 0;
 
+    const snapshotAtSave = builderSnapshot;
     try {
       // POST against the commerce invoice contract — /api/commerce/invoices.
       // Auto-creates or attaches the customer by phone/name, computes taxes and
-      // generates compliant e-Way Bill and e-Invoice payloads.
+      // generates compliant e-Way Bill and e-Invoice payloads. The server
+      // assigns the real sequence number (INV-<year>-<seq>) — the client only
+      // adopts what it returns.
       const res = await authFetch('/api/commerce/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -955,117 +1120,146 @@ export function BosInvoicesWorkstation({
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         showToast((data && data.error) || 'Failed to save invoice on server.');
-        return;
+        return null;
       }
 
-      const verifiedInvoiceId = data?.invoice?.id || `inv-${Date.now()}`;
-      const verifiedInvoiceNumber = data?.invoice?.number || invoiceNumber;
-
-      const html = generateGstInvoiceHtml(
-        {
-          number: verifiedInvoiceNumber,
-          date: invoiceDate,
-          dueDate,
-          customerName: cleanCustomerName,
-          customerPhone: cleanCustomerPhone,
-          customerGstin: selectedCustomerGstin,
-          customerAddress: cleanCustomerAddress,
-          placeOfSupply,
-          subtotal: Math.round(calculations.taxableAmount),
-          tax: Math.round(calculations.cgst + calculations.sgst),
-          discount: Math.round(calculations.discountAmount),
-          total: Math.round(calculations.totalAmount),
-          balance: Math.round(calculations.totalAmount),
-          status: 'DRAFT',
-          items: calculations.computedRows.map((r) => ({
-            name: r.name,
-            hsn: r.hsnSac,
-            qty: r.qty,
-            unitPrice: r.rate,
-          })),
-        },
-        {
-          businessName: storeSettings.businessName || 'Business Store',
-          logoUrl: storeSettings.logoUrl || '/bos/logo-mark.png',
-          signatureUrl: storeSettings.signatureUrl || '',
-          billFooter: storeSettings.billFooter || '',
-          gstin: storeSettings.gstin || '',
-          address: storeSettings.address || '',
-          phone: storeSettings.phone || '',
-          email: storeSettings.email || '',
-          upiId: storeSettings.upiId || '',
-        },
-        currencySymbol,
-      );
-
-      const rawTotal = calculations.totalAmount;
-      const roundedTotal = Math.round(rawTotal);
-      const roundOff = +(roundedTotal - rawTotal).toFixed(2);
-      const effectiveReceived = receivedAmountInitialized ? receivedAmount : roundedTotal;
-      const balanceDue = Math.max(0, +(roundedTotal - effectiveReceived).toFixed(2));
-
-      const saved: SavedBosInvoice = {
-        id: verifiedInvoiceId,
-        invoiceNumber: verifiedInvoiceNumber,
-        docType,
-        customerName: cleanCustomerName,
-        customerGstin: selectedCustomerGstin,
-        date: invoiceDate,
-        dueDate,
-        totalAmount: roundedTotal,
-        paidAmount: effectiveReceived,
-        status: balanceDue <= 0 ? 'Paid' : effectiveReceived > 0 ? 'Partial' : 'Unpaid',
-        quotationRef: quotationRef || undefined,
-        deliveryChallanNumber: deliveryChallanNumber || undefined,
-        roundOff,
-        receivedAmount: effectiveReceived,
-        balanceDue,
-        paymentMode,
-      };
-      if (onInvoiceSaved) handleSavedInvoiceAndRefresh(saved);
-
-      const win = window.open('', '_blank', 'width=900,height=800');
-      if (win) {
-        win.document.open();
-        win.document.write(html);
-        win.document.close();
-        win.focus();
-        setTimeout(() => win.print(), 300);
+      const savedId = data?.invoice?.id;
+      const savedNumber = data?.invoice?.number || data?.invoice?.invoiceNumber;
+      if (!savedId || !savedNumber) {
+        showToast(
+          'Invoice saved, but the server did not return its number — please refresh the invoice list.',
+        );
+        return null;
       }
 
-      // Auto-dispatch WhatsApp Tax Invoice to customer if valid mobile number exists
-      const cleanPhone = selectedCustomerPhone.replace(/\D/g, '');
-      if (cleanPhone && cleanPhone.length >= 10) {
-        const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bos.fieseros.com';
-        const payLink = `${origin}/pay/${encodeURIComponent(verifiedInvoiceNumber)}`;
-        const businessTitle = storeSettings.businessName || 'BOS Store';
-        const msg = `Hello *${cleanCustomerName}*,\nHere is your Tax Invoice *${verifiedInvoiceNumber}* from *${businessTitle}*.\n• *Total Amount:* ${currencySymbol} ${formatTwoDecimals(roundedTotal)}\n👉 *View Online:* ${payLink}`;
-
-        void authFetch('/api/commerce/whatsapp/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone: cleanPhone,
-            message: msg,
-            templateType: 'bos_tax_invoice',
-            templateData: {
-              customerName: cleanCustomerName,
-              invoiceNumber: verifiedInvoiceNumber,
-              amount: `${currencySymbol} ${formatTwoDecimals(roundedTotal)}`,
-              pdfUrl: payLink,
-              businessName: businessTitle,
-            },
-          }),
-        }).catch((err) => {
-          console.warn('Auto WhatsApp invoice send non-fatal error:', err);
-        });
-
-        showToast(`Invoice ${verifiedInvoiceNumber} created, printed & sent via WhatsApp ✓`);
-      } else {
-        showToast(`Invoice ${verifiedInvoiceNumber} created & sent to printer`);
-      }
+      // Adopt the server-assigned sequence number and remember the identity
+      // together with the exact builder content it corresponds to. A fresh
+      // draft carries no payments.
+      setInvoiceNumber(String(savedNumber));
+      setSavedInvoiceRef({ id: String(savedId), number: String(savedNumber) });
+      setSavedSnapshot(snapshotAtSave);
+      setSavedPaymentSummary(null);
+      return { id: String(savedId), number: String(savedNumber) };
     } catch (err: any) {
       showToast(err?.message || 'Network error saving invoice.');
+      return null;
+    }
+  };
+
+  const handlePrintOrDownload = async () => {
+    // Persist first (exactly like before) — the printed document always carries
+    // the REAL server-assigned invoice number.
+    const savedRef = await persistDraftInvoice();
+    if (!savedRef) return;
+    const verifiedInvoiceId = savedRef.id;
+    const verifiedInvoiceNumber = savedRef.number;
+
+    const cleanCustomerName = selectedCustomerName.trim();
+    const cleanCustomerPhone = selectedCustomerPhone.trim();
+    const cleanCustomerAddress = billingAddressLines.slice(1).join(', ').trim();
+
+    const html = generateGstInvoiceHtml(
+      {
+        number: verifiedInvoiceNumber,
+        date: invoiceDate,
+        dueDate,
+        customerName: cleanCustomerName,
+        customerPhone: cleanCustomerPhone,
+        customerGstin: selectedCustomerGstin,
+        customerAddress: cleanCustomerAddress,
+        placeOfSupply,
+        subtotal: Math.round(calculations.taxableAmount),
+        tax: Math.round(calculations.cgst + calculations.sgst),
+        discount: Math.round(calculations.discountAmount),
+        total: Math.round(calculations.totalAmount),
+        balance: Math.round(calculations.totalAmount),
+        status: 'DRAFT',
+        items: calculations.computedRows.map((r) => ({
+          name: r.name,
+          hsn: r.hsnSac,
+          qty: r.qty,
+          unitPrice: r.rate,
+        })),
+      },
+      {
+        businessName: storeSettings.businessName || 'Business Store',
+        logoUrl: storeSettings.logoUrl || '/bos/logo-mark.png',
+        signatureUrl: storeSettings.signatureUrl || '',
+        billFooter: storeSettings.billFooter || '',
+        gstin: storeSettings.gstin || '',
+        address: storeSettings.address || '',
+        phone: storeSettings.phone || '',
+        email: storeSettings.email || '',
+        upiId: storeSettings.upiId || '',
+      },
+      currencySymbol,
+    );
+
+    const rawTotal = calculations.totalAmount;
+    const roundedTotal = Math.round(rawTotal);
+    const roundOff = +(roundedTotal - rawTotal).toFixed(2);
+    const effectiveReceived = receivedAmountInitialized ? receivedAmount : roundedTotal;
+    const balanceDue = Math.max(0, +(roundedTotal - effectiveReceived).toFixed(2));
+
+    const saved: SavedBosInvoice = {
+      id: verifiedInvoiceId,
+      invoiceNumber: verifiedInvoiceNumber,
+      docType,
+      customerName: cleanCustomerName,
+      customerGstin: selectedCustomerGstin,
+      date: invoiceDate,
+      dueDate,
+      totalAmount: roundedTotal,
+      paidAmount: effectiveReceived,
+      status: balanceDue <= 0 ? 'Paid' : effectiveReceived > 0 ? 'Partial' : 'Unpaid',
+      quotationRef: quotationRef || undefined,
+      deliveryChallanNumber: deliveryChallanNumber || undefined,
+      roundOff,
+      receivedAmount: effectiveReceived,
+      balanceDue,
+      paymentMode,
+    };
+    if (onInvoiceSaved) handleSavedInvoiceAndRefresh(saved);
+
+    const win = window.open('', '_blank', 'width=900,height=800');
+    if (win) {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 300);
+    }
+
+    // Auto-dispatch WhatsApp Tax Invoice to customer if valid mobile number exists
+    const cleanPhone = selectedCustomerPhone.replace(/\D/g, '');
+    if (cleanPhone && cleanPhone.length >= 10) {
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bos.fieseros.com';
+      const payLink = `${origin}/pay/${encodeURIComponent(verifiedInvoiceNumber)}`;
+      const businessTitle = storeSettings.businessName || 'BOS Store';
+      const msg = `Hello *${cleanCustomerName}*,\nHere is your Tax Invoice *${verifiedInvoiceNumber}* from *${businessTitle}*.\n• *Total Amount:* ${currencySymbol} ${formatTwoDecimals(roundedTotal)}\n👉 *View Online:* ${payLink}`;
+
+      void authFetch('/api/commerce/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: cleanPhone,
+          message: msg,
+          templateType: 'bos_tax_invoice',
+          templateData: {
+            customerName: cleanCustomerName,
+            invoiceNumber: verifiedInvoiceNumber,
+            amount: `${currencySymbol} ${formatTwoDecimals(roundedTotal)}`,
+            pdfUrl: payLink,
+            businessName: businessTitle,
+          },
+        }),
+      }).catch((err) => {
+        console.warn('Auto WhatsApp invoice send non-fatal error:', err);
+      });
+
+      showToast(`Invoice ${verifiedInvoiceNumber} created, printed & sent via WhatsApp ✓`);
+    } else {
+      showToast(`Invoice ${verifiedInvoiceNumber} created & sent to printer`);
     }
   };
 
@@ -1075,10 +1269,26 @@ export function BosInvoicesWorkstation({
       showToast('Please enter customer phone number to share invoice on WhatsApp.');
       return;
     }
+
+    // ── Honesty guard ────────────────────────────────────────────────
+    // The WhatsApp pay link must carry the REAL server invoice number, so an
+    // unsaved draft is persisted first (exactly like the create flow) and the
+    // share happens with the server-assigned number. Demo mode keeps its
+    // showcase number; if the save fails, sharing stops with the honest error.
+    let shareNumber = invoiceNumber;
+    if (!demoMode) {
+      const target = builderMatchesSaved ? savedInvoiceRef : await persistDraftInvoice();
+      if (!target) return; // persistDraftInvoice already showed the honest error.
+      shareNumber = target.number;
+    }
+    if (!shareNumber.trim()) {
+      showToast('Save the invoice first to share it');
+      return;
+    }
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bos.fieseros.com';
-    const payLink = `${origin}/pay/${encodeURIComponent(invoiceNumber)}`;
+    const payLink = `${origin}/pay/${encodeURIComponent(shareNumber)}`;
     const businessTitle = storeSettings.businessName || 'BOS Store';
-    const text = `Hello *${selectedCustomerName}*,\nHere is your Tax Invoice *${invoiceNumber}* from *${businessTitle}*.\n• *Taxable Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.taxableAmount)}\n• *Total Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.totalAmount)}\n${remarks ? `${remarks}\n` : ''}👉 *View & Pay Online via UPI:* ${payLink}`;
+    const text = `Hello *${selectedCustomerName}*,\nHere is your Tax Invoice *${shareNumber}* from *${businessTitle}*.\n• *Taxable Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.taxableAmount)}\n• *Total Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.totalAmount)}\n${remarks ? `${remarks}\n` : ''}👉 *View & Pay Online via UPI:* ${payLink}`;
 
     try {
       const res = await authFetch('/api/commerce/whatsapp/send', {
@@ -1090,7 +1300,7 @@ export function BosInvoicesWorkstation({
           templateType: 'bos_tax_invoice',
           templateData: {
             customerName: selectedCustomerName,
-            invoiceNumber,
+            invoiceNumber: shareNumber,
             amount: `${currencySymbol} ${formatTwoDecimals(calculations.totalAmount)}`,
             pdfUrl: payLink,
             businessName: businessTitle,
@@ -1113,7 +1323,138 @@ export function BosInvoicesWorkstation({
         'noopener,noreferrer',
       );
     }
-    showToast(`Shared ${invoiceNumber} payment link with ${selectedCustomerName}`);
+    showToast(`Shared ${shareNumber} payment link with ${selectedCustomerName}`);
+  }
+
+  /**
+   * Record a REAL payment against the builder's invoice via
+   * POST /api/commerce/invoices/[id]/payments. When the builder is unsaved it
+   * is first persisted as a DRAFT (exactly like the create flow); the payment
+   * amount defaults to the outstanding balance and is validated against it.
+   * The toast reports the SERVER's outcome — never a client-side guess.
+   */
+  const handleRecordPayment = async (method: string) => {
+    if (demoMode) {
+      showInfo('Demo mode — payments are recorded only in your live store.');
+      return;
+    }
+    if (recordingPayment) return;
+    if (items.length === 0) {
+      showToast('Add at least one item before recording a payment.');
+      return;
+    }
+
+    // Outstanding balance: the SERVER's truth while the builder matches the
+    // saved invoice, else the bill total (round2 — same math the server uses).
+    const outstanding = settlement.outstanding;
+    if (outstanding <= 0.01) {
+      showToast(
+        builderMatchesSaved && savedPaymentSummary
+          ? 'This invoice is already fully paid.'
+          : 'Nothing to collect — add items with a value above zero.',
+      );
+      return;
+    }
+    const amount = receivedAmountInitialized ? receivedAmount : outstanding;
+    if (!(amount > 0)) {
+      showToast('Enter a received amount greater than zero.');
+      return;
+    }
+    if (amount > outstanding + 0.011) {
+      showToast(
+        `Received amount exceeds the outstanding balance (${currencySymbol} ${formatTwoDecimals(outstanding)}).`,
+      );
+      return;
+    }
+
+    setRecordingPayment(true);
+    try {
+      // (a) Unsaved builder → persist as DRAFT exactly like the create flow.
+      const target = builderMatchesSaved ? savedInvoiceRef : await persistDraftInvoice();
+      if (!target) return; // the honest error was already toasted.
+
+      // (b) Record the payment on the payments endpoint — atomic on the server
+      // (balance re-read, cap check, insert and status flip in one tx).
+      const res = await authFetch(
+        `/api/commerce/invoices/${encodeURIComponent(target.id)}/payments`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: +amount.toFixed(2), method }),
+        },
+      );
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        showToast((data && data.error) || `Failed to record payment (HTTP ${res.status}).`);
+        return;
+      }
+      const payment = data?.payment;
+      const summary = data?.summary;
+      // Idempotent retry (same reference + amount): the server returns the
+      // originally recorded payment without double-charging.
+      if (data?.duplicate && payment) {
+        setListRefreshNonce((n) => n + 1);
+        showToast(
+          `Payment already recorded on ${target.number} via ${String(payment.method || method)} — no double charge`,
+        );
+        return;
+      }
+      if (!payment || !summary) {
+        showToast(
+          'Payment recorded, but the server response was incomplete — refreshing the invoice list.',
+        );
+        setListRefreshNonce((n) => n + 1);
+        return;
+      }
+
+      // (c) Adopt the server-computed summary everywhere it is displayed.
+      const serverSummary = {
+        total: Number(summary.total) || 0,
+        paid: Number(summary.paid) || 0,
+        balance: Number(summary.balance) || 0,
+        status: String(summary.status || ''),
+      };
+      setSavedPaymentSummary(serverSummary);
+      // The Received input describes the NEXT settlement; after a recorded
+      // payment the default (uninitialized) state is the NEW outstanding
+      // balance — exactly the “default: balance due” contract.
+      setReceivedAmountInitialized(false);
+      setReceivedCapped(false);
+
+      // Update the local list row straight from the payment response.
+      const rowStatus = paymentSummaryToDisplayStatus(serverSummary.status, serverSummary.balance);
+      setRemoteInvoices((prev) =>
+        prev
+          ? prev.map((row) =>
+              row.id === target.id
+                ? {
+                    ...row,
+                    totalAmount: serverSummary.total || row.totalAmount,
+                    paidAmount: serverSummary.paid,
+                    balanceDue: serverSummary.balance,
+                    rawStatus: serverSummary.status || row.rawStatus,
+                    status: rowStatus,
+                  }
+                : row,
+            )
+          : prev,
+      );
+
+      // Refresh the invoice list + book-wide stats via the existing refetch path.
+      setListRefreshNonce((n) => n + 1);
+
+      const balanceLabel =
+        serverSummary.balance <= 0.01
+          ? 'fully paid ✓'
+          : `balance ${currencySymbol} ${formatTwoDecimals(serverSummary.balance)}`;
+      showToast(
+        `${currencySymbol} ${formatTwoDecimals(Number(payment.amount) || 0)} recorded on ${target.number} via ${String(payment.method || method)} — ${balanceLabel}`,
+      );
+    } catch (err: any) {
+      showToast(err?.message || 'Network error recording payment.');
+    } finally {
+      setRecordingPayment(false);
+    }
   };
 
   const handleAddNewCustomerSubmit = async (e: React.FormEvent) => {
@@ -1309,20 +1650,34 @@ export function BosInvoicesWorkstation({
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-              {/* Invoice Number */}
+              {/* Invoice Number — server-assigned on save (production). The
+                  input stays read-only ('Auto' placeholder) until the real
+                  number exists; the demo keeps its editable showcase number. */}
               <div>
                 <label className="block text-[11.5px] font-medium text-[#475569] mb-1">
-                  Invoice Number <span className="text-[#EF4444]">*</span>
+                  Invoice Number {demoMode ? <span className="text-[#EF4444]">*</span> : null}
                 </label>
                 <div className="relative">
                   <input
                     type="text"
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value)}
-                    className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-white pl-3 pr-8 text-[12.5px] font-bold text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                    placeholder={demoMode ? undefined : 'Auto'}
+                    disabled={!demoMode}
+                    title={
+                      demoMode
+                        ? undefined
+                        : 'Assigned automatically from your invoice sequence when the invoice is saved'
+                    }
+                    className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-white pl-3 pr-8 text-[12.5px] font-bold text-[#111827] focus:border-[#0A6847] focus:outline-hidden disabled:cursor-not-allowed disabled:bg-[#F8FAFC] disabled:text-[#64748B]"
                   />
                   <Settings className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#64748B]" />
                 </div>
+                {!demoMode && (
+                  <p className="mt-1 text-[10.5px] font-medium text-[#64748B]">
+                    {invoiceNumber ? 'Assigned by your invoice sequence' : 'Assigned automatically on save'}
+                  </p>
+                )}
               </div>
 
               {/* Invoice Date */}
@@ -1986,15 +2341,30 @@ export function BosInvoicesWorkstation({
                 <label className="block text-[11.5px] font-medium text-[#475569] mb-1">
                   Sales Person
                 </label>
+                {/* Real staff from GET /api/commerce/staff (active members only).
+                    Demo mode keeps the showcase names; on fetch failure, no
+                    permission or an empty list we show just the honest
+                    Unassigned option — never invented names. */}
                 <select
                   aria-label="Sales Person"
                   value={salesPerson}
                   onChange={(e) => setSalesPerson(e.target.value)}
                   className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[12.5px] font-medium text-[#111827]"
                 >
-                  <option value="Ravi Kumar">Ravi Kumar</option>
-                  <option value="Amit Verma">Amit Verma</option>
-                  <option value="Priya Nair">Priya Nair</option>
+                  <option value="">Unassigned</option>
+                  {demoMode ? (
+                    <>
+                      <option value="Ravi Kumar">Ravi Kumar</option>
+                      <option value="Amit Verma">Amit Verma</option>
+                      <option value="Priya Nair">Priya Nair</option>
+                    </>
+                  ) : (
+                    staffOptions.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -2025,12 +2395,12 @@ export function BosInvoicesWorkstation({
             </div>
           </div>
 
-          {/* CARD 5: PAYMENT & SETTLEMENT */}
+          {/* CARD 5: PAYMENT & SETTLEMENT — the Received input feeds the REAL
+              payment recording (payments endpoint); amounts are clamped to
+              the outstanding balance with honest inline feedback. */}
           {(() => {
-            const rawTotal = calculations.totalAmount;
-            const roundedTotal = Math.round(rawTotal);
-            const effectiveReceived = receivedAmountInitialized ? receivedAmount : roundedTotal;
-            const balanceDue = Math.max(0, +(roundedTotal - effectiveReceived).toFixed(2));
+            const { roundedTotal, priorPaid, outstanding, effectiveReceived, balanceDue } =
+              settlement;
             return (
               <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between">
@@ -2039,6 +2409,9 @@ export function BosInvoicesWorkstation({
                   </h2>
                   <span className="text-[11.5px] font-bold text-[#64748B]">
                     Net: {currencySymbol} {formatTwoDecimals(roundedTotal)}
+                    {priorPaid > 0
+                      ? ` · Paid so far: ${currencySymbol} ${formatTwoDecimals(priorPaid)}`
+                      : ''}
                   </span>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -2068,8 +2441,9 @@ export function BosInvoicesWorkstation({
                       <button
                         type="button"
                         onClick={() => {
-                          setReceivedAmount(roundedTotal);
+                          setReceivedAmount(outstanding);
                           setReceivedAmountInitialized(true);
+                          setReceivedCapped(false);
                         }}
                         className="text-[10.5px] font-bold text-[#0A6847] hover:underline cursor-pointer"
                       >
@@ -2079,13 +2453,25 @@ export function BosInvoicesWorkstation({
                     <input
                       type="number"
                       step="0.01"
+                      max={outstanding}
                       value={effectiveReceived}
                       onChange={(e) => {
-                        setReceivedAmount(Math.max(0, Number(e.target.value) || 0));
+                        // Clamp honestly to the outstanding balance — you
+                        // cannot receive more than what is due.
+                        const typed = Math.max(0, Number(e.target.value) || 0);
+                        const capped = Math.min(typed, outstanding);
+                        setReceivedAmount(capped);
                         setReceivedAmountInitialized(true);
+                        setReceivedCapped(typed > outstanding + 0.001);
                       }}
                       className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12.5px] font-bold text-[#111827]"
                     />
+                    {receivedCapped ? (
+                      <p className="mt-1 text-[10.5px] font-semibold text-amber-600">
+                        Capped to the outstanding balance ({currencySymbol}{' '}
+                        {formatTwoDecimals(outstanding)})
+                      </p>
+                    ) : null}
                   </div>
 
                   <div>
@@ -2269,7 +2655,7 @@ export function BosInvoicesWorkstation({
                     <div className="flex justify-between gap-2">
                       <span className="text-[#64748B]">Invoice No:</span>
                       <span className="font-extrabold text-[#111827]">
-                        {invoiceNumber}
+                        {displayInvoiceNumber}
                       </span>
                     </div>
                     {quotationRef ? (
@@ -2440,10 +2826,10 @@ export function BosInvoicesWorkstation({
                     )}
                     {(() => {
                       const rawTotal = calculations.totalAmount;
-                      const roundedTotal = Math.round(rawTotal);
+                      const roundedTotal = settlement.roundedTotal;
                       const roundOff = +(roundedTotal - rawTotal).toFixed(2);
-                      const effectiveReceived = receivedAmountInitialized ? receivedAmount : roundedTotal;
-                      const balanceDue = Math.max(0, +(roundedTotal - effectiveReceived).toFixed(2));
+                      const effectiveReceived = settlement.effectiveReceived;
+                      const balanceDue = settlement.balanceDue;
                       return (
                         <>
                           {roundOff !== 0 && (
@@ -2494,16 +2880,22 @@ export function BosInvoicesWorkstation({
                     {/* Real Scannable Invoice UPI QR Code */}
                     <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-[#CBD5E1] bg-white p-1 shadow-2xs">
                       {storeSettings.upiId ? (
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
-                            `upi://pay?pa=${encodeURIComponent(storeSettings.upiId)}&pn=${encodeURIComponent(
-                              storeSettings.businessName || 'Store'
-                            )}&am=${calculations.totalAmount.toFixed(2)}&tn=${encodeURIComponent(
-                              `Invoice ${invoiceNumber}`
-                            )}&cu=INR`
-                          )}`}
-                          alt="Invoice UPI QR"
-                          className="h-full w-full object-contain"
+                        /* Safe to inline: markup is generated entirely by our
+                           local encoder — no user-controlled attributes. */
+                        <div
+                          className="h-full w-full"
+                          role="img"
+                          aria-label="Invoice UPI QR"
+                          dangerouslySetInnerHTML={{
+                            __html:
+                              qrSvgMarkup(
+                                `upi://pay?pa=${encodeURIComponent(storeSettings.upiId)}&pn=${encodeURIComponent(
+                                  storeSettings.businessName || 'Store'
+                                )}&am=${settlement.outstanding.toFixed(2)}&tn=${encodeURIComponent(
+                                  `Invoice ${displayInvoiceNumber}`
+                                )}&cu=INR`
+                              ) ?? '',
+                          }}
                         />
                       ) : (
                         <QrCode className="h-8 w-8 text-[#94A3B8]" />
@@ -2689,7 +3081,7 @@ export function BosInvoicesWorkstation({
               <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#EBF2EE]">
                 <button
                   type="button"
-                  onClick={() => handleDownloadJson(eInvoicePayload, `${invoiceNumber}_einvoice.json`)}
+                  onClick={() => handleDownloadJson(eInvoicePayload, `${displayInvoiceNumber}_einvoice.json`)}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 py-2 text-[12px] font-bold text-white shadow-2xs hover:bg-[#085238] cursor-pointer"
                 >
                   <Download className="h-3.5 w-3.5" />
@@ -2794,7 +3186,7 @@ export function BosInvoicesWorkstation({
               <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#EBF2EE]">
                 <button
                   type="button"
-                  onClick={() => handleDownloadJson(eWayPayload, `${invoiceNumber}_ewaybill.json`)}
+                  onClick={() => handleDownloadJson(eWayPayload, `${displayInvoiceNumber}_ewaybill.json`)}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 py-2 text-[12px] font-bold text-white shadow-2xs hover:bg-[#085238] cursor-pointer"
                 >
                   <Download className="h-3.5 w-3.5" />
@@ -2825,8 +3217,11 @@ export function BosInvoicesWorkstation({
                     Instant QR code settlement via UPI or Cash
                   </p>
                 </div>
-                <span className="text-[16px] font-extrabold text-[#0A6847]">
-                  {currencySymbol} {formatTwoDecimals(calculations.totalAmount)}
+                <span
+                  className="text-[16px] font-extrabold text-[#0A6847]"
+                  title="Outstanding balance due (server truth once payments exist)"
+                >
+                  {currencySymbol} {formatTwoDecimals(settlement.outstanding)}
                 </span>
               </div>
 
@@ -2834,16 +3229,22 @@ export function BosInvoicesWorkstation({
               <div className="flex flex-col items-center justify-center p-4 bg-[#FAFDFB] rounded-xl border border-[#DCE9E3] space-y-2.5 text-center">
                 <div className="p-2 bg-white rounded-xl shadow-xs border border-[#E2E8F0]">
                   {storeSettings.upiId ? (
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
-                        `upi://pay?pa=${encodeURIComponent(storeSettings.upiId)}&pn=${encodeURIComponent(
-                          storeSettings.businessName || 'Store',
-                        )}&am=${calculations.totalAmount.toFixed(2)}&tn=${encodeURIComponent(
-                          `Invoice ${invoiceNumber}`,
-                        )}&cu=INR`,
-                      )}`}
-                      alt="UPI Payment QR"
-                      className="h-36 w-36 object-contain"
+                    /* Safe to inline: markup is generated entirely by our
+                       local encoder — no user-controlled attributes. */
+                    <div
+                      className="h-36 w-36"
+                      role="img"
+                      aria-label="UPI Payment QR"
+                      dangerouslySetInnerHTML={{
+                        __html:
+                          qrSvgMarkup(
+                            `upi://pay?pa=${encodeURIComponent(storeSettings.upiId)}&pn=${encodeURIComponent(
+                              storeSettings.businessName || 'Store',
+                            )}&am=${settlement.outstanding.toFixed(2)}&tn=${encodeURIComponent(
+                              `Invoice ${displayInvoiceNumber}`,
+                            )}&cu=INR`,
+                          ) ?? '',
+                      }}
                     />
                   ) : (
                     <div className="h-36 w-36 flex flex-col items-center justify-center p-3 text-center bg-[#FAFDFB]">
@@ -2865,33 +3266,54 @@ export function BosInvoicesWorkstation({
                 </div>
               </div>
 
-              {/* Quick Record Payment Action Buttons */}
+              {/* Quick Record Payment — REAL persistence: an unsaved draft is
+                  saved first (create-flow payload), then
+                  POST /api/commerce/invoices/[id]/payments records the money.
+                  The toast reports the server's outcome, never a guess. */}
               <div className="space-y-2 pt-2 border-t border-[#EBF2EE]">
                 <p className="text-[11.5px] font-bold text-[#334155]">Record Payment Received</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={async () => {
-                      await handlePrintOrDownload();
-                      showToast(`Payment collected for ${invoiceNumber} via Cash!`);
-                    }}
-                    className="flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12px] font-bold text-[#111827] hover:bg-[#E6F6F0] cursor-pointer"
+                    disabled={recordingPayment}
+                    onClick={() => void handleRecordPayment('CASH')}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12px] font-bold text-[#111827] hover:bg-[#E6F6F0] cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <span>💵</span>
-                    <span>Received Cash</span>
+                    <span>{recordingPayment ? 'Recording…' : 'Received Cash'}</span>
                   </button>
                   <button
                     type="button"
-                    onClick={async () => {
-                      await handlePrintOrDownload();
-                      showToast(`Payment verified for ${invoiceNumber} via UPI!`);
-                    }}
-                    className="flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12px] font-bold text-[#0A6847] hover:bg-[#E6F6F0] cursor-pointer"
+                    disabled={recordingPayment}
+                    onClick={() => void handleRecordPayment('UPI')}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12px] font-bold text-[#0A6847] hover:bg-[#E6F6F0] cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <span>⚡</span>
-                    <span>Received UPI</span>
+                    <span>{recordingPayment ? 'Recording…' : 'Received UPI'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={recordingPayment}
+                    onClick={() =>
+                      void handleRecordPayment(PAYMENT_MODE_TO_METHOD[paymentMode])
+                    }
+                    className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white py-2 text-[12px] font-bold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <span>🧾</span>
+                    <span>
+                      {recordingPayment
+                        ? 'Recording payment…'
+                        : `Record ${PAYMENT_MODE_LABEL[paymentMode]} Payment`}
+                    </span>
                   </button>
                 </div>
+                <p className="text-[10.5px] leading-snug text-[#64748B]">
+                  {demoMode
+                    ? 'Demo mode — payments are recorded only in your live store.'
+                    : `Amount defaults to the balance due (${currencySymbol} ${formatTwoDecimals(
+                        settlement.outstanding,
+                      )}) and is saved as a real payment entry — the balance updates from the server.`}
+                </p>
               </div>
             </div>
           )}
@@ -2922,7 +3344,7 @@ export function BosInvoicesWorkstation({
               <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3 space-y-2">
                 <p className="font-bold text-[#111827]">Part A: Consignment Summary</p>
                 <div className="grid grid-cols-2 gap-2 text-[11.5px] text-[#475569]">
-                  <p><span className="font-semibold text-[#111827]">Invoice #:</span> {invoiceNumber}</p>
+                  <p><span className="font-semibold text-[#111827]">Invoice #:</span> {displayInvoiceNumber}</p>
                   <p><span className="font-semibold text-[#111827]">Total Value:</span> {currencySymbol} {formatTwoDecimals(calculations.totalAmount)}</p>
                   <p className="truncate"><span className="font-semibold text-[#111827]">From:</span> {storeSettings.businessName || 'Store'}</p>
                   <p className="truncate"><span className="font-semibold text-[#111827]">To:</span> {selectedCustomerName || 'Customer'}</p>
@@ -3023,7 +3445,7 @@ export function BosInvoicesWorkstation({
                 <button
                   type="button"
                   onClick={() => {
-                    handleDownloadJson(eWayPayload, `${invoiceNumber}_ewaybill.json`);
+                    handleDownloadJson(eWayPayload, `${displayInvoiceNumber}_ewaybill.json`);
                     setShowEWayBillModal(false);
                   }}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 py-1.5 text-[12px] font-bold text-white hover:bg-[#085238] shadow-2xs cursor-pointer"
@@ -3077,9 +3499,10 @@ export function BosInvoicesWorkstation({
                 <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[#EBF2EE] text-[11px]">
                   <div>
                     <span className="text-[#64748B]">Ack Number:</span>
-                    <p className="font-mono font-bold text-[#111827]">
-                      1124{String(Date.now()).slice(-10)}
-                    </p>
+                    {/* Honest placeholder — the real Ack Number is assigned by
+                        the IRP only on portal upload; this modal is a Draft
+                        Preview (Unregistered), so nothing is fabricated. */}
+                    <p className="font-mono font-bold text-[#111827]">— pending IRP upload</p>
                   </div>
                   <div>
                     <span className="text-[#64748B]">Total Value:</span>
@@ -3130,7 +3553,7 @@ export function BosInvoicesWorkstation({
                 <button
                   type="button"
                   onClick={() => {
-                    handleDownloadJson(eInvoicePayload, `${invoiceNumber}_einvoice.json`);
+                    handleDownloadJson(eInvoicePayload, `${displayInvoiceNumber}_einvoice.json`);
                     setShowEInvoiceModal(false);
                   }}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 py-1.5 text-[12px] font-bold text-white hover:bg-[#085238] shadow-2xs cursor-pointer"

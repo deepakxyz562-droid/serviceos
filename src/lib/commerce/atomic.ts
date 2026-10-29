@@ -44,6 +44,7 @@ export function commerceError(error: unknown): { message: string; status: number
     ORDER_NOT_FOUND:[404,'Order not found.'], INVALID_ORDER_STATUS:[400,'Choose a valid order status.'], INVALID_ORDER_TRANSITION:[409,'This order cannot move to that status. Refresh the order.'], INVALID_PAYMENT_STATUS:[400,'Use a verified payment or refund entry.'], PAYMENT_REFUND_REQUIRED:[409,'Record and verify the refund before cancelling a paid order.'], CANCELLATION_REVIEW_REQUIRED:[409,'Review the stock for this older order before cancelling.'],
     RECEIPT_CORRECTION_REQUIRED:[409,'Recorded payments cannot be changed or deleted. Record an audited correction.'],
     INVALID_AMOUNT: [400, 'Enter a valid amount.'], INVALID_RECONCILIATION: [400, 'Enter the amount already paid, up to the bill total.'],
+    INVALID_DISCOUNT: [400, 'Enter a valid discount.'],
     ORDER_NOT_PAYABLE: [409, 'This order cannot receive a payment.'],
     INVOICE_NOT_PAYABLE: [409, 'This invoice cannot receive a payment.'],
     SUPPLIER_NOT_FOUND: [404, 'Supplier not found.'], BUSINESS_NOT_FOUND: [404, 'Business not found.'],

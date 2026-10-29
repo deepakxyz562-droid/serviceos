@@ -18,8 +18,10 @@ export const BGOS_NAVIGATION = [
   {
     title: 'Growth & CRM',
     items: [
-      { view: 'socialMedia', label: 'Google Business Studio', iconName: 'Sparkles' },
+      { view: 'gbpAI', label: 'GBP AI Agents', iconName: 'Sparkles' },
       { view: 'leads', label: 'Leads & CRM', iconName: 'Users' },
+      { view: 'socialMedia', label: 'Marketing Studio', iconName: 'Send' },
+      { view: 'reviews', label: 'Google Business & Reviews', iconName: 'Store' },
       { view: 'formBuilder', label: 'Forms', iconName: 'FileInput' },
       { view: 'scheduling', label: 'Appointments', iconName: 'Calendar' },
     ],
@@ -35,7 +37,7 @@ export const BGOS_NAVIGATION = [
 
 const allowed = new Set<string>([
   ...BGOS_NAVIGATION.flatMap((section) => section.items.map((item) => item.view)),
-  'gbpAI', 'reviews',
+  'gbpAI',
   'contacts', 'formSubmissions', 'booking', 'calendar', 'meetingTypes', 'appointmentTypes',
   'creatorProfile', 'creatorOffers', 'canvas', 'notifications', 'activityLogs', 'helpAdmin',
   'socialAccounts', 'postComposer', 'postsList', 'socialAnalytics', 'emailProviders',
@@ -54,7 +56,7 @@ export function bgosNavigationView(view: string): string {
   if (view === 'contacts' || view === 'campaigns' || view === 'leadDiscovery') return 'leads';
   if (view === 'formSubmissions') return 'formBuilder';
   if (['booking', 'calendar', 'meetingTypes', 'appointmentTypes'].includes(view)) return 'scheduling';
-  if (['socialAccounts', 'postComposer', 'postsList', 'socialAnalytics', 'reviews', 'gbpAI'].includes(view)) return 'socialMedia';
+  if (['socialAccounts', 'postComposer', 'postsList', 'socialAnalytics'].includes(view)) return 'socialMedia';
   if (['aiCallHistory', 'aiAgents'].includes(view)) return 'aiReceptionist';
   if (view === 'creatorOffers') return 'creatorProfile';
   if (view === 'employees' || view === 'billing') return 'settings';

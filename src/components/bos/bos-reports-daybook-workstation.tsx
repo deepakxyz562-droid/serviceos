@@ -24,7 +24,6 @@ import {
   Filter,
   Home,
   Layers,
-  Lock,
   MapPin,
   MoreVertical,
   Percent,
@@ -75,6 +74,15 @@ type BosReportsDaybookWorkstationProps = {
     entry: Omit<BosDaybookEntry, 'id' | 'time' | 'createdAt'>,
   ) => Promise<void>;
   onNavigateToBilling?: () => void;
+  /**
+   * Real date navigation (Phase 2B): the day currently shown (ISO yyyy-mm-dd).
+   * Owned by the parent — the pill can only ever display a day whose ledger
+   * actually loaded. Shifting the date calls onDaybookDateChange and the
+   * parent refetches GET /api/commerce/daybook?date=…, passing the result
+   * back down via the daybookEntries prop.
+   */
+  daybookDate: string;
+  onDaybookDateChange?: (date: string) => void;
 };
 
 export type ReportCategory = 'transaction' | 'party' | 'gst' | 'stock';
@@ -356,6 +364,21 @@ function getMethodPillStyle(method: DaybookShowcaseRow['method']) {
   }
 }
 
+/** Local-timezone ISO yyyy-mm-dd (the daybook route's ?date= param format). */
+function toLocalDayIso(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** "12 Oct 2024"-style label for the day book date pill. */
+function formatDaybookDateLabel(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 function mapDaybookEntryToShowcaseRow(
   entry: BosDaybookEntry,
   index: number,
@@ -382,7 +405,9 @@ function mapDaybookEntryToShowcaseRow(
   return {
     id: entry.id,
     rowNum: index + 1,
-    dateText: entry.createdAt === 'Today' ? '12 Oct 2024' : entry.createdAt,
+    // 'Today' entries (recorded this session) show as Today; fetched rows
+    // carry their real date from the API. Never a hardcoded demo date.
+    dateText: entry.createdAt === 'Today' ? 'Today' : entry.createdAt,
     timeText: entry.time || '10:00 AM',
     typeLabel,
     particularsTitle: entry.partyName,
@@ -530,6 +555,8 @@ export function BosReportsDaybookWorkstation({
   demoMode = false,
   storeSettings,
   onNavigateToBilling,
+  daybookDate,
+  onDaybookDateChange,
 }: BosReportsDaybookWorkstationProps) {
   const [reportTab, setReportTab] = useState<
     'overview' | 'sales' | 'pnl' | 'gst' | 'inventory' | 'khata' | 'cash_flow' | 'balance_sheet'
@@ -546,6 +573,7 @@ export function BosReportsDaybookWorkstation({
 
   // Purchase Bills State (Phase 5)
   const [showAddPurchaseModal, setShowAddPurchaseModal] = useState(false);
+  const [purchaseBillSaving, setPurchaseBillSaving] = useState(false);
   const [purchaseBillForm, setPurchaseBillForm] = useState({
     vendorName: '',
     billNumber: `BILL-${1045 + Math.floor(Math.random() * 900)}`,
@@ -1003,7 +1031,21 @@ export function BosReportsDaybookWorkstation({
   const [daybookTab, setDaybookTab] = useState<DaybookTabId>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('Main Store');
-  const [dayClosed, setDayClosed] = useState(false);
+  // The viewed day comes from the parent (daybookDate prop) — prev/next only
+  // ask the parent to move; the pill updates once that day's ledger has
+  // actually loaded, so it never claims a date whose data failed to fetch.
+  const daybookDateLabel = useMemo(() => formatDaybookDateLabel(daybookDate), [daybookDate]);
+  const daybookIsToday = daybookDate === toLocalDayIso(new Date());
+  const shiftDaybookDate = (deltaDays: number) => {
+    // Never navigate into the future — tomorrow's ledger cannot exist yet.
+    if (deltaDays > 0 && daybookIsToday) return;
+    const base = new Date(`${daybookDate}T00:00:00`);
+    if (Number.isNaN(base.getTime())) return;
+    base.setDate(base.getDate() + deltaDays);
+    const nextIso = toLocalDayIso(base);
+    if (nextIso === daybookDate) return;
+    onDaybookDateChange?.(nextIso);
+  };
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -2190,24 +2232,140 @@ export function BosReportsDaybookWorkstation({
         status,
       };
 
-      setPurchaseBills((prev) => [newBill, ...prev]);
-      setShowAddPurchaseModal(false);
+      // Demo fixtures stay local-only behind the demoMode guard (path kept
+      // untouched from the previous behaviour).
+      if (demoMode) {
+        setPurchaseBills((prev) => [newBill, ...prev]);
+        setShowAddPurchaseModal(false);
 
-      try {
-        if (paid > 0) {
-          await onAddDaybookEntry({
-            partyName: vendor,
-            subtitle: `Purchase Bill #${newBill.billNumber} (${purchaseBillForm.particulars || 'Stock in'})`,
-            category: 'Supplier',
-            refNumber: newBill.billNumber,
-            paymentMode: purchaseBillForm.paymentMode.toLowerCase() as BosDaybookEntry['paymentMode'],
-            moneyIn: 0,
-            moneyOut: paid,
-          });
+        try {
+          if (paid > 0) {
+            await onAddDaybookEntry({
+              partyName: vendor,
+              subtitle: `Purchase Bill #${newBill.billNumber} (${purchaseBillForm.particulars || 'Stock in'})`,
+              category: 'Supplier',
+              refNumber: newBill.billNumber,
+              paymentMode: purchaseBillForm.paymentMode.toLowerCase() as BosDaybookEntry['paymentMode'],
+              moneyIn: 0,
+              moneyOut: paid,
+            });
+          }
+          showToast(`Recorded Purchase Bill ${newBill.billNumber} for ${vendor} (${currencySymbol} ${tot.toLocaleString('en-IN')})`);
+        } catch (err: unknown) {
+          showToast(`Saved locally. Daybook note: ${err instanceof Error ? err.message : 'Error syncing'}`);
         }
+        return;
+      }
+
+      // PRODUCTION (Phase 2A): persist through the atomic money ledger with
+      // web parity to the mobile money flow — (1) resolve/create the Supplier
+      // row, (2) record the bill via SUPPLIER_BILL (reference = bill number,
+      // unique per supplier), (3) record the paid part via SUPPLIER_PAYMENT.
+      // Mirrors the money-ledger semantics bosmobile uses (money.tsx: a bill is
+      // SUPPLIER_BILL, paying a supplier is SUPPLIER_PAYMENT): whenever the
+      // merchant paid ANYTHING against this bill (paid > 0 — partial or full),
+      // a SUPPLIER_PAYMENT records that money-out and settles the bill's
+      // paidMinor. Skipping it for fully-paid bills would silently hide the
+      // money-out and leave the supplier showing a phantom payable.
+      // The parent's onAddDaybookEntry is intentionally NOT called here: it
+      // would double-record the money-out as a second EXPENSE entry.
+      setPurchaseBillSaving(true);
+      try {
+        // (1) Reuse the existing supplier when the vendor name matches one.
+        let supplierId: string | undefined;
+        try {
+          const moneyRes = await authFetch('/api/commerce/money', { credentials: 'include' });
+          const moneyData = await moneyRes.json().catch(() => null);
+          if (moneyRes.ok && Array.isArray(moneyData?.suppliers)) {
+            const match = (moneyData.suppliers as Array<{ id?: string; name?: string }>).find(
+              (s) => String(s.name || '').trim().toLowerCase() === vendor.toLowerCase(),
+            );
+            if (match?.id) supplierId = String(match.id);
+          }
+        } catch {
+          // Snapshot lookup failed — fall through to creating the supplier.
+        }
+        if (!supplierId) {
+          const supRes = await authFetch('/api/commerce/suppliers', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: vendor }),
+          });
+          const supData = await supRes.json().catch(() => null);
+          if (!supRes.ok || !supData?.supplier?.id) {
+            throw new Error((supData && supData.error) || `Could not create supplier "${vendor}" (HTTP ${supRes.status})`);
+          }
+          supplierId = String(supData.supplier.id);
+        }
+
+        const account = purchaseBillForm.paymentMode === 'Cash' ? 'CASH' : 'BANK';
+
+        // (2) SUPPLIER_BILL — the bill itself (money owed to the supplier).
+        const billKey = `pb_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+        const billRes = await authFetch('/api/commerce/money', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': billKey },
+          body: JSON.stringify({
+            kind: 'SUPPLIER_BILL',
+            amount: tot,
+            account,
+            supplierId,
+            reference: newBill.billNumber,
+          }),
+        });
+        const billData = await billRes.json().catch(() => null);
+        if (!billRes.ok) {
+          if (billRes.status === 409) {
+            // DUPLICATE_SUPPLIER_BILL — honest conflict, nothing was recorded.
+            throw new Error(
+              (billData && billData.error) ||
+                `A purchase bill numbered ${newBill.billNumber} is already recorded for ${vendor}.`,
+            );
+          }
+          throw new Error((billData && billData.error) || `Could not record the supplier bill (HTTP ${billRes.status})`);
+        }
+
+        // (3) The paid part (any payment made against this bill at entry
+        // time — partial OR full; the RPC settles it against the bill just
+        // recorded, oldest-first like the mobile "Pay supplier" flow).
+        if (paid > 0) {
+          const payKey = `pbp_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+          const payRes = await authFetch('/api/commerce/money', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': payKey },
+            body: JSON.stringify({
+              kind: 'SUPPLIER_PAYMENT',
+              amount: paid,
+              account,
+              supplierId,
+              reference: `${newBill.billNumber}-part1`,
+            }),
+          });
+          const payData = await payRes.json().catch(() => null);
+          if (!payRes.ok) {
+            throw new Error(
+              (payData && payData.error) ||
+                `Bill ${newBill.billNumber} was recorded but the payment of ${currencySymbol} ${paid.toLocaleString('en-IN')} could not be saved. Record it from Money → Pay supplier.`,
+            );
+          }
+        }
+
+        // All calls succeeded — keep the existing local list update for
+        // immediate UI. The parent provides no dedicated refetch for the
+        // purchase register; day-book rows rehydrate from the money ledger
+        // on the next full workstation load.
+        setPurchaseBills((prev) => [newBill, ...prev]);
+        setShowAddPurchaseModal(false);
         showToast(`Recorded Purchase Bill ${newBill.billNumber} for ${vendor} (${currencySymbol} ${tot.toLocaleString('en-IN')})`);
       } catch (err: unknown) {
-        showToast(`Saved locally. Daybook note: ${err instanceof Error ? err.message : 'Error syncing'}`);
+        // Honest failure — no partial local state: the bill is only added to
+        // the local list when every server call above succeeded.
+        showToast(err instanceof Error ? err.message : 'Could not save the purchase bill. Please retry.');
+      } finally {
+        setPurchaseBillSaving(false);
       }
     };
 
@@ -2375,7 +2533,11 @@ export function BosReportsDaybookWorkstation({
                   {formatBosCurrency(reportsData.totalRevenue, currencySymbol)}
                 </p>
                 <p className="text-[11px] font-semibold text-[#0A6847]">
-                  {reportsData.totalRevenue > 0 ? '+18.4% vs last period' : 'No recorded sales yet'}
+                  {/* Honest sub-label: real order count — never a fabricated
+                      vs-last-period trend (no comparison data is tracked). */}
+                  {reportsData.totalRevenue > 0
+                    ? `${reportsData.totalOrders} order${reportsData.totalOrders === 1 ? '' : 's'}`
+                    : 'No recorded sales yet'}
                 </p>
               </div>
 
@@ -3730,15 +3892,17 @@ export function BosReportsDaybookWorkstation({
                   <button
                     type="button"
                     onClick={() => setShowAddPurchaseModal(false)}
-                    className="rounded-xl border border-[#DCE9E3] px-4 py-2 font-semibold text-[#475569] cursor-pointer"
+                    disabled={purchaseBillSaving}
+                    className="rounded-xl border border-[#DCE9E3] px-4 py-2 font-semibold text-[#475569] cursor-pointer disabled:opacity-60"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="bos-btn-primary rounded-xl px-5 py-2 font-bold cursor-pointer"
+                    disabled={purchaseBillSaving}
+                    className="bos-btn-primary rounded-xl px-5 py-2 font-bold cursor-pointer disabled:opacity-60"
                   >
-                    Save Purchase Bill
+                    {purchaseBillSaving ? 'Saving…' : 'Save Purchase Bill'}
                   </button>
                 </div>
               </form>
@@ -3782,23 +3946,30 @@ export function BosReportsDaybookWorkstation({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Date Picker Pill: 12 Oct 2024 < > */}
+          {/* Date Pill: the real viewed date; < > shifts the day and triggers a
+              parent refetch of /api/commerce/daybook?date=… (onDaybookDateChange). */}
           <div className="inline-flex h-9 items-center rounded-xl border border-[#DCE9E3] bg-white shadow-2xs text-[12.5px] font-semibold text-[#1E293B]">
             <div className="flex items-center gap-2 px-3">
               <Calendar className="h-3.5 w-3.5 text-[#475569]" />
-              <span>12 Oct 2024</span>
+              <span>{daybookDateLabel}</span>
             </div>
             <button
               type="button"
               aria-label="Previous day"
-              className="flex h-full items-center border-l border-[#EBF2EE] px-2 text-[#64748B] hover:bg-[#F8FAFC]"
+              onClick={() => shiftDaybookDate(-1)}
+              disabled={!onDaybookDateChange}
+              title={onDaybookDateChange ? 'Previous day' : 'Date navigation needs a live business account'}
+              className="flex h-full items-center border-l border-[#EBF2EE] px-2 text-[#64748B] hover:bg-[#F8FAFC] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
               aria-label="Next day"
-              className="flex h-full items-center border-l border-[#EBF2EE] px-2 text-[#64748B] hover:bg-[#F8FAFC] rounded-r-xl"
+              onClick={() => shiftDaybookDate(1)}
+              disabled={daybookIsToday || !onDaybookDateChange}
+              title={daybookIsToday ? 'Already viewing today' : 'Next day'}
+              className="flex h-full items-center border-l border-[#EBF2EE] px-2 text-[#64748B] hover:bg-[#F8FAFC] rounded-r-xl cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
@@ -3849,7 +4020,6 @@ export function BosReportsDaybookWorkstation({
             <p className="text-[21px] font-extrabold text-[#111827] leading-tight">
               {currencySymbol} {totalMoneyIn.toLocaleString('en-IN')}
             </p>
-            <p className="text-[11px] font-bold text-[#0A7B56]">↑ 12%</p>
           </div>
         </div>
 
@@ -3865,7 +4035,6 @@ export function BosReportsDaybookWorkstation({
             <p className="text-[21px] font-extrabold text-[#111827] leading-tight">
               {currencySymbol} {totalMoneyOut.toLocaleString('en-IN')}
             </p>
-            <p className="text-[11px] font-bold text-[#E11D48]">↓ 8%</p>
           </div>
         </div>
 
@@ -4476,7 +4645,7 @@ export function BosReportsDaybookWorkstation({
         </div>
       </div>
 
-        {/* RIGHT SIDEBAR (3 cols): Search + Add Entry, Close Day, Payment Method Summary, Quick Actions */}
+        {/* RIGHT SIDEBAR (3 cols): Search + Add Entry, Day Summary, Payment Method Summary, Quick Actions */}
         <div className="lg:col-span-4 xl:col-span-3 space-y-3.5">
           {/* Top Search + + Add Entry Row */}
           <div className="flex items-center gap-2">
@@ -4502,15 +4671,18 @@ export function BosReportsDaybookWorkstation({
             </button>
           </div>
 
-          {/* CARD 1: Close Day */}
+          {/* DAY SUMMARY — opening / in / out / calculated closing balance.
+              The former “Close Day / Reopen Day” button only flipped local
+              state and fired fake “verified closing balance” toasts, so it was
+              removed (nothing is persisted by closing a day here). */}
           <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-[15.5px] font-extrabold text-[#111827]">
-                Close Day
+                Day Summary
               </h2>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A7B56]">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#0A7B56]" />
-                <span>{dayClosed ? 'Day Closed' : 'Day is Open'}</span>
+                <span>{daybookDateLabel}</span>
               </span>
             </div>
 
@@ -4543,22 +4715,6 @@ export function BosReportsDaybookWorkstation({
                 {currencySymbol} {closingBalance.toLocaleString('en-IN')}
               </span>
             </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setDayClosed((prev) => !prev);
-                showToast(
-                  dayClosed
-                    ? 'Reopened Day Book for 12 Oct 2024'
-                    : `Closed Day Book & verified closing balance ${currencySymbol} ${closingBalance.toLocaleString('en-IN')}`,
-                );
-              }}
-              className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#0A6847] text-[13px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
-            >
-              <Lock className="h-4 w-4" />
-              <span>{dayClosed ? 'Reopen Day' : 'Close Day'}</span>
-            </button>
           </div>
 
           {/* CARD 2: Payment Method Summary */}

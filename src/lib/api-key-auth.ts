@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { createHash } from 'crypto';
+import { createHash, randomInt } from 'crypto';
 
 /**
  * API Key Authentication
@@ -33,12 +33,15 @@ export function hashApiKey(plaintext: string): string {
 /**
  * Generate a new API key string.
  * Format: fieseros_<random_48_chars>
+ *
+ * Uses crypto.randomInt for cryptographically secure, uniform base62
+ * selection — Math.random is predictable and would make keys guessable.
  */
 export function generateApiKey(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let key = '';
   for (let i = 0; i < 48; i++) {
-    key += chars[Math.floor(Math.random() * chars.length)];
+    key += chars[randomInt(0, chars.length)];
   }
   return `fieseros_${key}`;
 }

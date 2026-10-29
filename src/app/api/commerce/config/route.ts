@@ -39,6 +39,9 @@ export async function GET(req: NextRequest) {
           billing: DEFAULT_BILLING,
           discounts: DEFAULT_DISCOUNTS,
           deliverySettings: DEFAULT_DELIVERY_SETTINGS,
+          location: {},
+          whatsappNumber: '',
+          inventory: {},
           paymentQrUrl: '',
           enableOnlinePayment: true,
         };
@@ -49,6 +52,11 @@ export async function GET(req: NextRequest) {
           billing: { ...DEFAULT_BILLING, ...(raw.billing || {}) },
           discounts: raw.discounts || DEFAULT_DISCOUNTS,
           deliverySettings: { ...DEFAULT_DELIVERY_SETTINGS, ...(raw.deliverySettings || {}) },
+          // Location / WhatsApp / inventory round-trip (Phase 2A): carried
+          // through so the heartbeat rewrite below never drops them.
+          location: raw.location && typeof raw.location === 'object' ? raw.location : {},
+          whatsappNumber: raw.whatsappNumber || '',
+          inventory: raw.inventory && typeof raw.inventory === 'object' ? raw.inventory : {},
           paymentQrUrl: raw.paymentQrUrl || '',
           enableOnlinePayment: raw.enableOnlinePayment !== undefined ? Boolean(raw.enableOnlinePayment) : true,
           isStoreOpen: raw.isStoreOpen !== undefined ? Boolean(raw.isStoreOpen) : (config?.isActive ?? true),
@@ -64,6 +72,9 @@ export async function GET(req: NextRequest) {
         billing: DEFAULT_BILLING,
         discounts: DEFAULT_DISCOUNTS,
         deliverySettings: DEFAULT_DELIVERY_SETTINGS,
+        location: {},
+        whatsappNumber: '',
+        inventory: {},
         paymentQrUrl: '',
         enableOnlinePayment: true,
         isStoreOpen: config?.isActive ?? true,
@@ -113,6 +124,18 @@ export async function GET(req: NextRequest) {
         discounts: parsedFieldsData.discounts,
         fields: parsedFieldsData.fields,
         deliverySettings: parsedFieldsData.deliverySettings,
+        // Location / WhatsApp / tax-registration / inventory round-trip
+        // (Phase 2A) — surfaced flat AND nested so every client shape works.
+        location: parsedFieldsData.location || {},
+        city: parsedFieldsData.location?.city || '',
+        state: parsedFieldsData.location?.state || '',
+        pincode: parsedFieldsData.location?.pincode || '',
+        whatsappNumber: parsedFieldsData.whatsappNumber || '',
+        pan: parsedFieldsData.billing?.pan || '',
+        registrationType: parsedFieldsData.billing?.registrationType || '',
+        eInvoiceStatus: parsedFieldsData.billing?.eInvoiceStatus || '',
+        inventory: parsedFieldsData.inventory || {},
+        stopSaleNegativeStock: Boolean(parsedFieldsData.inventory?.stopSaleNegativeStock),
         paymentQrUrl: parsedFieldsData.paymentQrUrl || '',
         enableOnlinePayment: parsedFieldsData.enableOnlinePayment,
         isStoreOpen: parsedFieldsData.isStoreOpen,
@@ -209,6 +232,12 @@ export async function PATCH(req: NextRequest) {
             billing: { ...DEFAULT_BILLING, ...(raw.billing || {}) },
             discounts: raw.discounts || DEFAULT_DISCOUNTS,
             deliverySettings: { ...DEFAULT_DELIVERY_SETTINGS, ...(raw.deliverySettings || {}) },
+            // Location / WhatsApp / inventory round-trip (Phase 2A): carried
+            // through so this PATCH rewrite never drops previously persisted
+            // values the current body does not mention.
+            location: raw.location && typeof raw.location === 'object' ? raw.location : {},
+            whatsappNumber: raw.whatsappNumber || '',
+            inventory: raw.inventory && typeof raw.inventory === 'object' ? raw.inventory : {},
             logoUrl: raw.logoUrl,
             signatureUrl: raw.signatureUrl,
             billFooter: raw.billFooter,
@@ -234,6 +263,38 @@ export async function PATCH(req: NextRequest) {
     if (body.taxRate !== undefined) container.billing = { ...container.billing, taxRate: Number(body.taxRate) };
     if (body.taxType !== undefined) container.billing = { ...container.billing, taxType: String(body.taxType) };
     if (body.gstin !== undefined) container.billing = { ...container.billing, gstin: String(body.gstin) };
+    // Tax registration (Phase 2A) — BOS sends these from the Documents & Tax
+    // settings tab; they previously vanished silently.
+    if (body.pan !== undefined) {
+      container.billing = { ...container.billing, pan: String(body.pan ?? '').trim().toUpperCase().slice(0, 10) };
+    }
+    if (body.registrationType !== undefined) {
+      container.billing = { ...container.billing, registrationType: String(body.registrationType ?? '').trim().slice(0, 40) };
+    }
+    if (body.eInvoiceStatus !== undefined) {
+      container.billing = { ...container.billing, eInvoiceStatus: String(body.eInvoiceStatus ?? '').trim().slice(0, 40) };
+    }
+    // Store location + WhatsApp (Phase 2A) — BOS sends these from the
+    // storefront settings; merged into the nested location container.
+    if (body.city !== undefined || body.state !== undefined || body.pincode !== undefined) {
+      const prevLocation = container.location && typeof container.location === 'object' ? container.location : {};
+      container.location = {
+        ...prevLocation,
+        ...(body.city !== undefined ? { city: String(body.city ?? '').trim().slice(0, 120) } : {}),
+        ...(body.state !== undefined ? { state: String(body.state ?? '').trim().slice(0, 120) } : {}),
+        ...(body.pincode !== undefined ? { pincode: String(body.pincode ?? '').trim().slice(0, 10) } : {}),
+      };
+    }
+    if (body.whatsappNumber !== undefined) {
+      container.whatsappNumber = String(body.whatsappNumber ?? '').trim().slice(0, 20);
+    }
+    // Inventory guard (Phase 2A) — negative-stock billing lock.
+    if (body.stopSaleNegativeStock !== undefined) {
+      container.inventory = {
+        ...(container.inventory && typeof container.inventory === 'object' ? container.inventory : {}),
+        stopSaleNegativeStock: Boolean(body.stopSaleNegativeStock),
+      };
+    }
     if (body.discounts !== undefined) container.discounts = body.discounts;
     if (body.logoUrl !== undefined) container.logoUrl = body.logoUrl;
     if (body.signatureUrl !== undefined) container.signatureUrl = body.signatureUrl;
@@ -330,6 +391,18 @@ export async function PATCH(req: NextRequest) {
         discounts: container.discounts,
         fields: container.fields,
         deliverySettings: container.deliverySettings,
+        // Location / WhatsApp / tax-registration / inventory round-trip
+        // (Phase 2A) — same shape as the GET response.
+        location: container.location || {},
+        city: container.location?.city || '',
+        state: container.location?.state || '',
+        pincode: container.location?.pincode || '',
+        whatsappNumber: container.whatsappNumber || '',
+        pan: container.billing?.pan || '',
+        registrationType: container.billing?.registrationType || '',
+        eInvoiceStatus: container.billing?.eInvoiceStatus || '',
+        inventory: container.inventory || {},
+        stopSaleNegativeStock: Boolean(container.inventory?.stopSaleNegativeStock),
         paymentQrUrl: container.paymentQrUrl || '',
         enableOnlinePayment: container.enableOnlinePayment,
         isStoreOpen: container.isStoreOpen,

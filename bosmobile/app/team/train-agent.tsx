@@ -17,6 +17,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest, ApiError } from '@/lib/api';
+import { openLatestChatSession } from '@/lib/chat-navigation';
 
 interface KnowledgeSource {
   id: string;
@@ -402,7 +403,7 @@ export default function TrainAgentScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Train AI Knowledge</Text>
         <TouchableOpacity
-          onPress={() => router.push('/chat/session-urgent-1')}
+          onPress={() => void openLatestChatSession()}
           style={styles.testBtn}
         >
           <Text style={styles.testBtnText}>Test AI</Text>
@@ -443,7 +444,7 @@ export default function TrainAgentScreen() {
 
             <TouchableOpacity
               style={styles.testHeroBtn}
-              onPress={() => router.push('/chat/session-urgent-1')}
+              onPress={() => void openLatestChatSession()}
             >
               <MaterialIcons name="forum" size={16} color="#ffffff" style={{ marginRight: 6 }} />
               <Text style={styles.testHeroBtnText}>Test in Chat</Text>

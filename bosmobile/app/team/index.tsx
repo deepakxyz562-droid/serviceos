@@ -17,6 +17,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest, ApiError } from '@/lib/api';
 import { API_PATHS } from '@/lib/constants';
+import { openLatestChatSession } from '@/lib/chat-navigation';
 
 interface TeamMember {
   id: string;
@@ -134,7 +135,7 @@ export default function TeamScreen() {
         },
         {
           text: 'Test in Chat',
-          onPress: () => router.push('/chat/session-urgent-1'),
+          onPress: () => void openLatestChatSession(),
         },
         { text: 'Cancel', style: 'cancel' },
       ]);

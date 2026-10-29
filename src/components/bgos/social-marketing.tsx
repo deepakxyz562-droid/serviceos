@@ -1797,6 +1797,12 @@ export function SocialMediaView({
                     <SelectItem value="Google Business" className="text-xs">
                       Google Business
                     </SelectItem>
+                    <SelectItem value="Instagram" className="text-xs">
+                      Instagram
+                    </SelectItem>
+                    <SelectItem value="Facebook" className="text-xs">
+                      Facebook
+                    </SelectItem>
                     <SelectItem value="WhatsApp Broadcast" className="text-xs">
                       WhatsApp Broadcast
                     </SelectItem>

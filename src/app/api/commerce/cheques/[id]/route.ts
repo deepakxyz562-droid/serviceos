@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ownerBusiness } from '@/lib/commerce/access';
+import { auditAmountLabel, logCommerceActivity, resolveCommerceActor } from '@/lib/commerce/audit';
 
 /**
  * Allowed status transitions and their effect on the default deposit account's
@@ -120,6 +121,30 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       return tx.aiCheque.findUnique({ where: { id: cheque.id } });
     });
 
+    // Commerce audit trail — fire-and-forget; a logging failure can never
+    // fail the status transition that just succeeded (logCommerceActivity
+    // swallows). Includes the account adjustment when one was applied.
+    const statusActor = await resolveCommerceActor(req);
+    await logCommerceActivity({
+      business,
+      actorId: statusActor.actorId,
+      actorName: statusActor.actorName,
+      action: 'status_change',
+      entityType: 'cheque',
+      entityId: cheque.id,
+      entityName: cheque.chequeNumber,
+      description: `Cheque ${cheque.chequeNumber} (${cheque.direction}) ${currentStatus} → ${nextStatus}${account ? ` — ${account.name} adjusted by ${auditAmountLabel(business, delta)}` : ''}`,
+      metadata: {
+        chequeId: cheque.id,
+        chequeNumber: cheque.chequeNumber,
+        fromStatus: currentStatus,
+        toStatus: nextStatus,
+        direction: cheque.direction,
+        amount: cheque.amount,
+        accountAdjusted: account ? { id: account.id, name: account.name, delta } : null,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       cheque: updated,
@@ -151,6 +176,12 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     const business = await ownerBusiness(req);
     const { id } = await ctx.params;
 
+    // Pre-read for the audit trail (only PENDING/CANCELLED rows are deletable
+    // — the deleteMany below still enforces that atomically).
+    const existing = await db.aiCheque.findFirst({
+      where: { id: String(id), businessId: business.id, status: { in: ['PENDING', 'CANCELLED'] } },
+    });
+
     const deleted = await db.aiCheque.deleteMany({
       where: {
         id: String(id),
@@ -164,6 +195,28 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
         { status: 409 }
       );
     }
+
+    // Commerce audit trail — fire-and-forget; a logging failure can never
+    // fail the deletion that already succeeded (logCommerceActivity swallows).
+    const deleteActor = await resolveCommerceActor(req);
+    await logCommerceActivity({
+      business,
+      actorId: deleteActor.actorId,
+      actorName: deleteActor.actorName,
+      action: 'delete',
+      entityType: 'cheque',
+      entityId: String(id),
+      entityName: existing?.chequeNumber || String(id),
+      description: `Cheque ${existing?.chequeNumber || String(id)}${existing ? ` (${existing.direction}, ${existing.partyName})` : ''} deleted`,
+      metadata: {
+        chequeId: String(id),
+        chequeNumber: existing?.chequeNumber || null,
+        direction: existing?.direction || null,
+        partyName: existing?.partyName || null,
+        amount: existing?.amount ?? null,
+        status: existing?.status || null,
+      },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

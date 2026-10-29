@@ -14,13 +14,19 @@ export interface CalcLineItem {
 
 export interface DetailedInvoiceTotals {
   documentType: DocumentType;
+  /** Pre-discount, tax-EXCLUSIVE base (Σ qty×price). Same value as `subtotal`. */
   taxableAmount: number;
+  /** Full GST on the discounted base. Inter-state callers use this whole value as IGST. */
   gstAmount: number;
+  /** Intra-state half of gstAmount (round2(gstAmount/2)). Zero when the caller treats tax as IGST. */
   cgstAmount: number;
+  /** Intra-state half of gstAmount (round2(gstAmount/2)). Zero when the caller treats tax as IGST. */
   sgstAmount: number;
+  /** Tax-EXCLUSIVE item total BEFORE discount (Σ qty×price). NOT tax-inclusive. */
   subtotal: number;
   discount: number;
   shippingFee: number;
+  /** Alias of gstAmount (kept for legacy consumers). */
   tax: number;
   total: number;
 }
@@ -41,6 +47,23 @@ export interface ProposalTier {
  * Pure arithmetic for quotes and invoices.
  * Supports Tax Invoice (GST itemized), Bill of Supply (tax-exempt), and Simple Bill.
  * Client and server safe (zero db or auth dependencies).
+ *
+ * CANONICAL TAX_INVOICE MATH (single source of truth — mirrors the BOS web
+ * preview in bos-invoices-workstation.tsx):
+ *   subtotal       = round2(Σ qty×price)             — tax-EXCLUSIVE, PRE-discount
+ *   discount       = PERCENT ? round2(subtotal × pct/100)
+ *                    : min(round2(value), subtotal)
+ *   discountedBase = max(0, subtotal − discount)     — the GST base
+ *   factor         = subtotal > 0 ? discountedBase / subtotal : 0
+ *   gstAmount      = round2(Σ round2(qty×price × factor × lineRate/100))
+ *                    (lineRate = item.taxRate when numeric, else globalTaxRate;
+ *                     GST is applied AFTER the discount — GST Sec 15(3) style:
+ *                     the discount reduces the taxable value)
+ *   cgst = sgst    = round2(gstAmount/2)             — inter-state callers use
+ *                    gstAmount whole as IGST (this helper does NOT split states)
+ *   total          = round2(discountedBase + gstAmount + shipping)
+ * Canonical example: ₹1,000 @18% − ₹100 AMOUNT discount → GST ₹162, total ₹1,062
+ * (NOT ₹1,080 — tax is never charged on the discounted-away portion).
  */
 export function computeInvoiceTotals(options: {
   items: CalcLineItem[];
@@ -113,23 +136,17 @@ export function computeInvoiceTotals(options: {
   }
 
   // Default: TAX_INVOICE (or ESTIMATE with itemized GST)
-  let taxableSum = 0;
-  let gstSum = 0;
-
+  // Discount applied BEFORE tax; GST computed per-line on the pro-rata
+  // discounted base (see the canonical formula in the header comment).
+  let subtotalSum = 0;
   for (const item of items) {
     const itemQty = Number(item.qty) || 0;
     const itemPrice = Number(item.unitPrice) || 0;
-    const itemTaxable = itemQty * itemPrice;
-    const itemTaxRate = typeof item.taxRate === 'number' ? item.taxRate : Number(globalTaxRate) || 0;
-    const itemTax = itemTaxable * (itemTaxRate / 100);
-
-    taxableSum += itemTaxable;
-    gstSum += itemTax;
+    subtotalSum += itemQty * itemPrice;
   }
 
-  const taxableAmount = round2(taxableSum);
-  const gstAmount = round2(gstSum);
-  const subtotal = round2(taxableAmount + gstAmount);
+  const subtotal = round2(subtotalSum);
+  const taxableAmount = subtotal; // pre-discount, tax-exclusive base (unchanged meaning)
 
   let discount = 0;
   if (discountType === 'PERCENT') {
@@ -138,9 +155,21 @@ export function computeInvoiceTotals(options: {
     discount = Math.min(round2(Number(discountValue) || 0), subtotal);
   }
 
+  const discountedBase = Math.max(0, round2(subtotal - discount));
+  const factor = subtotal > 0 ? discountedBase / subtotal : 0;
+
+  let gstSum = 0;
+  for (const item of items) {
+    const itemQty = Number(item.qty) || 0;
+    const itemPrice = Number(item.unitPrice) || 0;
+    const lineRate = typeof item.taxRate === 'number' ? item.taxRate : Number(globalTaxRate) || 0;
+    gstSum += round2(itemQty * itemPrice * factor * (lineRate / 100));
+  }
+  const gstAmount = round2(gstSum);
+
   const cgstAmount = round2(gstAmount / 2);
   const sgstAmount = round2(gstAmount / 2);
-  const total = round2(Math.max(0, subtotal - discount) + (Number(shippingFee) || 0));
+  const total = round2(discountedBase + gstAmount + (Number(shippingFee) || 0));
 
   return {
     documentType: docType,
@@ -218,7 +247,8 @@ export function generateDefaultTiers(baseItems: CalcLineItem[] = []): ProposalTi
 }
 
 /**
- * Legacy compatible computeTotals
+ * Legacy compatible computeTotals — delegates to computeInvoiceTotals
+ * (canonical math: discount before tax, per-line rates, tax-exclusive subtotal).
  */
 export function computeTotals(
   items: { qty: number; unitPrice: number; taxRate?: number }[],

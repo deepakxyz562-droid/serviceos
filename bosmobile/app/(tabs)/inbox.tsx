@@ -151,22 +151,6 @@ export default function InboxScreen() {
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#10B981']} />}
         >
-          {/* Archives Row at the top (matches 18.35.51.jpeg) */}
-          <TouchableOpacity
-            style={styles.archiveRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/archives');
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.archiveRowLeft}>
-              <MaterialIcons name="inventory-2" size={20} color="#1e293b" style={{ marginRight: 12 }} />
-              <Text style={styles.archiveTitle}>Archives</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
-
           {/* Loading spinner */}
           {loading && (
             <View style={styles.stateWrap}>
@@ -328,24 +312,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingVertical: 6,
-  },
-  archiveRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  archiveRowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  archiveTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a',
   },
   chatRow: {
     flexDirection: 'row',

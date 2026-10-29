@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { UniversalProject } from '@/lib/forms/universal-component-types';
+import { qrSvgMarkup } from '@/lib/qr-svg';
 import {
   Share2,
   Globe,
@@ -133,7 +134,8 @@ export function UniversalPublishCenter({
 
 
 
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(formUrl)}`;
+  // QR generated fully on-device — the form URL never leaves the browser.
+  const formQrSvg = qrSvgMarkup(formUrl);
 
   const copyText = (text: string, key: string, label = 'Content') => {
     navigator.clipboard.writeText(text);
@@ -153,14 +155,14 @@ export function UniversalPublishCenter({
             body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; padding: 40px; }
             h1 { font-size: 24px; margin-bottom: 8px; }
             p { color: #64748b; font-size: 14px; margin-bottom: 24px; }
-            img { width: 260px; height: 260px; border-radius: 12px; }
+            .qr-box { width: 260px; height: 260px; border-radius: 12px; margin: 0 auto; }
             .badge { display: inline-block; background: #ecfdf5; color: #047857; padding: 6px 14px; border-radius: 9999px; font-weight: 600; font-size: 12px; margin-top: 20px; }
           </style>
         </head>
         <body>
           <h1>${resolvedFormName}</h1>
           <p>Scan the QR code below on your mobile phone to fill out this form</p>
-          <img src="${qrImageUrl}" alt="Form QR Code" />
+          <div class="qr-box">${formQrSvg}</div>
           <br/>
           <div class="badge">Powered by Fieseros GPTForm</div>
           <script>window.onload = function() { window.print(); }</script>
@@ -566,10 +568,13 @@ export function UniversalPublishCenter({
               <div className="flex flex-col md:flex-row items-center gap-6 p-4 bg-muted/30 rounded-2xl border border-border/60">
                 {/* Live QR Image */}
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 shrink-0 text-center space-y-2">
-                  <img
-                    src={qrImageUrl}
-                    alt="Form QR Code"
+                  {/* Safe to inline: markup is generated entirely by our local
+                      encoder — no user-controlled attributes. */}
+                  <div
                     className="size-48 rounded-lg mx-auto"
+                    role="img"
+                    aria-label="Form QR Code"
+                    dangerouslySetInnerHTML={{ __html: formQrSvg ?? '' }}
                   />
                   <p className="text-[10px] font-mono text-slate-500">Scan to open form</p>
                 </div>
@@ -609,8 +614,43 @@ export function UniversalPublishCenter({
                     <Button
                       size="sm"
                       onClick={() => {
-                        window.open(qrImageUrl, '_blank');
-                        toast.success('Opening high-resolution QR image for download!');
+                        // Rasterize the local SVG to a real PNG on-device.
+                        if (!formQrSvg) {
+                          toast.error('Could not encode this form URL into a QR code');
+                          return;
+                        }
+                        const blob = new Blob([formQrSvg], {
+                          type: 'image/svg+xml;charset=utf-8',
+                        });
+                        const url = URL.createObjectURL(blob);
+                        const img = new Image();
+                        img.onload = () => {
+                          const canvas = document.createElement('canvas');
+                          canvas.width = 1040;
+                          canvas.height = 1040;
+                          const ctx = canvas.getContext('2d');
+                          if (!ctx) {
+                            URL.revokeObjectURL(url);
+                            toast.error('Could not rasterize the QR code');
+                            return;
+                          }
+                          ctx.fillStyle = '#ffffff';
+                          ctx.fillRect(0, 0, 1040, 1040);
+                          ctx.drawImage(img, 0, 0, 1040, 1040);
+                          URL.revokeObjectURL(url);
+                          const a = document.createElement('a');
+                          a.href = canvas.toDataURL('image/png');
+                          a.download = `${(resolvedFormName || 'form').replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}-qr.png`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          toast.success('High-resolution QR image downloaded!');
+                        };
+                        img.onerror = () => {
+                          URL.revokeObjectURL(url);
+                          toast.error('Could not rasterize the QR code');
+                        };
+                        img.src = url;
                       }}
                       className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl h-9"
                     >

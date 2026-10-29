@@ -1,6 +1,7 @@
 'use client';
 import { RequestTracker } from '../../../../shared/money';
 import { isValidUpiId, sanitizeUpiId } from '@/lib/upi-qr';
+import { qrSvgMarkup } from '@/lib/qr-svg';
 import { getBosText, detectRegionalDefaultLanguage, type BosLanguage } from '@/components/bos/i18n/bos-translations';
 import { formatStoreAddress } from '@/lib/format-utils';
 
@@ -533,12 +534,13 @@ export function StoreClient({
     return `upi://pay?pa=${encodeURIComponent(effectiveUpiId)}&pn=${encodeURIComponent(businessName)}&am=${grandTotal.toFixed(2)}&tn=${encodeURIComponent(`Order at ${businessName}`)}&cu=INR`;
   }, [effectiveUpiId, isUpiValid, businessName, grandTotal]);
 
-  const dynamicQrCodeUrl = useMemo(() => {
-    if (paymentQrUrl) return paymentQrUrl;
-    if (effectiveUpiId && upiUri) {
-      return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(upiUri)}`;
-    }
-    return '';
+  // UPI QR is generated fully on-device — the deep link never leaves the
+  // browser. A merchant-uploaded static QR image (paymentQrUrl) still renders
+  // from its own hosted URL.
+  const dynamicQrCodeUrl = paymentQrUrl || '';
+  const dynamicQrMarkup = useMemo(() => {
+    if (paymentQrUrl || !effectiveUpiId || !upiUri) return '';
+    return qrSvgMarkup(upiUri) ?? '';
   }, [paymentQrUrl, effectiveUpiId, upiUri]);
 
   const handleCopyUpiId = () => {
@@ -2049,14 +2051,23 @@ export function StoreClient({
                               </div>
 
                               {/* Dynamic QR Code Card */}
-                              {dynamicQrCodeUrl && (
+                              {(dynamicQrCodeUrl || dynamicQrMarkup) && (
                                 <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-3 rounded-xl border border-stone-200 shadow-2xs">
                                   <div className="relative group shrink-0">
-                                    <img
-                                      src={dynamicQrCodeUrl}
-                                      alt="Shop UPI QR Code"
-                                      className="size-32 rounded-lg border border-stone-200 bg-white p-1 object-contain shadow-2xs"
-                                    />
+                                    {dynamicQrCodeUrl ? (
+                                      <img
+                                        src={dynamicQrCodeUrl}
+                                        alt="Shop UPI QR Code"
+                                        className="size-32 rounded-lg border border-stone-200 bg-white p-1 object-contain shadow-2xs"
+                                      />
+                                    ) : (
+                                      // Safe to inline: markup is generated entirely by
+                                      // our local encoder — no user-controlled attributes.
+                                      <div
+                                        className="size-32 rounded-lg border border-stone-200 bg-white p-1 shadow-2xs"
+                                        dangerouslySetInnerHTML={{ __html: dynamicQrMarkup }}
+                                      />
+                                    )}
                                     <div className="absolute -bottom-1 -right-1 bg-emerald-600 text-white rounded-full p-1 shadow">
                                       <QrCode className="size-3" />
                                     </div>
@@ -2428,10 +2439,18 @@ export function StoreClient({
                 {/* QR Code / Mobile Deep Link Section */}
                 <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-100 flex items-center gap-3">
                   <div className="bg-white p-1.5 rounded-xl border border-emerald-200 shadow-2xs shrink-0">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : 'https://bos.fieseros.com')}`}
-                      alt="Scan QR code"
+                    {/* Safe to inline: markup is generated entirely by our local
+                        encoder from the store URL — no user-controlled attributes. */}
+                    <div
                       className="w-16 h-16 rounded"
+                      dangerouslySetInnerHTML={{
+                        __html:
+                          qrSvgMarkup(
+                            typeof window !== 'undefined'
+                              ? window.location.href
+                              : 'https://bos.fieseros.com'
+                          ) ?? '',
+                      }}
                     />
                   </div>
                   <div className="min-w-0 flex-1">

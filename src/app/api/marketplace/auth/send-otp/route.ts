@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomInt } from 'node:crypto';
 import { db } from '@/lib/db';
 import { sendSmsMessage } from '@/lib/sms-send';
 import { sendEmail } from '@/lib/email-send';
@@ -67,8 +68,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Generate OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate OTP with crypto-grade randomness (Math.random is predictable).
+    const otpCode = randomInt(100000, 1000000).toString();
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
     // Save OTP on the customer record

@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { ownerBusiness } from '@/lib/commerce/access';
-import { computeTotals } from '@/lib/quote-flow-session';
+import { computeTotals, computeInvoiceTotals, round2 } from '@/lib/quote-flow-calc';
 import {
   extractGstStateCode,
   generateEWayBillPayload,
   generateEInvoicePayload,
 } from '@/lib/billing/gst-invoice-helper';
+import { auditAmountLabel, logCommerceActivity, resolveCommerceActor } from '@/lib/commerce/audit';
 
 const createInvoiceSchema = z.object({
   customerId: z.string().optional(),
@@ -85,8 +86,10 @@ export async function GET(req: Request) {
     let totalInvoiced = 0;
 
     const enriched = invoices.map((inv) => {
+      // Canonical math (computeInvoiceTotals): per-line GST rate with the
+      // invoice-level rate as fallback — mirrors how the rows were persisted.
       const totals = computeTotals(
-        inv.items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice })),
+        inv.items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice, taxRate: i.gstRate ?? inv.taxRate })),
         inv.discountValue,
         inv.discountType,
         inv.taxRate,
@@ -249,18 +252,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2. Generate Invoice sequence number
-    let invoiceNumber = data.number;
-    if (!invoiceNumber) {
-      const updatedBusiness = await db.aiBusiness.update({
-        where: { id: business.id },
-        data: { invoiceSeq: { increment: 1 } },
-        select: { invoiceSeq: true },
-      });
-      const year = new Date().getFullYear();
-      invoiceNumber = `INV-${year}-${updatedBusiness.invoiceSeq}`;
-    }
-
     // 3. Tax computations
     const config = await db.gptformCommerceConfig.findFirst({
       where: { businessId: business.id },
@@ -273,23 +264,46 @@ export async function POST(req: Request) {
       }
     } catch {}
 
-    const storeGstin = configBilling.gstin || '';
-    const storeStateCode = extractGstStateCode(storeGstin || business.address || '');
-    const clientStateCode = extractGstStateCode(data.placeOfSupply || data.customerGstin || '');
-    // No client state (B2C without GSTIN) defaults to intra-state supply (CGST+SGST).
-    const isInterstate = Boolean(clientStateCode) && storeStateCode !== clientStateCode;
+    const storeGstin = configBilling.gstin || business.gstin || '';
+    // Inter-state determination: merchant state = leading 2-digit state code of
+    // the store GSTIN (or business.stateCode); customer state = leading code of
+    // placeOfSupply/customerGstin. IGST only when BOTH are known and differ;
+    // unknown → intra-state (CGST+SGST).
+    const merchantState =
+      extractGstStateCode(storeGstin, '') || extractGstStateCode(business.stateCode, '');
+    const customerState =
+      extractGstStateCode(data.placeOfSupply, '') || extractGstStateCode(data.customerGstin, '');
+    const isInterstate = Boolean(merchantState && customerState) && merchantState !== customerState;
 
-    let subtotal = 0;
+    // ONE canonical math (computeInvoiceTotals): discount applied BEFORE tax,
+    // GST computed per-line on the pro-rata discounted base.
+    const totals = computeInvoiceTotals({
+      items: data.items.map((it) => ({
+        qty: Number(it.qty) || 1,
+        unitPrice: Number(it.unitPrice) || 0,
+        taxRate: it.gstRate ?? data.taxRate,
+      })),
+      discountValue: data.discountValue,
+      discountType: data.discountType,
+      globalTaxRate: data.taxRate,
+    });
+
+    // subtotal (tax-EXCLUSIVE, pre-discount) and discount live inside `totals`.
+    const taxableTotal = round2(totals.subtotal - totals.discount); // post-discount GST base
+    const totalCgst = isInterstate ? 0 : totals.cgstAmount;
+    const totalSgst = isInterstate ? 0 : totals.sgstAmount;
+    const totalIgst = isInterstate ? totals.gstAmount : 0;
+    const grandTotal = totals.total;
+
+    // Per-line amounts for the e-Way/e-invoice payloads — same pro-rata discount
+    // factor as computeInvoiceTotals so the payload reconciles with the totals.
+    const factor = totals.subtotal > 0 ? (totals.subtotal - totals.discount) / totals.subtotal : 0;
     const computedItems = data.items.map((it) => {
       const rate = Number(it.unitPrice) || 0;
       const qty = Number(it.qty) || 1;
-      const lineTaxable = rate * qty;
       const gstRate = Number(it.gstRate ?? data.taxRate ?? 18);
-      subtotal += lineTaxable;
-
-      const cgst = isInterstate ? 0 : lineTaxable * (gstRate / 200);
-      const sgst = isInterstate ? 0 : lineTaxable * (gstRate / 200);
-      const igst = isInterstate ? lineTaxable * (gstRate / 100) : 0;
+      const lineTaxable = round2(rate * qty * factor);
+      const lineTax = round2(rate * qty * factor * (gstRate / 100));
 
       return {
         description: it.description,
@@ -299,62 +313,117 @@ export async function POST(req: Request) {
         gstRate,
         unit: it.unit || 'pcs',
         taxableAmount: lineTaxable,
-        cgst,
-        sgst,
-        igst,
+        cgst: isInterstate ? 0 : round2(lineTax / 2),
+        sgst: isInterstate ? 0 : round2(lineTax / 2),
+        igst: isInterstate ? lineTax : 0,
       };
     });
 
-    const discount =
-      data.discountType === 'PERCENT'
-        ? (subtotal * (data.discountValue || 0)) / 100
-        : data.discountValue || 0;
-    const taxableTotal = Math.max(0, subtotal - discount);
+    // 4. Create the invoice + items + (optional) opening payment ATOMICALLY.
+    // The sequence-based number assignment, the invoice+items create and the
+    // PAID auto-payment all run in ONE db.$transaction (mirrors
+    // quote-flow/invoices), so a caller never sees a half-created invoice.
+    // P2002 retry: the (businessId, number) unique constraint can reject a
+    // sequence number consumed by a concurrent creation — retry with a fresh
+    // invoiceSeq increment (max 3 attempts), then give up with 409.
+    const createInvoiceTx = () =>
+      db.$transaction(async (tx) => {
+        let invoiceNumber = data.number;
+        if (!invoiceNumber) {
+          const updatedBusiness = await tx.aiBusiness.update({
+            where: { id: business.id },
+            data: { invoiceSeq: { increment: 1 } },
+            select: { invoiceSeq: true },
+          });
+          const year = new Date().getFullYear();
+          invoiceNumber = `INV-${year}-${updatedBusiness.invoiceSeq}`;
+        }
 
-    const totalCgst = isInterstate ? 0 : (taxableTotal * (data.taxRate / 200));
-    const totalSgst = isInterstate ? 0 : (taxableTotal * (data.taxRate / 200));
-    const totalIgst = isInterstate ? (taxableTotal * (data.taxRate / 100)) : 0;
-    const grandTotal = Math.round((taxableTotal + totalCgst + totalSgst + totalIgst) * 100) / 100;
+        const inv = await tx.aiInvoice.create({
+          data: {
+            businessId: business.id,
+            customerId: customerId || null,
+            number: invoiceNumber,
+            status: data.status,
+            dueDate: data.dueDate ? new Date(data.dueDate) : null,
+            notes: data.notes || null,
+            discountValue: data.discountValue,
+            discountType: data.discountType,
+            taxRate: data.taxRate,
+            // GST context snapshot (Phase 1) — used downstream for IGST/CGST
+            // decisions (reports, PDFs) and e-way/e-invoice payloads.
+            placeOfSupply: data.placeOfSupply?.trim().slice(0, 60) || null,
+            customerGstin: data.customerGstin?.trim().toUpperCase().slice(0, 15) || null,
+            items: {
+              create: computedItems.map((it) => ({
+                description: it.description,
+                qty: it.qty,
+                unitPrice: it.unitPrice,
+                hsnCode: it.hsnCode,
+                gstRate: it.gstRate, // persist the per-line GST rate snapshot (was silently dropped before)
+              })),
+            },
+          },
+          include: {
+            customer: true,
+            items: true,
+            payments: true,
+          },
+        });
 
-    // 4. Create invoice record in database
-    const createdInvoice = await db.aiInvoice.create({
-      data: {
-        businessId: business.id,
+        if (data.status === 'PAID') {
+          await tx.aiPayment.create({
+            data: {
+              invoiceId: inv.id,
+              amount: grandTotal,
+              method: data.paymentMethod || 'CASH',
+              notes: 'Recorded at invoice creation',
+            },
+          });
+        }
+
+        return inv;
+      });
+
+    let createdInvoice: Awaited<ReturnType<typeof createInvoiceTx>> | null = null;
+    for (let attempt = 0; attempt < 3 && !createdInvoice; attempt++) {
+      try {
+        createdInvoice = await createInvoiceTx();
+      } catch (err: any) {
+        // P2002 = unique constraint violation on (businessId, number). A
+        // sequence-generated number is retried (each attempt re-increments
+        // invoiceSeq inside the rolled-back transaction); a caller-provided
+        // number is a hard conflict.
+        if (err?.code === 'P2002' && !data.number) continue;
+        if (err?.code === 'P2002') break;
+        throw err;
+      }
+    }
+    if (!createdInvoice) {
+      return NextResponse.json({ error: 'Invoice number conflict, please retry' }, { status: 409 });
+    }
+
+    // Commerce audit trail — fire-and-forget; a logging failure can never
+    // fail the invoice that was just created (logCommerceActivity swallows).
+    const invoiceActor = await resolveCommerceActor(req);
+    await logCommerceActivity({
+      business,
+      actorId: invoiceActor.actorId,
+      actorName: invoiceActor.actorName,
+      action: 'create',
+      entityType: 'invoice',
+      entityId: createdInvoice.id,
+      entityName: createdInvoice.number,
+      description: `Invoice ${createdInvoice.number} created for ${data.customerName || 'Walk-in Customer'} — ${auditAmountLabel(business, grandTotal)}`,
+      metadata: {
+        invoiceId: createdInvoice.id,
+        number: createdInvoice.number,
+        total: grandTotal,
+        status: createdInvoice.status,
+        itemCount: computedItems.length,
         customerId: customerId || null,
-        number: invoiceNumber,
-        status: data.status,
-        dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        notes: data.notes || null,
-        discountValue: data.discountValue,
-        discountType: data.discountType,
-        taxRate: data.taxRate,
-        items: {
-          create: computedItems.map((it) => ({
-            description: it.description,
-            qty: it.qty,
-            unitPrice: it.unitPrice,
-            hsnCode: it.hsnCode,
-            gstRate: it.gstRate, // persist the per-line GST rate snapshot (was silently dropped before)
-          })),
-        },
-      },
-      include: {
-        customer: true,
-        items: true,
-        payments: true,
       },
     });
-
-    if (data.status === 'PAID') {
-      await db.aiPayment.create({
-        data: {
-          invoiceId: createdInvoice.id,
-          amount: grandTotal,
-          method: data.paymentMethod || 'CASH',
-          notes: 'Recorded at invoice creation',
-        },
-      });
-    }
 
     // 5. Generate compliant E-Way Bill & E-Invoice payloads if requested or applicable
     const storeMeta = {
@@ -385,7 +454,7 @@ export async function POST(req: Request) {
     };
 
     const eWayBill = generateEWayBillPayload({
-      invoiceNumber,
+      invoiceNumber: createdInvoice.number,
       invoiceDate: data.date || new Date().toISOString(),
       store: storeMeta,
       customer: customerMeta,
@@ -406,7 +475,7 @@ export async function POST(req: Request) {
     });
 
     const eInvoice = generateEInvoicePayload({
-      invoiceNumber,
+      invoiceNumber: createdInvoice.number,
       invoiceDate: data.date || new Date().toISOString(),
       store: storeMeta,
       customer: customerMeta,

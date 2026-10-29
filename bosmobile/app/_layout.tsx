@@ -130,13 +130,6 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
-            name="archives"
-            options={{
-              headerShown: false,
-              animation: 'slide_from_right',
-            }}
-          />
-          <Stack.Screen
             name="tickets"
             options={{
               headerShown: false,

@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Share,
-  Image,
   TextInput,
   Modal,
   Alert,
@@ -20,6 +19,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
 import { API_PATHS, WEB_URL } from '@/lib/constants';
+import { QrCode } from '@/components/qr-code';
 
 interface DiningTable {
   id: string;
@@ -112,9 +112,6 @@ export default function MobileDineInQrScreen() {
   };
 
   const qrUrl = `${WEB_URL}/store/${storeSlug}?table=${encodeURIComponent(selectedTable)}`;
-  const qrImageUri = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
-    qrUrl
-  )}`;
 
   const handleShare = async () => {
     hapticFeedback.light();
@@ -272,7 +269,7 @@ export default function MobileDineInQrScreen() {
               </Text>
 
               <View style={styles.qrBox}>
-                <Image source={{ uri: qrImageUri }} style={styles.qrImage} resizeMode="contain" />
+                <QrCode data={qrUrl} size={176} style={styles.qrImage} />
               </View>
 
               <Text style={styles.urlText} numberOfLines={1}>

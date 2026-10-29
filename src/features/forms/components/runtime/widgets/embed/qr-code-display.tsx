@@ -5,6 +5,7 @@ import { QrCode, ExternalLink, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { WidgetProps } from '../widget-props';
+import { qrSvgPath, qrSvgMarkup } from '@/lib/qr-svg';
 
 interface QrCodeValue {
   data: string;
@@ -211,15 +212,24 @@ export function QrCodeDisplay({ value, onChange, config, disabled, field }: Widg
 
   const result = useMemo(() => {
     if (!data) return null;
-    if (data.length > 100) {
-      const apiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
-      return { encoder: 'api' as const, svg: '', apiUrl, version: 0, modules: 0 };
-    }
     const bytes = utf8Bytes(data);
     const version = pickVersion(bytes.length);
-    if (version === 0) {
-      const apiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
-      return { encoder: 'api' as const, svg: '', apiUrl, version: 0, modules: 0 };
+    if (data.length > 100 || version === 0) {
+      // Beyond the built-in table (or long payloads) use the shared on-device
+      // encoder (up to version 40) — still no third-party service involved.
+      const shared = qrSvgPath(data);
+      const markup = shared ? qrSvgMarkup(data) : null;
+      if (shared && markup) {
+        const modules = shared.size - 8; // shared lib adds a 4-module quiet zone
+        return {
+          encoder: 'svg' as const,
+          svg: markup,
+          version: (modules - 17) / 4,
+          modules,
+          apiUrl: '',
+        };
+      }
+      return null;
     }
     const codewords = buildDataCodewords(bytes, version);
     const final = interleave(codewords, version);

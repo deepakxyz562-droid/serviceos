@@ -5,6 +5,7 @@ import { ownerBusiness } from '@/lib/commerce/access';
 import { computeTotals } from '@/lib/quote-flow-session';
 import { commerceError } from '@/lib/commerce/atomic';
 import { round2 } from '@/lib/quote-flow-calc';
+import { auditAmountLabel, logCommerceActivity, resolveCommerceActor } from '@/lib/commerce/audit';
 
 const paymentSchema = z.object({
   amount: z.number().positive('Amount must be greater than zero'),
@@ -31,8 +32,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
+    // Canonical math (computeInvoiceTotals): per-line GST rate with the
+    // invoice-level rate as fallback — mirrors how the rows were persisted.
     const totals = computeTotals(
-      invoice.items,
+      invoice.items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice, taxRate: i.gstRate ?? invoice.taxRate })),
       invoice.discountValue,
       invoice.discountType,
       invoice.taxRate,
@@ -74,6 +77,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
  * method, optional UTR/cheque reference). Recomputes invoice status honestly:
  * PAID only when the balance reaches zero, PARTIALLY_PAID otherwise.
  * A duplicate submission with the same reference + amount is a no-op.
+ *
+ * IDEMPOTENCY: an `Idempotency-Key` header (8-128 chars, same contract as
+ * /api/commerce/money) is accepted as the payment reference when the body
+ * carries none — so the existing invoice+amount+reference dedupe below IS
+ * the idempotency mechanism: a same-key/same-amount retry returns the
+ * originally recorded payment instead of double-charging the invoice.
+ *
+ * ATOMICITY: the balance re-read, cap validation, payment insert and status
+ * flip all run inside ONE db.$transaction (mirrors commerce/cheques/[id]),
+ * so two concurrent payments cannot both pass the balance check.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -89,76 +102,132 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     const data = parsed.data;
 
-    const invoice = await db.aiInvoice.findFirst({
-      where: { id, businessId: business.id },
-      include: { payments: true, items: true },
+    // Idempotency-Key support (mirrors /api/commerce/money): when present it
+    // must be 8-128 chars; it doubles as the payment reference so the dedupe
+    // below makes retries idempotent.
+    const idempotencyKey = req.headers.get('Idempotency-Key');
+    if (idempotencyKey !== null && (idempotencyKey.length < 8 || idempotencyKey.length > 128)) {
+      return NextResponse.json({ error: 'Invalid payment input' }, { status: 400 });
+    }
+    const dedupeReference = data.reference?.trim() || idempotencyKey || null;
+
+    const result = await db.$transaction(async (tx) => {
+      // Re-read the invoice + payments INSIDE the transaction — the balance
+      // and cap checks must see concurrently recorded payments.
+      const invoice = await tx.aiInvoice.findFirst({
+        where: { id, businessId: business.id },
+        include: { payments: true, items: true },
+      });
+      if (!invoice) {
+        return { kind: 'not_found' as const };
+      }
+
+      const totals = computeTotals(
+        invoice.items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice, taxRate: i.gstRate ?? invoice.taxRate })),
+        invoice.discountValue,
+        invoice.discountType,
+        invoice.taxRate,
+        business.currency
+      );
+      const paid = round2(invoice.payments.reduce((s, p) => s + p.amount, 0));
+      const balance = Math.max(0, round2(totals.total - paid));
+
+      if (balance <= 0.01) {
+        return { kind: 'already_paid' as const };
+      }
+      if (round2(data.amount) > balance + 0.011) {
+        return { kind: 'over_balance' as const, balance };
+      }
+
+      // Idempotency: same reference + amount on the same invoice is a no-op.
+      if (dedupeReference) {
+        const duplicate = invoice.payments.find(
+          (p) => p.reference === dedupeReference && Math.abs(p.amount - data.amount) < 0.011
+        );
+        if (duplicate) {
+          return { kind: 'duplicate' as const, payment: duplicate };
+        }
+      }
+
+      const paidAt = data.paidAt ? new Date(data.paidAt) : new Date();
+      const payment = await tx.aiPayment.create({
+        data: {
+          invoiceId: invoice.id,
+          amount: round2(data.amount),
+          method: data.method.toUpperCase().slice(0, 40),
+          reference: dedupeReference,
+          notes: data.notes?.trim() || null,
+          paidAt: Number.isNaN(paidAt.getTime()) ? new Date() : paidAt,
+        },
+      });
+
+      // Status is derived from the balance recomputed inside this tx. The
+      // conditional updateMany keeps the write scoped to this business.
+      const nextPaid = round2(paid + payment.amount);
+      const nextBalance = Math.max(0, round2(totals.total - nextPaid));
+      const nextStatus = nextBalance <= 0.01 ? 'PAID' : 'PARTIALLY_PAID';
+      await tx.aiInvoice.updateMany({
+        where: { id: invoice.id, businessId: business.id },
+        data: { status: nextStatus },
+      });
+
+      return { kind: 'created' as const, payment, invoiceNumber: invoice.number, totals, nextPaid, nextBalance, nextStatus };
     });
-    if (!invoice) {
+
+    if (result.kind === 'not_found') {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
-
-    const totals = computeTotals(
-      invoice.items,
-      invoice.discountValue,
-      invoice.discountType,
-      invoice.taxRate,
-      business.currency
-    );
-    const paid = round2(invoice.payments.reduce((s, p) => s + p.amount, 0));
-    const balance = Math.max(0, round2(totals.total - paid));
-
-    if (balance <= 0.01) {
+    if (result.kind === 'already_paid') {
       return NextResponse.json({ error: 'This invoice is already fully paid.' }, { status: 400 });
     }
-    if (round2(data.amount) > balance + 0.011) {
+    if (result.kind === 'over_balance') {
       return NextResponse.json(
-        { error: `Amount exceeds the outstanding balance (${balance.toFixed(2)}).`, balance },
+        { error: `Amount exceeds the outstanding balance (${result.balance.toFixed(2)}).`, balance: result.balance },
         { status: 400 }
       );
     }
-
-    // Light idempotency: same reference + amount on the same invoice is a no-op.
-    if (data.reference) {
-      const duplicate = invoice.payments.find(
-        (p) => p.reference === data.reference && Math.abs(p.amount - data.amount) < 0.011
-      );
-      if (duplicate) {
-        return NextResponse.json({ payment: duplicate, duplicate: true });
-      }
+    if (result.kind === 'duplicate') {
+      return NextResponse.json({ payment: result.payment, duplicate: true });
     }
 
-    const paidAt = data.paidAt ? new Date(data.paidAt) : new Date();
-    const payment = await db.aiPayment.create({
-      data: {
-        invoiceId: invoice.id,
-        amount: round2(data.amount),
-        method: data.method.toUpperCase().slice(0, 40),
-        reference: data.reference?.trim() || null,
-        notes: data.notes?.trim() || null,
-        paidAt: Number.isNaN(paidAt.getTime()) ? new Date() : paidAt,
+    // Commerce audit trail — fire-and-forget; a logging failure can never
+    // fail the payment that was just recorded (logCommerceActivity swallows).
+    const paymentActor = await resolveCommerceActor(req);
+    await logCommerceActivity({
+      business,
+      actorId: paymentActor.actorId,
+      actorName: paymentActor.actorName,
+      action: 'pay',
+      entityType: 'payment',
+      entityId: result.payment.id,
+      entityName: result.invoiceNumber,
+      description: `Payment ${auditAmountLabel(business, result.payment.amount)} recorded on ${result.invoiceNumber} via ${result.payment.method}`,
+      metadata: {
+        invoiceId: id,
+        invoiceNumber: result.invoiceNumber,
+        amount: result.payment.amount,
+        method: result.payment.method,
+        reference: result.payment.reference || null,
+        balanceAfter: result.nextBalance,
+        statusAfter: result.nextStatus,
       },
     });
-
-    const nextPaid = round2(paid + payment.amount);
-    const nextBalance = Math.max(0, round2(totals.total - nextPaid));
-    const nextStatus = nextBalance <= 0.01 ? 'PAID' : 'PARTIALLY_PAID';
-    await db.aiInvoice.update({ where: { id: invoice.id }, data: { status: nextStatus } });
 
     return NextResponse.json(
       {
         payment: {
-          id: payment.id,
-          amount: payment.amount,
-          method: payment.method,
-          reference: payment.reference,
-          notes: payment.notes,
-          paidAt: payment.paidAt,
+          id: result.payment.id,
+          amount: result.payment.amount,
+          method: result.payment.method,
+          reference: result.payment.reference,
+          notes: result.payment.notes,
+          paidAt: result.payment.paidAt,
         },
         summary: {
-          total: totals.total,
-          paid: nextPaid,
-          balance: nextBalance,
-          status: nextStatus,
+          total: result.totals.total,
+          paid: result.nextPaid,
+          balance: result.nextBalance,
+          status: result.nextStatus,
         },
       },
       { status: 201 }

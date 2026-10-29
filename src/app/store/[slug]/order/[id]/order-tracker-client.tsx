@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { qrSvgMarkup } from '@/lib/qr-svg';
 import {
   CheckCircle2,
   Clock,
@@ -214,9 +215,8 @@ export function OrderTrackerClient({
     ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(order.businessName)}&am=${order.total.toFixed(2)}&tn=${encodeURIComponent(`Order #${order.orderNumber}`)}&cu=INR`
     : '';
 
-  const qrCodeUrl = upiUri
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(upiUri)}`
-    : '';
+  // UPI QR generated fully on-device — the deep link never leaves the browser.
+  const qrMarkup = upiUri ? (qrSvgMarkup(upiUri) ?? '') : '';
 
   const handleSubmitUtr = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -564,15 +564,16 @@ export function OrderTrackerClient({
                     <span>{t('tracker.payWithAnyUpi', 'Pay with any UPI App', 'किसी भी UPI ऐप से भुगतान करें')} ({currencySymbol}{order.total.toFixed(2)})</span>
                   </a>
 
-                  {qrCodeUrl && (
+                  {qrMarkup && (
                     <div className="bg-stone-50 border border-stone-100 rounded-2xl p-3 flex flex-col items-center justify-center text-center">
                       <p className="text-[11px] text-stone-600 font-medium mb-2">
                         {t('tracker.orScanToPay', 'Or scan to pay directly to vendor', 'या सीधे दुकानदार को स्कैन करके भुगतान करें')} ({upiId})
                       </p>
-                      <img
-                        src={qrCodeUrl}
-                        alt="Vendor UPI QR Code"
-                        className="w-36 h-36 rounded-xl border border-stone-200 shadow-xs"
+                      {/* Safe to inline: markup is generated entirely by our local
+                          encoder — no user-controlled attributes. */}
+                      <div
+                        className="w-36 h-36 rounded-xl border border-stone-200 shadow-xs bg-white"
+                        dangerouslySetInnerHTML={{ __html: qrMarkup }}
                       />
                     </div>
                   )}

@@ -581,8 +581,10 @@ export function BosDashboardWorkstation({
               <span className="text-[26px] font-extrabold tracking-tight text-[#111827]">
                 {kpiStats.newCustomersCount}
               </span>
+              {/* No comparable vs-last-period figure is computed — show the
+                  honest placeholder the sibling Sales/Orders cards use. */}
               <span className="inline-flex items-center rounded-full bg-[#E6F6F0] px-2 py-0.5 text-[11px] font-semibold text-[#0A6847]">
-                +5.4%
+                —
               </span>
             </div>
             <p className="mt-1 text-[11.5px] text-[#64748B]">
@@ -622,8 +624,10 @@ export function BosDashboardWorkstation({
               <span className="text-[26px] font-extrabold tracking-tight text-[#111827]">
                 {kpiStats.appointmentsCount}
               </span>
-              <span className="inline-flex items-center rounded-full bg-[#FEE2E2] px-2 py-0.5 text-[11px] font-semibold text-[#DC2626]">
-                -2.1%
+              {/* Same honest placeholder as the other KPI cards — the red
+                  “-2.1%” chip previously shown here was fabricated. */}
+              <span className="inline-flex items-center rounded-full bg-[#E6F6F0] px-2 py-0.5 text-[11px] font-semibold text-[#0A6847]">
+                —
               </span>
             </div>
             <p className="mt-1 text-[11.5px] font-medium text-[#7C3AED]">

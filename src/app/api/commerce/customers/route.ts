@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readHomePages, postedOrderSales } from '@/lib/business-home-data';
 import { db } from '@/lib/db';
 import { requireQuoteFlowBusiness } from '@/lib/quote-flow-session';
+import { logCommerceActivity } from '@/lib/commerce/audit';
 
 /**
  * GET /api/commerce/customers
@@ -48,6 +49,8 @@ export async function GET(req: NextRequest) {
       firstVisit: Date | null;
       lastVisit: Date | null;
       gstin?: string | null;
+      partyType?: string | null;
+      creditLimit?: number | null;
       itemFrequency: Record<string, number>;
       recentOrders: Array<{ id: string; total: number; date: Date; status: string }>;
     }
@@ -64,6 +67,7 @@ export async function GET(req: NextRequest) {
         id: customer.id, phone, name: customer.name || 'Customer', deliveryAddress: customer.address,
         ordersCount: 0, totalSpent: 0, firstVisit: null, lastVisit: null,
         itemFrequency: {}, recentOrders: [], gstin: customer.gstin || legacyNotesGstin,
+        partyType: customer.partyType ?? null, creditLimit: customer.creditLimit ?? null,
       });
     }
     for (const ord of orders) {
@@ -84,6 +88,8 @@ export async function GET(req: NextRequest) {
           itemFrequency: {},
           recentOrders: [],
           gstin: aiC ? (aiC.gstin || (aiC.notes ? (aiC.notes.match(/GSTIN:\s*([A-Z0-9]{15})/i)?.[1] ?? null) : null)) : null,
+          partyType: aiC?.partyType ?? null,
+          creditLimit: aiC?.creditLimit ?? null,
         };
         customerMap.set(cleanPhone, existing);
       }
@@ -147,6 +153,8 @@ export async function GET(req: NextRequest) {
         deliveryAddress: c.deliveryAddress,
         address: c.deliveryAddress,
         gstin: c.gstin ?? null,
+        partyType: c.partyType ?? null,
+        creditLimit: c.creditLimit ?? null,
         ordersCount: c.ordersCount,
         totalSpent: Number(c.totalSpent.toFixed(2)),
         avgOrderValue: c.ordersCount ? Number((c.totalSpent / c.ordersCount).toFixed(2)) : 0,
@@ -201,7 +209,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { business } = await requireQuoteFlowBusiness(req);
+    const { business, user } = await requireQuoteFlowBusiness(req);
     const body = await req.json().catch(() => null);
     const key = req.headers.get('Idempotency-Key');
     if (!body || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 200 || typeof body.phone !== 'string' || !key || !/^[\w-]{8,128}$/.test(key)) return NextResponse.json({ error: 'Enter a name, phone and request key.' }, { status: 400 });
@@ -214,12 +222,44 @@ export async function POST(req: NextRequest) {
     const gstin = typeof body.gstin === 'string' && body.gstin.trim() ? body.gstin.trim().toUpperCase() : null;
     // GSTIN now lives in its own column (legacy encodings in `notes` are no longer written).
     const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null;
-    const data: any = { businessId: business.id, name: body.name.trim(), phone, address, email, notes, gstin };
+    // Party metadata (Phase 1): CUSTOMER | SUPPLIER | BOTH + khata credit limit
+    // (positive float). Invalid values are rejected, not silently coerced.
+    const partyTypeRaw = body.partyType;
+    if (partyTypeRaw != null && !['CUSTOMER', 'SUPPLIER', 'BOTH'].includes(String(partyTypeRaw).toUpperCase())) {
+      return NextResponse.json({ error: 'Party type must be CUSTOMER, SUPPLIER or BOTH.' }, { status: 400 });
+    }
+    const partyType = partyTypeRaw == null ? null : String(partyTypeRaw).toUpperCase();
+    if (body.creditLimit != null && body.creditLimit !== '' &&
+        (!Number.isFinite(Number(body.creditLimit)) || Number(body.creditLimit) < 0)) {
+      return NextResponse.json({ error: 'Credit limit must be a positive amount.' }, { status: 400 });
+    }
+    const creditLimit = body.creditLimit == null || body.creditLimit === '' ? null : Number(body.creditLimit);
+    const data: any = { businessId: business.id, name: body.name.trim(), phone, address, email, notes, gstin, partyType, creditLimit };
     const replay = (customer: { businessId: string; name: string; phone: string | null }) => customer.businessId === data.businessId && customer.name === data.name && customer.phone === data.phone;
     const existing = await db.aiCustomer.findUnique({ where: { id } });
     if (existing) return replay(existing) ? NextResponse.json({ customer: existing, replayed: true }) : NextResponse.json({ error: 'This request was used for different customer details.' }, { status: 409 });
     try {
       const customer = await db.aiCustomer.create({ data: { id, ...data } });
+
+      // Commerce audit trail — fire-and-forget; a logging failure can never
+      // fail the customer that was just created (logCommerceActivity swallows).
+      await logCommerceActivity({
+        business,
+        actorId: user.id,
+        actorName: user.name || user.email || null,
+        action: 'create',
+        entityType: 'customer',
+        entityId: customer.id,
+        entityName: customer.name,
+        description: `Customer ${customer.name}${customer.phone ? ` (${customer.phone})` : ''} added`,
+        metadata: {
+          customerId: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          partyType: customer.partyType || null,
+        },
+      });
+
       return NextResponse.json({ customer }, { status: 201 });
     } catch (error) {
       const saved = await db.aiCustomer.findUnique({ where: { id } });
@@ -270,6 +310,21 @@ export async function PATCH(req: NextRequest) {
     const updatedAddress = body.address !== undefined ? (typeof body.address === 'string' && body.address.trim() ? body.address.trim() : null) : existing?.address;
     const updatedEmail = body.email !== undefined ? (typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null) : existing?.email;
 
+    // Party metadata (Phase 1): CUSTOMER | SUPPLIER | BOTH + khata credit limit.
+    const PARTY_TYPES = ['CUSTOMER', 'SUPPLIER', 'BOTH'];
+    const updatedPartyType =
+      body.partyType === undefined || body.partyType === null
+        ? existing?.partyType ?? null
+        : PARTY_TYPES.includes(String(body.partyType).toUpperCase())
+          ? String(body.partyType).toUpperCase()
+          : null;
+    const updatedCreditLimit =
+      body.creditLimit === undefined || body.creditLimit === null || body.creditLimit === ''
+        ? existing?.creditLimit ?? null
+        : Number.isFinite(Number(body.creditLimit)) && Number(body.creditLimit) > 0
+          ? Number(body.creditLimit)
+          : null;
+
     let updatedNotes = existing?.notes || null;
     let updatedGstin: string | null | undefined = existing?.gstin ?? null;
     if (body.gstin !== undefined) {
@@ -292,6 +347,8 @@ export async function PATCH(req: NextRequest) {
           email: updatedEmail,
           notes: updatedNotes,
           ...(body.gstin !== undefined ? { gstin: updatedGstin } : {}),
+          ...(body.partyType !== undefined ? { partyType: updatedPartyType } : {}),
+          ...(body.creditLimit !== undefined ? { creditLimit: updatedCreditLimit } : {}),
         },
       });
     } else {
@@ -306,6 +363,8 @@ export async function PATCH(req: NextRequest) {
           email: updatedEmail,
           notes: updatedNotes,
           gstin: updatedGstin ?? null,
+          partyType: updatedPartyType,
+          creditLimit: updatedCreditLimit,
         },
       });
     }
@@ -336,6 +395,9 @@ export async function PATCH(req: NextRequest) {
         email: customer.email,
         address: customer.address,
         notes: customer.notes,
+        gstin: customer.gstin ?? null,
+        partyType: customer.partyType ?? null,
+        creditLimit: customer.creditLimit ?? null,
       },
     });
   } catch (error) {

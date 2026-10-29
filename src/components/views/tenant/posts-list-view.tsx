@@ -305,7 +305,12 @@ export function PostsListView({ embedded = false }: { embedded?: boolean } = {})
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All platforms</SelectItem>
+                <SelectItem value="facebook">Facebook</SelectItem>
+                <SelectItem value="instagram">Instagram</SelectItem>
                 <SelectItem value="googlebusiness">Google Business</SelectItem>
+                <SelectItem value="linkedin">LinkedIn</SelectItem>
+                <SelectItem value="pinterest">Pinterest</SelectItem>
+                <SelectItem value="twitter">X</SelectItem>
               </SelectContent>
             </Select>
           </div>

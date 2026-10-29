@@ -47,6 +47,13 @@ export default function MoreScreen() {
     ];
     business.push({ label: t('Open web dashboard', 'वेब डैशबोर्ड खोलें'), icon: 'open-in-new', onPress: () => { void Linking.openURL(`${WEB_URL}/?view=commerce`).catch(() => Alert.alert(t('Unable to open browser', 'ब्राउज़र नहीं खुला'))); } });
     if (c.onlineStore || (c.catalog && c.orders)) business.unshift({ label: t('Share store & QR', 'दुकान और QR शेयर करें'), icon: 'qr-code', path: '/store-share' });
+    // Real-but-hidden tab screens (kept out of the tab bar by the tab layout) —
+    // linked here so they stay reachable. Same href form as '/(tabs)/orders'.
+    const conversations: Row[] = [
+        { label: t('Inbox', 'इनबॉक्स'), icon: 'inbox' as Icon, path: '/(tabs)/inbox' },
+        { label: t('Leads pipeline', 'लीड्स पाइपलाइन'), icon: 'person-search' as Icon, path: '/(tabs)/leads' },
+        { label: t('Engage — live visitors', 'इनगेज — लाइव ग्राहक'), icon: 'forum' as Icon, path: '/(tabs)/engage' },
+    ];
     const tools: Row[] = [
         ...(c.forms ? [{ label: t('Forms', 'फ़ॉर्म'), icon: 'dynamic-form' as Icon, path: '/forms' }] : []),
         { label: t('Automations & channels', 'ऑटोमेशन और चैनल'), icon: 'chat-bubble-outline' as Icon, path: '/channels' },
@@ -57,7 +64,7 @@ export default function MoreScreen() {
     const section = (title: string, rows: Row[]) => rows.length > 0 && <View><Text style={styles.section}>{title}</Text><View style={styles.group}>{rows.map((row, index) => <TouchableOpacity key={row.label} accessibilityRole="button" onPress={() => row.onPress ? row.onPress() : router.push(row.path as any)} style={[styles.row, index > 0 && styles.border]}><View style={styles.icon}><MaterialIcons name={row.icon} size={22} color="#36634f"/></View><Text style={styles.label}>{row.label}</Text>{row.detail && <Text style={styles.detail}>{row.detail}</Text>}<MaterialIcons name="chevron-right" size={21} color="#94a3b8"/></TouchableOpacity>)}</View></View>;
     return <SafeAreaView style={styles.safe} edges={['top']}><ScrollView contentContainerStyle={styles.content}>
   <Text style={styles.title}>{t('Settings', 'सेटिंग')}</Text><View style={styles.profile}><View style={styles.avatar}><Text style={styles.initial}>{(user?.name || user?.email || '?')[0].toUpperCase()}</Text></View><View style={{ flex: 1 }}><Text style={styles.name}>{user?.name || t('Your account', 'आपका खाता')}</Text><Text style={styles.email}>{user?.email}</Text></View></View>
-  {section(t('Your business', 'आपका व्यवसाय'), business)}{section(t('Enabled tools', 'चालू टूल'), tools)}{section(t('Preferences', 'पसंद'), preferences)}
+  {section(t('Your business', 'आपका व्यवसाय'), business)}{section(t('Customers & conversations', 'ग्राहक और बातचीत'), conversations)}{section(t('Enabled tools', 'चालू टूल'), tools)}{section(t('Preferences', 'पसंद'), preferences)}
   {section(t('Business setup', 'व्यवसाय की सेटिंग'), [
     { label: t('Staff & team roles', 'स्टाफ़ और भूमिकाएँ'), icon: 'badge' as Icon, path: '/staff', detail: t('Multi-user', 'मल्टी-यूज़र') },
     { label: t('Business details', 'व्यवसाय की जानकारी'), icon: 'storefront', path: '/blueprint-setup', detail: homeText(blueprint.businessType, language) },

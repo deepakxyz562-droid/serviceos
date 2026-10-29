@@ -814,6 +814,9 @@ export function BosPosWorkstation({
       )}
 
       {/* 4 Top KPI Summary Cards */}
+      {/* Honest KPIs only: the former “↑ 12%/20%/8%/15%” chips and their
+          rising-trend sparklines were fabricated (no vs-last-period data is
+          computed for this register), so they were removed outright. */}
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         {/* Card 1: Today's Sales */}
         <div className="relative overflow-hidden rounded-2xl border border-[#DCE9E3] bg-gradient-to-br from-[#F1FAF5] via-white to-[#E8F6EE] px-4 py-3.5 shadow-2xs flex items-center justify-between">
@@ -832,24 +835,6 @@ export function BosPosWorkstation({
               </p>
             </div>
           </div>
-          <div className="flex flex-col items-end justify-between">
-            <span className="inline-flex items-center gap-0.5 text-[12px] font-bold text-[#0A7B56]">
-              ↑ 12%
-            </span>
-            <svg
-              viewBox="0 0 90 32"
-              className="mt-1 h-7 w-20 overflow-visible"
-              fill="none"
-            >
-              <path
-                d="M4 26 C 22 25, 34 21, 52 17 C 66 13, 75 10, 84 6"
-                stroke="#10B981"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              />
-              <circle cx="84" cy="6" r="3" fill="#0A7B56" />
-            </svg>
-          </div>
         </div>
 
         {/* Card 2: Bills */}
@@ -864,24 +849,6 @@ export function BosPosWorkstation({
                 {kpiStats.billsCount}
               </p>
             </div>
-          </div>
-          <div className="flex flex-col items-end justify-between">
-            <span className="inline-flex items-center gap-0.5 text-[12px] font-bold text-[#0A7B56]">
-              ↑ 20%
-            </span>
-            <svg
-              viewBox="0 0 90 32"
-              className="mt-1 h-7 w-20 overflow-visible"
-              fill="none"
-            >
-              <path
-                d="M4 26 C 24 25, 42 20, 58 15 C 70 11, 77 9, 84 6"
-                stroke="#3B82F6"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              />
-              <circle cx="84" cy="6" r="3" fill="#2563EB" />
-            </svg>
           </div>
         </div>
 
@@ -900,24 +867,6 @@ export function BosPosWorkstation({
               </p>
             </div>
           </div>
-          <div className="flex flex-col items-end justify-between">
-            <span className="inline-flex items-center gap-0.5 text-[12px] font-bold text-[#0A7B56]">
-              ↑ 8%
-            </span>
-            <svg
-              viewBox="0 0 90 32"
-              className="mt-1 h-7 w-20 overflow-visible"
-              fill="none"
-            >
-              <path
-                d="M4 26 C 22 25, 40 21, 58 16 C 70 12, 77 9, 84 6"
-                stroke="#F59E0B"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              />
-              <circle cx="84" cy="6" r="3" fill="#D97706" />
-            </svg>
-          </div>
         </div>
 
         {/* Card 4: Customers */}
@@ -934,24 +883,6 @@ export function BosPosWorkstation({
                 {kpiStats.customersCount}
               </p>
             </div>
-          </div>
-          <div className="flex flex-col items-end justify-between">
-            <span className="inline-flex items-center gap-0.5 text-[12px] font-bold text-[#0A7B56]">
-              ↑ 15%
-            </span>
-            <svg
-              viewBox="0 0 90 32"
-              className="mt-1 h-7 w-20 overflow-visible"
-              fill="none"
-            >
-              <path
-                d="M4 26 C 22 25, 40 21, 58 16 C 70 12, 77 9, 84 6"
-                stroke="#A855F7"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              />
-              <circle cx="84" cy="6" r="3" fill="#9333EA" />
-            </svg>
           </div>
         </div>
       </div>

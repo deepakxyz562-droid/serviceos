@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { generateGstInvoiceHtml } from '@/lib/billing/gst-invoice-helper';
+import { qrSvgMarkup } from '@/lib/qr-svg';
 
 interface InvoiceData {
   id: string;
@@ -198,9 +199,10 @@ export default function PublicInvoicePayPage() {
     return `upi://pay?pa=${encodeURIComponent(rawUpiId)}&pn=${encodeURIComponent(merchant)}&am=${amount}&tn=${encodeURIComponent(note)}&cu=INR`;
   }, [paymentMethods?.upi, branding?.businessName, invoice]);
 
-  const dynamicQrCodeUrl = useMemo(() => {
+  // UPI QR generated fully on-device — the deep link never leaves the browser.
+  const dynamicQrMarkup = useMemo(() => {
     if (!upiUri) return '';
-    return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(upiUri)}`;
+    return qrSvgMarkup(upiUri) ?? '';
   }, [upiUri]);
 
   // ── App-Return Detection Layer: Listen for user returning from UPI app ──
@@ -781,11 +783,12 @@ export default function PublicInvoicePayPage() {
                           <div className="flex flex-col sm:flex-row items-center gap-5">
                             {/* Visual QR Image */}
                             <div className="bg-white p-2.5 rounded-2xl border border-[#DCE9E3] shadow-sm shrink-0">
-                              {dynamicQrCodeUrl ? (
-                                <img
-                                  src={dynamicQrCodeUrl}
-                                  alt="Scan UPI QR"
-                                  className="w-44 h-44 rounded-xl object-contain"
+                              {dynamicQrMarkup ? (
+                                // Safe to inline: markup is generated entirely by our
+                                // local encoder — no user-controlled attributes.
+                                <div
+                                  className="w-44 h-44 rounded-xl"
+                                  dangerouslySetInnerHTML={{ __html: dynamicQrMarkup }}
                                 />
                               ) : (
                                 <div className="w-44 h-44 flex items-center justify-center text-xs text-stone-400">

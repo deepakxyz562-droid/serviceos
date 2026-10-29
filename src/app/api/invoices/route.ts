@@ -403,6 +403,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 400 });
     }
 
+    // ── FK-injection IDOR fix: customerId/jobId/employeeId come from the
+    // request body. Verify each referenced record belongs to the caller's
+    // tenant before linking it — otherwise tenant A could invoice tenant
+    // B's customer and then read their PII through the invoice relation.
+    if (customerId) {
+      const ownedCustomer = await db.customer.findFirst({
+        where: { id: customerId, OR: [{ tenantId }, { workspace: { tenantId } }] },
+        select: { id: true },
+      });
+      if (!ownedCustomer) {
+        return NextResponse.json({ error: 'Invalid customerId' }, { status: 400 });
+      }
+    }
+    if (jobId) {
+      const ownedJob = await db.job.findFirst({
+        where: { id: jobId, workspace: { tenantId } },
+        select: { id: true },
+      });
+      if (!ownedJob) {
+        return NextResponse.json({ error: 'Invalid jobId' }, { status: 400 });
+      }
+    }
+    if (employeeId) {
+      const ownedEmployee = await db.employee.findFirst({
+        where: { id: employeeId, workspace: { tenantId } },
+        select: { id: true },
+      });
+      if (!ownedEmployee) {
+        return NextResponse.json({ error: 'Invalid employeeId' }, { status: 400 });
+      }
+    }
+
     // Resolve tenant's base currency
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },

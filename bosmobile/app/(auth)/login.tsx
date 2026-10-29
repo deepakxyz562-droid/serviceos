@@ -19,6 +19,7 @@ import { BUSINESS_TYPE_LABELS } from '@/lib/blueprint/presets';
 import { COUNTRY_PACKS } from '@/lib/blueprint/country-packs';
 import type { BusinessType, CountryCode } from '@/lib/blueprint/types';
 import { hapticFeedback } from '@/lib/haptics';
+import { apiRequest } from '@/lib/api';
 
 export default function LoginScreen() {
   const [mode, setMode] = useState<'signin' | 'register'>('signin');
@@ -36,6 +37,7 @@ export default function LoginScreen() {
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const { login, register, loginWithGoogle, isLoading, error, clearError } = useAuthStore();
   const saveBlueprintToServer = useBlueprintStore((s) => s.saveBlueprintToServer);
@@ -81,6 +83,41 @@ export default function LoginScreen() {
   const handleGoogleAuth = async () => {
     await hapticFeedback.medium();
     await loginWithGoogle();
+  };
+
+  // Real password reset: POST /api/auth/request-reset with the email typed in
+  // the sign-in form. The server always answers 200 (no email enumeration) and
+  // only errors on invalid input / transport failures, which we surface as-is.
+  const handleForgotPassword = async () => {
+    if (resetting) return;
+    const targetEmail = email.trim();
+    if (!targetEmail) {
+      Alert.alert(
+        'Email required',
+        'Type your work email above first, then tap Forgot password to send a reset link.'
+      );
+      return;
+    }
+    setResetting(true);
+    try {
+      await hapticFeedback.light();
+      await apiRequest('/api/auth/request-reset', {
+        method: 'POST',
+        body: { email: targetEmail },
+        skipAuth: true,
+      });
+      Alert.alert(
+        'Reset link sent',
+        'If an account exists for that email, a reset link has been sent.'
+      );
+    } catch (err: any) {
+      Alert.alert(
+        'Could not send reset link',
+        err?.message || 'Something went wrong while requesting the reset link. Please try again.'
+      );
+    } finally {
+      setResetting(false);
+    }
   };
 
   return (
@@ -191,9 +228,12 @@ export default function LoginScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={styles.inputLabel}>Password</Text>
                   <TouchableOpacity
-                    onPress={() => Alert.alert('Reset Password', 'Please check your email to reset your BOS password.')}
+                    onPress={() => void handleForgotPassword()}
+                    disabled={resetting || isLoading}
+                    accessibilityRole="button"
+                    accessibilityLabel="Forgot password — email a reset link"
                   >
-                    <Text style={styles.forgotText}>Forgot password?</Text>
+                    <Text style={styles.forgotText}>{resetting ? 'Sending…' : 'Forgot password?'}</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.inputRow}>

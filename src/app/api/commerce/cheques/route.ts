@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ownerBusiness } from '@/lib/commerce/access';
+import { auditAmountLabel, logCommerceActivity, resolveCommerceActor } from '@/lib/commerce/audit';
 
 const DIRECTIONS = ['INCOMING', 'OUTGOING'] as const;
 const STATUSES = ['PENDING', 'CLEARED', 'BOUNCED', 'CANCELLED'] as const;
@@ -118,6 +119,29 @@ export async function POST(req: NextRequest) {
         dueDate,
         status: 'PENDING',
         notes,
+      },
+    });
+
+    // Commerce audit trail — fire-and-forget; a logging failure can never
+    // fail the cheque that was just recorded (logCommerceActivity swallows).
+    const chequeActor = await resolveCommerceActor(req);
+    await logCommerceActivity({
+      business,
+      actorId: chequeActor.actorId,
+      actorName: chequeActor.actorName,
+      action: 'create',
+      entityType: 'cheque',
+      entityId: cheque.id,
+      entityName: cheque.chequeNumber,
+      description: `${direction === 'INCOMING' ? 'Incoming' : 'Outgoing'} cheque ${cheque.chequeNumber} for ${auditAmountLabel(business, cheque.amount)} ${direction === 'INCOMING' ? 'from' : 'to'} ${cheque.partyName} recorded — status PENDING`,
+      metadata: {
+        chequeId: cheque.id,
+        chequeNumber: cheque.chequeNumber,
+        direction,
+        partyName: cheque.partyName,
+        amount: cheque.amount,
+        bankName: cheque.bankName,
+        status: 'PENDING',
       },
     });
 

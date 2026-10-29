@@ -21,8 +21,10 @@ export async function GET(req: Request) {
     let totalOverdue = 0;
 
     const enriched = invoices.map((inv) => {
+      // Canonical math (computeInvoiceTotals): per-line GST rate with the
+      // invoice-level rate as fallback — mirrors how the rows were persisted.
       const totals = computeTotals(
-        inv.items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice })),
+        inv.items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice, taxRate: i.gstRate ?? inv.taxRate })),
         inv.discountValue,
         inv.discountType,
         inv.taxRate,
@@ -78,6 +80,14 @@ export async function POST(req: Request) {
     const { business } = await requireQuoteFlowBusiness(req);
     const body = await req.json();
 
+    // Optional GST context (persisted on the invoice — Phase 1).
+    const placeOfSupply =
+      typeof body.placeOfSupply === 'string' ? body.placeOfSupply.trim().slice(0, 60) : null;
+    const customerGstin =
+      typeof body.customerGstin === 'string'
+        ? body.customerGstin.trim().toUpperCase().slice(0, 15)
+        : null;
+
     let targetCustomerId = body.customerId;
     if (targetCustomerId) {
       const validCustomer = await db.aiCustomer.findFirst({
@@ -98,34 +108,45 @@ export async function POST(req: Request) {
         ? await db.aiCustomer.findFirst({ where: { businessId: business.id, phone: custPhone } })
         : await db.aiCustomer.findFirst({ where: { businessId: business.id, name: custName } });
       if (existing) {
-        // Refresh name/phone if the caller supplied newer info.
-        if (body.customerName && existing.name !== custName) {
-          existing = await db.aiCustomer.update({
-            where: { id: existing.id },
-            data: { name: custName, phone: custPhone || existing.phone },
-          });
-        }
+        // Refresh name/phone if the caller supplied newer info. GSTIN and
+        // address are back-filled only when missing (never overwrite data
+        // the merchant already curated on the customer record).
+        existing = await db.aiCustomer.update({
+          where: { id: existing.id },
+          data: {
+            name: body.customerName && existing.name !== custName ? custName : undefined,
+            phone: custPhone || undefined,
+            ...(customerGstin && !existing.gstin ? { gstin: customerGstin } : {}),
+            ...(body.customerAddress && !existing.address
+              ? { address: String(body.customerAddress).trim() }
+              : {}),
+          },
+        });
         targetCustomerId = existing.id;
       } else {
         const newCust = await db.aiCustomer.create({
-          data: { businessId: business.id, name: custName, phone: custPhone },
+          data: {
+            businessId: business.id,
+            name: custName,
+            phone: custPhone,
+            ...(customerGstin ? { gstin: customerGstin } : {}),
+            ...(body.customerAddress ? { address: String(body.customerAddress).trim() } : {}),
+          },
         });
         targetCustomerId = newCust.id;
       }
     }
-
-    const updatedBiz = await db.aiBusiness.update({
-      where: { id: business.id },
-      data: { invoiceSeq: { increment: 1 } },
-    });
-    const number = `INV-${updatedBiz.invoiceSeq}`;
 
     const rawItems = Array.isArray(body.items) && body.items.length > 0
       ? body.items
       : [{ description: 'Custom Service', qty: 1, unitPrice: 0 }];
 
     const totals = computeTotals(
-      rawItems.map((i: any) => ({ qty: Number(i.qty) || 1, unitPrice: Number(i.unitPrice) || 0 })),
+      rawItems.map((i: any) => ({
+        qty: Number(i.qty) || 1,
+        unitPrice: Number(i.unitPrice) || 0,
+        taxRate: Number(i.gstRate) > 0 ? Number(i.gstRate) : Number(body.taxRate) || 0,
+      })),
       Number(body.discountValue) || 0,
       body.discountType || 'AMOUNT',
       Number(body.taxRate) || 0,
@@ -144,52 +165,81 @@ export async function POST(req: Request) {
       initialStatus = 'PARTIALLY_PAID';
     }
 
-    const invoice = await db.$transaction(async (tx) => {
-      const inv = await tx.aiInvoice.create({
-        data: {
-          businessId: business.id,
-          customerId: targetCustomerId,
-          number,
-          status: initialStatus,
-          dueDate: body.dueDate ? new Date(body.dueDate) : null,
-          notes: body.notes || null,
-          discountValue: Number(body.discountValue) || 0,
-          discountType: body.discountType || 'AMOUNT',
-          taxRate: Number(body.taxRate) || 0,
-          pdfTemplate: body.pdfTemplate || 'classic-corporate-blue',
-          fromQuoteId: body.fromQuoteId || null,
-        },
-      });
+    // Invoice + items + (optional) opening payment are created in ONE
+    // db.$transaction. The invoiceSeq increment lives INSIDE the transaction
+    // so a P2002 rollback also rolls the sequence back and the retry gets a
+    // fresh number; after 3 conflicts we give up with 409.
+    const createInvoiceTx = () =>
+      db.$transaction(async (tx) => {
+        const updatedBiz = await tx.aiBusiness.update({
+          where: { id: business.id },
+          data: { invoiceSeq: { increment: 1 } },
+        });
+        const number = `INV-${updatedBiz.invoiceSeq}`;
 
-      for (const it of rawItems) {
-        await tx.aiInvoiceItem.create({
+        const inv = await tx.aiInvoice.create({
           data: {
-            invoiceId: inv.id,
-            description: it.description || 'Service',
-            qty: Number(it.qty) || 1,
-            unitPrice: Number(it.unitPrice) || 0,
-            hsnCode: it.hsnCode || null,
-            gstRate: Number(it.gstRate) > 0 ? Number(it.gstRate) : null,
+            businessId: business.id,
+            customerId: targetCustomerId,
+            number,
+            status: initialStatus,
+            dueDate: body.dueDate ? new Date(body.dueDate) : null,
+            notes: body.notes || null,
+            discountValue: Number(body.discountValue) || 0,
+            discountType: body.discountType || 'AMOUNT',
+            taxRate: Number(body.taxRate) || 0,
+            placeOfSupply: placeOfSupply || null,
+            customerGstin: customerGstin || null,
+            pdfTemplate: body.pdfTemplate || 'classic-corporate-blue',
+            fromQuoteId: body.fromQuoteId || null,
           },
         });
-      }
 
-      if (effectivePaid > 0) {
-        await tx.aiPayment.create({
-          data: {
-            invoiceId: inv.id,
-            amount: effectivePaid,
-            method: body.paymentMethod || 'CASH',
-            notes: 'Initial payment recorded at creation',
-          },
+        for (const it of rawItems) {
+          await tx.aiInvoiceItem.create({
+            data: {
+              invoiceId: inv.id,
+              description: it.description || 'Service',
+              qty: Number(it.qty) || 1,
+              unitPrice: Number(it.unitPrice) || 0,
+              hsnCode: it.hsnCode || null,
+              gstRate: Number(it.gstRate) > 0 ? Number(it.gstRate) : null,
+            },
+          });
+        }
+
+        if (effectivePaid > 0) {
+          await tx.aiPayment.create({
+            data: {
+              invoiceId: inv.id,
+              amount: effectivePaid,
+              method: body.paymentMethod || 'CASH',
+              notes: 'Initial payment recorded at creation',
+            },
+          });
+        }
+
+        return tx.aiInvoice.findUnique({
+          where: { id: inv.id },
+          include: { customer: true, items: true, payments: true },
         });
-      }
-
-      return tx.aiInvoice.findUnique({
-        where: { id: inv.id },
-        include: { customer: true, items: true, payments: true },
       });
-    });
+
+    let invoice: Awaited<ReturnType<typeof createInvoiceTx>> | null = null;
+    for (let attempt = 0; attempt < 3 && !invoice; attempt++) {
+      try {
+        invoice = await createInvoiceTx();
+      } catch (err: any) {
+        // P2002 = unique constraint violation on (businessId, number) — a
+        // concurrent creation consumed the same invoiceSeq value. Retry with
+        // a fresh increment.
+        if (err?.code === 'P2002') continue;
+        throw err;
+      }
+    }
+    if (!invoice) {
+      return NextResponse.json({ error: 'Invoice number conflict, please retry' }, { status: 409 });
+    }
 
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (e: any) {

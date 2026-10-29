@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { qrSvgMarkup } from '@/lib/qr-svg';
 import {
   AlertCircle,
   AlertTriangle,
@@ -27,7 +28,6 @@ import {
   Image as ImageIcon,
   IndianRupee,
   Mail,
-  Lock,
   MapPin,
   Megaphone,
   MessageCircle,
@@ -95,6 +95,7 @@ import type {
   SalesChannel,
 } from '../../../shared/blueprint/types';
 import { authFetch } from '@/lib/client-auth';
+import { extractGstStateCode } from '@/lib/billing/gst-invoice-helper';
 import { isValidUpiId, sanitizeUpiId } from '@/lib/upi-qr';
 import { useBosTranslation } from '@/components/bos/i18n/bos-i18n-context';
 const APPLICABLE_CHANNELS_BY_TYPE: Record<BusinessType, SalesChannel[]> = {
@@ -110,6 +111,98 @@ const APPLICABLE_CHANNELS_BY_TYPE: Record<BusinessType, SalesChannel[]> = {
   wholesale: ['b2b', 'whatsapp', 'in_store', 'online'],
   other: ['in_store', 'online', 'whatsapp', 'at_location', 'b2b'],
 };
+
+/**
+ * GST state code → state name, mirroring the state map in
+ * src/lib/billing/gst-invoice-helper.ts. Used for the Tally XML export's
+ * <STATENAME> so the exported company state is derived from the business's
+ * real GSTIN prefix instead of a hardcoded "Delhi".
+ */
+const GST_STATE_NAMES_BY_CODE: Record<string, string> = {
+  '03': 'Punjab',
+  '05': 'Uttarakhand',
+  '06': 'Haryana',
+  '07': 'Delhi',
+  '08': 'Rajasthan',
+  '09': 'Uttar Pradesh',
+  '10': 'Bihar',
+  '18': 'Assam',
+  '19': 'West Bengal',
+  '20': 'Jharkhand',
+  '21': 'Odisha',
+  '22': 'Chhattisgarh',
+  '23': 'Madhya Pradesh',
+  '24': 'Gujarat',
+  '27': 'Maharashtra',
+  '29': 'Karnataka',
+  '30': 'Goa',
+  '32': 'Kerala',
+  '33': 'Tamil Nadu',
+  '36': 'Telangana',
+  '37': 'Andhra Pradesh',
+};
+
+/** Audit-trail row as rendered in Settings → Audit Trail. */
+type AuditLogRow = {
+  id: string;
+  timestamp: string;
+  user: string;
+  category: string;
+  action: string;
+  detail: string;
+};
+
+/** Timestamp formatter for audit-trail rows, matching the section's style. */
+function formatAuditTimestamp(createdAt: unknown): string {
+  const d = createdAt ? new Date(String(createdAt)) : null;
+  if (!d || Number.isNaN(d.getTime())) return '—';
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return `Today, ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`;
+  return `${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}, ${time}`;
+}
+
+/**
+ * Demo-workspace fixture for the Audit Trail section — rendered ONLY in
+ * demoMode (static demo data, never mixed with live businesses).
+ */
+const DEMO_AUDIT_LOGS: AuditLogRow[] = [
+  {
+    id: 'aud-1',
+    action: 'Invoice Created: INV-8821',
+    user: 'Admin Owner',
+    timestamp: 'Today, 11:42 AM',
+    category: 'Billing',
+    detail: 'Tax Invoice generated for Sharma Traders (₹18,500)',
+  },
+  {
+    id: 'aud-2',
+    action: 'Cash Adjustment Recorded',
+    user: 'Admin Owner',
+    timestamp: 'Today, 10:15 AM',
+    category: 'Daybook',
+    detail: 'Opening cash float added: ₹1,000 in Drawer',
+  },
+  {
+    id: 'aud-3',
+    action: 'Inventory Stock Updated',
+    user: 'Biller / Staff',
+    timestamp: 'Yesterday, 06:30 PM',
+    category: 'Catalog',
+    detail: 'Basmati Rice 5kg stock increased by 25 units from Purchase Bill #BILL-4091',
+  },
+  {
+    id: 'aud-4',
+    action: 'Price Tier Modified',
+    user: 'Admin Owner',
+    timestamp: 'Yesterday, 02:15 PM',
+    category: 'Master',
+    detail: 'Wholesale price added for Amul Butter (₹245 for 10+ pcs)',
+  },
+];
 
 function getCapabilitiesSummary(bp: BusinessType): string[] {
   switch (bp) {
@@ -210,8 +303,12 @@ export function BosMarketingAiIntegrationsSettings({
 
   // Phase 6 Vyapar Utilities & Advanced Settings State
   const [zoomScale, setZoomScale] = useState(100);
-  const [stopSaleNegativeStock, setStopSaleNegativeStock] = useState(false);
-  const [fyClosed, setFyClosed] = useState(false);
+  // Wired to the real save path (Phase 2B): PATCH /api/commerce/config
+  // { stopSaleNegativeStock } round-trips it — hydrated from
+  // storeSettings.stopSaleOnNegativeStock below.
+  const [stopSaleNegativeStock, setStopSaleNegativeStock] = useState<boolean>(
+    () => storeSettings.stopSaleOnNegativeStock ?? false,
+  );
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
   const [serviceForm, setServiceForm] = useState({
     customerName: '',
@@ -251,40 +348,59 @@ export function BosMarketingAiIntegrationsSettings({
     },
   ] : []));
 
-  const [auditLogs] = useState(() => [
-    {
-      id: 'aud-1',
-      action: 'Invoice Created: INV-8821',
-      user: storeSettings.ownerName || 'Admin Owner',
-      timestamp: 'Today, 11:42 AM',
-      category: 'Billing',
-      detail: 'Tax Invoice generated for Sharma Traders (₹18,500)',
-    },
-    {
-      id: 'aud-2',
-      action: 'Cash Adjustment Recorded',
-      user: storeSettings.ownerName || 'Admin Owner',
-      timestamp: 'Today, 10:15 AM',
-      category: 'Daybook',
-      detail: 'Opening cash float added: ₹1,000 in Drawer',
-    },
-    {
-      id: 'aud-3',
-      action: 'Inventory Stock Updated',
-      user: 'Biller / Staff',
-      timestamp: 'Yesterday, 06:30 PM',
-      category: 'Catalog',
-      detail: 'Basmati Rice 5kg stock increased by 25 units from Purchase Bill #BILL-4091',
-    },
-    {
-      id: 'aud-4',
-      action: 'Price Tier Modified',
-      user: storeSettings.ownerName || 'Admin Owner',
-      timestamp: 'Yesterday, 02:15 PM',
-      category: 'Master',
-      detail: 'Wholesale price added for Amul Butter (₹245 for 10+ pcs)',
-    },
-  ]);
+  /* Audit trail (Phase 2B): real ActivityLog rows from GET
+     /api/commerce/audit-logs — written by the commerce routes themselves
+     (invoices, payments, money, expenses, banks, cheques, customers).
+     demoMode never fetches; the demo fixture above is rendered instead. */
+  const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([]);
+  const [auditLogsLoading, setAuditLogsLoading] = useState(false);
+  const [auditLogsError, setAuditLogsError] = useState<string | null>(null);
+  const [auditLogsRetryNonce, setAuditLogsRetryNonce] = useState(0);
+
+  useEffect(() => {
+    if (demoMode || mode !== 'settings') return;
+    let cancelled = false;
+    setAuditLogsLoading(true);
+    setAuditLogsError(null);
+    (async () => {
+      try {
+        const res = await authFetch('/api/commerce/audit-logs', { credentials: 'include' });
+        const data = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (!res.ok) {
+          throw new Error(
+            (data && data.error) || `Failed to load the audit trail (HTTP ${res.status})`,
+          );
+        }
+        const logs = Array.isArray(data?.logs) ? (data.logs as Array<Record<string, unknown>>) : [];
+        setAuditLogs(
+          logs.map((log, idx) => ({
+            id: String(log.id ?? `aud-${idx}`),
+            timestamp: formatAuditTimestamp(log.createdAt),
+            user: String(log.actorName || log.actorType || 'System'),
+            category: String(log.entityType || 'activity'),
+            action: String(log.description || log.action || 'Activity recorded'),
+            detail: log.entityName
+              ? String(log.entityName)
+              : log.entityId
+                ? String(log.entityId)
+                : '—',
+          })),
+        );
+      } catch (err) {
+        if (!cancelled) {
+          setAuditLogsError(err instanceof Error ? err.message : 'Failed to load the audit trail.');
+        }
+      } finally {
+        if (!cancelled) setAuditLogsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [demoMode, mode, auditLogsRetryNonce]);
+
+  const auditTrailRows: AuditLogRow[] = demoMode ? DEMO_AUDIT_LOGS : auditLogs;
 
   const GREETING_POSTERS = [
     {
@@ -391,7 +507,81 @@ export function BosMarketingAiIntegrationsSettings({
   const handleExportTallyXml = () => {
     const today = new Date().toISOString().slice(0, 10);
     const storeName = storeSettings.businessName || 'Business Store';
-    const gstin = storeSettings.gstin || '09ABCDE1234F1Z5';
+    const gstin = (storeSettings.gstin || '').trim();
+
+    // Real place of supply: GST state code from the business GSTIN (or the
+    // configured state name) via extractGstStateCode — never a hardcoded
+    // "Delhi". When nothing is configured the <STATENAME> tag is omitted
+    // rather than guessed.
+    const stateCode = extractGstStateCode(gstin || storeSettings.state, '');
+    const stateName =
+      GST_STATE_NAMES_BY_CODE[stateCode] ||
+      (storeSettings.state || '').replace(/^\s*\d{1,2}\s*[-–]\s*/, '').trim();
+
+    // The store's configured tax rate is the LAST fallback for orders that
+    // carry no per-item GST rate — a flat 18% assumption is never used.
+    const storeTaxRate =
+      typeof storeSettings.taxRate === 'number' && storeSettings.taxRate > 0
+        ? storeSettings.taxRate
+        : 0;
+
+    // All orders in the loaded range are exported (the old export silently
+    // capped at the first 15).
+    const vouchersXml = (orders || [])
+      .map((o) => {
+        const total = o.totalAmount || 0;
+        // Per-order tax, same honest chain as the reports route: line-item
+        // gstRate sums first, then the order-level gstRate/taxRate, then the
+        // store's configured rate (tax-inclusive totals).
+        const lineTax = (o.items || []).reduce((sum, it) => {
+          const r = Number(it.gstRate) > 0 ? Number(it.gstRate) : 0;
+          if (r <= 0) return sum;
+          return sum + ((it.qty || 0) * (it.price || 0) * r) / 100;
+        }, 0);
+        let tax: number;
+        if (lineTax > 0) {
+          tax = Math.round(lineTax);
+        } else {
+          const orderLevel = (o as { gstRate?: number; taxRate?: number }).gstRate ??
+            (o as { taxRate?: number }).taxRate;
+          const rate = typeof orderLevel === 'number' && orderLevel > 0 ? orderLevel : storeTaxRate;
+          tax = rate > 0 ? Math.round(total - total / (1 + rate / 100)) : 0;
+        }
+        const taxable = Math.max(0, Math.round(total - tax));
+        const cgst = Math.round(tax / 2);
+        const sgst = tax - cgst;
+        return `
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <VOUCHER VCHTYPE="Sales" ACTION="Create">
+            <DATE>${today.replace(/-/g, '')}</DATE>
+            <VOUCHERNUMBER>${o.id}</VOUCHERNUMBER>
+            <PARTYLEDGERNAME>${o.customerName || 'Cash Customer'}</PARTYLEDGERNAME>
+            <PERSISTEDVIEW>Invoice View</PERSISTEDVIEW>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>${o.customerName || 'Cash Customer'}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-${total}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Sales Account</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>${taxable}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            ${tax > 0 ? `
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Output CGST</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>${cgst}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Output SGST</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>${sgst}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>` : ''}
+          </VOUCHER>
+        </TALLYMESSAGE>`;
+      })
+      .join('\n');
 
     const tallyXml = `<?xml version="1.0" encoding="UTF-8"?>
 <ENVELOPE>
@@ -411,40 +601,12 @@ export function BosMarketingAiIntegrationsSettings({
           <COMPANY>
             <REMOTECMPINFO.LIST MERGECMP="Yes">
               <NAME>${storeName}</NAME>
-              <STATENAME>Delhi</STATENAME>
-              <GSTIN>${gstin}</GSTIN>
+              ${stateName ? `<STATENAME>${stateName}</STATENAME>` : ''}
+              <GSTIN>${gstin || 'URP'}</GSTIN>
             </REMOTECMPINFO.LIST>
           </COMPANY>
         </TALLYMESSAGE>
-        ${(orders || []).slice(0, 15).map((o) => `
-        <TALLYMESSAGE xmlns:UDF="TallyUDF">
-          <VOUCHER VCHTYPE="Sales" ACTION="Create">
-            <DATE>${today.replace(/-/g, '')}</DATE>
-            <VOUCHERNUMBER>${o.id}</VOUCHERNUMBER>
-            <PARTYLEDGERNAME>${o.customerName || 'Cash Customer'}</PARTYLEDGERNAME>
-            <PERSISTEDVIEW>Invoice View</PERSISTEDVIEW>
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${o.customerName || 'Cash Customer'}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <AMOUNT>-${o.totalAmount || 0}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>Sales Account</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <AMOUNT>${Math.round((o.totalAmount || 0) / 1.18)}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>Output CGST</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <AMOUNT>${Math.round(((o.totalAmount || 0) - Math.round((o.totalAmount || 0) / 1.18)) / 2)}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>Output SGST</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <AMOUNT>${Math.round(((o.totalAmount || 0) - Math.round((o.totalAmount || 0) / 1.18)) / 2)}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>
-          </VOUCHER>
-        </TALLYMESSAGE>`).join('\n')}
+        ${vouchersXml}
       </REQUESTDATA>
     </IMPORTDATA>
   </BODY>
@@ -468,11 +630,6 @@ export function BosMarketingAiIntegrationsSettings({
     showToast(`Display UI zoom set to ${newScale}%`);
   };
 
-  const handleCloseFinancialYear = () => {
-    setFyClosed(true);
-    showToast(`Financial Year 2025-26 closed! Balances rolled over to FY 2026-27.`);
-  };
-
   const handleSaveServiceReminder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!serviceForm.customerName.trim() || !serviceForm.customerPhone.trim()) {
@@ -490,7 +647,9 @@ export function BosMarketingAiIntegrationsSettings({
     };
     setServiceReminders((prev) => [newRem, ...prev]);
     setShowAddServiceModal(false);
-    showToast(`Scheduled service reminder for ${newRem.customerName} (${newRem.itemName})`);
+    // Honest copy: the reminder is only saved locally for reference — no
+    // automated WhatsApp sending exists in the app.
+    showToast(`Saved service reminder for ${newRem.customerName} (${newRem.itemName}) — it is kept here for your reference`);
   };
   const [recentCampaigns, setRecentCampaigns] = useState<
     Array<{
@@ -1065,8 +1224,12 @@ export function BosMarketingAiIntegrationsSettings({
   const [settingsGstin, setSettingsGstin] = useState(() =>
     demoMode ? (storeSettings.gstin || '09ABCDE1234F1Z5') : (storeSettings.gstin || '')
   );
-  const [settingsRegType, setSettingsRegType] = useState('Regular');
-  const [settingsEInvoiceEnabled, setSettingsEInvoiceEnabled] = useState(true);
+  const [settingsRegType, setSettingsRegType] = useState<string>(
+    () => storeSettings.registrationType || 'Regular',
+  );
+  const [settingsEInvoiceEnabled, setSettingsEInvoiceEnabled] = useState<boolean>(
+    () => storeSettings.eInvoiceStatus ?? true,
+  );
   const [editingHours, setEditingHours] = useState(false);
   const [defaultDayHours, setDefaultDayHours] = useState('9:00 AM - 10:00 PM');
   const [gstModalOpen, setGstModalOpen] = useState(false);
@@ -1280,6 +1443,17 @@ export function BosMarketingAiIntegrationsSettings({
       if (storeSettings.state) setSettingsState(storeSettings.state);
       if (storeSettings.pincode) setSettingsPinCode(storeSettings.pincode);
       if (storeSettings.gstin) setSettingsGstin(storeSettings.gstin);
+      // Tax-registration / inventory round-trip (Phase 2A keys): seed the
+      // Documents & Tax + Utilities forms from the persisted config so the
+      // saved values survive a reload.
+      if (storeSettings.pan) setSettingsPan(storeSettings.pan);
+      if (storeSettings.registrationType) setSettingsRegType(storeSettings.registrationType);
+      if (storeSettings.eInvoiceStatus !== undefined) {
+        setSettingsEInvoiceEnabled(storeSettings.eInvoiceStatus);
+      }
+      if (storeSettings.stopSaleOnNegativeStock !== undefined) {
+        setStopSaleNegativeStock(storeSettings.stopSaleOnNegativeStock);
+      }
     }
   }, [storeSettings, demoMode]);
 
@@ -3602,8 +3776,8 @@ export function BosMarketingAiIntegrationsSettings({
     },
     {
       id: 'vyaparUtilities' as const,
-      title: 'Accounting Utilities & FY Close',
-      sub: 'Tally XML export, Close FY, Negative stock & Zoom',
+      title: 'Accounting Utilities',
+      sub: 'Tally XML export, Negative stock & Zoom',
       icon: Settings,
     },
     {
@@ -5066,14 +5240,20 @@ export function BosMarketingAiIntegrationsSettings({
                           className="h-full w-full object-contain"
                         />
                       ) : settingsUpiId && isValidUpiId(settingsUpiId) ? (
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-                            `upi://pay?pa=${encodeURIComponent(settingsUpiId.trim())}&pn=${encodeURIComponent(
-                              storeSettings.businessName || 'My Store'
-                            )}&cu=INR`
-                          )}`}
-                          alt="Auto-generated UPI QR"
-                          className="h-full w-full object-contain"
+                        /* Safe to inline: markup is generated entirely by our
+                           local encoder — no user-controlled attributes. */
+                        <div
+                          className="h-full w-full"
+                          role="img"
+                          aria-label="Auto-generated UPI QR"
+                          dangerouslySetInnerHTML={{
+                            __html:
+                              qrSvgMarkup(
+                                `upi://pay?pa=${encodeURIComponent(settingsUpiId.trim())}&pn=${encodeURIComponent(
+                                  storeSettings.businessName || 'My Store'
+                                )}&cu=INR`
+                              ) ?? '',
+                          }}
                         />
                       ) : (
                         <QrCode className="h-10 w-10 text-[#64748B]" />
@@ -5642,36 +5822,10 @@ export function BosMarketingAiIntegrationsSettings({
                 </div>
               </div>
 
-              {/* Close Financial Year (FY) */}
-              <div className="bos-card p-5 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-[15px] font-bold text-[#111827]">Close Financial Year (FY)</h3>
-                      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${fyClosed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                        {fyClosed ? 'FY 2025-26 Closed' : 'Active: FY 2025-26'}
-                      </span>
-                    </div>
-                    <p className="text-[12px] text-[#64748B] mt-1 max-w-lg">
-                      Lock all vouchers before 31 March 2026. Carry forward closing stock quantity as new opening stock and rollover customer udhaar balances to FY 2026-27.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={fyClosed}
-                    onClick={handleCloseFinancialYear}
-                    className={`rounded-xl px-4 py-2 text-[12.5px] font-bold flex items-center gap-1.5 transition ${
-                      fyClosed
-                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                        : 'bg-amber-600 text-white hover:bg-amber-700 cursor-pointer shadow-2xs'
-                    }`}
-                  >
-                    <Lock className="h-4 w-4" />
-                    <span>{fyClosed ? 'Year Closed' : 'Close FY & Carry Forward'}</span>
-                  </button>
-                </div>
-              </div>
+              {/* Close Financial Year — REMOVED (Phase 2B honesty sweep):
+                  the button only flipped local state and toasted “balances
+                  rolled over to FY 2026-27” without persisting anything, so the
+                  whole card was taken out. */}
 
               {/* Stop Sale on Negative Stock */}
               <div className="bos-card p-5 space-y-3">
@@ -5688,8 +5842,21 @@ export function BosMarketingAiIntegrationsSettings({
                       type="checkbox"
                       checked={stopSaleNegativeStock}
                       onChange={(e) => {
-                        setStopSaleNegativeStock(e.target.checked);
-                        showToast(e.target.checked ? 'Negative stock billing lock enabled' : 'Negative stock billing allowed');
+                        const next = e.target.checked;
+                        setStopSaleNegativeStock(next);
+                        // Persist via the component's real save path so the
+                        // lock round-trips (PATCH /api/commerce/config
+                        // { stopSaleNegativeStock }). On failure we revert the
+                        // local toggle so the UI never claims a saved state
+                        // that the server rejected.
+                        onUpdateStoreSettings({ stopSaleOnNegativeStock: next })
+                          .then(() => {
+                            showToast(next ? 'Negative stock billing lock enabled' : 'Negative stock billing allowed');
+                          })
+                          .catch(() => {
+                            setStopSaleNegativeStock(!next);
+                            showToast('Could not save the negative stock setting — please retry.');
+                          });
                       }}
                       className="sr-only peer"
                     />
@@ -5743,7 +5910,7 @@ export function BosMarketingAiIntegrationsSettings({
                       Appliance, Vehicle &amp; Device Service Reminders
                     </h3>
                     <p className="text-[12px] text-[#64748B]">
-                      Track periodic maintenance, warranty expiries, oil changes, and send automated WhatsApp reminders.
+                      Track periodic maintenance, warranty expiries and oil changes. Reminders are saved for your reference — automated sending is not available yet (use the Remind button to send one manually).
                     </p>
                   </div>
 
@@ -5907,13 +6074,15 @@ export function BosMarketingAiIntegrationsSettings({
             </div>
           )}
 
-          {/* AUDIT TRAIL & SYSTEM ACTIVITY LOG (Phase 6 Parity) */}
+          {/* AUDIT TRAIL & SYSTEM ACTIVITY LOG — real ActivityLog rows from
+              GET /api/commerce/audit-logs (demoMode renders the clearly
+              gated static fixture instead). */}
           {settingsSection === 'auditTrail' && (
             <div className="bos-card p-5 space-y-4">
               <div>
                 <h3 className="text-[15px] font-bold text-[#111827]">Audit Trail &amp; Activity Log</h3>
                 <p className="text-[12px] text-[#64748B]">
-                  Tamper-evident record of all billing transactions, inventory edits, cash reconciliations, and staff operations.
+                  Server-recorded log of money, billing, banking, cheque and customer operations for this business (latest 100 entries).
                 </p>
               </div>
 
@@ -5929,19 +6098,50 @@ export function BosMarketingAiIntegrationsSettings({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EEF5F1]">
-                    {auditLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-[#F9FCFA]">
-                        <td className="py-3 px-3 font-mono text-[11px] text-[#64748B] whitespace-nowrap">{log.timestamp}</td>
-                        <td className="py-3 px-3 font-semibold text-[#111827]">{log.user}</td>
-                        <td className="py-3 px-3">
-                          <span className="rounded-md bg-[#F1F5F3] px-2 py-0.5 text-[10.5px] font-bold text-[#334155]">
-                            {log.category}
-                          </span>
+                    {!demoMode && auditLogsLoading ? (
+                      [0, 1, 2, 3].map((i) => (
+                        <tr key={`aud-skeleton-${i}`}>
+                          <td colSpan={5} className="py-3 px-3">
+                            <div className="h-4 animate-pulse rounded bg-[#F1F5F9]" />
+                          </td>
+                        </tr>
+                      ))
+                    ) : !demoMode && auditLogsError ? (
+                      <tr>
+                        <td colSpan={5} className="py-3 px-3">
+                          <div className="flex items-center justify-between rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2.5 text-[12.5px] font-semibold text-[#991B1B]">
+                            <span>{auditLogsError}</span>
+                            <button
+                              type="button"
+                              onClick={() => setAuditLogsRetryNonce((n) => n + 1)}
+                              className="text-xs font-bold underline cursor-pointer"
+                            >
+                              Retry
+                            </button>
+                          </div>
                         </td>
-                        <td className="py-3 px-3 font-bold text-[#0A6847]">{log.action}</td>
-                        <td className="py-3 px-3 text-[#475569]">{log.detail}</td>
                       </tr>
-                    ))}
+                    ) : auditTrailRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-6 text-center text-[12.5px] text-[#64748B]">
+                          No activity recorded yet — money and billing operations will appear here.
+                        </td>
+                      </tr>
+                    ) : (
+                      auditTrailRows.map((log) => (
+                        <tr key={log.id} className="hover:bg-[#F9FCFA]">
+                          <td className="py-3 px-3 font-mono text-[11px] text-[#64748B] whitespace-nowrap">{log.timestamp}</td>
+                          <td className="py-3 px-3 font-semibold text-[#111827]">{log.user}</td>
+                          <td className="py-3 px-3">
+                            <span className="rounded-md bg-[#F1F5F3] px-2 py-0.5 text-[10.5px] font-bold text-[#334155]">
+                              {log.category}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 font-bold text-[#0A6847]">{log.action}</td>
+                          <td className="py-3 px-3 text-[#475569]">{log.detail}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

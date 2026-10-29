@@ -23,6 +23,7 @@
  *   3. Human forwarding → PhoneConnection(DIRECT, HUMAN_FORWARD, routingTarget)
  */
 
+import { randomInt } from 'node:crypto';
 import { db } from '@/lib/db';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -164,8 +165,9 @@ export async function createForwardingConnection(params: {
     throw new Error('Fieseros phone number not found or does not belong to this tenant');
   }
 
-  // Generate a 4-digit verification code
-  const verificationCode = Math.floor(1000 + Math.random() * 9000).toString();
+  // Generate a 4-digit verification code with crypto-grade randomness
+  // (Math.random is predictable — codes must be unguessable).
+  const verificationCode = randomInt(1000, 10000).toString();
   const verificationExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
   // Use a transaction: create ExternalPhoneNumber + PhoneConnection atomically

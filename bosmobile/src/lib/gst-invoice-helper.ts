@@ -1,4 +1,5 @@
 import { extractGstStateCode } from './money';
+import { qrSvgMarkup } from './qr';
 
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
@@ -69,9 +70,13 @@ export function generateGstInvoiceHtml(
   store: GstStoreInfo,
   currencySymbol = '₹'
 ): string {
-  const taxable = Number(inv.subtotal || inv.total - (inv.tax || 0)) || 0;
+  const grossSubtotal =
+    Number(inv.subtotal ?? Math.max(0, Number(inv.total || 0) - Number(inv.tax || 0))) || 0;
   const tax = Number(inv.tax || 0);
   const discount = Number(inv.discount || 0);
+  // GST base = gross subtotal minus discount (discount reduces the taxable
+  // value — mirrors computeInvoiceTotals in quote-flow-calc).
+  const taxable = Math.max(0, round2(grossSubtotal - discount));
   const total = Number(inv.total || 0);
   const paidAmount = Math.min(Number(inv.paidAmount) || 0, total || Number.POSITIVE_INFINITY);
   const balanceDue = Math.max(0, round2(total - paidAmount));
@@ -89,9 +94,17 @@ export function generateGstInvoiceHtml(
       )}&am=${(isPaid ? total : balanceDue).toFixed(2)}&tn=${encodeURIComponent(`Invoice ${inv.number}`)}&cu=INR`
     : '';
 
-  const qrUrl = upiLink
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiLink)}`
-    : '';
+  // QR rendered fully on-device — the UPI id / invoice data never leaves the
+  // device (the previous third-party QR image endpoint received the whole deep link).
+  const qrSvg = upiLink ? qrSvgMarkup(upiLink) : null;
+
+  // Pro-rata discount factor so line taxes sum exactly to the header GST
+  // (mirrors computeInvoiceTotals in quote-flow-calc).
+  const itemsGross = (inv.items || []).reduce(
+    (s: number, it: any) => s + (Number(it.qty) || 1) * (Number(it.unitPrice) || 0),
+    0
+  );
+  const discountFactor = itemsGross > 0 ? Math.max(0, itemsGross - discount) / itemsGross : 1;
 
   const itemsRows = (inv.items || [])
     .map((item: any, idx: number) => {
@@ -103,7 +116,7 @@ export function generateGstInvoiceHtml(
       const rateLabel = `${Number.isInteger(lineRate) ? lineRate : lineRate.toFixed(1)}%`;
 
       if (interstate) {
-        const itemIgst = itemAmount * (lineRate / 100);
+        const itemIgst = itemAmount * discountFactor * (lineRate / 100);
         const itemTotal = itemAmount + itemIgst;
         return `
         <tr>
@@ -121,7 +134,7 @@ export function generateGstInvoiceHtml(
       `;
       }
 
-      const itemCgst = itemAmount * (lineRate / 200);
+      const itemCgst = itemAmount * discountFactor * (lineRate / 200);
       const itemSgst = itemCgst;
       const itemTotal = itemAmount + itemCgst + itemSgst;
 
@@ -404,7 +417,7 @@ export function generateGstInvoiceHtml(
   <div class="totals-wrap">
     <table class="totals-table">
       <tr>
-        <td style="color: #64748b;">Taxable Subtotal</td>
+        <td style="color: #64748b;">Taxable Value</td>
         <td style="text-align: right; font-weight: bold;">${currencySymbol}${taxable.toFixed(2)}</td>
       </tr>
       ${
@@ -419,7 +432,7 @@ export function generateGstInvoiceHtml(
         interstate
           ? `<tr>
               <td style="color: #64748b;">IGST</td>
-              <td style="text-align: right; font-weight: bold;">${currencySymbol}${(tax / 1).toFixed(2)}</td>
+              <td style="text-align: right; font-weight: bold;">${currencySymbol}${tax.toFixed(2)}</td>
             </tr>`
           : `<tr>
               <td style="color: #64748b;">CGST</td>
@@ -461,10 +474,10 @@ export function generateGstInvoiceHtml(
     <tr>
       <td style="vertical-align: top; width: 50%;">
         ${
-          qrUrl
+          qrSvg
             ? `
             <div style="display: inline-block; vertical-align: top; text-align: center; margin-right: 14px;">
-              <img src="${qrUrl}" class="qr-img" style="border: 1px solid #cbd5e1; padding: 4px; border-radius: 6px;" alt="UPI QR" />
+              <div class="qr-img" style="width: 160px; height: 160px; border: 1px solid #cbd5e1; padding: 4px; border-radius: 6px; background: #ffffff;">${qrSvg}</div>
               <div style="font-size: 9px; color: #64748b; margin-top: 2px;">Scan &amp; Pay via UPI</div>
             </div>`
             : ''

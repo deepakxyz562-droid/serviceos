@@ -508,11 +508,11 @@ export default function MobileReportsScreen() {
             <View style={styles.errorBanner}>
               <MaterialIcons name="cloud-off" size={18} color="#991B1B" />
               <Text style={styles.errorBannerText}>
-                {t('Network or server error. Showing zeroed values.', 'नेटवर्क समस्या। डेटा लोड नहीं हो सका।')}
+                {t('Network or server error. Showing zeroed values.', 'नेटवर्क समस्या। त्रुटि के कारण शून्य मान दिखाए जा रहे हैं।')}
               </Text>
               <TouchableOpacity
                 accessibilityRole="button"
-                onPress={() => void fetchReports(period)}
+                onPress={() => void fetchReports(period, customRange)}
                 style={styles.retryBtn}
               >
                 <Text style={styles.retryBtnText}>{t('Retry', 'रीट्राई')}</Text>

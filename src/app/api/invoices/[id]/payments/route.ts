@@ -10,6 +10,12 @@ export const dynamic = 'force-dynamic';
  * POST /api/invoices/[id]/payments — record a (partial) payment against the
  * invoice. Every entry lands in the InvoicePayment ledger; the invoice's
  * status/paidAt are derived from the ledger sums (paid when sum >= total).
+ *
+ * IDEMPOTENCY: an `Idempotency-Key` header (8-128 chars, same contract as
+ * /api/commerce/money) is accepted as the payment reference when the body
+ * carries none — a same-key retry then hits the per-invoice+amount+method+
+ * reference dedupe inside the transaction and returns the existing payment
+ * without double-recording.
  */
 
 const PAYMENT_METHODS = ['MANUAL', 'CASH', 'CARD', 'BANK_TRANSFER', 'UPI', 'CHEQUE', 'OTHER'];
@@ -92,42 +98,101 @@ export async function POST(
     if (body.method !== undefined && !PAYMENT_METHODS.includes(body.method)) {
       return NextResponse.json({ error: 'Invalid payment method' }, { status: 400 });
     }
+    const method = PAYMENT_METHODS.includes(body.method) ? body.method : 'MANUAL';
 
-    const agg = await db.invoicePayment.aggregate({
-      where: { invoiceId: id },
-      _sum: { amount: true },
+    // Idempotency-Key support (mirrors /api/commerce/money): when present it
+    // must be 8-128 chars; it doubles as the payment reference (unless the
+    // body carries one), so the per-invoice+amount+method+reference dedupe
+    // inside the transaction makes same-key retries return the existing
+    // payment instead of double-recording.
+    const idempotencyKey = request.headers.get('Idempotency-Key');
+    if (idempotencyKey !== null && (idempotencyKey.length < 8 || idempotencyKey.length > 128)) {
+      return NextResponse.json({ error: 'Invalid payment input' }, { status: 400 });
+    }
+    const reference =
+      typeof body.reference === 'string' && body.reference ? body.reference : idempotencyKey || null;
+
+    // Aggregate + cap check + insert + status flip run in ONE transaction so
+    // two concurrent payments cannot both pass the outstanding-balance check.
+    const result = await db.$transaction(async (tx) => {
+      const agg = await tx.invoicePayment.aggregate({
+        where: { invoiceId: id },
+        _sum: { amount: true },
+      });
+      const paid = agg._sum.amount || 0;
+
+      // Idempotency: same invoice + amount + method + reference (from the
+      // body or the Idempotency-Key header) → return the existing payment.
+      if (reference) {
+        const duplicate = await tx.invoicePayment.findFirst({
+          where: { invoiceId: id, amount: round2(amount), method, reference },
+        });
+        if (duplicate) {
+          return { kind: 'duplicate' as const, payment: duplicate, paid };
+        }
+      }
+
+      const outstanding = Number(invoice.total) - paid;
+      if (amount > outstanding + 0.009) {
+        return { kind: 'over_balance' as const, outstanding };
+      }
+
+      const payment = await tx.invoicePayment.create({
+        data: {
+          invoiceId: id,
+          tenantId: invoice.tenantId,
+          amount: round2(amount),
+          currency: invoice.currency,
+          method,
+          reference,
+          notes: typeof body.notes === 'string' ? body.notes : null,
+          recordedBy: authUser.id,
+        },
+      });
+
+      const newPaid = paid + amount;
+      const nowFullyPaid = newPaid >= Number(invoice.total) - 0.009;
+      await tx.invoice.updateMany({
+        where: { id },
+        data: {
+          ...(nowFullyPaid ? { status: 'paid', paidAt: new Date() } : {}),
+          ...(invoice.status === 'draft' && !nowFullyPaid ? { status: 'sent' } : {}),
+        },
+      });
+
+      return { kind: 'created' as const, payment, newPaid, nowFullyPaid };
     });
-    const paid = agg._sum.amount || 0;
-    const outstanding = Number(invoice.total) - paid;
-    if (amount > outstanding + 0.009) {
+
+    if (result.kind === 'over_balance') {
       return NextResponse.json(
-        { error: 'Payment exceeds the outstanding balance', outstanding: round2(Math.max(0, outstanding)) },
+        { error: 'Payment exceeds the outstanding balance', outstanding: round2(Math.max(0, result.outstanding)) },
         { status: 400 },
       );
     }
+    if (result.kind === 'duplicate') {
+      // Same-key retry — return the originally recorded payment (no double-record).
+      const paidAfter = result.paid;
+      return NextResponse.json(
+        {
+          payment: result.payment,
+          summary: {
+            total: round2(invoice.total),
+            paid: round2(paidAfter),
+            outstanding: round2(Math.max(0, Number(invoice.total) - paidAfter)),
+            currency: invoice.currency,
+          },
+          status:
+            paidAfter >= Number(invoice.total) - 0.009
+              ? 'paid'
+              : invoice.status === 'draft'
+                ? 'sent'
+                : invoice.status,
+        },
+        { status: 200 },
+      );
+    }
 
-    const payment = await db.invoicePayment.create({
-      data: {
-        invoiceId: id,
-        tenantId: invoice.tenantId,
-        amount: round2(amount),
-        currency: invoice.currency,
-        method: PAYMENT_METHODS.includes(body.method) ? body.method : 'MANUAL',
-        reference: typeof body.reference === 'string' ? body.reference : null,
-        notes: typeof body.notes === 'string' ? body.notes : null,
-        recordedBy: authUser.id,
-      },
-    });
-
-    const newPaid = paid + amount;
-    const nowFullyPaid = newPaid >= Number(invoice.total) - 0.009;
-    await db.invoice.updateMany({
-      where: { id },
-      data: {
-        ...(nowFullyPaid ? { status: 'paid', paidAt: new Date() } : {}),
-        ...(invoice.status === 'draft' && !nowFullyPaid ? { status: 'sent' } : {}),
-      },
-    });
+    const { payment, newPaid, nowFullyPaid } = result;
 
     // Best-effort activity log + paid event (never fails the request)
     try {

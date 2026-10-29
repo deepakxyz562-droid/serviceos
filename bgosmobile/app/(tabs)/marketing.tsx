@@ -286,7 +286,6 @@ export default function MarketingScreen() {
             detail="Generate your first AI post and review before sharing."
             actionLabel="＋ Create First Post"
             onAction={() => {
-              setSelected(available.slice(0, 3).map((a) => a.id));
               setOpen(true);
             }}
           />

@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   ChevronDown,
   CreditCard,
-  Crown,
   FileText,
   Globe,
   HelpCircle,
@@ -768,6 +767,61 @@ const DEFAULT_DAYBOOK: BosDaybookEntry[] = [
   },
 ];
 
+/** Local-timezone ISO yyyy-mm-dd — matches the daybook route's ?date= param. */
+function toLocalDayIso(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Map GET /api/commerce/daybook transactions to BosDaybookEntry rows.
+ * Shared by the mount-time hydration and the date-navigation refetch so the
+ * two paths can never drift. `createdAt` keeps the real transaction date
+ * (formatted like "12 Oct 2024") — the Day Book rows render it verbatim.
+ */
+function mapDaybookTransactions(
+  txList: Array<Record<string, unknown>>,
+): BosDaybookEntry[] {
+  return txList.map((t, idx) => {
+    const isOut = String(t.type || '').toUpperCase() === 'OUTFLOW';
+    const amt = Number(t.amount) || 0;
+    const rawM = String(t.paymentMethod || 'CASH').toUpperCase();
+    const paymentMode: BosDaybookEntry['paymentMode'] = rawM.includes('UPI')
+      ? 'upi'
+      : rawM.includes('BANK')
+        ? 'bank'
+        : rawM.includes('CARD')
+          ? 'card'
+          : 'cash';
+    const at = t.time ? new Date(String(t.time)).getTime() : Number.NaN;
+    return {
+      id: String(t.id || `db-api-${idx}`),
+      time: Number.isNaN(at)
+        ? 'Today'
+        : new Date(at).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+      partyName: String(t.title || 'Store Entry'),
+      subtitle: String(t.subtitle || 'Daily transaction'),
+      category: isOut ? 'Expense' : 'POS Sale',
+      refNumber: String(t.id || `REF-${100 + idx}`).slice(-8).toUpperCase(),
+      paymentMode,
+      moneyIn: isOut ? 0 : amt,
+      moneyOut: isOut ? amt : 0,
+      createdAt: Number.isNaN(at)
+        ? 'Today'
+        : new Date(at).toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          }),
+    };
+  });
+}
+
 const DEFAULT_COUPONS: BosCoupon[] = [
   {
     id: 'cp-1',
@@ -934,14 +988,15 @@ function BosWebAppInner({
   });
 
   const [activeBranchId, setActiveBranchId] = useState('br-1');
+  // Branches exist only in the demo workspace. Production accounts are a
+  // single real store — rendering a fake "Main Store" switcher there would be
+  // dishonest UI, so the switcher block itself is demo-gated below.
   const branches = demoMode
     ? [
         { id: 'br-1', name: storeSettings.businessName || 'Sharma General Store', location: 'MG Road Main Branch' },
         { id: 'br-2', name: `${storeSettings.businessName || 'Sharma'} Express Mart`, location: 'Kothrud Branch' },
       ]
-    : [
-        { id: 'br-1', name: storeSettings.businessName || 'Main Store', location: storeSettings.address || 'Primary Branch' },
-      ];
+    : [];
   const [blueprintFilterEnabled, setBlueprintFilterEnabled] = useState(false);
   const [storeMenuOpen, setStoreMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -996,12 +1051,10 @@ function BosWebAppInner({
   }, []);
   const [helpOpen, setHelpOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [printerModalOpen, setPrinterModalOpen] = useState(false);
   const [printerConfig, setPrinterConfig] = useState<ThermalPrinterConfig>(() =>
     loadPrinterConfig(),
   );
-
   const [globalSearch, setGlobalSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const globalSearchInputRef = useRef<HTMLInputElement | null>(null);
@@ -1040,6 +1093,36 @@ function BosWebAppInner({
     useState<BosKhataTransaction[]>(() => (demoMode ? DEFAULT_KHATA_TX : []));
   const [appointments, setAppointments] = useState<BosAppointment[]>(() => (demoMode ? DEFAULT_APPOINTMENTS : []));
   const [daybookEntries, setDaybookEntries] = useState<BosDaybookEntry[]>(() => (demoMode ? DEFAULT_DAYBOOK : []));
+  // Day Book date navigation (Phase 2B): the day currently shown in the Day
+  // Book view, owned here so the date pill can only ever display a day whose
+  // ledger actually loaded (the shift is reverted when the refetch fails).
+  const [daybookDate, setDaybookDate] = useState<string>(() => toLocalDayIso(new Date()));
+  const daybookDateRef = useRef(daybookDate);
+  const handleDaybookDateChange = useCallback(async (date: string) => {
+    const prevDate = daybookDateRef.current;
+    if (date === prevDate) return;
+    daybookDateRef.current = date;
+    setDaybookDate(date);
+    try {
+      const res = await authFetch(
+        `/api/commerce/daybook?date=${encodeURIComponent(date)}`,
+        { credentials: 'include' },
+      );
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error((data && data.error) || `HTTP ${res.status}`);
+      }
+      const txList = data?.transactions;
+      setDaybookEntries(
+        Array.isArray(txList) ? mapDaybookTransactions(txList.slice(0, 20)) : [],
+      );
+    } catch {
+      // Revert the pill so it never claims a day whose ledger failed to load.
+      daybookDateRef.current = prevDate;
+      setDaybookDate(prevDate);
+      toast.error('Could not load the day book for the selected date.');
+    }
+  }, []);
   const [coupons, setCoupons] = useState<BosCoupon[]>(() => (demoMode ? DEFAULT_COUPONS : []));
   const [invoices, setInvoices] = useState<SavedBosInvoice[]>([]);
 
@@ -1373,6 +1456,23 @@ function BosWebAppInner({
                 if (cfg.billing.taxRate !== undefined) next.taxRate = Number(cfg.billing.taxRate);
                 if (cfg.billing.taxType) next.taxType = cfg.billing.taxType;
               }
+              // Location / WhatsApp / tax-registration / inventory round-trip
+              // (Phase 2A backend keys): hydrate them so the Settings forms
+              // show persisted values and their “saved!” toasts stay true
+              // after a reload.
+              if (cfg.city) next.city = String(cfg.city);
+              if (cfg.state) next.state = String(cfg.state);
+              if (cfg.pincode) next.pincode = String(cfg.pincode);
+              if (cfg.whatsappNumber) next.whatsappNumber = String(cfg.whatsappNumber);
+              if (cfg.pan) next.pan = String(cfg.pan);
+              if (cfg.registrationType) next.registrationType = String(cfg.registrationType);
+              if (cfg.eInvoiceStatus) {
+                // The API stores the flag as the string 'true' / 'false'.
+                next.eInvoiceStatus = String(cfg.eInvoiceStatus).trim().toLowerCase() === 'true';
+              }
+              if (cfg.stopSaleNegativeStock !== undefined) {
+                next.stopSaleOnNegativeStock = Boolean(cfg.stopSaleNegativeStock);
+              }
               if (cfg.businessHours && typeof cfg.businessHours === 'object') {
                 next.businessHours = cfg.businessHours;
               }
@@ -1534,11 +1634,20 @@ function BosWebAppInner({
                     paymentStatus,
                     totalAmount: totalVal,
                     items: Array.isArray(o.items)
-                      ? (o.items as Array<Record<string, unknown>>).map((it) => ({
-                          name: String(it.name || 'Item'),
-                          qty: Number(it.qty) || 1,
-                          price: Number(it.price) || 0,
-                        }))
+                      ? (o.items as Array<Record<string, unknown>>).map((it) => {
+                          // Preserve each line's real GST rate (itemsJson may
+                          // carry gstRate or taxRate) — reports and the Tally
+                          // export derive per-order tax from these values.
+                          const lineGstRate = Number(it.gstRate ?? it.taxRate);
+                          return {
+                            name: String(it.name || 'Item'),
+                            qty: Number(it.qty) || 1,
+                            price: Number(it.price) || 0,
+                            ...(Number.isFinite(lineGstRate) && lineGstRate > 0
+                              ? { gstRate: lineGstRate }
+                              : {}),
+                          };
+                        })
                       : [{ name: 'Store Item', qty: 1, price: totalVal }],
                     createdAt: o.createdAt
                       ? new Date(String(o.createdAt)).toLocaleTimeString([], {
@@ -1598,37 +1707,7 @@ function BosWebAppInner({
           const dbData = await daybookRes.value.json().catch(() => null);
           const txList = dbData?.transactions;
           if (Array.isArray(txList) && txList.length > 0) {
-            const mappedDaybook: BosDaybookEntry[] = (
-              txList.slice(0, 20) as Array<Record<string, unknown>>
-            ).map((t, idx) => {
-              const isOut = String(t.type || '').toUpperCase() === 'OUTFLOW';
-              const amt = Number(t.amount) || 0;
-              const rawM = String(t.paymentMethod || 'CASH').toUpperCase();
-              const paymentMode: BosDaybookEntry['paymentMode'] = rawM.includes('UPI')
-                ? 'upi'
-                : rawM.includes('BANK')
-                  ? 'bank'
-                  : rawM.includes('CARD')
-                    ? 'card'
-                    : 'cash';
-              return {
-                id: String(t.id || `db-api-${idx}`),
-                time: t.time
-                  ? new Date(String(t.time)).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : 'Today',
-                partyName: String(t.title || 'Store Entry'),
-                subtitle: String(t.subtitle || 'Daily transaction'),
-                category: isOut ? 'Expense' : 'POS Sale',
-                refNumber: String(t.id || `REF-${100 + idx}`).slice(-8).toUpperCase(),
-                paymentMode,
-                moneyIn: isOut ? 0 : amt,
-                moneyOut: isOut ? amt : 0,
-                createdAt: 'Today',
-              };
-            });
+            const mappedDaybook = mapDaybookTransactions(txList.slice(0, 20));
             if (demoMode) {
               setDaybookEntries((prev) => [...mappedDaybook, ...prev.slice(0, 5)]);
             } else {
@@ -1944,6 +2023,9 @@ function BosWebAppInner({
         customerName: payload.customerName,
         customerPhone: cleanCustomerPhone,
         deliveryType: 'takeout',
+        // Manual POS discount — validated + applied server-side in priceOrder
+        // (the stored total is recomputed; the client amount is not trusted).
+        discountAmount: Math.max(0, Number(payload.discountAmount) || 0),
         paymentMethod:
           payload.paymentMode === 'khata'
             ? 'CREDIT'
@@ -2542,7 +2624,12 @@ function BosWebAppInner({
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       createdAt: 'Today',
     };
-    setDaybookEntries((prev) => [created, ...prev]);
+    // Entries are always recorded for TODAY — only surface the local row in
+    // the viewed list when the merchant is actually viewing today; a past
+    // date's ledger must not gain rows that belong to the current day.
+    if (daybookDateRef.current === toLocalDayIso(new Date())) {
+      setDaybookEntries((prev) => [created, ...prev]);
+    }
   };
 
   const handleUpdateStoreSettings = async (patch: Partial<BosStoreSettings>) => {
@@ -2623,6 +2710,16 @@ function BosWebAppInner({
     if (patch.city !== undefined) configPatch.city = patch.city;
     if (patch.state !== undefined) configPatch.state = patch.state;
     if (patch.pincode !== undefined) configPatch.pincode = patch.pincode;
+    // Tax registration (Phase 2A config keys) — persisted from the Documents
+    // & Tax tab so its “saved!” toast is true across reloads.
+    if (patch.pan !== undefined) configPatch.pan = patch.pan;
+    if (patch.registrationType !== undefined) configPatch.registrationType = patch.registrationType;
+    if (patch.eInvoiceStatus !== undefined) configPatch.eInvoiceStatus = patch.eInvoiceStatus;
+    // Negative-stock billing lock — BosStoreSettings calls it
+    // stopSaleOnNegativeStock; the config API key is stopSaleNegativeStock.
+    if (patch.stopSaleOnNegativeStock !== undefined) {
+      configPatch.stopSaleNegativeStock = patch.stopSaleOnNegativeStock;
+    }
     if (patch.logoUrl !== undefined) configPatch.logoUrl = patch.logoUrl;
     if (patch.signatureUrl !== undefined) configPatch.signatureUrl = patch.signatureUrl;
     if (patch.billFooter !== undefined) configPatch.billFooter = patch.billFooter;
@@ -2957,27 +3054,11 @@ function BosWebAppInner({
           })}
         </nav>
 
-        {/* Bottom Upgrade to Pro Card (Exact match to Screenshot) */}
-        <div className="p-3">
-          <div className="bos-upgrade-card p-3.5 text-white">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-400/20 text-amber-300">
-                <Crown className="h-3.5 w-3.5" />
-              </span>
-              <span className="text-[13px] font-bold tracking-tight">{t('header.upgradeToPro', 'Upgrade to Pro')}</span>
-            </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-[#B8DCD0]">
-              {t('header.proFeatures', 'Get advanced features, team members and more.')}
-            </p>
-            <button
-              type="button"
-              onClick={() => setUpgradeModalOpen(true)}
-              className="bos-btn-mint mt-3 w-full rounded-lg py-2 text-[12px] font-bold shadow-xs"
-            >
-              {language === 'hi' ? 'अपग्रेड करें' : language === 'both' ? 'Upgrade / अपग्रेड' : 'Upgrade Now'}
-            </button>
-          </div>
-        </div>
+        {/* The former “Upgrade to Pro” sidebar card + ₹4,999/year modal were
+            removed (Phase 2B honesty sweep): the app has no pricing or purchase
+            flow — the modal's CTA only navigated to Settings while implying a
+            purchase. Real plan info comes from GET /api/subscriptions and is
+            shown on the Settings → Billing cards. */}
       </aside>
 
       {/* Right Main Column: Top White Header + Scrollable Mint-Gray Canvas */}
@@ -3050,30 +3131,35 @@ function BosWebAppInner({
 
               {storeMenuOpen && (
                 <div className="absolute left-0 z-40 mt-1.5 w-80 rounded-2xl border border-[#E4EFEA] bg-white p-2.5 shadow-xl space-y-2">
-                  <div>
-                    <p className="px-2 py-1 text-[10.5px] font-bold uppercase tracking-wider text-[#64748B]">
-                      Switch Store / Branch
-                    </p>
-                    {branches.map((br) => (
-                      <button
-                        key={br.id}
-                        type="button"
-                        onClick={() => {
-                          setActiveBranchId(br.id);
-                          setStoreMenuOpen(false);
-                        }}
-                        className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-[12.5px] hover:bg-[#F4F8F6]"
-                      >
-                        <div>
-                          <p className="font-bold text-[#111827]">{br.name}</p>
-                          <p className="text-[11px] text-[#64748B]">{br.location}</p>
-                        </div>
-                        {activeBranchId === br.id && (
-                          <span className="h-2 w-2 rounded-full bg-[#0A6847]" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
+                  {/* Branch switcher is demo-only — production accounts are a
+                      single real store, so no fake "Main Store / Branch 2"
+                      picker is rendered outside demoMode. */}
+                  {demoMode && (
+                    <div>
+                      <p className="px-2 py-1 text-[10.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                        Switch Store / Branch
+                      </p>
+                      {branches.map((br) => (
+                        <button
+                          key={br.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveBranchId(br.id);
+                            setStoreMenuOpen(false);
+                          }}
+                          className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-[12.5px] hover:bg-[#F4F8F6]"
+                        >
+                          <div>
+                            <p className="font-bold text-[#111827]">{br.name}</p>
+                            <p className="text-[11px] text-[#64748B]">{br.location}</p>
+                          </div>
+                          {activeBranchId === br.id && (
+                            <span className="h-2 w-2 rounded-full bg-[#0A6847]" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Business Blueprint Profile Switcher */}
                   <div className="border-t border-[#EDF4F0] pt-2 px-2">
@@ -3777,6 +3863,8 @@ function BosWebAppInner({
                 initialOpeningBalance={storeSettings.openingBalance || 0}
                 onAddDaybookEntry={handleAddDaybookEntry}
                 onNavigateToBilling={() => setActiveView('invoices')}
+                daybookDate={daybookDate}
+                onDaybookDateChange={demoMode ? undefined : handleDaybookDateChange}
               />
             )}
 
@@ -3844,7 +3932,6 @@ function BosWebAppInner({
                   }).catch(() => {});
                 }}
                 onOpenPrinterModal={() => setPrinterModalOpen(true)}
-                onOpenUpgradeModal={() => setUpgradeModalOpen(true)}
               />
             )}
           </div>
@@ -3861,73 +3948,6 @@ function BosWebAppInner({
           savePrinterConfig(next);
         }}
       />
-
-      {/* BOS Upgrade to Pro Modal */}
-      {upgradeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-3">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0A6847] text-white">
-                  <Crown className="h-5 w-5" />
-                </span>
-                <div>
-                  <h3 className="text-[16px] font-extrabold text-[#111827]">
-                    BOS Pro — Business Operating System
-                  </h3>
-                  <p className="text-[11.5px] text-[#64748B]">
-                    Unlock multi-branch POS, unlimited staff, WhatsApp API & E-Invoicing
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setUpgradeModalOpen(false)}
-                className="rounded-lg p-1 text-[#64748B]"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-2.5 text-[13px] text-[#334155]">
-              {[
-                'Unlimited POS Billing Registers & Barcode Label Printing',
-                'Official WhatsApp Business API for Automated Bills & Khata Reminders',
-                '1-Click GST E-Invoice (IRN), E-Way Bill & Tally Prime Sync',
-                'Custom Domain Online Storefront with Zero Commission',
-                'Unlimited BOS AI Business Copilot Queries & Demand Forecasting',
-              ].map((feat) => (
-                <div key={feat} className="flex items-center gap-2.5">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[#0A6847]" />
-                  <span className="font-medium">{feat}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 rounded-xl border border-[#BCE3D4] bg-[#F3FAF7] p-4 flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-bold uppercase text-[#0A6847]">
-                  Annual Pro Plan
-                </p>
-                <p className="text-[22px] font-extrabold text-[#111827]">
-                  {storeSettings.currencySymbol}4,999
-                  <span className="text-[12px] font-normal text-[#64748B]"> / year (GST incl.)</span>
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setUpgradeModalOpen(false);
-                  handleNavigate('settings');
-                }}
-                className="bos-btn-primary rounded-xl px-5 py-2.5 text-[13px]"
-              >
-                Activate BOS Pro
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

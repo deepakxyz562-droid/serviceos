@@ -193,6 +193,17 @@ export async function POST(request: NextRequest) {
       expYearDb = 2000 + year
       holderNameDb = holderName
 
+      // Card tokenization requires a real payment provider (Stripe/Razorpay).
+      // In production we must NOT store a non-chargeable mock token — reject
+      // the request instead. Outside production the mock token keeps local
+      // development flows working.
+      if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json(
+          { error: 'Card saving requires a configured payment provider' },
+          { status: 400 }
+        )
+      }
+
       // Mock tokenization — in production this comes from Stripe/Razorpay
       const mockToken = `tok_${crypto.randomBytes(12).toString('hex')}`
       tokenJson = JSON.stringify({ token: mockToken, provider: 'mock' })

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { qrSvgMarkup } from '@/lib/qr-svg';
 import {
   AlertCircle,
   BadgePercent,
@@ -313,20 +314,50 @@ export function BosOnlineStoreWorkstation({
     return storeUrl;
   }, [qrMode, qrTableNumber, storeSettings.businessName, storeSettings.upiId, storeUpiId, storeName, storeUrl]);
 
+  // QR rasterised fully on-device (local SVG → canvas → PNG): the payload
+  // (store link / UPI id) never leaves the browser, and the merchant gets a
+  // real downloaded file instead of a third-party page opening in a new tab.
   const handleDownloadQr = (targetData: string, filename: string) => {
     if (!targetData) {
       showToast('No QR code data available to download');
       return;
     }
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(targetData)}`;
-    const a = document.createElement('a');
-    a.href = qrUrl;
-    a.download = filename;
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    showToast(`Downloaded printable ${filename}`);
+    const svg = qrSvgMarkup(targetData);
+    if (!svg) {
+      showToast('Could not encode this QR code data');
+      return;
+    }
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      // 800px = 2x the previous 400px image, crisp enough for printed standees.
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 800;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        showToast('Could not rasterize the QR code');
+        return;
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 800, 800);
+      ctx.drawImage(img, 0, 0, 800, 800);
+      URL.revokeObjectURL(url);
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast(`Downloaded printable ${filename}`);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      showToast('Could not rasterize the QR code');
+    };
+    img.src = url;
   };
 
   const onlineKpiStats = useMemo(() => {
@@ -1304,10 +1335,13 @@ export function BosOnlineStoreWorkstation({
                 <div className="flex items-center gap-3">
                   {/* Real Scannable Storefront QR Code */}
                   <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border border-[#DCE9E3] bg-white p-1.5 shadow-2xs">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(storeUrl)}`}
-                      alt="Storefront QR Code"
-                      className="h-full w-full object-contain"
+                    {/* Safe to inline: markup is generated entirely by our
+                        local encoder — no user-controlled attributes. */}
+                    <div
+                      className="h-full w-full"
+                      role="img"
+                      aria-label="Storefront QR Code"
+                      dangerouslySetInnerHTML={{ __html: qrSvgMarkup(storeUrl) ?? '' }}
                     />
                   </div>
 
@@ -1730,12 +1764,18 @@ export function BosOnlineStoreWorkstation({
                   {storePaymentQr ? (
                     <img src={storePaymentQr} alt="Payment QR" className="h-full w-full object-contain" />
                   ) : storeUpiId && isValidUpiId(storeUpiId) ? (
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(
-                        `upi://pay?pa=${encodeURIComponent(storeUpiId.trim())}&pn=${encodeURIComponent(storeName.trim())}&cu=INR`
-                      )}`}
-                      alt="UPI QR"
-                      className="h-full w-full object-contain"
+                    /* Safe to inline: markup is generated entirely by our
+                       local encoder — no user-controlled attributes. */
+                    <div
+                      className="h-full w-full"
+                      role="img"
+                      aria-label="UPI QR"
+                      dangerouslySetInnerHTML={{
+                        __html:
+                          qrSvgMarkup(
+                            `upi://pay?pa=${encodeURIComponent(storeUpiId.trim())}&pn=${encodeURIComponent(storeName.trim())}&cu=INR`
+                          ) ?? '',
+                      }}
                     />
                   ) : (
                     <QrCode className="h-6 w-6 text-[#94A3B8]" />
@@ -2515,17 +2555,22 @@ export function BosOnlineStoreWorkstation({
                     </p>
                   </div>
                 ) : (
-                  <img
-                    src={
-                      qrMode === 'payment' && storePaymentQr
-                        ? storePaymentQr
-                        : `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
-                            activeQrTargetUrl
-                          )}`
-                    }
-                    alt={`${qrMode} QR Code`}
-                    className="h-full w-full object-contain"
-                  />
+                  qrMode === 'payment' && storePaymentQr ? (
+                    <img
+                      src={storePaymentQr}
+                      alt="payment QR Code"
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    /* Safe to inline: markup is generated entirely by our
+                       local encoder — no user-controlled attributes. */
+                    <div
+                      className="h-full w-full"
+                      role="img"
+                      aria-label={`${qrMode} QR Code`}
+                      dangerouslySetInnerHTML={{ __html: qrSvgMarkup(activeQrTargetUrl) ?? '' }}
+                    />
+                  )
                 )}
               </div>
               <p className="text-[11px] font-mono text-[#475569] break-all px-2">

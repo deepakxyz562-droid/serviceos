@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ownerBusiness } from '@/lib/commerce/access';
+import { auditAmountLabel, logCommerceActivity, resolveCommerceActor } from '@/lib/commerce/audit';
 
 /** Mask an account number to its last 4 digits (never return the full number). */
 function maskAccountNumber(value: string | null | undefined): string | null {
@@ -115,6 +116,26 @@ export async function POST(req: NextRequest) {
         currency: business.currency || 'INR',
         isDefault: makeDefault,
         isActive: true,
+      },
+    });
+
+    // Commerce audit trail — fire-and-forget; a logging failure can never
+    // fail the account that was just created (logCommerceActivity swallows).
+    const accountActor = await resolveCommerceActor(req);
+    await logCommerceActivity({
+      business,
+      actorId: accountActor.actorId,
+      actorName: accountActor.actorName,
+      action: 'create',
+      entityType: 'bank_account',
+      entityId: account.id,
+      entityName: account.name,
+      description: `${type === 'BANK' ? 'Bank' : type === 'CASH' ? 'Cash' : type === 'UPI' ? 'UPI' : 'Wallet'} account "${account.name}" added with opening balance ${auditAmountLabel(business, openingBalance)}`,
+      metadata: {
+        accountId: account.id,
+        type,
+        openingBalance,
+        isDefault: account.isDefault,
       },
     });
 

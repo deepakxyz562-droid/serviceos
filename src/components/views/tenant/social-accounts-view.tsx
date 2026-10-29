@@ -83,6 +83,22 @@ const PLATFORMS: PlatformMeta[] = [
     description: 'Invite customers via WhatsApp to leave 5-star Google reviews ($0 cost, works natively).',
     oauthScopes: 'direct_deeplink',
   },
+  {
+    key: 'facebook',
+    label: 'Facebook',
+    icon: Facebook,
+    color: 'bg-blue-600',
+    description: 'Publish posts to your Facebook Page.',
+    oauthScopes: 'pages_manage_posts, pages_read_engagement',
+  },
+  {
+    key: 'instagram',
+    label: 'Instagram',
+    icon: Instagram,
+    color: 'bg-pink-600',
+    description: 'Publish photos and reels to Instagram Business.',
+    oauthScopes: 'instagram_content_publish, instagram_basic',
+  },
 ];
 
 // ─── Types ─────────────────────────────────────────────────────────────────

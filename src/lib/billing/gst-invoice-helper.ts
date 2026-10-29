@@ -1,3 +1,5 @@
+import { qrSvgMarkup } from '@/lib/qr-svg';
+
 export interface GstStoreInfo {
   businessName: string;
   logoUrl?: string;
@@ -79,9 +81,9 @@ export function generateGstInvoiceHtml(
       )}&am=${total.toFixed(2)}&tn=${encodeURIComponent(`Invoice ${inv.number}`)}&cu=INR`
     : '';
 
-  const qrUrl = upiLink
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiLink)}`
-    : '';
+  // QR rendered fully on-device — the UPI id / invoice data never leaves the
+  // browser (the retired third-party QR image endpoint received the whole deep link).
+  const qrSvg = upiLink ? qrSvgMarkup(upiLink) : null;
 
   const itemsRows = (inv.items || [])
     .map((item: any, idx: number) => {
@@ -406,10 +408,10 @@ export function generateGstInvoiceHtml(
     <tr>
       <td style="vertical-align: top; width: 50%;">
         ${
-          qrUrl
+          qrSvg
             ? `
             <div style="display: inline-block; vertical-align: top; text-align: center; margin-right: 14px;">
-              <img src="${qrUrl}" class="qr-img" style="border: 1px solid #cbd5e1; padding: 4px; border-radius: 6px;" alt="UPI QR" />
+              <div class="qr-img" style="width: 160px; height: 160px; border: 1px solid #cbd5e1; padding: 4px; border-radius: 6px; background: #ffffff;">${qrSvg}</div>
               <div style="font-size: 9px; color: #64748b; margin-top: 2px;">Scan &amp; Pay via UPI</div>
             </div>`
             : ''
@@ -438,8 +440,13 @@ export function generateGstInvoiceHtml(
   `.trim();
 }
 
-export function extractGstStateCode(gstinOrState?: string): string {
-  if (!gstinOrState) return '07';
+/**
+ * Leading 2-digit GST state code from a GSTIN, a "Name (NN)" place-of-supply
+ * string, or a state name. `fallback` (default '07') is returned when the
+ * state cannot be determined — pass '' when the caller needs "unknown".
+ */
+export function extractGstStateCode(gstinOrState?: string, fallback = '07'): string {
+  if (!gstinOrState) return fallback;
   const clean = gstinOrState.trim();
   const match = clean.match(/^(\d{2})/);
   if (match) return match[1];
@@ -470,7 +477,7 @@ export function extractGstStateCode(gstinOrState?: string): string {
   for (const [s, code] of Object.entries(stateMap)) {
     if (lower.includes(s)) return code;
   }
-  return '07';
+  return fallback;
 }
 
 export function computeIrnHash(

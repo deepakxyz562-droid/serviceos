@@ -535,7 +535,9 @@ function mapAppointmentsToBlocks(appts: BosAppointment[]): ScheduleBlockItem[] {
 
 export function BosAppointmentsWorkstation({
   businessName,
-  businessSlug,
+  // NOTE: the legacy `businessSlug` prop is intentionally no longer used —
+  // the share link now resolves the real published slug from the server.
+  businessSlug: _businessSlug,
   currencySymbol,
   appointments = [],
   initialOpenNewModal = false,
@@ -588,6 +590,32 @@ export function BosAppointmentsWorkstation({
   const [showNewModal, setShowNewModal] = useState(initialOpenNewModal);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [bannerMsg, setBannerMsg] = useState<string | null>(null);
+
+  // Real public booking slug — resolved from the server via
+  // /api/commerce/store-share (same source as the online-store workstation).
+  // Until a REAL slug resolves there is no honest booking link to share, so
+  // the copy-link button renders nothing (the old 'ravi-store' fallback
+  // pointed at a store that does not exist).
+  const [bookingLinkSlug, setBookingLinkSlug] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    authFetch('/api/commerce/store-share')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active || !data?.storeUrl) return;
+        try {
+          const parsed = new URL(data.storeUrl);
+          const pathParts = parsed.pathname.split('/').filter(Boolean);
+          const slug = pathParts[pathParts.length - 1];
+          if (slug) setBookingLinkSlug(slug);
+        } catch {}
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const [newForm, setNewForm] = useState({
     customerName: '',
@@ -659,7 +687,9 @@ export function BosAppointmentsWorkstation({
   };
 
   const handleCopyBookingLink = () => {
-    const link = `${typeof window !== 'undefined' ? window.location.origin : 'https://bos.app'}/store/${businessSlug || 'ravi-store'}/book`;
+    // Only ever share the REAL, server-resolved booking slug (the button that
+    // calls this is hidden until one resolves — no fake fallback link).
+    const link = `${typeof window !== 'undefined' ? window.location.origin : 'https://bos.app'}/store/${encodeURIComponent(bookingLinkSlug || '')}/book`;
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(link).catch(() => {});
     }
@@ -829,14 +859,18 @@ export function BosAppointmentsWorkstation({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={handleCopyBookingLink}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 text-[12.5px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
-          >
-            <Link2 className="h-3.5 w-3.5 text-[#475569]" />
-            <span>Booking Link</span>
-          </button>
+          {/* Booking Link — hidden entirely (renders nothing) until the server
+              confirms a real published store slug; no fake fallback link. */}
+          {bookingLinkSlug && (
+            <button
+              type="button"
+              onClick={handleCopyBookingLink}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 text-[12.5px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
+            >
+              <Link2 className="h-3.5 w-3.5 text-[#475569]" />
+              <span>Booking Link</span>
+            </button>
+          )}
 
           <button
             type="button"

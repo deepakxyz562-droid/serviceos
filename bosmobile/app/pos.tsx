@@ -8,7 +8,6 @@ import {
   TextInput,
   Alert,
   Modal,
-  Image,
   Linking,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -22,10 +21,11 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
 import { RequestTracker } from '../../shared/money';
-import { API_PATHS, WEB_URL } from '@/lib/constants';
+import { API_PATHS } from '@/lib/constants';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { generateGstInvoiceHtml, GstStoreInfo } from '@/lib/gst-invoice-helper';
+import { QrCode } from '@/components/qr-code';
 import { useBlueprintStore } from '@/stores/blueprint-store';
 
 interface CartItem {
@@ -262,10 +262,6 @@ export default function MobilePosScreen() {
     ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(businessName)}&am=${total.toFixed(2)}&tn=${encodeURIComponent('POS Order')}&cu=${upiCurrency}`
     : '';
 
-  const qrImageUrl = upiDeepLink
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(upiDeepLink)}`
-    : '';
-
   const handleCheckoutPress = () => {
     if (cart.length === 0) {
       Alert.alert('Empty Cart', 'Tap items on the menu to add them first.');
@@ -281,6 +277,37 @@ export default function MobilePosScreen() {
     }
 
     handleSaveOrder('PAID', paymentMethod);
+  };
+
+  // Honest POS WhatsApp receipt: order summary + total for a REAL order id.
+  // No invoice link is sent — a POS order has no /invoice/{id} page and the
+  // order-tracking page requires a server-signed token, so there is no URL
+  // we can honestly construct here.
+  const sendOrderWhatsAppReceipt = (order: {
+    id?: string;
+    customerPhone?: string | null;
+    items?: Array<{ name?: string; qty?: number }>;
+    total?: number;
+    paymentStatus?: string;
+    paymentMethod?: string;
+  }) => {
+    const cleanPhone = (order?.customerPhone || '').replace(/\D/g, '');
+    if (!cleanPhone) return Promise.resolve(null as any);
+    const orderRef = order?.id ? `#${String(order.id).slice(-6).toUpperCase()}` : '';
+    const itemsList = (order.items || [])
+      .map((it) => `• ${it.name || 'Item'} × ${Number(it.qty) || 1}`)
+      .join('\n');
+    const payStatus = order.paymentStatus === 'PAID' ? 'PAID ✅' : 'PENDING ⏳';
+    const message =
+      `🧾 *Order ${orderRef || ''}confirmed!*\n` +
+      `Thank you for shopping at *${businessName}*.` +
+      (itemsList ? `\n\n📋 *Order Summary:*\n${itemsList}` : '') +
+      `\n\n💰 *Total: ${currencySymbol}${(Number(order.total) || 0).toFixed(2)}*\n` +
+      `💳 Payment: ${payStatus}${order.paymentMethod ? ` (${order.paymentMethod})` : ''}`;
+    return apiRequest(API_PATHS.commerceWhatsAppSend, {
+      method: 'POST',
+      body: { phone: cleanPhone, message },
+    });
   };
 
   const handleSaveOrder = async (payStatus: 'PAID' | 'UNPAID', method: string) => {
@@ -361,23 +388,14 @@ export default function MobilePosScreen() {
 
         const cleanPhone = customerPhone.replace(/\D/g, '');
         if (cleanPhone && whatsappConsent) {
-          apiRequest(API_PATHS.commerceWhatsAppSend, {
-            method: 'POST',
-            body: {
-              phone: cleanPhone,
-              templateType: 'bos_tax_invoice',
-              templateData: {
-                customerName: customerName.trim() || 'Valued Customer',
-                invoiceNumber: invNumber,
-                businessName: businessName,
-                total: total,
-                currency: countryPack?.currency?.code || 'INR',
-                paymentStatus: 'PAID',
-                paymentMethod: method,
-                invoiceUrl: `${WEB_URL}/invoice/${invNumber}`,
-              },
-              message: `🧾 *TAX INVOICE: ${invNumber}*\nThank you for shopping at *${businessName}*!\nTotal Paid: *${currencySymbol}${total.toFixed(2)}* (${method})\nYour invoice PDF is ready.`,
-            },
+          // Order summary + total only — no invoice link (there is none for a POS order).
+          sendOrderWhatsAppReceipt({
+            id: d.order.id,
+            customerPhone: cleanPhone,
+            items: cart.map((i) => ({ name: i.name, qty: i.qty })),
+            total,
+            paymentStatus: payStatus,
+            paymentMethod: method,
           })
             .then((res: any) => {
               if (res?.success) {
@@ -404,29 +422,12 @@ export default function MobilePosScreen() {
   const sendWhatsAppPdfBill = async (order: any) => {
     try {
       hapticFeedback.light();
-      const cleanPhone = (order?.customerPhone || '').replace(/\D/g, '');
-      if (cleanPhone) {
-        apiRequest(API_PATHS.commerceWhatsAppSend, {
-          method: 'POST',
-          body: {
-            phone: cleanPhone,
-            templateType: 'bos_tax_invoice',
-            templateData: {
-              customerName: order?.customerName || 'Valued Customer',
-              invoiceNumber: `POS-${(order?.id || '').slice(-6).toUpperCase()}`,
-              businessName: businessName,
-              total: order?.total || 0,
-              currency: 'INR',
-              paymentStatus: order?.paymentStatus || 'PAID',
-              paymentMethod: order?.paymentMethod || 'Counter',
-            },
-          },
+      // Order summary + total only — no invoice link (there is none for a POS order).
+      sendOrderWhatsAppReceipt(order)
+        .then((res: any) => {
+          if (res?.success) setWhatsappSent(true);
         })
-          .then((res: any) => {
-            if (res?.success) setWhatsappSent(true);
-          })
-          .catch(() => {});
-      }
+        .catch(() => {});
 
       if (generatedPdfUri) {
         const canShare = await Sharing.isAvailableAsync();
@@ -1181,9 +1182,9 @@ export default function MobilePosScreen() {
               </Text>
             </View>
 
-            {qrImageUrl ? (
+            {upiDeepLink ? (
               <View style={styles.qrWrapper}>
-                <Image source={{ uri: qrImageUrl }} style={styles.qrImage} />
+                <QrCode data={upiDeepLink} size={200} style={styles.qrImage} />
                 <Text style={styles.upiIdBadge}>UPI ID: {upiId}</Text>
               </View>
             ) : (

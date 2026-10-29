@@ -124,6 +124,43 @@ export async function PUT(
       notes,
     } = body
 
+    // ── FK-injection IDOR fix: body-supplied customerId/jobId/employeeId must
+    // belong to the invoice's tenant before they can be linked to it (tenant
+    // isolation on the referenced rows, not just the invoice row itself).
+    // Super-admins keep cross-tenant access (their tenantFilter is empty).
+    const isSuperAdminSession =
+      authUser.isSuperAdmin || authUser.role === 'superadmin' || authUser.role === 'super_admin'
+    const fkTenantId = existing.tenantId || authUser.tenantId
+    if (!isSuperAdminSession && fkTenantId) {
+      if (customerId) {
+        const ownedCustomer = await db.customer.findFirst({
+          where: { id: customerId, OR: [{ tenantId: fkTenantId }, { workspace: { tenantId: fkTenantId } }] },
+          select: { id: true },
+        })
+        if (!ownedCustomer) {
+          return NextResponse.json({ error: 'Invalid customerId' }, { status: 400 })
+        }
+      }
+      if (jobId) {
+        const ownedJob = await db.job.findFirst({
+          where: { id: jobId, workspace: { tenantId: fkTenantId } },
+          select: { id: true },
+        })
+        if (!ownedJob) {
+          return NextResponse.json({ error: 'Invalid jobId' }, { status: 400 })
+        }
+      }
+      if (employeeId) {
+        const ownedEmployee = await db.employee.findFirst({
+          where: { id: employeeId, workspace: { tenantId: fkTenantId } },
+          select: { id: true },
+        })
+        if (!ownedEmployee) {
+          return NextResponse.json({ error: 'Invalid employeeId' }, { status: 400 })
+        }
+      }
+    }
+
     // Recalculate totals only if line items changed. The schema stores a single
     // `amount` (subtotal), `tax`, `discount`, `total`.
     let amount = existing.amount

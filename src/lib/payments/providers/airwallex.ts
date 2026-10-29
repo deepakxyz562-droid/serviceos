@@ -502,7 +502,10 @@ export const airwallexProvider: PaymentProvider = {
   },
 
   async getPaymentStatus(paymentId: string): Promise<PaymentStatus> {
-    if (paymentId.startsWith('int_demo_')) {
+    // Demo ids are dev-only. In production we fall through to the real API
+    // path (which throws ProviderNotConfiguredError when unconfigured) so a
+    // fabricated `int_demo_*` id can never report fake success.
+    if (process.env.NODE_ENV !== 'production' && paymentId.startsWith('int_demo_')) {
       return 'succeeded'; // demo mode simulates success
     }
 
@@ -529,6 +532,12 @@ export const airwallexProvider: PaymentProvider = {
 
   async createFundsSplit(input: CreateFundsSplitInput): Promise<CreateFundsSplitResult> {
     if (input.sourcePaymentId.startsWith('int_demo_')) {
+      // Fail-closed: demo payment ids must never move real money. In
+      // production (or explicit AIRWALLEX_ENV=prod) this throws instead of
+      // simulating a funds split.
+      if (!allowMockArtifacts()) {
+        throw new ProviderNotConfiguredError(PROVIDER);
+      }
       return {
         fundsSplitId: mockId('fs_'),
         status: 'created',
@@ -584,6 +593,10 @@ export const airwallexProvider: PaymentProvider = {
 
   async releaseFundsSplit(fundsSplitId: string): Promise<ReleaseFundsSplitResult> {
     if (fundsSplitId.startsWith('fs_demo_')) {
+      // Fail-closed: releasing a demo funds split is dev-only.
+      if (!allowMockArtifacts()) {
+        throw new ProviderNotConfiguredError(PROVIDER);
+      }
       return { fundsSplitId, status: 'released' };
     }
 
@@ -620,6 +633,10 @@ export const airwallexProvider: PaymentProvider = {
 
   async createPayout(input: CreatePayoutInput): Promise<CreatePayoutResult> {
     if (input.destinationAccountId.startsWith('acct_demo_')) {
+      // Fail-closed: paying out to a demo connected account is dev-only.
+      if (!allowMockArtifacts()) {
+        throw new ProviderNotConfiguredError(PROVIDER);
+      }
       return {
         payoutId: mockId('cat_'), // connected_account_transfer id
         status: 'settled', // demo: instant settle
@@ -671,7 +688,11 @@ export const airwallexProvider: PaymentProvider = {
 
   async getPayoutStatus(payoutId: string): Promise<PayoutStatus> {
     if (payoutId.startsWith('cat_demo_')) {
-      return 'settled';
+      // Demo transfer ids are dev-only; production falls through to the real
+      // API path (ProviderNotConfiguredError when unconfigured).
+      if (process.env.NODE_ENV !== 'production') {
+        return 'settled';
+      }
     }
 
     const token = await getAccessToken();
@@ -697,6 +718,11 @@ export const airwallexProvider: PaymentProvider = {
 
   async createRefund(input: CreateRefundInput): Promise<CreateRefundResult> {
     if (input.paymentId.startsWith('int_demo_')) {
+      // Fail-closed: refunding a demo payment id is dev-only — a production
+      // refund must always hit the real refunds API.
+      if (!allowMockArtifacts()) {
+        throw new ProviderNotConfiguredError(PROVIDER);
+      }
       return {
         refundId: mockId('rfd_'),
         status: 'succeeded',
@@ -760,7 +786,16 @@ export const airwallexProvider: PaymentProvider = {
 
     // Demo mode (no webhook secret configured): accept all webhooks.
     // Useful for local dev testing. Production MUST set AIRWALLEX_WEBHOOK_SECRET.
+    //
+    // FAIL-CLOSED: in production an unset secret means we cannot verify the
+    // sender's authenticity, so the webhook is REJECTED outright — never
+    // accepted on trust. Outside production the lenient behavior stays so
+    // local webhook testing keeps working.
     if (!cfg.webhookSecret) {
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[airwallex] AIRWALLEX_WEBHOOK_SECRET not set — REJECTING webhook (fail-closed). Set AIRWALLEX_WEBHOOK_SECRET in env.');
+        return { verified: false, error: 'AIRWALLEX_WEBHOOK_SECRET not set — webhook verification unavailable' };
+      }
       if (cfg.configured) {
         console.warn('[airwallex] AIRWALLEX_WEBHOOK_SECRET not set — accepting webhook without verification (dev only!)');
       }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { resolveStaffSessionFromRequest } from '@/lib/commerce/access';
+import { computeInvoiceTotals, round2 } from '@/lib/quote-flow-calc';
+import { extractGstStateCode } from '@/lib/billing/gst-invoice-helper';
 
 function getDateRangeForPeriod(period: string, customStart?: string | null, customEnd?: string | null): { start: Date; end: Date; label: string } {
   const now = new Date();
@@ -94,8 +96,10 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const period = searchParams.get('period') || 'this_month';
-    const customStart = searchParams.get('startDate');
-    const customEnd = searchParams.get('endDate');
+    // Custom range aliases: web sends startDate/endDate, mobile sends
+    // customStart/customEnd — accept both (startDate wins when both present).
+    const customStart = searchParams.get('startDate') || searchParams.get('customStart');
+    const customEnd = searchParams.get('endDate') || searchParams.get('customEnd');
 
     const { start, end, label: periodLabel } = getDateRangeForPeriod(period, customStart, customEnd);
 
@@ -272,52 +276,79 @@ export async function GET(req: NextRequest) {
     let invoiceAgingOverdue = 0;
     const nowMs = Date.now();
 
+    // Merchant GST state (leading 2-digit state code of the business GSTIN or
+    // its stateCode column) — used for the per-invoice IGST/CGST+SGST split.
+    const merchantState =
+      extractGstStateCode(business.gstin, '') || extractGstStateCode(business.stateCode, '');
+
     for (const inv of invoices as any[]) {
       if (inv.status === 'DRAFT') continue;
 
-      let itemsSubtotal = 0;
-      if (Array.isArray(inv.items) && inv.items.length > 0) {
-        for (const it of inv.items) {
-          const qty = Number(it.qty || 1);
-          const price = Number(it.unitPrice || 0);
-          const lineTotal = qty * price;
-          itemsSubtotal += lineTotal;
+      // ONE canonical math (computeInvoiceTotals): discount applied BEFORE
+      // tax, GST per-line on the pro-rata discounted base, per-line rate with
+      // the invoice-level rate as fallback.
+      const invItems: any[] = Array.isArray(inv.items) ? inv.items : [];
+      const totals = computeInvoiceTotals({
+        items: invItems.map((it) => ({
+          qty: Number(it.qty) || 1,
+          unitPrice: Number(it.unitPrice) || 0,
+          taxRate: it.gstRate ?? inv.taxRate,
+        })),
+        discountValue: Number(inv.discountValue) || 0,
+        discountType: inv.discountType,
+        globalTaxRate: Number(inv.taxRate) || 0,
+      });
+      const taxable = round2(totals.subtotal - totals.discount); // post-discount GST base
+      const taxAmount = totals.gstAmount;
+      const invTotal = totals.total;
 
-          const name = it.description || 'Service/Product';
-          const existing = productSalesMap.get(name) || { name, category: 'General', qty: 0, revenue: 0 };
-          existing.qty += qty;
-          existing.revenue += lineTotal;
-          productSalesMap.set(name, existing);
-        }
-      } else if (inv.total) {
-        itemsSubtotal = Number(inv.subtotal || inv.total || 0);
+      // Product sales still use raw pre-discount line totals (unchanged output).
+      for (const it of invItems) {
+        const qty = Number(it.qty || 1);
+        const price = Number(it.unitPrice || 0);
+        const lineTotal = qty * price;
+        const name = it.description || 'Service/Product';
+        const existing = productSalesMap.get(name) || { name, category: 'General', qty: 0, revenue: 0 };
+        existing.qty += qty;
+        existing.revenue += lineTotal;
+        productSalesMap.set(name, existing);
       }
-
-      const discount = (inv.discountType === 'PERCENT' || inv.discountType === 'PERCENTAGE')
-        ? (itemsSubtotal * (Number(inv.discountValue) || 0)) / 100
-        : (Number(inv.discountValue) || 0);
-      const taxable = Math.max(0, itemsSubtotal - discount);
-      const taxRate = Number(inv.taxRate || 0);
-      const taxAmount = Number(inv.taxAmount) || Math.round((taxable * taxRate) / 100);
-      const invTotal = Number(inv.total) || (taxable + taxAmount);
 
       totalRevenue += invTotal;
       taxableSales += taxable;
       totalGstCollected += taxAmount;
 
-      if (taxRate > 0) {
-        const bucketKey = `${taxRate}%`;
-        if (rateBuckets[bucketKey]) {
-          rateBuckets[bucketKey].taxable += taxable;
-          rateBuckets[bucketKey].tax += taxAmount;
+      // Rate buckets are per LINE rate (like the orders loop), pro-rata on the
+      // discounted base — not the invoice-level taxRate.
+      const factor = totals.subtotal > 0 ? (totals.subtotal - totals.discount) / totals.subtotal : 0;
+      const bucketLines = invItems.length > 0
+        ? invItems
+        : [{ qty: 1, unitPrice: totals.subtotal, gstRate: inv.taxRate }];
+      for (const it of bucketLines) {
+        const lineRate = Number(it.gstRate ?? inv.taxRate ?? 0);
+        const lineTaxable = round2((Number(it.qty) || 1) * (Number(it.unitPrice) || 0) * factor);
+        const bucketKey = `${lineRate}%`;
+        if (lineRate > 0 && rateBuckets[bucketKey]) {
+          rateBuckets[bucketKey].taxable += lineTaxable;
+          rateBuckets[bucketKey].tax += round2(lineTaxable * (lineRate / 100));
           rateBuckets[bucketKey].count += 1;
+        } else {
+          rateBuckets['0%'].taxable += lineTaxable;
+          rateBuckets['0%'].count += 1;
         }
-      } else {
-        rateBuckets['0%'].taxable += taxable;
-        rateBuckets['0%'].count += 1;
       }
 
-      if (inv.placeOfSupply && inv.placeOfSupply !== 'Intra-state') {
+      // IGST vs CGST+SGST: merchant state vs customer state (leading 2-digit
+      // code of the persisted customerGstin/placeOfSupply). Falls back to the
+      // legacy placeOfSupply text check when neither state is known.
+      const customerState =
+        extractGstStateCode(inv.customerGstin, '') || extractGstStateCode(inv.placeOfSupply, '');
+      const isInterstate =
+        merchantState && customerState
+          ? merchantState !== customerState
+          : Boolean(inv.placeOfSupply && inv.placeOfSupply !== 'Intra-state');
+
+      if (isInterstate) {
         totalIgst += taxAmount;
       } else {
         totalCgst += Math.round(taxAmount / 2);

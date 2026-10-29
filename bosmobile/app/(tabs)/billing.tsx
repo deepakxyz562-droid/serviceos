@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   TextInput,
   RefreshControl,
@@ -34,9 +35,11 @@ import {
   GstStoreInfo,
 } from '@/lib/gst-invoice-helper';
 import { SignaturePadModal, SignaturePreview } from '@/components/SignaturePadModal';
+import { QrCode } from '@/components/qr-code';
 import { KpiRow } from '@/components/money/kpi-tile';
 import { DateRangeSheet, presetRange, type DateRange } from '@/components/money/date-range-sheet';
-import { formatInr } from '@/lib/money';
+import { PaymentSheet, type PaymentSheetInvoice } from '@/components/money/payment-sheet';
+import { formatInr, buildInvoiceUrl } from '@/lib/money';
 
 interface ItemEntry {
   description: string;
@@ -91,6 +94,138 @@ interface QuoteRecord {
   items: ItemEntry[];
 }
 
+/**
+ * One invoice card — extracted so the big invoices list can live in a FlatList
+ * (rows render in isolated batches instead of one giant blocking map()).
+ */
+interface InvoiceRowProps {
+  inv: InvoiceRecord;
+  onPress: (inv: InvoiceRecord) => void;
+  onOpen: (inv: InvoiceRecord) => void;
+  onToggleStatus: (inv: InvoiceRecord) => void;
+  onSharePdf: (inv: InvoiceRecord) => void;
+  onPrint: (inv: InvoiceRecord) => void;
+  onEdit: (inv: InvoiceRecord) => void;
+  onShareWhatsApp: (inv: InvoiceRecord) => void;
+  onDelete: (inv: InvoiceRecord) => void;
+}
+
+function InvoiceRow({
+  inv,
+  onPress,
+  onOpen,
+  onToggleStatus,
+  onSharePdf,
+  onPrint,
+  onEdit,
+  onShareWhatsApp,
+  onDelete,
+}: InvoiceRowProps) {
+  const isPaid = inv.balance <= 0 || inv.status === 'PAID';
+
+  return (
+    <TouchableOpacity style={styles.docCard} activeOpacity={0.9} onPress={() => onPress(inv)}>
+      <View style={styles.docHeader}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.docNumber}>{inv.number}</Text>
+            <TouchableOpacity
+              onPress={() => onToggleStatus(inv)}
+              style={[
+                styles.statusBadge,
+                isPaid ? styles.statusBadgePaid : styles.statusBadgeUnpaid,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusBadgeText,
+                  isPaid ? styles.statusBadgeTextPaid : styles.statusBadgeTextUnpaid,
+                ]}
+              >
+                {isPaid ? 'PAID ✓' : 'UNPAID • TAP TO PAY'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.docCustomer}>
+            {inv.customer?.name || 'Walk-in Client'}
+            {inv.customer?.gstin ? ` • GSTIN: ${inv.customer.gstin}` : ''}
+          </Text>
+        </View>
+
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.docTotal}>₹{inv.total.toFixed(2)}</Text>
+          <Text style={styles.docDate}>
+            {new Date(inv.createdAt).toLocaleDateString()}
+          </Text>
+        </View>
+      </View>
+
+      {/* Items snippet */}
+      <View style={styles.itemsSummary}>
+        <Text style={styles.itemsSummaryText} numberOfLines={1}>
+          {inv.items.map((i) => `${i.description} × ${i.qty}`).join(' • ')}
+        </Text>
+      </View>
+
+      {/* Vyapar Quick Action Toolbar */}
+      <View style={styles.invoiceActionBar}>
+        <TouchableOpacity
+          onPress={() => onOpen(inv)}
+          style={styles.actionIconBtn}
+          accessibilityLabel="Preview Invoice"
+        >
+          <MaterialIcons name="visibility" size={15} color="#0f172a" />
+          <Text style={styles.actionIconText}>View</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => onSharePdf(inv)}
+          style={styles.actionIconBtn}
+          accessibilityLabel="PDF Invoice"
+        >
+          <MaterialIcons name="picture-as-pdf" size={15} color="#dc2626" />
+          <Text style={styles.actionIconText}>PDF</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => onPrint(inv)}
+          style={styles.actionIconBtn}
+          accessibilityLabel="Print Invoice"
+        >
+          <MaterialIcons name="print" size={15} color="#4338ca" />
+          <Text style={styles.actionIconText}>Print</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => onEdit(inv)}
+          style={styles.actionIconBtn}
+          accessibilityLabel="Edit Invoice"
+        >
+          <MaterialIcons name="edit" size={15} color="#d97706" />
+          <Text style={styles.actionIconText}>Edit</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => onShareWhatsApp(inv)}
+          style={[styles.actionIconBtn, { backgroundColor: '#25D366' }]}
+          accessibilityLabel="Share on WhatsApp"
+        >
+          <Ionicons name="logo-whatsapp" size={14} color="#ffffff" />
+          <Text style={[styles.actionIconText, { color: '#ffffff', fontWeight: '800' }]}>WhatsApp</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => onDelete(inv)}
+          style={styles.actionIconBtnDanger}
+          accessibilityLabel="Delete Invoice"
+        >
+          <MaterialIcons name="delete-outline" size={15} color="#ef4444" />
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function BillingScreen() {
   const router = useRouter();
   const { blueprint, countryPack } = useBlueprintStore();
@@ -108,9 +243,10 @@ export default function BillingScreen() {
   // Vyapar-Grade Features State
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null);
-  const [paymentModalInvoice, setPaymentModalInvoice] = useState<InvoiceRecord | null>(null);
+  // Real partial-payment sheet (amount + method + UTR) — same flow as /invoice/[id].
+  const [paySheetOpen, setPaySheetOpen] = useState(false);
+  const [paySheetInvoice, setPaySheetInvoice] = useState<PaymentSheetInvoice | null>(null);
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<string>('CASH');
-  const [updatingPayment, setUpdatingPayment] = useState(false);
   const [brandModalOpen, setBrandModalOpen] = useState(false);
   const [savingBrand, setSavingBrand] = useState(false);
   const [showSigPad, setShowSigPad] = useState(false);
@@ -328,28 +464,44 @@ export default function BillingScreen() {
     setShowCatalogPickerModal(false);
   };
 
+  // Single honest share-link construction: canonical /invoice/{id} on the
+  // configured host. Without a real invoice id there is no honest link, so we
+  // send a link-free plain-text summary instead of a URL that would 404.
+  const sendInvoiceWhatsApp = (inv: InvoiceRecord, cleanPhone: string) => {
+    const businessName = storeInfo?.businessName || 'Our Store';
+    const shareUrl = inv.id ? buildInvoiceUrl(inv.id) : '';
+    const body = shareUrl
+      ? {
+          phone: cleanPhone,
+          templateType: 'bos_tax_invoice',
+          templateData: {
+            customerName: inv.customer?.name || 'Valued Customer',
+            invoiceNumber: inv.number,
+            businessName,
+            total: inv.total,
+            currency: 'INR',
+            paymentStatus: inv.status || 'PAID',
+            paymentMethod: 'Cash / Online',
+            invoiceUrl: shareUrl,
+          },
+        }
+      : {
+          phone: cleanPhone,
+          message:
+            `🧾 *Tax Invoice* ${inv.number}\n` +
+            `Dear ${inv.customer?.name || 'Customer'}, thank you for your business with *${businessName}*.\n\n` +
+            `💰 Invoice Total: ${formatInr(inv.total)}\n` +
+            `Status: ${inv.status === 'PAID' ? 'PAID' : 'PENDING / DUE'}`,
+        };
+    return apiRequest(API_PATHS.commerceWhatsAppSend, { method: 'POST', body }).catch(() => {});
+  };
+
   const handleShareWhatsAppPdf = async (inv: InvoiceRecord) => {
     try {
       await hapticFeedback.medium();
       const cleanPhone = (inv.customer?.phone || '').replace(/\D/g, '');
       if (cleanPhone) {
-        apiRequest(API_PATHS.commerceWhatsAppSend, {
-          method: 'POST',
-          body: {
-            phone: cleanPhone,
-            templateType: 'bos_tax_invoice',
-            templateData: {
-              customerName: inv.customer?.name || 'Valued Customer',
-              invoiceNumber: inv.number,
-              businessName: storeInfo?.businessName || 'Our Store',
-              total: inv.total,
-              currency: 'INR',
-              paymentStatus: inv.status || 'PAID',
-              paymentMethod: 'Cash / Online',
-              invoiceUrl: `${process.env.EXPO_PUBLIC_APP_URL || 'https://serviceos.com'}/invoice/${inv.number}`,
-            },
-          },
-        }).catch(() => {});
+        sendInvoiceWhatsApp(inv, cleanPhone);
       }
 
       const html = generateGstInvoiceHtml(inv, storeInfo, '₹');
@@ -437,8 +589,22 @@ export default function BillingScreen() {
   );
   const discountAmt = parseFloat(discountValue) || 0;
   const taxable = Math.max(0, formSubtotal - discountAmt);
-  const taxAmt = (taxable * taxRate) / 100;
-  const formGrandTotal = taxable + taxAmt;
+  // Mirrors computeInvoiceTotals (quote-flow-calc): discount before tax,
+  // per-line GST on the pro-rata discounted base. Falls back to the
+  // invoice-level rate only when NO line carries a gstRate.
+  const hasLineRates = items.some((i) => Number(i.gstRate) > 0);
+  const discountFactor = formSubtotal > 0 ? taxable / formSubtotal : 0;
+  const taxAmt = hasLineRates
+    ? items.reduce((sum, i) => {
+        const lineRate = Number(i.gstRate) || 0;
+        if (lineRate <= 0) return sum;
+        return (
+          sum +
+          (Number(i.qty) || 0) * (Number(i.unitPrice) || 0) * discountFactor * (lineRate / 100)
+        );
+      }, 0)
+    : (taxable * taxRate) / 100;
+  const formGrandTotal = Math.round((taxable + taxAmt) * 100) / 100;
   const computedPaid = paymentStatus === 'PAID' ? formGrandTotal : paymentStatus === 'PARTIAL' ? Math.min(formGrandTotal, parseFloat(amountPaidInput) || 0) : 0;
   const computedBalance = Math.max(0, formGrandTotal - computedPaid);
 
@@ -513,24 +679,36 @@ export default function BillingScreen() {
         const cleanPhone = rawPhone ? rawPhone.replace(/\D/g, '') : '';
         if (cleanPhone && cleanPhone.length >= 10) {
           const invNum = invRes?.invoice?.number || 'INV';
-          const invTotal = String(invRes?.invoice?.total || formGrandTotal);
+          const invId = invRes?.invoice?.id || '';
           const businessTitle = storeInfo.businessName || 'Store';
           const targetCustomerName = customerName.trim() || selectedParty?.name || 'Customer';
-          const invoiceUrl = `https://bos.fieseros.com/invoice/${invRes?.invoice?.id || ''}`;
+          const shareUrl = invId ? buildInvoiceUrl(invId) : '';
 
           void apiRequest(API_PATHS.commerceWhatsAppSend, {
             method: 'POST',
-            body: {
-              phone: cleanPhone,
-              templateType: 'bos_tax_invoice',
-              templateData: {
-                customerName: targetCustomerName,
-                invoiceNumber: invNum,
-                businessName: businessTitle,
-                total: invTotal,
-                invoiceUrl,
-              },
-            },
+            body: shareUrl
+              ? {
+                  phone: cleanPhone,
+                  templateType: 'bos_tax_invoice',
+                  templateData: {
+                    customerName: targetCustomerName,
+                    invoiceNumber: invNum,
+                    businessName: businessTitle,
+                    total: String(invRes?.invoice?.total || formGrandTotal),
+                    currency: 'INR',
+                    paymentStatus: invRes?.invoice?.status || 'PENDING',
+                    paymentMethod: invRes?.invoice?.paymentMethod || 'Cash / Online',
+                    invoiceUrl: shareUrl,
+                  },
+                }
+              : {
+                  // No server invoice id → no honest /invoice/{id} link exists yet.
+                  phone: cleanPhone,
+                  message:
+                    `🧾 *Tax Invoice* ${invNum}\n` +
+                    `Dear ${targetCustomerName}, thank you for your business with *${businessTitle}*.\n\n` +
+                    `💰 Invoice Total: ₹${(Number(invRes?.invoice?.total) || formGrandTotal).toFixed(2)}`,
+                },
           }).catch((err) => {
             console.warn('Auto WhatsApp invoice send non-fatal error:', err);
           });
@@ -598,9 +776,40 @@ export default function BillingScreen() {
     }
   };
 
+  // Open the real partial-payment sheet for an invoice with a balance due.
+  const openPaymentSheet = (inv: InvoiceRecord) => {
+    setPaySheetInvoice({
+      id: inv.id,
+      number: inv.number,
+      balance: Number(inv.balance) || 0,
+      currencySymbol: '₹',
+    });
+    setPaySheetOpen(true);
+  };
+
   const handleTogglePaymentStatus = (inv: InvoiceRecord) => {
     const isPaid = inv.balance <= 0 || inv.status === 'PAID';
     if (isPaid) {
+      if ((Number(inv.paidAmount) || 0) > 0) {
+        // Payments exist — the backend refuses to flip a paid invoice back
+        // (409 by design). Point the owner at the payment history instead.
+        hapticFeedback.light();
+        Alert.alert(
+          'Payments recorded',
+          'Payments recorded — open the invoice to review history.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Invoice',
+              onPress: () => {
+                if (selectedInvoice?.id === inv.id) setSelectedInvoice(null);
+                router.push(`/invoice/${inv.id}` as any);
+              },
+            },
+          ]
+        );
+        return;
+      }
       Alert.alert(
         'Mark as Unpaid?',
         `Revert Invoice #${inv.number} status to UNPAID?`,
@@ -634,39 +843,8 @@ export default function BillingScreen() {
         ]
       );
     } else {
-      setPaymentModalInvoice(inv);
-      setSelectedPaymentMode('CASH');
-    }
-  };
-
-  const handleConfirmPayment = async () => {
-    if (!paymentModalInvoice) return;
-    try {
-      setUpdatingPayment(true);
-      await hapticFeedback.success();
-      await apiRequest(`${API_PATHS.commerceInvoices}/${paymentModalInvoice.id}`, {
-        method: 'PATCH',
-        body: {
-          status: 'PAID',
-          paymentMethod: selectedPaymentMode,
-        },
-      });
-      Alert.alert('Payment Recorded ✓', `Invoice #${paymentModalInvoice.number} marked as PAID via ${selectedPaymentMode}.`);
-      if (selectedInvoice?.id === paymentModalInvoice.id) {
-        setSelectedInvoice({
-          ...selectedInvoice,
-          status: 'PAID',
-          balance: 0,
-          paidAmount: selectedInvoice.total,
-          paymentMethod: selectedPaymentMode,
-        });
-      }
-      setPaymentModalInvoice(null);
-      fetchBillingData();
-    } catch (e: any) {
-      Alert.alert('Payment Record Failed', e?.message || 'Could not record payment.');
-    } finally {
-      setUpdatingPayment(false);
+      hapticFeedback.light();
+      openPaymentSheet(inv);
     }
   };
 
@@ -823,23 +1001,7 @@ export default function BillingScreen() {
     const cleanPhone = item.customer?.phone?.replace(/\D/g, '') || '';
 
     if (isInvoice && cleanPhone) {
-      apiRequest(API_PATHS.commerceWhatsAppSend, {
-        method: 'POST',
-        body: {
-          phone: cleanPhone,
-          templateType: 'bos_tax_invoice',
-          templateData: {
-            customerName: clientName,
-            invoiceNumber: item.number,
-            businessName: storeInfo?.businessName || 'Our Store',
-            total: item.total,
-            currency: 'INR',
-            paymentStatus: item.status || 'PAID',
-            paymentMethod: 'Cash / Online',
-            invoiceUrl: `${process.env.EXPO_PUBLIC_APP_URL || 'https://serviceos.com'}/invoice/${item.number}`,
-          },
-        },
-      }).catch(() => {});
+      sendInvoiceWhatsApp(item as InvoiceRecord, cleanPhone);
     }
 
     const text = `Hello ${clientName},\n\nPlease find your ${docName} #${item.number} for the amount of ₹${item.total.toFixed(2)}.\n\nThank you for your business!`;
@@ -1332,116 +1494,27 @@ export default function BillingScreen() {
                 </Text>
               </View>
             ) : (
-              filteredInvoices.map((inv) => {
-                const isPaid = inv.balance <= 0 || inv.status === 'PAID';
-
-                return (
-                  <TouchableOpacity
-                    key={inv.id}
-                    style={styles.docCard}
-                    activeOpacity={0.9}
-                    onPress={() => router.push(`/invoice/${inv.id}` as any)}
-                  >
-                    <View style={styles.docHeader}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={styles.docNumber}>{inv.number}</Text>
-                          <TouchableOpacity
-                            onPress={() => handleTogglePaymentStatus(inv)}
-                            style={[
-                              styles.statusBadge,
-                              isPaid ? styles.statusBadgePaid : styles.statusBadgeUnpaid,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.statusBadgeText,
-                                isPaid ? styles.statusBadgeTextPaid : styles.statusBadgeTextUnpaid,
-                              ]}
-                            >
-                              {isPaid ? 'PAID ✓' : 'UNPAID • TAP TO PAY'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                        <Text style={styles.docCustomer}>
-                          {inv.customer?.name || 'Walk-in Client'}
-                          {inv.customer?.gstin ? ` • GSTIN: ${inv.customer.gstin}` : ''}
-                        </Text>
-                      </View>
-
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.docTotal}>₹{inv.total.toFixed(2)}</Text>
-                        <Text style={styles.docDate}>
-                          {new Date(inv.createdAt).toLocaleDateString()}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Items snippet */}
-                    <View style={styles.itemsSummary}>
-                      <Text style={styles.itemsSummaryText} numberOfLines={1}>
-                        {inv.items.map((i) => `${i.description} × ${i.qty}`).join(' • ')}
-                      </Text>
-                    </View>
-
-                    {/* Vyapar Quick Action Toolbar */}
-                    <View style={styles.invoiceActionBar}>
-                      <TouchableOpacity
-                        onPress={() => setSelectedInvoice(inv)}
-                        style={styles.actionIconBtn}
-                        accessibilityLabel="Preview Invoice"
-                      >
-                        <MaterialIcons name="visibility" size={15} color="#0f172a" />
-                        <Text style={styles.actionIconText}>View</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={() => handleSharePdfInvoice(inv)}
-                        style={styles.actionIconBtn}
-                        accessibilityLabel="PDF Invoice"
-                      >
-                        <MaterialIcons name="picture-as-pdf" size={15} color="#dc2626" />
-                        <Text style={styles.actionIconText}>PDF</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={() => handlePrintInvoice(inv)}
-                        style={styles.actionIconBtn}
-                        accessibilityLabel="Print Invoice"
-                      >
-                        <MaterialIcons name="print" size={15} color="#4338ca" />
-                        <Text style={styles.actionIconText}>Print</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={() => handleOpenEditInvoice(inv)}
-                        style={styles.actionIconBtn}
-                        accessibilityLabel="Edit Invoice"
-                      >
-                        <MaterialIcons name="edit" size={15} color="#d97706" />
-                        <Text style={styles.actionIconText}>Edit</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={() => handleShareWhatsAppPdf(inv)}
-                        style={[styles.actionIconBtn, { backgroundColor: '#25D366' }]}
-                        accessibilityLabel="Share on WhatsApp"
-                      >
-                        <Ionicons name="logo-whatsapp" size={14} color="#ffffff" />
-                        <Text style={[styles.actionIconText, { color: '#ffffff', fontWeight: '800' }]}>WhatsApp</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={() => handleDeleteInvoice(inv)}
-                        style={styles.actionIconBtnDanger}
-                        accessibilityLabel="Delete Invoice"
-                      >
-                        <MaterialIcons name="delete-outline" size={15} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })
+              // The outer ScrollView remains the scroller (RefreshControl lives
+              // there), so the FlatList only virtualizes/batches the rows.
+              <FlatList
+                data={filteredInvoices}
+                keyExtractor={(inv) => inv.id}
+                scrollEnabled={false}
+                nestedScrollEnabled
+                renderItem={({ item }) => (
+                  <InvoiceRow
+                    inv={item}
+                    onPress={(i) => router.push(`/invoice/${i.id}` as any)}
+                    onOpen={setSelectedInvoice}
+                    onToggleStatus={handleTogglePaymentStatus}
+                    onSharePdf={handleSharePdfInvoice}
+                    onPrint={handlePrintInvoice}
+                    onEdit={handleOpenEditInvoice}
+                    onShareWhatsApp={handleShareWhatsAppPdf}
+                    onDelete={handleDeleteInvoice}
+                  />
+                )}
+              />
             )
           ) : filteredQuotes.length === 0 ? (
             <View style={styles.emptyState}>
@@ -2254,11 +2327,6 @@ export default function BillingScreen() {
                 `Invoice ${inv.number}`
               )}&cu=INR`
             : '';
-          const qrUrl = upiLink
-            ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
-                upiLink
-              )}`
-            : '';
 
           return (
             <SafeAreaView style={styles.previewModalSafe}>
@@ -2504,10 +2572,7 @@ export default function BillingScreen() {
                             { color: isPaid ? '#059669' : '#0f172a' },
                           ]}
                         >
-                          ₹
-                          {isPaid
-                            ? total.toFixed(2)
-                            : (Number(inv.paidAmount) || 0).toFixed(2)}
+                          ₹{(Number(inv.paidAmount) || 0).toFixed(2)}
                         </Text>
                       </View>
                       {!isPaid && (
@@ -2526,7 +2591,7 @@ export default function BillingScreen() {
                               { color: '#b91c1c', fontWeight: '900' },
                             ]}
                           >
-                            ₹{total.toFixed(2)}
+                            ₹{(Number(inv.balance) || 0).toFixed(2)}
                           </Text>
                         </View>
                       )}
@@ -2542,12 +2607,12 @@ export default function BillingScreen() {
                   {/* Footer with UPI QR & Signature Stamp */}
                   <View style={styles.a4Footer}>
                     <View style={{ flex: 1 }}>
-                      {qrUrl ? (
+                      {upiLink ? (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                          <Image
-                            source={{ uri: qrUrl }}
-                            style={styles.qrImage}
-                            resizeMode="contain"
+                          <QrCode
+                            data={upiLink}
+                            size={58}
+                            style={[styles.qrImage, { backgroundColor: '#ffffff' }]}
                           />
                           <View>
                             <Text style={styles.qrTitle}>Scan & Pay via UPI</Text>
@@ -2620,6 +2685,17 @@ export default function BillingScreen() {
                     <MaterialIcons name="print" size={16} color="#ffffff" />
                     <Text style={styles.bottomActionBtnText}>Print</Text>
                   </TouchableOpacity>
+
+                  {!isPaid && (
+                    <TouchableOpacity
+                      onPress={() => openPaymentSheet(inv)}
+                      style={[styles.bottomActionBtn, { backgroundColor: '#059669' }]}
+                      accessibilityLabel="Record Payment"
+                    >
+                      <MaterialIcons name="payments" size={16} color="#ffffff" />
+                      <Text style={styles.bottomActionBtnText}>Record Payment</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </ScrollView>
             </SafeAreaView>
@@ -2627,85 +2703,30 @@ export default function BillingScreen() {
         })()}
       </Modal>
 
-      {/* 2. Payment Mode Selection Modal */}
-      <Modal
-        visible={!!paymentModalInvoice}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPaymentModalInvoice(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { maxHeight: 380 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Record Payment</Text>
-              <TouchableOpacity onPress={() => setPaymentModalInvoice(null)}>
-                <MaterialIcons name="close" size={20} color="#64748b" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ paddingVertical: 14 }}>
-              <Text style={styles.inputLabel}>
-                Invoice #{paymentModalInvoice?.number} • ₹
-                {paymentModalInvoice ? paymentModalInvoice.total.toFixed(2) : '0.00'}
-              </Text>
-              <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
-                Select payment method received from customer:
-              </Text>
-
-              <View style={{ gap: 8 }}>
-                {[
-                  { id: 'CASH', label: 'Cash Payment', icon: 'payments' },
-                  { id: 'UPI', label: 'UPI / QR Code', icon: 'qr-code-scanner' },
-                  {
-                    id: 'BANK_TRANSFER',
-                    label: 'Bank Transfer / IMPS / NEFT',
-                    icon: 'account-balance',
-                  },
-                  { id: 'CARD', label: 'Credit / Debit Card', icon: 'credit-card' },
-                ].map((mode) => (
-                  <TouchableOpacity
-                    key={mode.id}
-                    onPress={() => setSelectedPaymentMode(mode.id)}
-                    style={[
-                      styles.paymentModeChoice,
-                      selectedPaymentMode === mode.id && styles.paymentModeChoiceActive,
-                    ]}
-                  >
-                    <MaterialIcons
-                      name={mode.icon as any}
-                      size={20}
-                      color={selectedPaymentMode === mode.id ? '#059669' : '#64748b'}
-                    />
-                    <Text
-                      style={[
-                        styles.paymentModeChoiceText,
-                        selectedPaymentMode === mode.id && styles.paymentModeChoiceTextActive,
-                      ]}
-                    >
-                      {mode.label}
-                    </Text>
-                    {selectedPaymentMode === mode.id && (
-                      <MaterialIcons name="check" size={18} color="#059669" />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TouchableOpacity
-                onPress={handleConfirmPayment}
-                disabled={updatingPayment}
-                style={[styles.modalSubmitBtn, { marginTop: 16 }]}
-              >
-                {updatingPayment ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.modalSubmitText}>Confirm & Mark as Paid</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* 2. Partial-payment sheet — posts /api/commerce/invoices/[id]/payments
+          with amount + method + UTR (same flow as the /invoice/[id] screen). */}
+      <PaymentSheet
+        visible={paySheetOpen}
+        onClose={() => {
+          setPaySheetOpen(false);
+          setPaySheetInvoice(null);
+        }}
+        invoice={paySheetInvoice}
+        onRecorded={(s) => {
+          hapticFeedback.success();
+          const sheetInv = paySheetInvoice;
+          if (sheetInv && selectedInvoice?.id === sheetInv.id) {
+            setSelectedInvoice({
+              ...selectedInvoice,
+              paidAmount: s.paid,
+              balance: s.balance,
+              status: s.status,
+            });
+          }
+          // Refresh the invoice list + KPIs from the server's payment ledger.
+          fetchBillingData();
+        }}
+      />
 
       {/* 3. Store Branding & GST Settings Modal */}
       <Modal
@@ -4117,31 +4138,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#ffffff',
-  },
-  // Payment Choice Modal
-  paymentModeChoice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-  },
-  paymentModeChoiceActive: {
-    borderColor: '#059669',
-    backgroundColor: '#ecfdf5',
-  },
-  paymentModeChoiceText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  paymentModeChoiceTextActive: {
-    color: '#059669',
-    fontWeight: '800',
   },
   // Brand Settings
   brandPickBtn: {

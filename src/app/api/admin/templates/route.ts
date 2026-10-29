@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { isSuperAdminRequest } from '@/lib/admin-auth';
 
 /**
  * GET /api/admin/templates — list templates for admin review.
@@ -14,16 +15,20 @@ import { db } from '@/lib/db';
  * Returns all templates (including non-public) for admin review.
  * Used by the /admin/templates review queue UI.
  *
- * TODO: Add auth check — only admins should access this route.
+ * AUTH: super admin only (same guard as the other /api/admin/* routes).
  */
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const status = searchParams.get('status') || 'submitted';
-  const sort = searchParams.get('sort') || 'recent';
-  const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 200);
-  const offset = parseInt(searchParams.get('offset') || '0', 10) || 0;
-
   try {
+    if (!(await isSuperAdminRequest())) {
+      return NextResponse.json({ error: 'Forbidden: Super admin access required' }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get('status') || 'submitted';
+    const sort = searchParams.get('sort') || 'recent';
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 200);
+    const offset = parseInt(searchParams.get('offset') || '0', 10) || 0;
+
     // Build where clause
     const where: { status?: string } = {};
     if (status !== 'all') {
@@ -67,10 +72,14 @@ export async function GET(request: NextRequest) {
  *
  * Used by the admin review queue to approve/reject community submissions.
  *
- * TODO: Add auth check — only admins should access this route.
+ * AUTH: super admin only (same guard as the other /api/admin/* routes).
  */
 export async function PATCH(request: NextRequest) {
   try {
+    if (!(await isSuperAdminRequest())) {
+      return NextResponse.json({ error: 'Forbidden: Super admin access required' }, { status: 403 });
+    }
+
     const body = await request.json().catch(() => ({}));
     const { templateId, status } = body as { templateId?: string; status?: string };
 

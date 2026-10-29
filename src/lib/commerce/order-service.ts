@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { db } from '@/lib/db';
 import { atomicCommerce } from './atomic';
-import { priceOrder } from './pricing';
+import { priceOrder, type ManualDiscount } from './pricing';
 import { counterCustomerPhone } from '../../../shared/walk-in-customer';
 
 export async function createCommerceOrder(business: { id: string; tenantId: string | null }, body: Record<string, any>, key: string, publicOrder: boolean) {
@@ -15,7 +15,15 @@ export async function createCommerceOrder(business: { id: string; tenantId: stri
   const code = typeof body.discountCode === 'string' ? body.discountCode.toUpperCase().trim() : '';
   const promotion = code ? await db.promotion.findFirst({ where: { code, tenantId: business.tenantId || business.id, isActive: true } }) : null;
   if (code && !promotion) throw new Error('PROMOTION_UNAVAILABLE');
-  const quote = priceOrder(config, body.items, publicOrder, promotion || undefined);
+  // Manual POS checkout discount. discountAmount (₹) wins when both are sent;
+  // 0/absent means none. Validated inside priceOrder (INVALID_DISCOUNT).
+  let manualDiscount: ManualDiscount | undefined;
+  if (body.discountAmount !== undefined && body.discountAmount !== null && body.discountAmount !== '' && Number(body.discountAmount) !== 0) {
+    manualDiscount = { type: 'AMOUNT', value: Number(body.discountAmount) };
+  } else if (body.discountPercent !== undefined && body.discountPercent !== null && body.discountPercent !== '' && Number(body.discountPercent) !== 0) {
+    manualDiscount = { type: 'PERCENT', value: Number(body.discountPercent) };
+  }
+  const quote = priceOrder(config, body.items, publicOrder, promotion || undefined, manualDiscount);
   const clientHash = createHash('sha256').update(JSON.stringify(body)).digest('hex');
   const payload = {
     ...quote, clientHash, promotionQuote:promotion?{type:promotion.type,value:promotion.value,minSpend:promotion.minSpend,maxDiscount:promotion.maxDiscount}:undefined, configId: config.id, promotionId: promotion?.id,
@@ -27,5 +35,16 @@ export async function createCommerceOrder(business: { id: string; tenantId: stri
     whatsappConsent: body.whatsappConsent === true,
     paymentStatus: !publicOrder && body.paymentMethod !== 'CREDIT' && (body.paymentStatus === 'PAID' || (!body.paymentStatus && (!body.paymentMethod || body.paymentMethod === 'CASH'))) ? 'PAID' : 'UNPAID',
   };
-  return atomicCommerce<{ order: Record<string, any>; replayed: boolean }>('order', [business.id, key, payload]);
+  const result = await atomicCommerce<{ order: Record<string, any>; replayed: boolean }>('order', [business.id, key, payload]);
+  // Persist the applied discount as display metadata. The stored TOTAL is
+  // already correct and atomic (the RPC reads totalMinor, which includes the
+  // discount); this write is best-effort and never affects money math.
+  const appliedDiscount = (quote.discountMinor || 0) / 100;
+  if (appliedDiscount > 0 && result?.order?.id && !result?.replayed) {
+    try {
+      await db.gptformCommerceOrder.update({ where: { id: String(result.order.id) }, data: { discountAmount: appliedDiscount } });
+      result.order.discountAmount = appliedDiscount;
+    } catch { /* best-effort metadata only */ }
+  }
+  return result;
 }

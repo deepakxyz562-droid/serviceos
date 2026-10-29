@@ -1,5 +1,6 @@
 'use client';
 import { RequestTracker } from '../../../shared/money';
+import { qrSvgMarkup } from '@/lib/qr-svg';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/store/app-store';
@@ -3645,14 +3646,18 @@ export function CommerceView() {
                       {selectedTableForQr}
                     </div>
 
-                    {/* QR Code Container */}
+                    {/* QR Code Container — generated fully on-device */}
                     <div className="w-48 h-48 my-3 bg-white p-2 border-2 border-stone-200 rounded-2xl flex items-center justify-center shadow-inner">
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-                          `${publicStoreUrl}?table=${encodeURIComponent(selectedTableForQr)}`
-                        )}`}
-                        alt={`${selectedTableForQr} QR`}
-                        className="w-full h-full object-contain rounded-lg"
+                      {/* Safe to inline: markup is generated entirely by our local
+                          encoder — no user-controlled attributes. */}
+                      <div
+                        className="w-full h-full rounded-lg"
+                        dangerouslySetInnerHTML={{
+                          __html:
+                            qrSvgMarkup(
+                              `${publicStoreUrl}?table=${encodeURIComponent(selectedTableForQr)}`
+                            ) ?? '',
+                        }}
                       />
                     </div>
 
@@ -6352,7 +6357,7 @@ export function CommerceView() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 p-2 bg-stone-50 rounded-xl max-h-[70vh] overflow-y-auto">
               {tables.map((tbl) => {
                 const tableUrl = `${publicStoreUrl}?table=${encodeURIComponent(tbl.name)}`;
-                const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(tableUrl)}`;
+                const tableQrMarkup = qrSvgMarkup(tableUrl);
                 return (
                   <div
                     key={tbl.id}
@@ -6369,10 +6374,13 @@ export function CommerceView() {
                     </div>
 
                     <div className="p-3 bg-white rounded-xl border border-stone-200 shadow-2xs my-3">
-                      <img
-                        src={qrSrc}
-                        alt={`${tbl.name} QR Code`}
-                        className="h-36 w-36 object-contain"
+                      {/* Safe to inline: markup is generated entirely by our local
+                          encoder — no user-controlled attributes. */}
+                      <div
+                        className="h-36 w-36"
+                        role="img"
+                        aria-label={`${tbl.name} QR Code`}
+                        dangerouslySetInnerHTML={{ __html: tableQrMarkup ?? '' }}
                       />
                     </div>
 
@@ -6855,9 +6863,8 @@ export function CommerceView() {
         const upiLink = webStoreInfo.upiId
           ? `upi://pay?pa=${encodeURIComponent(webStoreInfo.upiId)}&pn=${encodeURIComponent(webStoreInfo.businessName || 'Store')}&am=${total.toFixed(2)}&tn=${encodeURIComponent(`Invoice ${inv.number}`)}&cu=INR`
           : '';
-        const qrUrl = upiLink
-          ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiLink)}`
-          : '';
+        // UPI QR generated fully on-device — the deep link never leaves the browser.
+        const qrMarkup = upiLink ? qrSvgMarkup(upiLink) : null;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
@@ -7099,12 +7106,15 @@ export function CommerceView() {
                   {/* Footer with UPI QR & Signature Stamp */}
                   <div className="pt-4 border-t border-stone-200 flex justify-between items-end gap-6">
                     <div className="flex items-start gap-4">
-                      {qrUrl && (
+                      {qrMarkup && (
                         <div className="text-center">
-                          <img
-                            src={qrUrl}
-                            alt="UPI QR"
+                          {/* Safe to inline: markup is generated entirely by our
+                              local encoder — no user-controlled attributes. */}
+                          <div
                             className="h-24 w-24 p-1 rounded-lg border border-stone-300 bg-white"
+                            role="img"
+                            aria-label="UPI QR"
+                            dangerouslySetInnerHTML={{ __html: qrMarkup }}
                           />
                           <div className="text-[9px] font-bold text-stone-500 mt-1">Scan &amp; Pay via UPI</div>
                         </div>

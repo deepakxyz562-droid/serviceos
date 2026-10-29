@@ -2,7 +2,13 @@ import { createHash } from 'crypto';
 import { moneyMinor } from '../../../shared/money';
 
 export interface PricedItem { productId: string; name: string; qty: number; price: number; amount: number }
-export function priceOrder(config: { catalogJson: string; fieldsJson: string }, rawItems: unknown, publicOrder: boolean, promotion?: { id: string; type: string; value: number; minSpend: number; maxDiscount?: number | null }) {
+
+/** Manual POS checkout discount (amount or percent). Combined with a coupon
+ *  promotion when both are present; the total is always clamped to the
+ *  pre-discount subtotal so an order can never go negative. */
+export interface ManualDiscount { type: 'PERCENT' | 'AMOUNT'; value: number }
+
+export function priceOrder(config: { catalogJson: string; fieldsJson: string }, rawItems: unknown, publicOrder: boolean, promotion?: { id: string; type: string; value: number; minSpend: number; maxDiscount?: number | null }, manualDiscount?: ManualDiscount) {
   if (!Array.isArray(rawItems) || rawItems.length < 1 || rawItems.length > 200) throw new Error('INVALID_ITEMS');
   const catalog: Array<{ id: string; name: string; price: number; isActive?: boolean }> = JSON.parse(config.catalogJson || '[]');
   const fields = JSON.parse(config.fieldsJson || '{}');
@@ -22,8 +28,14 @@ export function priceOrder(config: { catalogJson: string; fieldsJson: string }, 
     if (subtotalMinor < moneyMinor(promotion.minSpend, true)) throw new Error('PROMOTION_UNAVAILABLE');
     discountMinor = promotion.type === 'percentage' ? Math.round(subtotalMinor * promotion.value / 100) : moneyMinor(promotion.value, true);
     if (promotion.maxDiscount != null) discountMinor = Math.min(discountMinor, moneyMinor(promotion.maxDiscount, true));
-    discountMinor = Math.max(0, Math.min(subtotalMinor, discountMinor));
   }
+  if (manualDiscount) {
+    if (!Number.isFinite(manualDiscount.value) || manualDiscount.value < 0 || (manualDiscount.type === 'PERCENT' && manualDiscount.value > 100)) throw new Error('INVALID_DISCOUNT');
+    const manualMinor = manualDiscount.type === 'PERCENT' ? Math.round(subtotalMinor * manualDiscount.value / 100) : moneyMinor(manualDiscount.value, true);
+    discountMinor += Math.max(0, manualMinor);
+  }
+  // Final clamp: promotion + manual together can never exceed the subtotal.
+  discountMinor = Math.max(0, Math.min(subtotalMinor, discountMinor));
   const billing = fields.billing || {};
   // GST / Tax is opt-in for merchants (default: OFF / 0%).
   const enableGst = Boolean(billing.enableGst);
