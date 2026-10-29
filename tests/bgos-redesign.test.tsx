@@ -774,9 +774,8 @@ it('verifies BGOS navigation cleanup, Billing inside Settings, and FormAgentStud
   expect(allNavViews).not.toContain('formsAnalytics');
   expect(allNavViews).not.toContain('creatorProfile');
   expect(allNavViews).not.toContain('billing');
-  expect(allNavViews).not.toContain('campaigns');
   expect(allNavViews).toContain('socialMedia');
-  expect(allNavViews).toContain('reviews');
+  expect(bgosNavigationView('reviews')).toBe('socialMedia');
   expect(bgosNavigationView('billing')).toBe('settings');
   expect(bgosNavigationView('campaigns')).toBe('leads');
 

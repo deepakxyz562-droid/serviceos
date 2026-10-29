@@ -75,12 +75,7 @@ interface PlatformMeta {
 }
 
 const PLATFORMS: PlatformMeta[] = [
-  { key: 'facebook', label: 'Facebook', icon: Facebook, color: 'bg-blue-600', charLimit: 5000 },
-  { key: 'instagram', label: 'Instagram', icon: Instagram, color: 'bg-pink-600', charLimit: 2200 },
   { key: 'googlebusiness', label: 'Google Business', icon: MapPin, color: 'bg-emerald-600', charLimit: 1500 },
-  { key: 'linkedin', label: 'LinkedIn', icon: Linkedin, color: 'bg-sky-700', charLimit: 3000 },
-  { key: 'pinterest', label: 'Pinterest', icon: ImageIcon, color: 'bg-red-600', charLimit: 500 },
-  { key: 'twitter', label: 'X', icon: Twitter, color: 'bg-zinc-900', charLimit: 280 },
 ];
 
 function getPlatformMeta(key: string): PlatformMeta | undefined {

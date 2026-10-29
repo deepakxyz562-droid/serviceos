@@ -156,9 +156,9 @@ const viewLabels: Record<ViewType, string> = {
   helpAdminKB: 'Help Admin Kb',
   helpAdminCategories: 'Help Admin Categories',
   helpAdminAnnouncements: 'Help Admin Announcements',
-  socialMedia: 'Social Media',
-  socialAccounts: 'Social Accounts',
-  postComposer: 'Post Composer',
+  socialMedia: 'Google Business Studio',
+  socialAccounts: 'Google & WhatsApp Accounts',
+  postComposer: 'Google Post Studio',
   postsList: 'Posts List',
   socialAnalytics: 'Social Analytics',
 };
