@@ -238,6 +238,16 @@ export async function proxy(request: NextRequest) {
   }
 
   const appProduct = productForHostname(lowerHost);
+  // Serve the same BGOS entry in the core production build and standalone app.
+  // Its page preserves authentication query parameters by forwarding them to /app.
+  if (appProduct === 'bgos' && pathname === '/' && ['GET', 'HEAD'].includes(request.method)) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/bgos-home';
+    const response = NextResponse.rewrite(url);
+    response.headers.set('x-app-product', appProduct);
+    response.headers.set('X-Request-Id', generateRequestId());
+    return response;
+  }
   // Keep the BOS public entry consistent on core and standalone deployments.
   if (appProduct === 'bos' && pathname === '/' && !request.nextUrl.searchParams.has('auth')) {
     const url = request.nextUrl.clone();

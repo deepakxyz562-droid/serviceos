@@ -193,3 +193,7 @@ next-dev.pid
 !public/bos/landing/*.webp
 !apps/bos/public/bos/landing/*.webp
 !assets/bos-landing-hd/*.png
+
+# BGOS landing artwork must ship with both production entry points.
+!/public/bgos/landing/assistant-hd.png
+!/apps/bgos/public/bgos/landing/assistant-hd.png
