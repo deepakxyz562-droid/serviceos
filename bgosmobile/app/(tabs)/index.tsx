@@ -8,7 +8,7 @@ import { apiRequest } from '../../src/lib/api';
 import { useAuthStore } from '../../src/stores/auth-store';
 import { Speedometer, WeekScoreBars, scoreBandColor } from '../../src/components/gbp/speedometer';
 import { WeeklyScoreLineChart } from '../../src/components/gbp/growth-charts';
-import { MarketingTrackerCard } from '../../src/components/gbp/marketing-tracker';
+import { MarketingTrackerSlide, type TrackerItem } from '../../src/components/gbp/marketing-tracker';
 import { GooglePerformanceCard } from '../../src/components/gbp/google-performance';
 import { SocialCalendarCard } from '../../src/components/gbp/social-calendar';
 import { SidebarDrawer } from '../../src/components/navigation/sidebar-drawer';
@@ -92,9 +92,7 @@ const MORE_TOOLS: {
   { label: 'Leads', route: '/(tabs)/leads', icon: 'people-outline' },
   { label: 'Keyword Planner', route: '/keyword-planner', icon: 'travel-explore' },
   { label: 'Appointments', route: '/(tabs)/appointments', icon: 'event' },
-  { label: 'Outreach', route: '/(tabs)/outreach', icon: 'send' },
   { label: 'Agents', route: '/(tabs)/agents', icon: 'smart-toy' },
-  { label: 'Automations', route: '/(tabs)/automations', icon: 'bolt' },
   { label: 'Integrations', route: '/(tabs)/integrations', icon: 'extension' },
 ];
 
@@ -142,9 +140,10 @@ function MoreToolsGrid() {
   );
 }
 
-/** Marketing Score card — swipeable: gauge slide + weekly growth chart slide. */
+/** Marketing Score card — 3-slide carousel: Gauge + Weekly Growth + Marketing Tracker (Screenshot 08.55.29 (1)) */
 function MarketingScoreCard({
   res,
+  trackerItems,
 }: {
   res: {
     data: MarketingScoreResponse | null;
@@ -152,6 +151,7 @@ function MarketingScoreCard({
     error: string | null;
     refresh: () => Promise<unknown>;
   };
+  trackerItems?: TrackerItem[];
 }) {
   const router = useRouter();
   const [slide, setSlide] = useState(0);
@@ -161,23 +161,42 @@ function MarketingScoreCard({
 
   return (
     <Card style={{ gap: 14 }}>
-      <View style={[ui.row, { justifyContent: 'space-between' }]}>
-        <View style={[ui.row, { gap: 6 }]}>
-          <Text style={ui.heading}>Marketing Score</Text>
+      {/* Dynamic Header according to active slide */}
+      {slide === 0 ? (
+        <View style={[ui.row, { justifyContent: 'space-between' }]}>
+          <View style={[ui.row, { gap: 6 }]}>
+            <Text style={ui.heading}>Marketing Score</Text>
+            {connected ? (
+              <View style={{ backgroundColor: `${scoreBandColor(score!.score)}22`, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ color: scoreBandColor(score!.score), fontSize: 10, fontWeight: '800' }}>
+                  {score!.label ?? 'Score'} ⓘ
+                </Text>
+              </View>
+            ) : null}
+          </View>
           {connected ? (
-            <View style={{ backgroundColor: `${scoreBandColor(score!.score)}22`, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-              <Text style={{ color: scoreBandColor(score!.score), fontSize: 10, fontWeight: '800' }}>
-                {score!.label ?? 'Score'} ⓘ
-              </Text>
-            </View>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/growth')}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Improve Score →</Text>
+            </Pressable>
           ) : null}
         </View>
-        {connected ? (
-          <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/growth')}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Improve Score →</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      ) : slide === 1 ? (
+        <View style={[ui.row, { justifyContent: 'space-between' }]}>
+          <Text style={ui.heading}>Growth in Marketing Score</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <MaterialIcons name="filter-list" size={15} color="#E11D48" />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#E11D48' }}>This Week</Text>
+          </View>
+        </View>
+      ) : (
+        <View style={[ui.row, { justifyContent: 'space-between' }]}>
+          <Text style={ui.heading}>Marketing Tracker</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <MaterialIcons name="filter-list" size={15} color="#E11D48" />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#E11D48' }}>This Week</Text>
+          </View>
+        </View>
+      )}
 
       {res.loading && !score ? (
         <Loading />
@@ -204,7 +223,7 @@ function MarketingScoreCard({
         </View>
       ) : (
         <>
-          {/* Slide 1: speedometer · Slide 2: weekly growth */}
+          {/* 3-Slide Carousel: Slide 0 Speedometer · Slide 1 Weekly Growth · Slide 2 Marketing Tracker */}
           <ScrollView
             horizontal
             pagingEnabled
@@ -215,6 +234,7 @@ function MarketingScoreCard({
             }
             scrollEventThrottle={16}
           >
+            {/* Slide 0: Speedometer */}
             <View style={{ width: slideW, alignItems: 'center', gap: 10, paddingVertical: 6 }}>
               <View style={{ position: 'relative', alignItems: 'center' }}>
                 <Speedometer score={score!.score ?? 0} size={210} />
@@ -228,8 +248,15 @@ function MarketingScoreCard({
                 Goal: Reach 80%+ to dominate Google Local 3-Pack
               </Text>
             </View>
+
+            {/* Slide 1: Growth Line Chart */}
             <View style={{ width: slideW, paddingVertical: 6, paddingHorizontal: 4 }}>
               <WeeklyScoreLineChart history={score!.weekHistory || []} filterLabel="This Week" />
+            </View>
+
+            {/* Slide 2: Marketing Tracker Table */}
+            <View style={{ width: slideW, paddingVertical: 6, paddingHorizontal: 4 }}>
+              <MarketingTrackerSlide width={slideW - 8} items={trackerItems} />
             </View>
           </ScrollView>
 
@@ -249,7 +276,7 @@ function MarketingScoreCard({
           </View>
 
           <Action
-            label="Improve Marketing Score →"
+            label={slide === 2 ? 'View All Growth Tasks →' : 'Improve Marketing Score →'}
             icon="trending-up"
             onPress={() => router.push('/(tabs)/growth')}
           />
@@ -462,6 +489,7 @@ export default function HomeScreen() {
     <Screen
       customHeader={customHeader}
       onRefresh={refresh}
+      extraBottomPadding={70}
     >
       <ErrorNotice
         message={workspace.error || inbox.error || bookings.error || leads.error || calls.error}
@@ -511,12 +539,10 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Marketing Score — real /api/gbp/marketing-score (speedometer + growth slide) */}
-      <MarketingScoreCard res={marketingScore} />
-
-      {/* Marketing Tracker Card (Screenshot 08.55.29 (1)) */}
-      <MarketingTrackerCard
-        items={[
+      {/* Marketing Score — unified 3-slide carousel (Gauge, Growth line chart, Marketing tracker) */}
+      <MarketingScoreCard
+        res={marketingScore}
+        trackerItems={[
           {
             id: '1',
             name: 'AI Post Approved',

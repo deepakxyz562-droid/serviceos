@@ -11,12 +11,12 @@ export interface TrackerItem {
   route: string;
 }
 
-export function MarketingTrackerCard({
+export function MarketingTrackerSlide({
   items,
-  filterLabel = 'This Week',
+  width,
 }: {
   items?: TrackerItem[];
-  filterLabel?: string;
+  width?: number;
 }) {
   const router = useRouter();
 
@@ -28,7 +28,6 @@ export function MarketingTrackerCard({
 
   const tasks = items && items.length > 0 ? items : defaultItems;
 
-  // Find task with highest pending count for runner message
   const mostPending = tasks.reduce((prev, curr) => {
     const prevPending = prev.target - prev.achieved;
     const currPending = curr.target - curr.achieved;
@@ -38,26 +37,7 @@ export function MarketingTrackerCard({
   const pendingCount = Math.max(0, mostPending.target - mostPending.achieved);
 
   return (
-    <View
-      style={{
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        gap: 14,
-        marginBottom: 12,
-      }}
-    >
-      {/* Header: Marketing Tracker | Filter: This Week */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Marketing Tracker</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <MaterialIcons name="filter-list" size={15} color="#E11D48" />
-          <Text style={{ fontSize: 12, fontWeight: '700', color: '#E11D48' }}>{filterLabel}</Text>
-        </View>
-      </View>
-
+    <View style={{ width: width || '100%', gap: 14, paddingVertical: 4 }}>
       {/* 5-Column Table */}
       <View
         style={{
@@ -107,7 +87,7 @@ export function MarketingTrackerCard({
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                paddingVertical: 12,
+                paddingVertical: 11,
                 paddingHorizontal: 12,
                 borderBottomWidth: idx < tasks.length - 1 ? 1 : 0,
                 borderBottomColor: '#F1F5F9',
@@ -149,7 +129,7 @@ export function MarketingTrackerCard({
       </View>
 
       {/* Runner Illustration Track matching Screenshot 08.55.29 (1) */}
-      <View style={{ gap: 8, paddingTop: 4 }}>
+      <View style={{ gap: 8, paddingTop: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 }}>
           {/* Runner icon */}
           <Text style={{ fontSize: 24 }}>🏃</Text>
@@ -166,8 +146,39 @@ export function MarketingTrackerCard({
           <Text style={{ color: '#DC2626', fontWeight: '800' }}>{pendingCount} more</Text> to achieve the target
         </Text>
       </View>
+    </View>
+  );
+}
 
-      {/* 3 Pagination Dots */}
+export function MarketingTrackerCard({
+  items,
+  filterLabel = 'This Week',
+}: {
+  items?: TrackerItem[];
+  filterLabel?: string;
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        gap: 14,
+        marginBottom: 12,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Marketing Tracker</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <MaterialIcons name="filter-list" size={15} color="#E11D48" />
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#E11D48' }}>{filterLabel}</Text>
+        </View>
+      </View>
+
+      <MarketingTrackerSlide items={items} />
+
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 4 }}>
         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#E2E8F0' }} />
         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#E2E8F0' }} />

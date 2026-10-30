@@ -120,7 +120,6 @@ export default function ToolsScreen() {
       <Card>
         <Text style={ui.heading}>AI & Automation</Text>
         <MenuRow title="AI Assistant Studio" detail="Assistant bots, test lab & knowledge setup" icon="smart-toy" onPress={() => router.push('/(tabs)/agents')} />
-        <MenuRow title="Automated Workflows" detail="Instant trigger actions & follow-ups" icon="alt-route" onPress={() => router.push('/(tabs)/automations')} />
         <MenuRow title="Channel Integrations" detail="Connected social and messaging accounts" icon="link" onPress={() => router.push('/(tabs)/integrations')} />
         <MenuRow title="Team Permissions · Web" detail="Manage workspace members and access" icon="people-outline" onPress={() => run(() => Linking.openURL(getBgosWebUrl('settings')))} />
       </Card>

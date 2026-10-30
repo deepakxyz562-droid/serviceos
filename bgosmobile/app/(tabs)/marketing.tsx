@@ -23,6 +23,7 @@ import { validateSocialPost } from '../../src/lib/social-validation';
 import { futureLocalTime } from '../../src/lib/dates';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import { PostsBoard } from '../../src/components/gbp/posts-list';
+import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
 import type { BgosWorkspace } from '../../../shared/bgos-contracts';
 import type { GbpPlaceResult } from '../../src/components/gbp/types';
 
@@ -53,6 +54,7 @@ export default function MarketingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [requestOpen, setRequestOpen] = useState(false);
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
   const [boardRefresh, setBoardRefresh] = useState(0);
 
   useEffect(() => {
@@ -225,53 +227,20 @@ export default function MarketingScreen() {
           />
         }
       >
-        {/* Feature Navigation Cards (Screen 14) */}
-        <Card style={{ backgroundColor: colors.hero, borderColor: colors.hero, padding: 18 }}>
-          <View style={[ui.row, { justifyContent: 'space-between' }]}>
-            <View style={{ flex: 1 }}>
-              <View style={[ui.row, { gap: 6 }]}>
-                <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFFFFF' }}>Google Business Autopilot</Text>
-                <Badge label="GBP Focus" accent />
-              </View>
-              <Text style={{ fontSize: 13, color: '#D1EAE5', marginTop: 4 }}>
-                Craft high-converting Google updates, announcements, and local offers that boost your Google Maps ranking.
-              </Text>
-            </View>
-            <MaterialIcons name="auto-awesome" size={32} color={colors.accent} />
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-            <Pressable onPress={handleGoogleChipPress} style={styles.channelChip}>
-              <MaterialIcons name="store" size={14} color="#FFFFFF" />
-              <Text style={styles.channelChipText}>
-                Google Business {gbpAccount ? '✓' : '+'}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setRequestOpen(true)}
-              style={[styles.channelChip, { backgroundColor: '#25D366' }]}
-              accessibilityRole="button"
-              accessibilityLabel="Send 1-Tap Google Review Request via WhatsApp"
-            >
-              <MaterialIcons name="chat" size={14} color="#FFFFFF" />
-              <Text style={styles.channelChipText}>
-                WhatsApp Review Invite ↗
-              </Text>
-            </Pressable>
-          </View>
-        </Card>
-
         {notice ? (
-          <View style={{ backgroundColor: colors.successSoft, padding: 12, borderRadius: 12 }}>
+          <View style={{ backgroundColor: colors.successSoft, padding: 12, borderRadius: 12, marginBottom: 8 }}>
             <Text style={{ color: colors.success, fontWeight: '700' }}>✓ {notice}</Text>
           </View>
         ) : null}
 
         <ErrorNotice message={error || accounts.error} retry={() => accounts.refresh()} />
 
-        {/* Viral Video Banner (Dhanda AI benchmark) */}
-        <View
-          style={{
+        {/* Viral Video Banner (Dhanda AI benchmark) — Interactive */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Try Generating Viral Video"
+          onPress={() => setVideoModalOpen(true)}
+          style={({ pressed }) => ({
             backgroundColor: '#FAF5FF',
             borderColor: '#E9D5FF',
             borderWidth: 1,
@@ -280,7 +249,8 @@ export default function MarketingScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-          }}
+            opacity: pressed ? 0.85 : 1,
+          })}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={{ fontSize: 16 }}>🎬</Text>
@@ -289,7 +259,7 @@ export default function MarketingScreen() {
             </Text>
           </View>
           <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Explore →</Text>
-        </View>
+        </Pressable>
 
         {/* Keyword Planner Tip (Dhanda AI benchmark) */}
         <View
@@ -648,6 +618,19 @@ export default function MarketingScreen() {
           `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(workspace.data?.name || 'Your Business')}`
         }
         apiRequest={apiRequest}
+      />
+
+      {/* AI Viral Video & Reel Studio Modal */}
+      <ViralVideoModal
+        visible={videoModalOpen}
+        onClose={() => setVideoModalOpen(false)}
+        businessName={workspace.data?.name || gbpPlace.data?.place?.title || 'My Business'}
+        onSchedule={(videoScript) => {
+          setTopic(videoScript.hook);
+          setContent(`${videoScript.hook}\n\n${videoScript.scenes.map(s => `Scene ${s.scene}: ${s.onScreenText}`).join('\n')}\n\n${videoScript.hashtags}`);
+          setNotice('Video reel script loaded into post composer.');
+          setOpen(true);
+        }}
       />
     </View>
   );

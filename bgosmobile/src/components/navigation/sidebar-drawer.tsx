@@ -226,12 +226,6 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                 onPress={() => navigate('/(tabs)/agents')}
               />
               <DrawerItem
-                icon="alt-route"
-                title="Automated Workflows"
-                subtitle="Triggers, rules & actions"
-                onPress={() => navigate('/(tabs)/automations')}
-              />
-              <DrawerItem
                 icon="link"
                 title="Channel Integrations"
                 subtitle="Connected messaging & accounts"

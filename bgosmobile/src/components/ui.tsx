@@ -78,6 +78,7 @@ export function Screen({
   showBack,
   onBack,
   customHeader,
+  extraBottomPadding = 0,
 }: {
   title?: string;
   subtitle?: string;
@@ -88,6 +89,7 @@ export function Screen({
   showBack?: boolean;
   onBack?: () => void;
   customHeader?: React.ReactNode;
+  extraBottomPadding?: number;
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -107,7 +109,7 @@ export function Screen({
   // Safe status bar top inset calculation (handles dynamic island, notch, and Android status bar)
   const androidExtra = Platform.OS === 'android' ? Math.max(0, (RNStatusBar.currentHeight || 24) - insets.top) : 0;
   // Ensure content never gets hidden behind bottom tabs (62px bar + insets.bottom + clearance)
-  const bottomInset = Math.max(insets.bottom, 16) + 76;
+  const bottomInset = Math.max(insets.bottom, 16) + 76 + extraBottomPadding;
 
   return (
     <SafeAreaView style={[ui.screen, { paddingTop: androidExtra }]} edges={['top', 'left', 'right']}>
