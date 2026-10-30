@@ -19,7 +19,7 @@ import { apiRequest } from '../../src/lib/api';
 import { getToken } from '../../src/lib/auth';
 import { WEB_URL } from '../../src/lib/constants';
 import { useAuthStore } from '../../src/stores/auth-store';
-import type { BgosWorkspace } from '../../../shared/bgos-contracts';
+import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 import { Segmented } from '../../src/components/gbp/segmented';
 import { OptimizationTimeline, OptimizingPill } from '../../src/components/gbp/timeline';
 import { ConnectWizard, useWizardState } from '../../src/components/gbp/wizard';

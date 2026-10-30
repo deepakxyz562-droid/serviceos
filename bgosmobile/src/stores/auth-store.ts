@@ -5,7 +5,7 @@ import { apiRequest, ApiError } from '../lib/api';
 import { API_PATHS } from '../lib/constants';
 import { googleSignIn } from '../lib/google-auth';
 import { appleSignIn } from '../lib/apple-auth';
-import { isBgosIdentity } from '../../../shared/bgos-identity';
+import { isBgosIdentity } from '../lib/bgos-identity';
 
 export interface User { id: string; email: string; name?: string; role?: string; tenantId?: string; workspaceId?: string }
 export interface SessionResponse { token: string; refreshToken: string; user: User; workspace: { id: string; productType: string } | null; onboardingRequired?: boolean }

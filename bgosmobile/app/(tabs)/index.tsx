@@ -15,7 +15,7 @@ import { SidebarDrawer } from '../../src/components/navigation/sidebar-drawer';
 import { PushPromptModal } from '../../src/components/notifications/push-prompt';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import type { GbpPlaceResult } from '../../src/components/gbp/types';
-import type { BgosConversation, BgosWorkspace } from '../../../shared/bgos-contracts';
+import type { BgosConversation, BgosWorkspace } from '../../src/types/bgos-contracts';
 
 type Booking = { id: string; title?: string; customerName?: string; scheduledAt?: string; status: string };
 

@@ -19,7 +19,7 @@ import { WEB_URL } from '../../src/lib/constants';
 import { getBgosWebUrl } from '../../src/lib/bgos-urls';
 import { useAuthStore } from '../../src/stores/auth-store';
 import { enablePush } from '../../src/lib/push';
-import type { BgosWorkspace } from '../../../shared/bgos-contracts';
+import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 
 export default function ToolsScreen() {
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');

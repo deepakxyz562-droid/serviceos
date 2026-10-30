@@ -19,7 +19,7 @@ import { useAuthStore } from '../../stores/auth-store';
 import { enablePush, isPushPermissionGranted, unregisterPush } from '../../lib/push';
 import { getBgosWebUrl } from '../../lib/bgos-urls';
 import { WEB_URL } from '../../lib/constants';
-import type { BgosWorkspace } from '../../../../shared/bgos-contracts';
+import type { BgosWorkspace } from '../../types/bgos-contracts';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.75, 320);

@@ -29,7 +29,7 @@ import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { WEB_URL } from '../../src/lib/constants';
 import { getBgosWebUrl } from '../../src/lib/bgos-urls';
-import type { BgosConversation, BgosMessage, BgosWorkspace } from '../../../shared/bgos-contracts';
+import type { BgosConversation, BgosMessage, BgosWorkspace } from '../../src/types/bgos-contracts';
 
 export default function InboxScreen() {
   const inbox = useResource<BgosConversation[]>('/api/omnichannel/conversations', 10000);

@@ -24,7 +24,7 @@ import { futureLocalTime } from '../../src/lib/dates';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import { PostsBoard } from '../../src/components/gbp/posts-list';
 import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
-import type { BgosWorkspace } from '../../../shared/bgos-contracts';
+import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 import type { GbpPlaceResult } from '../../src/components/gbp/types';
 
 type Account = { id: string; platform: string; accountName: string; isActive: boolean };
