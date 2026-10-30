@@ -13,10 +13,12 @@ export type Review = {
 
 export type ReplyPayload = {
   text?: string;
+  replyText?: string;
   repliedAt?: string;
   repliedBy?: string;
   publishedToGoogle?: boolean;
   googleError?: string | null;
+  mapsUrl?: string | null;
 };
 
 export type AuditCheck = {

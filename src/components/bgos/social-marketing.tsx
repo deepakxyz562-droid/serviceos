@@ -2336,6 +2336,34 @@ export function SocialMediaView({
     }
   };
 
+  const [autoReplyRunning, setAutoReplyRunning] = useState(false);
+
+  const handleRunAutoReply = async () => {
+    setAutoReplyRunning(true);
+    try {
+      const res = await authFetch('/api/reviews/auto-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minRating: 4 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        if (data.processedCount > 0) {
+          toast.success(`AI Auto-Reply completed! ${data.processedCount} review${data.processedCount === 1 ? '' : 's'} answered.`);
+          await fetchReviews();
+        } else {
+          toast.info('All reviews are already answered! No pending reviews found.');
+        }
+      } else {
+        toast.error(data.error || 'Auto-reply failed to complete');
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Error executing auto-reply');
+    } finally {
+      setAutoReplyRunning(false);
+    }
+  };
+
   const handlePublishReviewReply = async (review: ReviewDto) => {
     const text = (replyDrafts[review.id] || '').trim();
     if (!text) {
@@ -2349,11 +2377,31 @@ export function SocialMediaView({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ replyText: text }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        toast.success('Reply published to your Google Business Profile!');
+        if (data.publishedToGoogle) {
+          toast.success('Reply published directly to your Google Business Profile!');
+        } else {
+          toast.info(
+            'Reply saved in BGOS. (Direct Google API sync pending: quota 0). Click "Copy & Open Google Maps" to paste it live with 1 tap.',
+            { duration: 6000 }
+          );
+        }
         setReviews((prev) =>
           prev.map((r) =>
-            r.id === review.id ? { ...r, responseJson: JSON.stringify({ text }) } : r
+            r.id === review.id
+              ? {
+                  ...r,
+                  responseJson: JSON.stringify({
+                    text,
+                    publishedToGoogle: Boolean(data.publishedToGoogle),
+                    googleError: data.googleError,
+                    repliedAt: new Date().toISOString(),
+                    repliedBy: 'Owner',
+                    mapsUrl: data.mapsUrl,
+                  }),
+                }
+              : r
           )
         );
         setReplyDrafts((prev) => {
@@ -2362,8 +2410,8 @@ export function SocialMediaView({
           return next;
         });
       } else {
-        const err = await res.json().catch(() => ({}));
-        toastApiError(res, err.error || 'Could not publish the reply. Please try again.');
+        const err = data.error || 'Could not publish the reply. Please try again.';
+        toastApiError(res, err);
       }
     } catch {
       toast.error('Network error publishing the reply.');
@@ -3540,6 +3588,48 @@ export function SocialMediaView({
       {/* ─── TAB: Review Replies (Dhanda review-reply workstation) ──────── */}
       {activeTab === 'review-replies' && (
         <div className="space-y-4">
+          {/* AI Auto-Reply Command Bar */}
+          <div className="bg-linear-to-r from-emerald-500/10 via-teal-500/10 to-primary/10 border border-emerald-500/30 rounded-2xl p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-xs">
+                <Bot className="size-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-foreground">AI Auto-Reply to Google Reviews</h3>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">
+                    Active 24/7
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Automatically drafts and applies personalized, SEO-rich replies to 4★ &amp; 5★ reviews.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleRunAutoReply}
+                disabled={autoReplyRunning || pendingReviews.length === 0}
+                className="h-8.5 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 text-xs gap-1.5 shadow-xs transition-all"
+              >
+                {autoReplyRunning ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    <span>Auto-Replying with AI…</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-3.5 text-amber-300" />
+                    <span>Auto-Reply Pending ({pendingReviews.length})</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
           {/* Summary strip */}
           <div className="bg-card border border-border rounded-2xl p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -3674,15 +3764,63 @@ export function SocialMediaView({
 
                     {/* Existing published reply */}
                     {existingReply && (
-                      <div className="mt-3 ml-12 p-3 rounded-xl border border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/10">
-                        <p className="text-[10px] font-extrabold tracking-wider text-emerald-600 dark:text-emerald-400 mb-1">
-                          YOUR REPLY
-                        </p>
+                      <div className="mt-3 ml-0 sm:ml-12 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/20 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[10px] font-extrabold tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                            <CheckCircle2 className="size-3 text-emerald-600 dark:text-emerald-400" /> YOUR REPLY
+                          </p>
+                          {(() => {
+                            let published = false;
+                            try {
+                              const parsed = JSON.parse(review.responseJson || '{}');
+                              published = Boolean(parsed.publishedToGoogle);
+                            } catch {}
+                            return published ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">
+                                🟢 Live on Google
+                              </span>
+                            ) : (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 text-[10px] font-bold"
+                                title="Saved in BGOS. Direct Google API sync pending partner quota."
+                              >
+                                🟡 Saved in BGOS · Google sync pending
+                              </span>
+                            );
+                          })()}
+                        </div>
+
                         <KeywordText
                           text={existingReply}
                           keywords={seoKeywords}
                           className="text-xs text-foreground leading-relaxed"
                         />
+
+                        {/* 1-Tap Copy & Open Google Maps Action */}
+                        <div className="flex items-center justify-between pt-2 border-t border-border/40 gap-2 flex-wrap">
+                          <span className="text-[10px] text-muted-foreground">
+                            Ensure your reply is visible on Google Maps:
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(existingReply);
+                              toast.success('Reply copied to clipboard! Paste it on Google Maps.');
+                              const targetUrl =
+                                review.reviewUrl ||
+                                placeData?.place?.mapsUrl ||
+                                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(businessName)}`;
+                              window.open(targetUrl, '_blank');
+                            }}
+                            className="h-7 text-[11px] font-bold gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                          >
+                            <Copy className="size-3" />
+                            <span>Copy Reply &amp; Open Google Maps</span>
+                            <ExternalLink className="size-3" />
+                          </Button>
+                        </div>
                       </div>
                     )}
 

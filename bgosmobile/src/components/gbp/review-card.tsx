@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, Share, Text, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card, colors, ui } from '../ui';
 import { AiButton, InitialAvatar, Pill, RatingPill, gbpColors, relativeDate } from './bits';
@@ -11,7 +11,8 @@ const ROSE = '#E11D48'; // "Reply Generated" label (spec §6, reference B)
 function parseReply(review: Review): ReplyPayload | null {
   try {
     const parsed = JSON.parse(review.responseJson || '{}');
-    return parsed && parsed.text ? (parsed as ReplyPayload) : null;
+    const text = parsed && (parsed.text || parsed.replyText);
+    return text ? ({ ...parsed, text } as ReplyPayload) : null;
   } catch {
     return null;
   }
@@ -140,9 +141,9 @@ export function ReviewCard({
             </Text>
             {reply.publishedToGoogle ? (
               <Text style={{ fontSize: 10.5, fontWeight: '700', color: gbpColors.emerald }}>Live on Google</Text>
-            ) : reply.googleError ? (
-              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#B45309' }}>Saved locally</Text>
-            ) : null}
+            ) : (
+              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#B45309' }}>Google sync pending</Text>
+            )}
             <MaterialIcons name={expanded ? 'expand-less' : 'expand-more'} size={18} color={gbpColors.aiDark} />
           </Pressable>
 
@@ -223,6 +224,59 @@ export function ReviewCard({
                       <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>✎ Edit</Text>
                     </Pressable>
                   </View>
+                  {!reply.publishedToGoogle ? (
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={async () => {
+                          try {
+                            await Share.share({ message: reply.text || '' });
+                          } catch {}
+                        }}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          paddingVertical: 7,
+                          paddingHorizontal: 10,
+                          borderRadius: 8,
+                          backgroundColor: '#F1F5F9',
+                          borderWidth: 1,
+                          borderColor: colors.line,
+                        }}
+                      >
+                        <MaterialIcons name="content-copy" size={13} color={colors.ink} />
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.ink }}>Share / Copy</Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={async () => {
+                          const target = reply.mapsUrl || 'https://business.google.com/';
+                          try {
+                            await Linking.openURL(target);
+                          } catch {
+                            Alert.alert('Google Maps Link', target);
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          paddingVertical: 7,
+                          paddingHorizontal: 10,
+                          borderRadius: 8,
+                          backgroundColor: colors.brand,
+                        }}
+                      >
+                        <MaterialIcons name="open-in-new" size={13} color="#FFFFFF" />
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#FFFFFF' }}>Open Maps ↗</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
                 </>
               )}
             </View>

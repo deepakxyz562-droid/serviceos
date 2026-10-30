@@ -147,9 +147,9 @@ describe('Storefront Online Payment & UPI Checkout', () => {
     const unlockBtn = screen.queryByRole('button', { name: /Unlock UPI Payment/i });
     if (unlockBtn) fireEvent.click(unlockBtn);
 
-    // Dynamic QR URL generated via qrserver API
-    const qrImg = screen.getByAltText('Shop UPI QR Code') as HTMLImageElement;
-    expect(qrImg.getAttribute('src')).toContain('api.qrserver.com');
-    expect(qrImg.getAttribute('src')).toContain('merchant');
+    // Dynamic QR generated on-device via local privacy-preserving SVG encoder
+    const qrContainer = screen.getByRole('img', { name: 'Shop UPI QR Code' });
+    expect(qrContainer).toBeTruthy();
+    expect(qrContainer.innerHTML).toContain('<svg');
   });
 });

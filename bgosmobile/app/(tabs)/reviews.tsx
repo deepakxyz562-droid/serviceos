@@ -3,8 +3,10 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Linking,
   Pressable,
   ScrollView,
+  Share,
   Text,
   TextInput,
   View,
@@ -39,6 +41,8 @@ interface ParsedReply {
   repliedAt?: string;
   repliedBy?: string;
   publishedToGoogle?: boolean;
+  googleError?: string | null;
+  mapsUrl?: string | null;
   keywords?: KeywordUsage[];
 }
 
@@ -51,12 +55,15 @@ const DEFAULT_KEYWORDS_FALLBACK: KeywordUsage[] = [
 function parseReply(review: Review): ParsedReply | null {
   try {
     const parsed = JSON.parse(review.responseJson || '{}');
-    if (parsed && (parsed.text || parsed.replyText)) {
+    const text = parsed && (parsed.text || parsed.replyText);
+    if (text) {
       return {
-        text: parsed.text || parsed.replyText || '',
+        text,
         repliedAt: parsed.repliedAt,
         repliedBy: parsed.repliedBy || 'Owner',
         publishedToGoogle: Boolean(parsed.publishedToGoogle),
+        googleError: parsed.googleError || null,
+        mapsUrl: parsed.mapsUrl || null,
         keywords: Array.isArray(parsed.keywords) && parsed.keywords.length > 0
           ? parsed.keywords
           : DEFAULT_KEYWORDS_FALLBACK,
@@ -142,6 +149,7 @@ export default function ReviewRepliesScreen() {
   const [drafts, setDrafts] = useState<Record<string, { text: string; keywords?: KeywordUsage[] }>>({});
   const [draftBusyId, setDraftBusyId] = useState<string | null>(null);
   const [replyBusyId, setReplyBusyId] = useState<string | null>(null);
+  const [autoReplyBusy, setAutoReplyBusy] = useState(false);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
@@ -174,6 +182,40 @@ export default function ReviewRepliesScreen() {
   }, [all]);
 
   const shown = filter === 'pending' ? pending : filter === 'replied' ? replied : all;
+
+  async function handleTriggerAutoReply() {
+    if (autoReplyBusy) return;
+    setAutoReplyBusy(true);
+    setLocalError(null);
+    setNotice('');
+    try {
+      const res = await apiRequest<{ success: boolean; processedCount: number; message: string }>('/api/reviews/auto-reply', {
+        method: 'POST',
+        body: { minRating: 1 },
+      });
+      setNotice(res.message || `Processed ${res.processedCount} auto-replies.`);
+      await reviews.refresh();
+    } catch (err: unknown) {
+      setLocalError((err as Error).message || 'AI Auto-reply failed.');
+    } finally {
+      setAutoReplyBusy(false);
+    }
+  }
+
+  async function handleShareReply(text: string) {
+    try {
+      await Share.share({ message: text });
+    } catch {}
+  }
+
+  async function handleOpenMaps(url?: string | null) {
+    const target = url || gbpPlace.data?.place?.mapsUrl || 'https://business.google.com/';
+    try {
+      await Linking.openURL(target);
+    } catch {
+      Alert.alert('Google Maps Link', target);
+    }
+  }
 
   async function generateDraft(review: Review) {
     if (draftBusyId) return;
@@ -212,7 +254,12 @@ export default function ReviewRepliesScreen() {
     setLocalError(null);
     setNotice('');
     try {
-      const res = await apiRequest<{ message?: string }>(`/api/reviews/${review.id}/reply`, {
+      const res = await apiRequest<{
+        message?: string;
+        publishedToGoogle?: boolean;
+        googleError?: string | null;
+        mapsUrl?: string | null;
+      }>(`/api/reviews/${review.id}/reply`, {
         method: 'POST',
         body: {
           replyText: text.trim(),
@@ -225,7 +272,11 @@ export default function ReviewRepliesScreen() {
         return next;
       });
       setEditingId(null);
-      setNotice(res.message || 'Reply published successfully.');
+      if (res.publishedToGoogle) {
+        setNotice(res.message || 'Reply published to Google Maps successfully!');
+      } else {
+        setNotice('Reply saved in BGOS! Google sync pending (quota limit active). Use "Open Maps ↗" to paste it.');
+      }
       await reviews.refresh();
     } catch (e) {
       setLocalError((e as Error).message || 'Could not publish reply.');
@@ -578,6 +629,59 @@ export default function ReviewRepliesScreen() {
           </Pressable>
         </View>
 
+        {/* ── AUTO-REPLY COMMAND BAR ── */}
+        {pending.length > 0 ? (
+          <View
+            style={{
+              backgroundColor: '#EFF6FF',
+              borderWidth: 1,
+              borderColor: '#BFDBFE',
+              borderRadius: 14,
+              padding: 12,
+              marginBottom: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="auto-awesome" size={16} color="#2563EB" />
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#1E40AF' }}>AI Auto-Reply</Text>
+              </View>
+              <Text style={{ fontSize: 11.5, color: '#3B82F6', marginTop: 2 }}>
+                {pending.length} pending review{pending.length === 1 ? '' : 's'} waiting for replies
+              </Text>
+            </View>
+            <Pressable
+              disabled={autoReplyBusy}
+              onPress={() => void handleTriggerAutoReply()}
+              style={({ pressed }) => ({
+                backgroundColor: '#2563EB',
+                paddingHorizontal: 14,
+                paddingVertical: 9,
+                borderRadius: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                opacity: autoReplyBusy ? 0.6 : pressed ? 0.85 : 1,
+              })}
+            >
+              {autoReplyBusy ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <MaterialIcons name="bolt" size={15} color="#FFFFFF" />
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' }}>
+                    Auto-Reply ({pending.length})
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        ) : null}
+
         {/* ── REVIEW LIST ── */}
         {reviews.loading ? (
           <Loading />
@@ -678,9 +782,21 @@ export default function ReviewRepliesScreen() {
                           <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
                             {reply.repliedBy || 'Owner'}
                           </Text>
-                          <Text style={{ fontSize: 11, color: '#64748B' }}>
-                            You replied 22h ago
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                            <Text style={{ fontSize: 11, color: '#64748B' }}>
+                              {reply.repliedAt ? `Replied ${relativeDate(reply.repliedAt) || 'recently'}` : 'Replied'}
+                            </Text>
+                            <Text style={{ fontSize: 10, color: '#CBD5E1' }}>•</Text>
+                            {reply.publishedToGoogle ? (
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>
+                                🟢 Live on Google
+                              </Text>
+                            ) : (
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>
+                                🟡 Sync pending
+                              </Text>
+                            )}
+                          </View>
                         </View>
                       </View>
 
@@ -810,9 +926,53 @@ export default function ReviewRepliesScreen() {
                         </View>
                       </View>
                     ) : (
-                      <Text style={{ fontSize: 13.5, lineHeight: 21, color: '#1E293B' }}>
-                        {reply.text}
-                      </Text>
+                      <View style={{ gap: 8 }}>
+                        <Text style={{ fontSize: 13.5, lineHeight: 21, color: '#1E293B' }}>
+                          {reply.text}
+                        </Text>
+                        {!reply.publishedToGoogle ? (
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                            <Pressable
+                              accessibilityRole="button"
+                              onPress={() => void handleShareReply(reply.text)}
+                              style={{
+                                flex: 1,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 6,
+                                paddingVertical: 8,
+                                paddingHorizontal: 12,
+                                borderRadius: 10,
+                                backgroundColor: '#F1F5F9',
+                                borderWidth: 1,
+                                borderColor: '#E2E8F0',
+                              }}
+                            >
+                              <MaterialIcons name="content-copy" size={14} color="#0F172A" />
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>Share / Copy</Text>
+                            </Pressable>
+                            <Pressable
+                              accessibilityRole="button"
+                              onPress={() => void handleOpenMaps(reply.mapsUrl)}
+                              style={{
+                                flex: 1,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 6,
+                                paddingVertical: 8,
+                                paddingHorizontal: 12,
+                                borderRadius: 10,
+                                backgroundColor: '#2563EB',
+                              }}
+                            >
+                              <MaterialIcons name="open-in-new" size={14} color="#FFFFFF" />
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>Open Maps ↗</Text>
+                            </Pressable>
+                          </View>
+                        ) : null}
+                      </View>
                     )}
                   </View>
                 ) : drafts[review.id] ? (

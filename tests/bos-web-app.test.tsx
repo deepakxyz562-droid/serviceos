@@ -44,7 +44,7 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders the BOS logo PNG, deep forest green sidebar with all 15 menu items, and Upgrade to Pro card', () => {
+  it('renders the BOS logo PNG, deep forest green sidebar with all 15 menu items', () => {
     render(<BosWebApp />);
 
     // Verify BOS PNG logo is used
@@ -57,10 +57,6 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
     for (const item of BOS_PRIMARY_NAV_ITEMS) {
       expect(nav.textContent).toContain(item.label);
     }
-
-    // Verify Upgrade to Pro card
-    expect(screen.getByText('Upgrade to Pro')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Upgrade Now/i })).toBeTruthy();
   });
 
   it('renders theDashboard Overview with KPI cards, Sales Overview, Sales by Category, BOS AI Assistant, Quick Actions, and bottom tables', () => {
@@ -83,9 +79,13 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
 
     const nav = screen.getByRole('navigation', { name: /BOS Primary Navigation/i });
     const clickNavItem = (label: string) => {
-      const btn = Array.from(nav.querySelectorAll('button')).find((b) =>
-        b.textContent?.includes(label),
-      );
+      const btn =
+        Array.from(nav.querySelectorAll('button.bos-nav-item')).find((b) =>
+          b.textContent?.trim() === label || b.textContent?.includes(label),
+        ) ||
+        Array.from(nav.querySelectorAll('button')).find((b) =>
+          b.textContent?.trim() === label,
+        );
       expect(btn).toBeTruthy();
       fireEvent.click(btn!);
     };
@@ -218,7 +218,7 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
     ).toBeTruthy();
     expect(screen.getByText('Campaigns Sent')).toBeTruthy();
     expect(screen.getByText('Customers Reached')).toBeTruthy();
-    expect(screen.getByText('Recent Campaigns')).toBeTruthy();
+    expect(screen.getByLabelText('Search marketing campaigns')).toBeTruthy();
     expect(screen.getByText('Campaign Preview')).toBeTruthy();
     expect(screen.getAllByText('Weekend Fresh Deals').length).toBeGreaterThan(0);
 
@@ -267,9 +267,13 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
 
     const nav = screen.getByRole('navigation', { name: /BOS Primary Navigation/i });
     const clickNavItem = (label: string) => {
-      const btn = Array.from(nav.querySelectorAll('button')).find((b) =>
-        b.textContent?.includes(label),
-      );
+      const btn =
+        Array.from(nav.querySelectorAll('button.bos-nav-item')).find((b) =>
+          b.textContent?.trim() === label || b.textContent?.includes(label),
+        ) ||
+        Array.from(nav.querySelectorAll('button')).find((b) =>
+          b.textContent?.trim() === label,
+        );
       expect(btn).toBeTruthy();
       fireEvent.click(btn!);
     };

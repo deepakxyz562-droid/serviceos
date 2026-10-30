@@ -354,7 +354,13 @@ export default function GrowthScreen() {
     setReplyBusyId(review.id);
     setError(null);
     try {
-      const res = await apiRequest<{ success: boolean; review?: Review; message?: string }>(
+      const res = await apiRequest<{
+        success: boolean;
+        review?: Review;
+        message?: string;
+        publishedToGoogle?: boolean;
+        googleError?: string | null;
+      }>(
         `/api/reviews/${review.id}/reply`,
         { method: 'POST', body: { replyText } },
       );
@@ -371,7 +377,13 @@ export default function GrowthScreen() {
           delete next[review.id];
           return next;
         });
-        Alert.alert(isEdit ? 'Reply Updated ✅' : 'Reply Published ✅', res.message || 'Your reply is live on Google.');
+        const alertTitle = res.publishedToGoogle
+          ? (isEdit ? 'Reply Updated Live on Google ✅' : 'Reply Published Live on Google ✅')
+          : 'Reply Saved in BGOS 📋';
+        const alertMsg = res.publishedToGoogle
+          ? (res.message || 'Your reply is live on Google Maps.')
+          : 'Your reply has been saved in BGOS! Google sync is pending (quota limit active). Tap the review to share or open in Google Maps.';
+        Alert.alert(alertTitle, alertMsg);
         await reviews.refresh();
       }
     } catch (e: unknown) {

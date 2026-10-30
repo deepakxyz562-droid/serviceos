@@ -86,9 +86,18 @@ export async function POST(
     let publishedToGoogle = false;
     let googleError: string | null = null;
 
+    let mapsUrl = review.reviewUrl || review.externalUrl || null;
+    const googleAccount = review.googleReviewId ? await prepareGoogleAccount(user.tenantId) : null;
+
+    if (googleAccount?.metadata) {
+      const meta = googleAccount.metadata as Record<string, any>;
+      if (meta?.mapsUri && !mapsUrl) {
+        mapsUrl = meta.mapsUri;
+      }
+    }
+
     // If review is linked to Google Business, attempt publishing to Google
     if (review.googleReviewId) {
-      const googleAccount = await prepareGoogleAccount(user.tenantId);
       if (googleAccount) {
         try {
           await replyToGoogleBusinessReview(googleAccount, review.googleReviewId, replyText);
@@ -118,6 +127,7 @@ export async function POST(
       publishedToGoogle,
       googleError,
       keywords,
+      mapsUrl,
     };
 
     const updatedReview = await db.review.update({
@@ -133,6 +143,7 @@ export async function POST(
       review: updatedReview,
       publishedToGoogle,
       googleError,
+      mapsUrl,
       message: publishedToGoogle
         ? 'Reply published successfully to Google Business Profile and saved locally.'
         : googleError

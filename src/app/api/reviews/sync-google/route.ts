@@ -240,7 +240,17 @@ Write a warm, authentic, professional reply (1-3 sentences) thanking them by nam
           const replyText = (typeof aiReply === 'string' ? aiReply : (aiReply as any)?.text || '').trim();
 
           if (replyText) {
-            await replyToGoogleBusinessReview(googleAccount, gRev.reviewId, replyText);
+            let publishedToGoogle = false;
+            let googleError: string | null = null;
+            try {
+              await replyToGoogleBusinessReview(googleAccount, gRev.reviewId, replyText);
+              publishedToGoogle = true;
+            } catch (syncErr: unknown) {
+              const msg = syncErr instanceof Error ? syncErr.message : String(syncErr);
+              console.warn('[reviews/sync-google] Direct Google reply failed:', gRev.reviewId, msg);
+              googleError = msg;
+            }
+
             await db.review.update({
               where: { id: existing.id },
               data: {
@@ -248,8 +258,10 @@ Write a warm, authentic, professional reply (1-3 sentences) thanking them by nam
                   text: replyText,
                   repliedAt: new Date().toISOString(),
                   repliedBy: 'BGOS AI Reputation Agent',
-                  publishedToGoogle: true,
+                  publishedToGoogle,
+                  googleError,
                 }),
+                status: 'published',
               },
             });
             autoRepliesCount++;
