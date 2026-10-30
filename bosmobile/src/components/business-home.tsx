@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
@@ -6,6 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { apiRequest, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBlueprintStore } from '@/stores/blueprint-store';
+import { storageGetItem, storageSetItem } from '@/lib/storage';
 import { getBusinessHome, homeText, homeMetricAction, HOME_DESTINATIONS, formatHomeMetric, type BusinessHomeSnapshot } from '@/lib/business-home';
 export function BusinessHomeScreen() {
     const blueprint = useBlueprintStore(s => s.blueprint);
@@ -44,37 +45,100 @@ export function BusinessHomeScreen() {
         }
     };
 
+    // Hydrate immediately from cache on mount for instant render (<50ms)
+    useEffect(() => {
+        if (!user?.id) return;
+        let active = true;
+        (async () => {
+            try {
+                const [cachedHome, cachedConfig] = await Promise.all([
+                    storageGetItem(`bos_home_snapshot_${identity}`),
+                    storageGetItem('bos_store_config'),
+                ]);
+                if (!active) return;
+                if (cachedHome) {
+                    try {
+                        const parsed = JSON.parse(cachedHome);
+                        if (parsed && parsed.metrics) {
+                            setLoaded({ identity, data: parsed });
+                            setLoading(false);
+                        }
+                    } catch {}
+                }
+                if (cachedConfig) {
+                    try {
+                        const parsed = JSON.parse(cachedConfig);
+                        if (typeof parsed?.isStoreOpen === 'boolean') {
+                            setStoreOpen(parsed.isStoreOpen);
+                        }
+                    } catch {}
+                }
+            } catch {}
+        })();
+        return () => { active = false; };
+    }, [identity, user?.id]);
+
     useFocusEffect(useCallback(() => {
         if (!hydrated || !user?.id)
             return;
         let active = true;
-        setLoading(true);
+        // Keep showing existing snapshot without screen flicker; only show loading if empty
+        if (!snapshot) {
+            setLoading(true);
+        }
         setError(null);
+
+        // Run bootstrap in background if identity changed
         if (bootstrap.current?.identity !== identity) {
             const promise = apiRequest('/api/gptform/bootstrap', { method: 'POST' });
             bootstrap.current = { identity, promise };
             void promise.catch(() => { if (bootstrap.current?.promise === promise) bootstrap.current = null; });
         }
-        bootstrap.current.promise
-            .then(() => Promise.all([
-                apiRequest<BusinessHomeSnapshot>('/api/commerce/home'),
-                apiRequest<any>('/api/commerce/config').catch(() => null),
-            ]))
+
+        const fetchHomeData = () => Promise.all([
+            apiRequest<BusinessHomeSnapshot>('/api/commerce/home'),
+            apiRequest<any>('/api/commerce/config').catch(() => null),
+        ]);
+
+        fetchHomeData()
             .then(([data, config]) => {
                 if (active) {
                     setLoaded({ identity, data });
+                    void storageSetItem(`bos_home_snapshot_${identity}`, JSON.stringify(data)).catch(() => {});
                     if (config && typeof config.isStoreOpen === 'boolean') {
                         setStoreOpen(config.isStoreOpen);
+                        void storageSetItem('bos_store_config', JSON.stringify({ isStoreOpen: config.isStoreOpen })).catch(() => {});
                     }
                 }
             })
-            .catch(e => { if (active) {
-            setError(e instanceof ApiError && e.statusCode === 409 ? 'account' : e instanceof ApiError && e.statusCode === 404 ? 'setup' : 'connection');
-        } })
-            .finally(() => { if (active)
-            setLoading(false); });
+            .catch(async (e) => {
+                if (!active) return;
+                // If 404, backend might still be running initial bootstrap; await bootstrap and retry once
+                if (e instanceof ApiError && e.statusCode === 404 && bootstrap.current?.promise) {
+                    try {
+                        await bootstrap.current.promise;
+                        const [retryData, retryConfig] = await fetchHomeData();
+                        if (active) {
+                            setLoaded({ identity, data: retryData });
+                            void storageSetItem(`bos_home_snapshot_${identity}`, JSON.stringify(retryData)).catch(() => {});
+                            if (retryConfig && typeof retryConfig.isStoreOpen === 'boolean') {
+                                setStoreOpen(retryConfig.isStoreOpen);
+                                void storageSetItem('bos_store_config', JSON.stringify({ isStoreOpen: retryConfig.isStoreOpen })).catch(() => {});
+                            }
+                            return;
+                        }
+                    } catch {}
+                }
+                if (active) {
+                    setError(e instanceof ApiError && e.statusCode === 409 ? 'account' : e instanceof ApiError && e.statusCode === 404 ? 'setup' : 'connection');
+                }
+            })
+            .finally(() => {
+                if (active) setLoading(false);
+            });
+
         return () => { active = false; };
-    }, [hydrated, user?.id, user?.tenantId, blueprint.version, revision, identity]));
+    }, [hydrated, identity, blueprint.version, revision, !!snapshot]));
     const metrics = home.metrics.filter(m => snapshot?.metrics[m] != null).slice(0, 4);
     const actions = home.actions.filter(a => HOME_DESTINATIONS[a].native).slice(0, 4);
     return <SafeAreaView style={styles.safe} edges={['top']}><ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading && hydrated} onRefresh={() => setRevision(v => v + 1)} tintColor="#047857"/>}>

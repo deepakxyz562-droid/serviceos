@@ -217,6 +217,7 @@ export default function InvoiceDetailScreen() {
     }
   };
 
+  const insets = useSafeAreaInsets();
   const status = summary?.status || invoice?.status || 'DRAFT';
   const chip = STATUS_COLORS[status] || STATUS_COLORS.DRAFT;
   const storeState = extractGstStateCode(storeInfo.gstin);
@@ -224,9 +225,16 @@ export default function InvoiceDetailScreen() {
   const interstate = Boolean(clientState) && Boolean(storeState) && storeState !== clientState;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
+    <View style={styles.safe}>
+      {/* Header with notch & status bar padding */}
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 20 : 12),
+          },
+        ]}
+      >
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <MaterialIcons name="arrow-back" size={22} color="#0f172a" />
         </TouchableOpacity>
@@ -257,8 +265,9 @@ export default function InvoiceDetailScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: 24 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(false); }} colors={['#059669']} />}
+          showsVerticalScrollIndicator={false}
         >
           {/* KPI strip — Vyapar Total / Received / Balance */}
           <KpiRow
@@ -351,47 +360,80 @@ export default function InvoiceDetailScreen() {
               ))
             )}
           </View>
+        </ScrollView>
+      )}
 
-          {/* Actions */}
-          <View style={styles.actions}>
+      {/* Docked Sticky Bottom Action Bar */}
+      {invoice && !loading && (
+        <View
+          style={[
+            styles.dockedBottomBar,
+            {
+              paddingBottom: Math.max(insets.bottom, 14),
+            },
+          ]}
+        >
+          {/* Primary Action: WhatsApp */}
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.whatsAppPrimaryBtn}
+            onPress={() => void shareWhatsApp()}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="logo-whatsapp" size={20} color="#ffffff" />
+            <Text style={styles.whatsAppPrimaryText}>Share on WhatsApp</Text>
+          </TouchableOpacity>
+
+          {/* Secondary Actions Row */}
+          <View style={styles.secondaryActionsRow}>
             {(summary?.balance ?? invoice.balance) > 0.01 ? (
               <TouchableOpacity
                 accessibilityRole="button"
-                style={[styles.actionBtn, styles.primaryBtn]}
+                style={[styles.secondaryActionBtn, styles.secondaryActionBtnPay]}
                 onPress={async () => {
                   await hapticFeedback.light();
                   setPayOpen(true);
                 }}
+                activeOpacity={0.8}
               >
-                <MaterialIcons name="currency-rupee" size={18} color="#ffffff" />
-                <Text style={styles.primaryText}>Record Payment</Text>
+                <MaterialIcons name="currency-rupee" size={17} color="#059669" />
+                <Text style={[styles.secondaryActionText, { color: '#059669', fontWeight: '800' }]}>
+                  Record Pay
+                </Text>
               </TouchableOpacity>
-            ) : (
-              <View style={[styles.actionBtn, styles.paidBanner]}>
-                <MaterialIcons name="verified" size={18} color="#15803d" />
-                <Text style={styles.paidBannerText}>Fully Paid</Text>
-              </View>
-            )}
-            {invoice.status === 'DRAFT' ? (
-              <TouchableOpacity style={styles.actionBtn} onPress={() => void markSent()}>
-                <MaterialIcons name="send" size={18} color="#0369a1" />
-                <Text style={styles.actionText}>Mark Sent</Text>
+            ) : invoice.status === 'DRAFT' ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                style={styles.secondaryActionBtn}
+                onPress={() => void markSent()}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="send" size={17} color="#0369a1" />
+                <Text style={styles.secondaryActionText}>Mark Sent</Text>
               </TouchableOpacity>
             ) : null}
-            <TouchableOpacity style={styles.actionBtn} onPress={() => void sharePdf()}>
-              <MaterialIcons name="picture-as-pdf" size={18} color="#b91c1c" />
-              <Text style={styles.actionText}>Share PDF</Text>
+
+            <TouchableOpacity
+              accessibilityRole="button"
+              style={styles.secondaryActionBtn}
+              onPress={() => void sharePdf()}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="picture-as-pdf" size={17} color="#dc2626" />
+              <Text style={styles.secondaryActionText}>Export PDF</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => void shareWhatsApp()}>
-              <MaterialIcons name="chat" size={18} color="#15803d" />
-              <Text style={styles.actionText}>WhatsApp</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => void print()}>
-              <MaterialIcons name="print" size={18} color="#475569" />
-              <Text style={styles.actionText}>Print</Text>
+
+            <TouchableOpacity
+              accessibilityRole="button"
+              style={styles.secondaryActionBtn}
+              onPress={() => void print()}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="print" size={17} color="#475569" />
+              <Text style={styles.secondaryActionText}>Print</Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
+        </View>
       )}
 
       <PaymentSheet
@@ -407,13 +449,13 @@ export default function InvoiceDetailScreen() {
           void load(false);
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
   backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -8 },
   headerTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
   headerSub: { fontSize: 12, color: '#64748b', marginTop: 1 },
@@ -423,7 +465,7 @@ const styles = StyleSheet.create({
   errorText: { color: '#b91c1c', textAlign: 'center' },
   retryBtn: { minHeight: 44, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#0f172a', alignItems: 'center', justifyContent: 'center' },
   retryText: { color: '#ffffff', fontWeight: '700' },
-  content: { padding: 16, gap: 14, paddingBottom: 48 },
+  content: { padding: 16, gap: 14 },
   card: { backgroundColor: '#ffffff', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', padding: 14, gap: 8 },
   cardTitle: { fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
   partyName: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
@@ -444,11 +486,56 @@ const styles = StyleSheet.create({
   paymentMain: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
   paymentSub: { fontSize: 12, color: '#64748b', marginTop: 2 },
   emptyHistory: { fontSize: 13, color: '#94a3b8', paddingVertical: 8 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  actionBtn: { minHeight: 48, paddingHorizontal: 14, borderRadius: 12, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  primaryBtn: { backgroundColor: '#059669', borderColor: '#059669', flexGrow: 1 },
-  primaryText: { color: '#ffffff', fontWeight: '800' },
-  actionText: { color: '#334155', fontWeight: '700' },
-  paidBanner: { backgroundColor: '#dcfce7', borderColor: '#86efac', flexGrow: 1 },
-  paidBannerText: { color: '#15803d', fontWeight: '800' },
+  dockedBottomBar: {
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 8,
+  },
+  whatsAppPrimaryBtn: {
+    backgroundColor: '#25D366',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+  },
+  whatsAppPrimaryText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  secondaryActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  secondaryActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  secondaryActionBtnPay: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+  },
+  secondaryActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
 });

@@ -21,7 +21,7 @@ import { Paths, File as ExpoFile } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import * as ImagePicker from 'expo-image-picker';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons, Feather, Ionicons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
@@ -32,6 +32,7 @@ import { storageGetItem, storageSetItem } from '@/lib/storage';
 import {
   numberToWords,
   generateGstInvoiceHtml,
+  resolveAbsoluteLogoUrl,
   GstStoreInfo,
 } from '@/lib/gst-invoice-helper';
 import { SignaturePadModal, SignaturePreview } from '@/components/SignaturePadModal';
@@ -228,6 +229,7 @@ function InvoiceRow({
 
 export default function BillingScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { blueprint, countryPack } = useBlueprintStore();
   const [tab, setTab] = useState<'INVOICES' | 'QUOTES'>('INVOICES');
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
@@ -348,7 +350,7 @@ export default function BillingScreen() {
 
   useEffect(() => {
     fetchBillingData(true);
-    // Load store config for GST branding (offline-first)
+    // Load store config for GST branding & catalog (offline-first, deduplicated)
     (async () => {
       try {
         const cached = await storageGetItem('bos_store_branding');
@@ -356,15 +358,25 @@ export default function BillingScreen() {
           try {
             const parsed = JSON.parse(cached);
             if (parsed && typeof parsed === 'object') {
-              setStoreInfo((prev) => ({ ...prev, ...parsed }));
+              setStoreInfo((prev) => ({
+                ...prev,
+                ...parsed,
+                logoUrl: resolveAbsoluteLogoUrl(parsed.logoUrl) || prev.logoUrl,
+              }));
             }
           } catch {}
         }
 
-        const res = await apiRequest<{ config?: any; business?: any }>(API_PATHS.commerceConfig);
+        const [res, cRes] = await Promise.all([
+          apiRequest<{ config?: any; business?: any }>(API_PATHS.commerceConfig).catch(() => null),
+          apiRequest<{ customers?: any[] }>(API_PATHS.commerceCustomers).catch(() => ({ customers: [] })),
+        ]);
+
         if (res) {
           const c = res.config || {};
           const b = res.business || {};
+          const serverLogo = b.logoUrl || c.logoUrl || '';
+          const resolvedLogo = resolveAbsoluteLogoUrl(serverLogo);
           setStoreInfo((prev) => {
             const nextInfo = {
               ...prev,
@@ -380,36 +392,28 @@ export default function BillingScreen() {
               email: b.email || c.email || prev.email,
               address: b.address || c.address || prev.address,
               upiId: c.upiId || b.upiId || prev.upiId,
-              logoUrl: b.logoUrl || c.logoUrl || prev.logoUrl,
+              logoUrl: resolvedLogo || prev.logoUrl,
               signatureUrl: b.signatureUrl || c.signatureUrl || prev.signatureUrl,
               billFooter: b.billFooter || c.billFooter || prev.billFooter,
             };
             void storageSetItem('bos_store_branding', JSON.stringify(nextInfo)).catch(() => {});
             return nextInfo;
           });
+
+          if (c?.catalogJson) {
+            try {
+              const parsed = JSON.parse(c.catalogJson);
+              if (Array.isArray(parsed)) setCatalogList(parsed);
+            } catch {}
+          }
+        }
+
+        if (Array.isArray(cRes?.customers)) {
+          setCustomersList(cRes.customers);
         }
       } catch (e) {
         // Fallback to local cache / blueprint
       }
-    })();
-
-    // Load customers directory and catalog for Vyapar-grade invoicing
-    (async () => {
-      try {
-        const [cRes, cfgRes] = await Promise.all([
-          apiRequest<{ customers?: any[] }>(API_PATHS.commerceCustomers).catch(() => ({ customers: [] })),
-          apiRequest<{ config?: any }>(API_PATHS.commerceConfig).catch(() => ({ config: null })),
-        ]);
-        if (Array.isArray(cRes?.customers)) {
-          setCustomersList(cRes.customers);
-        }
-        if (cfgRes?.config?.catalogJson) {
-          try {
-            const parsed = JSON.parse(cfgRes.config.catalogJson);
-            if (Array.isArray(parsed)) setCatalogList(parsed);
-          } catch {}
-        }
-      } catch {}
     })();
   }, [fetchBillingData]);
 
@@ -2361,50 +2365,60 @@ export default function BillingScreen() {
             : '';
 
           return (
-            <SafeAreaView style={styles.previewModalSafe}>
-              {/* Modal Top Bar */}
-              <View style={styles.previewTopBar}>
+            <View style={styles.previewModalSafe}>
+              {/* Modal Top Bar with safe area padding */}
+              <View
+                style={[
+                  styles.previewTopBar,
+                  {
+                    paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 20 : 12),
+                    paddingBottom: 12,
+                  },
+                ]}
+              >
                 <TouchableOpacity
                   onPress={() => setSelectedInvoice(null)}
                   style={styles.previewBackBtn}
+                  hitSlop={8}
                 >
-                  <MaterialIcons name="close" size={22} color="#0f172a" />
+                  <MaterialIcons name="arrow-back" size={22} color="#0f172a" />
                 </TouchableOpacity>
 
-                <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={styles.previewBarTitle}>Tax Invoice #{inv.number}</Text>
-                  <Text style={styles.previewBarSub}>Professional GST format</Text>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.previewBarTitle} numberOfLines={1}>
+                    Tax Invoice #{inv.number}
+                  </Text>
+                  <Text style={styles.previewBarSub}>
+                    {inv.customer?.name || 'Customer'} • {new Date(inv.createdAt).toLocaleDateString('en-IN')}
+                  </Text>
                 </View>
 
                 {/* Quick actions in top bar */}
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                  <TouchableOpacity
-                    onPress={() => handleSharePdfInvoice(inv)}
-                    style={styles.previewActionBtn}
-                  >
-                    <MaterialIcons name="picture-as-pdf" size={18} color="#dc2626" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handlePrintInvoice(inv)}
-                    style={styles.previewActionBtn}
-                  >
-                    <MaterialIcons name="print" size={18} color="#4338ca" />
-                  </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
                     onPress={() => {
                       setSelectedInvoice(null);
                       handleOpenEditInvoice(inv);
                     }}
                     style={styles.previewActionBtn}
+                    hitSlop={8}
                   >
-                    <MaterialIcons name="edit" size={18} color="#d97706" />
+                    <MaterialIcons name="edit" size={18} color="#0A6847" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setSelectedInvoice(null)}
+                    style={styles.previewActionBtn}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons name="close" size={20} color="#64748b" />
                   </TouchableOpacity>
                 </View>
               </View>
 
               <ScrollView
                 style={styles.previewScroll}
-                contentContainerStyle={styles.previewScrollContent}
+                contentContainerStyle={[styles.previewScrollContent, { paddingBottom: 24 }]}
+                showsVerticalScrollIndicator={false}
               >
                 {/* A4 Sheet Container */}
                 <View style={styles.a4Sheet}>
@@ -2413,7 +2427,7 @@ export default function BillingScreen() {
                     <View style={{ flex: 1 }}>
                       {storeInfo.logoUrl ? (
                         <Image
-                          source={{ uri: storeInfo.logoUrl }}
+                          source={{ uri: resolveAbsoluteLogoUrl(storeInfo.logoUrl) }}
                           style={styles.storeLogo}
                           resizeMode="contain"
                         />
@@ -2692,45 +2706,63 @@ export default function BillingScreen() {
                   </View>
                 </View>
 
-                {/* Bottom Action Sheet */}
-                <View style={styles.previewBottomActions}>
-                  <TouchableOpacity
-                    onPress={() => handleShareWhatsApp(inv, true)}
-                    style={[styles.bottomActionBtn, { backgroundColor: '#25D366' }]}
-                  >
-                    <MaterialIcons name="send" size={16} color="#ffffff" />
-                    <Text style={styles.bottomActionBtnText}>Share on WhatsApp</Text>
-                  </TouchableOpacity>
+              </ScrollView>
 
+              {/* Docked Sticky Bottom Action Bar */}
+              <View
+                style={[
+                  styles.dockedBottomBar,
+                  {
+                    paddingBottom: Math.max(insets.bottom, 14),
+                  },
+                ]}
+              >
+                {/* Primary Button: WhatsApp */}
+                <TouchableOpacity
+                  onPress={() => handleShareWhatsApp(inv, true)}
+                  style={styles.whatsAppPrimaryBtn}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="logo-whatsapp" size={20} color="#ffffff" />
+                  <Text style={styles.whatsAppPrimaryText}>Share on WhatsApp</Text>
+                </TouchableOpacity>
+
+                {/* Secondary Actions Row */}
+                <View style={styles.secondaryActionsRow}>
                   <TouchableOpacity
                     onPress={() => handleSharePdfInvoice(inv)}
-                    style={[styles.bottomActionBtn, { backgroundColor: '#dc2626' }]}
+                    style={styles.secondaryActionBtn}
+                    activeOpacity={0.8}
                   >
-                    <MaterialIcons name="picture-as-pdf" size={16} color="#ffffff" />
-                    <Text style={styles.bottomActionBtnText}>Export PDF</Text>
+                    <MaterialIcons name="picture-as-pdf" size={17} color="#dc2626" />
+                    <Text style={styles.secondaryActionText}>Export PDF</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     onPress={() => handlePrintInvoice(inv)}
-                    style={[styles.bottomActionBtn, { backgroundColor: '#4338ca' }]}
+                    style={styles.secondaryActionBtn}
+                    activeOpacity={0.8}
                   >
-                    <MaterialIcons name="print" size={16} color="#ffffff" />
-                    <Text style={styles.bottomActionBtnText}>Print</Text>
+                    <MaterialIcons name="print" size={17} color="#4338ca" />
+                    <Text style={styles.secondaryActionText}>Print</Text>
                   </TouchableOpacity>
 
                   {!isPaid && (
                     <TouchableOpacity
                       onPress={() => openPaymentSheet(inv)}
-                      style={[styles.bottomActionBtn, { backgroundColor: '#059669' }]}
+                      style={[styles.secondaryActionBtn, styles.secondaryActionBtnPay]}
                       accessibilityLabel="Record Payment"
+                      activeOpacity={0.8}
                     >
-                      <MaterialIcons name="payments" size={16} color="#ffffff" />
-                      <Text style={styles.bottomActionBtnText}>Record Payment</Text>
+                      <MaterialIcons name="payments" size={17} color="#059669" />
+                      <Text style={[styles.secondaryActionText, { color: '#059669', fontWeight: '800' }]}>
+                        Record Pay
+                      </Text>
                     </TouchableOpacity>
                   )}
                 </View>
-              </ScrollView>
-            </SafeAreaView>
+              </View>
+            </View>
           );
         })()}
       </Modal>
@@ -4185,6 +4217,58 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#ffffff',
+  },
+  dockedBottomBar: {
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 8,
+  },
+  whatsAppPrimaryBtn: {
+    backgroundColor: '#25D366',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+  },
+  whatsAppPrimaryText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  secondaryActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  secondaryActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  secondaryActionBtnPay: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+  },
+  secondaryActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
   },
   // Brand Settings
   brandPickBtn: {

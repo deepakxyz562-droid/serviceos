@@ -18,6 +18,7 @@ import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
 import { useBlueprintStore } from '@/stores/blueprint-store';
 import { API_PATHS } from '@/lib/constants';
+import { storageGetItem, storageSetItem } from '@/lib/storage';
 import {
   matchNotificationToOrders,
   submitPaymentMatch,
@@ -69,14 +70,36 @@ export default function OrdersScreen() {
       const data = await apiRequest<{ orders: Order[] }>(API_PATHS.commerceOrders);
       setOrders(data.orders || []);
       setError(null);
+      void storageSetItem('bos_orders_cache', JSON.stringify(data.orders || [])).catch(() => {});
     } catch (err: any) {
-      setOrders([]);
-      setError(err?.message || 'Unable to load orders. Pull to retry.');
+      setOrders(prev => {
+        if (prev.length === 0) {
+          setError(err?.message || 'Unable to load orders. Pull to retry.');
+        }
+        return prev;
+      });
     }
   };
 
   useEffect(() => {
-    fetchOrders().finally(() => setLoading(false));
+    let active = true;
+    (async () => {
+      try {
+        const cached = await storageGetItem('bos_orders_cache');
+        if (cached && active) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setOrders(parsed);
+            setLoading(false);
+          }
+        }
+      } catch {}
+      if (active) {
+        await fetchOrders();
+        setLoading(false);
+      }
+    })();
+    return () => { active = false; };
   }, []);
 
   const onRefresh = async () => {

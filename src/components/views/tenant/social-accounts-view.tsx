@@ -288,25 +288,17 @@ export function SocialAccountsView({ embedded = false }: { embedded?: boolean } 
                   Google Business Profile API Approved &amp; Live! (300 QPM)
                 </span>
                 <p className="mt-1 text-emerald-700 dark:text-emerald-300">
-                  Google has approved project <strong>58940552680</strong>. Ensure <em>Business Information API</em> and <em>Performance API</em> are activated in Google Cloud Console to enable live location fetching and review sync.
+                  Business Information API is connected and verified. Location <strong>shiv-ganga market (Patna)</strong> is active. Enable <em>Google My Business API</em> to publish reviews &amp; replies directly to Google Maps.
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <a
-                  href="https://console.developers.google.com/apis/api/mybusinessbusinessinformation.googleapis.com/overview?project=58940552680"
+                  href="https://console.developers.google.com/apis/api/mybusiness.googleapis.com/overview?project=58940552680"
                   target="_blank"
                   rel="noreferrer"
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-xs"
                 >
-                  Enable Business Info API ↗
-                </a>
-                <a
-                  href="https://console.developers.google.com/apis/api/businessprofileperformance.googleapis.com/overview?project=58940552680"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1"
-                >
-                  Enable Performance API ↗
+                  Enable Reviews API (Google My Business API) ↗
                 </a>
               </div>
             </div>

@@ -22,6 +22,7 @@ import { apiRequest } from '@/lib/api';
 import { RequestTracker } from '../../shared/money';
 import { useBlueprintStore } from '@/stores/blueprint-store';
 import { API_PATHS } from '@/lib/constants';
+import { storageGetItem, storageSetItem } from '@/lib/storage';
 
 export interface ProductItem {
   id: string;
