@@ -10,16 +10,18 @@ import {
   Share,
   RefreshControl,
   Linking,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { apiRequest } from '@/lib/api';
 import { API_PATHS } from '@/lib/constants';
 import { hapticFeedback } from '@/lib/haptics';
-import { generateGstInvoiceHtml, type GstStoreInfo } from '@/lib/gst-invoice-helper';
+import { storageGetItem } from '@/lib/storage';
+import { generateGstInvoiceHtml, resolveAbsoluteLogoUrl, type GstStoreInfo } from '@/lib/gst-invoice-helper';
 import { formatInr, formatDateShort, buildInvoiceUrl, extractGstStateCode } from '@/lib/money';
 import { KpiRow } from '@/components/money/kpi-tile';
 import { PaymentSheet } from '@/components/money/payment-sheet';
@@ -107,11 +109,31 @@ export default function InvoiceDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       void load(true);
-      // Store branding for the PDF (same mapping as the billing screen).
+      // Immediately load cached branding for instant offline render
+      void storageGetItem('bos_store_branding')
+        .then((cached) => {
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              if (parsed && typeof parsed === 'object') {
+                setStoreInfo((prev) => ({
+                  ...prev,
+                  ...parsed,
+                  logoUrl: resolveAbsoluteLogoUrl(parsed.logoUrl) || prev.logoUrl,
+                }));
+              }
+            } catch {}
+          }
+        })
+        .catch(() => {});
+
+      // Store branding from server
       apiRequest<{ config?: any; business?: any }>(API_PATHS.commerceConfig)
         .then((res) => {
           const c = res.config || {};
           const b = res.business || {};
+          const serverLogo = b.logoUrl || c.logoUrl || '';
+          const resolvedLogo = resolveAbsoluteLogoUrl(serverLogo);
           setStoreInfo((prev) => ({
             ...prev,
             businessName: b.name || c.storeName || c.businessName || prev.businessName,
@@ -120,7 +142,7 @@ export default function InvoiceDetailScreen() {
             email: b.email || c.email || prev.email,
             address: b.address || c.address || prev.address,
             upiId: c.upiId || b.upiId || prev.upiId,
-            logoUrl: b.logoUrl || c.logoUrl || prev.logoUrl,
+            logoUrl: resolvedLogo || prev.logoUrl,
             signatureUrl: b.signatureUrl || c.signatureUrl || prev.signatureUrl,
             billFooter: b.billFooter || c.billFooter || prev.billFooter,
           }));

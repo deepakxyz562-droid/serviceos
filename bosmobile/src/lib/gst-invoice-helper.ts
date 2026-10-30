@@ -1,8 +1,26 @@
 import { extractGstStateCode } from './money';
 import { qrSvgMarkup } from './qr';
+import { API_BASE_URL } from './constants';
 
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+export function resolveAbsoluteLogoUrl(url?: string | null): string {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  if (
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('file:') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://')
+  ) {
+    return trimmed;
+  }
+  const cleanBase = (API_BASE_URL || 'https://bos.fieseros.com').replace(/\/$/, '');
+  const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return `${cleanBase}${cleanPath}`;
 }
 
 export interface GstStoreInfo {
@@ -351,11 +369,12 @@ export function generateGstInvoiceHtml(
   <table class="header-table" cellpadding="0" cellspacing="0">
     <tr>
       <td style="vertical-align: top; width: 60%;">
-        ${
-          store.logoUrl
-            ? `<img src="${store.logoUrl}" style="max-height: 55px; max-width: 140px; object-fit: contain; margin-bottom: 6px;" alt="Logo" /><br/>`
-            : ''
-        }
+        ${(() => {
+          const absoluteLogo = resolveAbsoluteLogoUrl(store.logoUrl);
+          return absoluteLogo
+            ? `<img src="${absoluteLogo}" style="max-height: 55px; max-width: 140px; object-fit: contain; margin-bottom: 6px;" alt="Logo" /><br/>`
+            : '';
+        })()}
         <h1 class="store-name">${store.businessName || 'Business Store'}</h1>
         ${store.gstin ? `<div style="font-weight: bold; color: #475569;">GSTIN: ${store.gstin}</div>` : ''}
         ${store.address ? `<div>${store.address}</div>` : ''}

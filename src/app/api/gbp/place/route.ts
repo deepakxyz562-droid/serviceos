@@ -270,7 +270,7 @@ export async function GET(request: NextRequest) {
         status: isPendingApproval ? 'PENDING_APPROVAL' : 'ACTIVE',
         statusMessage: isPendingApproval
           ? 'Google Account connected. Listing locations pending Google API access approval (0 QPM quota).'
-          : 'Google Business Profile connected and active.',
+          : 'Google Business Profile connected and active (300 QPM approved).',
         completionScore: score,
         missingFields: missing,
       },
