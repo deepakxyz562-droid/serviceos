@@ -2359,8 +2359,8 @@ export default function BillingScreen() {
           const total = Number(inv.total || 0);
           const effectiveRate = taxable > 0 ? Math.round((tax / taxable) * 100) : 18;
           const halfRate = (effectiveRate / 2).toFixed(1).replace('.0', '');
-          const upiLink = storeInfo.upiId
-            ? `upi://pay?pa=${encodeURIComponent(storeInfo.upiId)}&pn=${encodeURIComponent(
+          const upiLink = storeInfo.upiId?.trim()
+            ? `upi://pay?pa=${encodeURIComponent(storeInfo.upiId.trim())}&pn=${encodeURIComponent(
                 storeInfo.businessName || 'Store'
               )}&am=${total.toFixed(2)}&tn=${encodeURIComponent(
                 `Invoice ${inv.number}`

@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   const originProto = request.headers.get('x-forwarded-proto') || (request.url.startsWith('https') ? 'https' : 'http');
   const originHost = host ? `${originProto}://${rawHost}` : getAppUrl();
 
-  // Infer target Fieseros app surface (customer | pro | admin | business)
+  // Infer target Fieseros app surface (customer | pro | admin | bos | business)
   const inferredApp =
     rawApp ||
     (redirectTo.startsWith('/app') || redirectTo.startsWith('fieseros://') || host.startsWith('app.')
@@ -51,7 +51,9 @@ export async function GET(request: NextRequest) {
         ? 'pro'
         : redirectTo.startsWith('/admin') || host.startsWith('admin.')
           ? 'admin'
-          : 'business');
+          : redirectTo.includes('app=true') || redirectTo.startsWith('/bos') || host.startsWith('bos.')
+            ? 'bos'
+            : 'business');
 
   if (!GOOGLE_CLIENT_ID) {
     console.error('Google OAuth: GOOGLE_CLIENT_ID is not configured');
@@ -67,7 +69,15 @@ export async function GET(request: NextRequest) {
     }
     const baseUrl = getAppUrl();
     const fallbackPath =
-      inferredApp === 'customer' ? '/app' : inferredApp === 'pro' ? '/pro' : inferredApp === 'admin' ? '/admin' : '/';
+      inferredApp === 'customer'
+        ? '/app'
+        : inferredApp === 'pro'
+          ? '/pro'
+          : inferredApp === 'admin'
+            ? '/admin'
+            : inferredApp === 'bos'
+              ? '/bos-login'
+              : '/';
     return NextResponse.redirect(
       new URL(`${fallbackPath}?auth_error=google_not_configured`, baseUrl)
     );

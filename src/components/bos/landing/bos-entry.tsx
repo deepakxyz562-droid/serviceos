@@ -8,7 +8,7 @@ const Workspace = dynamic(() => import('@/components/bos/bos-web-app').then(m =>
 function Entry() {
  const params = useSearchParams();
  const demo = params.get('demo') === 'true' || params.get('mode') === 'demo';
- const requested = params.get('app') === 'true' || params.has('view') || params.has('tab');
+ const requested = params.get('app') === 'true' || params.has('view') || params.has('tab') || params.get('google_login') === 'success';
  const landing = params.get('landing') === 'true' || params.has('logout');
  const [authenticated,setAuthenticated] = useState(false);
  useEffect(() => {

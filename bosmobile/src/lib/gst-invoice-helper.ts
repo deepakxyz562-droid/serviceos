@@ -106,8 +106,8 @@ export function generateGstInvoiceHtml(
   const clientState = extractGstStateCode(inv.placeOfSupply || inv.customer?.gstin);
   const interstate = Boolean(clientState) && Boolean(storeState) && storeState !== clientState;
 
-  const upiLink = store.upiId
-    ? `upi://pay?pa=${encodeURIComponent(store.upiId)}&pn=${encodeURIComponent(
+  const upiLink = store.upiId?.trim()
+    ? `upi://pay?pa=${encodeURIComponent(store.upiId.trim())}&pn=${encodeURIComponent(
         store.businessName || 'Store'
       )}&am=${(isPaid ? total : balanceDue).toFixed(2)}&tn=${encodeURIComponent(`Invoice ${inv.number}`)}&cu=INR`
     : '';

@@ -340,6 +340,12 @@ export async function GET(request: NextRequest) {
       redirectParam.startsWith('/admin') ||
       originHostLower.includes('://admin.');
 
+    const isBosApp =
+      state.app === 'bos' ||
+      redirectParam.includes('app=true') ||
+      redirectParam.startsWith('/bos') ||
+      originHostLower.includes('://bos.');
+
     const isMobileMode =
       state.mode === 'mobile' ||
       redirectParam.includes('auth-callback') ||
@@ -354,7 +360,9 @@ export async function GET(request: NextRequest) {
         ? '/pro'
         : isAdminApp
           ? '/admin'
-          : '/';
+          : isBosApp
+            ? '/bos-login'
+            : '/';
 
     // Handle Google OAuth errors (e.g., user denied access, redirect_uri_mismatch)
     if (error) {
@@ -424,6 +432,11 @@ export async function GET(request: NextRequest) {
       }
       if (isAdminApp) {
         const targetPath = state.redirect && state.redirect.startsWith('/') ? state.redirect : '/admin';
+        const sep = targetPath.includes('?') ? '&' : '?';
+        return `${baseUrl}${targetPath}${sep}google_login=success`;
+      }
+      if (isBosApp) {
+        const targetPath = state.redirect && state.redirect.startsWith('/') ? state.redirect : '/?app=true';
         const sep = targetPath.includes('?') ? '&' : '?';
         return `${baseUrl}${targetPath}${sep}google_login=success`;
       }

@@ -75,8 +75,8 @@ export function generateGstInvoiceHtml(
   const effectiveRate = taxable > 0 ? Math.round((tax / taxable) * 100) : 18;
   const halfRate = (effectiveRate / 2).toFixed(1).replace('.0', '');
 
-  const upiLink = store.upiId
-    ? `upi://pay?pa=${encodeURIComponent(store.upiId)}&pn=${encodeURIComponent(
+  const upiLink = store.upiId?.trim()
+    ? `upi://pay?pa=${encodeURIComponent(store.upiId.trim())}&pn=${encodeURIComponent(
         store.businessName || 'Store'
       )}&am=${total.toFixed(2)}&tn=${encodeURIComponent(`Invoice ${inv.number}`)}&cu=INR`
     : '';

@@ -2899,11 +2899,9 @@ export function BosInvoicesWorkstation({
                 {/* QR Code + Terms & Conditions + Authorized Signatory */}
                 <div className="flex flex-col gap-3 border-t border-[#EBF2EE] pt-2.5 sm:flex-row sm:items-end sm:justify-between">
                   <div className="flex items-start gap-2.5">
-                    {/* Real Scannable Invoice UPI QR Code */}
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-[#CBD5E1] bg-white p-1 shadow-2xs">
-                      {storeSettings.upiId ? (
-                        /* Safe to inline: markup is generated entirely by our
-                           local encoder — no user-controlled attributes. */
+                    {/* Real Scannable Invoice UPI QR Code — only rendered when UPI ID is configured */}
+                    {storeSettings.upiId?.trim() ? (
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-[#CBD5E1] bg-white p-1 shadow-2xs">
                         <div
                           className="h-full w-full"
                           role="img"
@@ -2911,7 +2909,7 @@ export function BosInvoicesWorkstation({
                           dangerouslySetInnerHTML={{
                             __html:
                               qrSvgMarkup(
-                                `upi://pay?pa=${encodeURIComponent(storeSettings.upiId)}&pn=${encodeURIComponent(
+                                `upi://pay?pa=${encodeURIComponent(storeSettings.upiId.trim())}&pn=${encodeURIComponent(
                                   storeSettings.businessName || 'Store'
                                 )}&am=${settlement.outstanding.toFixed(2)}&tn=${encodeURIComponent(
                                   `Invoice ${displayInvoiceNumber}`
@@ -2919,10 +2917,8 @@ export function BosInvoicesWorkstation({
                               ) ?? '',
                           }}
                         />
-                      ) : (
-                        <QrCode className="h-8 w-8 text-[#94A3B8]" />
-                      )}
-                    </div>
+                      </div>
+                    ) : null}
 
                     <div className="text-[9.5px] leading-snug text-[#475569] space-y-0.5">
                       <p className="font-bold text-[#111827]">
@@ -3247,12 +3243,10 @@ export function BosInvoicesWorkstation({
                 </span>
               </div>
 
-              {/* UPI QR Display */}
-              <div className="flex flex-col items-center justify-center p-4 bg-[#FAFDFB] rounded-xl border border-[#DCE9E3] space-y-2.5 text-center">
-                <div className="p-2 bg-white rounded-xl shadow-xs border border-[#E2E8F0]">
-                  {storeSettings.upiId ? (
-                    /* Safe to inline: markup is generated entirely by our
-                       local encoder — no user-controlled attributes. */
+              {/* UPI QR Display — only rendered when UPI ID is configured */}
+              {storeSettings.upiId?.trim() ? (
+                <div className="flex flex-col items-center justify-center p-4 bg-[#FAFDFB] rounded-xl border border-[#DCE9E3] space-y-2.5 text-center">
+                  <div className="p-2 bg-white rounded-xl shadow-xs border border-[#E2E8F0]">
                     <div
                       className="h-36 w-36"
                       role="img"
@@ -3260,7 +3254,7 @@ export function BosInvoicesWorkstation({
                       dangerouslySetInnerHTML={{
                         __html:
                           qrSvgMarkup(
-                            `upi://pay?pa=${encodeURIComponent(storeSettings.upiId)}&pn=${encodeURIComponent(
+                            `upi://pay?pa=${encodeURIComponent(storeSettings.upiId.trim())}&pn=${encodeURIComponent(
                               storeSettings.businessName || 'Store',
                             )}&am=${settlement.outstanding.toFixed(2)}&tn=${encodeURIComponent(
                               `Invoice ${displayInvoiceNumber}`,
@@ -3268,25 +3262,17 @@ export function BosInvoicesWorkstation({
                           ) ?? '',
                       }}
                     />
-                  ) : (
-                    <div className="h-36 w-36 flex flex-col items-center justify-center p-3 text-center bg-[#FAFDFB]">
-                      <QrCode className="h-10 w-10 text-[#94A3B8] mb-1" />
-                      <p className="text-[11.5px] font-bold text-[#334155]">UPI Not Configured</p>
-                      <p className="text-[10px] text-[#64748B] mt-0.5">
-                        Set your merchant UPI ID in Settings to enable dynamic bill QR
-                      </p>
-                    </div>
-                  )}
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-bold text-[#111827]">
+                      Scan with GPay, PhonePe, Paytm, or BHIM
+                    </p>
+                    <p className="text-[11px] text-[#64748B] font-mono">
+                      UPI ID: {storeSettings.upiId.trim()}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[12px] font-bold text-[#111827]">
-                    Scan with GPay, PhonePe, Paytm, or BHIM
-                  </p>
-                  <p className="text-[11px] text-[#64748B] font-mono">
-                    UPI ID: {storeSettings.upiId || 'Not configured (set in Settings)'}
-                  </p>
-                </div>
-              </div>
+              ) : null}
 
               {/* Quick Record Payment — REAL persistence: an unsaved draft is
                   saved first (create-flow payload), then
