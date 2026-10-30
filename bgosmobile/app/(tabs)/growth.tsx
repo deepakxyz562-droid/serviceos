@@ -29,6 +29,7 @@ import { PhotosBoard } from '../../src/components/gbp/photos-grid';
 import { PerformancePanel } from '../../src/components/gbp/performance-panel';
 import { AiActionsFeed } from '../../src/components/gbp/ai-actions';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
+import { AgencyComparisonCard } from '../../src/components/gbp/agency-matrix';
 import { AiButton, ChipRow, Pill, SectionHeader, gbpColors } from '../../src/components/gbp/bits';
 import type {
   AiAction,
@@ -676,6 +677,8 @@ export default function GrowthScreen() {
           <SectionHeader title="AI Actions" icon="auto-awesome" iconColor={gbpColors.ai} />
           <AiActionsFeed actions={aiActions} onOpenPosts={() => setTab('posts')} />
         </View>
+
+        <AgencyComparisonCard />
       </View>
     );
   }
