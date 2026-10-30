@@ -446,9 +446,31 @@ export function BosInvoicesWorkstation({
     });
   }, [storeSettings]);
 
-  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/commerce/logo', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.logoUrl) {
+        setBrandingForm((prev) => ({ ...prev, logoUrl: data.logoUrl }));
+        if (onUpdateStoreSettings) {
+          void onUpdateStoreSettings({ logoUrl: data.logoUrl });
+        }
+        setStatusBanner('Logo uploaded and synced across invoices and store!');
+        return;
+      }
+    } catch {
+      // Fallback to local Data URI if cloud storage upload fails
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       setBrandingForm((prev) => ({ ...prev, logoUrl: reader.result as string }));

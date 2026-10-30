@@ -2064,6 +2064,8 @@ export function StoreClient({
                                       // Safe to inline: markup is generated entirely by
                                       // our local encoder — no user-controlled attributes.
                                       <div
+                                        role="img"
+                                        aria-label="Shop UPI QR Code"
                                         className="size-32 rounded-lg border border-stone-200 bg-white p-1 shadow-2xs"
                                         dangerouslySetInnerHTML={{ __html: dynamicQrMarkup }}
                                       />

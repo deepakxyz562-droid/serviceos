@@ -581,7 +581,7 @@ export function BosReportsDaybookWorkstation({
     particulars: '',
     totalAmount: 5000,
     taxRate: 18,
-    paymentMode: 'Bank' as const,
+    paymentMode: 'Bank' as 'Bank' | 'Cash',
     paidAmount: 5000,
   });
   const [purchaseBills, setPurchaseBills] = useState<PurchaseBillRecord[]>(() => (demoMode ? [
@@ -1483,6 +1483,11 @@ export function BosReportsDaybookWorkstation({
   );
   const closingBalance = openingBalance + totalMoneyIn - totalMoneyOut;
   const expectedBalance = closingBalance;
+  const daybookKpis = {
+    moneyIn: totalMoneyIn,
+    moneyOut: totalMoneyOut,
+    closingBalance,
+  };
 
   // Add Entry Modal State
   const [showEntryModal, setShowEntryModal] = useState(false);
@@ -2584,7 +2589,7 @@ export function BosReportsDaybookWorkstation({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h3 className="text-[15px] font-bold text-[#111827]">
-                      Revenue vs Profit &amp; Expenses
+                      Revenue vs Profit & Expenses
                     </h3>
                     <p className="text-[12px] text-[#64748B]">
                       Performance breakdown across POS, Online Store, and B2B Invoices
@@ -2699,7 +2704,7 @@ export function BosReportsDaybookWorkstation({
 
               <div className="bos-card p-4 space-y-3 text-[12.5px]">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-[14.5px] font-bold text-[#111827]">Profit &amp; Loss Summary</h3>
+                  <h3 className="text-[14.5px] font-bold text-[#111827]">Profit & Loss Summary</h3>
                   <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
                     {reportsData.netProfit >= 0 ? 'Healthy' : 'Deficit'}
                   </span>
@@ -2735,7 +2740,7 @@ export function BosReportsDaybookWorkstation({
               <div className="bos-card p-4 space-y-3 text-[12.5px]">
                 <div className="flex items-center justify-between">
                   <h3 className="text-[14.5px] font-bold text-[#111827]">
-                    GST Tax Summary (GSTR-1 &amp; 3B)
+                    GST Tax Summary (GSTR-1 & 3B)
                   </h3>
                   <span className="rounded-md bg-[#F1F6F3] px-2 py-0.5 text-[10.5px] font-bold text-[#334155]">
                     {new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' })}
@@ -2945,7 +2950,7 @@ export function BosReportsDaybookWorkstation({
                     </p>
                   </div>
                   <div className="bos-card p-4">
-                    <p className="text-[12px] font-semibold text-[#64748B]">Closing Cash &amp; Bank Balance</p>
+                    <p className="text-[12px] font-semibold text-[#64748B]">Closing Cash & Bank Balance</p>
                     <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
                       {currencySymbol} {closingBalance.toLocaleString('en-IN')}
                     </p>
@@ -2953,7 +2958,7 @@ export function BosReportsDaybookWorkstation({
                 </div>
 
                 <div className="bos-card p-4 space-y-3">
-                  <h4 className="text-[14px] font-bold text-[#111827]">Daily Cash &amp; Bank Register</h4>
+                  <h4 className="text-[14px] font-bold text-[#111827]">Daily Cash & Bank Register</h4>
                   <p className="text-xs text-[#64748B]">
                     Full real-time transaction ledger including POS sales, customer khata receipts, operating expenses, and cash withdrawals.
                   </p>

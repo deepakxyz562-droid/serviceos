@@ -114,6 +114,34 @@ export async function POST(request: NextRequest) {
       } catch (tErr) {
         console.warn('[BrandKit] Tenant.logo sync non-fatal:', tErr)
       }
+
+      try {
+        const aiBiz = await db.aiBusiness.findFirst({
+          where: { tenantId },
+        })
+        if (aiBiz) {
+          await db.aiBusiness.update({
+            where: { id: aiBiz.id },
+            data: { logoUrl: body.logoUrl },
+          })
+          const cfg = await db.gptformCommerceConfig.findFirst({
+            where: { businessId: aiBiz.id },
+          })
+          if (cfg?.fieldsJson) {
+            try {
+              const raw = JSON.parse(cfg.fieldsJson)
+              const container = Array.isArray(raw) ? { fields: raw } : raw
+              container.logoUrl = body.logoUrl
+              await db.gptformCommerceConfig.update({
+                where: { id: cfg.id },
+                data: { fieldsJson: JSON.stringify(container) },
+              })
+            } catch {}
+          }
+        }
+      } catch (aiErr) {
+        console.warn('[BrandKit] AiBusiness/CommerceConfig sync non-fatal:', aiErr)
+      }
     }
 
     revalidatePublicBusiness(tenantId)

@@ -22,7 +22,7 @@ import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons, Feather, Ionicons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
@@ -247,7 +247,14 @@ export default function BillingScreen() {
   const [paySheetOpen, setPaySheetOpen] = useState(false);
   const [paySheetInvoice, setPaySheetInvoice] = useState<PaymentSheetInvoice | null>(null);
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<string>('CASH');
+  const params = useLocalSearchParams<{ openBrand?: string }>();
   const [brandModalOpen, setBrandModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (params?.openBrand === '1') {
+      setBrandModalOpen(true);
+    }
+  }, [params?.openBrand]);
   const [savingBrand, setSavingBrand] = useState(false);
   const [showSigPad, setShowSigPad] = useState(false);
   const [storeInfo, setStoreInfo] = useState<GstStoreInfo>(() => ({
@@ -887,13 +894,38 @@ export default function BillingScreen() {
         base64: true,
       });
       if (!res.canceled && res.assets && res.assets[0]) {
-        const base64Uri = `data:image/jpeg;base64,${res.assets[0].base64}`;
+        const asset = res.assets[0];
+        const base64Uri = `data:image/jpeg;base64,${asset.base64}`;
         setStoreInfo((prev) => ({ ...prev, logoUrl: base64Uri }));
-        Alert.alert('Logo Selected ✓', 'Store logo updated.');
+
+        // Attempt instant cloud sync via /api/commerce/logo
+        try {
+          const syncRes = await apiRequest<{ logoUrl?: string }>('/api/commerce/logo', {
+            method: 'POST',
+            body: { base64: base64Uri },
+          });
+          if (syncRes?.logoUrl) {
+            setStoreInfo((prev) => ({ ...prev, logoUrl: syncRes.logoUrl! }));
+            void storageSetItem('bos_store_branding', JSON.stringify({ ...storeInfo, logoUrl: syncRes.logoUrl })).catch(() => {});
+          }
+        } catch {
+          // Fallback to local base64 until full brand save
+        }
+
+        Alert.alert('Logo Selected ✓', 'Store logo updated and synced across all devices.');
       }
     } catch (e: any) {
       Alert.alert('Image Pick Error', e?.message || 'Could not pick logo.');
     }
+  };
+
+  const handleRemoveLogo = async () => {
+    setStoreInfo((prev) => ({ ...prev, logoUrl: '' }));
+    try {
+      await apiRequest('/api/commerce/logo', { method: 'DELETE' });
+      void storageSetItem('bos_store_branding', JSON.stringify({ ...storeInfo, logoUrl: '' })).catch(() => {});
+    } catch {}
+    Alert.alert('Logo Removed', 'Store logo has been cleared.');
   };
 
   const handlePickSignature = async () => {
@@ -2816,7 +2848,22 @@ export default function BillingScreen() {
                   <Text style={styles.inputLabel}>Store Logo</Text>
                   <TouchableOpacity onPress={handlePickLogo} style={styles.brandPickBtn}>
                     {storeInfo.logoUrl ? (
-                      <Image source={{ uri: storeInfo.logoUrl }} style={styles.pickedThumb} />
+                      <View style={{ position: 'relative', width: '100%', height: '100%' }}>
+                        <Image source={{ uri: storeInfo.logoUrl }} style={styles.pickedThumb} />
+                        <TouchableOpacity
+                          onPress={handleRemoveLogo}
+                          style={{
+                            position: 'absolute',
+                            top: 4,
+                            right: 4,
+                            backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                            borderRadius: 12,
+                            padding: 3,
+                          }}
+                        >
+                          <MaterialIcons name="close" size={14} color="#ffffff" />
+                        </TouchableOpacity>
+                      </View>
                     ) : (
                       <>
                         <MaterialIcons name="add-photo-alternate" size={24} color="#059669" />

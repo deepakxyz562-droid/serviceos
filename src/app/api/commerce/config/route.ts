@@ -9,7 +9,7 @@ import { computeStoreAvailability, getIstCurrentDateStr } from '@/lib/commerce/s
 
 export async function GET(req: NextRequest) {
   try {
-    const { business } = await requireQuoteFlowBusiness(req);
+    const { business, user } = await requireQuoteFlowBusiness(req);
     let config = await db.gptformCommerceConfig.findFirst({
       where: {
         OR: [{ businessId: business.id }, ...(business.tenantId ? [{ businessId: business.tenantId }] : [])],
@@ -116,6 +116,18 @@ export async function GET(req: NextRequest) {
       businessName: business.name,
     });
 
+    let resolvedLogoUrl = business.logoUrl || (parsedFieldsData.logoUrl || '');
+    const resolvedTenantId = business.tenantId || user?.tenantId;
+    if (!resolvedLogoUrl && resolvedTenantId) {
+      try {
+        const t = await db.tenant.findUnique({
+          where: { id: resolvedTenantId },
+          select: { logo: true },
+        });
+        if (t?.logo) resolvedLogoUrl = t.logo;
+      } catch {}
+    }
+
     return NextResponse.json({
       config: {
         ...config,
@@ -151,7 +163,7 @@ export async function GET(req: NextRequest) {
         phone: business.phone || '',
         email: business.email || '',
         address: business.address || '',
-        logoUrl: business.logoUrl || (parsedFieldsData.logoUrl || ''),
+        logoUrl: resolvedLogoUrl,
         signatureUrl: parsedFieldsData.signatureUrl || '',
         billFooter: parsedFieldsData.billFooter || '',
         upiId: config.upiId || '',
@@ -166,7 +178,7 @@ export async function GET(req: NextRequest) {
         phone: business.phone || '',
         email: business.email || '',
         address: business.address || '',
-        logoUrl: business.logoUrl || (parsedFieldsData.logoUrl || ''),
+        logoUrl: resolvedLogoUrl,
         signatureUrl: parsedFieldsData.signatureUrl || '',
         billFooter: parsedFieldsData.billFooter || '',
         gstin: parsedFieldsData.billing?.gstin || '',
@@ -185,7 +197,7 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { business } = await requireQuoteFlowBusiness(req);
+    const { business, user } = await requireQuoteFlowBusiness(req);
     const body = await req.json();
 
     // 1. Update business profile fields on db.aiBusiness if supplied
@@ -373,6 +385,49 @@ export async function PATCH(req: NextRequest) {
     try {
       if (config.businessHoursJson) parsedHours = JSON.parse(config.businessHoursJson);
     } catch {}
+
+    // Atomic sync across Tenant & BrandKit so storefronts, booking, and pay portals stay unified
+    const resolvedTenantId = business.tenantId || user?.tenantId;
+    if (resolvedTenantId) {
+      try {
+        const tenantUpdates: Record<string, any> = {};
+        if (businessUpdates.logoUrl !== undefined) tenantUpdates.logo = businessUpdates.logoUrl;
+        if (businessUpdates.name) tenantUpdates.name = businessUpdates.name;
+        if (businessUpdates.phone) tenantUpdates.phone = businessUpdates.phone;
+        if (businessUpdates.email) tenantUpdates.email = businessUpdates.email;
+        if (businessUpdates.address) tenantUpdates.address = businessUpdates.address;
+        if (container.location?.city) tenantUpdates.city = container.location.city;
+        if (container.location?.state) tenantUpdates.state = container.location.state;
+        if (container.location?.pincode) tenantUpdates.zip = container.location.pincode;
+
+        if (Object.keys(tenantUpdates).length > 0) {
+          await db.tenant.update({
+            where: { id: resolvedTenantId },
+            data: tenantUpdates,
+          });
+        }
+
+        const brandKitUpdates: Record<string, any> = {};
+        if (businessUpdates.logoUrl !== undefined) brandKitUpdates.logoUrl = businessUpdates.logoUrl;
+        if (businessUpdates.name) brandKitUpdates.companyName = businessUpdates.name;
+        if (businessUpdates.phone) brandKitUpdates.phone = businessUpdates.phone;
+        if (businessUpdates.email) brandKitUpdates.email = businessUpdates.email;
+        if (businessUpdates.address) brandKitUpdates.address = businessUpdates.address;
+
+        if (Object.keys(brandKitUpdates).length > 0) {
+          await db.brandKit.upsert({
+            where: { tenantId: resolvedTenantId },
+            create: { tenantId: resolvedTenantId, ...brandKitUpdates },
+            update: brandKitUpdates,
+          });
+        }
+
+        const { revalidatePublicBusiness } = await import('@/lib/public-business');
+        revalidatePublicBusiness(resolvedTenantId);
+      } catch (syncErr) {
+        console.warn('[CommerceConfig] Tenant/BrandKit sync non-fatal:', syncErr);
+      }
+    }
 
     const availability = computeStoreAvailability({
       isStoreOpen: container.isStoreOpen !== undefined ? Boolean(container.isStoreOpen) : (config.isActive ?? true),

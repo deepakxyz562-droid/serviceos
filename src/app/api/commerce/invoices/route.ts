@@ -223,7 +223,7 @@ export async function POST(req: Request) {
     }
     if (!customerId && (data.customerName || data.customerPhone)) {
       const cleanPhone = (data.customerPhone || '').replace(/\D/g, '');
-      let existing = null;
+      let existing: any = null;
       if (cleanPhone) {
         existing = await db.aiCustomer.findFirst({
           where: { businessId: business.id, phone: { contains: cleanPhone.slice(-10) } },
@@ -342,7 +342,7 @@ export async function POST(req: Request) {
         const inv = await tx.aiInvoice.create({
           data: {
             businessId: business.id,
-            customerId: customerId || null,
+            customerId: customerId || undefined,
             number: invoiceNumber,
             status: data.status,
             dueDate: data.dueDate ? new Date(data.dueDate) : null,

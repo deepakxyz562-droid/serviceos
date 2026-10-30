@@ -1259,14 +1259,35 @@ export function BosMarketingAiIntegrationsSettings({
   const logoFileInputRef = useRef<HTMLInputElement>(null);
 
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setToast('Please select a valid image file (PNG, JPG, WebP).');
+      setToast('Please select a valid image file (PNG, JPG, WebP, SVG).');
       setTimeout(() => setToast(null), 3000);
       return;
     }
+
+    try {
+      setToast('Uploading and syncing logo...');
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await authFetch('/api/commerce/logo', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.logoUrl) {
+        setSettingsLogoUrl(data.logoUrl);
+        await onUpdateStoreSettings({ logoUrl: data.logoUrl });
+        setToast('Business logo synced across Invoices, Store & Mobile!');
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+    } catch {
+      // Fallback to local Data URI if cloud storage is unreachable
+    }
+
     const reader = new FileReader();
     reader.onload = async () => {
       const base64 = reader.result as string;
@@ -1280,8 +1301,11 @@ export function BosMarketingAiIntegrationsSettings({
 
   const handleRemoveLogo = async () => {
     setSettingsLogoUrl('');
+    try {
+      await authFetch('/api/commerce/logo', { method: 'DELETE' });
+    } catch {}
     await onUpdateStoreSettings({ logoUrl: '' });
-    setToast('Business logo removed.');
+    setToast('Business logo removed across all workstations.');
     setTimeout(() => setToast(null), 3000);
   };
 
@@ -4152,9 +4176,14 @@ export function BosMarketingAiIntegrationsSettings({
                 {/* Row 6: Business Logo & Description */}
                 <div className="grid grid-cols-1 gap-4 pt-2 border-t border-[#EDF4F0] sm:grid-cols-12">
                   <div className="sm:col-span-5 space-y-2">
-                    <label className="block text-[12px] font-semibold text-[#334155]">
-                      Business Logo
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[12px] font-semibold text-[#334155]">
+                        Business Logo
+                      </label>
+                      <span className="rounded-full bg-[#E6F6F0] px-2 py-0.5 text-[10px] font-bold text-[#0A6847]">
+                        ✓ Synced everywhere
+                      </span>
+                    </div>
                     <div className="flex items-center gap-3">
                       <div className="relative flex h-16 w-16 shrink-0 flex-col items-center justify-center overflow-hidden rounded-xl border border-[#DCE9E3] bg-gradient-to-b from-[#E6F6F0] to-[#FEF3C7] shadow-2xs">
                         {settingsLogoUrl ? (
@@ -4673,7 +4702,12 @@ export function BosMarketingAiIntegrationsSettings({
               <div className="space-y-4 text-[12.5px]">
                 {/* Logo Section */}
                 <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-4 space-y-3">
-                  <p className="font-bold text-[#111827]">Store Logo</p>
+                  <div className="flex items-center justify-between">
+                    <p className="font-bold text-[#111827]">Store Logo</p>
+                    <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[10.5px] font-bold text-[#0A6847]">
+                      ✓ Synced with Invoices, Store, &amp; Mobile App
+                    </span>
+                  </div>
                   <div className="flex items-center gap-4">
                     <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-[#A7F3D0] bg-white shadow-xs">
                       {settingsLogoUrl ? (

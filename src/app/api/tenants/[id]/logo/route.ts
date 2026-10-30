@@ -164,6 +164,35 @@ export async function POST(
       console.warn('[LogoUpload] BrandKit sync non-fatal warning:', bkErr);
     }
 
+    // Also sync AiBusiness and GptformCommerceConfig for BOS
+    try {
+      const aiBiz = await db.aiBusiness.findFirst({
+        where: { OR: [{ tenantId }, { ownerId: user.id }] },
+      });
+      if (aiBiz) {
+        await db.aiBusiness.update({
+          where: { id: aiBiz.id },
+          data: { logoUrl: url },
+        });
+        const cfg = await db.gptformCommerceConfig.findFirst({
+          where: { businessId: aiBiz.id },
+        });
+        if (cfg?.fieldsJson) {
+          try {
+            const raw = JSON.parse(cfg.fieldsJson);
+            const container = Array.isArray(raw) ? { fields: raw } : raw;
+            container.logoUrl = url;
+            await db.gptformCommerceConfig.update({
+              where: { id: cfg.id },
+              data: { fieldsJson: JSON.stringify(container) },
+            });
+          } catch {}
+        }
+      }
+    } catch (aiErr) {
+      console.warn('[LogoUpload] AiBusiness/CommerceConfig sync non-fatal warning:', aiErr);
+    }
+
     invalidateAuthCache();
     revalidatePublicBusiness(updatedTenant?.slug || tenantId);
     try {
@@ -221,6 +250,32 @@ export async function DELETE(
         where: { tenantId },
         data: { logoUrl: null },
       });
+    } catch {}
+
+    try {
+      const aiBiz = await db.aiBusiness.findFirst({
+        where: { OR: [{ tenantId }, { ownerId: user.id }] },
+      });
+      if (aiBiz) {
+        await db.aiBusiness.update({
+          where: { id: aiBiz.id },
+          data: { logoUrl: null },
+        });
+        const cfg = await db.gptformCommerceConfig.findFirst({
+          where: { businessId: aiBiz.id },
+        });
+        if (cfg?.fieldsJson) {
+          try {
+            const raw = JSON.parse(cfg.fieldsJson);
+            const container = Array.isArray(raw) ? { fields: raw } : raw;
+            container.logoUrl = null;
+            await db.gptformCommerceConfig.update({
+              where: { id: cfg.id },
+              data: { fieldsJson: JSON.stringify(container) },
+            });
+          } catch {}
+        }
+      }
     } catch {}
 
     invalidateAuthCache();

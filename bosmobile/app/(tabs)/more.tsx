@@ -66,6 +66,7 @@ export default function MoreScreen() {
   <Text style={styles.title}>{t('Settings', 'सेटिंग')}</Text><View style={styles.profile}><View style={styles.avatar}><Text style={styles.initial}>{(user?.name || user?.email || '?')[0].toUpperCase()}</Text></View><View style={{ flex: 1 }}><Text style={styles.name}>{user?.name || t('Your account', 'आपका खाता')}</Text><Text style={styles.email}>{user?.email}</Text></View></View>
   {section(t('Your business', 'आपका व्यवसाय'), business)}{section(t('Customers & conversations', 'ग्राहक और बातचीत'), conversations)}{section(t('Enabled tools', 'चालू टूल'), tools)}{section(t('Preferences', 'पसंद'), preferences)}
   {section(t('Business setup', 'व्यवसाय की सेटिंग'), [
+    { label: t('Store branding & logo', 'दुकान की ब्रांडिंग और लोगो'), icon: 'branding-watermark' as Icon, path: '/(tabs)/billing?openBrand=1', detail: t('Logo, GST', 'लोगो, GST') },
     { label: t('Staff & team roles', 'स्टाफ़ और भूमिकाएँ'), icon: 'badge' as Icon, path: '/staff', detail: t('Multi-user', 'मल्टी-यूज़र') },
     { label: t('Business details', 'व्यवसाय की जानकारी'), icon: 'storefront', path: '/blueprint-setup', detail: homeText(blueprint.businessType, language) },
   ])}

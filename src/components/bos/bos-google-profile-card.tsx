@@ -186,15 +186,15 @@ export function BosGoogleProfileCard({ demoMode = false, businessName }: BosGoog
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2.5">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[13px] font-extrabold text-[#0A6847] shadow-2xs">
-                {(gbpAccount.accountName || 'G').slice(0, 1).toUpperCase()}
+                {(gbpAccount?.accountName || 'G').slice(0, 1).toUpperCase()}
               </span>
               <div className="min-w-0">
                 <p className="flex items-center gap-1.5 text-[12.5px] font-extrabold text-[#065F46]">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Connected as {gbpAccount.accountName || 'Google account'}
+                  Connected as {gbpAccount?.accountName || 'Google account'}
                 </p>
                 <p className="truncate text-[10.5px] text-[#047857]">
-                  Google Business Profile · {gbpAccount.accountId}
+                  Google Business Profile · {gbpAccount?.accountId || ''}
                 </p>
               </div>
             </div>
