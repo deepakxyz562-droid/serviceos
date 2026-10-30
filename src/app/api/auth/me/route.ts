@@ -12,7 +12,7 @@ import { invalidateAuthCache } from '@/lib/auth-me-cache';
 // logout (cookie cleared) and on profile updates via `invalidateAuthCache()`.
 const AUTH_ME_TTL = 30_000;
 
-export async function GET(request?: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     const authUser = await getAuthUser(request);
 
