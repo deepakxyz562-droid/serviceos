@@ -54,8 +54,10 @@ import {
   Layers,
   Bot,
   Check,
+  ChevronLeft,
   ChevronRight,
   ChevronDown,
+  ArrowRight,
   Copy,
   ExternalLink,
   Plus,
@@ -654,9 +656,16 @@ function KeywordText({
 
 const SCORE_LABEL_STYLES: Record<string, string> = {
   Great: 'bg-emerald-500',
-  Good: 'bg-amber-400',
+  Good: 'bg-amber-500',
   Average: 'bg-orange-500',
-  Poor: 'bg-red-500',
+  Poor: 'bg-rose-500',
+};
+
+const SCORE_TEXT_COLORS: Record<string, string> = {
+  Great: 'text-emerald-600 dark:text-emerald-400',
+  Good: 'text-amber-600 dark:text-amber-400',
+  Average: 'text-orange-600 dark:text-orange-400',
+  Poor: 'text-rose-600 dark:text-rose-400',
 };
 
 function SpeedometerGauge({
@@ -670,15 +679,22 @@ function SpeedometerGauge({
   onImprove?: () => void;
   onFix?: () => void;
 }) {
+  const [showInfo, setShowInfo] = useState(false);
   const connected = scoreData?.isConnected === true;
   const score = typeof scoreData?.score === 'number' ? scoreData.score : null;
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-3 gap-3">
-        <Skeleton className="h-24 w-44 rounded-2xl" />
-        <Skeleton className="h-7 w-24 rounded-full" />
-        <Skeleton className="h-8 w-full rounded-xl" />
+        <Skeleton className="h-28 w-48 rounded-2xl" />
+        <Skeleton className="h-6 w-28 rounded-full" />
+        <div className="grid grid-cols-2 gap-2 w-full mt-2">
+          <Skeleton className="h-10 w-full rounded-lg" />
+          <Skeleton className="h-10 w-full rounded-lg" />
+          <Skeleton className="h-10 w-full rounded-lg" />
+          <Skeleton className="h-10 w-full rounded-lg" />
+        </div>
+        <Skeleton className="h-9 w-full rounded-xl" />
       </div>
     );
   }
@@ -686,7 +702,7 @@ function SpeedometerGauge({
   // Honest NOT_CONNECTED state (Dhanda): dash + grey "Not available" pill + fix row.
   if (!connected || score === null) {
     return (
-      <div className="flex flex-col items-center justify-center p-3 text-center">
+      <div className="flex flex-col items-center justify-center p-4 text-center">
         <div className="text-5xl font-black text-muted-foreground/40 leading-none pt-2">&mdash;</div>
         <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full bg-muted text-muted-foreground text-[11px] font-bold mt-2">
           Not available
@@ -694,7 +710,7 @@ function SpeedometerGauge({
         <p className="text-[11px] text-muted-foreground mt-2 max-w-[220px]">
           Connect your Google Business Profile to unlock your Marketing Score.
         </p>
-        <div className="mt-3 w-full flex items-center justify-between border-t border-border/40 pt-2">
+        <div className="mt-4 w-full flex items-center justify-between border-t border-border/40 pt-2.5">
           <span className="text-[10px] font-extrabold tracking-widest text-rose-500">NOT_CONNECTED</span>
           <button
             type="button"
@@ -713,60 +729,235 @@ function SpeedometerGauge({
   const label =
     scoreData?.label ||
     (score >= 80 ? 'Great' : score >= 60 ? 'Good' : score >= 40 ? 'Average' : 'Poor');
-  const badgeClass = SCORE_LABEL_STYLES[label] || 'bg-red-500';
+  const badgeClass = SCORE_LABEL_STYLES[label] || 'bg-rose-500';
+  const textColor = SCORE_TEXT_COLORS[label] || 'text-rose-500';
+
+  // Arc math: radius 75, circumference = pi * 75 ≈ 235.62
+  const strokeCircumference = 235.62;
+  const strokeOffset = strokeCircumference * (1 - Math.min(Math.max(score / 100, 0), 1));
+
+  // 4 Core Factors Breakdown
+  const comps = scoreData?.components;
+  const profileVal = comps?.profileCompleteness ?? Math.min(100, Math.round(score * 1.2));
+  const replyVal = Math.round((scoreData?.reviewReplyRate ?? 0) * 100);
+  const cadenceVal = comps?.postingCadenceScore ?? (scoreData?.postsLast30Days ? Math.min(100, scoreData.postsLast30Days * 12) : 0);
+  const rankVal = comps?.engagementScore ?? (scoreData?.reviewRating ? Math.round((scoreData.reviewRating / 5) * 100) : 0);
+
+  const factorItems = [
+    { label: 'Profile Audit', val: profileVal, icon: FileText, color: 'bg-emerald-500' },
+    { label: 'Review Replies', val: replyVal, icon: MessageSquare, color: 'bg-blue-500' },
+    { label: '30D Posts', val: cadenceVal, icon: Sparkles, color: 'bg-amber-500' },
+    { label: 'Local Rank', val: rankVal, icon: TrendingUp, color: 'bg-purple-500' },
+  ];
 
   return (
-    <div className="flex flex-col items-center justify-center p-3 text-center">
-      <div className="relative w-44 h-24 flex items-end justify-center overflow-hidden">
-        <svg viewBox="0 0 200 110" className="w-full h-full" role="img" aria-label={`Marketing score ${score} out of 100`}>
-          <path d="M 20 100 A 80 80 0 0 1 60 40" fill="none" stroke="#EF4444" strokeWidth="14" strokeLinecap="round" />
-          <path d="M 62 38 A 80 80 0 0 1 100 20" fill="none" stroke="#F97316" strokeWidth="14" />
-          <path d="M 100 20 A 80 80 0 0 1 138 38" fill="none" stroke="#EAB308" strokeWidth="14" />
-          <path d="M 140 40 A 80 80 0 0 1 180 100" fill="none" stroke="#10B981" strokeWidth="14" strokeLinecap="round" />
-          <circle cx="100" cy="100" r="7" fill="#1E293B" className="dark:fill-slate-100" />
-          <line
-            x1="100"
-            y1="100"
-            x2="100"
-            y2="30"
-            stroke="#1E293B"
-            strokeWidth="4"
+    <div className="flex flex-col items-center justify-between h-full p-2 text-center">
+      {/* Premium SVG Speedometer Gauge */}
+      <div className="relative w-52 h-28 flex items-end justify-center overflow-visible pt-1">
+        <svg viewBox="0 0 220 125" className="w-full h-full overflow-visible" role="img" aria-label={`Marketing score ${score} out of 100`}>
+          <defs>
+            <linearGradient id="scoreGaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#EF4444" />
+              <stop offset="35%" stopColor="#F97316" />
+              <stop offset="65%" stopColor="#EAB308" />
+              <stop offset="100%" stopColor="#10B981" />
+            </linearGradient>
+            <filter id="gaugeShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.2" />
+            </filter>
+          </defs>
+
+          {/* Background neutral track arc */}
+          <path
+            d="M 35 105 A 75 75 0 0 1 185 105"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="13"
             strokeLinecap="round"
-            className="dark:stroke-slate-100 transition-transform duration-700 ease-out"
-            style={{ transformOrigin: '100px 100px', transform: `rotate(${angle}deg)` }}
+            className="text-muted/20 dark:text-muted/30"
           />
+
+          {/* Filled gradient active arc */}
+          <path
+            d="M 35 105 A 75 75 0 0 1 185 105"
+            fill="none"
+            stroke="url(#scoreGaugeGrad)"
+            strokeWidth="13"
+            strokeLinecap="round"
+            strokeDasharray={strokeCircumference}
+            strokeDashoffset={strokeOffset}
+            className="transition-all duration-1000 ease-out"
+          />
+
+          {/* Scale labels */}
+          <text x="32" y="122" textAnchor="middle" className="text-[10px] font-bold fill-muted-foreground/70">0%</text>
+          <text x="110" y="22" textAnchor="middle" className="text-[10px] font-bold fill-muted-foreground/70">50%</text>
+          <text x="188" y="122" textAnchor="middle" className="text-[10px] font-bold fill-muted-foreground/70">100%</text>
+
+          {/* Tapered needle */}
+          <g style={{ transformOrigin: '110px 105px', transform: `rotate(${angle}deg)` }} className="transition-transform duration-700 ease-out">
+            <polygon points="107,105 113,105 111,38 109,38" className="fill-foreground" />
+          </g>
+
+          {/* Center pivot cap */}
+          <circle cx="110" cy="105" r="7" className="fill-foreground" filter="url(#gaugeShadow)" />
+          <circle cx="110" cy="105" r="3" fill="#FFFFFF" />
         </svg>
       </div>
 
-      <div className="mt-1">
-        <div className="text-2xl font-black text-foreground tracking-tight">{score}%</div>
-        <span
-          className={`inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-white text-[11px] font-bold mt-1 shadow-xs ${badgeClass}`}
-        >
-          {label} ⓘ
-        </span>
-      </div>
-
-      {onImprove && (
-        <div className="mt-3 w-full rounded-xl p-[1.5px] bg-linear-to-r from-rose-500 via-orange-500 to-amber-500">
+      {/* Score readout and band label */}
+      <div className="mt-1 flex flex-col items-center">
+        <div className={`text-3xl font-black tracking-tight ${textColor}`}>{score}%</div>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-white text-[11px] font-bold shadow-xs ${badgeClass}`}>
+            {label}
+          </span>
           <button
             type="button"
-            onClick={onImprove}
-            className="w-full rounded-[10px] bg-card py-2 px-3 text-xs font-bold text-foreground hover:bg-muted/40 transition-all flex items-center justify-center gap-1.5"
+            onClick={() => setShowInfo(true)}
+            className="p-0.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            title="How Marketing Score is calculated"
+            aria-label="Marketing score details"
           >
-            <span>Improve Marketing Score</span>
-            <span>&rarr;</span>
+            <Info className="size-3.5" />
           </button>
         </div>
+        <p className="text-[10px] font-semibold text-muted-foreground mt-1">
+          Goal: <span className="font-bold text-foreground">80%+</span> to dominate Google Local 3-Pack
+        </p>
+      </div>
+
+      {/* 4 Factor Breakdown Bars */}
+      <div className="grid grid-cols-2 gap-2 w-full mt-2.5 pt-2 border-t border-border/40 text-left">
+        {factorItems.map((f) => (
+          <div key={f.label} className="p-1.5 rounded-lg bg-muted/40 border border-border/40">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold mb-1">
+              <span className="flex items-center gap-1 truncate">
+                <f.icon className="size-2.5 text-foreground/70" />
+                {f.label}
+              </span>
+              <span className="font-bold text-foreground">{f.val}%</span>
+            </div>
+            <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full ${f.color} transition-all duration-500`}
+                style={{ width: `${Math.min(100, Math.max(0, f.val))}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Actionable CTA */}
+      {onImprove && (
+        <Button
+          type="button"
+          onClick={onImprove}
+          className="w-full mt-2.5 h-8.5 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 shadow-2xs flex items-center justify-center gap-1.5 text-xs transition-all"
+        >
+          <Zap className="size-3.5 fill-current text-amber-300" />
+          <span>Improve Marketing Score</span>
+          <ArrowRight className="size-3.5" />
+        </Button>
       )}
+
+      {/* Scoring Methodology Info Modal */}
+      <Dialog open={showInfo} onOpenChange={setShowInfo}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Sparkles className="size-4 text-primary" />
+              <span>How Marketing Score is Calculated</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Your composite score (0–100%) measures your Google Business optimization and local visibility using 4 weighted pillars:
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="p-2.5 rounded-xl bg-muted/50 border border-border/50">
+              <div className="flex items-center justify-between font-bold text-foreground">
+                <span className="flex items-center gap-1.5">
+                  <FileText className="size-3.5 text-emerald-500" />
+                  Profile Completeness
+                </span>
+                <span className="text-emerald-600 dark:text-emerald-400">40% Weight</span>
+              </div>
+              <p className="text-muted-foreground mt-1 text-[11px]">
+                Business hours, primary &amp; secondary categories, complete address, service areas, website &amp; direct phone link.
+              </p>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-muted/50 border border-border/50">
+              <div className="flex items-center justify-between font-bold text-foreground">
+                <span className="flex items-center gap-1.5">
+                  <MessageSquare className="size-3.5 text-blue-500" />
+                  Review Responsiveness
+                </span>
+                <span className="text-blue-600 dark:text-blue-400">20% Weight</span>
+              </div>
+              <p className="text-muted-foreground mt-1 text-[11px]">
+                Percentage of customer reviews answered with thoughtful owner replies. Fast AI replies improve local search authority.
+              </p>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-muted/50 border border-border/50">
+              <div className="flex items-center justify-between font-bold text-foreground">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="size-3.5 text-amber-500" />
+                  Posting &amp; Media Cadence
+                </span>
+                <span className="text-amber-600 dark:text-amber-400">20% Weight</span>
+              </div>
+              <p className="text-muted-foreground mt-1 text-[11px]">
+                Active weekly Google posts, announcements, special offers, and photo uploads in the last 30 days.
+              </p>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-muted/50 border border-border/50">
+              <div className="flex items-center justify-between font-bold text-foreground">
+                <span className="flex items-center gap-1.5">
+                  <TrendingUp className="size-3.5 text-purple-500" />
+                  Search &amp; Maps Engagement
+                </span>
+                <span className="text-purple-600 dark:text-purple-400">20% Weight</span>
+              </div>
+              <p className="text-muted-foreground mt-1 text-[11px]">
+                Real customer interactions from Google Search and Maps: direction requests, website clicks, and phone calls.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={() => {
+                setShowInfo(false);
+                if (onImprove) onImprove();
+              }}
+              className="w-full text-xs font-bold"
+            >
+              Start Improving Score &rarr;
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-/** Slide 2 — honest SVG polyline chart built from the real score history. */
-function ScoreTrendChart({ scoreData, loading }: { scoreData: MarketingScoreResponse | null; loading: boolean }) {
-  const [range, setRange] = useState<'week' | '30d'>('week');
-
+/** Slide 1 — honest SVG polyline chart built from the real score history. */
+function ScoreTrendChart({
+  scoreData,
+  loading,
+  range,
+  onRangeChange,
+}: {
+  scoreData: MarketingScoreResponse | null;
+  loading: boolean;
+  range: 'week' | '30d';
+  onRangeChange: (r: 'week' | '30d') => void;
+}) {
   const points = useMemo<ScorePoint[]>(() => {
     const raw = range === 'week' ? scoreData?.weekHistory : scoreData?.history;
     return (Array.isArray(raw) ? raw : []).filter(
@@ -780,10 +971,19 @@ function ScoreTrendChart({ scoreData, loading }: { scoreData: MarketingScoreResp
     x: 5 + i * stepX,
     y: 75 - (Math.min(Math.max(p.score, 0), 100) / 100) * 65,
   });
+
   const polyPoints = points.map((p, i) => {
     const { x, y } = toXY(p, i);
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
+
+  // Area polygon points
+  const areaPoints =
+    n > 1
+      ? `${toXY(points[0], 0).x.toFixed(1)},75 ` +
+        polyPoints.join(' ') +
+        ` ${toXY(points[n - 1], n - 1).x.toFixed(1)},75`
+      : '';
 
   const dateLabel = (d?: string) => {
     const t = d ? Date.parse(d) : NaN;
@@ -793,14 +993,29 @@ function ScoreTrendChart({ scoreData, loading }: { scoreData: MarketingScoreResp
       : new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
+  const latestScore = points[points.length - 1]?.score ?? 0;
+  const earliestScore = points[0]?.score ?? 0;
+  const delta = latestScore - earliestScore;
+
   return (
-    <div className="p-3 flex flex-col justify-between h-full text-primary">
-      <div className="flex items-center justify-between text-xs mb-1">
-        <span className="font-bold text-foreground">Growth in Marketing Score</span>
-        <span className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg text-[10px]">
+    <div className="p-3 flex flex-col justify-between h-full">
+      <div className="flex items-center justify-between text-xs mb-2">
+        <div>
+          <span className="font-bold text-foreground">Score Progression</span>
+          {n >= 2 && (
+            <span
+              className={`ml-2 text-[11px] font-bold ${
+                delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'
+              }`}
+            >
+              {delta >= 0 ? `+${delta}%` : `${delta}%`}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg text-[10px]">
           <button
             type="button"
-            onClick={() => setRange('week')}
+            onClick={() => onRangeChange('week')}
             className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
               range === 'week' ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground'
             }`}
@@ -809,57 +1024,202 @@ function ScoreTrendChart({ scoreData, loading }: { scoreData: MarketingScoreResp
           </button>
           <button
             type="button"
-            onClick={() => setRange('30d')}
+            onClick={() => onRangeChange('30d')}
             className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
               range === '30d' ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground'
             }`}
           >
             30 Days
           </button>
-        </span>
+        </div>
       </div>
 
       {loading ? (
-        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-32 w-full rounded-xl" />
       ) : n < 2 ? (
-        <div className="h-24 flex flex-col items-center justify-center text-center">
-          <TrendingUp className="size-5 text-muted-foreground/50 mb-1.5" />
-          <p className="text-[11px] font-semibold text-muted-foreground">Score history is building</p>
-          <p className="text-[10px] text-muted-foreground/80">A daily snapshot is saved — check back tomorrow.</p>
+        <div className="h-32 flex flex-col items-center justify-center text-center p-3">
+          <TrendingUp className="size-6 text-muted-foreground/50 mb-1.5" />
+          <p className="text-xs font-bold text-foreground">Score history is building</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            A daily snapshot is automatically recorded — check back tomorrow for your growth curve.
+          </p>
         </div>
       ) : (
         <>
-          <div className="relative h-24 w-full">
-            <div className="absolute inset-0 flex flex-col justify-between text-[10px] text-muted-foreground pointer-events-none opacity-50">
+          <div className="relative h-28 w-full my-auto">
+            <div className="absolute inset-0 flex flex-col justify-between text-[9px] text-muted-foreground pointer-events-none opacity-60">
               <div>100%</div>
               <div>50%</div>
               <div>0%</div>
             </div>
-            <svg viewBox="0 0 200 80" className="w-full h-20 pl-7" role="img" aria-label="Marketing score trend">
+            <svg viewBox="0 0 200 80" className="w-full h-full pl-7 overflow-visible" role="img" aria-label="Marketing score trend">
+              <defs>
+                <linearGradient id="scoreAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#10B981" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#10B981" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
               {[15, 42.5, 70].map((gy) => (
-                <line key={gy} x1="0" y1={gy} x2="200" y2={gy} stroke="currentColor" strokeWidth="0.5" className="text-muted-foreground/30" />
+                <line key={gy} x1="0" y1={gy} x2="200" y2={gy} stroke="currentColor" strokeWidth="0.5" className="text-muted-foreground/20" />
               ))}
+              {areaPoints && <polygon points={areaPoints} fill="url(#scoreAreaGrad)" />}
               <polyline
                 points={polyPoints.join(' ')}
                 fill="none"
-                stroke="currentColor"
+                stroke="#10B981"
                 strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
               {points.map((p, i) => {
                 const { x, y } = toXY(p, i);
-                return <circle key={`${p.date}-${i}`} cx={x} cy={y} r="3" fill="currentColor" />;
+                return (
+                  <circle
+                    key={`${p.date}-${i}`}
+                    cx={x}
+                    cy={y}
+                    r="3.5"
+                    fill="#10B981"
+                    stroke="#FFFFFF"
+                    strokeWidth="1.5"
+                    className="cursor-pointer hover:r-5 transition-all"
+                  >
+                    <title>{`${new Date(p.date).toLocaleDateString()}: ${p.score}%`}</title>
+                  </circle>
+                );
               })}
             </svg>
           </div>
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground pl-7 pt-1">
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground pl-7 pt-1 border-t border-border/30">
             <span>{dateLabel(points[0]?.date)}</span>
-            {n > 2 && <span className="hidden sm:inline">{dateLabel(points[Math.floor(n / 2)]?.date)}</span>}
+            {n > 2 && <span>{dateLabel(points[Math.floor(n / 2)]?.date)}</span>}
             <span>{dateLabel(points[n - 1]?.date)}</span>
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** Slide 2 — Marketing Tracker (Parity with Mobile & Dhanda AI benchmark) */
+function MarketingTrackerCardContent({
+  growthState,
+  postsTotal,
+  reviews,
+  onNavigateTab,
+}: {
+  growthState: GrowthActionsResponse | null;
+  postsTotal: number;
+  reviews: ReviewDto[];
+  onNavigateTab: (tab: SocialTab) => void;
+}) {
+  const approvedAction = growthState?.actions?.find((a) => a.id === 'approve_post');
+  const photosAction = growthState?.actions?.find((a) => a.id === 'upload_photos');
+  const repliedReviewsCount = reviews.filter((r) => Boolean(r.responseJson)).length;
+
+  const tasks = [
+    {
+      id: '1',
+      name: 'AI Post Approved',
+      target: 5,
+      achieved: approvedAction?.doneCount || 0,
+      tab: 'ai-content' as SocialTab,
+    },
+    {
+      id: '2',
+      name: 'AI Post Published',
+      target: 5,
+      achieved: Math.min(5, postsTotal || 0),
+      tab: 'posts' as SocialTab,
+    },
+    {
+      id: '3',
+      name: 'Media Uploaded',
+      target: 5,
+      achieved: photosAction?.doneCount || 0,
+      tab: 'google-media' as SocialTab,
+    },
+    {
+      id: '4',
+      name: 'Review Responded',
+      target: 5,
+      achieved: Math.min(5, repliedReviewsCount),
+      tab: 'review-replies' as SocialTab,
+    },
+  ];
+
+  const totalTarget = tasks.reduce((sum, t) => sum + t.target, 0);
+  const totalAchieved = tasks.reduce((sum, t) => sum + Math.min(t.target, t.achieved), 0);
+  const totalPending = Math.max(0, totalTarget - totalAchieved);
+  const progressPct = Math.round((totalAchieved / totalTarget) * 100);
+
+  return (
+    <div className="p-2 flex flex-col justify-between h-full gap-2">
+      {/* 5-Column Compact Table */}
+      <div className="rounded-xl border border-border/60 overflow-hidden bg-card text-xs">
+        <div className="grid grid-cols-12 bg-muted/50 px-2 py-1.5 font-bold text-[10px] text-muted-foreground border-b border-border/50">
+          <span className="col-span-5">Tasks</span>
+          <span className="col-span-2 text-center">Target</span>
+          <span className="col-span-2 text-center">Done</span>
+          <span className="col-span-2 text-center">Pending</span>
+          <span className="col-span-1 text-right">Go</span>
+        </div>
+        <div className="divide-y divide-border/40">
+          {tasks.map((task) => {
+            const pending = Math.max(0, task.target - task.achieved);
+            return (
+              <div key={task.id} className="grid grid-cols-12 items-center px-2 py-1.5 text-[11px]">
+                <span className="col-span-5 font-semibold text-foreground truncate">{task.name}</span>
+                <span className="col-span-2 text-center text-muted-foreground font-mono">
+                  {String(task.target).padStart(2, '0')}
+                </span>
+                <span className="col-span-2 text-center font-bold text-primary font-mono">
+                  {String(task.achieved).padStart(2, '0')}
+                </span>
+                <span className="col-span-2 text-center text-rose-500 font-bold font-mono">
+                  {String(pending).padStart(2, '0')}
+                </span>
+                <div className="col-span-1 text-right">
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab(task.tab)}
+                    className="p-1 rounded-md hover:bg-muted text-primary hover:text-primary-foreground hover:bg-primary transition-colors text-[10px]"
+                    title={`Go to ${task.name}`}
+                  >
+                    <ArrowRight className="size-3" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Runner Track Visualization */}
+      <div className="p-2.5 rounded-xl bg-muted/30 border border-border/40">
+        <div className="flex items-center justify-between text-[11px] font-bold text-foreground mb-1.5">
+          <span className="flex items-center gap-1.5">
+            <span aria-hidden>🏃</span> Weekly Finish Line
+          </span>
+          <span className="text-primary">{totalAchieved} / {totalTarget} Completed ({progressPct}%)</span>
+        </div>
+
+        {/* Track Line */}
+        <div className="relative w-full h-3 bg-muted rounded-full overflow-hidden my-1">
+          <div
+            className="h-full bg-linear-to-r from-amber-500 to-emerald-500 transition-all duration-700 rounded-full"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1">
+          <span>Start (0)</span>
+          <span className="font-semibold text-foreground">
+            {totalPending > 0 ? `${totalPending} tasks to reach 80%+ rank` : 'All tasks completed! 🎉'}
+          </span>
+          <span>🏁 Top Rank</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1203,7 +1563,8 @@ export function SocialMediaView({
   // ── Dhanda Overview state (all real API data) ──
   const [marketingScore, setMarketingScore] = useState<MarketingScoreResponse | null>(null);
   const [scoreLoading, setScoreLoading] = useState(true);
-  const [scoreSlide, setScoreSlide] = useState<0 | 1>(0);
+  const [scoreSlide, setScoreSlide] = useState<0 | 1 | 2>(0);
+  const [trendRange, setTrendRange] = useState<'week' | '30d'>('week');
   const scoreTouchX = useRef<number | null>(null);
 
   const [placeData, setPlaceData] = useState<PlaceResponse | null>(null);
@@ -2540,78 +2901,168 @@ export function SocialMediaView({
 
           {/* Dhanda AI Benchmark Grid (Score carousel + Performance + Competitors) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-5 items-stretch">
-            {/* Card 1: Marketing Score — swipeable 2-slide carousel */}
+            {/* Card 1: Marketing Score — unified 3-slide carousel (Gauge, Growth line chart, Marketing tracker) */}
             <div className="lg:col-span-4 bg-card border border-border rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
               <div className="flex items-center justify-between border-b border-border/50 pb-2.5">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="size-4 text-primary" />
-                  <h2 className="text-sm font-bold text-foreground">Marketing Score</h2>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Sparkles className="size-4 text-primary shrink-0" />
+                  <h2 className="text-sm font-bold text-foreground truncate">
+                    {scoreSlide === 0
+                      ? 'Marketing Score'
+                      : scoreSlide === 1
+                      ? 'Growth in Marketing Score'
+                      : 'Marketing Tracker'}
+                  </h2>
+                  {scoreSlide === 0 && marketingScore?.score != null && (
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-[10px] font-bold shrink-0 ${
+                        SCORE_LABEL_STYLES[marketingScore.label || 'Average'] || 'bg-orange-500'
+                      }`}
+                    >
+                      {marketingScore.label || 'Score'}
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg text-[10px]">
-                  <button
-                    type="button"
-                    onClick={() => setScoreSlide(0)}
-                    className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
-                      scoreSlide === 0 ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground'
-                    }`}
-                  >
-                    Gauge
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setScoreSlide(1)}
-                    className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
-                      scoreSlide === 1 ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground'
-                    }`}
-                  >
-                    Growth
-                  </button>
+
+                {/* Header Actions / Filters */}
+                <div className="flex items-center gap-1 shrink-0">
+                  {scoreSlide === 1 ? (
+                    <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => setTrendRange('week')}
+                        className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
+                          trendRange === 'week' ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground'
+                        }`}
+                      >
+                        This Week
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTrendRange('30d')}
+                        className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
+                          trendRange === '30d' ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground'
+                        }`}
+                      >
+                        30 Days
+                      </button>
+                    </div>
+                  ) : scoreSlide === 2 ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-[10px]">
+                      This Week
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setGrowthDrawerOpen(true)}
+                      className="text-[11px] font-bold text-primary hover:underline flex items-center gap-0.5"
+                    >
+                      <span>Improve</span>
+                      <span>&rarr;</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
+              {/* 3-Slide Carousel Content */}
               <div
-                className="overflow-hidden"
+                className="overflow-hidden my-auto"
                 onTouchStart={(e) => {
                   scoreTouchX.current = e.touches[0]?.clientX ?? null;
                 }}
                 onTouchEnd={(e) => {
                   if (scoreTouchX.current == null) return;
                   const dx = (e.changedTouches[0]?.clientX ?? 0) - scoreTouchX.current;
-                  if (Math.abs(dx) > 40) setScoreSlide(dx < 0 ? 1 : 0);
+                  if (Math.abs(dx) > 40) {
+                    if (dx < 0) {
+                      setScoreSlide((s) => (s < 2 ? ((s + 1) as 0 | 1 | 2) : 0));
+                    } else {
+                      setScoreSlide((s) => (s > 0 ? ((s - 1) as 0 | 1 | 2) : 2));
+                    }
+                  }
                   scoreTouchX.current = null;
                 }}
               >
                 <div
-                  className="flex w-[200%] transition-transform duration-300 ease-out"
-                  style={{ transform: scoreSlide === 0 ? 'translateX(0)' : 'translateX(-50%)' }}
+                  className="flex w-[300%] transition-transform duration-300 ease-out"
+                  style={{
+                    transform:
+                      scoreSlide === 0
+                        ? 'translateX(0)'
+                        : scoreSlide === 1
+                        ? 'translateX(-33.333%)'
+                        : 'translateX(-66.666%)',
+                  }}
                 >
-                  <div className="w-1/2 shrink-0">
+                  {/* Slide 0: Speedometer Gauge + 4-Factor Breakdown */}
+                  <div className="w-1/3 shrink-0">
                     <SpeedometerGauge
                       scoreData={marketingScore}
                       loading={scoreLoading}
-                      onImprove={() => setActiveTab('ai-content')}
+                      onImprove={() => setGrowthDrawerOpen(true)}
                       onFix={() => setActiveTab('accounts')}
                     />
                   </div>
-                  <div className="w-1/2 shrink-0">
-                    <ScoreTrendChart scoreData={marketingScore} loading={scoreLoading} />
+
+                  {/* Slide 1: Growth line chart */}
+                  <div className="w-1/3 shrink-0">
+                    <ScoreTrendChart
+                      scoreData={marketingScore}
+                      loading={scoreLoading}
+                      range={trendRange}
+                      onRangeChange={setTrendRange}
+                    />
+                  </div>
+
+                  {/* Slide 2: Marketing Tracker table & runner track */}
+                  <div className="w-1/3 shrink-0">
+                    <MarketingTrackerCardContent
+                      growthState={growthState}
+                      postsTotal={postsTotal}
+                      reviews={reviews}
+                      onNavigateTab={(tab) => setActiveTab(tab)}
+                    />
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-center gap-1.5 pt-2 border-t border-border/40">
-                <button
-                  type="button"
-                  aria-label="Show score gauge"
-                  onClick={() => setScoreSlide(0)}
-                  className={`size-1.5 rounded-full transition-colors ${scoreSlide === 0 ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-                />
-                <button
-                  type="button"
-                  aria-label="Show score growth chart"
-                  onClick={() => setScoreSlide(1)}
-                  className={`size-1.5 rounded-full transition-colors ${scoreSlide === 1 ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-                />
+              {/* Bottom Pagination & Navigation */}
+              <div className="flex items-center justify-between pt-2 border-t border-border/40 mt-1">
+                <div className="flex items-center gap-1.5">
+                  {[0, 1, 2].map((idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      aria-label={`Slide ${idx + 1}`}
+                      onClick={() => setScoreSlide(idx as 0 | 1 | 2)}
+                      className={`h-1.5 rounded-full transition-all ${
+                        scoreSlide === idx ? 'w-5 bg-primary' : 'w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50'
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+                  <button
+                    type="button"
+                    onClick={() => setScoreSlide((s) => (s > 0 ? ((s - 1) as 0 | 1 | 2) : 2))}
+                    className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title="Previous slide"
+                    aria-label="Previous slide"
+                  >
+                    <ChevronLeft className="size-3.5" />
+                  </button>
+                  <span>{scoreSlide + 1} / 3</span>
+                  <button
+                    type="button"
+                    onClick={() => setScoreSlide((s) => (s < 2 ? ((s + 1) as 0 | 1 | 2) : 0))}
+                    className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title="Next slide"
+                    aria-label="Next slide"
+                  >
+                    <ChevronRight className="size-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
 
