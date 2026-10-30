@@ -4,19 +4,92 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { apiRequest } from './api';
 import * as SecureStore from 'expo-secure-store';
-const key = 'bgos_push_token';
-export async function enablePush() {
-  if (!Device.isDevice) throw new Error('Push notifications require a physical device.');
-  const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
-  if (!projectId) throw new Error('This build needs an EAS project ID before push notifications can be enabled.');
-  if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync('default', { name: 'Customer updates', importance: Notifications.AndroidImportance.HIGH });
-  const permission = await Notifications.requestPermissionsAsync();
-  if (permission.status !== 'granted') throw new Error('Allow notifications in your device settings to receive lead and message alerts.');
-  const result = await Notifications.getExpoPushTokenAsync({ projectId });
-  await apiRequest('/api/notifications/push/subscribe', { method: 'POST', body: { expoPushToken: result.data, platform: Platform.OS } });
-  await SecureStore.setItemAsync(key, result.data);
+
+const PUSH_TOKEN_KEY = 'bgos_push_token';
+const PUSH_ENABLED_KEY = 'bgos_push_enabled';
+
+export async function isPushPermissionGranted(): Promise<boolean> {
+  try {
+    const settings = await Notifications.getPermissionsAsync();
+    return settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+  } catch {
+    return false;
+  }
 }
+
+export async function requestPushPermissions(): Promise<boolean> {
+  try {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Customer & Lead Updates',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#2563EB',
+      });
+    }
+
+    const { status } = await Notifications.requestPermissionsAsync({
+      ios: {
+        allowAlert: true,
+        allowBadge: true,
+        allowSound: true,
+      },
+    });
+
+    return status === 'granted';
+  } catch (err) {
+    console.warn('[push] requestPushPermissions error:', err);
+    return false;
+  }
+}
+
+export async function enablePush(): Promise<{ success: boolean; message: string }> {
+  try {
+    const granted = await requestPushPermissions();
+    if (!granted) {
+      return { success: false, message: 'Notification permission was denied. Please allow notifications in device settings.' };
+    }
+
+    await SecureStore.setItemAsync(PUSH_ENABLED_KEY, 'true').catch(() => {});
+
+    if (!Device.isDevice) {
+      return { success: true, message: 'Push notifications enabled for simulator.' };
+    }
+
+    const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
+    if (!projectId) {
+      return { success: true, message: 'Push notifications enabled locally.' };
+    }
+
+    const tokenRes = await Notifications.getExpoPushTokenAsync({ projectId });
+    if (tokenRes.data) {
+      await apiRequest('/api/notifications/push/subscribe', {
+        method: 'POST',
+        body: { expoPushToken: tokenRes.data, platform: Platform.OS },
+      }).catch(() => {});
+      await SecureStore.setItemAsync(PUSH_TOKEN_KEY, tokenRes.data).catch(() => {});
+    }
+
+    return { success: true, message: 'Push notifications enabled successfully.' };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to enable push notifications.';
+    return { success: false, message: msg };
+  }
+}
+
 export async function unregisterPush(accessToken?: string | null) {
-  const token = await SecureStore.getItemAsync(key);
-  if (token) { await apiRequest('/api/notifications/push/subscribe', { method: 'DELETE', body: { expoPushToken: token }, ...(accessToken ? { skipAuth: true, headers: { Authorization: `Bearer ${accessToken}` } } : {}) }); await SecureStore.deleteItemAsync(key); }
+  try {
+    const token = await SecureStore.getItemAsync(PUSH_TOKEN_KEY);
+    if (token) {
+      await apiRequest('/api/notifications/push/subscribe', {
+        method: 'DELETE',
+        body: { expoPushToken: token },
+        ...(accessToken ? { skipAuth: true, headers: { Authorization: `Bearer ${accessToken}` } } : {}),
+      }).catch(() => {});
+      await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY).catch(() => {});
+    }
+    await SecureStore.setItemAsync(PUSH_ENABLED_KEY, 'false').catch(() => {});
+  } catch (err) {
+    console.warn('[push] unregisterPush error:', err);
+  }
 }

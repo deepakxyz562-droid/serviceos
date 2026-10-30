@@ -106,15 +106,6 @@ export default function ToolsScreen() {
         </View>
       </Card>
 
-      {/* GROWTH & MARKETING SUITE */}
-      <Card>
-        <Text style={ui.heading}>Growth & Marketing</Text>
-        <MenuRow title="Google Business & Reviews" detail="SEO ranking, AI auto-replies & review requests" icon="storefront" onPress={() => router.push('/(tabs)/growth')} />
-        <MenuRow title="GBP Photos & Showcase" detail="Upload, schedule & publish business photos" icon="photo-library" onPress={() => router.push('/(tabs)/photos')} />
-        <MenuRow title="Google Post Studio" detail="AI Google updates, special offers & calendar" icon="auto-awesome" onPress={() => router.push('/(tabs)/marketing')} />
-        <MenuRow title="Campaigns & Outreach" detail="WhatsApp & SMS broadcast sequences" icon="send" onPress={() => router.push('/(tabs)/outreach')} />
-      </Card>
-
       {/* COMMUNICATIONS & SALES */}
       <Card>
         <Text style={ui.heading}>Communications & Sales</Text>

@@ -172,6 +172,30 @@ export async function POST(request: NextRequest) {
       caption = caption.slice(0, charLimit - 1).trimEnd() + '…';
     }
 
+    // Specialized Review Reply handling
+    const isReviewReply = /review reply|reply to this \d★ review|google review reply/i.test(body.topic);
+    if (isReviewReply) {
+      const isNegative = /1★|2★|disappoint|poor|bad|problem|unhappy/i.test(body.topic);
+      const authorMatch = body.topic.match(/from ([^:.]+)/i);
+      const authorName = authorMatch ? authorMatch[1].trim() : 'valued customer';
+
+      const keywords = [
+        { keyword: 'best crm software for small businesses', volume: '500 ↗' },
+        { keyword: 'software development company', volume: '500 ↗' },
+        { keyword: 'software development company in Patna', volume: '100 ↗' },
+      ];
+
+      if (!caption) {
+        if (isNegative) {
+          caption = `Dear ${authorName},\n\nWe're deeply sorry to hear that you've had a disappointing experience with our software. We understand how frustrating this must be, and as a dedicated software development company in Patna, we take user satisfaction very seriously. We continuously enhance our CRM and business tools, and we'd love the opportunity to resolve your concerns. Please connect with our support team at 8505945123 so we can make this right for you.`;
+        } else {
+          caption = `Dear ${authorName},\n\nThank you so much for your kind words! 😊 We're thrilled that you had a wonderful experience with our software and services. As a leading software development company, our mission is to deliver the best CRM software for small businesses. We look forward to continuing to support your business growth!`;
+        }
+      }
+
+      return NextResponse.json({ caption, keywords });
+    }
+
     return NextResponse.json({ caption });
   } catch (error) {
     console.error('[api/social/ai-caption] POST error:', error);

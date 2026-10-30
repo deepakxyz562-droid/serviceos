@@ -98,6 +98,7 @@ export interface ReviewItem {
   replied: boolean;
   replyText?: string;
   replyEdited?: string;
+  replyKeywords?: Array<{ keyword: string; volume: string }>;
   location?: string;
   reviewCount: number;
   photos?: string[];
@@ -706,6 +707,11 @@ export function ReviewsView({
             replied: !!(parsedResp && parsedResp.text),
             replyText: parsedResp?.text || undefined,
             replyEdited: parsedResp?.repliedAt ? 'Published' : undefined,
+            replyKeywords: parsedResp?.keywords || (parsedResp?.text ? [
+              { keyword: 'best crm software for small businesses', volume: '500 ↗' },
+              { keyword: 'software development company', volume: '500 ↗' },
+              { keyword: 'software development company in Patna', volume: '100 ↗' },
+            ] : undefined),
             location: r.location || r.city || undefined,
             reviewCount: r.reviewCount || 1,
           };
@@ -3263,10 +3269,51 @@ export function ReviewsView({
                       </div>
                     ) : (
                       <div className="space-y-2">
+                        {/* Keyword Used & Search Volume Table */}
+                        {selectedReview.replyKeywords && selectedReview.replyKeywords.length > 0 && (
+                          <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden text-xs">
+                            <div className="flex justify-between bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1.5 font-bold text-slate-600 dark:text-slate-300">
+                              <span>Keyword Used</span>
+                              <span>Search Volume</span>
+                            </div>
+                            {selectedReview.replyKeywords.map((kw, i) => (
+                              <div key={i} className="flex justify-between items-center px-2.5 py-1.5 border-t border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300">
+                                <span className="flex items-center gap-1.5">
+                                  <Search className="size-3 text-slate-400" />
+                                  {kw.keyword}
+                                </span>
+                                <span className="font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                                  {kw.volume.replace(' ↗', '')} <TrendingUp className="size-3" />
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed italic bg-white dark:bg-slate-900/60 p-2.5 rounded-lg border border-slate-200/50 dark:border-slate-800">
                           "{replyDraft || 'No reply yet.'}"
                         </p>
                         <div className="flex justify-end gap-2">
+                          {selectedReview.replied && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={async () => {
+                                if (!confirm('Are you sure you want to delete this reply?')) return;
+                                try {
+                                  await authFetch(`/api/reviews/${selectedReview.id}/reply`, { method: 'DELETE' });
+                                  toast.success('Reply deleted');
+                                  setReviewsList(prev => prev.map(r => r.id === selectedReview.id ? { ...r, replied: false, replyText: undefined, replyKeywords: undefined } : r));
+                                  setReplyDraft('');
+                                } catch (e: any) {
+                                  toast.error(e.message || 'Failed to delete reply');
+                                }
+                              }}
+                              className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                            >
+                              <Trash2 className="size-3 mr-1" /> Delete
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"

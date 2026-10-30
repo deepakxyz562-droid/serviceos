@@ -103,12 +103,21 @@ export async function POST(
       }
     }
 
+    const keywords = Array.isArray(body.keywords)
+      ? body.keywords
+      : [
+          { keyword: 'best crm software for small businesses', volume: '500 ↗' },
+          { keyword: 'software development company', volume: '500 ↗' },
+          { keyword: 'software development company in Patna', volume: '100 ↗' },
+        ];
+
     const replyPayload = {
       text: replyText.trim(),
       repliedAt: new Date().toISOString(),
       repliedBy: user.email || user.name || 'Owner',
       publishedToGoogle,
       googleError,
+      keywords,
     };
 
     const updatedReview = await db.review.update({

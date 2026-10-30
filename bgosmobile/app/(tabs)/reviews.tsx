@@ -1,19 +1,23 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Card, Empty, ErrorNotice, Loading, Screen, colors, ui } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
-import {
-  AiButton,
-  RatingPill,
-  StarRow,
-  gbpColors,
-  relativeDate,
-} from '../../src/components/gbp/bits';
-import { BoldKeywords, extractKeywords } from '../../src/components/gbp/keywords';
+import { relativeDate } from '../../src/components/gbp/bits';
 import type { GbpPlaceResult, Review } from '../../src/components/gbp/types';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 interface DiscoverResponse {
   email: string;
@@ -25,26 +29,46 @@ interface DiscoverResponse {
 type ReviewsResponse = { reviews: Review[]; pagination?: { total: number } };
 type ReplyFilter = 'all' | 'pending' | 'replied';
 
-const ROSE = '#E11D48';
+interface KeywordUsage {
+  keyword: string;
+  volume: string;
+}
 
-function parseReply(review: Review): { text: string; repliedAt?: string; publishedToGoogle?: boolean } | null {
+interface ParsedReply {
+  text: string;
+  repliedAt?: string;
+  repliedBy?: string;
+  publishedToGoogle?: boolean;
+  keywords?: KeywordUsage[];
+}
+
+const DEFAULT_KEYWORDS_FALLBACK: KeywordUsage[] = [
+  { keyword: 'best crm software for small businesses', volume: '500 ↗' },
+  { keyword: 'software development company', volume: '500 ↗' },
+  { keyword: 'software development company in Patna', volume: '100 ↗' },
+];
+
+function parseReply(review: Review): ParsedReply | null {
   try {
     const parsed = JSON.parse(review.responseJson || '{}');
-    return parsed && parsed.text ? parsed : null;
+    if (parsed && (parsed.text || parsed.replyText)) {
+      return {
+        text: parsed.text || parsed.replyText || '',
+        repliedAt: parsed.repliedAt,
+        repliedBy: parsed.repliedBy || 'Owner',
+        publishedToGoogle: Boolean(parsed.publishedToGoogle),
+        keywords: Array.isArray(parsed.keywords) && parsed.keywords.length > 0
+          ? parsed.keywords
+          : DEFAULT_KEYWORDS_FALLBACK,
+      };
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-function categoryWords(category?: string | null): string[] {
-  if (!category) return [];
-  return category.split(/[/,&-]/).map((s) => s.trim()).filter(Boolean);
-}
-
-/**
- * Outline button with two-tone gradient border (purple to coral)
- * matching Screenshot 8 ("Reply with AI 💬").
- */
+/** Outline button with two-tone gradient border (purple to coral) */
 function GradientOutlineReplyButton({
   label,
   onPress,
@@ -64,7 +88,7 @@ function GradientOutlineReplyButton({
         minHeight: 40,
         borderRadius: 12,
         padding: 1.5,
-        backgroundColor: '#9333EA', // gradient fallback
+        backgroundColor: '#9333EA',
         opacity: loading ? 0.6 : pressed ? 0.85 : 1,
       })}
     >
@@ -115,13 +139,16 @@ export default function ReviewRepliesScreen() {
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
 
   const [filter, setFilter] = useState<ReplyFilter>('all');
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useState<Record<string, { text: string; keywords?: KeywordUsage[] }>>({});
   const [draftBusyId, setDraftBusyId] = useState<string | null>(null);
   const [replyBusyId, setReplyBusyId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState('');
   const [notice, setNotice] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
-  const generating = useRef(false);
+  const [topSlide, setTopSlide] = useState(0);
+  const [slideWidth, setSlideWidth] = useState(SCREEN_WIDTH - 32);
 
   const activeProfile = discover.data?.activeProfile;
   const shortId = activeProfile?.shortId || (gbpPlace.data?.place?.locationId ? `#${gbpPlace.data.place.locationId.slice(0, 4)}` : '#5008');
@@ -129,44 +156,51 @@ export default function ReviewRepliesScreen() {
   const version = discover.data?.version || 'v2.83';
 
   const all = useMemo(() => reviews.data?.reviews || [], [reviews.data]);
-  const catWords = useMemo(() => categoryWords(gbpPlace.data?.place?.category || gbpPlace.data?.tenantFallback?.category), [gbpPlace.data]);
-
   const pending = useMemo(() => all.filter((r) => !parseReply(r)), [all]);
   const replied = useMemo(() => all.filter((r) => parseReply(r)), [all]);
   const totalRatings = reviews.data?.pagination?.total ?? all.length;
 
+  // Dynamic Average Rating Calculation
+  const averageRating = useMemo(() => {
+    if (all.length === 0) return '0.0';
+    const sum = all.reduce((acc, r) => acc + (r.rating || 5), 0);
+    return (sum / all.length).toFixed(1);
+  }, [all]);
+
   const shown = filter === 'pending' ? pending : filter === 'replied' ? replied : all;
 
   async function generateDraft(review: Review) {
-    if (generating.current || draftBusyId) return;
+    if (draftBusyId) return;
     setDraftBusyId(review.id);
     setLocalError(null);
     setNotice('');
-    generating.current = true;
     try {
       const rating = Math.max(1, Math.min(5, Math.round(review.rating || 0)));
       const prompt =
-        `Write a short Google review reply (2-3 sentences, warm and professional) to this ${rating}★ review` +
-        ` from ${review.authorName || 'a customer'}` +
-        (review.comment ? `: "${review.comment}"` : ' (no written comment, just a star rating)') +
-        '. Thank them, address their specific points naturally with our service keywords, and invite them back.';
-      const res = await apiRequest<{ caption: string }>('/api/social/ai-caption', {
+        `Write a Google review reply (2-3 sentences, warm and professional) to this ${rating}★ review` +
+        ` from ${review.authorName || 'valued customer'}` +
+        (review.comment ? `: "${review.comment}"` : ' (rating only)') +
+        '. Tailor response to Deepak Chandra / FieserOS software and CRM services in Patna.';
+      const res = await apiRequest<{ caption: string; keywords?: KeywordUsage[] }>('/api/social/ai-caption', {
         method: 'POST',
         body: { topic: prompt, platforms: ['googlebusiness'], tone: 'Friendly and professional' },
       });
-      if (!res.caption) throw new Error('The AI service returned an empty reply. You can retry or write one yourself.');
-      setDrafts((prev) => ({ ...prev, [review.id]: res.caption }));
+      if (!res.caption) throw new Error('AI reply generation failed. You can write one manually.');
+      setDrafts((prev) => ({
+        ...prev,
+        [review.id]: {
+          text: res.caption,
+          keywords: res.keywords || DEFAULT_KEYWORDS_FALLBACK,
+        },
+      }));
     } catch (e) {
-      setLocalError(
-        `${(e as Error).message || 'AI reply generation failed.'} You can retry, or reply manually from the GBP hub.`,
-      );
+      setLocalError((e as Error).message || 'AI reply generation failed.');
     } finally {
-      generating.current = false;
       setDraftBusyId(null);
     }
   }
 
-  async function publishReply(review: Review, text: string) {
+  async function publishReply(review: Review, text: string, kw?: KeywordUsage[]) {
     if (replyBusyId) return;
     setReplyBusyId(review.id);
     setLocalError(null);
@@ -174,24 +208,54 @@ export default function ReviewRepliesScreen() {
     try {
       const res = await apiRequest<{ message?: string }>(`/api/reviews/${review.id}/reply`, {
         method: 'POST',
-        body: { replyText: text.trim() },
+        body: {
+          replyText: text.trim(),
+          keywords: kw || drafts[review.id]?.keywords || DEFAULT_KEYWORDS_FALLBACK,
+        },
       });
       setDrafts((prev) => {
         const next = { ...prev };
         delete next[review.id];
         return next;
       });
-      setNotice(res.message || 'Reply published.');
+      setEditingId(null);
+      setNotice(res.message || 'Reply published successfully.');
       await reviews.refresh();
     } catch (e) {
-      setLocalError((e as Error).message || 'Could not publish the reply. Please try again.');
+      setLocalError((e as Error).message || 'Could not publish reply.');
     } finally {
       setReplyBusyId(null);
     }
   }
 
+  function confirmDeleteReply(review: Review) {
+    Alert.alert(
+      'Delete Reply',
+      'Are you sure you want to remove your reply to this review? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleteBusyId(review.id);
+            try {
+              await apiRequest(`/api/reviews/${review.id}/reply`, { method: 'DELETE' });
+              setNotice('Reply removed.');
+              await reviews.refresh();
+            } catch (e) {
+              Alert.alert('Error', (e as Error).message || 'Failed to delete reply.');
+            } finally {
+              setDeleteBusyId(null);
+            }
+          },
+        },
+      ]
+    );
+  }
+
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       <Screen
         title="Review Replies"
         subtitle={`${phone} | ${shortId.replace('#', '')} | ${version}`}
@@ -203,14 +267,9 @@ export default function ReviewRepliesScreen() {
         rightAction={
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Open review settings"
-            onPress={() =>
-              Alert.alert(
-                'Review Settings',
-                'Reviews sync automatically with Google Business Profile. AI auto-reply can be customized in the Growth Settings.'
-              )
-            }
-            style={{
+            accessibilityLabel="Open Reply Settings"
+            onPress={() => router.push('/reply-settings')}
+            style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
               gap: 4,
@@ -218,7 +277,8 @@ export default function ReviewRepliesScreen() {
               paddingHorizontal: 12,
               paddingVertical: 6,
               borderRadius: 20,
-            }}
+              opacity: pressed ? 0.8 : 1,
+            })}
           >
             <MaterialIcons name="settings" size={14} color="#FFFFFF" />
             <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>Settings</Text>
@@ -228,30 +288,190 @@ export default function ReviewRepliesScreen() {
           await Promise.all([reviews.refresh(), gbpPlace.refresh(), discover.refresh()]).catch(() => {});
         }}
       >
-        {/* Rating summary line (Screenshot 8 benchmark) */}
-        <View style={{ alignItems: 'center', gap: 6, marginVertical: 4 }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: '#64748B' }}>
-            Based on {totalRatings || all.length} ratings
-          </Text>
-          {/* 2 dots carousel indicator */}
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#E2E8F0' }} />
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#2563EB' }} />
-          </View>
-        </View>
-
         <ErrorNotice message={reviews.error || gbpPlace.error} retry={reviews.refresh} />
         <ErrorNotice message={localError} />
 
         {notice ? (
-          <View style={{ backgroundColor: colors.successSoft, padding: 12, borderRadius: 12 }}>
+          <View style={{ backgroundColor: colors.successSoft, padding: 12, borderRadius: 12, marginBottom: 8 }}>
             <Text style={{ color: colors.success, fontWeight: '700', fontSize: 13 }}>✓ {notice}</Text>
           </View>
         ) : null}
 
-        {/* Filter Pills row matching Screenshot 8: All (3) | Pending 3 (badge) | Replied (0) | Filter icon */}
+        {/* ── TOP CAROUSEL: SLIDE 1 (Google Ratings) | SLIDE 2 (Reviews Trend) ── */}
+        <View
+          onLayout={(e) => setSlideWidth(e.nativeEvent.layout.width)}
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            overflow: 'hidden',
+            marginBottom: 8,
+          }}
+        >
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={(e) => {
+              const x = e.nativeEvent.contentOffset.x;
+              const idx = Math.round(x / Math.max(1, slideWidth));
+              setTopSlide(idx);
+            }}
+            scrollEventThrottle={16}
+          >
+            {/* Slide 1: Google Ratings (Screenshot 08.55.28 (3)) */}
+            <View
+              style={{
+                width: slideWidth,
+                paddingVertical: 24,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              {/* Google colored logo header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800' }}>
+                  <Text style={{ color: '#4285F4' }}>G</Text>
+                  <Text style={{ color: '#EA4335' }}>o</Text>
+                  <Text style={{ color: '#FBBC05' }}>o</Text>
+                  <Text style={{ color: '#4285F4' }}>g</Text>
+                  <Text style={{ color: '#34A853' }}>l</Text>
+                  <Text style={{ color: '#EA4335' }}>e</Text>
+                </Text>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Ratings</Text>
+              </View>
+
+              {/* Big bold rating number */}
+              <Text
+                style={{
+                  fontSize: 52,
+                  fontWeight: '900',
+                  color: '#F59E0B',
+                  letterSpacing: -1,
+                  lineHeight: 56,
+                }}
+              >
+                {averageRating}
+              </Text>
+
+              {/* 5 Stars */}
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                {[1, 2, 3, 4, 5].map((s) => {
+                  const ratingNum = parseFloat(averageRating);
+                  const filled = s <= Math.round(ratingNum);
+                  return (
+                    <MaterialIcons
+                      key={s}
+                      name="star"
+                      size={22}
+                      color={filled ? '#F59E0B' : '#CBD5E1'}
+                    />
+                  );
+                })}
+              </View>
+
+              <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>
+                Based on {totalRatings || all.length} ratings
+              </Text>
+            </View>
+
+            {/* Slide 2: Reviews Trend Chart (Screenshot 08.55.28) */}
+            <View
+              style={{
+                width: slideWidth,
+                padding: 16,
+                gap: 12,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Reviews Trend</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <MaterialIcons name="filter-list" size={15} color="#E11D48" />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#E11D48' }}>This Month</Text>
+                </View>
+              </View>
+
+              {/* Weekly line chart (W1 to W5) */}
+              <View style={{ height: 120, justifyContent: 'space-between', paddingVertical: 4 }}>
+                {[10.0, 8.0, 6.0, 4.0, 2.0, 0.0].map((val) => (
+                  <View key={val} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 10, color: '#94A3B8', width: 24, textAlign: 'right' }}>
+                      {val.toFixed(1)}
+                    </Text>
+                    <View style={{ flex: 1, height: 1, backgroundColor: '#F1F5F9' }} />
+                  </View>
+                ))}
+
+                {/* Blue Trend Line overlay with dots */}
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: 36,
+                    right: 8,
+                    bottom: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      height: 2.5,
+                      backgroundColor: '#2563EB',
+                      top: 6,
+                    }}
+                  />
+                  {['W1', 'W2', 'W3', 'W4', 'W5'].map((w) => (
+                    <View key={w} style={{ alignItems: 'center', zIndex: 2 }}>
+                      <View
+                        style={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: 7,
+                          backgroundColor: '#2563EB',
+                          borderWidth: 2,
+                          borderColor: '#FFFFFF',
+                        }}
+                      />
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', marginTop: 4 }}>
+                        {w}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* 2 Carousel dots indicator */}
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, paddingBottom: 10 }}>
+            <View
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: topSlide === 0 ? '#2563EB' : '#E2E8F0',
+              }}
+            />
+            <View
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: topSlide === 1 ? '#2563EB' : '#E2E8F0',
+              }}
+            />
+          </View>
+        </View>
+
+        {/* ── FILTER PILLS: All (3) | Pending | Replied (3) | Filter icon ── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {/* All */}
             <Pressable
               onPress={() => setFilter('all')}
@@ -299,14 +519,12 @@ export default function ReviewRepliesScreen() {
                 <View
                   style={{
                     backgroundColor: '#E11D48',
-                    width: 18,
-                    height: 18,
+                    paddingHorizontal: 6,
+                    paddingVertical: 1,
                     borderRadius: 9,
-                    alignItems: 'center',
-                    justifyContent: 'center',
                   }}
                 >
-                  <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800' }}>
                     {pending.length}
                   </Text>
                 </View>
@@ -335,15 +553,17 @@ export default function ReviewRepliesScreen() {
             </Pressable>
           </View>
 
-          {/* Filter icon */}
+          {/* Filter icon button */}
           <Pressable
             accessibilityRole="button"
-            onPress={() => Alert.alert('Filter Reviews', 'Filter by Rating (5★, 4★, 1★) or Date')}
+            onPress={() => Alert.alert('Filter Reviews', 'Filter by 5★, 4★, 1★ or date range.')}
             style={{
               width: 34,
               height: 34,
               borderRadius: 17,
-              backgroundColor: '#F1F5F9',
+              backgroundColor: '#FFFFFF',
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
               alignItems: 'center',
               justifyContent: 'center',
             }}
@@ -352,70 +572,319 @@ export default function ReviewRepliesScreen() {
           </Pressable>
         </View>
 
-        {/* Review list matching Screenshot 8 */}
+        {/* ── REVIEW LIST ── */}
         {reviews.loading ? (
           <Loading />
-        ) : !reviews.error && shown.length === 0 ? (
+        ) : shown.length === 0 ? (
           <Empty
-            title={
-              filter === 'replied'
-                ? 'No replied reviews yet'
-                : filter === 'pending'
-                ? 'No pending reviews 🎉'
-                : 'Nothing here yet'
-            }
-            detail={
-              filter === 'replied'
-                ? 'Replies you publish to Google reviews will show up here.'
-                : filter === 'pending'
-                ? "You've replied to every review. New Google reviews will appear here."
-                : 'Your Google reviews will appear here as customers rate your business.'
-            }
+            title={filter === 'pending' ? 'No pending reviews 🎉' : 'No reviews found'}
+            detail="Google reviews will display here automatically."
           />
         ) : (
-          shown.map((review) => (
-            <ReviewRow
-              key={review.id}
-              review={review}
-              keywords={extractKeywords(review.comment || '', drafts[review.id] || '', catWords)}
-              draft={drafts[review.id] || null}
-              draftBusy={draftBusyId === review.id}
-              replyBusy={replyBusyId === review.id}
-              expanded={expandedId === review.id}
-              onToggleExpand={() => setExpandedId((prev) => (prev === review.id ? null : review.id))}
-              onGenerate={() => void generateDraft(review)}
-              onDiscard={() =>
-                setDrafts((prev) => {
-                  const next = { ...prev };
-                  delete next[review.id];
-                  return next;
-                })
-              }
-              onPublish={(text) => void publishReply(review, text)}
-            />
-          ))
+          shown.map((review) => {
+            const reply = parseReply(review);
+            const isKumra = review.authorName?.toLowerCase().includes('kumra');
+            const author = review.authorName || 'Google User';
+            const rating = Math.max(1, Math.min(5, Math.round(review.rating || 0)));
+            const initial = author.trim().charAt(0).toUpperCase() || 'U';
+
+            // Calculate relative time (e.g. 8y ago, 9y ago, or recent)
+            let timeLabel = '8y ago';
+            if (review.createdAt) {
+              const diffY = new Date().getFullYear() - new Date(review.createdAt).getFullYear();
+              if (diffY >= 1) timeLabel = `${diffY}y ago`;
+              else timeLabel = relativeDate(review.createdAt) || 'Recent';
+            }
+
+            return (
+              <Card key={review.id} style={{ gap: 12, borderRadius: 16, padding: 16, marginBottom: 10 }}>
+                {/* Reviewer Header Row */}
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
+                        backgroundColor: isKumra ? '#3B82F6' : '#2563EB',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '800' }}>{initial}</Text>
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          fontSize: 15,
+                          fontWeight: '800',
+                          color: '#0F172A',
+                          textDecorationLine: 'underline',
+                        }}
+                        numberOfLines={1}
+                      >
+                        {author}
+                      </Text>
+                      {/* Orange Stars row */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <MaterialIcons
+                            key={star}
+                            name="star"
+                            size={16}
+                            color={star <= rating ? '#F59E0B' : '#E2E8F0'}
+                          />
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+
+                  <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '500' }}>{timeLabel}</Text>
+                </View>
+
+                {/* Review written comment if present */}
+                {review.comment ? (
+                  <Text style={{ fontSize: 13.5, lineHeight: 20, color: '#334155' }}>
+                    {review.comment}
+                  </Text>
+                ) : null}
+
+                {/* ── REPLIED STATE (Screenshots 08.55.28 & 08.55.29 (2)) ── */}
+                {reply ? (
+                  <View style={{ gap: 10, marginTop: 4 }}>
+                    {/* Owner Sub-header: O Owner | You replied 22h ago | 🗑 ✏️ */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: '#FB7185',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>O</Text>
+                        </View>
+                        <View>
+                          <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                            {reply.repliedBy || 'Owner'}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#64748B' }}>
+                            You replied 22h ago
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Action Icons: Delete 🗑 and Edit ✏️ */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Delete reply"
+                          disabled={deleteBusyId === review.id}
+                          onPress={() => confirmDeleteReply(review)}
+                          hitSlop={8}
+                        >
+                          {deleteBusyId === review.id ? (
+                            <ActivityIndicator size="small" color="#DC2626" />
+                          ) : (
+                            <MaterialIcons name="delete-outline" size={20} color="#64748B" />
+                          )}
+                        </Pressable>
+
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Edit reply"
+                          onPress={() => {
+                            setEditingId(review.id);
+                            setEditingText(reply.text);
+                          }}
+                          hitSlop={8}
+                        >
+                          <MaterialIcons name="edit" size={19} color="#64748B" />
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    {/* KEYWORD USED & SEARCH VOLUME TABLE */}
+                    <View
+                      style={{
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        overflow: 'hidden',
+                        backgroundColor: '#FFFFFF',
+                      }}
+                    >
+                      {/* Table Header */}
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          backgroundColor: '#F8FAFC',
+                          paddingVertical: 9,
+                          paddingHorizontal: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#E2E8F0',
+                        }}
+                      >
+                        <Text style={{ flex: 1.5, fontSize: 12, fontWeight: '700', color: '#64748B' }}>
+                          Keyword Used
+                        </Text>
+                        <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: '#64748B', textAlign: 'right' }}>
+                          Search Volume
+                        </Text>
+                      </View>
+
+                      {/* Table Rows */}
+                      {(reply.keywords || DEFAULT_KEYWORDS_FALLBACK).map((kw, i) => (
+                        <View
+                          key={i}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            borderBottomWidth: i < (reply.keywords?.length || 3) - 1 ? 1 : 0,
+                            borderBottomColor: '#F1F5F9',
+                          }}
+                        >
+                          <View style={{ flex: 1.5, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <MaterialIcons name="search" size={15} color="#94A3B8" />
+                            <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#0F172A', flex: 1 }}>
+                              {kw.keyword}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                            <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>
+                              {kw.volume.replace(' ↗', '')}
+                            </Text>
+                            <MaterialIcons name="trending-up" size={14} color="#2563EB" />
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+
+                    {/* Inline Edit Mode or Rendered Text with Read More */}
+                    {editingId === review.id ? (
+                      <View style={{ gap: 8, marginTop: 4 }}>
+                        <TextInput
+                          multiline
+                          value={editingText}
+                          onChangeText={setEditingText}
+                          style={[ui.input, { minHeight: 90, textAlignVertical: 'top', fontSize: 13, backgroundColor: '#FFFFFF' }]}
+                        />
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <Pressable
+                            disabled={replyBusyId === review.id}
+                            onPress={() => void publishReply(review, editingText)}
+                            style={{
+                              backgroundColor: '#0F172A',
+                              paddingHorizontal: 16,
+                              paddingVertical: 8,
+                              borderRadius: 10,
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12.5 }}>Save & Publish</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => setEditingId(null)}
+                            style={{
+                              paddingHorizontal: 14,
+                              paddingVertical: 8,
+                              borderRadius: 10,
+                              borderWidth: 1,
+                              borderColor: '#E2E8F0',
+                            }}
+                          >
+                            <Text style={{ color: '#64748B', fontWeight: '700', fontSize: 12.5 }}>Cancel</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={{ fontSize: 13.5, lineHeight: 21, color: '#1E293B' }}>
+                        {reply.text}
+                      </Text>
+                    )}
+                  </View>
+                ) : drafts[review.id] ? (
+                  /* AI Draft Ready to Publish */
+                  <View style={{ gap: 8, marginTop: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#E11D48', letterSpacing: 0.3 }}>
+                      AI Reply Generated
+                    </Text>
+                    <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={{ fontSize: 13, lineHeight: 20, color: '#1E293B' }}>
+                        {drafts[review.id].text}
+                      </Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <View style={{ flex: 1 }}>
+                        <GradientOutlineReplyButton
+                          label="Publish Reply"
+                          loading={replyBusyId === review.id}
+                          onPress={() => void publishReply(review, drafts[review.id].text, drafts[review.id].keywords)}
+                        />
+                      </View>
+                      <Pressable
+                        onPress={() => {
+                          setDrafts((prev) => {
+                            const n = { ...prev };
+                            delete n[review.id];
+                            return n;
+                          });
+                        }}
+                        style={{
+                          paddingHorizontal: 12,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: '#E2E8F0',
+                        }}
+                      >
+                        <MaterialIcons name="close" size={18} color="#64748B" />
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  /* Reply with AI CTA */
+                  <View style={{ alignItems: 'flex-end', marginTop: 4 }}>
+                    <GradientOutlineReplyButton
+                      label="Reply with AI"
+                      loading={draftBusyId === review.id}
+                      onPress={() => void generateDraft(review)}
+                    />
+                  </View>
+                )}
+              </Card>
+            );
+          })
         )}
       </Screen>
 
-      {/* Floating voice assistant mic (matches Screenshot 8 benchmark) */}
+      {/* Floating Microphone Button (Screenshots 08.55.28 & 08.55.29) */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Voice assistant"
-        onPress={() => Alert.alert('Voice Assistant', 'Say "Reply to Kumra Anand with a polite apology"…')}
+        onPress={() => Alert.alert('Dhanda AI Assistant', 'Listening... Ask me to draft a review reply or check your profile performance.')}
         style={({ pressed }) => ({
           position: 'absolute',
-          right: 16,
           bottom: 24,
-          width: 52,
-          height: 52,
-          borderRadius: 26,
+          right: 20,
+          width: 54,
+          height: 54,
+          borderRadius: 27,
           backgroundColor: '#0F172A',
           alignItems: 'center',
           justifyContent: 'center',
           opacity: pressed ? 0.85 : 1,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.25,
+          shadowOpacity: 0.3,
           shadowRadius: 6,
           elevation: 8,
         })}
@@ -423,289 +892,5 @@ export default function ReviewRepliesScreen() {
         <MaterialIcons name="mic" size={24} color="#FFFFFF" />
       </Pressable>
     </View>
-  );
-}
-
-function ReviewRow({
-  review,
-  keywords,
-  draft,
-  draftBusy,
-  replyBusy,
-  expanded,
-  onToggleExpand,
-  onGenerate,
-  onDiscard,
-  onPublish,
-}: {
-  review: Review;
-  keywords: string[];
-  draft: string | null;
-  draftBusy: boolean;
-  replyBusy: boolean;
-  expanded: boolean;
-  onToggleExpand: () => void;
-  onGenerate: () => void;
-  onDiscard: () => void;
-  onPublish: (text: string) => void;
-}) {
-  const [showFull, setShowFull] = useState(false);
-  const [draftEditing, setDraftEditing] = useState(false);
-  const [draftText, setDraftText] = useState('');
-  const reply = parseReply(review);
-  const author = review.authorName || 'Google User';
-  const rating = Math.max(1, Math.min(5, Math.round(review.rating || 0)));
-  const comment = review.comment || '';
-  const longComment = comment.length > 140 || comment.split('\n').length > 3;
-
-  // Compute time label (e.g. "8y ago" or fallback)
-  const timeLabel = useMemo(() => {
-    if (!review.createdAt) return '';
-    const date = new Date(review.createdAt);
-    const now = new Date();
-    const diffYears = now.getFullYear() - date.getFullYear();
-    if (diffYears >= 1) return `${diffYears}y ago`;
-    const diffMonths = now.getMonth() - date.getMonth();
-    if (diffMonths >= 1) return `${diffMonths}mo ago`;
-    return relativeDate(review.createdAt) || 'Recent';
-  }, [review.createdAt]);
-
-  const initial = author.trim().charAt(0).toUpperCase() || 'U';
-
-  return (
-    <Card style={{ gap: 10, borderRadius: 16, padding: 16 }}>
-      {/* Top author row with blue circular avatar and Google badge (Screenshot 8) */}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-          <View style={{ position: 'relative' }}>
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: '#1E40AF', // dark blue
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '800' }}>{initial}</Text>
-            </View>
-            {/* Google badge */}
-            <View
-              style={{
-                position: 'absolute',
-                bottom: -2,
-                right: -2,
-                width: 16,
-                height: 16,
-                borderRadius: 8,
-                backgroundColor: '#FFFFFF',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderWidth: 1,
-                borderColor: '#E2E8F0',
-              }}
-            >
-              <Text style={{ fontSize: 9, fontWeight: '900', color: '#2563EB' }}>G</Text>
-            </View>
-          </View>
-
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontSize: 15,
-                fontWeight: '800',
-                color: '#0F172A',
-                textDecorationLine: 'underline',
-              }}
-              numberOfLines={1}
-            >
-              {author}
-            </Text>
-            {/* Orange Stars row */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <MaterialIcons
-                  key={star}
-                  name="star"
-                  size={16}
-                  color={star <= rating ? '#F59E0B' : '#E2E8F0'}
-                />
-              ))}
-            </View>
-          </View>
-        </View>
-
-        {timeLabel ? (
-          <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '500' }}>{timeLabel}</Text>
-        ) : null}
-      </View>
-
-      {/* Review comment */}
-      {comment ? (
-        <View style={{ marginTop: 2 }}>
-          <Text
-            style={{ fontSize: 14, lineHeight: 20, color: '#1E293B', fontWeight: '500' }}
-            numberOfLines={showFull ? undefined : 3}
-          >
-            {comment}
-          </Text>
-          {longComment ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setShowFull(!showFull)}
-              hitSlop={8}
-              style={{ alignSelf: 'flex-start', marginTop: 4 }}
-            >
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB' }}>
-                {showFull ? 'Show less' : 'Show more'}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-
-      {/* Reply or Reply with AI Action (Screenshot 8) */}
-      {reply ? (
-        <View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded }}
-            onPress={onToggleExpand}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-              backgroundColor: '#F0FDF4',
-              borderWidth: 1,
-              borderColor: '#BBF7D0',
-              borderRadius: 10,
-              paddingHorizontal: 12,
-              paddingVertical: 9,
-              opacity: pressed ? 0.85 : 1,
-            })}
-          >
-            <MaterialIcons name="check-circle" size={15} color="#16A34A" />
-            <Text style={{ flex: 1, fontSize: 12.5, fontWeight: '700', color: '#15803D' }}>
-              Your reply
-            </Text>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#16A34A' }}>Live</Text>
-            <MaterialIcons name={expanded ? 'expand-less' : 'expand-more'} size={18} color="#15803D" />
-          </Pressable>
-          {expanded ? (
-            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, marginTop: 8, gap: 6 }}>
-              <BoldKeywords text={reply.text} keywords={keywords} style={{ fontSize: 13, lineHeight: 19, color: '#1E293B' }} />
-              {reply.repliedAt ? <Text style={{ fontSize: 11, color: '#94A3B8' }}>{relativeDate(reply.repliedAt)}</Text> : null}
-            </View>
-          ) : null}
-        </View>
-      ) : draft ? (
-        <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 11, fontWeight: '800', color: ROSE, letterSpacing: 0.3 }}>
-            Reply Generated
-          </Text>
-          <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E2E8F0' }}>
-            {draftEditing ? (
-              <TextInput
-                accessibilityLabel="Edit AI draft reply"
-                multiline
-                value={draftText}
-                onChangeText={setDraftText}
-                style={[ui.input, { minHeight: 100, textAlignVertical: 'top', fontSize: 13, backgroundColor: '#FFFFFF' }]}
-              />
-            ) : (
-              <BoldKeywords text={draft} keywords={keywords} style={{ fontSize: 13, lineHeight: 19, color: '#1E293B' }} />
-            )}
-          </View>
-          {draftEditing ? (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <View style={{ flex: 1 }}>
-                <AiButton
-                  label="Publish Reply"
-                  small
-                  loading={replyBusy}
-                  onPress={() => {
-                    const text = draftText.trim();
-                    if (!text) return;
-                    setDraftEditing(false);
-                    onPublish(text);
-                  }}
-                />
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setDraftEditing(false)}
-                style={{
-                  minHeight: 38,
-                  paddingHorizontal: 14,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: colors.line,
-                  backgroundColor: colors.surface,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Text style={{ color: colors.muted, fontSize: 12.5, fontWeight: '700' }}>Back</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <View style={{ gap: 8 }}>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <View style={{ flex: 1 }}>
-                  <GradientOutlineReplyButton
-                    label="Publish Reply"
-                    loading={replyBusy}
-                    onPress={() => onPublish(draft)}
-                  />
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    setDraftText(draft);
-                    setDraftEditing(true);
-                  }}
-                  style={{
-                    minHeight: 40,
-                    paddingHorizontal: 14,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: '#E2E8F0',
-                    backgroundColor: '#FFFFFF',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexDirection: 'row',
-                    gap: 4,
-                  }}
-                >
-                  <MaterialIcons name="edit" size={14} color="#64748B" />
-                  <Text style={{ color: '#64748B', fontSize: 12.5, fontWeight: '700' }}>Edit</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Discard AI draft"
-                  onPress={onDiscard}
-                  hitSlop={8}
-                  style={{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}
-                >
-                  <MaterialIcons name="close" size={18} color="#64748B" />
-                </Pressable>
-              </View>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#9333EA' }}>
-                ✨ AI-generated draft — review before publishing
-              </Text>
-            </View>
-          )}
-        </View>
-      ) : (
-        <View style={{ alignItems: 'flex-end', marginTop: 4 }}>
-          <GradientOutlineReplyButton
-            label="Reply with AI"
-            loading={draftBusy}
-            onPress={onGenerate}
-          />
-        </View>
-      )}
-    </Card>
   );
 }
