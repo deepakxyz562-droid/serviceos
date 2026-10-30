@@ -277,7 +277,7 @@ export default function SelectProfileScreen() {
               <MaterialIcons name="place" size={20} color="#EA580C" />
             </View>
             <Text style={{ fontSize: 13.5, color: '#1E293B', fontWeight: '600', flex: 1 }}>
-              Dhanda AI connects to Google Business Only
+              BGOS AI connects to Google Business Profile only
             </Text>
           </View>
 
@@ -295,7 +295,7 @@ export default function SelectProfileScreen() {
               <MaterialIcons name="mail-lock" size={20} color="#EF4444" />
             </View>
             <Text style={{ fontSize: 13.5, color: '#1E293B', fontWeight: '600', flex: 1 }}>
-              It can't read your Emails
+              Zero access to your private emails or files
             </Text>
           </View>
 
@@ -313,7 +313,7 @@ export default function SelectProfileScreen() {
               <MaterialIcons name="verified-user" size={20} color="#16A34A" />
             </View>
             <Text style={{ fontSize: 13.5, color: '#1E293B', fontWeight: '600', flex: 1 }}>
-              It is 100% Safe & Secure
+              100% Secure Official Google OAuth 2.0 Integration
             </Text>
           </View>
 
@@ -332,6 +332,31 @@ export default function SelectProfileScreen() {
               You can disconnect Google Business anytime
             </Text>
           </View>
+
+          {/* Quick Access to Brand Brain */}
+          <Pressable
+            onPress={() => router.push('/preferences')}
+            style={{
+              marginTop: 6,
+              backgroundColor: '#F8FAFC',
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderRadius: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <MaterialIcons name="tune" size={18} color={colors.brand} />
+              <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.ink }}>
+                Edit Brand Brain & Preferences
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={18} color={colors.muted} />
+          </Pressable>
         </View>
       </ScrollView>
     </Screen>

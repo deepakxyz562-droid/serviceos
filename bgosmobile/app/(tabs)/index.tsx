@@ -96,7 +96,11 @@ const MORE_TOOLS: {
   route: string;
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
 }[] = [
-  { label: 'GBP Hub', route: '/(tabs)/growth', icon: 'storefront' },
+  { label: 'Brand Brain', route: '/preferences', icon: 'psychology' },
+  { label: 'Manage Profile', route: '/manage-profile', icon: 'storefront' },
+  { label: 'QR Standee', route: '/qr-standee', icon: 'qr-code-2' },
+  { label: 'Growth Report', route: '/growth-report', icon: 'picture-as-pdf' },
+  { label: 'GBP Hub', route: '/(tabs)/growth', icon: 'hub' },
   { label: 'Photos', route: '/(tabs)/photos', icon: 'photo-library' },
   { label: 'Google Posts', route: '/(tabs)/posts', icon: 'article' },
   { label: 'Inbox', route: '/(tabs)/inbox', icon: 'chat-bubble-outline' },
@@ -124,7 +128,7 @@ function MoreToolsGrid() {
             key={tool.label}
             accessibilityRole="button"
             accessibilityLabel={`Open ${tool.label}`}
-            onPress={() => router.push(tool.route)}
+            onPress={() => router.push(tool.route as any)}
             style={({ pressed }) => ({
               width: '30.3%',
               flexGrow: 1,
@@ -144,6 +148,78 @@ function MoreToolsGrid() {
             </View>
             <Text style={{ fontSize: 11, fontWeight: '700', color: colors.ink }} numberOfLines={1}>
               {tool.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </Card>
+  );
+}
+
+/**
+ * Growth & Brand Cockpit Quick Strip:
+ * High-visibility 4-action quick launch bar surfacing Brand Brain, Manage Profile,
+ * QR Standees, and Growth Report directly on the mobile Home screen.
+ */
+function GrowthCockpitQuickStrip() {
+  const router = useRouter();
+  const shortcuts = [
+    { label: 'Brand Brain', desc: 'Tone & Story', route: '/preferences', icon: 'psychology' as const, bg: '#EDE9FE', color: '#7C3AED' },
+    { label: 'Manage Profile', desc: 'Hours & Info', route: '/manage-profile', icon: 'storefront' as const, bg: '#EFF6FF', color: '#2563EB' },
+    { label: 'QR Standee', desc: 'Review Cards', route: '/qr-standee', icon: 'qr-code-2' as const, bg: '#ECFDF5', color: '#059669' },
+    { label: 'Growth Report', desc: 'Monthly PDF', route: '/growth-report', icon: 'analytics' as const, bg: '#FEF3C7', color: '#D97706' },
+  ];
+
+  return (
+    <Card style={{ padding: 12, gap: 10 }}>
+      <View style={[ui.row, { justifyContent: 'space-between' }]}>
+        <View style={[ui.row, { gap: 6 }]}>
+          <MaterialIcons name="auto-awesome" size={16} color={colors.brand} />
+          <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }}>
+            Growth & Brand Cockpit
+          </Text>
+        </View>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/preferences')}>
+          <Text style={{ fontSize: 11, fontWeight: '700', color: colors.brand }}>Configure AI →</Text>
+        </Pressable>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {shortcuts.map((sc) => (
+          <Pressable
+            key={sc.label}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${sc.label}`}
+            onPress={() => router.push(sc.route as any)}
+            style={({ pressed }) => ({
+              flex: 1,
+              alignItems: 'center',
+              paddingVertical: 10,
+              paddingHorizontal: 4,
+              borderRadius: 10,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.line,
+              opacity: pressed ? 0.7 : 1,
+              gap: 4,
+            })}
+          >
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: sc.bg,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <MaterialIcons name={sc.icon} size={20} color={sc.color} />
+            </View>
+            <Text style={{ fontSize: 10.5, fontWeight: '800', color: colors.ink, textAlign: 'center' }} numberOfLines={1}>
+              {sc.label}
+            </Text>
+            <Text style={{ fontSize: 9, color: colors.muted, textAlign: 'center', fontWeight: '600' }} numberOfLines={1}>
+              {sc.desc}
             </Text>
           </Pressable>
         ))}
@@ -554,6 +630,9 @@ export default function HomeScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Growth Cockpit Quick Strip: Brand Brain · Manage Profile · QR Standee · Growth Report */}
+      <GrowthCockpitQuickStrip />
 
       {/* Marketing Score — unified 3-slide carousel (Gauge, Growth line chart, Marketing tracker) */}
       <MarketingScoreCard

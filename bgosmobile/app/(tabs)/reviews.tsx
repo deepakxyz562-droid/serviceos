@@ -1219,7 +1219,7 @@ export default function ReviewRepliesScreen() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Voice assistant"
-        onPress={() => Alert.alert('Dhanda AI Assistant', 'Listening... Ask me to draft a review reply or check your profile performance.')}
+        onPress={() => Alert.alert('BGOS AI Assistant', 'Listening... Ask me to draft a review reply or check your profile performance.')}
         style={({ pressed }) => ({
           position: 'absolute',
           bottom: 24,

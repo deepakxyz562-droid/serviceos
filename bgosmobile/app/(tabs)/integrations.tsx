@@ -12,9 +12,16 @@ type WhatsAppTemplateSetup = {
     totalTemplates: number;
   };
 };
+type WhatsAppConfig = {
+  isConfigured: boolean;
+  mode: string;
+  phoneNumberId: string;
+  source?: 'platform' | 'tenant' | 'custom' | string;
+};
+
 export default function IntegrationsScreen() {
   const resource = useResource<{ data: Account[] }>('/api/social/accounts?includeInactive=true');
-  const waConfig = useResource<{ isConfigured: boolean; mode: string; phoneNumberId: string }>('/api/whatsapp/config');
+  const waConfig = useResource<WhatsAppConfig>('/api/whatsapp/config');
   const waTemplates = useResource<WhatsAppTemplateSetup>('/api/whatsapp/templates?setup=true');
   const [error, setError] = useState<string | null>(null);
 
@@ -29,29 +36,38 @@ export default function IntegrationsScreen() {
       ? setupStatus.templatesApproved
       : null;
 
+  const isPlatformManaged = waConfig.data?.source === 'platform';
+
   return (
     <Screen
-      title="Integrations"
-      subtitle="Connected channels and Meta Business API setup."
+      title="Channels & Integrations"
+      subtitle="Connected social accounts and customer messaging channels."
       showBack={true}
       onRefresh={refreshAll}
     >
       <ErrorNotice message={error || resource.error || waConfig.error} retry={refreshAll} />
 
-      {/* Meta WhatsApp Business Cloud API Card */}
+      {/* WhatsApp Business Messaging Card */}
       {waConfig.data?.isConfigured && (
         <Card style={{ borderColor: '#25D366', backgroundColor: '#F0FDF4' }}>
           <View style={[ui.row, { justifyContent: 'space-between' }]}>
-            <Text style={[ui.heading, { flex: 1, color: '#166534' }]}>Meta WhatsApp Cloud API</Text>
-            <Badge label={waConfig.data.mode === 'live' ? 'Live · Active' : 'Configured'} success />
+            <Text style={[ui.heading, { flex: 1, color: '#166534' }]}>WhatsApp Business Messaging</Text>
+            <Badge
+              label={isPlatformManaged ? 'System Delivery · Active' : 'Custom Number · Active'}
+              success
+            />
           </View>
           <Text style={[ui.body, { color: '#15803D' }]}>
-            {approvedCount != null
+            {isPlatformManaged
+              ? 'BGOS manages automated transactional booking confirmations, customer alerts, and review requests on your behalf.'
+              : approvedCount != null
               ? `${approvedCount} Meta-approved template${approvedCount === 1 ? '' : 's'} available for customer bookings and alerts.`
-              : 'Official Business API connected. Template approval status is available in the web Marketing Studio.'}
+              : 'Your custom WhatsApp Business number is connected and ready for customer communication.'}
           </Text>
           <Text style={[ui.caption, { color: '#166534' }]}>
-            Phone ID: {waConfig.data.phoneNumberId || 'Registered'}
+            {isPlatformManaged
+              ? 'Delivery: Managed by BGOS Cloud Gateway'
+              : `Phone ID: ${waConfig.data.phoneNumberId || 'Registered'}`}
           </Text>
         </Card>
       )}

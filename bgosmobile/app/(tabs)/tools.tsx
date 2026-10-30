@@ -116,13 +116,13 @@ export default function ToolsScreen() {
         <MenuRow title="Form Inquiries & Surveys" detail="Intake forms & customer submissions" icon="description" onPress={() => router.push('/(tabs)/submissions')} />
       </Card>
 
-      {/* GOOGLE GROWTH & BRAND BRAIN (Dhanda benchmark) */}
+      {/* GOOGLE GROWTH & BRAND BRAIN */}
       <Card>
         <Text style={ui.heading}>Google Growth & Brand Brain</Text>
         <MenuRow
-          title="Preferences (Brand Brain)"
+          title="Brand Brain (AI Preferences)"
           detail="Products, branding, founder bio & AI guardrails"
-          icon="tune"
+          icon="psychology"
           onPress={() => router.push('/preferences')}
         />
         <MenuRow

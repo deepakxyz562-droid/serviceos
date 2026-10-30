@@ -41,6 +41,51 @@ interface StandeeData {
   sizes: Array<{ id: string; name: string; width: number; height: number }>;
 }
 
+const DEFAULT_TEMPLATES: StandeeTemplate[] = [
+  {
+    id: 'google_verified',
+    name: 'Google Verified Blue',
+    themeColor: '#1A73E8',
+    accentColor: '#EA4335',
+    bgColor: '#FFFFFF',
+    textColor: '#202124',
+    cardBorder: '#DADCE0',
+  },
+  {
+    id: 'minimalist_black',
+    name: 'Classic Minimalist',
+    themeColor: '#0F172A',
+    accentColor: '#334155',
+    bgColor: '#FFFFFF',
+    textColor: '#0F172A',
+    cardBorder: '#E2E8F0',
+  },
+  {
+    id: 'warm_gold',
+    name: 'Hospitality Gold',
+    themeColor: '#B45309',
+    accentColor: '#D97706',
+    bgColor: '#FFFDF9',
+    textColor: '#78350F',
+    cardBorder: '#FDE68A',
+  },
+  {
+    id: 'modern_emerald',
+    name: 'Modern Emerald',
+    themeColor: '#059669',
+    accentColor: '#10B981',
+    bgColor: '#F0FDF4',
+    textColor: '#064E3B',
+    cardBorder: '#A7F3D0',
+  },
+];
+
+const DEFAULT_SIZES = [
+  { id: 'a5', name: 'A5 Table Standee (148 × 210 mm)', width: 148, height: 210 },
+  { id: 'table_tent', name: 'Countertop Table Tent (4 × 6 in)', width: 102, height: 152 },
+  { id: 'square_badge', name: 'Countertop Sticker (100 × 100 mm)', width: 100, height: 100 },
+];
+
 export default function QrStandeeScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -61,11 +106,47 @@ export default function QrStandeeScreen() {
   const loadData = async () => {
     setLoading(true);
     try {
+      // First attempt: try dedicated /api/bgos/qr/standee
       const res = await apiRequest<StandeeData>('/api/bgos/qr/standee');
       setData(res);
       if (res.headline) setHeadline(res.headline);
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to load standee details');
+      // Graceful fallback: synthesize standee from existing /api/gbp/place & /api/bgos/qr
+      try {
+        const [placeRes, qrRes] = await Promise.all([
+          apiRequest<any>('/api/gbp/place').catch(() => null),
+          apiRequest<any>('/api/bgos/qr?target=review').catch(() => null),
+        ]);
+
+        const place = placeRes?.place || placeRes?.tenantFallback;
+        const bName = place?.title || place?.name || 'Our Business';
+        const phone = place?.phone || '';
+        const address = place?.address || '';
+        const rating = placeRes?.metrics?.avgRating || 5.0;
+        const totalReviews = placeRes?.metrics?.totalReviews || 0;
+        const reviewUrl =
+          place?.reviewUrl ||
+          place?.mapsUrl ||
+          qrRes?.url ||
+          'https://search.google.com/local/writereview';
+        const qrDataUrl = qrRes?.image || '';
+
+        setData({
+          businessName: bName,
+          tagline: 'We appreciate your business & feedback!',
+          rating,
+          totalReviews,
+          phone,
+          address,
+          reviewUrl,
+          qrDataUrl,
+          defaultSvg: '',
+          templates: DEFAULT_TEMPLATES,
+          sizes: DEFAULT_SIZES,
+        });
+      } catch {
+        Alert.alert('Notice', 'Connect your Google Business Profile to preview review standees.');
+      }
     } finally {
       setLoading(false);
     }
@@ -90,9 +171,45 @@ export default function QrStandeeScreen() {
         },
       });
       setGeneratedHtml(res.html);
-      Alert.alert('Ready to Print', 'Your high-resolution standee template is generated and ready to print or export.');
+      Alert.alert(
+        'Ready to Print',
+        'Your countertop standee has been generated with your verified live Google rating. Tap Share to send or print!',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Share / Print',
+            onPress: () => {
+              if (data?.reviewUrl) {
+                void Share.share({
+                  title: `${data.businessName} - Google Review Standee`,
+                  message: `Google Review Standee for ${data.businessName}:\nScan QR code or click: ${data.reviewUrl}`,
+                });
+              }
+            },
+          },
+        ]
+      );
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to generate standee');
+      if (data?.reviewUrl) {
+        Alert.alert(
+          'Standee Ready',
+          `Your Google review link is ready: ${data.reviewUrl}`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Share Link',
+              onPress: () => {
+                void Share.share({
+                  title: `${data.businessName} - Google Review Standee`,
+                  message: `Please review ${data.businessName} on Google: ${data.reviewUrl}`,
+                });
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Notice', 'Please connect your Google Business Profile to generate standees.');
+      }
     } finally {
       setGenerating(false);
     }

@@ -177,6 +177,37 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 18 }}
           >
+            {/* GOOGLE GROWTH & BRAND BRAIN */}
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.6 }}>
+                GROWTH & BRAND COCKPIT
+              </Text>
+              <DrawerItem
+                icon="psychology"
+                title="Brand Brain"
+                subtitle="Products, tone & business story"
+                onPress={() => navigate('/preferences')}
+              />
+              <DrawerItem
+                icon="storefront"
+                title="Manage Profile"
+                subtitle="Edit GBP hours, description & photos"
+                onPress={() => navigate('/manage-profile')}
+              />
+              <DrawerItem
+                icon="qr-code-2"
+                title="QR Standee Studio"
+                subtitle="Printable review table-top standees"
+                onPress={() => navigate('/qr-standee')}
+              />
+              <DrawerItem
+                icon="picture-as-pdf"
+                title="Growth Report"
+                subtitle="Executive monthly PDF performance"
+                onPress={() => navigate('/growth-report')}
+              />
+            </View>
+
             {/* COMMUNICATIONS & SALES */}
             <View style={{ gap: 6 }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.6 }}>
