@@ -29,7 +29,7 @@ interface DiscoverResponse {
 }
 
 type ReviewsResponse = { reviews: Review[]; pagination?: { total: number } };
-type ReplyFilter = 'all' | 'pending' | 'replied';
+type ReplyFilter = 'all' | 'pending' | 'failed' | 'replied';
 
 interface KeywordUsage {
   keyword: string;
@@ -170,8 +170,28 @@ export default function ReviewRepliesScreen() {
   const version = discover.data?.version || 'v2.83';
 
   const all = useMemo(() => reviews.data?.reviews || [], [reviews.data]);
-  const pending = useMemo(() => all.filter((r) => !parseReply(r)), [all]);
-  const replied = useMemo(() => all.filter((r) => parseReply(r)), [all]);
+
+  const isLiveReplied = useCallback((r: Review) => {
+    const rep = parseReply(r);
+    if (!rep) return false;
+    const isGoogle = Boolean(r.googleReviewId || r.source === 'google');
+    return isGoogle ? rep.publishedToGoogle === true : true;
+  }, []);
+
+  const isSyncFailed = useCallback((r: Review) => {
+    const rep = parseReply(r);
+    if (!rep) return false;
+    const isGoogle = Boolean(r.googleReviewId || r.source === 'google');
+    return isGoogle && rep.publishedToGoogle !== true;
+  }, []);
+
+  const isPending = useCallback((r: Review) => {
+    return !parseReply(r);
+  }, []);
+
+  const pending = useMemo(() => all.filter(isPending), [all, isPending]);
+  const failed = useMemo(() => all.filter(isSyncFailed), [all, isSyncFailed]);
+  const replied = useMemo(() => all.filter(isLiveReplied), [all, isLiveReplied]);
   const totalRatings = reviews.data?.pagination?.total ?? all.length;
 
   // Dynamic Average Rating Calculation
@@ -181,7 +201,14 @@ export default function ReviewRepliesScreen() {
     return (sum / all.length).toFixed(1);
   }, [all]);
 
-  const shown = filter === 'pending' ? pending : filter === 'replied' ? replied : all;
+  const shown =
+    filter === 'pending'
+      ? pending
+      : filter === 'failed'
+        ? failed
+        : filter === 'replied'
+          ? replied
+          : all;
 
   async function handleTriggerAutoReply() {
     if (autoReplyBusy) return;
@@ -579,16 +606,21 @@ export default function ReviewRepliesScreen() {
           </View>
         </View>
 
-        {/* ── FILTER PILLS: All (3) | Pending | Replied (3) | Filter icon ── */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {/* ── FILTER PILLS: All | Pending | Failed Sync | Live on Google ── */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 6, gap: 6 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 }}
+            style={{ flex: 1 }}
+          >
             {/* All */}
             <Pressable
               onPress={() => setFilter('all')}
               style={{
-                backgroundColor: filter === 'all' ? '#0F172A' : 'transparent',
-                paddingHorizontal: 16,
-                paddingVertical: 8,
+                backgroundColor: filter === 'all' ? '#0F172A' : '#F1F5F9',
+                paddingHorizontal: 14,
+                paddingVertical: 7,
                 borderRadius: 20,
               }}
             >
@@ -596,7 +628,7 @@ export default function ReviewRepliesScreen() {
                 style={{
                   color: filter === 'all' ? '#FFFFFF' : '#64748B',
                   fontWeight: filter === 'all' ? '800' : '600',
-                  fontSize: 13,
+                  fontSize: 12.5,
                 }}
               >
                 All ({all.length})
@@ -610,9 +642,9 @@ export default function ReviewRepliesScreen() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 5,
-                backgroundColor: filter === 'pending' ? '#0F172A' : 'transparent',
-                paddingHorizontal: 14,
-                paddingVertical: 8,
+                backgroundColor: filter === 'pending' ? '#0F172A' : '#F1F5F9',
+                paddingHorizontal: 12,
+                paddingVertical: 7,
                 borderRadius: 20,
               }}
             >
@@ -620,7 +652,7 @@ export default function ReviewRepliesScreen() {
                 style={{
                   color: filter === 'pending' ? '#FFFFFF' : '#64748B',
                   fontWeight: filter === 'pending' ? '800' : '600',
-                  fontSize: 13,
+                  fontSize: 12.5,
                 }}
               >
                 Pending
@@ -641,27 +673,67 @@ export default function ReviewRepliesScreen() {
               ) : null}
             </Pressable>
 
-            {/* Replied */}
+            {/* Failed Sync */}
+            <Pressable
+              onPress={() => setFilter('failed')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: filter === 'failed' ? '#0F172A' : failed.length > 0 ? '#FEF3C7' : '#F1F5F9',
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 20,
+                borderWidth: failed.length > 0 && filter !== 'failed' ? 1 : 0,
+                borderColor: '#F59E0B',
+              }}
+            >
+              <Text
+                style={{
+                  color: filter === 'failed' ? '#FFFFFF' : failed.length > 0 ? '#B45309' : '#64748B',
+                  fontWeight: filter === 'failed' ? '800' : '700',
+                  fontSize: 12.5,
+                }}
+              >
+                Failed Sync
+              </Text>
+              {failed.length > 0 ? (
+                <View
+                  style={{
+                    backgroundColor: filter === 'failed' ? '#F59E0B' : '#D97706',
+                    paddingHorizontal: 6,
+                    paddingVertical: 1,
+                    borderRadius: 9,
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800' }}>
+                    {failed.length}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+
+            {/* Replied / Live on Google */}
             <Pressable
               onPress={() => setFilter('replied')}
               style={{
-                backgroundColor: filter === 'replied' ? '#0F172A' : 'transparent',
-                paddingHorizontal: 14,
-                paddingVertical: 8,
+                backgroundColor: filter === 'replied' ? '#0F172A' : '#F1F5F9',
+                paddingHorizontal: 12,
+                paddingVertical: 7,
                 borderRadius: 20,
               }}
             >
               <Text
                 style={{
-                  color: filter === 'replied' ? '#FFFFFF' : '#64748B',
-                  fontWeight: filter === 'replied' ? '800' : '600',
-                  fontSize: 13,
+                  color: filter === 'replied' ? '#FFFFFF' : '#059669',
+                  fontWeight: filter === 'replied' ? '800' : '700',
+                  fontSize: 12.5,
                 }}
               >
-                Replied ({replied.length})
+                Live on Google ({replied.length})
               </Text>
             </Pressable>
-          </View>
+          </ScrollView>
 
           {/* Filter icon button */}
           <Pressable
@@ -760,30 +832,7 @@ export default function ReviewRepliesScreen() {
                   ) : (
                     <>
                       <MaterialIcons name="refresh" size={14} color="#0F172A" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Sync</Text>
-                    </>
-                  )}
-                </Pressable>
-                <Pressable
-                  disabled={testReviewBusy}
-                  onPress={() => void handleGenerateTestReview()}
-                  style={({ pressed }) => ({
-                    backgroundColor: '#059669',
-                    paddingHorizontal: 10,
-                    paddingVertical: 7,
-                    borderRadius: 10,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 4,
-                    opacity: testReviewBusy ? 0.6 : pressed ? 0.85 : 1,
-                  })}
-                >
-                  {testReviewBusy ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <MaterialIcons name="add" size={14} color="#FFFFFF" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>+ Test 5★</Text>
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Sync Maps</Text>
                     </>
                   )}
                 </Pressable>

@@ -1872,7 +1872,7 @@ export function SocialMediaView({
   // ── Review Replies tab state ──
   const [reviews, setReviews] = useState<ReviewDto[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
-  const [reviewFilter, setReviewFilter] = useState<'all' | 'pending' | 'replied'>('all');
+  const [reviewFilter, setReviewFilter] = useState<'all' | 'pending' | 'failed' | 'replied'>('all');
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [generatingReplyId, setGeneratingReplyId] = useState<string | null>(null);
   const [publishingReplyId, setPublishingReplyId] = useState<string | null>(null);
@@ -2651,16 +2651,45 @@ export function SocialMediaView({
     }
   };
 
+  const isReviewPublished = (r: ReviewDto): boolean => {
+    try {
+      const parsed = JSON.parse(r.responseJson || '{}');
+      return Boolean(parsed?.publishedToGoogle);
+    } catch {
+      return false;
+    }
+  };
+
+  const isReviewSyncFailed = (r: ReviewDto): boolean => {
+    try {
+      const parsed = JSON.parse(r.responseJson || '{}');
+      const hasText = typeof parsed?.text === 'string' && parsed.text.trim().length > 0;
+      return hasText && !parsed?.publishedToGoogle;
+    } catch {
+      return false;
+    }
+  };
+
   const pendingReviews = useMemo(
     () => reviews.filter((r) => !replyTextOf(r)),
     [reviews]
   );
+  const failedSyncReviews = useMemo(
+    () => reviews.filter(isReviewSyncFailed),
+    [reviews]
+  );
   const repliedReviews = useMemo(
-    () => reviews.filter((r) => Boolean(replyTextOf(r))),
+    () => reviews.filter((r) => Boolean(replyTextOf(r)) && isReviewPublished(r)),
     [reviews]
   );
   const visibleReviews =
-    reviewFilter === 'pending' ? pendingReviews : reviewFilter === 'replied' ? repliedReviews : reviews;
+    reviewFilter === 'pending'
+      ? pendingReviews
+      : reviewFilter === 'failed'
+        ? failedSyncReviews
+        : reviewFilter === 'replied'
+          ? repliedReviews
+          : reviews;
   const avgReviewRating = reviews.length
     ? Number((reviews.reduce((s, r) => s + (r.rating || 0), 0) / reviews.length).toFixed(1))
     : 0;
@@ -4110,23 +4139,6 @@ export function SocialMediaView({
 
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleGenerateTestReview}
-                disabled={generatingTestReview}
-                className="h-8.5 rounded-xl border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-semibold gap-1.5 shadow-2xs"
-                title="Create a simulated 5★ review to test AI auto-reply pipeline"
-              >
-                {generatingTestReview ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Plus className="size-3.5" />
-                )}
-                <span>Test Review (5★)</span>
-              </Button>
-
-              <Button
-                type="button"
                 size="sm"
                 onClick={handleRunAutoReply}
                 disabled={autoReplyRunning || pendingReviews.length === 0}
@@ -4178,6 +4190,9 @@ export function SocialMediaView({
               {([
                 { key: 'all' as const, label: `All (${reviews.length})` },
                 { key: 'pending' as const, label: `Pending 🔴${pendingReviews.length}` },
+                ...(failedSyncReviews.length > 0
+                  ? [{ key: 'failed' as const, label: `Failed Sync ⚠️ (${failedSyncReviews.length})` }]
+                  : []),
                 { key: 'replied' as const, label: `Replied (${repliedReviews.length})` },
               ]).map((chip) => (
                 <button
@@ -4186,7 +4201,11 @@ export function SocialMediaView({
                   onClick={() => setReviewFilter(chip.key)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
                     reviewFilter === chip.key
-                      ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-400 shadow-2xs'
+                      ? chip.key === 'failed'
+                        ? 'bg-rose-500/10 border-rose-500 text-rose-700 dark:text-rose-400 shadow-2xs'
+                        : chip.key === 'replied'
+                          ? 'bg-emerald-500/10 border-emerald-500 text-emerald-700 dark:text-emerald-400 shadow-2xs'
+                          : 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-400 shadow-2xs'
                       : 'bg-card border-border text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -4245,9 +4264,15 @@ export function SocialMediaView({
                               {relativeTime(review.createdAt)}
                             </span>
                             {existingReply && (
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
-                                Replied
-                              </span>
+                              isReviewPublished(review) ? (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+                                  Live on Google
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 text-[10px] font-bold">
+                                  Google Sync Pending
+                                </span>
+                              )
                             )}
                           </div>
                           {review.comment && (

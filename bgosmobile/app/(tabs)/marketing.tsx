@@ -27,7 +27,7 @@ import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
 import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 import type { GbpPlaceResult } from '../../src/components/gbp/types';
 
-type Account = { id: string; platform: string; accountName: string; isActive: boolean };
+type Account = { id: string; platform: string; accountName: string; accountId?: string; isActive: boolean };
 
 export default function MarketingScreen() {
   const router = useRouter();
@@ -38,6 +38,7 @@ export default function MarketingScreen() {
   const saving = useRef(false);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
+  const discover = useResource<{ activeProfile?: { id: string; name: string } }>('/api/gbp/accounts/discover');
   const accounts = useResource<{ data: Account[] }>('/api/social/accounts');
 
   const [open, setOpen] = useState(false);
@@ -67,7 +68,16 @@ export default function MarketingScreen() {
   }, [params.generate, router]);
 
   const available = accounts.data?.data || [];
-  const gbpAccount = available.find((a) => a.platform === 'googlebusiness' && a.isActive);
+  const activeProfileId = discover.data?.activeProfile?.id;
+  const gbpAccount =
+    available.find(
+      (a) =>
+        a.platform === 'googlebusiness' &&
+        a.isActive &&
+        (activeProfileId
+          ? a.id === activeProfileId || a.accountId === activeProfileId
+          : a.accountName?.toLowerCase().includes('fieser') || a.accountId === '10777612572223040949')
+    ) || available.find((a) => a.platform === 'googlebusiness' && a.isActive);
   const targets = gbpAccount ? [{ platform: 'googlebusiness', socialAccountId: gbpAccount.id }] : [];
   const mediaUrls = media.split('\n').map((s) => s.trim()).filter(Boolean);
 

@@ -362,7 +362,7 @@ it('renders Marketing Studio with Dhanda tabs, real API wiring, gauge, competito
         return okJson({
           reviews: [
             { id: 'rev-1', rating: 5, comment: 'Amazing service! The team was professional and quick.', authorName: 'Priya Singh', createdAt: '2026-10-28T10:00:00Z', responseJson: '', source: 'google' },
-            { id: 'rev-2', rating: 4, comment: 'Good work, arrived slightly late.', authorName: 'Rahul Kumar', createdAt: '2026-10-25T09:00:00Z', responseJson: JSON.stringify({ text: 'Thank you Rahul — we will be on time next visit!' }), source: 'google' },
+            { id: 'rev-2', rating: 4, comment: 'Good work, arrived slightly late.', authorName: 'Rahul Kumar', createdAt: '2026-10-25T09:00:00Z', responseJson: JSON.stringify({ text: 'Thank you Rahul — we will be on time next visit!', publishedToGoogle: true }), source: 'google' },
           ],
           pagination: { page: 1, limit: 50, total: 2, totalPages: 1 },
         });

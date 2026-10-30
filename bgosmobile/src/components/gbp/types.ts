@@ -8,6 +8,7 @@ export type Review = {
   source?: string;
   status?: string;
   responseJson?: string;
+  googleReviewId?: string;
   createdAt?: string;
 };
 

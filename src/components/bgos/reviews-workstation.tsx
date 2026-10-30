@@ -96,6 +96,8 @@ export interface ReviewItem {
   text: string;
   keywords?: string[];
   replied: boolean;
+  failedSync?: boolean;
+  publishedToGoogle?: boolean;
   replyText?: string;
   replyEdited?: string;
   replyKeywords?: Array<{ keyword: string; volume: string }>;
@@ -704,7 +706,9 @@ export function ReviewsView({
             timeAgo: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
             text: comment || '(No written comment provided)',
             keywords: r.keywords || (extractedKeywords.length > 0 ? extractedKeywords : undefined),
-            replied: !!(parsedResp && parsedResp.text),
+            replied: !!(parsedResp && parsedResp.text && parsedResp.publishedToGoogle),
+            failedSync: !!(parsedResp && parsedResp.text && !parsedResp.publishedToGoogle),
+            publishedToGoogle: Boolean(parsedResp?.publishedToGoogle),
             replyText: parsedResp?.text || undefined,
             replyEdited: parsedResp?.repliedAt ? 'Published' : undefined,
             replyKeywords: parsedResp?.keywords || (parsedResp?.text ? [
@@ -797,7 +801,9 @@ export function ReviewsView({
               timeAgo: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
               text: comment || '(No written comment provided)',
               keywords: r.keywords || (extractedKeywords.length > 0 ? extractedKeywords : undefined),
-              replied: !!(parsedResp && parsedResp.text),
+              replied: !!(parsedResp && parsedResp.text && parsedResp.publishedToGoogle),
+            failedSync: !!(parsedResp && parsedResp.text && !parsedResp.publishedToGoogle),
+            publishedToGoogle: Boolean(parsedResp?.publishedToGoogle),
               replyText: parsedResp?.text || undefined,
               replyEdited: parsedResp?.repliedAt ? 'Published' : undefined,
               location: r.location || r.city || undefined,
@@ -3125,10 +3131,12 @@ export function ReviewsView({
                             'text-[10px] px-1.5 py-0.2 shrink-0 font-semibold',
                             item.replied
                               ? 'bg-[#E8F8EF] text-[#009F50] dark:bg-emerald-950 dark:text-emerald-300'
-                              : 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                              : item.failedSync
+                                ? 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                : 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
                           )}
                         >
-                          {item.replied ? 'Replied' : 'Pending'}
+                          {item.replied ? 'Live on Google' : item.failedSync ? 'Sync Failed' : 'Pending'}
                         </Badge>
                       </div>
 
@@ -3177,10 +3185,12 @@ export function ReviewsView({
                               'text-[10px] px-1.5 py-0.2 font-semibold',
                               selectedReview.replied
                                 ? 'bg-[#E8F8EF] text-[#009F50]'
-                                : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                                : selectedReview.failedSync
+                                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                  : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
                             )}
                           >
-                            {selectedReview.replied ? 'Replied' : 'Pending'}
+                            {selectedReview.replied ? 'Live on Google' : selectedReview.failedSync ? 'Sync Failed' : 'Pending'}
                           </Badge>
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">

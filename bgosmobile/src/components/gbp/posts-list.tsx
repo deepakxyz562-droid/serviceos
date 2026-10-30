@@ -13,7 +13,7 @@ import { relativeDate } from './bits';
  * (posts) tabs so both stay identical.
  */
 
-export type PostPill = 'scheduled' | 'posted' | 'not_posted' | 'pending' | 'approved' | 'rejected';
+export type PostPill = 'scheduled' | 'posted' | 'failed' | 'not_posted' | 'pending' | 'approved' | 'rejected';
 
 export type SocialPostRow = {
   id: string;
@@ -31,9 +31,9 @@ export type SocialPostRow = {
 
 export const PILL_ROWS: { key: PostPill; label: string }[][] = [
   [
+    { key: 'posted', label: 'Published 🟢' },
     { key: 'scheduled', label: 'Scheduled 📅' },
-    { key: 'posted', label: 'Posted ✓' },
-    { key: 'not_posted', label: 'Not Posted ✗' },
+    { key: 'failed', label: 'Failed 🔴' },
   ],
   [
     { key: 'pending', label: 'Pending ⚠️' },
@@ -57,6 +57,10 @@ const EMPTY_COPY: Record<PostPill, { title: string; detail: string }> = {
     title: 'No Published Posts',
     detail: 'Posts published to your Google Business Profile will appear here.',
   },
+  failed: {
+    title: 'No Failed Posts',
+    detail: 'Great news! All your published and scheduled posts are running smoothly without errors.',
+  },
   not_posted: {
     title: 'Nothing Waiting',
     detail: 'Drafts and posts that failed to publish will show up here.',
@@ -74,8 +78,9 @@ const EMPTY_COPY: Record<PostPill, { title: string; detail: string }> = {
 function postsPath(pill: PostPill): string {
   const base = '/api/social/posts?platform=googlebusiness&limit=20';
   if (APPROVAL_PILLS.includes(pill)) return `${base}&approval=${pill}`;
-  const status = pill === 'posted' ? 'published' : pill;
-  return `${base}&status=${status}`;
+  if (pill === 'posted') return `${base}&status=published`;
+  if (pill === 'failed') return `${base}&status=failed`;
+  return `${base}&status=${pill}`;
 }
 
 /**
@@ -148,16 +153,20 @@ export function PostCard({
   showApprovalActions = false,
   approveBusy = false,
   rejectBusy = false,
+  retryBusy = false,
   onApprove,
   onReject,
+  onRetry,
 }: {
   post: SocialPostRow;
   /** Pending-review posts get the Dhanda Approve / Reject action row. */
   showApprovalActions?: boolean;
   approveBusy?: boolean;
   rejectBusy?: boolean;
+  retryBusy?: boolean;
   onApprove?: () => void;
   onReject?: () => void;
+  onRetry?: () => void;
 }) {
   const badge = statusBadge(post);
   const media = post.mediaUrls?.[0];
@@ -189,8 +198,55 @@ export function PostCard({
         />
       ) : null}
 
-      {post.failureReason ? (
-        <Text style={{ fontSize: 12, color: colors.danger }}>Publish failed: {post.failureReason}</Text>
+      {post.status === 'failed' || post.failureReason ? (
+        <View
+          style={{
+            backgroundColor: '#FEF2F2',
+            borderColor: '#FECACA',
+            borderWidth: 1,
+            borderRadius: 10,
+            padding: 10,
+            gap: 6,
+          }}
+        >
+          <View style={[ui.row, { gap: 6 }]}>
+            <MaterialIcons name="error-outline" size={16} color={colors.danger} />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.danger }}>
+              Publish Failed
+            </Text>
+          </View>
+          {post.failureReason ? (
+            <Text style={{ fontSize: 11.5, color: '#991B1B', lineHeight: 16 }}>{post.failureReason}</Text>
+          ) : null}
+          {onRetry ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={retryBusy}
+              onPress={onRetry}
+              style={({ pressed }) => ({
+                alignSelf: 'flex-start',
+                backgroundColor: colors.danger,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                opacity: retryBusy ? 0.6 : pressed ? 0.85 : 1,
+                marginTop: 4,
+              })}
+            >
+              {retryBusy ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <MaterialIcons name="refresh" size={14} color="#FFFFFF" />
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>Retry Publish ⚡</Text>
+                </>
+              )}
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
 
       {post.publishTargets?.length ? (
@@ -295,6 +351,23 @@ export function PostsBoard({
     }
   }
 
+  async function retry(post: SocialPostRow) {
+    if (busyId) return;
+    setBusyId(post.id);
+    try {
+      await apiRequest('/api/social/publish', {
+        method: 'POST',
+        body: { postId: post.id },
+      });
+      Alert.alert('Publish Retrying', 'Publishing retry has started. Refreshing status...');
+      setTimeout(() => void board.reload(), 1500);
+    } catch (e) {
+      Alert.alert('Retry Failed', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const empty = EMPTY_COPY[pill];
 
   return (
@@ -362,8 +435,10 @@ export function PostsBoard({
             showApprovalActions={pill === 'pending'}
             approveBusy={busyId === post.id}
             rejectBusy={busyId === post.id}
+            retryBusy={busyId === post.id}
             onApprove={() => void moderate(post, 'approved')}
             onReject={() => void moderate(post, 'rejected')}
+            onRetry={() => void retry(post)}
           />
         ))
       )}
