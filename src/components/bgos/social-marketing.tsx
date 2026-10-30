@@ -1544,6 +1544,28 @@ export function SocialMediaView({
     fetchPhotos,
   ]);
 
+  useEffect(() => {
+    const handleProfileChange = () => {
+      fetchMarketingScore();
+      fetchPlace();
+      fetchCompetitors(true);
+      fetchKeywords();
+      fetchGrowthActions();
+      fetchReviews();
+      fetchPhotos();
+    };
+    window.addEventListener('gbp-profile-changed', handleProfileChange);
+    return () => window.removeEventListener('gbp-profile-changed', handleProfileChange);
+  }, [
+    fetchMarketingScore,
+    fetchPlace,
+    fetchCompetitors,
+    fetchKeywords,
+    fetchGrowthActions,
+    fetchReviews,
+    fetchPhotos,
+  ]);
+
   // AI Post tab: refetch the status-filtered list when the tab or pill changes.
   useEffect(() => {
     if (activeTab !== 'ai-content' || !auth?.isAuthenticated) return;

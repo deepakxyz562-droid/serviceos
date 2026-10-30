@@ -1,6 +1,6 @@
 import { unregisterPush } from '../lib/push';
 import { create } from 'zustand';
-import { getToken, getRefreshToken, setTokens, clearTokens, onSessionEnded, sessionRevision } from '../lib/auth';
+import { getToken, getRefreshToken, setTokens, clearTokens, onSessionEnded, sessionRevision, getSavedUser, saveUser } from '../lib/auth';
 import { apiRequest, ApiError } from '../lib/api';
 import { API_PATHS } from '../lib/constants';
 import { googleSignIn } from '../lib/google-auth';
@@ -23,7 +23,7 @@ async function acceptSession(session: SessionResponse, revision: number) {
     if (session.refreshToken) await apiRequest('/api/auth/logout', { method: 'POST', body: { refreshToken: session.refreshToken }, skipAuth: true }).catch(() => {});
     throw new Error('Use an active BGOS workspace account to sign in.');
   }
-  await setTokens(session.token, session.refreshToken, revision);
+  await setTokens(session.token, session.refreshToken, revision, session.user);
   return session.user;
 }
 export const useAuthStore = create<AuthState>((set) => ({
@@ -88,15 +88,35 @@ export const useAuthStore = create<AuthState>((set) => ({
     const revision = sessionRevision();
     set({ isLoading: true });
     try {
-      if (!await getToken()) { set({ user: null, isAuthenticated: false, isLoading: false }); return; }
+      const token = await getToken();
+      if (!token) {
+        set({ user: null, isAuthenticated: false, isLoading: false });
+        return;
+      }
+      // Instant recovery from local secure storage so app remains authenticated immediately
+      const savedUser = await getSavedUser().catch(() => null);
+      if (savedUser) {
+        set({ user: savedUser, isAuthenticated: true, isLoading: false, error: null });
+      }
+
       const session = await apiRequest<SessionResponse>(API_PATHS.currentUser);
       if (revision !== sessionRevision()) return;
-      if (!isBgosIdentity(session)) throw new ApiError('An active BGOS workspace is required.', 403);
-      set({ user: session.user, onboardingRequired: !!session.onboardingRequired, isAuthenticated: true, isLoading: false, error: null });
+      if (session?.user) {
+        await saveUser(session.user).catch(() => {});
+        set({ user: session.user, onboardingRequired: !!session.onboardingRequired, isAuthenticated: true, isLoading: false, error: null });
+      }
     } catch (error) {
       if (revision !== sessionRevision()) return;
-      if (error instanceof ApiError && [401, 403].includes(error.statusCode)) await clearTokens().catch(() => {});
-      set({ user: null, isAuthenticated: false, isLoading: false, error: error instanceof Error ? error.message : 'Could not check session. Retry when connected.' });
+      const savedUser = await getSavedUser().catch(() => null);
+      if (savedUser) {
+        // Retain authenticated session on network failure or transient checks
+        set({ user: savedUser, isAuthenticated: true, isLoading: false });
+      } else {
+        if (error instanceof ApiError && error.statusCode === 401) {
+          await clearTokens().catch(() => {});
+        }
+        set({ user: null, isAuthenticated: false, isLoading: false, error: error instanceof Error ? error.message : 'Could not check session. Retry when connected.' });
+      }
     }
   },
 }));

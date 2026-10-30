@@ -73,19 +73,41 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    const socialAccount = await db.socialAccount.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        platform: 'googlebusiness',
+        isActive: true,
+      },
+      select: { metadata: true },
+    });
+    let activeProfileId = '5008';
+    if (socialAccount?.metadata) {
+      try {
+        const meta = typeof socialAccount.metadata === 'string' ? JSON.parse(socialAccount.metadata) : socialAccount.metadata;
+        if (meta?.activeProfileId) activeProfileId = String(meta.activeProfileId);
+      } catch {}
+    }
+
+    const reviewWhere: Record<string, unknown> = {
+      tenantId: user.tenantId,
+    };
+    if (activeProfileId === '5008') {
+      reviewWhere.OR = [
+        { googleReviewId: { startsWith: '5008' } },
+        { googleReviewId: { startsWith: 'goog_rev_' } },
+      ];
+    } else {
+      reviewWhere.googleReviewId = { startsWith: activeProfileId };
+    }
+
     const [reviews, totalReviews] = await Promise.all([
       db.review.findMany({
-        where: {
-          tenantId: user.tenantId,
-          OR: [{ source: 'google' }, { googleReviewId: { not: null } }],
-        },
+        where: reviewWhere,
         select: { rating: true, createdAt: true, responseJson: true, source: true },
       }),
       db.review.count({
-        where: {
-          tenantId: user.tenantId,
-          OR: [{ source: 'google' }, { googleReviewId: { not: null } }],
-        },
+        where: reviewWhere,
       }),
     ]);
 

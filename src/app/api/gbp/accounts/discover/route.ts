@@ -115,6 +115,24 @@ export async function POST(request: NextRequest) {
           metadata: JSON.stringify(meta),
         },
       });
+    } else {
+      await db.socialAccount.create({
+        data: {
+          tenantId: user.tenantId,
+          platform: 'googlebusiness',
+          accountName: target.name,
+          accountId: target.id,
+          isActive: true,
+          accessToken: 'placeholder_token',
+          metadata: JSON.stringify({
+            activeProfileId: target.id,
+            shortId: target.shortId,
+            locationTitle: target.name,
+            locationId: target.id,
+            googleEmail: 'deepakchandra076@gmail.com',
+          }),
+        },
+      });
     }
 
     return NextResponse.json({

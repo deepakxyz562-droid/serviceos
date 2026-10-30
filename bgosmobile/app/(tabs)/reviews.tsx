@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Card, Empty, ErrorNotice, Loading, Screen, colors, ui } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
@@ -153,6 +153,12 @@ export default function ReviewRepliesScreen() {
   const activeProfile = discover.data?.activeProfile;
   const shortId = activeProfile?.shortId || (gbpPlace.data?.place?.locationId ? `#${gbpPlace.data.place.locationId.slice(0, 4)}` : '#5008');
   const phone = discover.data?.phone || '8505945123';
+
+  useFocusEffect(
+    useCallback(() => {
+      void Promise.all([reviews.refresh(), gbpPlace.refresh(), discover.refresh()]).catch(() => {});
+    }, [])
+  );
   const version = discover.data?.version || 'v2.83';
 
   const all = useMemo(() => reviews.data?.reviews || [], [reviews.data]);

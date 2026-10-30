@@ -465,12 +465,27 @@ export default function HomePageClient() {
           }
           return;
         }
-        // /api/auth/me returned 200 with {user: null} — the session cookie
-        // AND/OR the Bearer token is expired/invalid. The server has
-        // authoritatively told us "you are not logged in". Do NOT fall
-        // through to localStorage (which may hold a stale `isAuthenticated:
-        // true` from a previous session) — that's the zombie-auth bug.
-        // Clear any stale auth + token and let the landing page render.
+        // /api/auth/me returned 200 with {user: null} — check if we can refresh session first
+        const hasSavedAuth = typeof window !== 'undefined' && Boolean(localStorage.getItem('fieseros_auth') || localStorage.getItem('fieseros_token'));
+        if (hasSavedAuth) {
+          const refreshed = await refreshSession();
+          if (refreshed) {
+            const retryRes = await authFetch('/api/auth/me?XTransformPort=3000');
+            if (retryRes.ok) {
+              const retryData = await retryRes.json();
+              if (retryData.user) {
+                setAuth({
+                  isAuthenticated: true,
+                  user: retryData.user,
+                  tenant: retryData.tenant || null,
+                });
+                return;
+              }
+            }
+          }
+        }
+
+        // Only clear stale auth + token if refresh failed or no saved credentials existed
         if (typeof window !== 'undefined') {
           try {
             localStorage.removeItem('fieseros_auth');

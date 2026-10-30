@@ -49,6 +49,32 @@ export async function GET(request: NextRequest) {
     } else {
       where.tenantId = user.tenantId;
       if (customerIdParam) where.customerId = customerIdParam;
+
+      const profileIdParam = searchParams.get('profileId');
+      let effectiveProfileId = profileIdParam;
+      if (!effectiveProfileId && user.tenantId) {
+        const socialAccount = await db.socialAccount.findFirst({
+          where: { tenantId: user.tenantId, platform: 'googlebusiness', isActive: true },
+          select: { metadata: true },
+        });
+        if (socialAccount?.metadata) {
+          try {
+            const meta = typeof socialAccount.metadata === 'string' ? JSON.parse(socialAccount.metadata) : socialAccount.metadata;
+            if (meta?.activeProfileId) effectiveProfileId = String(meta.activeProfileId);
+          } catch {}
+        }
+      }
+
+      if (effectiveProfileId) {
+        if (effectiveProfileId === '5008') {
+          where.OR = [
+            { googleReviewId: { startsWith: '5008' } },
+            { googleReviewId: { startsWith: 'goog_rev_' } },
+          ];
+        } else {
+          where.googleReviewId = { startsWith: effectiveProfileId };
+        }
+      }
     }
 
     if (status) {

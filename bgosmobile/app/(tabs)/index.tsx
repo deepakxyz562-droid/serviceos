@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card, Screen, Action, ErrorNotice, MenuRow, Badge, MetricCard, ui, colors, Avatar, Loading } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
@@ -301,6 +301,12 @@ export default function HomeScreen() {
     ].map((p) => p.catch(() => {})));
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [])
+  );
+
   const unreadCount = inbox.data ? inbox.data.reduce((s, c) => s + c.unreadCount, 0) : '—';
   const leadTotal = leads.data?.pagination?.total ?? '—';
   const callCount = calls.data?.stats?.todayCount ?? '—';
@@ -504,43 +510,6 @@ export default function HomeScreen() {
           </Text>
         </View>
       </View>
-
-      {/* Video Banner (Screenshot 11) */}
-      <Pressable
-        onPress={() => void Linking.openURL('https://fieseros.com')}
-        style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: 14,
-          borderWidth: 1,
-          borderColor: '#E2E8F0',
-          padding: 12,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 12,
-          marginBottom: 12,
-        }}
-      >
-        <View
-          style={{
-            width: 80,
-            height: 52,
-            borderRadius: 10,
-            backgroundColor: '#1E293B',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <MaterialIcons name="play-circle-fill" size={32} color="#FFFFFF" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
-            How Dhanda AI Can Help Grow Your Business
-          </Text>
-          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#EA580C', marginTop: 3 }}>
-            Watch Now ▶
-          </Text>
-        </View>
-      </Pressable>
 
       {/* Marketing Score — real /api/gbp/marketing-score (speedometer + growth slide) */}
       <MarketingScoreCard res={marketingScore} />

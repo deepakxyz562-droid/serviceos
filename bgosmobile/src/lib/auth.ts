@@ -4,7 +4,8 @@ import * as SecureStore from 'expo-secure-store';
 const SESSION_KEY = 'bgos_session_v1';
 const LEGACY_ACCESS = 'chatbotly_auth_token';
 const LEGACY_REFRESH = 'chatbotly_refresh_token';
-type Session = { token: string; refreshToken?: string };
+export type SessionUser = { id: string; email: string; name?: string; role?: string; tenantId?: string; workspaceId?: string };
+type Session = { token: string; refreshToken?: string; user?: SessionUser };
 let revision = 0;
 let blocked = false;
 let writes: Promise<unknown> = Promise.resolve();
@@ -31,11 +32,24 @@ async function readSession(): Promise<Session | null> {
 }
 export async function getToken() { return (await readSession())?.token || null; }
 export async function getRefreshToken() { return (await readSession())?.refreshToken || null; }
-export async function setTokens(token: string, refreshToken?: string, expectedRevision = revision) {
+export async function getSavedUser(): Promise<SessionUser | null> { return (await readSession())?.user || null; }
+export async function saveUser(user: SessionUser) {
+  return serialized(async () => {
+    const raw = await SecureStore.getItemAsync(SESSION_KEY);
+    if (raw) {
+      try {
+        const value = JSON.parse(raw);
+        value.user = user;
+        await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(value));
+      } catch {}
+    }
+  });
+}
+export async function setTokens(token: string, refreshToken?: string, expectedRevision = revision, user?: SessionUser) {
   return serialized(async () => {
     if (expectedRevision !== revision) throw new Error('Session changed. Please sign in again.');
     if (!token) throw new Error('Missing session token');
-    await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ token, refreshToken }));
+    await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ token, refreshToken, user }));
     blocked = false;
   });
 }

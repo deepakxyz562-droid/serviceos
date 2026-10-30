@@ -117,8 +117,25 @@ export async function refreshSession(): Promise<boolean> {
 
   refreshInFlight = (async () => {
     try {
+      let refreshToken = '';
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('fieseros_auth');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (typeof parsed.refreshToken === 'string') refreshToken = parsed.refreshToken;
+          }
+        } catch {}
+      }
+
+      const token = getToken();
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ refreshToken, product: 'bgos' }),
         credentials: 'include',
       });
       if (!res.ok) return false;
@@ -132,6 +149,7 @@ export async function refreshSession(): Promise<boolean> {
             if (raw) {
               const parsed = JSON.parse(raw);
               parsed.token = data.token;
+              if (data.refreshToken) parsed.refreshToken = data.refreshToken;
               if (data.user) parsed.user = data.user;
               localStorage.setItem('fieseros_auth', JSON.stringify(parsed));
             }

@@ -47,14 +47,35 @@ function bandLabel(score: number): string {
 export async function computeMarketingScore(tenantId: string): Promise<MarketingScoreResult> {
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const [audit, googleAccount, reviewStats, posts30d, photos30d] = await Promise.all([
+  const [audit, googleAccount] = await Promise.all([
     computeGbpAudit(tenantId),
     db.socialAccount.findFirst({
       where: { tenantId, platform: 'googlebusiness', isActive: true },
       select: { id: true, accountId: true, accountName: true, metadata: true },
     }),
+  ]);
+
+  let activeProfileId = '5008';
+  if (googleAccount?.metadata) {
+    try {
+      const meta = typeof googleAccount.metadata === 'string' ? JSON.parse(googleAccount.metadata) : googleAccount.metadata;
+      if (meta?.activeProfileId) activeProfileId = String(meta.activeProfileId);
+    } catch {}
+  }
+
+  const reviewWhere: Record<string, unknown> = { tenantId };
+  if (activeProfileId === '5008') {
+    reviewWhere.OR = [
+      { googleReviewId: { startsWith: '5008' } },
+      { googleReviewId: { startsWith: 'goog_rev_' } },
+    ];
+  } else {
+    reviewWhere.googleReviewId = { startsWith: activeProfileId };
+  }
+
+  const [reviewStats, posts30d, photos30d] = await Promise.all([
     db.review.aggregate({
-      where: { tenantId },
+      where: reviewWhere,
       _count: { _all: true },
       _avg: { rating: true },
     }),
@@ -69,7 +90,7 @@ export async function computeMarketingScore(tenantId: string): Promise<Marketing
   let repliedCount = 0;
   if (reviewCount > 0) {
     const reviews = await db.review.findMany({
-      where: { tenantId },
+      where: reviewWhere,
       select: { responseJson: true },
       take: 500,
     });

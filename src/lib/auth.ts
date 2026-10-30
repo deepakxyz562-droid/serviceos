@@ -260,7 +260,7 @@ export async function getAuthUser(
     const cookieStore = await cookies();
     const token = cookieStore.get(TOKEN_NAME)?.value;
     if (token) {
-      user = verifyToken(token);
+      user = verifyToken(token) || verifyTokenWithGrace(token);
     }
 
     // 2. Fallback: Check Authorization header (Bearer token)
@@ -270,7 +270,7 @@ export async function getAuthUser(
         : (await headers()).get('authorization');
       if (authHeader?.startsWith('Bearer ')) {
         const bearerToken = authHeader.slice(7);
-        user = verifyToken(bearerToken);
+        user = verifyToken(bearerToken) || verifyTokenWithGrace(bearerToken);
       }
     }
 

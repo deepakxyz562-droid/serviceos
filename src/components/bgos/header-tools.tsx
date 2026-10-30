@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Search, ChevronRight, Command } from 'lucide-react';
 import { useAppStore } from '@/store/app-store';
 import { BGOS_NAVIGATION, bgosNavigationView } from '../../../shared/bgos-navigation';
+import { BgosProfileSwitcher } from './profile-switcher';
 
 export function BgosHeaderTools() {
   const { currentView, setCurrentView } = useAppStore();
@@ -36,9 +37,12 @@ export function BgosHeaderTools() {
   }, []);
 
   return (
-    <div className="bgos-header-tools flex items-center gap-4 w-full">
+    <div className="bgos-header-tools flex items-center gap-3 w-full">
       {/* Accessible Current BGOS Page Title */}
       <h1 className="sr-only">{currentTitle}</h1>
+
+      {/* Business Profile Dropdown Switcher */}
+      <BgosProfileSwitcher />
 
       {/* Left-aligned Wide Global Search / Feature Finder */}
       <div
