@@ -116,6 +116,47 @@ export default function ToolsScreen() {
         <MenuRow title="Form Inquiries & Surveys" detail="Intake forms & customer submissions" icon="description" onPress={() => router.push('/(tabs)/submissions')} />
       </Card>
 
+      {/* GOOGLE GROWTH & BRAND BRAIN (Dhanda benchmark) */}
+      <Card>
+        <Text style={ui.heading}>Google Growth & Brand Brain</Text>
+        <MenuRow
+          title="Preferences (Brand Brain)"
+          detail="Products, branding, founder bio & AI guardrails"
+          icon="tune"
+          onPress={() => router.push('/preferences')}
+        />
+        <MenuRow
+          title="Manage Google Profile"
+          detail="AI description rewrite, hours, photos & posts"
+          icon="storefront"
+          onPress={() => router.push('/manage-profile')}
+        />
+        <MenuRow
+          title="QR Standee Studio"
+          detail="Printable countertop review cards with verified Google rating"
+          icon="qr-code-2"
+          onPress={() => router.push('/qr-standee')}
+        />
+        <MenuRow
+          title="4-Tier Growth Report"
+          detail="Interactions → Enquiries → Qualified Leads → Revenue"
+          icon="insights"
+          onPress={() => router.push('/growth-report')}
+        />
+        <MenuRow
+          title="Review Reply Settings"
+          detail="Salutations, response length & auto-replies"
+          icon="reviews"
+          onPress={() => router.push('/reply-settings')}
+        />
+        <MenuRow
+          title="Keyword Planner"
+          detail="Local SEO ranking discovery for your city"
+          icon="travel-explore"
+          onPress={() => router.push('/keyword-planner')}
+        />
+      </Card>
+
       {/* AI & AUTOMATION */}
       <Card>
         <Text style={ui.heading}>AI & Automation</Text>

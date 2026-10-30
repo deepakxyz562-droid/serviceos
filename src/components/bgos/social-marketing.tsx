@@ -5858,6 +5858,77 @@ export function SocialMediaView({
               )}
             </div>
 
+            {/* Segmented Approvals Queue (Reviews & AI Posts) */}
+            {((growthState as any)?.segments?.reviews?.count > 0 || (growthState as any)?.segments?.posts?.count > 0) && (
+              <div className="space-y-2">
+                {(growthState as any)?.segments?.reviews?.count > 0 && (
+                  <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-950/20 flex items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="size-7 rounded-lg bg-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
+                        <Star className="size-3.5 fill-emerald-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-foreground">
+                          {(growthState as any).segments.reviews.count} Review Reply Ready
+                        </p>
+                        <p className="text-[11px] text-muted-foreground truncate">AI drafted polite, SEO-rich response</p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        const res = await authFetch('/api/gbp/growth-actions', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ action: 'approve_segment', segment: 'reviews' }),
+                        });
+                        if (res.ok) {
+                          toast.success('Approved all review replies!');
+                          fetchGrowthActions();
+                        }
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-7 rounded-lg shrink-0"
+                    >
+                      Approve All
+                    </Button>
+                  </div>
+                )}
+
+                {(growthState as any)?.segments?.posts?.count > 0 && (
+                  <div className="p-3 rounded-xl border border-orange-500/30 bg-orange-50/60 dark:bg-orange-950/20 flex items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="size-7 rounded-lg bg-orange-500/20 text-orange-600 flex items-center justify-center shrink-0">
+                        <Sparkles className="size-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-foreground">
+                          {(growthState as any).segments.posts.count} AI Post Waiting for Approval
+                        </p>
+                        <p className="text-[11px] text-muted-foreground truncate">Ready to publish to Google & Social</p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        const res = await authFetch('/api/gbp/growth-actions', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ action: 'approve_segment', segment: 'posts' }),
+                        });
+                        if (res.ok) {
+                          toast.success('Approved all posts!');
+                          fetchGrowthActions();
+                        }
+                      }}
+                      className="bg-orange-600 hover:bg-orange-700 text-white text-xs h-7 rounded-lg shrink-0"
+                    >
+                      Approve All
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Action cards — real doneCount/totalCount/weeklyTarget from the API */}
             {growthLoading && !growthState ? (
               <div className="space-y-2.5">

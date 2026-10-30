@@ -82,6 +82,7 @@ import { authFetch, getAuthToken } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 import { parseAddress, formatAddress } from '@/components/bgos/settings';
+import { GbpStandeeModal } from '@/components/bgos/gbp-standee-modal';
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -4408,48 +4409,12 @@ export function ReviewsView({
         </DialogContent>
       </Dialog>
 
-      {/* 3. QR Code Modal */}
-      <Dialog open={qrModalOpen} onOpenChange={setQrModalOpen}>
-        <DialogContent className="sm:max-w-[360px] text-center">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center justify-center gap-2">
-              <QrCode className="size-5 text-[#009F50]" /> Google Review QR Code
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Display this on counter tents or invoices for 1-scan Google reviews.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-800/50 rounded-xl my-2 border border-slate-200 dark:border-slate-700">
-            <div className="p-3 bg-white rounded-lg shadow-sm">
-              <svg className="size-36 text-slate-900" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M2 2h8v8H2V2zm2 2v4h4V4H4zm10-2h8v8h-8V2zm2 2v4h4V4h-4zM2 14h8v8H2v-8zm2 2v4h4v-4H4zm14-2h2v2h-2v-2zm-4 0h2v4h-2v-4zm6 2h2v2h-2v-2zm-2 2h2v4h-2v-4zm-4 2h2v2h-2v-2zm6 2h2v2h-2v-2zm-6-2h-2v2h2v-2z" />
-              </svg>
-            </div>
-            <p className="text-xs font-semibold mt-3 text-slate-800 dark:text-slate-200">
-              {profileTitle} • 5-Star Reviews
-            </p>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setQrModalOpen(false)}
-              className="flex-1 h-8 text-xs"
-            >
-              Close
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleDownloadQr}
-              className="flex-1 h-8 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-bold"
-            >
-              Download PNG
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 3. QR Standee Studio Modal */}
+      <GbpStandeeModal
+        open={qrModalOpen}
+        onOpenChange={setQrModalOpen}
+        businessName={profileTitle}
+      />
 
       {/* 4. Request Reviews Modal */}
       <Dialog open={requestReviewsOpen} onOpenChange={setRequestReviewsOpen}>

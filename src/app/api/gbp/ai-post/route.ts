@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
 import { getBrandContext } from '@/lib/brand-context';
+import { validateBrandSafety } from '@/lib/brand-safety-gate';
 
 export const dynamic = 'force-dynamic';
 
@@ -113,11 +114,50 @@ Respond ONLY with a valid JSON object with the following schema:
     const keywordQuery = encodeURIComponent(parsedResult.imageKeyword || industry || 'services');
     const visualImageUrl = `https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1080&q=80`;
 
+    // Layer 2: Deterministic Brand Safety Gate validation
+    const forbiddenPhrases = (() => {
+      try {
+        const fp = tenant?.brandProfile?.forbiddenPhrases;
+        return fp ? JSON.parse(fp) : [];
+      } catch {
+        return [];
+      }
+    })();
+    const competitors = (() => {
+      try {
+        const cp = tenant?.brandProfile?.competitors;
+        return cp ? JSON.parse(cp) : [];
+      } catch {
+        return [];
+      }
+    })();
+
+    const safetyCheck = validateBrandSafety(`${parsedResult.headline}\n${parsedResult.content}`, {
+      tenantId: user.tenantId,
+      activeBusinessName: businessName,
+      forbiddenPhrases,
+      competitors,
+    });
+
+    // If cross-tenant contamination or severe violations found, sanitize content to active business
+    let finalHeadline = parsedResult.headline;
+    let finalContent = parsedResult.content;
+    if (!safetyCheck.passed) {
+      for (const v of safetyCheck.violations) {
+        if (v.type === 'cross_tenant_contamination' && v.matchedText) {
+          const esc = v.matchedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const reg = new RegExp(`\\b${esc}\\b`, 'gi');
+          finalHeadline = finalHeadline.replace(reg, businessName);
+          finalContent = finalContent.replace(reg, businessName);
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       post: {
-        headline: parsedResult.headline,
-        content: parsedResult.content,
+        headline: finalHeadline,
+        content: finalContent,
         ctaType: parsedResult.ctaType || 'CALL',
         ctaLabel: parsedResult.ctaLabel || 'Call Now',
         postType,
@@ -125,6 +165,10 @@ Respond ONLY with a valid JSON object with the following schema:
         suggestedOffer: parsedResult.suggestedOffer,
         imagePrompt: parsedResult.imagePrompt,
         visualImageUrl,
+        safety: {
+          passed: safetyCheck.passed,
+          warnings: safetyCheck.warnings.map((w) => w.message),
+        },
       },
     });
   } catch (error: unknown) {

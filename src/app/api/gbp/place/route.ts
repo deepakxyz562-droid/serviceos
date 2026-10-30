@@ -96,6 +96,14 @@ export async function GET(request: NextRequest) {
       tenant?.brandProfile?.location || tenant?.city || '';
     const fallbackPhone = tenant?.phone || '';
     const fallbackWebsite = tenant?.website || '';
+    const fallbackDescription = tenant?.brandProfile?.summary || (tenant as any)?.description || '';
+
+    let regularHours: any = null;
+    if ((tenant as any)?.businessHoursJson) {
+      try {
+        regularHours = JSON.parse((tenant as any).businessHoursJson);
+      } catch {}
+    }
 
     // Calculate profile completeness dynamically
     const computeCompleteness = (t: string, c: string, a: string, p: string, w: string) => {
@@ -129,6 +137,8 @@ export async function GET(request: NextRequest) {
           address: fallbackAddress,
           phone: fallbackPhone,
           website: fallbackWebsite,
+          description: fallbackDescription,
+          regularHours,
           completionScore: score,
           missingFields: missing,
         },
@@ -214,6 +224,8 @@ export async function GET(request: NextRequest) {
         address: resolvedAddress,
         phone: resolvedPhone,
         website: resolvedWebsite,
+        description: fallbackDescription,
+        regularHours,
         placeId: resolvedPlaceId,
         mapsUrl: placeDetails.mapsUri,
         reviewUrl,
@@ -246,6 +258,80 @@ export async function GET(request: NextRequest) {
     console.error('Error fetching GBP place:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to fetch GBP place' },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * PATCH /api/gbp/place
+ * Update business basics, category, phone, website, opening hours, or description.
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = await getAuthUser(request);
+    if (!user || !user.tenantId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const updateData: Record<string, unknown> = {};
+
+    if (typeof body.title === 'string' && body.title.trim()) {
+      updateData.name = body.title.trim();
+    }
+    if (typeof body.phone === 'string') {
+      updateData.phone = body.phone.trim();
+    }
+    if (typeof body.address === 'string') {
+      updateData.address = body.address.trim();
+    }
+    if (typeof body.website === 'string') {
+      updateData.website = body.website.trim() || null;
+    }
+    if (typeof body.category === 'string') {
+      updateData.industry = body.category.trim();
+    }
+    if (typeof body.description === 'string') {
+      updateData.description = body.description.trim();
+    }
+    if (body.regularHours && typeof body.regularHours === 'object') {
+      updateData.businessHoursJson = JSON.stringify(body.regularHours);
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await db.tenant.update({
+        where: { id: user.tenantId },
+        data: updateData,
+      });
+
+      // Sync to brandProfile if it exists
+      const brandProfile = await db.brandProfile.findUnique({
+        where: { tenantId: user.tenantId },
+      });
+      if (brandProfile) {
+        await db.brandProfile.update({
+          where: { tenantId: user.tenantId },
+          data: {
+            ...(updateData.name ? { businessName: updateData.name as string } : {}),
+            ...(updateData.industry ? { industry: updateData.industry as string } : {}),
+            ...(updateData.website !== undefined ? { website: updateData.website as string } : {}),
+            ...(updateData.address ? { location: updateData.address as string } : {}),
+            ...(updateData.description !== undefined ? { summary: updateData.description as string } : {}),
+          },
+        });
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Business profile updated successfully.',
+      updated: updateData,
+    });
+  } catch (error: unknown) {
+    console.error('Error updating GBP place:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to update GBP place' },
       { status: 500 },
     );
   }

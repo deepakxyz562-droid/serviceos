@@ -14,6 +14,7 @@ import { SocialCalendarCard } from '../../src/components/gbp/social-calendar';
 import { SidebarDrawer } from '../../src/components/navigation/sidebar-drawer';
 import { PushPromptModal } from '../../src/components/notifications/push-prompt';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
+import { GrowthActionSheet } from '../../src/components/gbp/growth-action-sheet';
 import type { GbpPlaceResult } from '../../src/components/gbp/types';
 import type { BgosConversation, BgosWorkspace } from '../../src/types/bgos-contracts';
 
@@ -66,6 +67,16 @@ type GrowthActionsResponse = {
   totalTarget: number;
   leftCount: number;
   pendingApprovalCount: number;
+  targets?: {
+    weeklyPosts: number;
+    weeklyPhotos: number;
+    weeklyReviews: number;
+  };
+  segments?: {
+    reviews: { count: number; items: any[] };
+    posts: { count: number; items: any[] };
+    audit: { count: number; items: any[] };
+  };
 };
 
 interface DiscoverResponse {
@@ -1118,214 +1129,13 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      {/* Growth Action Bottom Sheet Modal (Screenshot 4 benchmark) */}
-      <Modal visible={growthModalOpen} animationType="slide" transparent={true} onRequestClose={() => setGrowthModalOpen(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              padding: 20,
-              gap: 14,
-              maxHeight: '85%',
-            }}
-          >
-            <View style={[ui.row, { justifyContent: 'space-between' }]}>
-              <View style={[ui.row, { gap: 8 }]}>
-                <Text style={{ fontSize: 20 }}>⚡</Text>
-                <View>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>Daily Growth Actions</Text>
-                  <Text style={{ fontSize: 11, color: colors.muted }}>Follow daily steps to boost your Google rank</Text>
-                </View>
-              </View>
-              <Pressable onPress={() => setGrowthModalOpen(false)} accessibilityRole="button" accessibilityLabel="Close growth actions">
-                <MaterialIcons name="close" size={22} color={colors.muted} />
-              </Pressable>
-            </View>
-
-            {/* The 3 Action Cards from Screenshot 4 */}
-            <View style={{ gap: 12 }}>
-              {/* Card 1: Complete your Profile */}
-              <View
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  padding: 14,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
-                }}
-              >
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: '#DCFCE7',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <MaterialIcons name="edit" size={20} color="#16A34A" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
-                    Complete your Profile
-                  </Text>
-                  <View style={{ height: 5, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden', marginTop: 4, width: '80%' }}>
-                    <View style={{ height: '100%', backgroundColor: '#16A34A', width: '33%' }} />
-                  </View>
-                  <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 3 }}>02/06 done</Text>
-                </View>
-                <Pressable
-                  onPress={() => {
-                    setGrowthModalOpen(false);
-                    router.push('/(tabs)/growth');
-                  }}
-                  style={{
-                    backgroundColor: '#16A34A',
-                    paddingHorizontal: 12,
-                    paddingVertical: 7,
-                    borderRadius: 10,
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Complete now</Text>
-                </Pressable>
-              </View>
-
-              {/* Card 2: Upload Media */}
-              <View
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  padding: 14,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
-                }}
-              >
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: '#FEE2E2',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <MaterialIcons name="cloud-upload" size={20} color="#EF4444" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
-                    Upload Media
-                  </Text>
-                  <View style={{ height: 5, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden', marginTop: 4, width: '80%' }}>
-                    <View style={{ height: '100%', backgroundColor: '#EF4444', width: '10%' }} />
-                  </View>
-                  <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 3 }}>0 done · 5 this week</Text>
-                </View>
-                <Pressable
-                  onPress={() => {
-                    setGrowthModalOpen(false);
-                    router.push('/(tabs)/photos');
-                  }}
-                  style={{
-                    backgroundColor: '#EF4444',
-                    paddingHorizontal: 14,
-                    paddingVertical: 7,
-                    borderRadius: 10,
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Upload</Text>
-                </Pressable>
-              </View>
-
-              {/* Card 3: Approve Post */}
-              <View
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  padding: 14,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
-                }}
-              >
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: '#FFEDD5',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <MaterialIcons name="thumb-up" size={20} color="#EA580C" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
-                    Approve Post
-                  </Text>
-                  <View style={{ height: 5, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden', marginTop: 4, width: '80%' }}>
-                    <View style={{ height: '100%', backgroundColor: '#EA580C', width: '10%' }} />
-                  </View>
-                  <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 3 }}>0 done · 5 this week</Text>
-                </View>
-                <Pressable
-                  onPress={() => {
-                    setGrowthModalOpen(false);
-                    router.push('/(tabs)/marketing');
-                  }}
-                  style={{
-                    backgroundColor: '#EA580C',
-                    paddingHorizontal: 14,
-                    paddingVertical: 7,
-                    borderRadius: 10,
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Approve</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {/* Bottom active pill from Screenshot 4 */}
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setGrowthModalOpen(false)}
-              style={{
-                height: 48,
-                borderRadius: 24,
-                overflow: 'hidden',
-                marginTop: 6,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingHorizontal: 16,
-              }}
-            >
-              <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row' }}>
-                <View style={{ flex: 1, backgroundColor: '#9333EA' }} />
-                <View style={{ flex: 1, backgroundColor: '#EA580C' }} />
-              </View>
-              <MaterialIcons name="close" size={20} color="#FFFFFF" />
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>Growth Action</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 10 }}>Tap an action to complete</Text>
-              </View>
-              <MaterialIcons name="expand-more" size={22} color="#FFFFFF" />
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      {/* Growth Action Bottom Sheet Modal (Segmented Approvals Engine) */}
+      <GrowthActionSheet
+        visible={growthModalOpen}
+        onClose={() => setGrowthModalOpen(false)}
+        growthData={growthActions.data}
+        onRefresh={growthActions.refresh}
+      />
 
       {/* 1-Tap WhatsApp Google Review Request Sheet */}
       <ReviewRequestSheet

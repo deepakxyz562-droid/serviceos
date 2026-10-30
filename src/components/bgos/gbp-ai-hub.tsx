@@ -87,6 +87,7 @@ import { toast } from 'sonner';
 import { authFetch, getAuthToken } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
+import { GbpManageProfileDialog } from '@/components/bgos/gbp-manage-profile-dialog';
 
 // ─── API response types (mirrors of live route contracts) ────────────────────
 
@@ -433,6 +434,7 @@ function HubHeader({
   isOptimizing,
   grade,
   connectUrl,
+  onOpenManageProfile,
 }: {
   name: string;
   address: string;
@@ -441,6 +443,7 @@ function HubHeader({
   isOptimizing: boolean;
   grade: string | null;
   connectUrl: string;
+  onOpenManageProfile?: () => void;
 }) {
   return (
     <Card className="rounded-2xl shadow-xs">
@@ -491,14 +494,28 @@ function HubHeader({
             )}
           </div>
         </div>
-        {!isConnected && connectUrl && (
-          <Button asChild className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90">
-            <a href={connectUrl}>
-              <PlugIcon />
-              Connect Google Business Profile
-            </a>
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {onOpenManageProfile && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onOpenManageProfile}
+              className="gap-1.5 rounded-xl border-slate-200 text-xs font-semibold hover:bg-slate-50"
+            >
+              <Store className="size-3.5 text-slate-500" />
+              Manage Profile
+            </Button>
+          )}
+          {!isConnected && connectUrl && (
+            <Button asChild className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 text-xs">
+              <a href={connectUrl}>
+                <PlugIcon />
+                Connect Google Business Profile
+              </a>
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -521,6 +538,7 @@ interface RoadmapProps {
   keywordsSeeded: boolean;
   onToggleAutomation?: (patch: { reviewAutoReply?: boolean; autoPosting?: boolean }) => void | Promise<void>;
   toggling?: boolean;
+  onOpenManageProfile?: (tab?: 'basics' | 'description' | 'hours') => void;
 }
 
 function RoadmapTimeline({
@@ -534,6 +552,7 @@ function RoadmapTimeline({
   keywordsSeeded,
   onToggleAutomation,
   toggling,
+  onOpenManageProfile,
 }: RoadmapProps) {
   const [expanded, setExpanded] = useState<'analyse' | 'gaps' | null>(null);
 
@@ -690,6 +709,18 @@ function RoadmapTimeline({
                         {c.recommendation}
                       </p>
                       <p className="mt-1 text-[11px] text-muted-foreground">{c.actionRequired}</p>
+                      {onOpenManageProfile && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onOpenManageProfile(c.id === 'optimized_description' ? 'description' : 'basics')}
+                          className="mt-2 h-7 gap-1.5 rounded-lg border-purple-200 bg-purple-50 text-[11px] font-semibold text-purple-700 hover:bg-purple-100"
+                        >
+                          <Sparkles className="size-3 text-purple-600" />
+                          {c.id === 'optimized_description' ? 'Rewrite with AI' : 'Fix in Profile'}
+                        </Button>
+                      )}
                     </div>
                   ))
                 )}
@@ -2072,6 +2103,13 @@ export function GbpAiHub() {
   const [savingSummary, setSavingSummary] = useState(false);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [connectUrl, setConnectUrl] = useState('');
+  const [manageProfileOpen, setManageProfileOpen] = useState(false);
+  const [manageProfileTab, setManageProfileTab] = useState<'basics' | 'description' | 'hours'>('basics');
+
+  const handleOpenManageProfile = useCallback((tab: 'basics' | 'description' | 'hours' = 'basics') => {
+    setManageProfileTab(tab);
+    setManageProfileOpen(true);
+  }, []);
 
   const loadReviews = useCallback(async () => {
     setReviewsLoading(true);
@@ -2335,6 +2373,7 @@ export function GbpAiHub() {
         isOptimizing={isOptimizing}
         grade={auditData?.grade || null}
         connectUrl={connectUrl}
+        onOpenManageProfile={() => handleOpenManageProfile('basics')}
       />
 
       <Tabs defaultValue="overview" className="gap-4">
@@ -2380,6 +2419,7 @@ export function GbpAiHub() {
                   keywordsSeeded={passedChecks.some((c) => c.id === 'optimized_description')}
                   onToggleAutomation={handleToggleAutomation}
                   toggling={automationsSaving}
+                  onOpenManageProfile={handleOpenManageProfile}
                 />
               </CardContent>
             </Card>
@@ -2440,6 +2480,23 @@ export function GbpAiHub() {
           />
         </TabsContent>
       </Tabs>
+
+      <GbpManageProfileDialog
+        open={manageProfileOpen}
+        onOpenChange={setManageProfileOpen}
+        place={{
+          title: businessName,
+          category,
+          address,
+          phone: profile?.phone || fallback?.phone || '',
+          website: profile?.website || fallback?.website || '',
+          description: profile?.description || fallback?.description || '',
+          regularHours: profile?.regularHours || fallback?.regularHours || null,
+          mapsUrl: profile?.mapsUrl || null,
+        }}
+        initialTab={manageProfileTab}
+        onSuccess={loadAll}
+      />
     </div>
   );
 }

@@ -162,6 +162,39 @@ export async function getBrandContext(tenantId: string | null | undefined): Prom
   pushLine(lines, 'USPs (unique selling points)', profile.usps);
   pushLine(lines, 'Current offers', profile.currentOffers);
 
+  // Ingest expanded Brand Brain from tenant settingsJson (sellingItems, founder, story, hashtags)
+  try {
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId as string },
+      select: { settingsJson: true },
+    });
+    if (tenant?.settingsJson) {
+      const parsed = JSON.parse(tenant.settingsJson);
+      const bb = parsed?.brandBrain;
+      if (bb) {
+        if (Array.isArray(bb.sellingItems) && bb.sellingItems.length > 0) {
+          const items = bb.sellingItems.map((it: any) => `${it.name}${it.description ? ` (${it.description})` : ''}${it.price ? ` - ${it.price}` : ''}`).join('; ');
+          lines.push(`Featured Products/Services catalog: ${items}`);
+        }
+        if (bb.brandDetails?.founder?.name) {
+          lines.push(`Founder: ${bb.brandDetails.founder.name}${bb.brandDetails.founder.bio ? ` (${bb.brandDetails.founder.bio})` : ''}`);
+        }
+        if (bb.brandDetails?.businessStory) {
+          lines.push(`Business story & background: ${bb.brandDetails.businessStory}`);
+        }
+        if (bb.brandDetails?.phoneOnPoster || bb.brandDetails?.addressOnPoster) {
+          const contactParts: string[] = [];
+          if (bb.brandDetails.phoneOnPoster) contactParts.push(`Phone: ${bb.brandDetails.phoneOnPoster}`);
+          if (bb.brandDetails.addressOnPoster) contactParts.push(`Address: ${bb.brandDetails.addressOnPoster}`);
+          lines.push(`Poster Contact Details: ${contactParts.join(' | ')}`);
+        }
+        if (Array.isArray(bb.brandDetails?.hashtags) && bb.brandDetails.hashtags.length > 0) {
+          lines.push(`Brand Hashtags: ${bb.brandDetails.hashtags.join(' ')}`);
+        }
+      }
+    }
+  } catch {}
+
   // Competitors (for tone differentiation — never copy them)
   if (competitors.length > 0) {
     lines.push(`Known competitors (differentiate from, do not mention by name unless asked): ${competitors.join(', ')}`);

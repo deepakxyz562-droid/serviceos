@@ -204,6 +204,23 @@ export async function GET(request: NextRequest) {
       } catch {}
     }
 
+    // Parse expanded BGOS 2.1 Brand Brain preferences from settingsJson
+    let brandDetails: any = null;
+    let sellingItems: any[] = [];
+    let marketingTargets: any = null;
+    let aiReplySalutation: any = null;
+
+    if (tenant?.settingsJson) {
+      try {
+        const parsed = JSON.parse(tenant.settingsJson);
+        const bb = parsed?.brandBrain || {};
+        brandDetails = bb.brandDetails || null;
+        sellingItems = Array.isArray(bb.sellingItems) ? bb.sellingItems : [];
+        marketingTargets = bb.marketingTargets || null;
+        aiReplySalutation = bb.aiReplySalutation || null;
+      } catch {}
+    }
+
     return NextResponse.json({
       profile,
       hours,
@@ -219,6 +236,10 @@ export async function GET(request: NextRequest) {
       notifications,
       automation,
       preferences,
+      brandDetails,
+      sellingItems,
+      marketingTargets,
+      aiReplySalutation,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -309,6 +330,12 @@ export async function PUT(request: NextRequest) {
       },
     });
 
+    const hasBrandBrainUpdate =
+      (body as any).brandDetails !== undefined ||
+      (body as any).sellingItems !== undefined ||
+      (body as any).marketingTargets !== undefined ||
+      (body as any).aiReplySalutation !== undefined;
+
     if (
       body.hours !== undefined ||
       body.phoneNumber !== undefined ||
@@ -321,7 +348,8 @@ export async function PUT(request: NextRequest) {
       (body as any).businessAddress !== undefined ||
       body.notifications !== undefined ||
       body.automation !== undefined ||
-      body.preferences !== undefined
+      body.preferences !== undefined ||
+      hasBrandBrainUpdate
     ) {
       const hasSettingsUpdate =
         body.gstNumber !== undefined ||
@@ -329,7 +357,8 @@ export async function PUT(request: NextRequest) {
         body.defaultTaxRate !== undefined ||
         body.notifications !== undefined ||
         body.automation !== undefined ||
-        body.preferences !== undefined;
+        body.preferences !== undefined ||
+        hasBrandBrainUpdate;
 
       let settingsJson: string | undefined = undefined;
       if (hasSettingsUpdate) {
@@ -355,9 +384,19 @@ export async function PUT(request: NextRequest) {
         if (body.invoicePrefix !== undefined) mergedTaxCompliance.invoicePrefix = (body.invoicePrefix || '').trim() || null;
         if (body.defaultTaxRate !== undefined) mergedTaxCompliance.defaultTaxRate = (body.defaultTaxRate || '').trim() || null;
 
+        const existingBrandBrain = (existingSettings.brandBrain ?? {}) as Record<string, unknown>;
+        const mergedBrandBrain: Record<string, unknown> = {
+          ...existingBrandBrain,
+          ...((body as any).brandDetails !== undefined ? { brandDetails: (body as any).brandDetails } : {}),
+          ...((body as any).sellingItems !== undefined ? { sellingItems: (body as any).sellingItems } : {}),
+          ...((body as any).marketingTargets !== undefined ? { marketingTargets: (body as any).marketingTargets } : {}),
+          ...((body as any).aiReplySalutation !== undefined ? { aiReplySalutation: (body as any).aiReplySalutation } : {}),
+        };
+
         settingsJson = JSON.stringify({
           ...existingSettings,
           taxCompliance: mergedTaxCompliance,
+          brandBrain: mergedBrandBrain,
           ...(body.notifications !== undefined ? { notifications: body.notifications } : {}),
           ...(body.automation !== undefined ? { automation: body.automation } : {}),
           ...(body.preferences !== undefined ? { preferences: body.preferences } : {}),

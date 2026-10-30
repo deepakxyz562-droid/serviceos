@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { publishPost } from '@/lib/social/publisher';
 import { logActivity } from '@/lib/activity-log';
+import { validateBrandSafety } from '@/lib/brand-safety-gate';
 import type { PublishTarget, SocialPlatform } from '@/lib/social/types';
 
 /**
@@ -229,6 +230,33 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         );
       }
+    }
+
+    // Layer 2: Brand Safety Gate check before storing or publishing
+    const tenantRecord = await db.tenant.findUnique({
+      where: { id: tenantId },
+      include: { brandProfile: true },
+    });
+    const activeBusinessName = tenantRecord?.brandProfile?.businessName || tenantRecord?.name || 'Business';
+    const forbiddenPhrases = safeJsonArray(tenantRecord?.brandProfile?.forbiddenPhrases) as string[];
+    const competitors = safeJsonArray(tenantRecord?.brandProfile?.competitors) as string[];
+
+    const safetyCheck = validateBrandSafety(body.content, {
+      tenantId,
+      activeBusinessName,
+      forbiddenPhrases,
+      competitors,
+    });
+
+    if (!safetyCheck.passed) {
+      return NextResponse.json(
+        {
+          error: `Brand safety violation: ${safetyCheck.violations.map((v) => v.message).join(' ')}`,
+          code: 'BRAND_SAFETY_VIOLATION',
+          violations: safetyCheck.violations,
+        },
+        { status: 422 },
+      );
     }
 
     // Resolve final status + scheduledAt.
