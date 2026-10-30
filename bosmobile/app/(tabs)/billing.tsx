@@ -339,14 +339,17 @@ export default function BillingScreen() {
         quoteOverview: quoteRes.overview,
       })).catch(() => {});
     } catch (err: any) {
-      if (invoices.length === 0 && quotes.length === 0) {
-        setError(err?.message || 'Unable to load billing data.');
-      }
+      setInvoices(prev => {
+        if (prev.length === 0) {
+          setError(err?.message || 'Unable to load billing data.');
+        }
+        return prev;
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [invoices.length, quotes.length]);
+  }, []);
 
   useEffect(() => {
     fetchBillingData(true);

@@ -134,33 +134,56 @@ export default function MobileCatalogScreen() {
   const [syncSecret, setSyncSecret] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const fetchCatalog = async () => {
+  const fetchCatalog = async (silent?: boolean | unknown) => {
+    const isSilent = typeof silent === 'boolean' ? silent : false;
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const data = await apiRequest<{ config: any }>(API_PATHS.commerceConfig);
       const cfg = data.config;
       if (cfg?.catalogJson) {
-        const parsed = JSON.parse(cfg.catalogJson);
+        const parsed = typeof cfg.catalogJson === 'string' ? JSON.parse(cfg.catalogJson) : cfg.catalogJson;
         if (Array.isArray(parsed) && parsed.length > 0) {
           setCatalog(parsed);
           setError(null);
+          void storageSetItem('bos_catalog_cache', JSON.stringify(parsed)).catch(() => {});
           return;
         }
       }
       // Empty catalog — show empty state, no fake fallback
       setCatalog([]);
       setError(null);
+      void storageSetItem('bos_catalog_cache', JSON.stringify([])).catch(() => {});
     } catch (err: any) {
-      setCatalog([]);
-      setError(err?.message || 'Unable to load your catalog. Tap retry to try again.');
+      setCatalog(prev => {
+        if (prev.length === 0) {
+          setError(err?.message || 'Unable to load your catalog. Tap retry to try again.');
+        }
+        return prev;
+      });
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchCatalog();
-    if(blueprint.capabilities.inventory)void loadStock();
+    let active = true;
+    (async () => {
+      try {
+        const cached = await storageGetItem('bos_catalog_cache');
+        if (cached && active) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCatalog(parsed);
+            setLoading(false);
+          }
+        }
+      } catch {}
+      if (active) {
+        void fetchCatalog(catalog.length > 0);
+      }
+    })();
+    if (blueprint.capabilities.inventory) void loadStock();
+    return () => { active = false; };
   }, []);
 
   const saveCatalogToBackend = async (updated: ProductItem[]) => {
@@ -172,7 +195,9 @@ export default function MobileCatalogScreen() {
         method: 'PATCH',
         body: { catalogJson: updated },
       });
-      setCatalog(updated);return true;
+      setCatalog(updated);
+      void storageSetItem('bos_catalog_cache', JSON.stringify(updated)).catch(() => {});
+      return true;
     } catch (err: any) {
       setSaveError(err?.message || t('Could not save changes. Please retry.','बदलाव सेव नहीं हुए। फिर कोशिश करें।'));
       Alert.alert(t('Save failed','सेव नहीं हुआ'), err?.message || 'Could not save catalog changes to server.');
@@ -526,7 +551,7 @@ export default function MobileCatalogScreen() {
             {error}
           </Text>
           <TouchableOpacity
-            onPress={fetchCatalog}
+            onPress={() => fetchCatalog(false)}
             style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#dc2626', borderRadius: 6 }}
           >
             <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '700' }}>Retry</Text>

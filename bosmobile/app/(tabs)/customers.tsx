@@ -350,14 +350,17 @@ export default function CustomersScreen() {
       setError(null);
       void storageSetItem('bos_customers_cache', JSON.stringify(data)).catch(() => {});
     } catch (err: any) {
-      if (customers.length === 0) {
-        setError(err?.message || 'Unable to load customer directory.');
-      }
+      setCustomers(prev => {
+        if (prev.length === 0) {
+          setError(err?.message || 'Unable to load customer directory.');
+        }
+        return prev;
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [customers.length]);
+  }, []);
 
   useEffect(() => {
     fetchCustomers(true);
