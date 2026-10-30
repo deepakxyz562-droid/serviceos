@@ -32,6 +32,11 @@ export interface GstStoreInfo {
   phone?: string;
   email?: string;
   upiId?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  accountHolderName?: string;
+  invoicePaymentDisplay?: 'both' | 'upi_qr' | 'bank_details' | 'none';
   billFooter?: string;
 }
 
@@ -106,7 +111,13 @@ export function generateGstInvoiceHtml(
   const clientState = extractGstStateCode(inv.placeOfSupply || inv.customer?.gstin);
   const interstate = Boolean(clientState) && Boolean(storeState) && storeState !== clientState;
 
-  const upiLink = store.upiId?.trim()
+  const paymentDisplay = store.invoicePaymentDisplay || 'both';
+  const showUpiQr = (paymentDisplay === 'both' || paymentDisplay === 'upi_qr') && Boolean(store.upiId?.trim());
+  const showBankDetails =
+    (paymentDisplay === 'both' || paymentDisplay === 'bank_details') &&
+    Boolean(store.bankName?.trim() || store.accountNumber?.trim());
+
+  const upiLink = showUpiQr && store.upiId?.trim()
     ? `upi://pay?pa=${encodeURIComponent(store.upiId.trim())}&pn=${encodeURIComponent(
         store.businessName || 'Store'
       )}&am=${(isPaid ? total : balanceDue).toFixed(2)}&tn=${encodeURIComponent(`Invoice ${inv.number}`)}&cu=INR`
@@ -498,6 +509,18 @@ export function generateGstInvoiceHtml(
             <div style="display: inline-block; vertical-align: top; text-align: center; margin-right: 14px;">
               <div class="qr-img" style="width: 160px; height: 160px; border: 1px solid #cbd5e1; padding: 4px; border-radius: 6px; background: #ffffff;">${qrSvg}</div>
               <div style="font-size: 9px; color: #64748b; margin-top: 2px;">Scan &amp; Pay via UPI</div>
+            </div>`
+            : ''
+        }
+        ${
+          showBankDetails
+            ? `
+            <div style="display: inline-block; vertical-align: top; text-align: left; margin-right: 14px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; font-size: 10px; line-height: 1.45;">
+              <div style="font-weight: 800; color: #4f46e5; text-transform: uppercase; font-size: 9px; margin-bottom: 3px;">Bank Transfer (NEFT/RTGS)</div>
+              ${store.bankName ? `<div><span style="color: #64748b;">Bank:</span> <strong>${store.bankName}</strong></div>` : ''}
+              ${store.accountNumber ? `<div><span style="color: #64748b;">A/C No:</span> <strong style="font-family: monospace;">${store.accountNumber}</strong></div>` : ''}
+              ${store.ifscCode ? `<div><span style="color: #64748b;">IFSC:</span> <strong style="font-family: monospace;">${store.ifscCode}</strong></div>` : ''}
+              ${store.accountHolderName ? `<div><span style="color: #64748b;">Name:</span> <strong>${store.accountHolderName}</strong></div>` : ''}
             </div>`
             : ''
         }

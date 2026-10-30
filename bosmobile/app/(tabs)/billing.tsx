@@ -268,6 +268,11 @@ export default function BillingScreen() {
     phone: '',
     email: '',
     upiId: '',
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+    accountHolderName: '',
+    invoicePaymentDisplay: 'both',
     billFooter: '1. Goods once sold will not be taken back.\n2. Interest @18% p.a. charged on overdue payments.',
   }));
 
@@ -395,6 +400,11 @@ export default function BillingScreen() {
               email: b.email || c.email || prev.email,
               address: b.address || c.address || prev.address,
               upiId: c.upiId || b.upiId || prev.upiId,
+              bankName: c.bankName || b.bankName || prev.bankName || '',
+              accountNumber: c.accountNumber || b.accountNumber || prev.accountNumber || '',
+              ifscCode: c.ifscCode || b.ifscCode || prev.ifscCode || '',
+              accountHolderName: c.accountHolderName || b.accountHolderName || prev.accountHolderName || '',
+              invoicePaymentDisplay: (c.invoicePaymentDisplay || b.invoicePaymentDisplay || prev.invoicePaymentDisplay || 'both') as 'both' | 'upi_qr' | 'bank_details' | 'none',
               logoUrl: resolvedLogo || prev.logoUrl,
               signatureUrl: b.signatureUrl || c.signatureUrl || prev.signatureUrl,
               billFooter: b.billFooter || c.billFooter || prev.billFooter,
@@ -969,6 +979,11 @@ export default function BillingScreen() {
           email: storeInfo.email,
           address: storeInfo.address,
           upiId: storeInfo.upiId,
+          bankName: storeInfo.bankName,
+          accountNumber: storeInfo.accountNumber,
+          ifscCode: storeInfo.ifscCode,
+          accountHolderName: storeInfo.accountHolderName,
+          invoicePaymentDisplay: storeInfo.invoicePaymentDisplay,
           logoUrl: storeInfo.logoUrl,
           signatureUrl: storeInfo.signatureUrl,
           billFooter: storeInfo.billFooter,
@@ -2366,6 +2381,15 @@ export default function BillingScreen() {
                 `Invoice ${inv.number}`
               )}&cu=INR`
             : '';
+          const paymentDisplay = storeInfo.invoicePaymentDisplay || 'both';
+          const showUpiQr =
+            paymentDisplay !== 'bank_details' &&
+            paymentDisplay !== 'none' &&
+            Boolean(upiLink);
+          const showBankDetails =
+            paymentDisplay !== 'upi_qr' &&
+            paymentDisplay !== 'none' &&
+            Boolean(storeInfo.bankName || storeInfo.accountNumber);
 
           return (
             <View style={styles.previewModalSafe}>
@@ -2653,20 +2677,54 @@ export default function BillingScreen() {
                     <Text style={styles.wordsValue}>{numberToWords(total)}</Text>
                   </View>
 
-                  {/* Footer with UPI QR & Signature Stamp */}
+                  {/* Footer with UPI QR, Bank Account Details & Signature Stamp */}
                   <View style={styles.a4Footer}>
                     <View style={{ flex: 1 }}>
-                      {upiLink ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                          <QrCode
-                            data={upiLink}
-                            size={58}
-                            style={[styles.qrImage, { backgroundColor: '#ffffff' }]}
-                          />
-                          <View>
-                            <Text style={styles.qrTitle}>Scan & Pay via UPI</Text>
-                            <Text style={styles.qrSub}>{storeInfo.upiId}</Text>
-                          </View>
+                      {showUpiQr || showBankDetails ? (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
+                          {showUpiQr ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 4, backgroundColor: '#f8fafc', borderRadius: 6, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                              <QrCode
+                                data={upiLink}
+                                size={52}
+                                style={[styles.qrImage, { backgroundColor: '#ffffff', width: 52, height: 52 }]}
+                              />
+                              <View>
+                                <Text style={styles.qrTitle}>Scan & Pay via UPI</Text>
+                                <Text style={styles.qrSub}>{storeInfo.upiId}</Text>
+                              </View>
+                            </View>
+                          ) : null}
+
+                          {showBankDetails ? (
+                            <View style={styles.a4BankBox}>
+                              <Text style={styles.a4BankTitle}>Bank Transfer (NEFT/RTGS)</Text>
+                              {storeInfo.bankName ? (
+                                <Text style={styles.a4BankText}>
+                                  <Text style={styles.a4BankLabel}>Bank: </Text>
+                                  {storeInfo.bankName}
+                                </Text>
+                              ) : null}
+                              {storeInfo.accountHolderName ? (
+                                <Text style={styles.a4BankText}>
+                                  <Text style={styles.a4BankLabel}>A/C Name: </Text>
+                                  {storeInfo.accountHolderName}
+                                </Text>
+                              ) : null}
+                              {storeInfo.accountNumber ? (
+                                <Text style={styles.a4BankText}>
+                                  <Text style={styles.a4BankLabel}>A/C No: </Text>
+                                  {storeInfo.accountNumber}
+                                </Text>
+                              ) : null}
+                              {storeInfo.ifscCode ? (
+                                <Text style={styles.a4BankText}>
+                                  <Text style={styles.a4BankLabel}>IFSC: </Text>
+                                  {storeInfo.ifscCode}
+                                </Text>
+                              ) : null}
+                            </View>
+                          ) : null}
                         </View>
                       ) : null}
 
@@ -2839,6 +2897,42 @@ export default function BillingScreen() {
                 autoCapitalize="characters"
               />
 
+              <Text style={[styles.inputLabel, { marginTop: 10 }]}>Payment Details on Invoices</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                {[
+                  { id: 'both', label: 'Both (QR + Bank)' },
+                  { id: 'upi_qr', label: 'UPI QR Only' },
+                  { id: 'bank_details', label: 'Bank Details Only' },
+                  { id: 'none', label: 'None (Cash Only)' },
+                ].map((opt) => {
+                  const isSelected = (storeInfo.invoicePaymentDisplay || 'both') === opt.id;
+                  return (
+                    <TouchableOpacity
+                      key={opt.id}
+                      onPress={() => setStoreInfo((p) => ({ ...p, invoicePaymentDisplay: opt.id as any }))}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: isSelected ? '#0f172a' : '#cbd5e1',
+                        backgroundColor: isSelected ? '#0f172a' : '#f8fafc',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: '600',
+                          color: isSelected ? '#ffffff' : '#334155',
+                        }}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
               <Text style={[styles.inputLabel, { marginTop: 10 }]}>UPI ID for Invoice QR Code</Text>
               <TextInput
                 value={storeInfo.upiId}
@@ -2847,6 +2941,52 @@ export default function BillingScreen() {
                 placeholder="e.g. business@okaxis"
                 autoCapitalize="none"
               />
+
+              {/* Bank Account Details */}
+              <View style={{ marginTop: 12, padding: 10, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a', marginBottom: 8 }}>
+                  🏦 Bank Account Details (for NEFT / RTGS)
+                </Text>
+
+                <Text style={styles.inputLabel}>Bank Name</Text>
+                <TextInput
+                  value={storeInfo.bankName || ''}
+                  onChangeText={(v) => setStoreInfo((p) => ({ ...p, bankName: v }))}
+                  style={styles.modalInput}
+                  placeholder="e.g. HDFC Bank / State Bank of India"
+                />
+
+                <Text style={[styles.inputLabel, { marginTop: 8 }]}>Account Holder Name</Text>
+                <TextInput
+                  value={storeInfo.accountHolderName || ''}
+                  onChangeText={(v) => setStoreInfo((p) => ({ ...p, accountHolderName: v }))}
+                  style={styles.modalInput}
+                  placeholder="e.g. Acme Enterprises Pvt Ltd"
+                />
+
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                  <View style={{ flex: 1.2 }}>
+                    <Text style={styles.inputLabel}>Account Number</Text>
+                    <TextInput
+                      value={storeInfo.accountNumber || ''}
+                      onChangeText={(v) => setStoreInfo((p) => ({ ...p, accountNumber: v }))}
+                      style={styles.modalInput}
+                      placeholder="9876543210123"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>IFSC Code</Text>
+                    <TextInput
+                      value={storeInfo.ifscCode || ''}
+                      onChangeText={(v) => setStoreInfo((p) => ({ ...p, ifscCode: v.toUpperCase() }))}
+                      style={styles.modalInput}
+                      placeholder="HDFC0001234"
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                </View>
+              </View>
 
               <Text style={[styles.inputLabel, { marginTop: 10 }]}>Store Address</Text>
               <TextInput
@@ -4161,6 +4301,29 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: '#64748b',
     marginTop: 1,
+  },
+  a4BankBox: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 6,
+    padding: 6,
+    minWidth: 140,
+  },
+  a4BankTitle: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  a4BankText: {
+    fontSize: 7.5,
+    color: '#334155',
+    lineHeight: 11,
+  },
+  a4BankLabel: {
+    fontWeight: '700',
+    color: '#64748b',
   },
   termsTitle: {
     fontSize: 9,

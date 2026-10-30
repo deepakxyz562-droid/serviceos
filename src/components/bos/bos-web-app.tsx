@@ -930,6 +930,8 @@ function BosWebAppInner({
         bankName: 'HDFC Bank',
         accountNumber: '50200048291042',
         ifscCode: 'HDFC0001204',
+        accountHolderName: 'Sharma General Store',
+        invoicePaymentDisplay: 'both',
         currencySymbol: '₹',
         storeLive: true,
         minOrderAmount: 199,
@@ -974,6 +976,8 @@ function BosWebAppInner({
       bankName: '',
       accountNumber: '',
       ifscCode: '',
+      accountHolderName: '',
+      invoicePaymentDisplay: 'both',
       currencySymbol: '₹',
       storeLive: false,
       minOrderAmount: 0,
@@ -1438,6 +1442,11 @@ function BosWebAppInner({
             setStoreSettings((prev) => {
               const next = { ...prev };
               if (cfg.upiId) next.upiId = String(cfg.upiId);
+              if (cfg.bankName) next.bankName = String(cfg.bankName);
+              if (cfg.accountNumber) next.accountNumber = String(cfg.accountNumber);
+              if (cfg.ifscCode) next.ifscCode = String(cfg.ifscCode);
+              if (cfg.accountHolderName) next.accountHolderName = String(cfg.accountHolderName);
+              if (cfg.invoicePaymentDisplay) next.invoicePaymentDisplay = cfg.invoicePaymentDisplay;
               if (cfg.paymentQrUrl) next.paymentQrUrl = String(cfg.paymentQrUrl);
               if (cfg.enableOnlinePayment !== undefined) next.enableOnlinePayment = Boolean(cfg.enableOnlinePayment);
               if (typeof cfg.isActive === 'boolean') {
@@ -2688,6 +2697,11 @@ function BosWebAppInner({
     // Persist Storefront & Billing Config updates
     const configPatch: Record<string, unknown> = {};
     if (patch.upiId !== undefined) configPatch.upiId = patch.upiId;
+    if (patch.bankName !== undefined) configPatch.bankName = patch.bankName;
+    if (patch.accountNumber !== undefined) configPatch.accountNumber = patch.accountNumber;
+    if (patch.ifscCode !== undefined) configPatch.ifscCode = patch.ifscCode;
+    if (patch.accountHolderName !== undefined) configPatch.accountHolderName = patch.accountHolderName;
+    if (patch.invoicePaymentDisplay !== undefined) configPatch.invoicePaymentDisplay = patch.invoicePaymentDisplay;
     if (patch.paymentQrUrl !== undefined) configPatch.paymentQrUrl = patch.paymentQrUrl;
     if (patch.enableOnlinePayment !== undefined) configPatch.enableOnlinePayment = patch.enableOnlinePayment;
     if (patch.storeLive !== undefined) configPatch.isActive = patch.storeLive;

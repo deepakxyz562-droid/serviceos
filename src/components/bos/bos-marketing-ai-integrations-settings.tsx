@@ -1349,6 +1349,11 @@ export function BosMarketingAiIntegrationsSettings({
   const [settingsUpiId, setSettingsUpiId] = useState(() => storeSettings.upiId || '');
   const [settingsPaymentQrUrl, setSettingsPaymentQrUrl] = useState(() => storeSettings.paymentQrUrl || '');
   const [settingsEnableOnlinePayment, setSettingsEnableOnlinePayment] = useState(() => storeSettings.enableOnlinePayment ?? true);
+  const [settingsBankName, setSettingsBankName] = useState(() => storeSettings.bankName || '');
+  const [settingsAccountNumber, setSettingsAccountNumber] = useState(() => storeSettings.accountNumber || '');
+  const [settingsIfscCode, setSettingsIfscCode] = useState(() => storeSettings.ifscCode || '');
+  const [settingsAccountHolderName, setSettingsAccountHolderName] = useState(() => storeSettings.accountHolderName || '');
+  const [settingsInvoicePaymentDisplay, setSettingsInvoicePaymentDisplay] = useState<'both' | 'upi_qr' | 'bank_details' | 'none'>(() => storeSettings.invoicePaymentDisplay || 'both');
   const paymentQrFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1364,7 +1369,32 @@ export function BosMarketingAiIntegrationsSettings({
     if (storeSettings.signatureUrl !== undefined) {
       setSettingsSignatureUrl(storeSettings.signatureUrl);
     }
-  }, [storeSettings.upiId, storeSettings.paymentQrUrl, storeSettings.enableOnlinePayment, storeSettings.signatureUrl]);
+    if (storeSettings.bankName !== undefined) {
+      setSettingsBankName(storeSettings.bankName);
+    }
+    if (storeSettings.accountNumber !== undefined) {
+      setSettingsAccountNumber(storeSettings.accountNumber);
+    }
+    if (storeSettings.ifscCode !== undefined) {
+      setSettingsIfscCode(storeSettings.ifscCode);
+    }
+    if (storeSettings.accountHolderName !== undefined) {
+      setSettingsAccountHolderName(storeSettings.accountHolderName);
+    }
+    if (storeSettings.invoicePaymentDisplay !== undefined) {
+      setSettingsInvoicePaymentDisplay(storeSettings.invoicePaymentDisplay);
+    }
+  }, [
+    storeSettings.upiId,
+    storeSettings.paymentQrUrl,
+    storeSettings.enableOnlinePayment,
+    storeSettings.signatureUrl,
+    storeSettings.bankName,
+    storeSettings.accountNumber,
+    storeSettings.ifscCode,
+    storeSettings.accountHolderName,
+    storeSettings.invoicePaymentDisplay,
+  ]);
 
   const handlePaymentQrFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -5186,13 +5216,18 @@ export function BosMarketingAiIntegrationsSettings({
                       upiId: cleanUpi,
                       paymentQrUrl: settingsPaymentQrUrl,
                       enableOnlinePayment: settingsEnableOnlinePayment,
+                      bankName: settingsBankName.trim(),
+                      accountNumber: settingsAccountNumber.trim(),
+                      ifscCode: settingsIfscCode.trim().toUpperCase(),
+                      accountHolderName: settingsAccountHolderName.trim(),
+                      invoicePaymentDisplay: settingsInvoicePaymentDisplay,
                     });
-                    setToast('Payment & UPI settings saved successfully!');
+                    setToast('Payment, Bank & Invoice settings saved successfully!');
                     setTimeout(() => setToast(null), 3000);
                   }}
                   className="shrink-0 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
                 >
-                  Save Payments
+                  Save Payments &amp; Bank
                 </button>
               </div>
 
@@ -5344,6 +5379,104 @@ export function BosMarketingAiIntegrationsSettings({
                     <span className="rounded-lg bg-[#0A6847] px-2.5 py-1 text-[10.5px] font-bold text-white shrink-0">
                       Active
                     </span>
+                  </div>
+                </div>
+
+                {/* Invoice Payment Display Option (Both / UPI QR / Bank Details / None) */}
+                <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-4 space-y-3">
+                  <div>
+                    <p className="font-bold text-[13px] text-[#111827]">Payment Details on Invoices &amp; Bills</p>
+                    <p className="text-[11.5px] text-[#64748B]">Choose what payment information to print in your tax invoice footer for customer settlement</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {[
+                      { id: 'both', title: 'Both (UPI QR + Bank A/C)', desc: 'Scannable QR + Bank details side-by-side (Recommended for Retail & B2B)' },
+                      { id: 'upi_qr', title: 'UPI QR Code Only', desc: 'Instant QR scan for counter retail, salons & walk-in customers' },
+                      { id: 'bank_details', title: 'Bank A/C Details Only', desc: 'Direct NEFT / RTGS / IMPS bank transfer info for B2B & wholesale' },
+                      { id: 'none', title: 'None (Hide Payment Details)', desc: 'Clean footer with only Terms & Signature (Cash-only counters)' },
+                    ].map((opt) => (
+                      <label
+                        key={opt.id}
+                        className={`flex items-start gap-2.5 rounded-xl border p-3 cursor-pointer transition ${
+                          settingsInvoicePaymentDisplay === opt.id
+                            ? 'border-[#0A6847] bg-[#E6F6F0]'
+                            : 'border-[#E2E8F0] bg-white hover:bg-[#F8FCFA]'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="invoicePaymentDisplay"
+                          value={opt.id}
+                          checked={settingsInvoicePaymentDisplay === opt.id}
+                          onChange={() => setSettingsInvoicePaymentDisplay(opt.id as any)}
+                          className="mt-0.5 h-4 w-4 accent-[#0A6847]"
+                        />
+                        <div className="flex-1 text-[12px]">
+                          <p className="font-bold text-[#111827]">{opt.title}</p>
+                          <p className="text-[11px] text-[#64748B] mt-0.5 leading-tight">{opt.desc}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Business Bank Account Details Card */}
+                <div className="rounded-xl border border-[#DCE9E3] bg-white p-4 space-y-3.5">
+                  <div>
+                    <p className="font-bold text-[13px] text-[#111827]">Business Bank Account Details</p>
+                    <p className="text-[11.5px] text-[#64748B]">For direct NEFT / RTGS / IMPS bank transfers from corporate &amp; wholesale customers</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-[11.5px] font-semibold text-[#334155]">
+                        Bank Name
+                      </label>
+                      <input
+                        type="text"
+                        value={settingsBankName}
+                        onChange={(e) => setSettingsBankName(e.target.value)}
+                        placeholder="e.g. HDFC Bank, ICICI Bank, SBI"
+                        className="w-full rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] px-3 py-2 text-[12.5px] font-medium text-[#111827] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11.5px] font-semibold text-[#334155]">
+                        Account Holder Name
+                      </label>
+                      <input
+                        type="text"
+                        value={settingsAccountHolderName}
+                        onChange={(e) => setSettingsAccountHolderName(e.target.value)}
+                        placeholder="e.g. Sharma General Store or Rahul Sharma"
+                        className="w-full rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] px-3 py-2 text-[12.5px] font-medium text-[#111827] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11.5px] font-semibold text-[#334155]">
+                        Bank Account Number
+                      </label>
+                      <input
+                        type="text"
+                        value={settingsAccountNumber}
+                        onChange={(e) => setSettingsAccountNumber(e.target.value)}
+                        placeholder="e.g. 50200048291042"
+                        className="w-full rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] px-3 py-2 font-mono text-[12.5px] font-medium text-[#111827] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11.5px] font-semibold text-[#334155]">
+                        IFSC Code
+                      </label>
+                      <input
+                        type="text"
+                        value={settingsIfscCode}
+                        onChange={(e) => setSettingsIfscCode(e.target.value.toUpperCase())}
+                        placeholder="e.g. HDFC0001204"
+                        className="w-full rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] px-3 py-2 font-mono text-[12.5px] font-medium uppercase text-[#111827] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

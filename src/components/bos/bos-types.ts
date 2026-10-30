@@ -236,6 +236,8 @@ export type BosStoreSettings = {
   bankName: string;
   accountNumber: string;
   ifscCode: string;
+  accountHolderName?: string;
+  invoicePaymentDisplay?: 'both' | 'upi_qr' | 'bank_details' | 'none';
   currencySymbol: string;
   openingBalance?: number;
   storeLive: boolean;

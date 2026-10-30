@@ -520,6 +520,9 @@ export function BosInvoicesWorkstation({
   const [quotationRef, setQuotationRef] = useState<string>('');
   const [deliveryChallanNumber, setDeliveryChallanNumber] = useState<string>('');
   const [paymentMode, setPaymentMode] = useState<'cash' | 'upi' | 'card' | 'bank' | 'cheque'>('cash');
+  const [invoicePaymentDisplay, setInvoicePaymentDisplay] = useState<'both' | 'upi_qr' | 'bank_details' | 'none'>(
+    () => storeSettings.invoicePaymentDisplay || 'both'
+  );
   const [receivedAmount, setReceivedAmount] = useState<number>(0);
   const [receivedAmountInitialized, setReceivedAmountInitialized] = useState(false);
   // Demo keeps its showcase number. Production numbers are assigned by the
@@ -1213,6 +1216,11 @@ export function BosInvoicesWorkstation({
         phone: storeSettings.phone || '',
         email: storeSettings.email || '',
         upiId: storeSettings.upiId || '',
+        bankName: storeSettings.bankName || '',
+        accountNumber: storeSettings.accountNumber || '',
+        ifscCode: storeSettings.ifscCode || '',
+        accountHolderName: storeSettings.accountHolderName || '',
+        invoicePaymentDisplay: invoicePaymentDisplay || storeSettings.invoicePaymentDisplay || 'both',
       },
       currencySymbol,
     );
@@ -2436,7 +2444,7 @@ export function BosInvoicesWorkstation({
                       : ''}
                   </span>
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                   <div>
                     <label className="block text-[11.5px] font-medium text-[#475569] mb-1">
                       Payment Mode
@@ -2452,6 +2460,23 @@ export function BosInvoicesWorkstation({
                       <option value="card">💳 Debit / Credit Card</option>
                       <option value="bank">🏦 Net Banking / NEFT</option>
                       <option value="cheque">🧾 Cheque</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11.5px] font-medium text-[#475569] mb-1">
+                      Invoice Footer
+                    </label>
+                    <select
+                      aria-label="Invoice Footer Payment Display"
+                      value={invoicePaymentDisplay}
+                      onChange={(e) => setInvoicePaymentDisplay(e.target.value as any)}
+                      className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[12px] font-semibold text-[#111827]"
+                    >
+                      <option value="both">Both (UPI QR + Bank)</option>
+                      <option value="upi_qr">UPI QR Only</option>
+                      <option value="bank_details">Bank A/C Only</option>
+                      <option value="none">None (Hide Details)</option>
                     </select>
                   </div>
 
@@ -2896,31 +2921,56 @@ export function BosInvoicesWorkstation({
                   {calculations.amountInWordsText}
                 </div>
 
-                {/* QR Code + Terms & Conditions + Authorized Signatory */}
+                {/* Payment Info (QR / Bank Details) + Terms & Conditions + Authorized Signatory */}
                 <div className="flex flex-col gap-3 border-t border-[#EBF2EE] pt-2.5 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="flex items-start gap-2.5">
-                    {/* Real Scannable Invoice UPI QR Code — only rendered when UPI ID is configured */}
-                    {storeSettings.upiId?.trim() ? (
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-[#CBD5E1] bg-white p-1 shadow-2xs">
-                        <div
-                          className="h-full w-full"
-                          role="img"
-                          aria-label="Invoice UPI QR"
-                          dangerouslySetInnerHTML={{
-                            __html:
-                              qrSvgMarkup(
-                                `upi://pay?pa=${encodeURIComponent(storeSettings.upiId.trim())}&pn=${encodeURIComponent(
-                                  storeSettings.businessName || 'Store'
-                                )}&am=${settlement.outstanding.toFixed(2)}&tn=${encodeURIComponent(
-                                  `Invoice ${displayInvoiceNumber}`
-                                )}&cu=INR`
-                              ) ?? '',
-                          }}
-                        />
+                  <div className="flex flex-wrap items-start gap-2.5">
+                    {/* Scannable Invoice UPI QR Code */}
+                    {(invoicePaymentDisplay === 'both' || invoicePaymentDisplay === 'upi_qr') && storeSettings.upiId?.trim() ? (
+                      <div className="flex flex-col items-center shrink-0">
+                        <div className="flex h-16 w-16 items-center justify-center rounded border border-[#CBD5E1] bg-white p-1 shadow-2xs">
+                          <div
+                            className="h-full w-full"
+                            role="img"
+                            aria-label="Invoice UPI QR"
+                            dangerouslySetInnerHTML={{
+                              __html:
+                                qrSvgMarkup(
+                                  `upi://pay?pa=${encodeURIComponent(storeSettings.upiId.trim())}&pn=${encodeURIComponent(
+                                    storeSettings.businessName || 'Store'
+                                  )}&am=${settlement.outstanding.toFixed(2)}&tn=${encodeURIComponent(
+                                    `Invoice ${displayInvoiceNumber}`
+                                  )}&cu=INR`
+                                ) ?? '',
+                            }}
+                          />
+                        </div>
+                        <span className="text-[8px] font-bold text-[#0A6847] mt-0.5">Scan &amp; Pay</span>
                       </div>
                     ) : null}
 
-                    <div className="text-[9.5px] leading-snug text-[#475569] space-y-0.5">
+                    {/* Bank Transfer Account Details */}
+                    {(invoicePaymentDisplay === 'both' || invoicePaymentDisplay === 'bank_details') &&
+                    Boolean(storeSettings.bankName?.trim() || storeSettings.accountNumber?.trim()) ? (
+                      <div className="rounded border border-[#DCE9E3] bg-[#FAFDFB] p-2 text-[9px] leading-tight text-[#334155] space-y-0.5 shrink-0 max-w-[170px]">
+                        <p className="font-extrabold text-[#0A6847] uppercase tracking-wider text-[8px]">
+                          Bank Transfer (NEFT/RTGS)
+                        </p>
+                        {storeSettings.bankName?.trim() ? (
+                          <p><span className="text-[#64748B]">Bank:</span> <span className="font-semibold">{storeSettings.bankName}</span></p>
+                        ) : null}
+                        {storeSettings.accountNumber?.trim() ? (
+                          <p><span className="text-[#64748B]">A/C:</span> <span className="font-mono font-bold text-[#111827]">{storeSettings.accountNumber}</span></p>
+                        ) : null}
+                        {storeSettings.ifscCode?.trim() ? (
+                          <p><span className="text-[#64748B]">IFSC:</span> <span className="font-mono font-bold text-[#111827]">{storeSettings.ifscCode}</span></p>
+                        ) : null}
+                        {storeSettings.accountHolderName?.trim() ? (
+                          <p><span className="text-[#64748B]">Name:</span> <span className="font-semibold">{storeSettings.accountHolderName}</span></p>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <div className="text-[9.5px] leading-snug text-[#475569] space-y-0.5 min-w-[140px]">
                       <p className="font-bold text-[#111827]">
                         Terms &amp; Conditions
                       </p>
