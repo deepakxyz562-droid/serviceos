@@ -257,10 +257,14 @@ export async function getAuthUser(
     let user: AuthUser | null = null;
 
     // 1. Try HTTP-only cookie first (preferred)
-    const cookieStore = await cookies();
-    const token = cookieStore.get(TOKEN_NAME)?.value;
-    if (token) {
-      user = verifyToken(token) || verifyTokenWithGrace(token);
+    try {
+      const cookieStore = await cookies();
+      const token = cookieStore.get(TOKEN_NAME)?.value;
+      if (token) {
+        user = verifyToken(token) || verifyTokenWithGrace(token);
+      }
+    } catch {
+      // Outside RequestAsyncStorage (e.g. testing, workers or CLI)
     }
 
     // 2. Fallback: Check Authorization header (Bearer token)

@@ -202,6 +202,58 @@ export default function ReviewRepliesScreen() {
     }
   }
 
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [testReviewBusy, setTestReviewBusy] = useState(false);
+
+  async function handleSyncGoogle() {
+    if (syncBusy) return;
+    setSyncBusy(true);
+    setLocalError(null);
+    setNotice('');
+    try {
+      const res = await apiRequest<{ success: boolean; newReviewsCount: number; totalFetched: number; message: string }>('/api/reviews/sync-google', {
+        method: 'POST',
+      });
+      setNotice(res.message || `Synced ${res.totalFetched || 0} reviews from Google Maps.`);
+      await reviews.refresh();
+    } catch (err: unknown) {
+      setLocalError((err as Error).message || 'Failed to sync Google reviews.');
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  async function handleGenerateTestReview() {
+    if (testReviewBusy) return;
+    setTestReviewBusy(true);
+    setLocalError(null);
+    setNotice('');
+    try {
+      const businessTitle = activeProfile?.name || gbpPlace.data?.place?.title || 'our business';
+      const authors = ['Vikram Malhotra', 'Pooja Sharma', 'Amit Roy', 'Neha Agarwal'];
+      const chosenAuthor = authors[Math.floor(Math.random() * authors.length)];
+      await apiRequest('/api/reviews', {
+        method: 'POST',
+        body: {
+          authorName: chosenAuthor,
+          rating: 5,
+          comment: `Outstanding experience with ${businessTitle}! Extremely polite staff, fast turnaround, and great value. Highly recommended!`,
+          source: 'google',
+          status: 'pending',
+          googleReviewId: `goog_rev_sim_${Date.now()}`,
+          responseJson: '{}',
+        },
+      });
+      setNotice(`Simulated 5★ review from ${chosenAuthor} added! Ready for Auto-Reply.`);
+      setFilter('pending');
+      await reviews.refresh();
+    } catch (err: unknown) {
+      setLocalError((err as Error).message || 'Failed to create test review.');
+    } finally {
+      setTestReviewBusy(false);
+    }
+  }
+
   async function handleShareReply(text: string) {
     try {
       await Share.share({ message: text });
@@ -631,57 +683,114 @@ export default function ReviewRepliesScreen() {
         </View>
 
         {/* ── AUTO-REPLY COMMAND BAR ── */}
-        {pending.length > 0 ? (
-          <View
-            style={{
-              backgroundColor: '#EFF6FF',
-              borderWidth: 1,
-              borderColor: '#BFDBFE',
-              borderRadius: 14,
-              padding: 12,
-              marginBottom: 10,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 10,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialIcons name="auto-awesome" size={16} color="#2563EB" />
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#1E40AF' }}>AI Auto-Reply</Text>
-              </View>
-              <Text style={{ fontSize: 11.5, color: '#3B82F6', marginTop: 2 }}>
-                {pending.length} pending review{pending.length === 1 ? '' : 's'} waiting for replies
+        <View
+          style={{
+            backgroundColor: pending.length > 0 ? '#EFF6FF' : '#F8FAFC',
+            borderWidth: 1,
+            borderColor: pending.length > 0 ? '#BFDBFE' : '#E2E8F0',
+            borderRadius: 14,
+            padding: 12,
+            marginBottom: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <MaterialIcons name="auto-awesome" size={16} color={pending.length > 0 ? '#2563EB' : '#059669'} />
+              <Text style={{ fontSize: 13, fontWeight: '800', color: pending.length > 0 ? '#1E40AF' : '#065F46' }}>
+                AI Auto-Reply {pending.length === 0 ? 'Active' : ''}
               </Text>
             </View>
-            <Pressable
-              disabled={autoReplyBusy}
-              onPress={() => void handleTriggerAutoReply()}
-              style={({ pressed }) => ({
-                backgroundColor: '#2563EB',
-                paddingHorizontal: 14,
-                paddingVertical: 9,
-                borderRadius: 10,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                opacity: autoReplyBusy ? 0.6 : pressed ? 0.85 : 1,
-              })}
-            >
-              {autoReplyBusy ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <MaterialIcons name="bolt" size={15} color="#FFFFFF" />
-                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' }}>
-                    Auto-Reply ({pending.length})
-                  </Text>
-                </>
-              )}
-            </Pressable>
+            <Text style={{ fontSize: 11.5, color: pending.length > 0 ? '#3B82F6' : '#64748B', marginTop: 2 }}>
+              {pending.length > 0
+                ? `${pending.length} pending review${pending.length === 1 ? '' : 's'} waiting for replies`
+                : 'All reviews answered! Use Sync or + Test Review.'}
+            </Text>
           </View>
-        ) : null}
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {pending.length > 0 ? (
+              <Pressable
+                disabled={autoReplyBusy}
+                onPress={() => void handleTriggerAutoReply()}
+                style={({ pressed }) => ({
+                  backgroundColor: '#2563EB',
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  opacity: autoReplyBusy ? 0.6 : pressed ? 0.85 : 1,
+                })}
+              >
+                {autoReplyBusy ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name="bolt" size={15} color="#FFFFFF" />
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
+                      Auto-Reply ({pending.length})
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            ) : (
+              <>
+                <Pressable
+                  disabled={syncBusy}
+                  onPress={() => void handleSyncGoogle()}
+                  style={({ pressed }) => ({
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    opacity: syncBusy ? 0.6 : pressed ? 0.85 : 1,
+                  })}
+                >
+                  {syncBusy ? (
+                    <ActivityIndicator size="small" color="#0F172A" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="refresh" size={14} color="#0F172A" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Sync</Text>
+                    </>
+                  )}
+                </Pressable>
+                <Pressable
+                  disabled={testReviewBusy}
+                  onPress={() => void handleGenerateTestReview()}
+                  style={({ pressed }) => ({
+                    backgroundColor: '#059669',
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    opacity: testReviewBusy ? 0.6 : pressed ? 0.85 : 1,
+                  })}
+                >
+                  {testReviewBusy ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="add" size={14} color="#FFFFFF" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>+ Test 5★</Text>
+                    </>
+                  )}
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
 
         {/* ── REVIEW LIST ── */}
         {reviews.loading ? (
@@ -937,6 +1046,31 @@ export default function ReviewRepliesScreen() {
                           <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
                             <Pressable
                               accessibilityRole="button"
+                              disabled={replyBusyId === review.id}
+                              onPress={() => void publishReply(review, reply.text)}
+                              style={{
+                                flex: 1.2,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 6,
+                                paddingVertical: 8,
+                                paddingHorizontal: 10,
+                                borderRadius: 10,
+                                backgroundColor: '#2563EB',
+                              }}
+                            >
+                              {replyBusyId === review.id ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                              ) : (
+                                <>
+                                  <MaterialIcons name="bolt" size={14} color="#FFFFFF" />
+                                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>Push to Google</Text>
+                                </>
+                              )}
+                            </Pressable>
+                            <Pressable
+                              accessibilityRole="button"
                               onPress={() => void handleShareReply(reply.text)}
                               style={{
                                 flex: 1,
@@ -945,7 +1079,7 @@ export default function ReviewRepliesScreen() {
                                 justifyContent: 'center',
                                 gap: 6,
                                 paddingVertical: 8,
-                                paddingHorizontal: 12,
+                                paddingHorizontal: 10,
                                 borderRadius: 10,
                                 backgroundColor: '#F1F5F9',
                                 borderWidth: 1,
@@ -953,25 +1087,22 @@ export default function ReviewRepliesScreen() {
                               }}
                             >
                               <MaterialIcons name="content-copy" size={14} color="#0F172A" />
-                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>Share / Copy</Text>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>Copy</Text>
                             </Pressable>
                             <Pressable
                               accessibilityRole="button"
                               onPress={() => void handleOpenMaps(reply.mapsUrl)}
                               style={{
-                                flex: 1,
-                                flexDirection: 'row',
+                                width: 36,
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: 6,
-                                paddingVertical: 8,
-                                paddingHorizontal: 12,
                                 borderRadius: 10,
-                                backgroundColor: '#2563EB',
+                                backgroundColor: '#F1F5F9',
+                                borderWidth: 1,
+                                borderColor: '#E2E8F0',
                               }}
                             >
-                              <MaterialIcons name="open-in-new" size={14} color="#FFFFFF" />
-                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>Open Maps ↗</Text>
+                              <MaterialIcons name="open-in-new" size={15} color="#0F172A" />
                             </Pressable>
                           </View>
                         ) : null}

@@ -79,6 +79,7 @@ import {
   Building2,
   ImageIcon,
   RefreshCw,
+  RotateCcw,
   Lock,
   Info,
   CalendarDays,
@@ -250,53 +251,324 @@ const QUICK_PROMPTS = [
  * Allows Indian SMBs (fabricators, tradies, clinics, salons, cafes)
  * to draft high-converting Google posts in 2 clicks.
  */
-export const BEST_SELLER_OFFERINGS = [
-  {
-    name: 'Gate & Grill Work',
-    icon: '🚪',
-    concept:
-      'Create a local promotion for custom gate, window grill, and safety door fabrication by {business}. Emphasize heavy-gauge steel, rust resistance, custom designs, and fast installation. Include a call to action to call for free site measurement.',
-    badge: 'Popular Work',
-    headline: 'Custom Gates & Grills',
-    type: 'Promo',
-  },
-  {
-    name: 'Stainless Steel Railings',
-    icon: '🛡️',
-    concept:
-      'Feature premium grade 304 stainless steel balcony, terrace, and staircase railing installation by {business}. Highlight mirror finish, lifetime strength, and competitive local rates. Call to book a consultation.',
-    badge: 'Best Quality',
-    headline: 'Premium SS Railings',
-    type: 'Showcase',
-  },
-  {
-    name: 'Industrial Sheds & Roofs',
-    icon: '🏭',
-    concept:
-      'Announce heavy-duty industrial factory shed, warehouse roofing, and tin shed structure erection by {business}. Highlight structural stability, certified welding, and on-time project completion.',
-    badge: 'Commercial',
-    headline: 'Factory Sheds & Roofing',
-    type: 'Announcement',
-  },
-  {
-    name: 'Laser Cutting Design',
-    icon: '✨',
-    concept:
-      'Promote precision CNC metal laser cutting and designer architectural screens by {business}. Modern geometric designs for main gates, partitions, and elevations. Contact for catalog.',
-    badge: 'CNC Precision',
-    headline: 'Designer Laser Cutting',
-    type: 'Showcase',
-  },
-  {
-    name: 'Welding & Repair Service',
-    icon: '🔧',
-    concept:
-      'Urgent on-site welding, rolling shutter repair, and structural metal maintenance by skilled welders from {business}. Prompt doorstep arrival across the local area. Call now for quick repair.',
-    badge: 'Fast Doorstep',
-    headline: 'Doorstep Welding Repair',
-    type: 'Urgent',
-  },
-];
+export interface PromotionOffering {
+  name: string;
+  icon: string;
+  concept: string;
+  badge: string;
+  headline: string;
+  type: string;
+}
+
+/**
+ * Dynamic local offerings engine benchmarked against Grexa & Dhanda AI.
+ * Automatically adapts to the tenant's genuine Google Business category,
+ * catalog, or industry (Community centres, Tech/CRM, Healthcare, Salons, Tradies, Retail).
+ */
+export function getDynamicOfferings(businessName: string, category?: string): PromotionOffering[] {
+  const cat = (category || '').toLowerCase();
+
+  if (cat.includes('community') || cat.includes('market') || cat.includes('centre') || cat.includes('hall')) {
+    return [
+      {
+        name: 'Space & Hall Booking',
+        icon: '🏛️',
+        concept:
+          'Announce premium event space, hall rental, and community gathering facilities at {business}. Highlight affordable local booking rates, spacious seating, and clean amenities. Call today for availability.',
+        badge: 'Event Space',
+        headline: 'Space & Venue Booking',
+        type: 'Announcement',
+      },
+      {
+        name: 'Weekend Market Day',
+        icon: '🛍️',
+        concept:
+          'Promote the upcoming weekend market days at {business}. Invite families and local residents to visit local stalls, fresh collections, and friendly vendors. Open throughout the weekend.',
+        badge: 'Weekend Special',
+        headline: 'Weekend Community Market',
+        type: 'Promo',
+      },
+      {
+        name: 'Stall & Vendor Openings',
+        icon: '🏪',
+        concept:
+          'Invite local entrepreneurs and shopkeepers to set up their stalls and business counters at {business}. Great foot traffic, prime location, and competitive rental terms. Contact our management office.',
+        badge: 'Vendor Slots',
+        headline: 'Prime Stall Openings',
+        type: 'Showcase',
+      },
+      {
+        name: 'Festival Celebration Deals',
+        icon: '🎉',
+        concept:
+          'Share festive wishes and special shopping discounts from all merchants at {business}. Celebrate this festive season with great deals, festive lighting, and a warm welcome.',
+        badge: 'Festive Deals',
+        headline: 'Festive Season at {business}',
+        type: 'Promo',
+      },
+      {
+        name: 'Visitor Parking & Amenities',
+        icon: '🚗',
+        concept:
+          'Highlight easy accessibility, ample parking, and clean community amenities at {business} in the local neighborhood. Visit us today for convenient shopping and community services.',
+        badge: 'Visitor Guide',
+        headline: 'Convenient Local Visiting',
+        type: 'Tips',
+      },
+    ];
+  }
+
+  if (cat.includes('salon') || cat.includes('beauty') || cat.includes('spa') || cat.includes('hair')) {
+    return [
+      {
+        name: 'Hair Styling & Cut',
+        icon: '✂️',
+        concept:
+          'Promote trendy haircuts, styling, and professional blowouts by expert stylists at {business}. Book your appointment for a fresh look.',
+        badge: 'Popular Style',
+        headline: 'Expert Hair Styling',
+        type: 'Promo',
+      },
+      {
+        name: 'Facial & Glow Treatment',
+        icon: '✨',
+        concept:
+          'Feature rejuvenating skin facials, deep cleansing, and radiant glow treatments at {business}. Perfect for weekends and special occasions.',
+        badge: 'Radiant Skin',
+        headline: 'Rejuvenating Facials',
+        type: 'Showcase',
+      },
+      {
+        name: 'Bridal & Party Makeover',
+        icon: '💄',
+        concept:
+          'Announce bridal makeup packages and party makeover bookings at {business}. Includes trial sessions, premium cosmetics, and expert artist consultation.',
+        badge: 'Bridal Special',
+        headline: 'Bridal & Party Packages',
+        type: 'Announcement',
+      },
+      {
+        name: 'Hair Spa & Keratin',
+        icon: '💆‍♀️',
+        concept:
+          'Special offer on intensive hair spa, keratin, and scalp nourishing treatments at {business}. Restore softness and shine.',
+        badge: 'Special Treatment',
+        headline: 'Hair Spa Nourishment',
+        type: 'Promo',
+      },
+      {
+        name: 'Weekend Pamper Package',
+        icon: '🌸',
+        concept:
+          'Limited weekend slots open for full head-to-toe pampering packages at {business}. Reserve early to avoid the rush.',
+        badge: 'Weekend Slots',
+        headline: 'Weekend Pamper Sessions',
+        type: 'Urgent',
+      },
+    ];
+  }
+
+  if (cat.includes('software') || cat.includes('tech') || cat.includes('it') || cat.includes('developer') || cat.includes('crm')) {
+    return [
+      {
+        name: 'Custom Software Development',
+        icon: '💻',
+        concept:
+          'Promote bespoke software architecture, web applications, and enterprise systems built by {business}. Fast turnarounds, scalable code, and ongoing support.',
+        badge: 'Custom Build',
+        headline: 'Tailored Software Solutions',
+        type: 'Showcase',
+      },
+      {
+        name: 'CRM & Business Automation',
+        icon: '⚡',
+        concept:
+          'Introduce automated CRM workflows, customer lead capture, and billing integrations by {business}. Help small businesses save 10+ hours every week.',
+        badge: 'Automation',
+        headline: 'Modern CRM Setup',
+        type: 'Promo',
+      },
+      {
+        name: 'Cloud Migration & Security',
+        icon: '☁️',
+        concept:
+          'Highlight secure cloud infrastructure deployment, data backup, and server optimization by {business}. Keep your customer data safe with high uptime.',
+        badge: 'Cloud Tech',
+        headline: 'Seamless Cloud Solutions',
+        type: 'Announcement',
+      },
+      {
+        name: 'Mobile App Development',
+        icon: '📱',
+        concept:
+          'Feature cross-platform iOS and Android mobile app development by {business}. Intuitive UI/UX, offline support, and seamless payment integration.',
+        badge: 'Mobile First',
+        headline: 'Native & Cross-Platform Apps',
+        type: 'Showcase',
+      },
+      {
+        name: 'Free Tech Consultation',
+        icon: '🎯',
+        concept:
+          'Book a complimentary 30-minute tech audit and software roadmap session with senior engineers at {business}. Limited slots available this month.',
+        badge: 'Free Audit',
+        headline: 'Complimentary Tech Review',
+        type: 'Urgent',
+      },
+    ];
+  }
+
+  if (cat.includes('fabricat') || cat.includes('weld') || cat.includes('steel') || cat.includes('metal') || cat.includes('iron')) {
+    return [
+      {
+        name: 'Gate & Window Grills',
+        icon: '🚪',
+        concept:
+          'Create a local promotion for custom gate, window grill, and safety door fabrication by {business}. Heavy-gauge steel, rust resistance, and fast installation.',
+        badge: 'Popular Work',
+        headline: 'Custom Gates & Grills',
+        type: 'Promo',
+      },
+      {
+        name: 'Stainless Steel Railings',
+        icon: '🛡️',
+        concept:
+          'Feature premium grade 304 stainless steel balcony and staircase railings by {business}. Mirror finish and lifetime durability.',
+        badge: 'Best Quality',
+        headline: 'Premium SS Railings',
+        type: 'Showcase',
+      },
+      {
+        name: 'Industrial Sheds & Roofing',
+        icon: '🏭',
+        concept:
+          'Announce heavy-duty industrial factory sheds, warehouse structures, and tin roofing by {business}. Certified welding and on-time completion.',
+        badge: 'Commercial',
+        headline: 'Industrial Shed Erection',
+        type: 'Announcement',
+      },
+      {
+        name: 'CNC Laser Cutting Screens',
+        icon: '✨',
+        concept:
+          'Promote precision CNC laser cutting and architectural metal partitions by {business}. Modern geometric designs for elevations.',
+        badge: 'CNC Precision',
+        headline: 'Designer Laser Cutting',
+        type: 'Showcase',
+      },
+      {
+        name: 'Doorstep Welding Repair',
+        icon: '🔧',
+        concept:
+          'Urgent on-site welding, rolling shutter repair, and metal maintenance by skilled welders from {business}. Prompt local arrival.',
+        badge: 'Doorstep Help',
+        headline: 'Fast Welding Repair',
+        type: 'Urgent',
+      },
+    ];
+  }
+
+  if (cat.includes('clinic') || cat.includes('health') || cat.includes('doctor') || cat.includes('dental') || cat.includes('hospital')) {
+    return [
+      {
+        name: 'Comprehensive Health Checkup',
+        icon: '🩺',
+        concept:
+          'Promote routine health screenings, vital diagnostics, and personalized consultations with doctors at {business}. Prioritize your family health today.',
+        badge: 'Wellness',
+        headline: 'Complete Health Screening',
+        type: 'Promo',
+      },
+      {
+        name: 'Doctor Consultation Slots',
+        icon: '👨‍⚕️',
+        concept:
+          'Announce open appointment slots for specialist consultations at {business}. Minimal wait times, compassionate care, and modern diagnostic facilities.',
+        badge: 'Appointments',
+        headline: 'Expert Medical Consultation',
+        type: 'Announcement',
+      },
+      {
+        name: 'Preventive Care Packages',
+        icon: '❤️',
+        concept:
+          'Highlight affordable preventive care and wellness packages at {business}. Early detection saves lives. Book your test package today.',
+        badge: 'Preventive Care',
+        headline: 'Family Wellness Packages',
+        type: 'Promo',
+      },
+      {
+        name: 'Emergency & Urgent Care',
+        icon: '🚨',
+        concept:
+          'Remind the local community of urgent care, first aid, and priority patient assistance available at {business}. Compassionate care when you need it most.',
+        badge: 'Urgent Care',
+        headline: 'Prompt Local Healthcare',
+        type: 'Urgent',
+      },
+      {
+        name: 'Everyday Wellness Advice',
+        icon: '🥗',
+        concept:
+          'Share 3 doctor-recommended lifestyle, diet, and hydration tips from the medical team at {business} to keep your family energized and healthy.',
+        badge: 'Doctor Tips',
+        headline: 'Tips for Everyday Wellness',
+        type: 'Tips',
+      },
+    ];
+  }
+
+  // Universal Default for all local businesses / retail / services
+  return [
+    {
+      name: 'Featured Special Service',
+      icon: '⭐',
+      concept:
+        'Highlight the top-rated signature services offered by {business}. Focus on high quality, friendly customer service, and reliable local support. Call to book today.',
+      badge: 'Customer Choice',
+      headline: 'Our Signature Services',
+      type: 'Showcase',
+    },
+    {
+      name: 'Limited-Time Local Offer',
+      icon: '🏷️',
+      concept:
+        'Announce an exclusive seasonal discount and special pricing for local neighborhood customers at {business}. Mention limited slots this week.',
+      badge: 'Limited Offer',
+      headline: 'Special Seasonal Discount',
+      type: 'Promo',
+    },
+    {
+      name: 'New Service Launch',
+      icon: '🚀',
+      concept:
+        'Introduce newly launched services and enhanced facilities available at {business}. Dedicated to bringing better quality to our customers.',
+      badge: 'New Launch',
+      headline: 'Introducing New Services',
+      type: 'Announcement',
+    },
+    {
+      name: 'Weekend Open Slots',
+      icon: '📅',
+      concept:
+        'Announce open weekend visiting slots and walk-ins welcome at {business}. Book early or stop by our location this Saturday & Sunday.',
+      badge: 'Weekend Slots',
+      headline: 'Weekend Availability at {business}',
+      type: 'Urgent',
+    },
+    {
+      name: 'Customer Thank-You Offer',
+      icon: '🙏',
+      concept:
+        'Thank loyal customers of {business} with special priority bookings, consultation perks, and friendly greetings. We love serving our community!',
+      badge: 'Thank You',
+      headline: 'Thank You to Our Community',
+      type: 'Tips',
+    },
+  ];
+}
+
+export const BEST_SELLER_OFFERINGS = getDynamicOfferings('My Business', 'General');
 
 const AI_TONES = ['Friendly', 'Professional', 'Hinglish / Local', 'Urgent', 'Luxury'];
 const POST_TYPES = ['Promo', 'Announcement', 'Tips', 'Showcase', 'Urgent'];
@@ -2420,6 +2692,116 @@ export function SocialMediaView({
     }
   };
 
+  const [syncingGoogleReviews, setSyncingGoogleReviews] = useState(false);
+  const [generatingTestReview, setGeneratingTestReview] = useState(false);
+  const [resettingReviewId, setResettingReviewId] = useState<string | null>(null);
+
+  const handleSyncGoogleReviews = async () => {
+    setSyncingGoogleReviews(true);
+    try {
+      const res = await authFetch('/api/reviews/sync-google', { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.success) {
+        toast.success(
+          json.message ||
+            `Synced with Google Maps: ${json.newReviewsCount || 0} new, ${json.totalFetched || 0} total.`
+        );
+      } else {
+        toast.info(json.error || json.message || 'Google Maps review sync completed.');
+      }
+      await fetchReviews();
+    } catch {
+      toast.error('Network error syncing reviews from Google Maps.');
+    } finally {
+      setSyncingGoogleReviews(false);
+    }
+  };
+
+  const handleGenerateTestReview = async () => {
+    setGeneratingTestReview(true);
+    try {
+      const testAuthors = [
+        { name: 'Vikram Malhotra', comment: `Outstanding experience with ${businessName}! Extremely polite staff, fast turnaround, and great value. Highly recommended!` },
+        { name: 'Pooja Sharma', comment: `Visited ${businessName} recently and had a wonderful experience. Top notch quality, clean amenities, and very helpful team.` },
+        { name: 'Amit Roy', comment: `Five stars for ${businessName}! They solved our requirements promptly and professionally. Will definitely return!` },
+      ];
+      const selected = testAuthors[Math.floor(Math.random() * testAuthors.length)];
+
+      const res = await authFetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          authorName: selected.name,
+          rating: 5,
+          comment: selected.comment,
+          source: 'google',
+          status: 'pending',
+          googleReviewId: `goog_rev_sim_${Date.now()}`,
+          responseJson: '{}',
+        }),
+      });
+
+      if (res.ok) {
+        toast.success(`Simulated 5★ review from ${selected.name} added! Ready for Auto-Reply.`);
+        setReviewFilter('pending');
+        await fetchReviews();
+      } else {
+        toast.error('Could not create simulated review.');
+      }
+    } catch {
+      toast.error('Network error creating test review.');
+    } finally {
+      setGeneratingTestReview(false);
+    }
+  };
+
+  const handleResetReviewToPending = async (reviewId: string) => {
+    setResettingReviewId(reviewId);
+    try {
+      const res = await authFetch(`/api/reviews/${reviewId}/reply`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        toast.success('Reply reset! Review is now back in Pending.');
+        await fetchReviews();
+      } else {
+        toast.error('Failed to reset review reply.');
+      }
+    } catch {
+      toast.error('Network error resetting review reply.');
+    } finally {
+      setResettingReviewId(null);
+    }
+  };
+
+  const handleRetryPushToGoogle = async (review: ReviewDto) => {
+    const existingReply = replyTextOf(review);
+    if (!existingReply) return;
+    setPublishingReplyId(review.id);
+    try {
+      const res = await authFetch(`/api/reviews/${review.id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ replyText: existingReply }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (data.publishedToGoogle) {
+          toast.success('Reply published directly to your Google Business Profile!');
+        } else {
+          toast.info(data.message || 'Saved locally in BGOS.');
+        }
+        await fetchReviews();
+      } else {
+        toast.error(data.error || 'Failed to push reply to Google.');
+      }
+    } catch {
+      toast.error('Network error pushing reply to Google.');
+    } finally {
+      setPublishingReplyId(null);
+    }
+  };
+
   // ── Keyword planner actions (real /api/gbp/keyword-plan) ──
 
   const handleAddKeyword = async (
@@ -2755,14 +3137,20 @@ export function SocialMediaView({
         ? mediaPhotos.filter((p) => p.source === 'queue' && !p.status?.startsWith('saved_locally'))
         : mediaPhotos.filter((p) => p.status?.startsWith('saved_locally'));
 
+  const detectedCategory = placeData?.place?.category || placeData?.tenantFallback?.category || '';
+  const currentOfferings = useMemo(
+    () => getDynamicOfferings(businessName, detectedCategory),
+    [businessName, detectedCategory]
+  );
+
   const seoKeywords = useMemo(
     () =>
       extractSeoKeywords(
         businessName,
-        placeData?.place?.category || placeData?.tenantFallback?.category || '',
+        detectedCategory,
         placeData?.place?.address || placeData?.tenantFallback?.address || ''
       ),
-    [businessName, placeData]
+    [businessName, detectedCategory, placeData]
   );
 
   return (
@@ -3607,7 +3995,37 @@ export function SocialMediaView({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSyncGoogleReviews}
+                disabled={syncingGoogleReviews}
+                className="h-8.5 rounded-xl border-border bg-card hover:bg-muted text-foreground text-xs font-semibold gap-1.5 shadow-2xs"
+                title="Fetch latest reviews from Google Business Profile"
+              >
+                <RefreshCw className={`size-3.5 ${syncingGoogleReviews ? 'animate-spin' : ''}`} />
+                <span>{syncingGoogleReviews ? 'Syncing…' : 'Sync Google Maps'}</span>
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateTestReview}
+                disabled={generatingTestReview}
+                className="h-8.5 rounded-xl border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-semibold gap-1.5 shadow-2xs"
+                title="Create a simulated 5★ review to test AI auto-reply pipeline"
+              >
+                {generatingTestReview ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Plus className="size-3.5" />
+                )}
+                <span>+ Test Review (5★)</span>
+              </Button>
+
               <Button
                 type="button"
                 size="sm"
@@ -3796,11 +4214,54 @@ export function SocialMediaView({
                           className="text-xs text-foreground leading-relaxed"
                         />
 
-                        {/* 1-Tap Copy & Open Google Maps Action */}
+                        {/* 1-Tap Actions: Retry Push to Google, Reset to Pending, Copy & Open */}
                         <div className="flex items-center justify-between pt-2 border-t border-border/40 gap-2 flex-wrap">
-                          <span className="text-[10px] text-muted-foreground">
-                            Ensure your reply is visible on Google Maps:
-                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {(() => {
+                              let published = false;
+                              try {
+                                const parsed = JSON.parse(review.responseJson || '{}');
+                                published = Boolean(parsed.publishedToGoogle);
+                              } catch {}
+                              if (!published) {
+                                return (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => handleRetryPushToGoogle(review)}
+                                    disabled={publishingReplyId === review.id}
+                                    className="h-7 text-[11px] font-bold gap-1 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-2xs"
+                                  >
+                                    {publishingReplyId === review.id ? (
+                                      <Loader2 className="size-3 animate-spin" />
+                                    ) : (
+                                      <Zap className="size-3" />
+                                    )}
+                                    <span>⚡ Push to Google</span>
+                                  </Button>
+                                );
+                              }
+                              return null;
+                            })()}
+
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleResetReviewToPending(review.id)}
+                              disabled={resettingReviewId === review.id}
+                              className="h-7 text-[11px] text-muted-foreground hover:text-destructive gap-1"
+                              title="Clear reply and move review back to Pending"
+                            >
+                              {resettingReviewId === review.id ? (
+                                <Loader2 className="size-3 animate-spin" />
+                              ) : (
+                                <RotateCcw className="size-3" />
+                              )}
+                              <span>Reset to Pending</span>
+                            </Button>
+                          </div>
+
                           <Button
                             type="button"
                             variant="outline"
@@ -3814,10 +4275,10 @@ export function SocialMediaView({
                                 `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(businessName)}`;
                               window.open(targetUrl, '_blank');
                             }}
-                            className="h-7 text-[11px] font-bold gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                            className="h-7 text-[11px] font-bold gap-1.5 border-primary/40 text-primary hover:bg-primary/10 ml-auto"
                           >
                             <Copy className="size-3" />
-                            <span>Copy Reply &amp; Open Google Maps</span>
+                            <span>Copy &amp; Open Google Maps</span>
                             <ExternalLink className="size-3" />
                           </Button>
                         </div>
@@ -4071,7 +4532,7 @@ export function SocialMediaView({
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {BEST_SELLER_OFFERINGS.map((item) => (
+                  {currentOfferings.map((item) => (
                     <button
                       key={item.name}
                       type="button"
@@ -4087,6 +4548,19 @@ export function SocialMediaView({
                       <span>{item.name}</span>
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStudioPrompt(`Special offer from ${businessName}: `);
+                      setPostType('Promo');
+                      setCurrentBadge('Special Offer');
+                      setCurrentHeadline(`${businessName} Special`);
+                    }}
+                    className="px-2.5 py-1 rounded-lg border border-dashed border-border bg-muted/30 hover:border-primary/50 text-xs font-medium text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-all shadow-2xs"
+                  >
+                    <span>➕</span>
+                    <span>Custom Service</span>
+                  </button>
                 </div>
               </div>
 
