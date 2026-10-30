@@ -112,12 +112,18 @@ export async function POST(
       }
     }
 
+    const tenant = await db.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { name: true },
+    });
+    const businessName = tenant?.name || 'Local Service';
+
     const keywords = Array.isArray(body.keywords)
       ? body.keywords
       : [
-          { keyword: 'best crm software for small businesses', volume: '500 ↗' },
-          { keyword: 'software development company', volume: '500 ↗' },
-          { keyword: 'software development company in Patna', volume: '100 ↗' },
+          { keyword: `${businessName.toLowerCase()} service`, volume: '500 ↗' },
+          { keyword: 'top rated local service', volume: '300 ↗' },
+          { keyword: 'verified customer satisfaction', volume: '250 ↗' },
         ];
 
     const replyPayload = {

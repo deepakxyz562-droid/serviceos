@@ -44,9 +44,9 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
   }, [visible]);
 
   const data = workspace.data;
-  const businessName = data?.name || user?.name || 'FieserOS';
-  const email = user?.email || 'deepakchandra076@gmail.com';
-  const initial = businessName.charAt(0).toUpperCase();
+  const businessName = data?.name || user?.name || 'My Business';
+  const email = user?.email || '';
+  const initial = businessName.charAt(0).toUpperCase() || 'M';
 
   function navigate(route: string) {
     onClose();

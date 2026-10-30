@@ -47,8 +47,8 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    let googleEmail = user.email || 'deepakchandra076@gmail.com';
-    let locationTitle = tenant?.name || 'FieserOS';
+    let googleEmail = user.email || '';
+    let locationTitle = tenant?.name || 'My Business';
 
     if (socialAccount?.metadata) {
       try {
@@ -103,10 +103,10 @@ export async function GET(request: NextRequest) {
       sampleReplies: {
         positive:
           saved.sampleReplies?.positive ||
-          "Thank you so much for your kind words! 😊 We're really glad you liked our collection. We always try to bring trendy and comfortable styles for our customers. Looking forward to seeing you again soon!",
+          "Thank you so much for your kind words! 😊 We're really glad you had a great experience with our team. Looking forward to seeing you again soon!",
         critical:
           saved.sampleReplies?.critical ||
-          "Dear customer, We're deeply sorry to hear about your disappointing experience with our software. We understand how frustrating this must be, and we'd love the opportunity to make things right. Please reach out to our dedicated support team at 8505945123 so we can assist you directly.",
+          `Dear customer, We're deeply sorry to hear about your experience. We understand how frustrating this must be, and we'd love the opportunity to make things right. Please reach out to our dedicated support team ${tenant?.phone ? `at ${tenant.phone} ` : ''}so we can assist you directly.`,
       },
     };
 

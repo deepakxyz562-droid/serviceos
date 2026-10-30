@@ -14,6 +14,7 @@ import { SocialCalendarCard } from '../../src/components/gbp/social-calendar';
 import { SidebarDrawer } from '../../src/components/navigation/sidebar-drawer';
 import { PushPromptModal } from '../../src/components/notifications/push-prompt';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
+import type { GbpPlaceResult } from '../../src/components/gbp/types';
 import type { BgosConversation, BgosWorkspace } from '../../../shared/bgos-contracts';
 
 type Booking = { id: string; title?: string; customerName?: string; scheduledAt?: string; status: string };
@@ -301,7 +302,7 @@ export default function HomeScreen() {
   const calls = useResource<{ stats: { todayCount: number; total: number } | null }>('/api/vapi/calls?limit=1&stats=true');
   const reviews = useResource<{ reviews: Array<{ rating: number }> }>('/api/reviews?limit=50');
   const marketingScore = useResource<MarketingScoreResponse>('/api/gbp/marketing-score');
-  const gbpPlace = useResource<{ isConnected: boolean; metrics?: { searchImpressions: number; mapsImpressions: number; callClicks: number; directionRequests: number; websiteClicks: number } | null }>('/api/gbp/place');
+  const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const competitors = useResource<CompetitorsResponse>('/api/gbp/competitors');
   const growthActions = useResource<GrowthActionsResponse>('/api/gbp/growth-actions');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
@@ -377,11 +378,15 @@ export default function HomeScreen() {
   }
 
   const activeProfile = discover.data?.activeProfile;
-  const profileName = activeProfile?.name || 'Deepak Chandra';
-  const shortId = activeProfile?.shortId ? activeProfile.shortId.replace('#', '') : '5008';
-  const phone = discover.data?.phone || '8505945123';
+  const profileName = activeProfile?.name || gbpPlace.data?.place?.title || 'My Business';
+  const shortId = activeProfile?.shortId
+    ? activeProfile.shortId.replace('#', '')
+    : gbpPlace.data?.place?.locationId
+    ? gbpPlace.data.place.locationId.slice(-4)
+    : '';
+  const phone = discover.data?.phone || gbpPlace.data?.place?.phone || '';
   const version = discover.data?.version || 'v2.83';
-  const initial = activeProfile?.initial || profileName.charAt(0).toUpperCase() || 'D';
+  const initial = activeProfile?.initial || profileName.trim().charAt(0).toUpperCase() || 'B';
 
   const customHeader = (
     <View

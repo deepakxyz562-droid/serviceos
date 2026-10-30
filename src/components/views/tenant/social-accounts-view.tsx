@@ -272,46 +272,6 @@ export function SocialAccountsView({ embedded = false }: { embedded?: boolean } 
       )}
 
       {/* Platform grid */}
-      {(() => {
-        const pendingGbp = accounts.find(
-          (a) => a.platform === 'googlebusiness' && a.isActive && (a.metadata as any)?.pendingApiApproval
-        );
-        const approvedGbp = accounts.find(
-          (a) => a.platform === 'googlebusiness' && a.isActive && (a.metadata as any)?.apiApproved
-        );
-        if (approvedGbp) {
-          return (
-            <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/20 p-4 text-xs text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <span className="font-bold flex items-center gap-1.5 text-sm text-emerald-800 dark:text-emerald-300">
-                  <CheckCircle2 className="size-4 text-emerald-600" />
-                  Google Business Profile API Approved &amp; Live! (300 QPM)
-                </span>
-                <p className="mt-1 text-emerald-700 dark:text-emerald-300">
-                  Business Information API is connected and verified. Location <strong>shiv-ganga market (Patna)</strong> is active. Enable <em>Google My Business API</em> to publish reviews &amp; replies directly to Google Maps.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <a
-                  href="https://console.developers.google.com/apis/api/mybusiness.googleapis.com/overview?project=58940552680"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-xs"
-                >
-                  Enable Reviews API (Google My Business API) ↗
-                </a>
-              </div>
-            </div>
-          );
-        }
-        if (!pendingGbp) return null;
-        return (
-          <div className="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/20 p-3.5 text-xs text-amber-900 dark:text-amber-200">
-            <span className="font-bold">Google Business connected — pending Google API approval.</span>{' '}
-            Google grants 0 requests/min for the Business Profile API until your API access request is approved, so syncing, reviews and publishing stay paused. Everything else keeps working, and this connection activates automatically once Google approves.
-          </div>
-        );
-      })()}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (

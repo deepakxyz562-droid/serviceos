@@ -58,19 +58,14 @@ export function BgosProfileSwitcher() {
     fetchProfiles();
   }, [fetchProfiles]);
 
-  const activeProfile = data?.activeProfile || data?.profiles?.find(p => p.id === data?.activeProfileId) || {
-    id: '5008',
-    name: 'Deepak Chandra',
-    shortId: '#5008',
-    initial: 'D',
+  const activeProfile = data?.activeProfile || data?.profiles?.find(p => p.id === data?.activeProfileId) || (data?.profiles?.[0]) || {
+    id: 'primary',
+    name: 'Business Profile',
+    shortId: '#0001',
+    initial: 'B',
   };
 
-  const profiles = data?.profiles || [
-    { id: '0c61', name: 'ZOZO Theme', shortId: '#0c61', initial: 'Z' },
-    { id: '4f66', name: 'shiv-ganga market', shortId: '#4f66', initial: 'S' },
-    { id: '5008', name: 'Deepak Chandra', shortId: '#5008', initial: 'D', isPrimary: true },
-    { id: '511b', name: 'zozotheme', shortId: '#511b', initial: 'Z' },
-  ];
+  const profiles = (data?.profiles && data.profiles.length > 0) ? data.profiles : [activeProfile];
 
   const handleSelectProfile = async (p: GbpDiscoveredProfile) => {
     if (switchingId || p.id === activeProfile.id) return;
@@ -147,7 +142,7 @@ export function BgosProfileSwitcher() {
             </Badge>
           </div>
           <p className="text-[11px] text-muted-foreground font-normal mt-0.5">
-            {data?.email || 'deepakchandra076@gmail.com'}
+            {data?.email || 'Connected Google Account'}
           </p>
         </DropdownMenuLabel>
 

@@ -66,22 +66,22 @@ export default function ReplySettingsScreen() {
   }, [settingsRes.data]);
 
   const activeProfile = discover.data?.activeProfile;
-  const shortId = activeProfile?.shortId || '#5008';
-  const phone = discover.data?.phone || '8505945123';
+  const shortId = activeProfile?.shortId || '';
+  const phone = discover.data?.phone || '';
   const version = discover.data?.version || 'v2.83';
 
-  const accountName = settingsRes.data?.accountName || 'FieserOS';
-  const email = settingsRes.data?.email || discover.data?.email || 'deepakchandra076@gmail.com';
-  const repliesCount = settingsRes.data?.replies24hCount ?? 3;
+  const accountName = settingsRes.data?.accountName || activeProfile?.name || 'My Business';
+  const email = settingsRes.data?.email || discover.data?.email || '';
+  const repliesCount = settingsRes.data?.replies24hCount ?? 0;
 
   const currentLength = LENGTH_STOPS[lengthIndex].id;
 
   const sampleReply =
     category === '3-5'
       ? settingsRes.data?.sampleReplies?.positive ||
-        "Thank you so much for your kind words! 😊 We're really glad you liked our collection. We always try to bring trendy and comfortable styles for our customers. Looking forward to seeing you again soon!"
+        "Thank you so much for your kind words! 😊 We're really glad you had a great experience with our team. Looking forward to seeing you again soon!"
       : settingsRes.data?.sampleReplies?.critical ||
-        "Dear customer, We're deeply sorry to hear about your experience. We understand how frustrating this must be, and as a dedicated software development company in Patna, we take user satisfaction very seriously. Please reach out to our dedicated support team at 8505945123 so we can assist you directly.";
+        "Dear customer, We're deeply sorry to hear about your experience. We understand how frustrating this must be, and we take customer satisfaction very seriously. Please reach out to our support team so we can assist you directly.";
 
   async function handleSave() {
     setSaving(true);

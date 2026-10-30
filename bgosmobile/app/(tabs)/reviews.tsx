@@ -47,9 +47,9 @@ interface ParsedReply {
 }
 
 const DEFAULT_KEYWORDS_FALLBACK: KeywordUsage[] = [
-  { keyword: 'best crm software for small businesses', volume: '500 ↗' },
-  { keyword: 'software development company', volume: '500 ↗' },
-  { keyword: 'software development company in Patna', volume: '100 ↗' },
+  { keyword: 'quality customer service', volume: '500 ↗' },
+  { keyword: 'top rated local business', volume: '350 ↗' },
+  { keyword: 'verified customer satisfaction', volume: '250 ↗' },
 ];
 
 function parseReply(review: Review): ParsedReply | null {
@@ -159,8 +159,8 @@ export default function ReviewRepliesScreen() {
   const [slideWidth, setSlideWidth] = useState(SCREEN_WIDTH - 32);
 
   const activeProfile = discover.data?.activeProfile;
-  const shortId = activeProfile?.shortId || (gbpPlace.data?.place?.locationId ? `#${gbpPlace.data.place.locationId.slice(0, 4)}` : '#5008');
-  const phone = discover.data?.phone || '8505945123';
+  const shortId = activeProfile?.shortId || (gbpPlace.data?.place?.locationId ? `#${gbpPlace.data.place.locationId.slice(-4)}` : '');
+  const phone = discover.data?.phone || gbpPlace.data?.place?.phone || '';
 
   useFocusEffect(
     useCallback(() => {
@@ -224,11 +224,12 @@ export default function ReviewRepliesScreen() {
     setNotice('');
     try {
       const rating = Math.max(1, Math.min(5, Math.round(review.rating || 0)));
+      const businessTitle = activeProfile?.name || gbpPlace.data?.place?.title || 'our business';
       const prompt =
         `Write a Google review reply (2-3 sentences, warm and professional) to this ${rating}★ review` +
         ` from ${review.authorName || 'valued customer'}` +
         (review.comment ? `: "${review.comment}"` : ' (rating only)') +
-        '. Tailor response to Deepak Chandra / FieserOS software and CRM services in Patna.';
+        `. Tailor response warmly on behalf of ${businessTitle}.`;
       const res = await apiRequest<{ caption: string; keywords?: KeywordUsage[] }>('/api/social/ai-caption', {
         method: 'POST',
         body: { topic: prompt, platforms: ['googlebusiness'], tone: 'Friendly and professional' },
@@ -315,7 +316,7 @@ export default function ReviewRepliesScreen() {
     <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       <Screen
         title="Review Replies"
-        subtitle={`${phone} | ${shortId.replace('#', '')} | ${version}`}
+        subtitle={[phone, shortId.replace('#', ''), version].filter(Boolean).join(' | ')}
         showBack={true}
         onBack={() => {
           if (router.canGoBack?.()) router.back();
@@ -693,18 +694,20 @@ export default function ReviewRepliesScreen() {
         ) : (
           shown.map((review) => {
             const reply = parseReply(review);
-            const isKumra = review.authorName?.toLowerCase().includes('kumra');
             const author = review.authorName || 'Google User';
             const rating = Math.max(1, Math.min(5, Math.round(review.rating || 0)));
             const initial = author.trim().charAt(0).toUpperCase() || 'U';
 
-            // Calculate relative time (e.g. 8y ago, 9y ago, or recent)
-            let timeLabel = '8y ago';
+            // Calculate relative time (e.g. 1y ago, 2m ago, or recent)
+            let timeLabel = 'Recent';
             if (review.createdAt) {
               const diffY = new Date().getFullYear() - new Date(review.createdAt).getFullYear();
               if (diffY >= 1) timeLabel = `${diffY}y ago`;
               else timeLabel = relativeDate(review.createdAt) || 'Recent';
             }
+
+            const avatarColors = ['#2563EB', '#059669', '#7C3AED', '#D97706', '#DB2777', '#0891B2'];
+            const avatarColor = avatarColors[initial.charCodeAt(0) % avatarColors.length];
 
             return (
               <Card key={review.id} style={{ gap: 12, borderRadius: 16, padding: 16, marginBottom: 10 }}>
@@ -716,7 +719,7 @@ export default function ReviewRepliesScreen() {
                         width: 44,
                         height: 44,
                         borderRadius: 22,
-                        backgroundColor: isKumra ? '#3B82F6' : '#2563EB',
+                        backgroundColor: avatarColor,
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}

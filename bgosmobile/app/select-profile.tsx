@@ -39,16 +39,10 @@ export default function SelectProfileScreen() {
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
   const [switchingId, setSwitchingId] = useState<string | null>(null);
 
-  const profiles = discover.data?.profiles || [
-    { id: '0c61', name: 'ZOZO Theme', shortId: '#0c61', initial: 'Z' },
-    { id: '4f66', name: 'shiv-ganga market', shortId: '#4f66', initial: 'S' },
-    { id: '5008', name: 'Deepak Chandra', shortId: '#5008', initial: 'D', isPrimary: true },
-    { id: '511b', name: 'zozotheme', shortId: '#511b', initial: 'Z' },
-  ];
-
-  const activeId = discover.data?.activeProfileId || '5008';
-  const email = discover.data?.email || 'deepakchandra076@gmail.com';
-  const phone = discover.data?.phone || '8505945123';
+  const profiles = discover.data?.profiles || [];
+  const activeId = discover.data?.activeProfileId || profiles[0]?.id || '';
+  const email = discover.data?.email || '';
+  const phone = discover.data?.phone || '';
   const version = discover.data?.version || 'v2.83';
 
   async function handleSelectProfile(p: GbpProfile) {

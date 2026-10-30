@@ -26,15 +26,15 @@ export default function PhotosScreen() {
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
 
   const activeProfile = discover.data?.activeProfile;
-  const shortId = activeProfile?.shortId || (gbpPlace.data?.place?.locationId ? `#${gbpPlace.data.place.locationId.slice(0, 4)}` : '#5008');
-  const phone = discover.data?.phone || '8505945123';
+  const shortId = activeProfile?.shortId || (gbpPlace.data?.place?.locationId ? `#${gbpPlace.data.place.locationId.slice(-4)}` : '');
+  const phone = discover.data?.phone || gbpPlace.data?.place?.phone || '';
   const version = discover.data?.version || 'v2.83';
 
   return (
     <View style={{ flex: 1 }}>
       <Screen
         title="Google Media"
-        subtitle={`${phone} | ${shortId.replace('#', '')} | ${version}`}
+        subtitle={[phone, shortId.replace('#', ''), version].filter(Boolean).join(' | ')}
         onRefresh={async () => {
           await Promise.all([photosRes.refresh(), gbpPlace.refresh(), discover.refresh()]).catch(() => {});
         }}

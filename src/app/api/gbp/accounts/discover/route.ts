@@ -12,13 +12,6 @@ export interface GbpDiscoveredProfile {
   isPrimary?: boolean;
 }
 
-const KNOWN_PROFILES: GbpDiscoveredProfile[] = [
-  { id: '0c61', name: 'ZOZO Theme', shortId: '#0c61', initial: 'Z' },
-  { id: '4f66', name: 'shiv-ganga market', shortId: '#4f66', initial: 'S' },
-  { id: '5008', name: 'Deepak Chandra', shortId: '#5008', initial: 'D', isPrimary: true },
-  { id: '511b', name: 'zozotheme', shortId: '#511b', initial: 'Z' },
-];
-
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
@@ -39,26 +32,68 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    let activeProfileId = '5008';
-    let googleEmail = 'deepakchandra076@gmail.com';
+    let googleEmail = user.email || '';
+    let meta: Record<string, any> = {};
 
     if (socialAccount?.metadata) {
       try {
-        const meta = typeof socialAccount.metadata === 'string' ? JSON.parse(socialAccount.metadata) : socialAccount.metadata;
-        if (meta.activeProfileId) activeProfileId = meta.activeProfileId;
+        meta =
+          typeof socialAccount.metadata === 'string'
+            ? JSON.parse(socialAccount.metadata)
+            : (socialAccount.metadata as Record<string, any>) || {};
         if (meta.googleEmail) googleEmail = meta.googleEmail;
       } catch {}
     }
 
-    const activeProfile = KNOWN_PROFILES.find((p) => p.id === activeProfileId) || KNOWN_PROFILES[2];
+    const profiles: GbpDiscoveredProfile[] = [];
+
+    // 1. If tenant has linked locations in metadata, use them
+    if (Array.isArray(meta.locations) && meta.locations.length > 0) {
+      for (const loc of meta.locations) {
+        const id = String(loc.locationId || (loc.name ? loc.name.split('/').pop() : '') || loc.id || '');
+        if (!id) continue;
+        const name = String(loc.title || loc.locationTitle || tenant?.name || 'Business Location');
+        const shortId = `#${id.slice(-4)}`;
+        const initial = name.trim().charAt(0).toUpperCase() || 'B';
+        profiles.push({ id, name, shortId, initial });
+      }
+    }
+
+    // 2. Or if socialAccount is connected, add its active location
+    if (profiles.length === 0 && socialAccount) {
+      const id = String(meta.locationId || socialAccount.accountId || 'primary');
+      const rawName = String(
+        meta.locationTitle || socialAccount.accountName || tenant?.name || 'Google Business Profile',
+      );
+      const cleanName = rawName.replace(/\s*\([^)]*\)$/, '').trim() || 'Google Business';
+      const shortId = `#${id.slice(-4)}`;
+      const initial = cleanName.charAt(0).toUpperCase() || 'B';
+      profiles.push({ id, name: cleanName, shortId, initial, isPrimary: true });
+    }
+
+    // 3. If no social account connected or no profiles discovered, use tenant's business profile
+    if (profiles.length === 0) {
+      const tenantName = tenant?.name || 'My Business';
+      const tenantIdShort = tenant?.id ? tenant.id.slice(-4) : '0001';
+      profiles.push({
+        id: tenantIdShort,
+        name: tenantName,
+        shortId: `#${tenantIdShort}`,
+        initial: tenantName.charAt(0).toUpperCase() || 'B',
+        isPrimary: true,
+      });
+    }
+
+    const activeProfileId = String(meta.activeProfileId || profiles[0].id);
+    const activeProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0];
 
     return NextResponse.json({
       email: googleEmail,
-      count: KNOWN_PROFILES.length,
-      activeProfileId,
+      count: profiles.length,
+      activeProfileId: activeProfile.id,
       activeProfile,
-      profiles: KNOWN_PROFILES,
-      phone: tenant?.phone || '8505945123',
+      profiles,
+      phone: tenant?.phone || meta.phone || '',
       version: 'v2.83',
     });
   } catch (err: unknown) {
@@ -76,20 +111,16 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const profileId = String(body.profileId || '').trim();
-    const target = KNOWN_PROFILES.find((p) => p.id === profileId);
-
-    if (!target) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    if (!profileId) {
+      return NextResponse.json({ error: 'Profile ID is required' }, { status: 400 });
     }
 
-    // Update Tenant
-    await db.tenant.update({
+    const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      data: { name: target.name },
+      select: { id: true, name: true },
     });
 
-    // Update SocialAccount
-    const account = await db.socialAccount.findFirst({
+    const socialAccount = await db.socialAccount.findFirst({
       where: {
         tenantId: user.tenantId,
         platform: 'googlebusiness',
@@ -97,49 +128,58 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (account) {
-      let meta: Record<string, unknown> = {};
+    let meta: Record<string, any> = {};
+    if (socialAccount?.metadata) {
       try {
-        meta = typeof account.metadata === 'string' ? JSON.parse(account.metadata) : (account.metadata as Record<string, unknown>) || {};
+        meta =
+          typeof socialAccount.metadata === 'string'
+            ? JSON.parse(socialAccount.metadata)
+            : (socialAccount.metadata as Record<string, any>) || {};
       } catch {}
-      meta.activeProfileId = target.id;
-      meta.shortId = target.shortId;
-      meta.locationTitle = target.name;
-      meta.locationId = target.id;
+    }
+
+    // Find target profile from existing locations or metadata
+    let targetName = '';
+    const targetShortId = `#${profileId.slice(-4)}`;
+    if (Array.isArray(meta.locations)) {
+      const match = meta.locations.find((l: any) => String(l.locationId || l.id) === profileId);
+      if (match) targetName = match.title || match.locationTitle;
+    }
+    if (!targetName && socialAccount) {
+      targetName = meta.locationTitle || socialAccount.accountName || tenant?.name || 'Google Business';
+    }
+    if (!targetName) {
+      targetName = tenant?.name || 'Business Profile';
+    }
+
+    // Update SocialAccount metadata
+    if (socialAccount) {
+      meta.activeProfileId = profileId;
+      meta.shortId = targetShortId;
+      meta.locationTitle = targetName;
+      meta.locationId = profileId;
 
       await db.socialAccount.update({
-        where: { id: account.id },
+        where: { id: socialAccount.id },
         data: {
-          accountName: target.name,
-          accountId: target.id,
+          accountId: profileId,
           metadata: JSON.stringify(meta),
-        },
-      });
-    } else {
-      await db.socialAccount.create({
-        data: {
-          tenantId: user.tenantId,
-          platform: 'googlebusiness',
-          accountName: target.name,
-          accountId: target.id,
-          isActive: true,
-          accessToken: 'placeholder_token',
-          metadata: JSON.stringify({
-            activeProfileId: target.id,
-            shortId: target.shortId,
-            locationTitle: target.name,
-            locationId: target.id,
-            googleEmail: 'deepakchandra076@gmail.com',
-          }),
         },
       });
     }
 
+    const targetProfile: GbpDiscoveredProfile = {
+      id: profileId,
+      name: targetName,
+      shortId: targetShortId,
+      initial: targetName.charAt(0).toUpperCase() || 'B',
+    };
+
     return NextResponse.json({
       success: true,
-      activeProfileId: target.id,
-      activeProfile: target,
-      message: `Switched active Google Business Profile to ${target.name} (${target.shortId})`,
+      activeProfileId: profileId,
+      activeProfile: targetProfile,
+      message: `Switched active Google Business Profile to ${targetName} (${targetShortId})`,
     });
   } catch (err: unknown) {
     console.error('[api/gbp/accounts/discover] POST error:', err);
