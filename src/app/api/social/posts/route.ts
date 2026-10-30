@@ -43,7 +43,7 @@ function isValidPlatform(p: string): p is SocialPlatform {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
@@ -169,7 +169,7 @@ interface CreatePostBody {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
