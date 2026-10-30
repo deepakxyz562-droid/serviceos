@@ -9,6 +9,11 @@
       "environment": "preview",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://bgos.fieseros.com",
+        "EXPO_PUBLIC_WEB_URL": "https://bgos.fieseros.com",
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "30078807-9b75-42c3-97c3-41fb166c40f2"
       }
     },
     "production": {
@@ -16,6 +21,11 @@
       "environment": "production",
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://bgos.fieseros.com",
+        "EXPO_PUBLIC_WEB_URL": "https://bgos.fieseros.com",
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "30078807-9b75-42c3-97c3-41fb166c40f2"
       }
     }
   },

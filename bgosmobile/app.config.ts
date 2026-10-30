@@ -9,6 +9,7 @@ export default ({ config }: ConfigContext): any => ({
   name: APP_NAME,
   description: FULL_TITLE,
   slug: 'bgos',
+  owner: 'rishi076s-team',
   version: '1.0.0',
   icon: './assets/app-icon.png',
   splash: { image: './assets/brand-mark.png', resizeMode: 'contain', backgroundColor: '#F4FAF9' },
@@ -30,5 +31,9 @@ export default ({ config }: ConfigContext): any => ({
     permissions: ['POST_NOTIFICATIONS'],
   },
   plugins: ['expo-router', 'expo-secure-store', 'expo-notifications', 'expo-web-browser', 'expo-apple-authentication'],
-  extra: { eas: { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID } },
+  extra: {
+    eas: {
+      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID || '30078807-9b75-42c3-97c3-41fb166c40f2',
+    },
+  },
 });
