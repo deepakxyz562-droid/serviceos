@@ -85,9 +85,14 @@ import {
   CalendarDays,
   Globe,
   MapPin,
+  Palette,
+  Film,
+  Play,
+  Type,
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -1796,6 +1801,18 @@ export function SocialMediaView({
   const [currentHeadline, setCurrentHeadline] = useState('');
   const [scheduleNotice, setScheduleNotice] = useState<string | null>(null);
 
+  // ── Marketing Studio 2.0 Creative & Calendar State ──
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [scheduleTime, setScheduleTime] = useState('15:00');
+  const [creativeMode, setCreativeMode] = useState<'post' | 'banner' | 'reel'>('post');
+  const [bannerTheme, setBannerTheme] = useState<'indigo' | 'emerald' | 'amber' | 'slate'>('indigo');
+  const [storySlide, setStorySlide] = useState<0 | 1 | 2>(0);
+
   // ── Live posts / counts state ──
   const [postsLoading, setPostsLoading] = useState(true);
   const [postsTotal, setPostsTotal] = useState(0);
@@ -2330,10 +2347,25 @@ export function SocialMediaView({
     }
     const accData = await res.json();
     const accounts = accData?.data || (Array.isArray(accData) ? accData : []);
-    const matching = accounts.find((a: SocialAccountRow) => {
-      const p = (a.platform || '').toLowerCase();
-      return (p === targetPlatform || p.includes(targetPlatform)) && a.isActive;
-    });
+    let matching: SocialAccountRow | undefined;
+    if (targetPlatform === 'googlebusiness' || targetPlatform.includes('google')) {
+      const gbpAccounts = accounts.filter(
+        (a: SocialAccountRow) => (a.platform || '').toLowerCase() === 'googlebusiness' && a.isActive
+      );
+      // Prefer active GBP profile (FieserOS / activeProfileId) over other secondary locations
+      matching =
+        gbpAccounts.find(
+          (a: SocialAccountRow) =>
+            a.accountId === '10777612572223040949' ||
+            a.accountName?.toLowerCase().includes('fieser') ||
+            (a.metadata as any)?.activeProfileId === a.accountId
+        ) || gbpAccounts[0];
+    } else {
+      matching = accounts.find((a: SocialAccountRow) => {
+        const p = (a.platform || '').toLowerCase();
+        return (p === targetPlatform || p.includes(targetPlatform)) && a.isActive;
+      });
+    }
     if (!matching) {
       toast.error(`${channelName} is not connected yet. Click Connect to link your account.`, {
         action: {
@@ -2387,18 +2419,78 @@ export function SocialMediaView({
     }
   };
 
-  const handleSchedulePost = async () => {
+  // ── Typography & Styling Tools ──
+  const applyBoldHeadline = () => {
+    const text = generatedCaption || studioPrompt;
+    if (!text.trim()) {
+      toast.info('Write or generate some text first.');
+      return;
+    }
+    const lines = text.split('\n');
+    const toBold = (str: string) => {
+      return str.replace(/[A-Za-z0-9]/g, (char) => {
+        const code = char.charCodeAt(0);
+        if (code >= 65 && code <= 90) return String.fromCodePoint(0x1d400 + code - 65);
+        if (code >= 97 && code <= 122) return String.fromCodePoint(0x1d41a + code - 97);
+        if (code >= 48 && code <= 57) return String.fromCodePoint(0x1d7ce + code - 48);
+        return char;
+      });
+    };
+    lines[0] = `✦ ${toBold(lines[0].replace(/^[✦*\s]+|[✦*\s]+$/g, ''))} ✦`;
+    const updated = lines.join('\n');
+    if (generatedCaption) setGeneratedCaption(updated);
+    else setStudioPrompt(updated);
+    toast.success('Applied bold headline typography!');
+  };
+
+  const applyBulletList = () => {
+    const text = generatedCaption || studioPrompt;
+    if (!text.trim()) {
+      toast.info('Write or generate some text first.');
+      return;
+    }
+    const lines = text.split('\n').map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('✦') || trimmed.startsWith('✔') || trimmed.startsWith('•')) return line;
+      return `✔ ${trimmed}`;
+    });
+    const updated = lines.join('\n');
+    if (generatedCaption) setGeneratedCaption(updated);
+    else setStudioPrompt(updated);
+    toast.success('Formatted with checklist bullets!');
+  };
+
+  const applyCta = (type: 'call' | 'website') => {
+    const text = generatedCaption || studioPrompt;
+    const ctaText =
+      type === 'call'
+        ? `\n\n📞 Call or WhatsApp us: 8505945123`
+        : `\n\n🌐 Visit our website: https://fieseros.com`;
+    const updated = (text + ctaText).trim();
+    if (generatedCaption) setGeneratedCaption(updated);
+    else setStudioPrompt(updated);
+    toast.success(`Appended ${type === 'call' ? 'Call' : 'Website'} CTA!`);
+  };
+
+  const handleSchedulePost = () => {
     if (!generatedCaption && !studioPrompt.trim()) {
       toast.info('Generate or write some content first, then schedule.');
       return;
     }
+    setIsScheduleModalOpen(true);
+  };
 
-    // Compute tomorrow at 3:00 PM local time
-    const schedDate = new Date();
-    schedDate.setDate(schedDate.getDate() + 1);
-    schedDate.setHours(15, 0, 0, 0);
+  const handleConfirmSchedule = async (customDate?: string, customTime?: string) => {
+    const targetDate = customDate || scheduleDate;
+    const targetTime = customTime || scheduleTime;
+    setIsScheduleModalOpen(false);
 
     const contentForPost = generatedCaption || studioPrompt;
+    if (!contentForPost.trim()) return;
+
+    const [year, month, day] = targetDate.split('-').map(Number);
+    const [hours, minutes] = targetTime.split(':').map(Number);
+    const schedDate = new Date(year, month - 1, day, hours, minutes, 0);
 
     if (isDemo) {
       const demoItem: SocialPostDto = {
@@ -2413,7 +2505,7 @@ export function SocialMediaView({
       };
       setScheduledPosts((prev) => [demoItem, ...prev]);
       setScheduledTotal((prev) => prev + 1);
-      setScheduleNotice(`Successfully scheduled to ${studioPreviewTab}! Added to Upcoming Schedule.`);
+      setScheduleNotice(`Successfully scheduled to ${studioPreviewTab} for ${schedDate.toLocaleDateString()} at ${targetTime}!`);
       setTimeout(() => setScheduleNotice(null), 4000);
       return;
     }
@@ -2436,19 +2528,19 @@ export function SocialMediaView({
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        toastApiError(res, err.error || 'Failed to schedule social post on server.');
+        toastApiError(res, err.error || 'Failed to schedule social post.');
         return;
       }
 
       setScheduleNotice(
-        `Successfully scheduled to ${studioPreviewTab}! Added to Upcoming Schedule.`
+        `Successfully scheduled to ${studioPreviewTab} for ${schedDate.toLocaleDateString()} at ${targetTime}!`
       );
       setTimeout(() => setScheduleNotice(null), 4000);
-      toast.success(`Post scheduled to ${matching.platform}!`);
+      toast.success(`Post scheduled for ${schedDate.toLocaleDateString()} at ${targetTime}!`);
       fetchSocialPosts();
     } catch (err) {
       console.warn('[Marketing Studio] Social post scheduling failed', err);
-      toast.error('Network error scheduling social post');
+      toast.error('Network error scheduling post.');
     } finally {
       setIsPublishing(false);
     }
@@ -2991,9 +3083,16 @@ export function SocialMediaView({
       }
       const accJson = await accRes.json();
       const accounts = accJson?.data || (Array.isArray(accJson) ? accJson : []);
-      const gbpAccount = accounts.find(
+      const gbpAccounts = accounts.filter(
         (a: SocialAccountRow) => a.platform === 'googlebusiness' && a.isActive
       );
+      const gbpAccount =
+        gbpAccounts.find(
+          (a: SocialAccountRow) =>
+            a.accountId === '10777612572223040949' ||
+            a.accountName?.toLowerCase().includes('fieser') ||
+            (a.metadata as any)?.activeProfileId === a.accountId
+        ) || gbpAccounts[0];
       if (!gbpAccount) {
         toast.error('Google Business is not connected yet. Connect it to post directly.', {
           action: { label: 'Connect', onClick: () => setActiveTab('accounts') },
@@ -3197,7 +3296,7 @@ export function SocialMediaView({
             className="h-9 gap-1.5 bg-card text-foreground font-semibold text-xs shadow-2xs rounded-xl"
           >
             <Plus className="size-3.5" />
-            <span>+ Create Campaign</span>
+            <span>Create Campaign</span>
           </Button>
 
           <Button
@@ -3216,7 +3315,7 @@ export function SocialMediaView({
             className="h-9 gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs rounded-xl px-4"
           >
             <Plus className="size-4" />
-            <span>+ Create Content</span>
+            <span>Create Content</span>
           </Button>
         </div>
       </div>
@@ -4023,7 +4122,7 @@ export function SocialMediaView({
                 ) : (
                   <Plus className="size-3.5" />
                 )}
-                <span>+ Test Review (5★)</span>
+                <span>Test Review (5★)</span>
               </Button>
 
               <Button
@@ -4579,6 +4678,45 @@ export function SocialMediaView({
                 </span>
               </div>
 
+              {/* Typography & CTA Toolbar */}
+              <div className="flex items-center gap-1.5 flex-wrap bg-muted/40 p-1.5 rounded-xl border border-border/60">
+                <span className="text-[11px] font-bold text-muted-foreground mr-1 flex items-center gap-1">
+                  <Type className="size-3 text-primary" /> Styler:
+                </span>
+                <button
+                  type="button"
+                  onClick={applyBoldHeadline}
+                  className="px-2 py-1 rounded-lg border border-border bg-card hover:bg-muted text-[11px] font-bold text-foreground transition shadow-2xs flex items-center gap-1"
+                  title="Make first line bold mathematical headline"
+                >
+                  <span>✦ 𝐁𝐨𝐥𝐝</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={applyBulletList}
+                  className="px-2 py-1 rounded-lg border border-border bg-card hover:bg-muted text-[11px] font-semibold text-foreground transition shadow-2xs flex items-center gap-1"
+                  title="Format items with checklist bullets"
+                >
+                  <span>✔ Bullets</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyCta('call')}
+                  className="px-2 py-1 rounded-lg border border-border bg-card hover:bg-muted text-[11px] font-medium text-foreground transition shadow-2xs flex items-center gap-1"
+                  title="Append Call CTA"
+                >
+                  <span>📞 Call CTA</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyCta('website')}
+                  className="px-2 py-1 rounded-lg border border-border bg-card hover:bg-muted text-[11px] font-medium text-foreground transition shadow-2xs flex items-center gap-1"
+                  title="Append Website CTA"
+                >
+                  <span>🌐 Web CTA</span>
+                </button>
+              </div>
+
               {/* Tone + post type */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -4673,152 +4811,387 @@ export function SocialMediaView({
 
           {/* Right: Preview canvas */}
           <div className="lg:col-span-5 bg-card border border-border rounded-2xl p-5 shadow-2xs flex flex-col gap-3">
-            <div>
-              <h2 className="text-base font-bold text-foreground mb-2.5">Preview</h2>
-
-              {/* Channel Tabs: Google Business | WhatsApp */}
-              <div className="flex items-center gap-3 border-b border-border pb-2 text-xs overflow-x-auto">
-                {(['Google Business', 'WhatsApp'] as const).map((tab) => {
-                  const active = studioPreviewTab === tab;
-                  return (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setStudioPreviewTab(tab)}
-                      className={`relative pb-1.5 font-semibold whitespace-nowrap transition-colors ${
-                        active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {tab}
-                      {active && (
-                        <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-primary" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-foreground">Preview</h2>
+              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                Marketing Studio 2.0
+              </span>
             </div>
 
-            {/* Social Post Preview Card */}
-            <div className="rounded-xl border border-border p-3.5 space-y-3 bg-card">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="size-8 rounded-full bg-(--primary-soft) text-primary font-extrabold text-sm flex items-center justify-center">
-                    {businessInitial}
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-foreground leading-tight">{businessName}</p>
-                    <p className="text-[11px] text-muted-foreground leading-tight">
-                      {studioPreviewTab} · Draft preview
-                    </p>
-                  </div>
+            {/* Creative Mode Switcher: Post Copy | AI Banner | 15s Story/Reel */}
+            <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border/80 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setCreativeMode('post')}
+                className={`flex-1 py-1.5 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  creativeMode === 'post'
+                    ? 'bg-card text-foreground shadow-2xs font-bold'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <FileText className="size-3.5" />
+                <span>Post Copy</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreativeMode('banner')}
+                className={`flex-1 py-1.5 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  creativeMode === 'banner'
+                    ? 'bg-card text-primary shadow-2xs font-bold'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Palette className="size-3.5" />
+                <span>AI Banner</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreativeMode('reel')}
+                className={`flex-1 py-1.5 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  creativeMode === 'reel'
+                    ? 'bg-card text-purple-600 dark:text-purple-400 shadow-2xs font-bold'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Film className="size-3.5" />
+                <span>15s Reel</span>
+              </button>
+            </div>
+
+            {/* Mode 1: Post Copy & Mockup */}
+            {creativeMode === 'post' && (
+              <>
+                {/* Channel Tabs: Google Business | WhatsApp */}
+                <div className="flex items-center gap-3 border-b border-border pb-2 text-xs overflow-x-auto">
+                  {(['Google Business', 'WhatsApp'] as const).map((tab) => {
+                    const active = studioPreviewTab === tab;
+                    return (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setStudioPreviewTab(tab)}
+                        className={`relative pb-1.5 font-semibold whitespace-nowrap transition-colors ${
+                          active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {tab}
+                        {active && (
+                          <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-primary" />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-              </div>
 
-              <div className="text-xs text-foreground space-y-1 leading-relaxed min-h-12">
-                {generatedCaption ? (
-                  <p className="whitespace-pre-wrap">{generatedCaption}</p>
-                ) : studioPrompt.trim() ? (
-                  <p className="whitespace-pre-wrap text-muted-foreground">{studioPrompt}</p>
-                ) : (
-                  <p className="text-muted-foreground italic">
-                    Write a prompt and click Generate — your post preview will appear here.
-                  </p>
-                )}
-              </div>
-
-              {/* Promo banner mockup — only shown when a template headline is set.
-                  No stock photos: pure brand gradient. */}
-              {currentHeadline && (
-                <div className="relative rounded-xl overflow-hidden h-36 p-4 flex flex-col justify-between text-primary-foreground bg-gradient-to-br from-primary via-primary to-primary/60">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider opacity-90">
-                      {businessName}
-                    </p>
-                    <p className="text-xl font-extrabold tracking-tight leading-none mt-0.5">
-                      {currentHeadline}
-                    </p>
+                {/* Social Post Preview Card */}
+                <div className="rounded-xl border border-border p-3.5 space-y-3 bg-card shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="size-8 rounded-full bg-(--primary-soft) text-primary font-extrabold text-sm flex items-center justify-center">
+                        {businessInitial}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-foreground leading-tight">{businessName}</p>
+                        <p className="text-[11px] text-muted-foreground leading-tight">
+                          {studioPreviewTab} · Verified Listing
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground font-medium">Just now</span>
                   </div>
-                  {currentBadge && (
-                    <span className="self-start px-3 py-1 rounded-full bg-background/20 font-bold text-xs">
-                      {currentBadge}
-                    </span>
+
+                  <div className="text-xs text-foreground space-y-1.5 leading-relaxed min-h-14">
+                    {generatedCaption ? (
+                      <p className="whitespace-pre-wrap">{generatedCaption}</p>
+                    ) : studioPrompt.trim() ? (
+                      <p className="whitespace-pre-wrap text-muted-foreground">{studioPrompt}</p>
+                    ) : (
+                      <p className="text-muted-foreground italic">
+                        Write a prompt and click Generate — your post preview will appear here.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Google Action Button Mockup */}
+                  {studioPreviewTab === 'Google Business' && (
+                    <div className="pt-2 border-t border-border flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-muted-foreground">Call to Action:</span>
+                      <button
+                        type="button"
+                        onClick={() => applyCta('call')}
+                        className="px-3 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold flex items-center gap-1.5 transition"
+                      >
+                        <PhoneCall className="size-3" />
+                        <span>Call Now</span>
+                      </button>
+                    </div>
                   )}
                 </div>
-              )}
+              </>
+            )}
 
-              {/* Action Bar */}
-              <div className="flex items-center gap-2 pt-1 border-t border-border flex-wrap">
-                <Button
-                  size="sm"
-                  onClick={() => handlePublishNow(studioPreviewTab)}
-                  disabled={isPublishing}
-                  className="flex-1 h-8 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold gap-1.5 shadow-xs"
+            {/* Mode 2: AI Visual Promotional Banner */}
+            {creativeMode === 'banner' && (
+              <div className="space-y-3">
+                {/* Theme Selector */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground">Banner Style:</span>
+                  <div className="flex items-center gap-1.5">
+                    {(
+                      [
+                        { id: 'indigo', name: 'Tech', bg: 'bg-indigo-600' },
+                        { id: 'emerald', name: 'Growth', bg: 'bg-emerald-600' },
+                        { id: 'amber', name: 'Offer', bg: 'bg-amber-600' },
+                        { id: 'slate', name: 'Luxe', bg: 'bg-slate-900' },
+                      ] as const
+                    ).map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setBannerTheme(t.id)}
+                        className={`size-5 rounded-full ${t.bg} border-2 transition-all ${
+                          bannerTheme === t.id ? 'border-foreground scale-110' : 'border-transparent opacity-70'
+                        }`}
+                        title={t.name}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* 16:9 Dynamic Branded Graphic Banner */}
+                <div
+                  className={`relative rounded-xl overflow-hidden aspect-video p-5 flex flex-col justify-between text-white shadow-md transition-all ${
+                    bannerTheme === 'indigo'
+                      ? 'bg-gradient-to-br from-indigo-700 via-indigo-900 to-slate-950'
+                      : bannerTheme === 'emerald'
+                        ? 'bg-gradient-to-br from-emerald-600 via-teal-900 to-slate-950'
+                        : bannerTheme === 'amber'
+                          ? 'bg-gradient-to-br from-amber-600 via-orange-900 to-stone-950'
+                          : 'bg-gradient-to-br from-slate-900 via-purple-950 to-slate-950'
+                  }`}
                 >
-                  {isPublishing ? (
-                    <>
-                      <Loader2 className="size-3.5 animate-spin" />
-                      <span>Publishing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="size-3.5" />
-                      <span>Publish to {studioPreviewTab}</span>
-                    </>
-                  )}
-                </Button>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="size-7 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center font-black text-xs text-white">
+                        {businessInitial}
+                      </div>
+                      <span className="text-xs font-extrabold tracking-wider uppercase opacity-90">
+                        {businessName}
+                      </span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-bold">
+                      {currentBadge || 'Verified 5★ Service'}
+                    </span>
+                  </div>
+
+                  <div className="my-auto space-y-1">
+                    <p className="text-lg sm:text-xl font-black tracking-tight leading-tight drop-shadow-sm">
+                      {currentHeadline || 'Modern Digital Solutions & Services'}
+                    </p>
+                    <p className="text-xs text-white/80 line-clamp-2 max-w-sm">
+                      {generatedCaption || studioPrompt || 'Transform your workflow with reliable local business automation.'}
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-white/20 flex items-center justify-between text-[10px] text-white/90 font-medium">
+                    <span className="flex items-center gap-1">
+                      <PhoneCall className="size-3 text-white" /> 8505945123
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Globe className="size-3 text-white" /> fieseros.com
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center text-xs text-muted-foreground pt-1">
+                  <span>Aspect ratio: 16:9 (Ready for Google Business & Facebook)</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      toast.success('Visual banner ready! You can attach it to posts.');
+                    }}
+                    className="text-primary font-bold hover:underline"
+                  >
+                    Attach to Post
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Mode 3: 15s Story / Reel Teaser Mode */}
+            {creativeMode === 'reel' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-muted-foreground">Story Teaser (9:16)</span>
+                  <span className="font-bold text-purple-600 dark:text-purple-400">
+                    Slide {storySlide + 1} of 3
+                  </span>
+                </div>
+
+                {/* 9:16 Vertical Smartphone Frame Mockup */}
+                <div className="mx-auto w-52 aspect-[9/16] rounded-2xl border-4 border-slate-800 bg-slate-950 p-3 flex flex-col justify-between text-white shadow-xl relative overflow-hidden">
+                  {/* Progress Bars */}
+                  <div className="flex items-center gap-1">
+                    {[0, 1, 2].map((s) => (
+                      <div
+                        key={s}
+                        onClick={() => setStorySlide(s as any)}
+                        className="h-1 flex-1 rounded-full bg-white/30 overflow-hidden cursor-pointer"
+                      >
+                        <div
+                          className={`h-full bg-white transition-all duration-300 ${
+                            storySlide === s ? 'w-full' : storySlide > s ? 'w-full' : 'w-0'
+                          }`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Story Header */}
+                  <div className="flex items-center gap-2 pt-2">
+                    <div className="size-6 rounded-full bg-primary text-primary-foreground font-bold text-[10px] flex items-center justify-center">
+                      {businessInitial}
+                    </div>
+                    <span className="text-[11px] font-bold truncate">@{businessName.toLowerCase().replace(/\s+/g, '')}</span>
+                  </div>
+
+                  {/* Slide Content */}
+                  <div className="my-auto text-center space-y-2 p-2">
+                    {storySlide === 0 && (
+                      <div className="space-y-2 animate-in fade-in">
+                        <span className="text-2xl">🔥</span>
+                        <p className="text-xs font-black leading-snug">
+                          Looking for trusted {businessName} services?
+                        </p>
+                        <p className="text-[10px] text-white/80">
+                          Get top-tier quality and fast turnaround in Patna!
+                        </p>
+                      </div>
+                    )}
+                    {storySlide === 1 && (
+                      <div className="space-y-2 animate-in fade-in">
+                        <span className="text-2xl">⚡</span>
+                        <p className="text-xs font-black leading-snug">
+                          Why customers rate us 5 Stars
+                        </p>
+                        <p className="text-[10px] text-white/80 line-clamp-3">
+                          {generatedCaption || 'Verified customer satisfaction, fair pricing, and expert dedicated team.'}
+                        </p>
+                      </div>
+                    )}
+                    {storySlide === 2 && (
+                      <div className="space-y-2 animate-in fade-in">
+                        <span className="text-2xl">📲</span>
+                        <p className="text-xs font-black leading-snug">
+                          Connect with us today!
+                        </p>
+                        <span className="inline-block px-3 py-1 rounded-full bg-primary text-[10px] font-bold text-white shadow-xs">
+                          Call 8505945123
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Slide Controls */}
+                  <div className="flex items-center justify-between pt-2 border-t border-white/20">
+                    <button
+                      type="button"
+                      disabled={storySlide === 0}
+                      onClick={() => setStorySlide((s) => Math.max(0, s - 1) as any)}
+                      className="text-[10px] font-bold text-white/80 hover:text-white disabled:opacity-30"
+                    >
+                      ◀ Back
+                    </button>
+                    <button
+                      type="button"
+                      disabled={storySlide === 2}
+                      onClick={() => setStorySlide((s) => Math.min(2, s + 1) as any)}
+                      className="text-[10px] font-bold text-white/80 hover:text-white disabled:opacity-30"
+                    >
+                      Next ▶
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Action Bar */}
+            <div className="flex items-center gap-2 pt-2 border-t border-border flex-wrap">
+              <Button
+                size="sm"
+                onClick={() => handlePublishNow(studioPreviewTab)}
+                disabled={isPublishing}
+                className="flex-1 h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold gap-1.5 shadow-xs"
+                title={`Publish immediately to ${studioPreviewTab}`}
+              >
+                {isPublishing ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    <span>Publishing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="size-3.5" />
+                    <span>⚡ Publish to {studioPreviewTab}</span>
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSchedulePost}
+                disabled={isPublishing}
+                className="h-9 px-3 rounded-xl text-xs font-bold gap-1.5 border-border shadow-2xs"
+                title="Open interactive calendar to choose date & time"
+              >
+                <Calendar className="size-3.5 text-primary" />
+                <span>📅 Schedule</span>
+              </Button>
+
+              {studioPreviewTab === 'Google Business' && (
                 <Button
                   variant="outline"
-                  size="sm"
-                  onClick={handleSchedulePost}
-                  disabled={isPublishing}
-                  className="h-8 rounded-lg text-xs font-semibold gap-1"
-                >
-                  <Calendar className="size-3.5 text-muted-foreground" />
-                  <span>Schedule</span>
-                </Button>
-                {studioPreviewTab === 'Google Business' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const textToCopy = generatedCaption || studioPrompt || '';
-                      if (!textToCopy) {
-                        toast.info('Generate or write some content first.');
-                        return;
-                      }
-                      navigator.clipboard.writeText(textToCopy);
-                      toast.success('Post content copied! Opening Google Business Profile...');
-                      window.open('https://business.google.com', '_blank');
-                    }}
-                    className="h-8 rounded-lg text-xs font-semibold gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-500/10 dark:text-blue-400 border-blue-500/30"
-                    title="Copy post and open Google Business Profile web console"
-                  >
-                    <ExternalLink className="size-3.5" />
-                    <span>Open GBP</span>
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
                   size="sm"
                   onClick={() => {
                     const textToCopy = generatedCaption || studioPrompt || '';
                     if (!textToCopy) {
-                      toast.info('Nothing to copy yet — generate or write a caption first.');
+                      toast.info('Generate or write some content first.');
                       return;
                     }
                     navigator.clipboard.writeText(textToCopy);
-                    toast.success('Caption copied to clipboard!');
+                    toast.success('Post content copied! Opening Google Business Profile...');
+                    window.open('https://business.google.com', '_blank');
                   }}
-                  className="h-8 px-2.5 rounded-lg text-xs"
-                  title="Copy caption"
+                  className="h-9 px-3 rounded-xl text-xs font-semibold gap-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-500/10 dark:text-blue-400 border-blue-500/30"
+                  title="Copy post and open Google Business Profile web console"
                 >
-                  <Copy className="size-3.5 text-muted-foreground" />
+                  <ExternalLink className="size-3.5" />
+                  <span>Open GBP</span>
                 </Button>
-              </div>
+              )}
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const textToCopy = generatedCaption || studioPrompt || '';
+                  if (!textToCopy) {
+                    toast.info('Nothing to copy yet — generate or write a caption first.');
+                    return;
+                  }
+                  navigator.clipboard.writeText(textToCopy);
+                  toast.success('Caption copied to clipboard!');
+                }}
+                className="h-9 px-3 rounded-xl text-xs font-semibold gap-1 text-muted-foreground hover:text-foreground"
+                title="Copy caption to clipboard"
+              >
+                <Copy className="size-3.5" />
+                <span>Copy</span>
+              </Button>
             </div>
           </div>
-          </div>
+        </div>
         </div>
       )}
 
@@ -5569,6 +5942,153 @@ export function SocialMediaView({
                 })}
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Interactive Schedule Post Modal ────────────────────────────── */}
+      <Dialog open={isScheduleModalOpen} onOpenChange={setIsScheduleModalOpen}>
+        <DialogContent className="sm:max-w-[460px] p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Calendar className="size-4 text-primary" />
+              <span>Schedule Social Post</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Select an optimal peak engagement slot or pick a custom date and time to publish automatically.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Target channel preview */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/40 border border-border">
+              <div className="flex items-center gap-2">
+                <div className="size-6 rounded-md bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center">
+                  {businessInitial}
+                </div>
+                <span className="text-xs font-semibold text-foreground">{businessName}</span>
+              </div>
+              <Badge variant="secondary" className="text-[10px] font-bold">
+                {studioPreviewTab}
+              </Badge>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Recommended Peak Slots</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  {
+                    label: 'Today 6:30 PM',
+                    sub: 'Evening Peak',
+                    getDate: () => {
+                      const d = new Date();
+                      return { date: d.toISOString().split('T')[0], time: '18:30' };
+                    },
+                  },
+                  {
+                    label: 'Tomorrow 9:00 AM',
+                    sub: 'Morning Buzz',
+                    getDate: () => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + 1);
+                      return { date: d.toISOString().split('T')[0], time: '09:00' };
+                    },
+                  },
+                  {
+                    label: 'Tomorrow 2:00 PM',
+                    sub: 'Afternoon Rush',
+                    getDate: () => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + 1);
+                      return { date: d.toISOString().split('T')[0], time: '14:00' };
+                    },
+                  },
+                  {
+                    label: 'Saturday 11:00 AM',
+                    sub: 'Weekend Traffic',
+                    getDate: () => {
+                      const d = new Date();
+                      const day = d.getDay();
+                      const diff = (6 - day + 7) % 7 || 7;
+                      d.setDate(d.getDate() + diff);
+                      return { date: d.toISOString().split('T')[0], time: '11:00' };
+                    },
+                  },
+                ].map((slot) => (
+                  <button
+                    key={slot.label}
+                    type="button"
+                    onClick={() => {
+                      const { date, time } = slot.getDate();
+                      setScheduleDate(date);
+                      setScheduleTime(time);
+                      toast.info(`Selected ${slot.label}`);
+                    }}
+                    className="p-2 rounded-xl border border-border bg-card hover:border-primary/40 text-left transition shadow-2xs hover:bg-(--primary-soft)"
+                  >
+                    <p className="text-xs font-bold text-foreground">{slot.label}</p>
+                    <p className="text-[10px] text-muted-foreground">{slot.sub}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Date & Time Picker */}
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                  <CalendarDays className="size-3.5 text-muted-foreground" /> Date
+                </label>
+                <input
+                  type="date"
+                  min={new Date().toISOString().split('T')[0]}
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  className="w-full h-9 rounded-xl border border-input bg-background px-3 py-1 text-xs text-foreground shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                  <Clock className="size-3.5 text-muted-foreground" /> Time
+                </label>
+                <input
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  className="w-full h-9 rounded-xl border border-input bg-background px-3 py-1 text-xs text-foreground shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-3 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsScheduleModalOpen(false);
+                  handlePublishNow(studioPreviewTab);
+                }}
+                className="flex-1 h-9 rounded-xl text-xs font-semibold gap-1 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+              >
+                <Zap className="size-3.5" />
+                <span>⚡ Publish Now</span>
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => handleConfirmSchedule(scheduleDate, scheduleTime)}
+                disabled={isPublishing}
+                className="flex-1 h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold gap-1 shadow-xs"
+              >
+                <Calendar className="size-3.5" />
+                <span>Confirm Schedule</span>
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -24,6 +24,7 @@ interface DiscoverResponse {
 }
 
 const AVATAR_COLORS: Record<string, { bg: string; text: string }> = {
+  F: { bg: '#E0E7FF', text: '#4338CA' }, // indigo
   Z: { bg: '#DBEAFE', text: '#2563EB' }, // blue
   S: { bg: '#DCFCE7', text: '#16A34A' }, // green
   D: { bg: '#DCFCE7', text: '#16A34A' }, // green

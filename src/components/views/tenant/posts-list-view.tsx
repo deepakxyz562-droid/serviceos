@@ -421,6 +421,21 @@ export function PostsListView({ embedded = false }: { embedded?: boolean } = {})
                         >
                           <Eye className="size-3.5" />
                         </Button>
+                        {post.status === 'published' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="size-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-500/10"
+                            onClick={() => {
+                              const targetWithUrl = post.targets?.find((t) => t.externalPostUrl || t.url);
+                              const url = targetWithUrl?.externalPostUrl || targetWithUrl?.url || 'https://maps.google.com/maps?cid=14866467569918261532';
+                              window.open(url, '_blank');
+                            }}
+                            title="View on Google Maps"
+                          >
+                            <ExternalLink className="size-3.5" />
+                          </Button>
+                        )}
                         {(post.status === 'failed' || post.status === 'partial') && (
                           <Button
                             size="sm"

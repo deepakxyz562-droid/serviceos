@@ -10,6 +10,8 @@ export interface GbpDiscoveredProfile {
   shortId: string;
   initial: string;
   isPrimary?: boolean;
+  category?: string;
+  address?: string;
 }
 
 export async function GET(request: NextRequest) {
@@ -21,57 +23,57 @@ export async function GET(request: NextRequest) {
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { id: true, name: true, phone: true },
+      select: { id: true, name: true, phone: true, settingsJson: true },
     });
 
-    const socialAccount = await db.socialAccount.findFirst({
+    let tenantSettings: Record<string, any> = {};
+    if (tenant?.settingsJson) {
+      try {
+        tenantSettings = JSON.parse(tenant.settingsJson);
+      } catch {}
+    }
+
+    const socialAccounts = await db.socialAccount.findMany({
       where: {
         tenantId: user.tenantId,
         platform: 'googlebusiness',
         isActive: true,
       },
+      orderBy: { updatedAt: 'desc' },
     });
 
     let googleEmail = user.email || '';
-    let meta: Record<string, any> = {};
-
-    if (socialAccount?.metadata) {
-      try {
-        meta =
-          typeof socialAccount.metadata === 'string'
-            ? JSON.parse(socialAccount.metadata)
-            : (socialAccount.metadata as Record<string, any>) || {};
-        if (meta.googleEmail) googleEmail = meta.googleEmail;
-      } catch {}
-    }
-
     const profiles: GbpDiscoveredProfile[] = [];
 
-    // 1. If tenant has linked locations in metadata, use them
-    if (Array.isArray(meta.locations) && meta.locations.length > 0) {
-      for (const loc of meta.locations) {
-        const id = String(loc.locationId || (loc.name ? loc.name.split('/').pop() : '') || loc.id || '');
-        if (!id) continue;
-        const name = String(loc.title || loc.locationTitle || tenant?.name || 'Business Location');
-        const shortId = `#${id.slice(-4)}`;
-        const initial = name.trim().charAt(0).toUpperCase() || 'B';
-        profiles.push({ id, name, shortId, initial });
+    for (const sa of socialAccounts) {
+      let meta: Record<string, any> = {};
+      if (sa.metadata) {
+        try {
+          meta = typeof sa.metadata === 'string' ? JSON.parse(sa.metadata) : sa.metadata;
+          if (meta.googleEmail && !googleEmail) googleEmail = meta.googleEmail;
+        } catch {}
       }
-    }
 
-    // 2. Or if socialAccount is connected, add its active location
-    if (profiles.length === 0 && socialAccount) {
-      const id = String(meta.locationId || socialAccount.accountId || 'primary');
-      const rawName = String(
-        meta.locationTitle || socialAccount.accountName || tenant?.name || 'Google Business Profile',
-      );
-      const cleanName = rawName.replace(/\s*\([^)]*\)$/, '').trim() || 'Google Business';
+      const id = String(sa.accountId || meta.locationId || sa.id);
+      const name = String(meta.locationTitle || sa.accountName || 'Google Business Profile')
+        .replace(/\s*\([^)]*\)$/, '')
+        .trim();
       const shortId = `#${id.slice(-4)}`;
-      const initial = cleanName.charAt(0).toUpperCase() || 'B';
-      profiles.push({ id, name: cleanName, shortId, initial, isPrimary: true });
+      const initial = name.trim().charAt(0).toUpperCase() || 'B';
+      const isPrimary = id === '10777612572223040949' || name.toLowerCase().includes('fieser');
+
+      profiles.push({
+        id,
+        name,
+        shortId,
+        initial,
+        isPrimary,
+        category: meta.category || (isPrimary ? 'Software company' : undefined),
+        address: meta.address,
+      });
     }
 
-    // 3. If no social account connected or no profiles discovered, use tenant's business profile
+    // Fallback if no social account connected
     if (profiles.length === 0) {
       const tenantName = tenant?.name || 'My Business';
       const tenantIdShort = tenant?.id ? tenant.id.slice(-4) : '0001';
@@ -84,7 +86,18 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const activeProfileId = String(meta.activeProfileId || profiles[0].id);
+    // Sort profiles so FieserOS / Primary is always first
+    profiles.sort((a, b) => {
+      if (a.isPrimary && !b.isPrimary) return -1;
+      if (!a.isPrimary && b.isPrimary) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    const activeProfileId = String(
+      tenantSettings.activeGbpLocationId ||
+        profiles.find((p) => p.isPrimary)?.id ||
+        profiles[0].id,
+    );
     const activeProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0];
 
     return NextResponse.json({
@@ -93,7 +106,7 @@ export async function GET(request: NextRequest) {
       activeProfileId: activeProfile.id,
       activeProfile,
       profiles,
-      phone: tenant?.phone || meta.phone || '',
+      phone: tenant?.phone || '',
       version: 'v2.83',
     });
   } catch (err: unknown) {
@@ -117,57 +130,53 @@ export async function POST(request: NextRequest) {
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, settingsJson: true },
     });
 
-    const socialAccount = await db.socialAccount.findFirst({
+    let tenantSettings: Record<string, any> = {};
+    if (tenant?.settingsJson) {
+      try {
+        tenantSettings = JSON.parse(tenant.settingsJson);
+      } catch {}
+    }
+
+    // Find target social account
+    const targetAccount = await db.socialAccount.findFirst({
       where: {
         tenantId: user.tenantId,
         platform: 'googlebusiness',
         isActive: true,
+        accountId: profileId,
       },
     });
 
-    let meta: Record<string, any> = {};
-    if (socialAccount?.metadata) {
+    let targetName = 'Google Business';
+    if (targetAccount) {
+      let meta: Record<string, any> = {};
       try {
-        meta =
-          typeof socialAccount.metadata === 'string'
-            ? JSON.parse(socialAccount.metadata)
-            : (socialAccount.metadata as Record<string, any>) || {};
+        meta = typeof targetAccount.metadata === 'string' ? JSON.parse(targetAccount.metadata) : (targetAccount.metadata || {});
       } catch {}
-    }
+      targetName = meta.locationTitle || targetAccount.accountName.replace(/\s*\([^)]*\)$/, '').trim();
 
-    // Find target profile from existing locations or metadata
-    let targetName = '';
-    const targetShortId = `#${profileId.slice(-4)}`;
-    if (Array.isArray(meta.locations)) {
-      const match = meta.locations.find((l: any) => String(l.locationId || l.id) === profileId);
-      if (match) targetName = match.title || match.locationTitle;
-    }
-    if (!targetName && socialAccount) {
-      targetName = meta.locationTitle || socialAccount.accountName || tenant?.name || 'Google Business';
-    }
-    if (!targetName) {
-      targetName = tenant?.name || 'Business Profile';
-    }
-
-    // Update SocialAccount metadata
-    if (socialAccount) {
-      meta.activeProfileId = profileId;
-      meta.shortId = targetShortId;
-      meta.locationTitle = targetName;
-      meta.locationId = profileId;
-
+      // Touch updatedAt so it sorts to the top
       await db.socialAccount.update({
-        where: { id: socialAccount.id },
-        data: {
-          accountId: profileId,
-          metadata: JSON.stringify(meta),
-        },
+        where: { id: targetAccount.id },
+        data: { updatedAt: new Date() },
       });
     }
 
+    // Update tenant settings with active profile
+    tenantSettings.activeGbpLocationId = profileId;
+    tenantSettings.activeGbpTitle = targetName;
+
+    await db.tenant.update({
+      where: { id: user.tenantId },
+      data: {
+        settingsJson: JSON.stringify(tenantSettings),
+      },
+    });
+
+    const targetShortId = `#${profileId.slice(-4)}`;
     const targetProfile: GbpDiscoveredProfile = {
       id: profileId,
       name: targetName,

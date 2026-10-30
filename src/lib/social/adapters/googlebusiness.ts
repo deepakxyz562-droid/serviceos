@@ -120,7 +120,14 @@ async function extractLocationRef(account: SocialAccountData): Promise<{
 }> {
   const meta = (account.metadata || {}) as Record<string, any>;
   let accountName = meta?.accountName;
-  let locationId = meta?.locationId;
+  let locationId = meta?.activeProfileId || meta?.locationId;
+
+  if (meta?.locations && Array.isArray(meta.locations) && locationId) {
+    const locMatch = meta.locations.find((l: any) => String(l.locationId || l.id) === String(locationId));
+    if (locMatch?.accountName) {
+      accountName = locMatch.accountName;
+    }
+  }
 
   const isPlaceholder =
     !accountName ||
@@ -137,10 +144,11 @@ async function extractLocationRef(account: SocialAccountData): Promise<{
       if (accRes.ok) {
         const accData = await accRes.json();
         const accountsList = Array.isArray(accData.accounts) ? accData.accounts : [];
+        const allDiscoveredLocs: any[] = [];
         for (const a of accountsList) {
           if (!a.name) continue;
           const locRes = await fetch(
-            `https://mybusinessbusinessinformation.googleapis.com/v1/${a.name}/locations?readMask=name,title,storefrontAddress,metadata`,
+            `https://mybusinessbusinessinformation.googleapis.com/v1/${a.name}/locations?readMask=name,title,storefrontAddress,metadata,categories`,
             {
               headers: { Authorization: `Bearer ${account.accessToken}` },
             },
@@ -148,35 +156,51 @@ async function extractLocationRef(account: SocialAccountData): Promise<{
           if (locRes.ok) {
             const locData = await locRes.json();
             const locList = Array.isArray(locData.locations) ? locData.locations : [];
-            if (locList.length > 0 && locList[0].name) {
-              const realAccountName = a.name;
-              const realLocationId = locList[0].name.split('/').pop()!;
-              const realTitle = locList[0].title || meta.locationTitle || account.accountName;
-
-              accountName = realAccountName;
-              locationId = realLocationId;
-              meta.accountName = realAccountName;
-              meta.locationId = realLocationId;
-              meta.locationName = locList[0].name;
-              meta.locationTitle = realTitle;
-              meta.placeId = locList[0].metadata?.placeId;
-              meta.mapsUri = locList[0].metadata?.mapsUri;
-
-              if (account.id) {
-                try {
-                  const { db } = await import('@/lib/db');
-                  await db.socialAccount.update({
-                    where: { id: account.id },
-                    data: {
-                      accountId: realLocationId,
-                      accountName: `${realTitle} (${account.accountName})`,
-                      metadata: JSON.stringify(meta),
-                    },
-                  });
-                } catch {}
-              }
-              break;
+            for (const loc of locList) {
+              const locId = loc.name ? loc.name.split('/').pop()! : '';
+              if (!locId) continue;
+              allDiscoveredLocs.push({
+                id: locId,
+                locationId: locId,
+                name: loc.name,
+                title: loc.title,
+                accountName: a.name,
+                category: loc.categories?.primaryCategory?.displayName || '',
+                address: loc.storefrontAddress ? [loc.storefrontAddress.addressLines?.join(', '), loc.storefrontAddress.locality].filter(Boolean).join(', ') : '',
+                metadata: loc.metadata,
+                placeId: loc.metadata?.placeId,
+                mapsUri: loc.metadata?.mapsUri,
+              });
             }
+          }
+        }
+
+        if (allDiscoveredLocs.length > 0) {
+          // Prefer FieserOS if present, otherwise first location
+          const primaryLoc = allDiscoveredLocs.find((l) => l.title?.toLowerCase().includes('fieser') || l.id === '10777612572223040949') || allDiscoveredLocs[0];
+          accountName = primaryLoc.accountName;
+          locationId = primaryLoc.id;
+          meta.accountName = primaryLoc.accountName;
+          meta.locationId = primaryLoc.id;
+          meta.activeProfileId = primaryLoc.id;
+          meta.locationName = primaryLoc.name;
+          meta.locationTitle = primaryLoc.title;
+          meta.placeId = primaryLoc.placeId;
+          meta.mapsUri = primaryLoc.mapsUri;
+          meta.locations = allDiscoveredLocs;
+
+          if (account.id) {
+            try {
+              const { db } = await import('@/lib/db');
+              await db.socialAccount.update({
+                where: { id: account.id },
+                data: {
+                  accountId: primaryLoc.id,
+                  accountName: `${primaryLoc.title} (${account.accountName})`,
+                  metadata: JSON.stringify(meta),
+                },
+              });
+            } catch {}
           }
         }
       }
@@ -815,7 +839,7 @@ export async function uploadGoogleBusinessMedia(
   thumbnailUrl?: string;
   createTime: string;
 }> {
-  const { accountName, locationId } = extractLocationRef(account);
+  const { accountName, locationId } = await extractLocationRef(account);
   const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
   const url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/media`;
 

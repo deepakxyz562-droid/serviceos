@@ -1,5 +1,5 @@
 import React from 'react';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, test, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BgosLeadBoard } from '@/components/bgos/lead-presentation';
 import { BgosMobileNavigation, BgosNavigation } from '@/components/bgos/navigation';
@@ -391,8 +391,8 @@ it('renders Marketing Studio with Dhanda tabs, real API wiring, gauge, competito
       screen.getByText('Create, publish and manage your marketing content across social, email, SMS and WhatsApp.')
     ).toBeDefined();
     expect(screen.getByText(/AI Enabled/i)).toBeDefined();
-    expect(screen.getByRole('button', { name: /\+ Create Content/i })).toBeDefined();
-    expect(screen.getByRole('button', { name: /\+ Create Campaign/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /Create Content/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /Create Campaign/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /Create Post/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /View Analytics/i })).toBeDefined();
 
@@ -539,7 +539,7 @@ it('renders Marketing Studio with Dhanda tabs, real API wiring, gauge, competito
     expect(screen.getByRole('button', { name: /Upload Media/i })).toBeDefined();
 
     // 13. Launch Campaign Dialog still works
-    fireEvent.click(screen.getByRole('button', { name: /\+ Create Campaign/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Create Campaign/i }));
     expect(screen.getByText('Create Marketing Campaign')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
   } finally {

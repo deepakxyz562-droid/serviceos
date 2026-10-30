@@ -1,58 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { decryptToken } from '@/lib/social/crypto';
-import { refreshExpiredToken } from '@/lib/social/token-refresh';
+import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import {
   fetchGoogleBusinessPlaceDetails,
   fetchGoogleBusinessPerformanceMetrics,
 } from '@/lib/social/adapters/googlebusiness';
-import type { SocialAccountData } from '@/lib/social/types';
 
 export const dynamic = 'force-dynamic';
-
-async function prepareGoogleAccount(tenantId: string): Promise<SocialAccountData | null> {
-  const account = await db.socialAccount.findFirst({
-    where: {
-      tenantId,
-      platform: 'googlebusiness',
-      isActive: true,
-    },
-  });
-
-  if (!account) return null;
-
-  try {
-    const rawAccessToken = decryptToken(account.accessToken);
-    const rawRefreshToken = account.refreshToken ? decryptToken(account.refreshToken) : undefined;
-    let metadata: Record<string, unknown> = {};
-    if (typeof account.metadata === 'string') {
-      try {
-        metadata = JSON.parse(account.metadata);
-      } catch {
-        metadata = {};
-      }
-    } else if (account.metadata && typeof account.metadata === 'object') {
-      metadata = account.metadata as Record<string, unknown>;
-    }
-
-    const accountData: SocialAccountData = {
-      id: account.id,
-      platform: 'googlebusiness',
-      accountId: account.accountId,
-      accountName: account.accountName,
-      accessToken: rawAccessToken,
-      refreshToken: rawRefreshToken,
-      tokenExpiry: account.tokenExpiry || undefined,
-      metadata,
-    };
-
-    return await refreshExpiredToken(accountData);
-  } catch (err) {
-    console.warn('[api/gbp/place] Error preparing Google account:', err);
-    return null;
-  }
-}
 
 /**
  * GET /api/gbp/place
