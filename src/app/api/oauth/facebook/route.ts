@@ -229,9 +229,14 @@ a, button { background: #009F50; color: white; border: none; padding: 0.65rem 1.
   // ── 5. Build Facebook consent URL (Graph API v18.0) ────────────────────
   const FB_SCOPES =
     'pages_manage_posts,pages_read_engagement,pages_show_list';
-  // Prefer the scopes configured on the credential if set, otherwise the
-  // canonical FB publishing scopes above.
-  const scopes = cred?.scopes && cred.scopes.trim().length > 0 ? cred.scopes : FB_SCOPES;
+  // Canonical FB publishing scopes. Filter out any deprecated/cross-platform scopes
+  // (like pages_read_user_content or instagram_content_publish) that may be stored in DB.
+  const rawScopes = cred?.scopes && cred.scopes.trim().length > 0 ? cred.scopes : FB_SCOPES;
+  const scopes = rawScopes
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s && s !== 'pages_read_user_content' && s !== 'instagram_content_publish')
+    .join(',') || FB_SCOPES;
 
   const authUrl = new URL('https://www.facebook.com/v18.0/dialog/oauth');
   authUrl.searchParams.set('client_id', clientId);

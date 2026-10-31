@@ -243,7 +243,7 @@ export const OAUTH_PROVIDERS: Record<
     authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
     tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
     scopes:
-      'pages_manage_posts,pages_read_engagement,pages_show_list,pages_read_user_content,instagram_content_publish',
+      'pages_manage_posts,pages_read_engagement,pages_show_list',
     displayName: 'Facebook Pages (Publishing)',
     docsUrl: 'https://developers.facebook.com/docs/pages-api',
   },

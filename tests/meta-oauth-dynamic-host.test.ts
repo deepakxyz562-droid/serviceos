@@ -72,6 +72,27 @@ it('uses fieseros.com host for redirect_uri when requested on fieseros.com', asy
   expect(state.redirectUri).toBe('https://fieseros.com/api/oauth/facebook/callback');
 });
 
+it('sanitizes and strips pages_read_user_content and instagram_content_publish from cred.scopes', async () => {
+  m.findFirst.mockResolvedValue({
+    id: 'cred_1',
+    clientId: '2180370786060435',
+    redirectUri: null,
+    scopes: 'pages_manage_posts,pages_read_engagement,pages_show_list,pages_read_user_content,instagram_content_publish',
+    provider: 'facebook',
+  });
+
+  const req = new NextRequest('https://bgos.fieseros.com/api/oauth/facebook', {
+    headers: { host: 'bgos.fieseros.com' },
+  });
+
+  const res = await startFacebook(req);
+  const location = new URL(res.headers.get('location')!);
+  const scope = location.searchParams.get('scope')!;
+  expect(scope).not.toContain('pages_read_user_content');
+  expect(scope).not.toContain('instagram_content_publish');
+  expect(scope).toBe('pages_manage_posts,pages_read_engagement,pages_show_list');
+});
+
 it('uses bgos.fieseros.com host for instagram redirect_uri and encodes into state', async () => {
   const req = new NextRequest('https://bgos.fieseros.com/api/oauth/instagram', {
     headers: { host: 'bgos.fieseros.com' },

@@ -105,8 +105,6 @@ const SOCIAL_PUBLISHING_PLATFORMS: SocialPublishingPlatformDef[] = [
       'pages_manage_posts',
       'pages_read_engagement',
       'pages_show_list',
-      'pages_read_user_content',
-      'instagram_content_publish',
     ],
     docsUrl: 'https://developers.facebook.com/apps/',
   },
