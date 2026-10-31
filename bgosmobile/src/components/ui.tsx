@@ -79,6 +79,7 @@ export function Screen({
   onBack,
   customHeader,
   extraBottomPadding = 0,
+  floatingAction,
 }: {
   title?: string;
   subtitle?: string;
@@ -90,6 +91,7 @@ export function Screen({
   onBack?: () => void;
   customHeader?: React.ReactNode;
   extraBottomPadding?: number;
+  floatingAction?: React.ReactNode;
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -109,70 +111,89 @@ export function Screen({
   // Safe status bar top inset calculation (handles dynamic island, notch, modals, and Android status bar)
   const topInset = Platform.OS === 'ios' ? Math.max(insets.top, 44) : Math.max(insets.top, RNStatusBar.currentHeight || 24);
   // Ensure content never gets hidden behind bottom tabs (62px bar + insets.bottom + clearance)
-  const bottomInset = Math.max(insets.bottom, 16) + 76 + extraBottomPadding;
+  // When floatingAction is passed, include extra clearance so content scrolls completely above the floating dock
+  const floatingClearance = floatingAction ? 60 : 0;
+  const bottomInset = Math.max(insets.bottom, 16) + 76 + extraBottomPadding + floatingClearance;
 
   return (
     <SafeAreaView style={[ui.screen, { paddingTop: insets.top < 20 ? topInset : 0 }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[ui.content, { paddingBottom: bottomInset }]}
-          refreshControl={
-            onRefresh ? (
-              <RefreshControl
-                refreshing={refreshing || pulling}
-                onRefresh={async () => {
-                  setPulling(true);
-                  try {
-                    await onRefresh();
-                  } finally {
-                    setPulling(false);
-                  }
-                }}
-                tintColor={colors.brand}
-              />
-            ) : undefined
-          }
-        >
-          {customHeader ? (
-            customHeader
-          ) : (
-            <>
-              <View style={ui.topbar}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8, flexWrap: 'nowrap' }}>
-                  {canBack ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Go back"
-                      onPress={handleBack}
-                      style={ui.backBtn}
-                    >
-                      <MaterialIcons name="arrow-back" size={20} color={colors.ink} />
-                    </Pressable>
-                  ) : null}
-                  <Brand />
+        <View style={{ flex: 1, position: 'relative' }}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={[ui.content, { paddingBottom: bottomInset }]}
+            refreshControl={
+              onRefresh ? (
+                <RefreshControl
+                  refreshing={refreshing || pulling}
+                  onRefresh={async () => {
+                    setPulling(true);
+                    try {
+                      await onRefresh();
+                    } finally {
+                      setPulling(false);
+                    }
+                  }}
+                  tintColor={colors.brand}
+                />
+              ) : undefined
+            }
+          >
+            {customHeader ? (
+              customHeader
+            ) : (
+              <>
+                <View style={ui.topbar}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8, flexWrap: 'nowrap' }}>
+                    {canBack ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Go back"
+                        onPress={handleBack}
+                        style={ui.backBtn}
+                      >
+                        <MaterialIcons name="arrow-back" size={20} color={colors.ink} />
+                      </Pressable>
+                    ) : null}
+                    <Brand />
+                  </View>
+                  {rightAction ? (
+                    <View style={{ flexShrink: 0, alignItems: 'flex-end', maxWidth: '65%' }}>
+                      {rightAction}
+                    </View>
+                  ) : (
+                    <View style={[ui.row, { flexShrink: 0, gap: 6, flexWrap: 'nowrap' }]}>
+                      <View style={[ui.statusDot, { backgroundColor: colors.accent }]} />
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.muted }}>Online</Text>
+                    </View>
+                  )}
                 </View>
-                {rightAction ? (
-                  <View style={{ flexShrink: 0, alignItems: 'flex-end', maxWidth: '65%' }}>
-                    {rightAction}
-                  </View>
-                ) : (
-                  <View style={[ui.row, { flexShrink: 0, gap: 6, flexWrap: 'nowrap' }]}>
-                    <View style={[ui.statusDot, { backgroundColor: colors.accent }]} />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.muted }}>Online</Text>
-                  </View>
-                )}
-              </View>
-              {title ? (
-                <Text accessibilityRole="header" style={ui.title}>
-                  {title}
-                </Text>
-              ) : null}
-              {subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : <View style={{ height: 14 }} />}
-            </>
-          )}
-          <View style={ui.stack}>{children}</View>
-        </ScrollView>
+                {title ? (
+                  <Text accessibilityRole="header" style={ui.title}>
+                    {title}
+                  </Text>
+                ) : null}
+                {subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : <View style={{ height: 14 }} />}
+              </>
+            )}
+            <View style={ui.stack}>{children}</View>
+          </ScrollView>
+
+          {floatingAction ? (
+            <View
+              pointerEvents="box-none"
+              style={{
+                position: 'absolute',
+                left: 16,
+                right: 16,
+                bottom: 12,
+                zIndex: 40,
+              }}
+            >
+              {floatingAction}
+            </View>
+          ) : null}
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

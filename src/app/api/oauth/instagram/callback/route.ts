@@ -77,6 +77,7 @@ export async function GET(request: NextRequest) {
     // Legacy DM connect route uses { provider, ts } instead of { flow, expires }.
     provider?: string;
     ts?: number;
+    returnUrl?: string;
   };
   try {
     state = JSON.parse(Buffer.from(stateParam, 'base64url').toString());
@@ -379,6 +380,15 @@ export async function GET(request: NextRequest) {
   }
 
   // ── 10. Clear the CSRF cookie + redirect to dashboard ──────────────────
+  if (state.returnUrl && state.returnUrl.startsWith('bgos://')) {
+    const mobileRedirect = new URL(state.returnUrl);
+    mobileRedirect.searchParams.set('connected', 'instagram');
+    mobileRedirect.searchParams.set('status', 'success');
+    const res = NextResponse.redirect(mobileRedirect.toString());
+    res.cookies.delete('ig_oauth_csrf');
+    return res;
+  }
+
   const redirectUrl = new URL(
     '/app?product=bgos&view=socialMedia&connected=instagram',
     appUrl,
@@ -492,7 +502,12 @@ function getAppUrlFromRequest(request: NextRequest): string {
  * the OAuth callback is loaded in a top-level browser navigation — the
  * user needs to see a human-readable message, not a JSON payload.
  */
-function renderErrorPage(message: string): NextResponse {
+function renderErrorPage(message: string, returnUrl?: string): NextResponse {
+  if (returnUrl && returnUrl.startsWith('bgos://')) {
+    const mobileRedirect = new URL(returnUrl);
+    mobileRedirect.searchParams.set('error', message);
+    return NextResponse.redirect(mobileRedirect.toString());
+  }
   const safe = message
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

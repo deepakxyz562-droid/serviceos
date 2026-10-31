@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
     expires?: number;
     flow?: string;
     platform?: string;
+    returnUrl?: string;
   };
   try {
     state = JSON.parse(Buffer.from(stateParam, 'base64url').toString());
@@ -325,6 +326,15 @@ export async function GET(request: NextRequest) {
   }
 
   // ── 8. Clear the CSRF cookie + redirect to dashboard ───────────────────
+  if (state.returnUrl && state.returnUrl.startsWith('bgos://')) {
+    const mobileRedirect = new URL(state.returnUrl);
+    mobileRedirect.searchParams.set('connected', 'facebook');
+    mobileRedirect.searchParams.set('status', 'success');
+    const res = NextResponse.redirect(mobileRedirect.toString());
+    res.cookies.delete('fb_oauth_csrf');
+    return res;
+  }
+
   const redirectUrl = new URL(
     '/app?product=bgos&view=socialMedia&connected=facebook',
     appUrl,
@@ -435,7 +445,12 @@ function getAppUrlFromRequest(request: NextRequest): string {
  * was launched in a popup) so the SPA can show a toast, then offers a
  * link back to the dashboard.
  */
-function renderErrorPage(message: string): NextResponse {
+function renderErrorPage(message: string, returnUrl?: string): NextResponse {
+  if (returnUrl && returnUrl.startsWith('bgos://')) {
+    const mobileRedirect = new URL(returnUrl);
+    mobileRedirect.searchParams.set('error', message);
+    return NextResponse.redirect(mobileRedirect.toString());
+  }
   const safe = message
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

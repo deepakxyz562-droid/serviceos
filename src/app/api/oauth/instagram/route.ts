@@ -200,6 +200,10 @@ a, button { background: #009F50; color: white; border: none; padding: 0.65rem 1.
     ? cred.redirectUri
     : `${appUrl}/api/oauth/instagram/callback`;
 
+  const returnUrl =
+    searchParams.get('returnUrl') ||
+    (queryOrigin?.startsWith('bgos://') ? queryOrigin : undefined);
+
   // ── 4. Build state (CSRF + tenant/user context) ────────────────────────
   const csrf = randomBytes(32).toString('hex');
   const expires = Date.now() + 10 * 60 * 1000; // 10 min
@@ -211,6 +215,7 @@ a, button { background: #009F50; color: white; border: none; padding: 0.65rem 1.
       expires,
       flow: 'publishing',
       platform: 'instagram',
+      returnUrl,
     }),
   ).toString('base64url');
 

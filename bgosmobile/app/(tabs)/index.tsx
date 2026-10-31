@@ -696,11 +696,85 @@ export default function HomeScreen() {
     </View>
   );
 
+  // Floating Growth Action Dock (Always visible sticky bar above bottom tabs)
+  const growthActionFloatingDock = (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Growth Action: ${totalDone} of ${totalTarget} done, ${leftCount} left`}
+        onPress={() => setGrowthModalOpen(true)}
+        style={({ pressed }) => ({
+          flex: 1,
+          height: 48,
+          borderRadius: 24,
+          overflow: 'hidden',
+          opacity: pressed ? 0.9 : 1,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.25,
+          shadowRadius: 6,
+          elevation: 8,
+        })}
+      >
+        <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row' }}>
+          <View style={{ flex: 1, backgroundColor: '#9333EA' }} />
+          <View style={{ flex: 1, backgroundColor: '#EA580C' }} />
+        </View>
+        <View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 16,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 16 }}>⚡</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
+              Growth Action ({growthActions.loading && !growthActions.data ? '…' : `${totalDone} of ${totalTarget} done • ${leftCount} left`})
+            </Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
+        </View>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Voice Assistant"
+        onPress={() => Alert.alert('Voice Assistant', 'Say "Increase my marketing score" or "Check my reviews"…')}
+        style={({ pressed }) => ({
+          width: 48,
+          height: 48,
+          borderRadius: 24,
+          backgroundColor: '#0F172A',
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.85 : 1,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.25,
+          shadowRadius: 6,
+          elevation: 8,
+        })}
+      >
+        <MaterialIcons name="mic" size={22} color="#FFFFFF" />
+      </Pressable>
+    </View>
+  );
+
   return (
     <Screen
       customHeader={customHeader}
       onRefresh={refresh}
-      extraBottomPadding={70}
+      floatingAction={growthActionFloatingDock}
     >
       <ErrorNotice
         message={workspace.error || inbox.error || bookings.error || leads.error || calls.error}
@@ -1301,77 +1375,6 @@ export default function HomeScreen() {
 
       {/* More Tools — everything that left the bottom bar stays one tap away */}
       <MoreToolsGrid />
-
-      {/* Floating Growth Action Pill — matches Screenshots 4 & 7 */}
-      <View
-        style={{
-          marginTop: 16,
-          marginBottom: 8,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 10,
-        }}
-      >
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setGrowthModalOpen(true)}
-          style={({ pressed }) => ({
-            flex: 1,
-            height: 48,
-            borderRadius: 24,
-            overflow: 'hidden',
-            opacity: pressed ? 0.9 : 1,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.25,
-            shadowRadius: 6,
-            elevation: 8,
-          })}
-        >
-          <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row' }}>
-            <View style={{ flex: 1, backgroundColor: '#9333EA' }} />
-            <View style={{ flex: 1, backgroundColor: '#EA580C' }} />
-          </View>
-          <View
-            style={{
-              flex: 1,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingHorizontal: 16,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 16 }}>⚡</Text>
-              <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
-                Growth Action ({growthActions.loading && !growthActions.data ? '…' : `${totalDone} of ${totalTarget} done • ${leftCount} left`})
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
-          </View>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => Alert.alert('Voice Assistant', 'Say "Increase my marketing score" or "Check my reviews"…')}
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 24,
-            backgroundColor: '#0F172A',
-            alignItems: 'center',
-            justifyContent: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.25,
-            shadowRadius: 6,
-            elevation: 8,
-          }}
-        >
-          <MaterialIcons name="mic" size={22} color="#FFFFFF" />
-        </Pressable>
-      </View>
 
       {/* Growth Action Bottom Sheet Modal (Segmented Approvals Engine) */}
       <GrowthActionSheet

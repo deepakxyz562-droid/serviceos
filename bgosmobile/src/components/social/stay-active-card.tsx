@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -13,7 +12,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors, ui } from '../ui';
 import { useResource } from '../../hooks/use-resource';
 import { apiRequest } from '../../lib/api';
-import { getToken } from '../../lib/auth';
 import { WEB_URL } from '../../lib/constants';
 
 interface SocialAccount {
@@ -32,89 +30,35 @@ export function StayActiveSocialMediaCard() {
   const fbAccount = accounts.find((a) => a.platform === 'facebook' && a.isActive);
   const igAccount = accounts.find((a) => a.platform === 'instagram' && a.isActive);
 
-  async function openInstalledApp(platform: 'facebook' | 'instagram') {
-    const scheme = platform === 'instagram' ? 'instagram://app' : 'fb://feed';
-    const webFallback = platform === 'instagram' ? 'https://instagram.com' : 'https://facebook.com';
-    try {
-      const supported = await Linking.canOpenURL(scheme);
-      if (supported) {
-        await Linking.openURL(scheme);
-      } else {
-        await Linking.openURL(webFallback);
-      }
-    } catch {
-      await Linking.openURL(webFallback);
-    }
-  }
-
   async function handleConnect(platform: 'facebook' | 'instagram') {
     const platformLabel = platform === 'facebook' ? 'Facebook' : 'Instagram';
+    setConnectingKey(platform);
+    try {
+      let ticket = '';
+      try {
+        const ticketRes = await apiRequest<{ ticket: string }>('/api/bgos/mobile-auth/handoff', { method: 'POST' });
+        if (ticketRes?.ticket) ticket = ticketRes.ticket;
+      } catch {}
 
-    Alert.alert(
-      `Connect ${platformLabel}`,
-      `Choose how you would like to interact with ${platformLabel}:\n\n• Open ${platformLabel} App: Opens your installed mobile app directly.\n• Auto-Post OAuth: Connects Meta API to schedule and publish posts from BGOS.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: `Open ${platformLabel} App`,
-          onPress: () => void openInstalledApp(platform),
-        },
-        {
-          text: 'Auto-Post OAuth',
-          onPress: async () => {
-            setConnectingKey(platform);
-            try {
-              let ticket = '';
-              try {
-                const ticketRes = await apiRequest<{ ticket: string }>('/api/bgos/mobile-auth/handoff', { method: 'POST' });
-                if (ticketRes?.ticket) ticket = ticketRes.ticket;
-              } catch {}
-              const ticketQuery = ticket ? `?ticket=${encodeURIComponent(ticket)}` : '';
-              const token = await getToken();
-              const precheckHeaders: Record<string, string> = { Accept: 'application/json' };
-              if (token) precheckHeaders.Authorization = `Bearer ${token}`;
+      const ticketQuery = ticket ? `?ticket=${encodeURIComponent(ticket)}` : '';
+      const returnUrlQuery = ticket ? `&returnUrl=${encodeURIComponent('bgos://auth-callback')}` : `?returnUrl=${encodeURIComponent('bgos://auth-callback')}`;
+      const oauthUrl = `${WEB_URL}/api/oauth/${platform}${ticketQuery}${returnUrlQuery}`;
 
-              // Preflight check if Meta App credentials are ready
-              const precheck = await fetch(`${WEB_URL}/api/oauth/${platform}${ticketQuery}`, {
-                headers: precheckHeaders,
-              }).catch(() => null);
+      const result = await WebBrowser.openAuthSessionAsync(oauthUrl, 'bgos://auth-callback');
+      await accountsRes.refresh();
 
-              if (precheck && precheck.status === 503) {
-                Alert.alert(
-                  'Meta App Required',
-                  `Meta OAuth credentials (META_APP_ID / META_APP_SECRET) are not configured on this server yet.\n\nYou can still use the "Open App" button to post directly from your device!`,
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: `Open ${platformLabel} App`, onPress: () => void openInstalledApp(platform) },
-                  ]
-                );
-                return;
-              }
-
-              const oauthUrl = `${WEB_URL}/api/oauth/${platform}${ticketQuery}`;
-              // Open in-app secure browser session rather than kicking out to external Safari
-              await WebBrowser.openBrowserAsync(oauthUrl, {
-                presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-                controlsColor: colors.brand,
-              });
-              await accountsRes.refresh();
-            } catch {
-              let ticket = '';
-              try {
-                const ticketRes = await apiRequest<{ ticket: string }>('/api/bgos/mobile-auth/handoff', { method: 'POST' });
-                if (ticketRes?.ticket) ticket = ticketRes.ticket;
-              } catch {}
-              const ticketQuery = ticket ? `?ticket=${encodeURIComponent(ticket)}` : '';
-              await Linking.openURL(`${WEB_URL}/api/oauth/${platform}${ticketQuery}`).catch(() => {
-                Alert.alert('Unable to Open', `Could not open ${platformLabel} connection.`);
-              });
-            } finally {
-              setConnectingKey(null);
-            }
-          },
-        },
-      ]
-    );
+      if (result.type === 'success' && result.url?.includes('error=')) {
+        try {
+          const urlObj = new URL(result.url);
+          const err = urlObj.searchParams.get('error');
+          if (err) Alert.alert('Connection Error', decodeURIComponent(err));
+        } catch {}
+      }
+    } catch {
+      Alert.alert('Connection Failed', `Could not connect ${platformLabel}. Please try again.`);
+    } finally {
+      setConnectingKey(null);
+    }
   }
 
   const channels = [
@@ -238,48 +182,46 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: '#EEF2F6',
   },
   avatarBadge: {
     width: 38,
     height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
+    borderRadius: 10,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   avatarText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
   },
   channelName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: colors.ink,
   },
   channelStatus: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 12,
   },
   channelStatusConnected: {
-    color: colors.success,
+    color: colors.brand,
+    fontWeight: '600',
   },
   channelStatusMuted: {
     color: colors.muted,
   },
   connectBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 10,
     backgroundColor: colors.brand,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 8,
     minWidth: 78,
     alignItems: 'center',
     justifyContent: 'center',
   },
   connectBtnText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   manageBtn: {
