@@ -74,6 +74,8 @@ export async function PATCH(
     const result = await atomicCommerce('updateOrder',[business.id,id,clean]);
     if (clean.status) {
       void triggerImmediateOrderNotifications(id, 'STATUS_CHANGE', clean.status);
+    } else if (clean.paymentStatus === 'PAID') {
+      void triggerImmediateOrderNotifications(id, 'STATUS_CHANGE', 'PAID');
     }
     return NextResponse.json(result);
 

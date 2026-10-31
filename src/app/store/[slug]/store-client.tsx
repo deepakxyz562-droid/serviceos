@@ -5,7 +5,7 @@ import { qrSvgMarkup } from '@/lib/qr-svg';
 import { getBosText, detectRegionalDefaultLanguage, type BosLanguage } from '@/components/bos/i18n/bos-translations';
 import { formatStoreAddress } from '@/lib/format-utils';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ShoppingCart,
   MessageCircle,
@@ -289,6 +289,83 @@ export function StoreClient({
   const [scheduledSlot, setScheduledSlot] = useState<string>('Today at 5:30 PM');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<any | null>(null);
+  const [modalUtrInput, setModalUtrInput] = useState('');
+  const [isSubmittingModalUtr, setIsSubmittingModalUtr] = useState(false);
+  const [modalUtrSubmitted, setModalUtrSubmitted] = useState(false);
+
+  // Play a cheerful ascending chime when payment is auto-detected
+  const playPaymentSuccessChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const playTone = (freq: number, start: number, duration: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime + start);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + start);
+        osc.stop(ctx.currentTime + start + duration);
+      };
+      playTone(523.25, 0.0, 0.35);
+      playTone(659.25, 0.15, 0.35);
+      playTone(783.99, 0.3, 0.45);
+    } catch {}
+  };
+
+  // Live polling for UPI payment verification on storefront checkout modal
+  useEffect(() => {
+    if (!orderSuccess || orderSuccess.paymentMethod !== 'UPI' || orderSuccess.paymentStatus === 'PAID') {
+      return;
+    }
+
+    const orderId = orderSuccess.orderId;
+    const token = orderSuccess.trackingToken;
+    if (!orderId) return;
+
+    let isSubscribed = true;
+
+    const pollPaymentStatus = async () => {
+      try {
+        const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : '';
+        const res = await fetch(`/api/public/store/order?orderId=${encodeURIComponent(orderId)}${tokenQuery}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isSubscribed) return;
+
+        if (data?.order) {
+          const isPaid =
+            data.order.paymentStatus === 'PAID' ||
+            data.order.status === 'CONFIRMED' ||
+            data.order.status === 'PREPARING' ||
+            data.order.status === 'COMPLETED';
+          if (isPaid) {
+            playPaymentSuccessChime();
+            setOrderSuccess((prev: any) =>
+              prev ? { ...prev, paymentStatus: 'PAID', status: data.order.status } : null
+            );
+          }
+        }
+      } catch {
+        // Network retry
+      }
+    };
+
+    const interval = setInterval(pollPaymentStatus, 2500);
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+    };
+  }, [
+    orderSuccess?.orderId,
+    orderSuccess?.paymentMethod,
+    orderSuccess?.paymentStatus,
+    orderSuccess?.trackingToken,
+  ]);
 
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState<DiscountRule | null>(null);
@@ -730,11 +807,16 @@ export function StoreClient({
       setOrderSuccess({
         orderNumber,
         orderId: res.orderId,
+        trackingToken: res.trackingToken,
         trackingUrl,
         waUrl,
         waMessage,
         paymentMethod: method === 'UPI' ? 'UPI' : 'COD',
+        total: grandTotal,
+        paymentStatus: method === 'UPI' ? 'UNPAID' : 'PAID',
       });
+      setModalUtrInput('');
+      setModalUtrSubmitted(false);
 
       setCart({});
       if (typeof window !== 'undefined') {
@@ -2327,66 +2409,235 @@ export function StoreClient({
           </div>
         )}
 
-        {/* Order Confirmed Dialog */}
+        {/* Order Confirmed / Live UPI Detection Dialog */}
         {orderSuccess && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-sm bg-white rounded-3xl p-6 text-center shadow-2xl">
-              <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                <CheckCircle2 className="h-8 w-8" />
-              </div>
-              <h3 className="text-xl font-black text-stone-900">{t('store.orderConfirmed', 'Order Confirmed!', 'ऑर्डर सफलतापूर्वक दर्ज हो गया!')}</h3>
-              <p className="text-xs text-stone-500 mt-1">
-                Order #{orderSuccess.orderNumber} {t('store.orderReceivedMsg', 'has been received. Keep this link to check its status.', 'प्राप्त हो गया है। स्थिति जांचने के लिए यह लिंक सुरक्षित रखें।')}
-              </p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fade-in">
+            {orderSuccess.paymentMethod === 'UPI' && orderSuccess.paymentStatus !== 'PAID' ? (
+              <div className="w-full max-w-md bg-white rounded-3xl p-5 sm:p-6 text-center shadow-2xl border border-stone-200 max-h-[92vh] overflow-y-auto">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                  <div className="text-left">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      ⚡ Direct UPI Payment
+                    </span>
+                    <h3 className="text-base font-black text-stone-900 mt-1">
+                      Order #{orderSuccess.orderNumber}
+                    </h3>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-stone-500 font-bold uppercase tracking-wider">Amount Payable</p>
+                    <p className="text-lg font-black text-emerald-700">
+                      {currencySymbol}{(orderSuccess.total ?? grandTotal).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
 
-              <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-stone-100 rounded-full text-xs font-bold text-stone-700">
-                {orderSuccess.paymentMethod === 'UPI' ? (
-                  <>
-                    <QrCode className="size-3.5 text-emerald-600" />
-                    <span>{t('store.paymentModeUpi', 'Payment Mode: UPI Online', 'पेमेंट: यूपीआई ऑनलाइन')}</span>
-                  </>
-                ) : (
-                  <>
-                    <Store className="size-3.5 text-stone-600" />
-                    <span>{t('store.paymentModeCounter', 'Payment Mode: Pay at Counter', 'पेमेंट: काउंटर पर नकद')}</span>
-                  </>
-                )}
-              </div>
+                {/* Radar Active Pulse indicator */}
+                <div className="my-3 py-2.5 px-3 bg-amber-50/80 rounded-2xl border border-amber-200 flex items-center justify-between text-left">
+                  <div className="flex items-center gap-2.5">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-amber-950">
+                        {t('store.checkingBank', 'Checking store soundbox & bank...', 'स्टोर साउंडबॉक्स / बैंक से मिलान हो रहा है...')}
+                      </p>
+                      <p className="text-[10px] text-amber-800">
+                        {t('store.autoDetectMsg', 'Screen will auto-confirm once your payment is detected', 'पेमेंट होते ही यह स्क्रीन अपने आप कन्फर्म हो जाएगी')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-              <div className="mt-5 space-y-2">
-                <a
-                  href={orderSuccess.trackingUrl}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-md active:scale-95 transition"
-                >
-                  <Clock className="h-4 w-4" />
-                  <span>{t('store.trackLiveOrder', '🔥 Track Live Order & Virtual Queue', '🔥 लाइव ऑर्डर और कतार ट्रैक करें')}</span>
-                </a>
+                {/* Dynamic Vector QR */}
+                {(() => {
+                  const upiTarget = effectiveUpiId;
+                  const liveUpiUri = upiTarget
+                    ? `upi://pay?pa=${encodeURIComponent(upiTarget)}&pn=${encodeURIComponent(businessName)}&am=${(orderSuccess.total ?? grandTotal).toFixed(2)}&tn=${encodeURIComponent(`Order #${orderSuccess.orderNumber}`)}&cu=INR`
+                    : '';
+                  const vectorQr = liveUpiUri ? (qrSvgMarkup(liveUpiUri) ?? '') : '';
 
-                {orderSuccess.waUrl && (
+                  return (
+                    <div className="space-y-3">
+                      {vectorQr ? (
+                        <div className="p-3 bg-stone-50 rounded-2xl border border-stone-200/80 flex flex-col items-center justify-center">
+                          <p className="text-xs font-bold text-stone-800 mb-2">
+                            {t('store.scanWithAnyUpi', 'Scan with any UPI App to Pay', 'किसी भी UPI ऐप से स्कैन करके भुगतान करें')}
+                          </p>
+                          <div
+                            className="size-40 rounded-xl bg-white p-2 shadow-xs border border-stone-200"
+                            dangerouslySetInnerHTML={{ __html: vectorQr }}
+                          />
+                          <div className="mt-2.5 flex items-center gap-1.5 text-[11px] font-mono font-bold text-stone-600 bg-white px-2.5 py-1 rounded-lg border border-stone-200">
+                            <span>UPI: {upiTarget}</span>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {/* 1-Tap Mobile UPI Switcher */}
+                      {liveUpiUri && (
+                        <div className="space-y-1.5">
+                          <p className="text-[10.5px] font-bold text-stone-500 uppercase tracking-wide">
+                            {t('store.tapToPayApp', 'Or 1-Tap Pay via App:', 'या ऐप से 1-टैप में भुगतान करें:')}
+                          </p>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {[
+                              { label: 'GPay', color: 'text-stone-900 border-stone-300 bg-white' },
+                              { label: 'PhonePe', color: 'text-purple-700 border-purple-200 bg-purple-50/50' },
+                              { label: 'Paytm', color: 'text-blue-700 border-blue-200 bg-blue-50/50' },
+                              { label: 'BHIM', color: 'text-emerald-700 border-emerald-200 bg-emerald-50/50' },
+                            ].map((app) => (
+                              <a
+                                key={app.label}
+                                href={liveUpiUri}
+                                className={`py-2 px-1 text-center rounded-xl border text-[11px] font-black transition active:scale-95 flex flex-col items-center justify-center ${app.color}`}
+                              >
+                                <Smartphone className="size-3.5 mb-0.5" />
+                                <span>{app.label}</span>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Optional UTR Input Form */}
+                <div className="mt-3.5 pt-3 border-t border-stone-100 text-left">
+                  <p className="text-[10.5px] font-bold text-stone-700 mb-1">
+                    {t('store.haveUtrReceipt', 'Have 12-digit UTR from payment receipt?', 'क्या आपके पास रसीद का 12-अंकों का UTR नंबर है?')}
+                  </p>
+                  {modalUtrSubmitted ? (
+                    <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                      <CheckCircle2 className="size-3.5 text-emerald-600" />
+                      <span>{t('store.utrSubmittedAlert', 'UTR submitted! Auto-matching against store device.', 'UTR दर्ज हो गया! दुकानदार के डिवाइस से मिलान किया जा रहा है।')}</span>
+                    </div>
+                  ) : (
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!modalUtrInput.trim() || isSubmittingModalUtr) return;
+                        setIsSubmittingModalUtr(true);
+                        try {
+                          await fetch('/api/public/store/order', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              orderId: orderSuccess.orderId,
+                              trackingToken: orderSuccess.trackingToken,
+                              utrNumber: modalUtrInput.trim(),
+                              paymentStatus: 'DETECTION_PENDING',
+                            }),
+                          });
+                          setModalUtrSubmitted(true);
+                        } catch {}
+                        setIsSubmittingModalUtr(false);
+                      }}
+                      className="flex gap-1.5"
+                    >
+                      <input
+                        type="text"
+                        value={modalUtrInput}
+                        onChange={(e) => setModalUtrInput(e.target.value.replace(/[^0-9a-zA-Z]/g, ''))}
+                        placeholder={t('store.utrPlaceholder', 'e.g. 4289xxxxxxxx', 'उदा. 4289xxxxxxxx')}
+                        maxLength={18}
+                        className="flex-1 text-xs font-mono bg-stone-50 border border-stone-200 rounded-xl px-3 py-1.5 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!modalUtrInput.trim() || isSubmittingModalUtr}
+                        className="px-3 py-1.5 bg-stone-900 hover:bg-black disabled:opacity-50 text-white rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer"
+                      >
+                        {isSubmittingModalUtr ? '...' : t('store.verifyBtn', 'Verify', 'सत्यापित करें')}
+                      </button>
+                    </form>
+                  )}
+                </div>
+
+                {/* Secondary Actions */}
+                <div className="mt-4 pt-2.5 border-t border-stone-100 flex items-center justify-between">
                   <a
-                    href={orderSuccess.waUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full bg-stone-100 hover:bg-stone-200 text-stone-900 py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition"
+                    href={orderSuccess.trackingUrl}
+                    className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
                   >
-                    <MessageCircle className="h-4 w-4 text-emerald-600" />
-                    <span>{t('store.openInWhatsApp', 'Open in WhatsApp', 'व्हाट्सएप में खोलें')}</span>
+                    <span>{t('store.trackLiveOrder', '🔥 Track Live Order & Virtual Queue', '🔥 लाइव ऑर्डर और कतार ट्रैक करें')}</span>
+                    <ArrowRight className="size-3.5" />
                   </a>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOrderSuccess(null);
-                    setCart({});
-                    closeCart();
-                  }}
-                  className="w-full text-stone-400 hover:text-stone-600 py-2 text-xs font-semibold cursor-pointer"
-                >
-                  {t('store.continueShopping', 'Back to Menu', 'दुकान पर वापस जाएं')}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrderSuccess(null);
+                      setCart({});
+                      closeCart();
+                    }}
+                    className="text-xs font-semibold text-stone-400 hover:text-stone-600 cursor-pointer"
+                  >
+                    {t('store.payLater', 'Pay Later', 'बाद में भुगतान करें')}
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* Confirmed Celebration Modal */
+              <div className="w-full max-w-sm bg-white rounded-3xl p-6 text-center shadow-2xl">
+                <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <CheckCircle2 className="h-8 w-8" />
+                </div>
+                <h3 className="text-xl font-black text-stone-900">{t('store.orderConfirmed', 'Order Confirmed!', 'ऑर्डर सफलतापूर्वक दर्ज हो गया!')}</h3>
+                <p className="text-xs text-stone-500 mt-1">
+                  Order #{orderSuccess.orderNumber} {t('store.orderReceivedMsg', 'has been received. Keep this link to check its status.', 'प्राप्त हो गया है। स्थिति जांचने के लिए यह लिंक सुरक्षित रखें।')}
+                </p>
+
+                <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-xs font-bold text-emerald-800">
+                  {orderSuccess.paymentMethod === 'UPI' ? (
+                    <>
+                      <Check className="size-3.5 text-emerald-600" />
+                      <span>{t('store.paymentVerifiedUpi', 'Payment Verified: Direct UPI', 'भुगतान सत्यापित: सीधा UPI')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Store className="size-3.5 text-stone-600" />
+                      <span>{t('store.paymentModeCounter', 'Payment Mode: Pay at Counter', 'पेमेंट: काउंटर पर नकद')}</span>
+                    </>
+                  )}
+                </div>
+
+                <div className="mt-5 space-y-2">
+                  <a
+                    href={orderSuccess.trackingUrl}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-md active:scale-95 transition"
+                  >
+                    <Clock className="h-4 w-4" />
+                    <span>{t('store.trackLiveOrder', '🔥 Track Live Order & Virtual Queue', '🔥 लाइव ऑर्डर और कतार ट्रैक करें')}</span>
+                  </a>
+
+                  {orderSuccess.waUrl && (
+                    <a
+                      href={orderSuccess.waUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full bg-stone-100 hover:bg-stone-200 text-stone-900 py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition"
+                    >
+                      <MessageCircle className="h-4 w-4 text-emerald-600" />
+                      <span>{t('store.openInWhatsApp', 'Open in WhatsApp', 'व्हाट्सएप में खोलें')}</span>
+                    </a>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrderSuccess(null);
+                      setCart({});
+                      closeCart();
+                    }}
+                    className="w-full text-stone-400 hover:text-stone-600 py-2 text-xs font-semibold cursor-pointer"
+                  >
+                    {t('store.continueShopping', 'Back to Menu', 'दुकान पर वापस जाएं')}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

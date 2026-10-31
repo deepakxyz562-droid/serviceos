@@ -50,7 +50,11 @@ type BosOrdersWorkstationProps = {
   orders: BosOrder[];
   demoMode?: boolean;
   initialSelectedOrderId?: string;
-  onUpdateOrderStatus: (orderId: string, status: BosOrder['status']) => Promise<void>;
+  onUpdateOrderStatus: (
+    orderId: string,
+    status: BosOrder['status'],
+    paymentStatus?: 'paid' | 'unpaid' | 'refunded' | 'refund_pending'
+  ) => Promise<void>;
   onPrintOrderBill: (order: BosOrder) => void;
   onNavigateToPos: () => void;
 };
@@ -82,6 +86,7 @@ type ShowcaseOrderRow = {
   inspectorTotal: number;
   paymentMethodDetail: string;
   transactionId: string;
+  paymentStatus?: string;
 };
 
 const SHOWCASE_ORDERS: ShowcaseOrderRow[] = [
@@ -690,6 +695,7 @@ export function BosOrdersWorkstation({
         inspectorTotal: o.totalAmount,
         paymentMethodDetail: o.paymentMode.toUpperCase(),
         transactionId: `TXN-${o.id.replace(/\D/g, '')}`,
+        paymentStatus: o.paymentStatus || 'paid',
       }));
 
     return [...newRuntimeOrders, ...SHOWCASE_ORDERS].map((row) => ({
@@ -1813,16 +1819,55 @@ export function BosOrdersWorkstation({
                       ? 'bg-[#FEE2E2] text-[#DC2626]'
                       : refundOverrides[selectedOrder.id] === 'refund_pending'
                         ? 'bg-[#FEF3C7] text-[#D97706]'
-                        : 'bg-[#E6F6F0] text-[#0A7B56]'
+                        : selectedOrder.paymentStatus === 'unpaid' || selectedOrder.paymentStatus === 'pending'
+                          ? 'bg-[#FEF3C7] text-[#D97706]'
+                          : selectedOrder.paymentStatus === 'detection_pending' || selectedOrder.paymentStatus === 'DETECTION_PENDING'
+                            ? 'bg-amber-100 text-amber-900'
+                            : 'bg-[#E6F6F0] text-[#0A7B56]'
                   }`}
                 >
                   {refundOverrides[selectedOrder.id] === 'refunded'
                     ? 'Refunded'
                     : refundOverrides[selectedOrder.id] === 'refund_pending'
                       ? 'Refund Pending'
-                      : 'Paid'}
+                      : selectedOrder.paymentStatus === 'unpaid' || selectedOrder.paymentStatus === 'pending'
+                        ? 'Unpaid ⏳'
+                        : selectedOrder.paymentStatus === 'detection_pending' || selectedOrder.paymentStatus === 'DETECTION_PENDING'
+                          ? 'Detecting UPI ⚡'
+                          : 'Paid ✓'}
                 </span>
               </div>
+
+              {selectedOrder.paymentStatus !== 'paid' &&
+                selectedOrder.paymentStatus !== 'PAID' &&
+                refundOverrides[selectedOrder.id] !== 'refunded' && (
+                  <div className="mt-2 p-2.5 rounded-xl bg-amber-50/90 border border-amber-200/80 flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] font-bold text-amber-950">
+                        {selectedOrder.paymentStatus === 'detection_pending' || selectedOrder.paymentStatus === 'DETECTION_PENDING'
+                          ? '⚡ UPI Detection Pending'
+                          : '⏳ Awaiting UPI Payment'}
+                      </p>
+                      <p className="text-[9.5px] text-amber-800">
+                        Confirm receipt in bank or soundbox
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await onUpdateOrderStatus(selectedOrder.id, 'accepted', 'paid');
+                          showToast(`Verified UPI payment for ${selectedOrder.id} ✓`);
+                        } catch {
+                          showToast('Failed to update payment status');
+                        }
+                      }}
+                      className="shrink-0 px-2.5 py-1.5 rounded-lg bg-[#0A6847] hover:bg-[#085338] text-white text-[11px] font-bold shadow-xs active:scale-95 transition cursor-pointer flex items-center gap-1"
+                    >
+                      <span>✓ Confirm Paid</span>
+                    </button>
+                  </div>
+                )}
 
               <div className="flex items-center justify-between text-[11.5px]">
                 <span className="text-[#64748B]">{t('orders.transactionId', 'Transaction ID')}</span>

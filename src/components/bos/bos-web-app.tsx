@@ -2304,7 +2304,11 @@ function BosWebAppInner({
     );
   };
 
-  const handleUpdateOrderStatus = async (orderId: string, status: BosOrder['status']) => {
+  const handleUpdateOrderStatus = async (
+    orderId: string,
+    status: BosOrder['status'],
+    paymentStatus?: 'paid' | 'unpaid' | 'refunded' | 'refund_pending'
+  ) => {
     const prevOrder = orders.find((o) => o.id === orderId);
 
     setOrders((prev) =>
@@ -2314,11 +2318,12 @@ function BosWebAppInner({
               ...o,
               status,
               paymentStatus:
-                status === 'completed'
+                paymentStatus ||
+                (status === 'completed'
                   ? 'paid'
                   : status === 'cancelled' && o.paymentStatus === 'paid'
                     ? 'refund_pending'
-                    : o.paymentStatus,
+                    : o.paymentStatus),
             }
           : o,
       ),
@@ -2339,7 +2344,7 @@ function BosWebAppInner({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: apiStatusMap[status] || 'CONFIRMED',
-          ...(status === 'completed' ? { paymentStatus: 'PAID' } : {}),
+          ...(paymentStatus === 'paid' || status === 'completed' ? { paymentStatus: 'PAID' } : {}),
         }),
       });
       if (!res.ok) {
