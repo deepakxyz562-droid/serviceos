@@ -1,3 +1,4 @@
+import { googleReviewScope } from '@/lib/social/google-review-scope';
 import { db } from '@/lib/db';
 import { CI } from '@/lib/db-utils';
 import { getAuthUser } from '@/lib/auth';
@@ -35,9 +36,9 @@ export async function GET(request: NextRequest) {
     const customerIdParam = searchParams.get('customerId');
     const minRating = searchParams.get('minRating');
     const search = searchParams.get('search');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const sortBy = searchParams.get('sortBy') || 'createdAt';
+    const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1') || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(searchParams.get('limit') || '50') || 50));
+    const sortBy = ['createdAt', 'rating', 'updatedAt'].includes(searchParams.get('sortBy') || '') ? searchParams.get('sortBy')! : 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
     const where: Record<string, unknown> = {};
@@ -50,42 +51,9 @@ export async function GET(request: NextRequest) {
       where.tenantId = user.tenantId;
       if (customerIdParam) where.customerId = customerIdParam;
 
-      let profileIdParam = searchParams.get('profileId');
-      if (!profileIdParam) {
-        try {
-          const tenant = await db.tenant.findUnique({
-            where: { id: user.tenantId },
-            select: { settingsJson: true },
-          });
-          if (tenant?.settingsJson) {
-            const parsed = JSON.parse(tenant.settingsJson);
-            if (parsed.activeGbpLocationId) {
-              profileIdParam = String(parsed.activeGbpLocationId);
-            }
-          }
-          if (!profileIdParam) {
-            const googleAccount = await db.socialAccount.findFirst({
-              where: { tenantId: user.tenantId, platform: 'googlebusiness', isActive: true },
-              select: { accountId: true, metadata: true },
-            });
-            if (googleAccount?.metadata) {
-              const meta = typeof googleAccount.metadata === 'string' ? JSON.parse(googleAccount.metadata) : googleAccount.metadata;
-              if (meta?.activeProfileId) profileIdParam = String(meta.activeProfileId);
-              else if (googleAccount.accountId) profileIdParam = String(googleAccount.accountId);
-            }
-          }
-        } catch {}
-      }
-
-      if (profileIdParam && profileIdParam !== 'all') {
-        const shortMatch = profileIdParam.length > 4 ? profileIdParam.slice(-4) : profileIdParam;
-        where.OR = [
-          { googleReviewId: { startsWith: profileIdParam } },
-          { googleReviewId: { startsWith: shortMatch } },
-          ...(profileIdParam === '5008' || shortMatch === '5008'
-            ? [{ googleReviewId: { startsWith: 'goog_rev_' } }]
-            : []),
-        ];
+      const profileId = searchParams.get('profileId');
+      if (source === 'google' || profileId) {
+        where.AND = [await googleReviewScope(user.tenantId!, profileId && profileId !== 'all' ? profileId : undefined)];
       }
     }
 
@@ -98,11 +66,7 @@ export async function GET(request: NextRequest) {
       }
     }
     if (source) {
-      if (source === 'google') {
-        where.OR = [{ source: 'google' }, { googleReviewId: { not: null } }];
-      } else {
-        where.source = source;
-      }
+      where.source = source === 'google' ? 'google' : source;
     }
     if (employeeId) where.employeeId = employeeId;
     if (minRating) where.rating = { gte: parseInt(minRating) };
@@ -181,6 +145,10 @@ export async function POST(request: NextRequest) {
       googleReviewId,
       reviewUrl,
     } = body;
+
+    if (source === 'google' || googleReviewId) {
+      return NextResponse.json({ error: 'Google reviews must be imported through Google sync. Use manual source for customer feedback.' }, { status: 400 });
+    }
 
     if (rating === undefined || rating === null) {
       return NextResponse.json(

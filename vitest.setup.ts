@@ -8,6 +8,13 @@ if (typeof (globalThis as any).__DEV__ === 'undefined') {
   (globalThis as any).__DEV__ = false;
 }
 
+try {
+  const rn = require('react-native');
+  if (rn && !rn.NativeModules) {
+    rn.NativeModules = {};
+  }
+} catch {}
+
 if (typeof (globalThis as any).expo === 'undefined') {
   (globalThis as any).expo = {
     EventEmitter: class EventEmitter {
@@ -16,7 +23,21 @@ if (typeof (globalThis as any).expo === 'undefined') {
       emit() {}
       removeAllListeners() {}
     },
-    modules: {},
+    modules: {
+      ExponentConstants: {
+        executionEnvironment: 'bare',
+        manifest: {},
+        manifest2: {},
+      },
+    },
+  };
+} else if (!(globalThis as any).expo.modules) {
+  (globalThis as any).expo.modules = {
+    ExponentConstants: {
+      executionEnvironment: 'bare',
+      manifest: {},
+      manifest2: {},
+    },
   };
 }
 

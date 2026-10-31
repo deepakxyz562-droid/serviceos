@@ -232,7 +232,7 @@ export default function ReviewRepliesScreen() {
   }
 
   const [syncBusy, setSyncBusy] = useState(false);
-  const [testReviewBusy, setTestReviewBusy] = useState(false);
+
 
   async function handleSyncGoogle() {
     if (syncBusy) return;
@@ -252,36 +252,7 @@ export default function ReviewRepliesScreen() {
     }
   }
 
-  async function handleGenerateTestReview() {
-    if (testReviewBusy) return;
-    setTestReviewBusy(true);
-    setLocalError(null);
-    setNotice('');
-    try {
-      const businessTitle = activeProfile?.name || gbpPlace.data?.place?.title || 'our business';
-      const authors = ['Vikram Malhotra', 'Pooja Sharma', 'Amit Roy', 'Neha Agarwal'];
-      const chosenAuthor = authors[Math.floor(Math.random() * authors.length)];
-      await apiRequest('/api/reviews', {
-        method: 'POST',
-        body: {
-          authorName: chosenAuthor,
-          rating: 5,
-          comment: `Outstanding experience with ${businessTitle}! Extremely polite staff, fast turnaround, and great value. Highly recommended!`,
-          source: 'google',
-          status: 'pending',
-          googleReviewId: `goog_rev_sim_${Date.now()}`,
-          responseJson: '{}',
-        },
-      });
-      setNotice(`Simulated 5★ review from ${chosenAuthor} added! Ready for Auto-Reply.`);
-      setFilter('pending');
-      await reviews.refresh();
-    } catch (err: unknown) {
-      setLocalError((err as Error).message || 'Failed to create test review.');
-    } finally {
-      setTestReviewBusy(false);
-    }
-  }
+
 
   async function handleShareReply(text: string) {
     try {

@@ -17,7 +17,7 @@ export async function resolveBgosMobileAccount(userId: string, workspaceId?: str
   if (!workspace && user.tenantId) {
     workspace = await db.workspace.findFirst({ where: { tenantId: user.tenantId } });
   }
-  if (!user.tenantId || user.tenant?.suspendedAt || (workspaceId && workspace && workspace.id !== workspaceId)) throw new ProductAccessError('BGOS_REQUIRED', 403);
+  if (!user.tenantId || user.tenant?.suspendedAt || (workspaceId && workspace && workspace.id !== workspaceId) || !isBgosIdentity({ user, workspace })) throw new ProductAccessError('BGOS_REQUIRED', 403);
   const effectiveProduct = workspace?.productType || 'bgos';
   return {
     user: { ...user, workspaceId: workspace?.id || user.workspaceId },

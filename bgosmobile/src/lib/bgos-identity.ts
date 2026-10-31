@@ -1,4 +1,4 @@
-// Explicit product identity: business identities allowed, customer/superadmin excluded, BOS excluded.
+// Only BGOS and its legacy aliases are valid BGOS identities.
 export function isBgosIdentity(identity: {
   user?: { role?: string | null; isSuperAdmin?: boolean } | null;
   workspace?: { productType?: string | null } | null;
@@ -8,6 +8,5 @@ export function isBgosIdentity(identity: {
     return false;
   }
   const pt = identity.workspace?.productType?.toLowerCase() || '';
-  if (pt === 'bos') return false;
-  return true;
+  return ['bgos', 'chatbotly', 'forms'].includes(pt);
 }

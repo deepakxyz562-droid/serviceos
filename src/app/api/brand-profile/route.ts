@@ -209,6 +209,7 @@ export async function GET(request: NextRequest) {
     let sellingItems: any[] = [];
     let marketingTargets: any = null;
     let aiReplySalutation: any = null;
+    let faqs: Array<{ q: string; a: string }> = [];
 
     if (tenant?.settingsJson) {
       try {
@@ -218,6 +219,7 @@ export async function GET(request: NextRequest) {
         sellingItems = Array.isArray(bb.sellingItems) ? bb.sellingItems : [];
         marketingTargets = bb.marketingTargets || null;
         aiReplySalutation = bb.aiReplySalutation || null;
+        faqs = Array.isArray(bb.faqs) ? bb.faqs : Array.isArray(parsed.faqs) ? parsed.faqs : [];
       } catch {}
     }
 
@@ -240,6 +242,7 @@ export async function GET(request: NextRequest) {
       sellingItems,
       marketingTargets,
       aiReplySalutation,
+      faqs,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -334,7 +337,8 @@ export async function PUT(request: NextRequest) {
       (body as any).brandDetails !== undefined ||
       (body as any).sellingItems !== undefined ||
       (body as any).marketingTargets !== undefined ||
-      (body as any).aiReplySalutation !== undefined;
+      (body as any).aiReplySalutation !== undefined ||
+      (body as any).faqs !== undefined;
 
     if (
       body.hours !== undefined ||
@@ -391,6 +395,7 @@ export async function PUT(request: NextRequest) {
           ...((body as any).sellingItems !== undefined ? { sellingItems: (body as any).sellingItems } : {}),
           ...((body as any).marketingTargets !== undefined ? { marketingTargets: (body as any).marketingTargets } : {}),
           ...((body as any).aiReplySalutation !== undefined ? { aiReplySalutation: (body as any).aiReplySalutation } : {}),
+          ...((body as any).faqs !== undefined ? { faqs: (body as any).faqs } : {}),
         };
 
         settingsJson = JSON.stringify({

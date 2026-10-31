@@ -629,7 +629,6 @@ export function OmnichannelView({
   const [composerMode, setComposerMode] = useState<'reply' | 'internal' | 'ai' | 'template'>('reply');
   const [showTemplates, setShowTemplates] = useState(false);
   const [centerNoteInput, setCenterNoteInput] = useState('');
-  const [conversationNotes, setConversationNotes] = useState<Record<string, { id: string; text: string; author: string; date: string }[]>>({});
   const [inboxTab, setInboxTab] = useState<'conversations' | 'visitors' | 'tickets'>(() => {
     if (initialTab) return initialTab;
     if (typeof window !== 'undefined') {
@@ -1571,7 +1570,7 @@ export function OmnichannelView({
                           <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
                             {conv.customerName}
                           </span>
-                          <ChannelIcon channel={conv.channel} className="size-3.5 shrink-0" />
+                          <ChannelIcon channel={conv.channel} size="sm" />
                         </div>
                         <span className="text-[10px] text-slate-400 shrink-0 font-medium">
                           {conv.displayTime || formatTime(conv.lastMessageTime)}
@@ -1698,7 +1697,7 @@ export function OmnichannelView({
                   {[
                     { id: 'chat', label: 'Chat' },
                     { id: 'details', label: 'Customer Details' },
-                    { id: 'notes', label: `Notes (${(conversationNotes[selectedConversation.id]?.length || 0) + 2})` },
+                    { id: 'notes', label: `Notes (${selectedConversation.messages.filter(message => message.sender === 'system' || (message as any).isInternal).length})` },
                     { id: 'orders', label: 'Orders (1)' },
                     { id: 'appointments', label: 'Appointments (1)' },
                     { id: 'tickets', label: 'Tickets (1)' },
@@ -1955,20 +1954,23 @@ export function OmnichannelView({
                         />
                         <Button
                           size="sm"
-                          onClick={() => {
-                            if (!centerNoteInput.trim()) return;
-                            const next = {
-                              id: `note_${Date.now()}`,
-                              text: centerNoteInput.trim(),
-                              author: auth.user?.name || 'You',
-                              date: 'Just now',
-                            };
-                            setConversationNotes((prev) => ({
-                              ...prev,
-                              [selectedConversation.id]: [next, ...(prev[selectedConversation.id] || [])],
-                            }));
-                            setCenterNoteInput('');
-                            toast.success('Internal note added');
+                          onClick={async () => {
+                            const content = centerNoteInput.trim();
+                            if (!content) return;
+                            const conversationId = selectedConversation.id;
+                            try {
+                              const res = await fetch(`${API_BASE}/conversations/${conversationId}/notes`, {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ content }),
+                              });
+                              const data = await res.json();
+                              if (!res.ok || !data.note) throw new Error(data.error || 'Could not save note');
+                              setConversations(prev => prev.map(c => c.id === conversationId ? {
+                                ...c, messages: [...c.messages, { ...data.note, text: content, sender: 'system' }],
+                              } : c));
+                              setCenterNoteInput('');
+                              toast.success('Internal note saved privately');
+                            } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not save note'); }
                           }}
                           className="h-9 rounded-xl bg-[#009F50] hover:bg-[#008A45] text-white text-xs font-bold"
                         >
@@ -1976,11 +1978,11 @@ export function OmnichannelView({
                         </Button>
                       </div>
                       <div className="space-y-2 pt-2">
-                        {[
-                          ...(conversationNotes[selectedConversation.id] || []),
-                          { id: 'n1', text: 'Customer prefers morning appointment slots (9 AM – 11 AM).', author: 'Team', date: 'Apr 15, 2025' },
-                          { id: 'n2', text: 'Looking for annual maintenance after service.', author: 'Team', date: 'Apr 12, 2025' },
-                        ].map((n) => (
+                        {selectedConversation.messages
+                          .filter(message => message.sender === 'system' || (message as any).isInternal)
+                          .map(message => ({ id: message.id, text: message.content,
+                            author: message.senderName || 'Team', date: message.timestamp ? new Date(message.timestamp).toLocaleString() : '' }))
+                          .map((n) => (
                           <div key={n.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800 text-xs">
                             <p className="font-medium text-slate-800 dark:text-slate-200">{n.text}</p>
                             <span className="text-[10px] text-slate-400 mt-1 block">{n.date} • {n.author}</span>

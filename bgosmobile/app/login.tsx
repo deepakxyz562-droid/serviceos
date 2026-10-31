@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Linking, Platform, Text, View } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -9,7 +9,7 @@ import { Action, Brand, Card, Chip, ErrorNotice, Field, Screen, colors, ui } fro
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [method, setMethod] = useState<'phone' | 'email'>('phone');
+  const [method, setMethod] = useState<'email' | 'phone'>('email');
   const [phone, setPhone] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState('');
@@ -18,8 +18,12 @@ export default function LoginScreen() {
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
-  const { login, loginGoogle, loginApple, checkAuth, error } = useAuthStore();
+  const { login, loginGoogle, loginApple, logout, checkAuth, error, isAuthenticated, isLoading, onboardingRequired } = useAuthStore();
   const [localError, setLocalError] = useState<string | null>(null);
+
+  if (!isLoading && isAuthenticated) {
+    return <Redirect href={onboardingRequired ? '/setup' : '/(tabs)'} />;
+  }
 
   useEffect(() => {
     let active = true;
@@ -73,10 +77,9 @@ export default function LoginScreen() {
     setBusy(true);
     setLocalError(null);
     try {
-      // In production OTP endpoints verify and issue token; fallback to checkAuth or email if needed
-      await checkAuth();
-    } catch (e) {
-      setLocalError(e instanceof Error ? e.message : 'Invalid code, please try again.');
+      // BGOS workspace management requires authenticated workspace credentials
+      setLocalError('BGOS workspace access requires Email & Password or Google sign-in. Please use the Email tab.');
+      setMethod('email');
     } finally {
       setBusy(false);
     }
@@ -109,8 +112,8 @@ export default function LoginScreen() {
       </View>
 
       <View style={[ui.row, { justifyContent: 'center', marginBottom: 12 }]}>
-        <Chip label="Mobile OTP" selected={method === 'phone'} onPress={() => setMethod('phone')} />
         <Chip label="Email & Password" selected={method === 'email'} onPress={() => setMethod('email')} />
+        <Chip label="Mobile OTP" selected={method === 'phone'} onPress={() => setMethod('phone')} />
       </View>
 
       <Card>
@@ -189,7 +192,7 @@ export default function LoginScreen() {
 
         <Action secondary label="Continue with Google" icon="login" disabled={busy} onPress={google} />
 
-        {appleAvailable && (
+        {appleAvailable && Platform.OS === 'ios' && (
           <View style={{ marginTop: 4 }}>
             <AppleAuthentication.AppleAuthenticationButton
               buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}

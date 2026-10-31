@@ -434,14 +434,15 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
         }),
       });
       if (res.ok) {
-        toast.success(`${lead.name} converted to active Customer & Job!`);
+        toast.success(`${lead.name} converted to active Customer!`);
         setIsDetailOpen(false);
         fetchLeads();
       } else {
-        handleStatusChange(lead.id, 'won');
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to convert lead. Please check customer details and try again.');
       }
     } catch {
-      handleStatusChange(lead.id, 'won');
+      toast.error('Network error converting lead. Please try again.');
     }
   };
 

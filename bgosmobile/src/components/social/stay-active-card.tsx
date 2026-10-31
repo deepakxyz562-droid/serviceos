@@ -64,13 +64,18 @@ export function StayActiveSocialMediaCard() {
           onPress: async () => {
             setConnectingKey(platform);
             try {
+              let ticket = '';
+              try {
+                const ticketRes = await apiRequest<{ ticket: string }>('/api/bgos/mobile-auth/handoff', { method: 'POST' });
+                if (ticketRes?.ticket) ticket = ticketRes.ticket;
+              } catch {}
+              const ticketQuery = ticket ? `?ticket=${encodeURIComponent(ticket)}` : '';
               const token = await getToken();
-              const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
               const precheckHeaders: Record<string, string> = { Accept: 'application/json' };
               if (token) precheckHeaders.Authorization = `Bearer ${token}`;
 
               // Preflight check if Meta App credentials are ready
-              const precheck = await fetch(`${WEB_URL}/api/oauth/${platform}${tokenQuery}`, {
+              const precheck = await fetch(`${WEB_URL}/api/oauth/${platform}${ticketQuery}`, {
                 headers: precheckHeaders,
               }).catch(() => null);
 
@@ -86,7 +91,7 @@ export function StayActiveSocialMediaCard() {
                 return;
               }
 
-              const oauthUrl = `${WEB_URL}/api/oauth/${platform}${tokenQuery}`;
+              const oauthUrl = `${WEB_URL}/api/oauth/${platform}${ticketQuery}`;
               // Open in-app secure browser session rather than kicking out to external Safari
               await WebBrowser.openBrowserAsync(oauthUrl, {
                 presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
@@ -94,9 +99,13 @@ export function StayActiveSocialMediaCard() {
               });
               await accountsRes.refresh();
             } catch {
-              const token = await getToken();
-              const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
-              await Linking.openURL(`${WEB_URL}/api/oauth/${platform}${tokenQuery}`).catch(() => {
+              let ticket = '';
+              try {
+                const ticketRes = await apiRequest<{ ticket: string }>('/api/bgos/mobile-auth/handoff', { method: 'POST' });
+                if (ticketRes?.ticket) ticket = ticketRes.ticket;
+              } catch {}
+              const ticketQuery = ticket ? `?ticket=${encodeURIComponent(ticket)}` : '';
+              await Linking.openURL(`${WEB_URL}/api/oauth/${platform}${ticketQuery}`).catch(() => {
                 Alert.alert('Unable to Open', `Could not open ${platformLabel} connection.`);
               });
             } finally {

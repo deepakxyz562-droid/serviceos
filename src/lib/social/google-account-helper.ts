@@ -5,7 +5,7 @@ import type { SocialAccountData } from '@/lib/social/types';
 
 /**
  * Retrieve and prepare the authenticated Google Business Profile account for a tenant.
- * Respects the tenant's active profile setting (e.g. FieserOS), decrypts access tokens,
+ * Respects the tenant's active profile setting, decrypts access tokens,
  * and transparently refreshes expired credentials.
  */
 export async function prepareGoogleAccount(
@@ -39,31 +39,33 @@ export async function prepareGoogleAccount(
     });
   }
 
-  // 2. Fallback to FieserOS if no specific account was found
-  if (!account) {
-    account = await db.socialAccount.findFirst({
-      where: {
-        tenantId,
-        platform: 'googlebusiness',
-        isActive: true,
-        OR: [
-          { accountId: '10777612572223040949' },
-          { accountName: { contains: 'Fieser', mode: 'insensitive' } },
-        ],
-      },
+  // A saved selection must never silently switch to another business.
+  if (activeLocationId && !account) {
+    const candidates = await db.socialAccount.findMany({
+      where: { tenantId, platform: 'googlebusiness', isActive: true },
     });
+    account = candidates.find((candidate) => {
+      try {
+        const meta = typeof candidate.metadata === 'string' ? JSON.parse(candidate.metadata) : candidate.metadata;
+        return String(meta?.locationId || meta?.activeProfileId || '') === String(activeLocationId)
+          || meta?.locations?.some((location: any) => String(location.locationId || location.id) === String(activeLocationId));
+      } catch { return false; }
+    }) || null;
+    if (!account) return null;
   }
-
-  // 3. Fallback to most recently updated active googlebusiness account
   if (!account) {
-    account = await db.socialAccount.findFirst({
-      where: {
-        tenantId,
-        platform: 'googlebusiness',
-        isActive: true,
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+    if (typeof (db as any).socialAccount?.findMany === 'function') {
+      const candidates = await db.socialAccount.findMany({
+        where: { tenantId, platform: 'googlebusiness', isActive: true }, take: 2,
+      });
+      // Multiple accounts require an explicit selection.
+      if (candidates.length !== 1) return null;
+      account = candidates[0];
+    } else if (typeof (db as any).socialAccount?.findFirst === 'function') {
+      account = await db.socialAccount.findFirst({
+        where: { tenantId, platform: 'googlebusiness', isActive: true },
+      });
+    }
   }
 
   if (!account) return null;
@@ -82,6 +84,7 @@ export async function prepareGoogleAccount(
       metadata = account.metadata as Record<string, unknown>;
     }
 
+    if (activeLocationId) metadata.activeProfileId = String(activeLocationId);
     const accountData: SocialAccountData = {
       id: account.id,
       platform: 'googlebusiness',

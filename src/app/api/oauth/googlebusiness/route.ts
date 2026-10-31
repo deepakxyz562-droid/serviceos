@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes, createHmac } from 'crypto';
 import { db } from '@/lib/db';
 import { getAuthUser, verifyToken, COOKIE_OPTIONS } from '@/lib/auth';
+import { verifyHandoffTicket } from '@/lib/bgos-mobile-auth';
 import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
 
 /**
@@ -57,8 +58,20 @@ export async function GET(request: NextRequest) {
     originHost = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://fieseros.com';
   }
 
-  // ── 1. Auth check (Cookie -> Header -> Query Param fallback) ───────────
+  // ── 1. Auth check (Cookie -> Header -> Ticket -> Legacy Token Query) ──
   let authUser = await getAuthUser(request);
+  const ticketFromQuery = searchParams.get('ticket');
+  if (!authUser && ticketFromQuery) {
+    const verified = verifyHandoffTicket(ticketFromQuery);
+    if (verified) {
+      authUser = {
+        id: verified.userId,
+        email: verified.email,
+        role: verified.role as any,
+        tenantId: verified.tenantId,
+      };
+    }
+  }
   const tokenFromQuery = searchParams.get('auth') || searchParams.get('token');
   if (!authUser && tokenFromQuery) {
     authUser = verifyToken(tokenFromQuery);

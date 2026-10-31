@@ -192,9 +192,12 @@ export default function MarketingScreen() {
 
   async function openGoogleConnect() {
     try {
-      const token = await getToken();
-      const authPart = token ? `&auth=${encodeURIComponent(token)}` : '';
-      await Linking.openURL(`${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&returnView=socialMedia${authPart}`);
+      let ticketParam = '';
+      try {
+        const res = await apiRequest<{ ticket: string }>('/api/bgos/mobile-auth/handoff', { method: 'POST' });
+        if (res?.ticket) ticketParam = `&ticket=${encodeURIComponent(res.ticket)}`;
+      } catch {}
+      await Linking.openURL(`${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&returnView=socialMedia${ticketParam}`);
     } catch {
       setError('Could not open the browser to connect Google. Try again or connect from BGOS web.');
     }

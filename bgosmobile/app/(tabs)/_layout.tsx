@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/components/ui';
 import { usePendingReplies } from '../../src/hooks/use-pending-replies';
+import { useAuthStore } from '../../src/stores/auth-store';
 
 /**
  * Bottom Navigation — BGOS Growth Employee bar:
@@ -40,6 +41,14 @@ const hidden = [
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const pendingReplies = usePendingReplies(60000);
+  const { isAuthenticated, isLoading, onboardingRequired } = useAuthStore();
+
+  if (!isLoading && !isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
+  if (!isLoading && isAuthenticated && onboardingRequired) {
+    return <Redirect href="/setup" />;
+  }
 
   const tabHeight = Platform.select({
     ios: insets.bottom > 0 ? 60 + insets.bottom : 64,

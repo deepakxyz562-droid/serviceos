@@ -413,6 +413,7 @@ export function ReviewsView({
   const [qnaModalOpen, setQnaModalOpen] = useState(false);
   const [qnaQuestion, setQnaQuestion] = useState('');
   const [qnaAnswer, setQnaAnswer] = useState('');
+  const gbpConnectedRef = useRef(false);
 
   // Reviews State
   const [reviewsList, setReviewsList] = useState<ReviewItem[]>(
@@ -460,12 +461,18 @@ export function ReviewsView({
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!mounted || !data) return;
-        const bName = data.profile?.businessName || auth?.tenant?.name || auth?.workspace?.name;
-        if (bName) setProfileTitle(bName);
-        if (data.profile?.industry) setProfileCategory(data.profile.industry);
-        const parsed = parseAddress(data.businessAddress || data.profile?.location);
-        const formatted = formatAddress(parsed) || data.profile?.location || auth?.tenant?.city;
-        if (formatted) setProfileAddress(formatted);
+        // Precedence: do not clobber verified Google Business Profile identity if already hydrated
+        if (!gbpConnectedRef.current) {
+          const bName = data.profile?.businessName || auth?.tenant?.name || auth?.workspace?.name;
+          if (bName) setProfileTitle(bName);
+          if (data.profile?.industry) setProfileCategory(data.profile.industry);
+          const parsed = parseAddress(data.businessAddress || data.profile?.location);
+          const formatted = formatAddress(parsed) || data.profile?.location || auth?.tenant?.city;
+          if (formatted) setProfileAddress(formatted);
+        }
+        if (Array.isArray(data.faqs) && data.faqs.length > 0) {
+          setQnaItems(data.faqs);
+        }
       })
       .catch(() => {});
 
@@ -483,6 +490,7 @@ export function ReviewsView({
       .then((data) => {
         if (!mounted || !data) return;
         if (data.isConnected && data.place) {
+          gbpConnectedRef.current = true;
           setIsGbpConnected(true);
           setIsPendingApproval(Boolean(data.isPendingApproval || data.place.isPendingApproval));
           setConnectedPlace(data.place);
@@ -491,6 +499,7 @@ export function ReviewsView({
           if (data.place.address) setProfileAddress(data.place.address);
           if (data.metrics) setGbpMetrics(data.metrics);
         } else {
+          gbpConnectedRef.current = false;
           if (!isDemo && !initialReviews) {
             setIsGbpConnected(false);
             setConnectedPlace(null);
@@ -1484,16 +1493,32 @@ export function ReviewsView({
   };
 
   // ─── Q&A: add FAQ to workspace FAQ content (Google Q&A API is deprecated) ─────
-  const handleAddFaq = () => {
+  const handleAddFaq = async () => {
     if (!qnaQuestion.trim() || !qnaAnswer.trim()) {
       toast.error('Enter both a question and an answer.');
       return;
     }
-    setQnaItems((prev) => [{ q: qnaQuestion.trim(), a: qnaAnswer.trim() }, ...prev]);
+    const newItems = [{ q: qnaQuestion.trim(), a: qnaAnswer.trim() }, ...qnaItems];
+    setQnaItems(newItems);
     setQnaQuestion('');
     setQnaAnswer('');
     setQnaModalOpen(false);
-    toast.success('FAQ added. It will appear in your public profile and help customers self-serve.');
+
+    try {
+      await authFetch('/api/brand-profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessName: profileTitle || 'My Business',
+          industry: profileCategory || 'Local Services',
+          faqs: newItems,
+          skipAiSummary: true,
+        }),
+      });
+      toast.success('FAQ added and saved to your business profile.');
+    } catch {
+      toast.info('FAQ added locally.');
+    }
   };
 
   // ─── Omnichannel Auto-Reply Saver ───────────────────────────────────────────
@@ -1672,14 +1697,20 @@ export function ReviewsView({
   // Dynamic Rating Trend Graph Points ending at actual average rating
   const trendMonths = ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'];
   const dynamicRatingTrend = trendMonths.map((month, i) => {
-    const diff = (trendMonths.length - 1 - i) * 0.08;
-    const ratingVal = Math.max(
-      3.8,
-      Math.min(5.0, averageRatingNum > 0 ? averageRatingNum - diff : 4.8 - diff)
-    );
-    const y = Math.round(((5.0 - ratingVal) / 4.0) * 110 + 14);
+    let ratingVal = 0;
+    if (isFixtureMode) {
+      const diff = (trendMonths.length - 1 - i) * 0.08;
+      ratingVal = Math.max(3.8, Math.min(5.0, averageRatingNum > 0 ? averageRatingNum - diff : 4.8 - diff));
+    } else if (averageRatingNum > 0) {
+      // In live production, end at actual average rating with subtle historical progression
+      const diff = (trendMonths.length - 1 - i) * 0.03;
+      ratingVal = Math.max(1.0, Math.min(5.0, averageRatingNum - diff));
+    } else {
+      ratingVal = 0;
+    }
+    const y = ratingVal === 0 ? 124 : Math.round(((5.0 - ratingVal) / 4.0) * 110 + 14);
     const x = Math.round(20 + i * (396 / (trendMonths.length - 1)));
-    return { month, rating: ratingVal.toFixed(1), x, y };
+    return { month, rating: ratingVal > 0 ? ratingVal.toFixed(1) : '—', x, y };
   });
 
   const trendSvgPath = dynamicRatingTrend
@@ -1909,7 +1940,13 @@ export function ReviewsView({
               <h2 className="text-base font-bold tracking-tight">
                 Google Business Profile Health:{' '}
                 <span className="text-[#009F50]">
-                  {connectedPlace?.completionScore ? `${connectedPlace.completionScore}% Complete` : isFixtureMode ? '88% Complete' : '60% Complete'}
+                  {connectedPlace?.completionScore != null
+                    ? `${connectedPlace.completionScore}% Complete`
+                    : isFixtureMode
+                    ? '88% Complete'
+                    : isGbpConnected
+                    ? 'Audit Pending'
+                    : 'Profile Unlinked'}
                 </span>
               </h2>
               <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">

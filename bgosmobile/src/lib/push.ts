@@ -50,24 +50,26 @@ export async function enablePush(): Promise<{ success: boolean; message: string 
       return { success: false, message: 'Notification permission was denied. Please allow notifications in device settings.' };
     }
 
-    await SecureStore.setItemAsync(PUSH_ENABLED_KEY, 'true').catch(() => {});
+    await SecureStore.setItemAsync(PUSH_ENABLED_KEY, 'false');
 
     if (!Device.isDevice) {
-      return { success: true, message: 'Push notifications enabled for simulator.' };
+      return { success: false, message: 'Permission granted. Use a physical device to register for push notifications.' };
     }
 
     const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
     if (!projectId) {
-      return { success: true, message: 'Push notifications enabled locally.' };
+      return { success: false, message: 'Push registration is unavailable: the app project ID is missing.' };
     }
 
     const tokenRes = await Notifications.getExpoPushTokenAsync({ projectId });
+    if (!tokenRes.data) throw new Error('Push registration did not return a device token. Please retry.');
     if (tokenRes.data) {
       await apiRequest('/api/notifications/push/subscribe', {
         method: 'POST',
         body: { expoPushToken: tokenRes.data, platform: Platform.OS },
-      }).catch(() => {});
-      await SecureStore.setItemAsync(PUSH_TOKEN_KEY, tokenRes.data).catch(() => {});
+      });
+      await SecureStore.setItemAsync(PUSH_TOKEN_KEY, tokenRes.data);
+      await SecureStore.setItemAsync(PUSH_ENABLED_KEY, 'true');
     }
 
     return { success: true, message: 'Push notifications enabled successfully.' };

@@ -76,8 +76,9 @@ export default function ToolsScreen() {
   }
 
   const data = workspace.data;
-  const planCode = data?.plan.code ? data.plan.code.toUpperCase() : 'GROWTH';
+  const planCode = data?.plan.code ? data.plan.code.toUpperCase() : 'STARTER';
   const isTrial = data?.plan.status === 'trial';
+  const isActive = data?.plan.status === 'active';
 
   return (
     <Screen
@@ -103,7 +104,9 @@ export default function ToolsScreen() {
               <MaterialIcons name="credit-card" size={20} color={colors.brand} />
               <Text style={ui.heading}>My Plan</Text>
             </View>
-            <Text style={ui.caption}>7-Day Free Trial & Subscriptions</Text>
+            <Text style={ui.caption}>
+              {isTrial ? '7-Day Free Trial' : isActive ? `${planCode} Plan Active` : 'Subscriptions & Billing'}
+            </Text>
           </View>
           <Badge label={planCode} accent />
         </View>

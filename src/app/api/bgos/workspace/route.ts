@@ -4,7 +4,17 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import type { BgosWorkspace } from '../../../../../shared/bgos-contracts';
 
-const patch = z.object({ mode: z.enum(['local', 'agency']).optional(), profileAssistant: z.boolean().optional(), offlineReply: z.boolean().optional() }).strict();
+const patch = z.object({
+  mode: z.enum(['local', 'agency']).optional(),
+  profileAssistant: z.boolean().optional(),
+  offlineReply: z.boolean().optional(),
+  gbpAutomations: z.object({
+    replyToReviews: z.boolean().optional(),
+    generatePosts: z.boolean().optional(),
+    postingSchedule: z.boolean().optional(),
+    mediaSchedule: z.boolean().optional(),
+  }).optional(),
+}).strict();
 function parse(value: string | null) { try { return JSON.parse(value || '{}'); } catch { return {}; } }
 
 export async function GET() {
@@ -26,7 +36,16 @@ export async function GET() {
         form: form?.slug ? `/f/${encodeURIComponent(form.slug)}` : null,
         review: tenant.googlePlaceId ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(tenant.googlePlaceId)}` : null,
       },
-      automations: { profileAssistant: profile?.aiAgentEnabled === true, offlineReply: settings.autoReplyOffline?.enabled === true },
+      automations: {
+        profileAssistant: profile?.aiAgentEnabled === true,
+        offlineReply: settings.autoReplyOffline?.enabled === true,
+        gbp: settings.gbpAutomations || {
+          replyToReviews: false,
+          generatePosts: false,
+          postingSchedule: false,
+          mediaSchedule: false,
+        },
+      },
       plan: { code: subscription?.billingSource === 'product' ? subscription.plan : tenant.plan, status: subscription?.billingSource === 'product' ? subscription.status : tenant.planStatus },
     };
     return NextResponse.json(data, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -49,6 +68,7 @@ export async function PATCH(request: NextRequest) {
       settings.creatorProfile.aiAgentEnabled = input.data.profileAssistant;
     }
     if (input.data.offlineReply !== undefined) settings.autoReplyOffline = { ...settings.autoReplyOffline, enabled: input.data.offlineReply };
+    if (input.data.gbpAutomations) settings.gbpAutomations = { ...(settings.gbpAutomations || {}), ...input.data.gbpAutomations };
     const updated = await db.tenant.updateMany({ where: { id: user.tenantId, settingsJson: tenant.settingsJson }, data: { settingsJson: JSON.stringify(settings) } });
     if (!updated.count) return NextResponse.json({ error: 'Settings changed in another session. Refresh and retry.' }, { status: 409 });
     return NextResponse.json({ success: true });

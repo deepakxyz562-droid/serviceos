@@ -114,7 +114,7 @@ async function resolveGoogleClientCredentials(): Promise<{
  * surface this as a per-target failure ("GBP account metadata is missing
  * accountName/locationId — reconnect the account").
  */
-async function extractLocationRef(account: SocialAccountData): Promise<{
+export async function extractLocationRef(account: SocialAccountData): Promise<{
   accountName: string;
   locationId: string;
 }> {
@@ -176,8 +176,9 @@ async function extractLocationRef(account: SocialAccountData): Promise<{
         }
 
         if (allDiscoveredLocs.length > 0) {
-          // Prefer FieserOS if present, otherwise first location
-          const primaryLoc = allDiscoveredLocs.find((l) => l.title?.toLowerCase().includes('fieser') || l.id === '10777612572223040949') || allDiscoveredLocs[0];
+          // Resolve only the selected location, or an unambiguous sole location.
+          const primaryLoc = allDiscoveredLocs.find((l) => l.id === locationId) || (allDiscoveredLocs.length === 1 ? allDiscoveredLocs[0] : null);
+          if (!primaryLoc) throw new Error('Select a Google Business location before continuing.');
           accountName = primaryLoc.accountName;
           locationId = primaryLoc.id;
           meta.accountName = primaryLoc.accountName;
@@ -663,18 +664,13 @@ export async function replyToGoogleBusinessReview(
   const { accountName, locationId } = await extractLocationRef(account);
   const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
   const cleanReviewId = reviewId.includes('/') ? reviewId.split('/').pop()! : reviewId;
+  const reviewLocation = reviewId.match(/(?:^|\/)locations\/([^/]+)\/reviews\/[^/]+$/)?.[1];
+  if (reviewLocation && reviewLocation !== String(locationId)) {
+    throw new Error('The review belongs to a different Google Business location.');
+  }
 
-  // Handle mock/simulated/seeded reviews seamlessly in development & sandbox
-  if (
-    cleanReviewId.startsWith('goog_rev_') ||
-    cleanReviewId.startsWith('sim_') ||
-    cleanReviewId.startsWith('mock_') ||
-    cleanReviewId.startsWith('test_')
-  ) {
-    return {
-      comment: comment.trim(),
-      updateTime: new Date().toISOString(),
-    };
+  if (/^(goog_rev_|sim_|mock_|test_)/.test(cleanReviewId)) {
+    throw new Error('This is a sample review. Sync the original Google review before publishing.');
   }
 
   const url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/reviews/${cleanReviewId}/reply`;
@@ -708,15 +704,13 @@ export async function deleteGoogleBusinessReviewReply(
   const { accountName, locationId } = await extractLocationRef(account);
   const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
   const cleanReviewId = reviewId.includes('/') ? reviewId.split('/').pop()! : reviewId;
+  const reviewLocation = reviewId.match(/(?:^|\/)locations\/([^/]+)\/reviews\/[^/]+$/)?.[1];
+  if (reviewLocation && reviewLocation !== String(locationId)) {
+    throw new Error('The review belongs to a different Google Business location.');
+  }
 
-  // Handle mock/simulated/seeded reviews seamlessly in development & sandbox
-  if (
-    cleanReviewId.startsWith('goog_rev_') ||
-    cleanReviewId.startsWith('sim_') ||
-    cleanReviewId.startsWith('mock_') ||
-    cleanReviewId.startsWith('test_')
-  ) {
-    return true;
+  if (/^(goog_rev_|sim_|mock_|test_)/.test(cleanReviewId)) {
+    throw new Error('This is a sample review. Sync the original Google review before deleting its reply.');
   }
 
   const url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/reviews/${cleanReviewId}/reply`;
@@ -770,7 +764,7 @@ export async function fetchGoogleBusinessReviews(
   });
 
   await assertOk(res, 'fetch reviews');
-  const data = (await res.json().catch(() => ({}))) as {
+  const data = (await res.json()) as {
     reviews?: Array<{
       reviewId?: string;
       name?: string;
@@ -793,11 +787,17 @@ export async function fetchGoogleBusinessReviews(
     FIVE: 5,
   };
 
+  if (!data || (data.reviews !== undefined && !Array.isArray(data.reviews))) {
+    throw new Error('Google returned an invalid review response. Please retry the sync.');
+  }
   const reviews = (data.reviews || []).map((r) => {
     const rId = r.reviewId || (r.name ? r.name.split('/').pop() : '') || '';
-    const rating = r.starRating ? starMap[r.starRating.toUpperCase()] || 5 : 5;
+    const rating = r.starRating ? starMap[r.starRating.toUpperCase()] : undefined;
+    if (!rId || !rating) {
+      throw new Error('Google returned a review without a valid ID or rating. Please retry the sync.');
+    }
     return {
-      reviewId: rId,
+      reviewId: `locations/${locationId}/reviews/${rId}`,
       authorName: r.reviewer?.displayName || 'Google User',
       profilePhotoUrl: r.reviewer?.profilePhotoUrl,
       rating,

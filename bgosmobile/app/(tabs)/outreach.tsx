@@ -67,7 +67,7 @@ export default function OutreachScreen() {
           channel: selectedChannel,
           messageContent: message.trim(),
           type: 'bgos_outreach',
-          status: 'draft',
+          status: 'pending_approval',
         },
       });
       setCreateModal(false);
@@ -179,7 +179,7 @@ export default function OutreachScreen() {
               <Text style={[ui.body, { marginTop: 4 }]}>{b.messageContent}</Text>
             </View>
 
-            {b.status === 'pending_approval' && (
+            {(b.status === 'pending_approval' || b.status === 'draft') && (
               <View style={[ui.row, { gap: 10 }]}>
                 <View style={{ flex: 1 }}>
                   <Action

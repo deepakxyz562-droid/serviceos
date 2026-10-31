@@ -1,3 +1,4 @@
+import { googleReviewScope } from '@/lib/social/google-review-scope';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
@@ -28,33 +29,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const socialAccount = await db.socialAccount.findFirst({
-      where: {
-        tenantId: user.tenantId,
-        platform: 'googlebusiness',
-        isActive: true,
-      },
-      select: { metadata: true },
-    });
-    let activeProfileId = '5008';
-    if (socialAccount?.metadata) {
-      try {
-        const meta = typeof socialAccount.metadata === 'string' ? JSON.parse(socialAccount.metadata) : socialAccount.metadata;
-        if (meta?.activeProfileId) activeProfileId = String(meta.activeProfileId);
-      } catch {}
-    }
-
-    const reviewWhere: Record<string, unknown> = {
-      tenantId: user.tenantId,
-    };
-    if (activeProfileId === '5008') {
-      reviewWhere.OR = [
-        { googleReviewId: { startsWith: '5008' } },
-        { googleReviewId: { startsWith: 'goog_rev_' } },
-      ];
-    } else {
-      reviewWhere.googleReviewId = { startsWith: activeProfileId };
-    }
+    const reviewWhere = { tenantId: user.tenantId, ...(await googleReviewScope(user.tenantId)) };
 
     const [reviews, totalReviews] = await Promise.all([
       db.review.findMany({
@@ -96,7 +71,7 @@ export async function GET(request: NextRequest) {
       tenant?.brandProfile?.location || tenant?.city || '';
     const fallbackPhone = tenant?.phone || '';
     const fallbackWebsite = tenant?.website || '';
-    const fallbackDescription = tenant?.brandProfile?.summary || (tenant as any)?.description || '';
+    const fallbackDescription = tenant?.brandProfile?.aiGeneratedSummary || (tenant as any)?.description || '';
 
     let regularHours: any = null;
     if ((tenant as any)?.businessHoursJson) {

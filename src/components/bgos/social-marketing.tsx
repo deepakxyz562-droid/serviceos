@@ -1763,9 +1763,11 @@ function SocialCalendarCard({
 
 export function SocialMediaView({
   initialCampaigns,
+  initialTab,
   isDemo: isDemoProp,
 }: {
   initialCampaigns?: CampaignRow[];
+  initialTab?: SocialTab;
   isDemo?: boolean;
 } = {}) {
   const setCurrentView = useAppStore((state) => state.setCurrentView);
@@ -1780,7 +1782,7 @@ export function SocialMediaView({
     auth?.tenant?.name || auth?.workspace?.name || (isDemo ? 'Your Business' : 'BGOS');
   const businessInitial = businessName.trim().charAt(0).toUpperCase() || 'Y';
 
-  const [activeTab, setActiveTab] = useState<SocialTab>('overview');
+  const [activeTab, setActiveTab] = useState<SocialTab>(initialTab || 'overview');
 
   // ── AI Content studio state ──
   const [studioPrompt, setStudioPrompt] = useState('');
@@ -2828,7 +2830,7 @@ export function SocialMediaView({
   };
 
   const [syncingGoogleReviews, setSyncingGoogleReviews] = useState(false);
-  const [generatingTestReview, setGeneratingTestReview] = useState(false);
+
   const [resettingReviewId, setResettingReviewId] = useState<string | null>(null);
 
   const handleSyncGoogleReviews = async () => {
@@ -2852,43 +2854,7 @@ export function SocialMediaView({
     }
   };
 
-  const handleGenerateTestReview = async () => {
-    setGeneratingTestReview(true);
-    try {
-      const testAuthors = [
-        { name: 'Vikram Malhotra', comment: `Outstanding experience with ${businessName}! Extremely polite staff, fast turnaround, and great value. Highly recommended!` },
-        { name: 'Pooja Sharma', comment: `Visited ${businessName} recently and had a wonderful experience. Top notch quality, clean amenities, and very helpful team.` },
-        { name: 'Amit Roy', comment: `Five stars for ${businessName}! They solved our requirements promptly and professionally. Will definitely return!` },
-      ];
-      const selected = testAuthors[Math.floor(Math.random() * testAuthors.length)];
 
-      const res = await authFetch('/api/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          authorName: selected.name,
-          rating: 5,
-          comment: selected.comment,
-          source: 'google',
-          status: 'pending',
-          googleReviewId: `goog_rev_sim_${Date.now()}`,
-          responseJson: '{}',
-        }),
-      });
-
-      if (res.ok) {
-        toast.success(`Simulated 5★ review from ${selected.name} added! Ready for Auto-Reply.`);
-        setReviewFilter('pending');
-        await fetchReviews();
-      } else {
-        toast.error('Could not create simulated review.');
-      }
-    } catch {
-      toast.error('Network error creating test review.');
-    } finally {
-      setGeneratingTestReview(false);
-    }
-  };
 
   const handleResetReviewToPending = async (reviewId: string) => {
     setResettingReviewId(reviewId);

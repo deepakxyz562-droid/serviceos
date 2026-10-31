@@ -27,3 +27,39 @@ export function readMobileState(value: string): MobileState | null {
     return state;
   } catch { return null; }
 }
+
+const HANDOFF_PURPOSE = 'bgos-mobile-handoff-v1';
+export type HandoffPayload = {
+  userId: string;
+  tenantId: string;
+  role: string;
+  email: string;
+  expires: number;
+  nonce: string;
+};
+
+export function sealHandoffTicket(payload: { userId: string; tenantId: string; role: string; email: string }): string {
+  const nonce = randomBytes(16).toString('hex');
+  const expires = Date.now() + 60 * 1000; // 60 seconds single-use TTL
+  return encryptToken(JSON.stringify({ ...payload, nonce, expires, purpose: HANDOFF_PURPOSE }));
+}
+
+export function verifyHandoffTicket(ticket: string): { userId: string; tenantId: string; role: string; email: string; id: string } | null {
+  try {
+    if (!ticket || ticket.length > 4096) return null;
+    const data = JSON.parse(decryptToken(ticket));
+    if (data.purpose !== HANDOFF_PURPOSE || !Number.isFinite(data.expires) || data.expires <= Date.now()) {
+      return null;
+    }
+    if (!data.userId || !data.tenantId) return null;
+    return {
+      id: data.userId,
+      userId: data.userId,
+      tenantId: data.tenantId,
+      role: data.role || 'owner',
+      email: data.email || '',
+    };
+  } catch {
+    return null;
+  }
+}

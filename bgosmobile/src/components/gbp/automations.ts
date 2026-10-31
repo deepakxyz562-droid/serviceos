@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { loadJson, saveJson } from '../../lib/device-storage';
+import { apiRequest } from '../../lib/api';
+import type { BgosWorkspace } from '../../../../shared/bgos-contracts';
 
 export type AutomationKey = 'replyToReviews' | 'generatePosts' | 'postingSchedule' | 'mediaSchedule';
 
@@ -28,10 +30,26 @@ export function useGbpAutomations() {
   useEffect(() => {
     let active = true;
     (async () => {
+      // 1. Instant local restore
       const saved = await loadJson<GbpAutomations>(KEY);
-      if (!active) return;
-      if (saved) setSettings({ ...AUTOMATION_DEFAULTS, ...saved });
-      setLoaded(true);
+      if (active && saved) {
+        setSettings({ ...AUTOMATION_DEFAULTS, ...saved });
+      }
+
+      // 2. Fetch authoritative workspace settings from server
+      try {
+        const ws = await apiRequest<BgosWorkspace>('/api/bgos/workspace');
+        if (active && ws?.automations?.gbp) {
+          const remoteGbp = ws.automations.gbp as unknown as Partial<GbpAutomations>;
+          setSettings((prev) => {
+            const merged = { ...prev, ...remoteGbp };
+            void saveJson(KEY, merged);
+            return merged;
+          });
+        }
+      } catch {}
+
+      if (active) setLoaded(true);
     })();
     return () => {
       active = false;
@@ -42,6 +60,11 @@ export function useGbpAutomations() {
     setSettings((prev) => {
       const next = { ...prev, [key]: value };
       void saveJson(KEY, next);
+      // Persist to server workspace settings
+      void apiRequest('/api/bgos/workspace', {
+        method: 'PATCH',
+        body: { gbpAutomations: { [key]: value } },
+      }).catch(() => {});
       return next;
     });
   }, []);

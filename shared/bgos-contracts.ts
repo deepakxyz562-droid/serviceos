@@ -2,7 +2,7 @@ export interface BgosWorkspace {
   name: string;
   mode: 'local' | 'agency';
   links: { profile: string | null; booking: string | null; form: string | null; review: string | null };
-  automations: { profileAssistant: boolean; offlineReply: boolean };
+  automations: { profileAssistant: boolean; offlineReply: boolean; gbp?: Record<string, boolean> };
   plan: { code: string; status: string };
 }
 export interface BgosConversation {

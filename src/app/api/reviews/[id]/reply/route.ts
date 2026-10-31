@@ -1,3 +1,4 @@
+import { reviewLocationId } from '@/lib/social/google-review-scope';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
@@ -37,11 +38,14 @@ export async function POST(
       return NextResponse.json({ error: 'Review not found' }, { status: 404 });
     }
 
+    if (review.googleReviewId && !reviewLocationId(review.googleReviewId)) {
+      return NextResponse.json({ error: 'Sync this review from Google to verify its location before replying.' }, { status: 409 });
+    }
     let publishedToGoogle = false;
     let googleError: string | null = null;
 
     let mapsUrl = review.reviewUrl || review.externalUrl || null;
-    const googleAccount = review.googleReviewId ? await prepareGoogleAccount(user.tenantId) : null;
+    const googleAccount = review.googleReviewId ? await prepareGoogleAccount(user.tenantId, reviewLocationId(review.googleReviewId)) : null;
 
     if (googleAccount?.metadata) {
       const meta = googleAccount.metadata as Record<string, any>;
@@ -72,13 +76,7 @@ export async function POST(
     });
     const businessName = tenant?.name || 'Local Service';
 
-    const keywords = Array.isArray(body.keywords)
-      ? body.keywords
-      : [
-          { keyword: `${businessName.toLowerCase()} service`, volume: '500 ↗' },
-          { keyword: 'top rated local service', volume: '300 ↗' },
-          { keyword: 'verified customer satisfaction', volume: '250 ↗' },
-        ];
+    const keywords = Array.isArray(body.keywords) ? body.keywords : [];
 
     const replyPayload = {
       text: replyText.trim(),
@@ -142,11 +140,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Review not found' }, { status: 404 });
     }
 
+    if (review.googleReviewId && !reviewLocationId(review.googleReviewId)) {
+      return NextResponse.json({ error: 'Sync this review from Google to verify its location before deleting its reply.' }, { status: 409 });
+    }
     let deletedFromGoogle = false;
     let googleError: string | null = null;
 
     if (review.googleReviewId) {
-      const googleAccount = await prepareGoogleAccount(user.tenantId);
+      const googleAccount = await prepareGoogleAccount(user.tenantId, reviewLocationId(review.googleReviewId));
       if (googleAccount) {
         try {
           await deleteGoogleBusinessReviewReply(googleAccount, review.googleReviewId);
@@ -156,6 +157,8 @@ export async function DELETE(
         }
       }
     }
+
+    if (review.googleReviewId && !deletedFromGoogle) return NextResponse.json({ error: googleError || 'Google reply deletion was not confirmed.' }, { status: 502 });
 
     const updatedReview = await db.review.update({
       where: { id },

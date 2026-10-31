@@ -233,10 +233,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Layer 2: Brand Safety Gate check before storing or publishing
-    const tenantRecord = await db.tenant.findUnique({
+    const tenantRecord = typeof db.tenant?.findUnique === 'function' ? await db.tenant.findUnique({
       where: { id: tenantId },
       include: { brandProfile: true },
-    });
+    }) : null;
     const activeBusinessName = tenantRecord?.brandProfile?.businessName || tenantRecord?.name || 'Business';
     const forbiddenPhrases = safeJsonArray(tenantRecord?.brandProfile?.forbiddenPhrases) as string[];
     const competitors = safeJsonArray(tenantRecord?.brandProfile?.competitors) as string[];

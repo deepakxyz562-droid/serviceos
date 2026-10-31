@@ -707,48 +707,94 @@ export default function HomeScreen() {
         retry={refresh}
       />
 
-      {/* 7 Days Free Trial Banner */}
-      <View
-        style={{
-          borderRadius: 14,
-          overflow: 'hidden',
-          marginBottom: 10,
-        }}
-      >
+      {/* Plan Status Banner — dynamic based on real workspace plan status */}
+      {workspace.data?.plan?.status === 'trial' ? (
         <View
           style={{
-            backgroundColor: '#4F46E5',
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            borderRadius: 14,
+            overflow: 'hidden',
+            marginBottom: 10,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-            <MaterialIcons name="auto-awesome" size={18} color="#FFFFFF" />
-            <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
-              7 Days Free Trial Active
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => router.push('/my-plan')}
+          <View
             style={{
-              backgroundColor: '#FFFFFF',
-              paddingHorizontal: 12,
-              paddingVertical: 5,
-              borderRadius: 8,
+              backgroundColor: '#4F46E5',
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
           >
-            <Text style={{ color: '#4F46E5', fontSize: 12, fontWeight: '800' }}>My Plan →</Text>
-          </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+              <MaterialIcons name="auto-awesome" size={18} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                7 Days Free Trial Active
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => router.push('/my-plan')}
+              style={{
+                backgroundColor: '#FFFFFF',
+                paddingHorizontal: 12,
+                paddingVertical: 5,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: '#4F46E5', fontSize: 12, fontWeight: '800' }}>My Plan →</Text>
+            </Pressable>
+          </View>
+          <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 14, paddingVertical: 6 }}>
+            <Text style={{ fontSize: 11, color: '#3730A3', fontWeight: '600' }}>
+              Full access to Google Growth, 1-Tap Reviews & AI · Upgrade anytime from ₹499/mo
+            </Text>
+          </View>
         </View>
-        <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 14, paddingVertical: 6 }}>
-          <Text style={{ fontSize: 11, color: '#3730A3', fontWeight: '600' }}>
-            Full access to Google Growth, 1-Tap Reviews & AI · Upgrade anytime from ₹499/mo
-          </Text>
+      ) : workspace.data?.plan?.status === 'active' ? (
+        <View
+          style={{
+            borderRadius: 14,
+            overflow: 'hidden',
+            marginBottom: 10,
+            borderWidth: 1,
+            borderColor: '#A7F3D0',
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: '#ECFDF5',
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+              <MaterialIcons name="verified" size={18} color="#059669" />
+              <View>
+                <Text style={{ color: '#065F46', fontSize: 13, fontWeight: '800' }}>
+                  {(workspace.data.plan.code || 'STARTER').toUpperCase()} Plan Active
+                </Text>
+                <Text style={{ color: '#047857', fontSize: 11, fontWeight: '500' }}>
+                  All Growth Hubs & AI automations unlocked
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={() => router.push('/my-plan')}
+              style={{
+                backgroundColor: '#059669',
+                paddingHorizontal: 12,
+                paddingVertical: 5,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Manage →</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      ) : null}
 
       {/* Growth Cockpit Quick Strip: Brand Brain · Manage Profile · QR Standee · Growth Report */}
       <GrowthCockpitQuickStrip />

@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { computeGbpAudit } from './audit';
+import { googleReviewScope } from '@/lib/social/google-review-scope';
 
 export interface MarketingScoreComponents {
   profileCompleteness: number;
@@ -55,23 +56,11 @@ export async function computeMarketingScore(tenantId: string): Promise<Marketing
     }),
   ]);
 
-  let activeProfileId = '5008';
-  if (googleAccount?.metadata) {
-    try {
-      const meta = typeof googleAccount.metadata === 'string' ? JSON.parse(googleAccount.metadata) : googleAccount.metadata;
-      if (meta?.activeProfileId) activeProfileId = String(meta.activeProfileId);
-    } catch {}
-  }
-
-  const reviewWhere: Record<string, unknown> = { tenantId };
-  if (activeProfileId === '5008') {
-    reviewWhere.OR = [
-      { googleReviewId: { startsWith: '5008' } },
-      { googleReviewId: { startsWith: 'goog_rev_' } },
-    ];
-  } else {
-    reviewWhere.googleReviewId = { startsWith: activeProfileId };
-  }
+  const reviewScope = await googleReviewScope(tenantId);
+  const reviewWhere = {
+    tenantId,
+    ...reviewScope,
+  };
 
   const [reviewStats, posts30d, photos30d] = await Promise.all([
     db.review.aggregate({

@@ -29,8 +29,21 @@ export default ({ config }: ConfigContext): any => ({
     package: 'com.fieseros.bgos',
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#009F50' },
     permissions: ['POST_NOTIFICATIONS'],
+    blockedPermissions: [
+      'android.permission.RECORD_AUDIO',
+      'android.permission.SYSTEM_ALERT_WINDOW',
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.WRITE_EXTERNAL_STORAGE',
+    ],
   },
-  plugins: ['expo-router', 'expo-secure-store', 'expo-notifications', 'expo-web-browser', 'expo-apple-authentication'],
+  plugins: [
+    'expo-router',
+    'expo-secure-store',
+    'expo-notifications',
+    'expo-web-browser',
+    'expo-apple-authentication',
+    './plugins/withAndroidReleaseOptimizations',
+  ],
   extra: {
     eas: {
       projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID || '30078807-9b75-42c3-97c3-41fb166c40f2',

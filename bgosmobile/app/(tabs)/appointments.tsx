@@ -29,8 +29,13 @@ export default function AppointmentsScreen() {
     return d;
   });
 
+  // Filter bookings from yesterday onwards so upcoming appointments are never crowded out by past history
+  const startOfWindow = new Date();
+  startOfWindow.setDate(startOfWindow.getDate() - 1);
+  startOfWindow.setHours(0, 0, 0, 0);
+
   const resource = useResource<{ bookings: Booking[] }>(
-    '/api/bookings?limit=100&sortBy=scheduledAt&sortOrder=asc'
+    `/api/bookings?limit=100&dateFrom=${encodeURIComponent(startOfWindow.toISOString())}&sortBy=scheduledAt&sortOrder=asc`
   );
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);

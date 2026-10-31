@@ -51,21 +51,17 @@ export async function POST(request: NextRequest) {
     const fetchResult = await fetchGoogleBusinessReviews(googleAccount);
     const allGoogleReviews = [...(fetchResult.reviews || [])];
     let currentToken = fetchResult.nextPageToken;
-    let pageCount = 1;
-
-    // Paginate through Google reviews up to 5 pages (up to 250 reviews)
-    while (currentToken && pageCount < 5) {
-      try {
-        const nextRes = await fetchGoogleBusinessReviews(googleAccount, { pageToken: currentToken });
-        if (nextRes.reviews && nextRes.reviews.length > 0) {
-          allGoogleReviews.push(...nextRes.reviews);
-        }
-        currentToken = nextRes.nextPageToken;
-        pageCount++;
-      } catch (pageErr) {
-        console.warn('[reviews/sync-google] Pagination ended or rate-limited:', pageErr);
-        break;
+    const seenTokens = new Set<string>();
+    // Fetch the complete snapshot before writing it. A failed page must not be
+    // presented as a successful full sync or trigger replies for a partial import.
+    while (currentToken) {
+      if (seenTokens.has(currentToken)) {
+        throw new Error('Google returned a repeated review page. Please retry the sync.');
       }
+      seenTokens.add(currentToken);
+      const nextRes = await fetchGoogleBusinessReviews(googleAccount, { pageToken: currentToken });
+      allGoogleReviews.push(...nextRes.reviews);
+      currentToken = nextRes.nextPageToken;
     }
 
     const { averageRating, totalReviewCount } = fetchResult;
@@ -84,21 +80,12 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Deduplication fallback: match by authorName, comment, rating if googleReviewId is unset
-      if (!existing && gRev.comment) {
-        existing = await db.review.findFirst({
-          where: {
-            tenantId: user.tenantId,
-            authorName: gRev.authorName,
-            comment: gRev.comment,
-            rating: gRev.rating,
-          },
-        });
+      // A Google-confirmed ID may upgrade a legacy unscoped record on resync.
+      if (!existing) {
+        const legacyId = gRev.reviewId.split('/').pop();
+        existing = await db.review.findFirst({ where: { tenantId: user.tenantId, googleReviewId: legacyId } });
         if (existing) {
-          await db.review.update({
-            where: { id: existing.id },
-            data: { googleReviewId: gRev.reviewId, source: 'google' },
-          });
+          existing = await db.review.update({ where: { id: existing.id }, data: { googleReviewId: gRev.reviewId, source: 'google' } });
         }
       }
 
@@ -153,25 +140,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Clean up any stray duplicate records with exact same author & comment
-      if (gRev.comment) {
-        try {
-          const duplicates = await db.review.findMany({
-            where: {
-              tenantId: user.tenantId,
-              authorName: gRev.authorName,
-              comment: gRev.comment,
-              id: { not: existing.id },
-            },
-            select: { id: true },
-          });
-          if (duplicates.length > 0) {
-            await db.review.deleteMany({
-              where: { id: { in: duplicates.map((d) => d.id) } },
-            });
-          }
-        } catch {}
-      }
+      // Never delete reviews based on matching author/comment: two locations can
+      // legitimately receive identical feedback. Provider resource IDs identify reviews.
 
       // Check if auto-reply should run for unreplied positive review
       const hasReply = gRev.reply?.comment || (existing.responseJson && existing.responseJson !== '{}');
@@ -219,7 +189,7 @@ Write a warm, authentic, professional reply (1-3 sentences) thanking them by nam
                 status: 'published',
               },
             });
-            autoRepliesCount++;
+            if (publishedToGoogle) autoRepliesCount++;
           }
         } catch (autoErr) {
           console.warn('[reviews/sync-google] Auto-reply failed for review:', gRev.reviewId, autoErr);
@@ -234,7 +204,7 @@ Write a warm, authentic, professional reply (1-3 sentences) thanking them by nam
       updatedReviewsCount,
       autoRepliesCount,
       averageRating,
-      totalReviewCount: totalReviewCount || allGoogleReviews.length,
+      totalReviewCount: totalReviewCount ?? allGoogleReviews.length,
       message: `Synced ${allGoogleReviews.length} reviews from Google Business Profile (${newReviewsCount} new, ${updatedReviewsCount} updated, ${autoRepliesCount} auto-replied).`,
     });
   } catch (error: unknown) {

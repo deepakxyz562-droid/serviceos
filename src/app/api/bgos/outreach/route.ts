@@ -27,10 +27,23 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const user = await getAuthUser();
   if (!user?.tenantId || !['owner','admin','standalone_user'].includes(user.role)) return NextResponse.json({ error: 'Owner approval required' }, { status: 403 });
-  const body = z.object({ id: z.string().min(1), decision: z.enum(['approved','rejected']) }).safeParse(await request.json().catch(() => null));
+  const body = z.object({ id: z.string().min(1), decision: z.enum(['approved','rejected','pending_approval']) }).safeParse(await request.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: 'Invalid approval decision' }, { status: 400 });
   try {
-    const result = await db.campaign.updateMany({ where: { id: body.data.id, tenantId: user.tenantId, ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}), type: 'bgos_outreach', status: 'pending_approval' }, data: { status: body.data.decision, approvedBy: user.id, approvedAt: new Date() } });
+    const result = await db.campaign.updateMany({
+      where: {
+        id: body.data.id,
+        tenantId: user.tenantId,
+        ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}),
+        type: 'bgos_outreach',
+        status: { in: ['pending_approval', 'draft'] },
+      },
+      data: {
+        status: body.data.decision,
+        approvedBy: user.id,
+        approvedAt: new Date(),
+      },
+    });
     if (!result.count) return NextResponse.json({ error: 'Batch already reviewed or unavailable. Refresh and retry.' }, { status: 409 });
     return NextResponse.json({ success: true });
   } catch { return NextResponse.json({ error: 'Could not save approval' }, { status: 503 }); }

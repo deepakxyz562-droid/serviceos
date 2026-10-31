@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Redirect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Action, Card, ErrorNotice, Field, Screen, colors, ui } from '../src/components/ui';
 import { useAuthStore } from '../src/stores/auth-store';
@@ -18,7 +19,14 @@ const categories = [
 ];
 
 export default function SetupScreen() {
-  const { user, checkAuth, logout } = useAuthStore();
+  const { user, checkAuth, logout, isAuthenticated, isLoading, onboardingRequired } = useAuthStore();
+
+  if (!isLoading && !isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
+  if (!isLoading && isAuthenticated && !onboardingRequired) {
+    return <Redirect href="/(tabs)" />;
+  }
   const [step, setStep] = useState<1 | 2>(1);
   const [category, setCategory] = useState('salon');
   const [name, setName] = useState('');
