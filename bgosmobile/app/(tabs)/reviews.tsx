@@ -1334,7 +1334,15 @@ export default function ReviewRepliesScreen() {
         visible={reviewSheetOpen}
         onClose={() => setReviewSheetOpen(false)}
         businessName={activeProfile?.name || gbpPlace.data?.place?.title || 'Our Business'}
-        reviewUrl={gbpPlace.data?.place?.reviewUrl || gbpPlace.data?.place?.mapsUrl || 'https://search.google.com/local/writereview'}
+        reviewUrl={
+          gbpPlace.data?.place?.reviewUrl ||
+          (gbpPlace.data?.place?.placeId
+            ? `https://search.google.com/local/writereview?placeid=${gbpPlace.data.place.placeId}`
+            : gbpPlace.data?.place?.mapsUrl ||
+              `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                activeProfile?.name || gbpPlace.data?.place?.title || 'Our Business'
+              )}`)
+        }
         apiRequest={apiRequest}
       />
     </View>

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { logActivity } from '@/lib/activity-log';
+import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 
 /**
  * POST /api/reviews/request
@@ -46,6 +47,17 @@ export async function POST(request: NextRequest) {
     }
     if (!reviewLink && tenant?.googlePlaceId) {
       reviewLink = `https://search.google.com/local/writereview?placeid=${tenant.googlePlaceId}`;
+    }
+    if (!reviewLink) {
+      try {
+        const googleAccount = await prepareGoogleAccount(user.tenantId);
+        const meta = (googleAccount?.metadata || {}) as Record<string, any>;
+        if (meta.placeId) {
+          reviewLink = `https://search.google.com/local/writereview?placeid=${meta.placeId}`;
+        } else if (meta.mapsUri) {
+          reviewLink = meta.mapsUri;
+        }
+      } catch {}
     }
 
     const businessName: string =
@@ -102,8 +114,11 @@ export async function POST(request: NextRequest) {
     const failures: Array<{ phone: string; error: string }> = [];
 
     for (const [phone, customerName] of byPhone) {
-      const firstName = (customerName || 'there').split(' ')[0];
-      const message = `Hi ${firstName}, thank you for choosing ${businessName}! If you were happy with our service, could you take 30 seconds to leave us a quick Google review? It helps other locals find us.${includeDirectLink ? `\n${reviewLink}` : ''}`;
+      const trimmedName = (customerName || '').trim();
+      const firstName = trimmedName ? trimmedName.split(/\s+/)[0] : '';
+      const greeting = firstName ? `Dear ${firstName},` : 'Dear Valued Client,';
+      const linkBlock = includeDirectLink ? `\n\n🔗 Review Link: ${reviewLink}` : '';
+      const message = `${greeting}\n\nThank you for choosing ${businessName}. We truly appreciate your trust and hope you had an exceptional experience with our team.\n\nIf you have a brief moment, we would be deeply grateful if you could share your feedback on our official Google Business Profile:${linkBlock}\n\nThank you for your partnership and support.\n\nWarm regards,\n${businessName}`;
 
       try {
         const result = await sendWhatsAppMessage({

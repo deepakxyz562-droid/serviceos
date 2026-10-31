@@ -32,7 +32,7 @@ const WA_HEADER = '#075E54';
 const WA_BG = '#ECE5DD';
 const WA_BLUE_TICKS = '#53BDEB';
 
-type TemplateKey = '5star' | 'experience' | 'thankyou';
+type TemplateKey = 'executive' | 'excellence' | 'gratitude' | '5star' | 'experience' | 'thankyou';
 
 export function ReviewRequestSheet({
   visible,
@@ -56,96 +56,134 @@ export function ReviewRequestSheet({
 }) {
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
-  const [template, setTemplate] = useState<TemplateKey>('5star');
+  const [template, setTemplate] = useState<TemplateKey>('executive');
   const [lang, setLang] = useState<'en' | 'hi'>('en');
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
-  const cleanBusinessName = businessName || 'Our Business';
-  const rawFirstName = customerName.trim().split(/\s+/)[0];
-  const firstName = rawFirstName ? rawFirstName : lang === 'hi' ? 'प्रिय ग्राहक' : 'there';
+  const cleanBusinessName = businessName?.trim() || 'Our Business';
+  const trimmedName = customerName.trim();
+  const firstName = trimmedName ? trimmedName.split(/\s+/)[0] : '';
+
+  const effectiveReviewUrl = useMemo(() => {
+    const trimmed = (reviewUrl || '').trim();
+    if (trimmed.length > 0 && trimmed !== 'https://search.google.com/local/writereview') {
+      return trimmed;
+    }
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanBusinessName)}`;
+  }, [reviewUrl, cleanBusinessName]);
 
   const inviteText = useMemo(() => {
+    // ─── Hindi Templates (Formal, Respectful & Professional) ─────────────
     if (lang === 'hi') {
-      if (template === '5star') {
+      const formalGreetingHi = firstName ? `सादर नमस्ते ${firstName} जी,` : 'सादर नमस्ते,';
+      const warmGreetingHi = firstName ? `नमस्ते ${firstName} जी,` : 'नमस्ते प्रिय ग्राहक जी,';
+
+      if (template === 'executive' || template === '5star') {
         return [
-          `👋 नमस्ते ${firstName}!`,
+          formalGreetingHi,
           '',
-          `⭐⭐⭐⭐⭐`,
-          `${cleanBusinessName} पर आपके अनुभव के लिए धन्यवाद!`,
+          `${cleanBusinessName} को सेवा का अवसर देने के लिए आपका हार्दिक धन्यवाद। हमारे लिए आपकी संतुष्टि और विश्वास सर्वोपरि है।`,
           '',
-          `यदि आपको हमारी सेवा पसंद आई हो, तो कृपया Google Maps पर अपनी 5-स्टार रेटिंग और छोटा सा रिव्यू शेयर करें। इससे हमारे स्थानीय व्यापार को बहुत मदद मिलती है:`,
+          `यदि आप हमारे कार्य और सेवा से संतुष्ट हैं, तो कृपया Google Maps पर 1 मिनट का समय निकालकर अपना बहुमूल्य रिव्यू अवश्य साझा करें। आपकी प्रतिक्रिया हमारे लिए अत्यंत मूल्यवान है:`,
           '',
-          `👉 रिव्यू लिंक: ${reviewUrl}`,
+          `👉 Google रिव्यू लिंक: ${effectiveReviewUrl}`,
           '',
-          `धन्यवाद! 🙏`,
+          `पुनः धन्यवाद और आपका दिन शुभ हो।`,
+          '',
+          `सादर,`,
+          cleanBusinessName,
         ].join('\n');
       }
-      if (template === 'experience') {
+
+      if (template === 'excellence' || template === 'experience') {
         return [
-          `नमस्ते ${firstName} जी!`,
+          warmGreetingHi,
           '',
-          `${cleanBusinessName} को चुनने के लिए आपका बहुत-बहुत धन्यवाद।`,
-          `हम हमेशा अपने ग्राहकों को सर्वोत्तम सेवा प्रदान करने का प्रयास करते हैं।`,
+          `${cleanBusinessName} से जुड़ने के लिए आपका बहुत-बहुत धन्यवाद।`,
           '',
-          `कृपया 30 सेकंड का समय निकालकर Google पर अपना अनुभव हमारे साथ साझा करें:`,
-          `👉 ${reviewUrl}`,
+          `आशा है कि आपको हमारी सेवा पसंद आई होगी। कृपया Google Maps पर अपना अनुभव रेट करें:`,
           '',
-          `आपका फीडबैक हमारे लिए बेहद मूल्यवान है!`,
+          `⭐ Google रिव्यू: ${effectiveReviewUrl}`,
+          '',
+          `किसी भी अन्य सेवा या सहायता के लिए हम सदैव तत्पर हैं।`,
+          '',
+          `धन्यवाद,`,
+          `${cleanBusinessName} टीम`,
         ].join('\n');
       }
-      // thankyou
+
+      // Gratitude / Thank You
       return [
-        `🙏 ${cleanBusinessName} में आपका स्वागत और धन्यवाद!`,
+        formalGreetingHi,
         '',
-        `नमस्ते ${firstName}, आशा है कि आपको हमारी सर्विस अच्छी लगी होगी।`,
-        `कृपया Google पर हमारे काम को रेट करें:`,
-        `⭐⭐⭐⭐⭐`,
-        `👉 ${reviewUrl}`,
+        `${cleanBusinessName} पर आपके विश्वास के लिए हम आपके आभारी हैं।`,
         '',
-        `आपका दिन शुभ हो!`,
+        `यदि आपको हमारा कार्य और अनुभव अच्छा लगा, तो कृपया Google पर अपना फीडबैक शेयर करें:`,
+        '',
+        `👉 रिव्यू लिंक: ${effectiveReviewUrl}`,
+        '',
+        `आपका दिन मंगलमय हो!`,
+        '',
+        `सादर,`,
+        cleanBusinessName,
       ].join('\n');
     }
 
-    // English templates
-    if (template === '5star') {
+    // ─── English Templates (Polished, Corporate & Professional) ───────────
+    const formalGreetingEn = firstName ? `Dear ${firstName},` : 'Dear Valued Client,';
+    const warmGreetingEn = firstName ? `Hello ${firstName},` : 'Hello,';
+
+    if (template === 'executive' || template === '5star') {
       return [
-        `👋 Hi ${firstName}!`,
+        formalGreetingEn,
         '',
-        `⭐⭐⭐⭐⭐`,
-        `Thank you for choosing ${cleanBusinessName}!`,
+        `Thank you for choosing ${cleanBusinessName}. We truly appreciate your trust and hope you had an exceptional experience with our team.`,
         '',
-        `If you loved our service today, could you take 30 seconds to drop us a 5-star review on Google? It means the world to our local business:`,
+        `If you have a brief moment, we would be deeply grateful if you could share your feedback on our official Google Business Profile. Your review helps us uphold our quality standards and guides other clients in our community:`,
         '',
-        `👉 Leave a Review: ${reviewUrl}`,
+        `🔗 Share Your Feedback: ${effectiveReviewUrl}`,
         '',
-        `Thank you for your support! 🙏`,
+        `Thank you for your continued partnership and support.`,
+        '',
+        `Warm regards,`,
+        cleanBusinessName,
       ].join('\n');
     }
-    if (template === 'experience') {
+
+    if (template === 'excellence' || template === 'experience') {
       return [
-        `Hello ${firstName},`,
+        warmGreetingEn,
         '',
-        `Thank you for trusting ${cleanBusinessName}! How was your service experience today?`,
+        `Thank you for trusting ${cleanBusinessName} with your recent service. Delivering high-quality results and complete customer satisfaction is our highest priority.`,
         '',
-        `We strive to deliver top quality every day. Please let us know how we did on Google Maps:`,
-        `👉 ${reviewUrl}`,
+        `Could you please take 30 seconds to rate your experience on Google Maps?`,
         '',
-        `Your honest review helps other customers find us!`,
+        `⭐ Rate Us on Google: ${effectiveReviewUrl}`,
+        '',
+        `We appreciate your feedback and look forward to serving you again.`,
+        '',
+        `Best regards,`,
+        `The ${cleanBusinessName} Team`,
       ].join('\n');
     }
-    // thankyou
+
+    // Gratitude / Thank You
     return [
-      `Thank you for your visit, ${firstName}!`,
+      warmGreetingEn,
       '',
-      `We truly appreciate having you as our customer at ${cleanBusinessName}.`,
-      `Would you mind sharing a quick review on Google?`,
-      `⭐⭐⭐⭐⭐`,
-      `👉 ${reviewUrl}`,
+      `Thank you for visiting ${cleanBusinessName}! It was a pleasure serving you.`,
       '',
-      `Have a wonderful day ahead!`,
+      `We are constantly working to deliver the best possible experience for our clients. If you were pleased with our service today, we would be honored if you could leave us a review on Google:`,
+      '',
+      `👉 Google Review Link: ${effectiveReviewUrl}`,
+      '',
+      `Wishing you a wonderful day ahead!`,
+      '',
+      `Sincerely,`,
+      cleanBusinessName,
     ].join('\n');
-  }, [lang, template, firstName, cleanBusinessName, reviewUrl]);
+  }, [lang, template, firstName, cleanBusinessName, effectiveReviewUrl]);
 
   const waHref = useMemo(() => {
     let digits = phone.replace(/[^\d]/g, '');
@@ -173,7 +211,7 @@ export function ReviewRequestSheet({
       const data = (await apiRequest('/api/reviews/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reviewLink: reviewUrl, businessName: cleanBusinessName, includeDirectLink: true }),
+        body: JSON.stringify({ reviewLink: effectiveReviewUrl, businessName: cleanBusinessName, includeDirectLink: true }),
       })) as {
         success?: boolean;
         sentCount?: number;
@@ -274,46 +312,70 @@ export function ReviewRequestSheet({
             <View style={styles.templateGroup}>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => setTemplate('5star')}
-                style={[styles.templateChip, template === '5star' && styles.templateChipActive]}
+                onPress={() => setTemplate('executive')}
+                style={[
+                  styles.templateChip,
+                  (template === 'executive' || template === '5star') && styles.templateChipActive,
+                ]}
               >
                 <MaterialIcons
-                  name="star"
+                  name="verified"
                   size={15}
-                  color={template === '5star' ? colors.brand : colors.muted}
+                  color={template === 'executive' || template === '5star' ? colors.brand : colors.muted}
                 />
-                <Text style={[styles.templateChipText, template === '5star' && styles.templateChipTextActive]}>
-                  5-Star Express
+                <Text
+                  style={[
+                    styles.templateChipText,
+                    (template === 'executive' || template === '5star') && styles.templateChipTextActive,
+                  ]}
+                >
+                  Executive
                 </Text>
               </Pressable>
 
               <Pressable
                 accessibilityRole="button"
-                onPress={() => setTemplate('experience')}
-                style={[styles.templateChip, template === 'experience' && styles.templateChipActive]}
+                onPress={() => setTemplate('excellence')}
+                style={[
+                  styles.templateChip,
+                  (template === 'excellence' || template === 'experience') && styles.templateChipActive,
+                ]}
               >
                 <MaterialIcons
-                  name="handshake"
+                  name="workspace-premium"
                   size={15}
-                  color={template === 'experience' ? colors.brand : colors.muted}
+                  color={template === 'excellence' || template === 'experience' ? colors.brand : colors.muted}
                 />
-                <Text style={[styles.templateChipText, template === 'experience' && styles.templateChipTextActive]}>
-                  Service Feedback
+                <Text
+                  style={[
+                    styles.templateChipText,
+                    (template === 'excellence' || template === 'experience') && styles.templateChipTextActive,
+                  ]}
+                >
+                  Excellence
                 </Text>
               </Pressable>
 
               <Pressable
                 accessibilityRole="button"
-                onPress={() => setTemplate('thankyou')}
-                style={[styles.templateChip, template === 'thankyou' && styles.templateChipActive]}
+                onPress={() => setTemplate('gratitude')}
+                style={[
+                  styles.templateChip,
+                  (template === 'gratitude' || template === 'thankyou') && styles.templateChipActive,
+                ]}
               >
                 <MaterialIcons
-                  name="card-giftcard"
+                  name="thumb-up"
                   size={15}
-                  color={template === 'thankyou' ? colors.brand : colors.muted}
+                  color={template === 'gratitude' || template === 'thankyou' ? colors.brand : colors.muted}
                 />
-                <Text style={[styles.templateChipText, template === 'thankyou' && styles.templateChipTextActive]}>
-                  Thank You Visit
+                <Text
+                  style={[
+                    styles.templateChipText,
+                    (template === 'gratitude' || template === 'thankyou') && styles.templateChipTextActive,
+                  ]}
+                >
+                  Gratitude
                 </Text>
               </Pressable>
             </View>

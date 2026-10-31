@@ -138,6 +138,10 @@ export async function GET(request: NextRequest) {
           phone: fallbackPhone,
           website: fallbackWebsite,
           description: fallbackDescription,
+          placeId: (tenant as any)?.googlePlaceId || null,
+          reviewUrl: (tenant as any)?.googlePlaceId
+            ? `https://search.google.com/local/writereview?placeid=${(tenant as any).googlePlaceId}`
+            : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallbackName)}`,
           regularHours,
           completionScore: score,
           missingFields: missing,
@@ -197,7 +201,11 @@ export async function GET(request: NextRequest) {
     const resolvedAddress = placeDetails.address || fallbackAddress;
     const resolvedPhone = placeDetails.phone || fallbackPhone;
     const resolvedWebsite = placeDetails.website || fallbackWebsite;
-    const resolvedPlaceId = placeDetails.placeId || null;
+    const resolvedPlaceId =
+      placeDetails.placeId ||
+      meta.placeId ||
+      (tenant as any)?.googlePlaceId ||
+      null;
 
     const { score, missing } = computeCompleteness(
       resolvedTitle,
@@ -209,7 +217,13 @@ export async function GET(request: NextRequest) {
 
     const reviewUrl = resolvedPlaceId
       ? `https://search.google.com/local/writereview?placeid=${resolvedPlaceId}`
-      : placeDetails.mapsUri || null;
+      : placeDetails.mapsUri ||
+        meta.mapsUri ||
+        (resolvedTitle
+          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+              `${resolvedTitle} ${resolvedAddress || ''}`.trim()
+            )}`
+          : null);
 
     return NextResponse.json({
       isConnected: true,

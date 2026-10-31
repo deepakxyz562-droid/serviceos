@@ -1244,7 +1244,10 @@ export default function GrowthScreen() {
         businessName={businessName}
         reviewUrl={
           gbpPlace.data?.place?.reviewUrl ||
-          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(businessName)}`
+          (gbpPlace.data?.place?.placeId
+            ? `https://search.google.com/local/writereview?placeid=${gbpPlace.data.place.placeId}`
+            : gbpPlace.data?.place?.mapsUrl ||
+              `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(businessName)}`)
         }
         apiRequest={apiRequest}
       />

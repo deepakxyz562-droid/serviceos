@@ -687,10 +687,15 @@ export default function MarketingScreen() {
       <ReviewRequestSheet
         visible={requestOpen}
         onClose={() => setRequestOpen(false)}
-        businessName={workspace.data?.name || 'Your Business'}
+        businessName={gbpPlace.data?.place?.title || workspace.data?.name || 'Your Business'}
         reviewUrl={
           gbpPlace.data?.place?.reviewUrl ||
-          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(workspace.data?.name || 'Your Business')}`
+          (gbpPlace.data?.place?.placeId
+            ? `https://search.google.com/local/writereview?placeid=${gbpPlace.data.place.placeId}`
+            : gbpPlace.data?.place?.mapsUrl ||
+              `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                gbpPlace.data?.place?.title || workspace.data?.name || 'Your Business'
+              )}`)
         }
         apiRequest={apiRequest}
       />

@@ -1224,7 +1224,15 @@ export default function HomeScreen() {
         visible={reviewModalOpen}
         onClose={() => setReviewModalOpen(false)}
         businessName={profileName || workspace.data?.name || user?.name || 'Deepak Chandra'}
-        reviewUrl="https://search.google.com/local/writereview"
+        reviewUrl={
+          gbpPlace.data?.place?.reviewUrl ||
+          (gbpPlace.data?.place?.placeId
+            ? `https://search.google.com/local/writereview?placeid=${gbpPlace.data.place.placeId}`
+            : gbpPlace.data?.place?.mapsUrl ||
+              `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                profileName || workspace.data?.name || 'Google Business'
+              )}`)
+        }
         apiRequest={apiRequest}
       />
 
