@@ -6,6 +6,7 @@ import { maybeAutoReply } from '@/lib/auto-reply';
 import { createInboundMessage } from '@/lib/inbox-message-service';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { getAppUrl } from '@/lib/brand';
+import { callAI, type ChatMessage } from '@/lib/ai-client';
 import crypto from 'crypto';
 
 // Well-known dev fallback tokens — accepted ONLY outside production so local
@@ -409,6 +410,39 @@ async function handlePlainTextInbound(
       }
     }
 
+    // Dynamic platform fallback: if phoneNumberId didn't match a specific tenant provider
+    // (e.g. Meta platform number), resolve the active default platform provider dynamically
+    if (!tenantId) {
+      try {
+        const defaultProvider = await db.communicationProvider.findFirst({
+          where: {
+            type: 'whatsapp',
+            status: 'active',
+            isDefault: true,
+          },
+          orderBy: { updatedAt: 'desc' },
+          select: { tenantId: true },
+        });
+        if (defaultProvider?.tenantId) {
+          tenantId = defaultProvider.tenantId;
+        } else {
+          const anyActiveProvider = await db.communicationProvider.findFirst({
+            where: {
+              type: 'whatsapp',
+              status: 'active',
+            },
+            orderBy: { updatedAt: 'desc' },
+            select: { tenantId: true },
+          });
+          if (anyActiveProvider?.tenantId) {
+            tenantId = anyActiveProvider.tenantId;
+          }
+        }
+      } catch (fallbackErr) {
+        console.warn('[WhatsApp Callback] dynamic provider fallback lookup failed:', fallbackErr);
+      }
+    }
+
     if (!tenantId) {
       console.warn(
         '[WhatsApp Callback] Could not resolve tenant for phone_number_id:',
@@ -638,6 +672,121 @@ async function handlePlainTextInbound(
     } catch (commerceErr) {
       console.warn('[WhatsApp Commerce] Failed, falling back to regular flow:', commerceErr);
       // Fall through to regular auto-reply if commerce fails
+    }
+
+    // ── 5.6 FormAgent Chatbot Engine ──────────────────────────────────
+    // If the tenant has an active FormAgent (trained receptionist / AI employee),
+    // route the inbound conversation to the agent so customer questions are answered
+    // with trained business knowledge, FAQs, and persona.
+    try {
+      // Check if conversation AI is paused by an operator
+      const convRecord = await db.conversation.findFirst({
+        where: { conversationId, tenantId },
+        select: { aiPaused: true },
+      });
+
+      if (!convRecord?.aiPaused) {
+        const activeAgent = await db.formAgent.findFirst({
+          where: { tenantId, status: 'active' },
+          orderBy: { updatedAt: 'desc' },
+          select: { id: true, name: true, configJson: true, voiceTone: true },
+        });
+
+        if (activeAgent) {
+          let agentConfig: any = {};
+          try {
+            agentConfig = activeAgent.configJson ? JSON.parse(activeAgent.configJson) : {};
+          } catch {}
+
+          const agentName = activeAgent.name || agentConfig.name || 'AI Assistant';
+          const systemPrompt =
+            agentConfig.knowledge?.systemPrompt ||
+            agentConfig.systemPrompt ||
+            `You are ${agentName}, an intelligent and friendly assistant for this business. Answer concisely and helpfully (1-3 sentences) in natural WhatsApp style. Assist the customer with information, bookings, and inquiries.`;
+
+          // Fetch recent conversation history for multi-turn context
+          const recentMsgs = await db.inboxMessage.findMany({
+            where: { tenantId, conversationId },
+            orderBy: { createdAt: 'desc' },
+            take: 6,
+            select: { direction: true, content: true },
+          }).catch(() => []);
+
+          const conversationHistory: ChatMessage[] = recentMsgs
+            .reverse()
+            .map((m) => ({
+              role: m.direction === 'inbound' ? ('user' as const) : ('assistant' as const),
+              content: m.content,
+            }));
+
+          const aiResult = await callAI({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              ...conversationHistory,
+            ],
+            temperature: 0.7,
+            maxTokens: 350,
+            usageContext: {
+              tenantId,
+              feature: 'whatsapp_agent_chatbot',
+            },
+          }).catch((err) => {
+            console.error('[WhatsApp Callback] FormAgent callAI error:', err);
+            return null;
+          });
+
+          const replyText = aiResult?.content?.trim();
+          if (replyText) {
+            // Save the outbound reply message in InboxMessage
+            try {
+              await db.inboxMessage.create({
+                data: {
+                  tenantId,
+                  conversationId,
+                  channel: 'whatsapp',
+                  senderId: 'ai',
+                  senderName: agentName,
+                  senderType: 'ai',
+                  direction: 'outbound',
+                  content: replyText,
+                  messageType: 'text',
+                  status: 'sent',
+                  metadataJson: {
+                    agentId: activeAgent.id,
+                    agentName,
+                    feature: 'form_agent_chatbot',
+                  },
+                },
+              });
+
+              await db.conversation.update({
+                where: { conversationId },
+                data: {
+                  lastMessageAt: new Date(),
+                  lastMessageBody: replyText,
+                  lastDirection: 'outbound',
+                },
+              });
+            } catch (saveErr) {
+              console.warn('[WhatsApp Callback] Error saving AI reply InboxMessage:', saveErr);
+            }
+
+            // Send via WhatsApp
+            await sendWhatsAppMessage({
+              tenantId,
+              to: from,
+              body: replyText,
+            }).catch((sendErr) => {
+              console.warn('[WhatsApp Callback] FormAgent sendWhatsAppMessage failed:', sendErr);
+            });
+
+            console.log(`[WhatsApp Callback] FormAgent ${activeAgent.id} successfully replied to ${from}`);
+            return; // Chatbot handled the message!
+          }
+        }
+      }
+    } catch (agentErr) {
+      console.warn('[WhatsApp Callback] FormAgent processing failed, falling back:', agentErr);
     }
 
     // ── 6. Auto-reply when tenant is offline ──────────────────────────────

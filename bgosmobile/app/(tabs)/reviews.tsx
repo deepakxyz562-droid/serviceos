@@ -194,14 +194,58 @@ export default function ReviewRepliesScreen() {
   const pending = useMemo(() => all.filter(isPending), [all, isPending]);
   const failed = useMemo(() => all.filter(isSyncFailed), [all, isSyncFailed]);
   const replied = useMemo(() => all.filter(isLiveReplied), [all, isLiveReplied]);
-  const totalRatings = reviews.data?.pagination?.total ?? all.length;
+  const totalRatings = all.length > 0 ? (reviews.data?.pagination?.total ?? all.length) : (gbpPlace.data?.metrics?.totalReviews ?? 0);
 
-  // Dynamic Average Rating Calculation
+  // Dynamic Average Rating Calculation with fallback to Google place metrics
   const averageRating = useMemo(() => {
-    if (all.length === 0) return '0.0';
-    const sum = all.reduce((acc, r) => acc + (r.rating || 5), 0);
-    return (sum / all.length).toFixed(1);
-  }, [all]);
+    if (all.length > 0) {
+      const sum = all.reduce((acc, r) => acc + (r.rating || 5), 0);
+      return (sum / all.length).toFixed(1);
+    }
+    const placeAvg = gbpPlace.data?.metrics?.avgRating;
+    if (placeAvg && placeAvg > 0) {
+      return Number(placeAvg).toFixed(1);
+    }
+    return '0.0';
+  }, [all, gbpPlace.data]);
+
+  // Dynamic 5-week review trend computation
+  const weeklyTrendData = useMemo(() => {
+    const weeks = [
+      { week: 'W1', count: 0, ratingSum: 0 },
+      { week: 'W2', count: 0, ratingSum: 0 },
+      { week: 'W3', count: 0, ratingSum: 0 },
+      { week: 'W4', count: 0, ratingSum: 0 },
+      { week: 'W5', count: 0, ratingSum: 0 },
+    ];
+
+    if (all.length > 0) {
+      all.forEach((r, idx) => {
+        let bucket = idx % 5;
+        if (r.createdAt) {
+          const d = new Date(r.createdAt);
+          if (!isNaN(d.getTime())) {
+            bucket = Math.min(4, Math.floor((d.getDate() - 1) / 7));
+          }
+        }
+        weeks[bucket].count += 1;
+        weeks[bucket].ratingSum += (r.rating || 5);
+      });
+    }
+
+    const maxCount = Math.max(5, ...weeks.map((w) => w.count));
+
+    return weeks.map((w) => {
+      const avg = w.count > 0 ? (w.ratingSum / w.count).toFixed(1) : (averageRating !== '0.0' ? averageRating : '0.0');
+      const pct = w.count > 0 ? Math.min(1, Math.max(0.25, w.count / maxCount)) : 0.08;
+      const height = Math.round(pct * 65);
+      return {
+        ...w,
+        avg,
+        height,
+      };
+    });
+  }, [all, averageRating]);
 
   const shown =
     filter === 'pending'
@@ -368,7 +412,7 @@ export default function ReviewRepliesScreen() {
     <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       <Screen
         title="Review Replies"
-        subtitle={[phone, shortId.replace('#', ''), version].filter(Boolean).join(' | ')}
+        subtitle={`Google Business Profile • ${shortId.replace('#', '') ? `${shortId.replace('#', '')} • ` : ''}${version}`}
         showBack={true}
         onBack={() => {
           if (router.canGoBack?.()) router.back();
@@ -508,7 +552,7 @@ export default function ReviewRepliesScreen() {
               </Text>
             </View>
 
-            {/* Slide 2: Reviews Trend Chart (Screenshot 08.55.28) */}
+            {/* Slide 2: Reviews Trend Chart */}
             <View
               style={{
                 width: slideWidth,
@@ -517,15 +561,24 @@ export default function ReviewRepliesScreen() {
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Reviews Trend</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Reviews Trend</Text>
+                  {all.length > 0 && (
+                    <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: '#047857' }}>
+                        {all.length} {all.length === 1 ? 'Review' : 'Reviews'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <MaterialIcons name="filter-list" size={15} color="#E11D48" />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#E11D48' }}>This Month</Text>
+                  <MaterialIcons name="filter-list" size={15} color="#009F50" />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50' }}>5 Weeks</Text>
                 </View>
               </View>
 
-              {/* Weekly line chart (W1 to W5) */}
-              <View style={{ height: 120, justifyContent: 'space-between', paddingVertical: 4 }}>
+              {/* Weekly trend chart area */}
+              <View style={{ height: 120, justifyContent: 'space-between', paddingVertical: 4, position: 'relative' }}>
                 {[10.0, 8.0, 6.0, 4.0, 2.0, 0.0].map((val) => (
                   <View key={val} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text style={{ fontSize: 10, color: '#94A3B8', width: 24, textAlign: 'right' }}>
@@ -535,42 +588,58 @@ export default function ReviewRepliesScreen() {
                   </View>
                 ))}
 
-                {/* Blue Trend Line overlay with dots */}
+                {/* Dynamic Trend Bars and Nodes */}
                 <View
                   style={{
                     position: 'absolute',
                     left: 36,
                     right: 8,
-                    bottom: 12,
+                    top: 6,
+                    bottom: 4,
                     flexDirection: 'row',
-                    alignItems: 'center',
+                    alignItems: 'flex-end',
                     justifyContent: 'space-between',
                   }}
                 >
-                  <View
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      right: 0,
-                      height: 2.5,
-                      backgroundColor: '#2563EB',
-                      top: 6,
-                    }}
-                  />
-                  {['W1', 'W2', 'W3', 'W4', 'W5'].map((w) => (
-                    <View key={w} style={{ alignItems: 'center', zIndex: 2 }}>
+                  {weeklyTrendData.map((item) => (
+                    <View key={item.week} style={{ alignItems: 'center', width: 36 }}>
+                      {/* Rating / count badge above node */}
+                      <Text style={{ fontSize: 9.5, fontWeight: '800', color: item.count > 0 ? '#009F50' : '#94A3B8', marginBottom: 2 }}>
+                        {item.count > 0 ? `${item.count}★` : '—'}
+                      </Text>
+
+                      {/* Dynamic vertical bar stem */}
+                      <View
+                        style={{
+                          width: 8,
+                          height: item.height,
+                          borderRadius: 4,
+                          backgroundColor: item.count > 0 ? '#34D399' : '#E2E8F0',
+                          opacity: item.count > 0 ? 0.9 : 0.4,
+                          marginBottom: 4,
+                        }}
+                      />
+
+                      {/* Circular node */}
                       <View
                         style={{
                           width: 14,
                           height: 14,
                           borderRadius: 7,
-                          backgroundColor: '#2563EB',
+                          backgroundColor: item.count > 0 ? '#009F50' : '#CBD5E1',
                           borderWidth: 2,
                           borderColor: '#FFFFFF',
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: 0.15,
+                          shadowRadius: 2,
+                          elevation: 2,
                         }}
                       />
+
+                      {/* Week label */}
                       <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', marginTop: 4 }}>
-                        {w}
+                        {item.week}
                       </Text>
                     </View>
                   ))}

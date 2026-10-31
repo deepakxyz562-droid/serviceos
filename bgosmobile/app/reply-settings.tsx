@@ -111,7 +111,7 @@ export default function ReplySettingsScreen() {
   return (
     <Screen
       title="Reply Settings"
-      subtitle={`${phone} | ${shortId.replace('#', '')} | ${version}`}
+      subtitle={`AI Review Automation • ${shortId.replace('#', '') ? `${shortId.replace('#', '')} • ` : ''}${version}`}
       showBack={true}
       onBack={() => {
         if (router.canGoBack?.()) router.back();

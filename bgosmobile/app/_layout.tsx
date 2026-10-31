@@ -95,6 +95,7 @@ export default function RootLayout() {
         <Stack.Screen name="growth-report" />
         <Stack.Screen name="select-profile" />
         <Stack.Screen name="preferences" />
+        <Stack.Screen name="help" />
       </Stack>
     </RootErrorBoundary>
   );

@@ -74,7 +74,7 @@ export default function SelectProfileScreen() {
   return (
     <Screen
       title="Select profile"
-      subtitle={`${phone} | ${version}`}
+      subtitle={`Google Business Profile • ${version}`}
       showBack={true}
       onBack={() => {
         if (router.canGoBack?.()) router.back();

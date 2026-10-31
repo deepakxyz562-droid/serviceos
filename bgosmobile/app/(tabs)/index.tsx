@@ -592,22 +592,22 @@ export default function HomeScreen() {
     : '';
   const phone = discover.data?.phone || gbpPlace.data?.place?.phone || '';
   const version = discover.data?.version || 'v2.83';
-  const initial = activeProfile?.initial || profileName.trim().charAt(0).toUpperCase() || 'B';
-
   const customHeader = (
     <View
       style={{
-        backgroundColor: '#0B1528',
+        backgroundColor: '#009F50', // BGOS Emerald brand color
         paddingHorizontal: 16,
         paddingTop: 12,
         paddingBottom: 14,
         marginHorizontal: -16,
         marginTop: -16,
         marginBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#008A45',
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        {/* Left: Hamburger & Profile block */}
+        {/* Left: Hamburger & Profile block (Direct Clean Typography) */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
           <Pressable
             accessibilityRole="button"
@@ -622,43 +622,18 @@ export default function HomeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Select profile"
             onPress={() => router.push('/select-profile')}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}
+            style={{ flex: 1, paddingVertical: 2 }}
           >
-            {/* Avatar with gradient ring */}
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                padding: 2,
-                backgroundColor: '#9333EA',
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <View
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: 20,
-                  backgroundColor: '#0F172A',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '800' }}>{initial}</Text>
-              </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: -0.2 }} numberOfLines={1}>
+                {profileName}
+              </Text>
+              <MaterialIcons name="arrow-drop-down" size={22} color="#D1F0DE" />
             </View>
-
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }} numberOfLines={1}>
-                  {profileName}
-                </Text>
-                <MaterialIcons name="arrow-drop-down" size={20} color="#94A3B8" />
-              </View>
-              <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '500' }}>
-                {phone} | {shortId} | {version}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' }} />
+              <Text style={{ color: '#E8F8EF', fontSize: 11, fontWeight: '600' }}>
+                BGOS Verified • {shortId.replace('#', '') ? `${shortId.replace('#', '')} • ` : ''}{version}
               </Text>
             </View>
           </Pressable>
@@ -668,8 +643,9 @@ export default function HomeScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => Alert.alert('Help & Support', `Reach dedicated BGOS support via Phone or WhatsApp: ${phone}`)}
-            style={{
+            accessibilityLabel="Help and Support"
+            onPress={() => router.push('/help')}
+            style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
               gap: 4,
@@ -677,9 +653,10 @@ export default function HomeScreen() {
               paddingHorizontal: 10,
               paddingVertical: 6,
               borderRadius: 16,
-            }}
+              opacity: pressed ? 0.75 : 1,
+            })}
           >
-            <MaterialIcons name="call" size={13} color="#FFFFFF" />
+            <MaterialIcons name="help-outline" size={14} color="#FFFFFF" />
             <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Help</Text>
           </Pressable>
 
@@ -696,24 +673,17 @@ export default function HomeScreen() {
     </View>
   );
 
-  // Floating Growth Action Dock (Always visible sticky bar above bottom tabs)
+  // Floating Growth Action Dock (Always visible sticky full-width bar above bottom tabs)
   const growthActionFloatingDock = (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-      }}
-    >
+    <View style={{ width: '100%' }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Growth Action: ${totalDone} of ${totalTarget} done, ${leftCount} left`}
         onPress={() => setGrowthModalOpen(true)}
         style={({ pressed }) => ({
-          flex: 1,
-          height: 48,
-          borderRadius: 24,
+          width: '100%',
+          height: 50,
+          borderRadius: 25,
           overflow: 'hidden',
           opacity: pressed ? 0.9 : 1,
           shadowColor: '#000',
@@ -733,39 +703,17 @@ export default function HomeScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingHorizontal: 16,
+            paddingHorizontal: 20,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 16 }}>⚡</Text>
-            <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: 18 }}>⚡</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontWeight: '800', letterSpacing: -0.2 }}>
               Growth Action ({growthActions.loading && !growthActions.data ? '…' : `${totalDone} of ${totalTarget} done • ${leftCount} left`})
             </Text>
           </View>
-          <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
+          <MaterialIcons name="chevron-right" size={22} color="#FFFFFF" />
         </View>
-      </Pressable>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Voice Assistant"
-        onPress={() => Alert.alert('Voice Assistant', 'Say "Increase my marketing score" or "Check my reviews"…')}
-        style={({ pressed }) => ({
-          width: 48,
-          height: 48,
-          borderRadius: 24,
-          backgroundColor: '#0F172A',
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: pressed ? 0.85 : 1,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.25,
-          shadowRadius: 6,
-          elevation: 8,
-        })}
-      >
-        <MaterialIcons name="mic" size={22} color="#FFFFFF" />
       </Pressable>
     </View>
   );
