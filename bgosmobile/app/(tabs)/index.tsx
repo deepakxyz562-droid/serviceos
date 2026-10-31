@@ -96,10 +96,12 @@ const MORE_TOOLS: {
   route: string;
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
 }[] = [
+  { label: 'My Plan', route: '/my-plan', icon: 'credit-card' },
   { label: 'Brand Brain', route: '/preferences', icon: 'psychology' },
   { label: 'Manage Profile', route: '/manage-profile', icon: 'storefront' },
   { label: 'QR Standee', route: '/qr-standee', icon: 'qr-code-2' },
   { label: 'Growth Report', route: '/growth-report', icon: 'picture-as-pdf' },
+  { label: 'Outreach', route: '/(tabs)/outreach', icon: 'send' },
   { label: 'GBP Hub', route: '/(tabs)/growth', icon: 'hub' },
   { label: 'Photos', route: '/(tabs)/photos', icon: 'photo-library' },
   { label: 'Google Posts', route: '/(tabs)/posts', icon: 'article' },
@@ -588,7 +590,7 @@ export default function HomeScreen() {
         retry={refresh}
       />
 
-      {/* 30 Days Marketing Trial Banner (Screenshot 7 & 11 benchmark) */}
+      {/* 7 Days Free Trial Banner */}
       <View
         style={{
           borderRadius: 14,
@@ -598,7 +600,7 @@ export default function HomeScreen() {
       >
         <View
           style={{
-            backgroundColor: '#EA580C',
+            backgroundColor: '#4F46E5',
             paddingHorizontal: 14,
             paddingVertical: 10,
             flexDirection: 'row',
@@ -607,13 +609,13 @@ export default function HomeScreen() {
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-            <MaterialIcons name="warning" size={18} color="#FFFFFF" />
+            <MaterialIcons name="auto-awesome" size={18} color="#FFFFFF" />
             <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
-              30 Days Marketing Trial
+              7 Days Free Trial Active
             </Text>
           </View>
           <Pressable
-            onPress={() => router.push('/(tabs)/growth')}
+            onPress={() => router.push('/my-plan')}
             style={{
               backgroundColor: '#FFFFFF',
               paddingHorizontal: 12,
@@ -621,12 +623,12 @@ export default function HomeScreen() {
               borderRadius: 8,
             }}
           >
-            <Text style={{ color: '#EA580C', fontSize: 12, fontWeight: '800' }}>Start @ ₹999/-</Text>
+            <Text style={{ color: '#4F46E5', fontSize: 12, fontWeight: '800' }}>My Plan →</Text>
           </Pressable>
         </View>
-        <View style={{ backgroundColor: '#FFF7ED', paddingHorizontal: 14, paddingVertical: 6 }}>
-          <Text style={{ fontSize: 11, color: '#9A3412', fontWeight: '600' }}>
-            Special Offer · <Text style={{ textDecorationLine: 'line-through' }}>₹1999</Text> → ₹999 per month after trial
+        <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 14, paddingVertical: 6 }}>
+          <Text style={{ fontSize: 11, color: '#3730A3', fontWeight: '600' }}>
+            Full access to Google Growth, 1-Tap Reviews & AI · Upgrade anytime from ₹499/mo
           </Text>
         </View>
       </View>

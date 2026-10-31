@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
         website: website || null,
         plan: signupPlan,
         planStatus: isFreePlan ? 'active' : 'trial',
-        trialEndsAt: isFreePlan ? null : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial (skip for free)
+        trialEndsAt: isFreePlan ? null : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7-day trial (skip for free)
         marketplaceOptIn: false,
         marketplaceTermsAcceptedAt: null,
         // Registered businesses created by owner are claimed by default for CRM,
@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
           amount: signupPlan === 'standalone_business' ? 19 : (signupPlan === 'standalone_starter' ? 10 : 0),
           currency: 'USD',
           billingCycle: 'monthly',
-          trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+          trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           maxUsers: isStandalone ? (signupPlan === 'standalone_business' ? 10 : 1) : 5,
           maxJobs: isStandalone ? 0 : 200,
           maxWorkflows: isStandalone ? 5 : 10,

@@ -166,16 +166,22 @@ const BUSINESS_SIDEBAR_ITEMS: {
 
 function normalizeTab(raw?: string | null): TopSettingsTab {
   if (!raw) return 'business';
-  if (raw === 'workspace' || raw === 'business') return 'business';
-  if (raw === 'subscription' || raw === 'billing') return 'billing';
+  if (raw === 'workspace' || raw === 'business' || raw === 'account') return 'business';
+  if (raw === 'subscription' || raw === 'billing' || raw === 'my-plan') return 'billing';
   if (raw === 'team' || raw === 'users') return 'team';
-  if (raw === 'google-business-profile' || raw === 'reputation' || raw === 'integrations') {
+  if (
+    raw === 'google-business-profile' ||
+    raw === 'reputation' ||
+    raw === 'integrations' ||
+    raw === 'social-account' ||
+    raw === 'social'
+  ) {
     return 'integrations';
   }
+  if (raw === 'security' || raw === 'privacy') return 'security';
   if (
     raw === 'notifications' ||
     raw === 'automation' ||
-    raw === 'security' ||
     raw === 'preferences'
   ) {
     return raw;
@@ -1835,6 +1841,68 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Settings Footer: Canonical Quick Tools & Legal Links */}
+      <div className="border-t border-slate-200 bg-white px-6 py-4">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-semibold text-slate-700">Quick Growth Tools:</span>
+            <button
+              type="button"
+              onClick={() => navigate('socialMarketing')}
+              className="hover:text-[#009F50] transition underline"
+            >
+              Brand Brain
+            </button>
+            <span className="text-slate-300">·</span>
+            <button
+              type="button"
+              onClick={() => navigate('socialMarketing')}
+              className="hover:text-[#009F50] transition underline"
+            >
+              QR Standee Studio
+            </button>
+            <span className="text-slate-300">·</span>
+            <button
+              type="button"
+              onClick={() => navigate('socialMarketing')}
+              className="hover:text-[#009F50] transition underline"
+            >
+              Manage Google Profile
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-semibold text-slate-700">Legal & Compliance:</span>
+            <a
+              href="/terms-of-service"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-[#009F50] transition underline"
+            >
+              Terms of Service
+            </a>
+            <span className="text-slate-300">·</span>
+            <a
+              href="/privacy-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-[#009F50] transition underline"
+            >
+              Privacy Policy
+            </a>
+            <span className="text-slate-300">·</span>
+            <a
+              href="/data-deletion"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-[#009F50] transition underline"
+            >
+              Data Deletion
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   );

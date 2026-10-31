@@ -183,6 +183,12 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                 GROWTH & BRAND COCKPIT
               </Text>
               <DrawerItem
+                icon="credit-card"
+                title="My Plan & Billing"
+                subtitle="7-day trial status & upgrades"
+                onPress={() => navigate('/my-plan')}
+              />
+              <DrawerItem
                 icon="psychology"
                 title="Brand Brain"
                 subtitle="Products, tone & business story"
@@ -218,6 +224,12 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                 title="Unified Inbox & Chat"
                 subtitle="WhatsApp, SMS & web radar"
                 onPress={() => navigate('/(tabs)/inbox')}
+              />
+              <DrawerItem
+                icon="send"
+                title="Campaigns & Outreach"
+                subtitle="WhatsApp & email broadcasts"
+                onPress={() => navigate('/(tabs)/outreach')}
               />
               <DrawerItem
                 icon="phone"

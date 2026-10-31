@@ -165,13 +165,13 @@ export async function POST(request: NextRequest) {
 
     // ── 'standalone' path ──
     // Convert from the default CRM trial → standalone AI Forms & Chatbot.
-    // 1. Update or create Subscription row → standalone_starter, trial, 14 days.
+    // 1. Update or create Subscription row → standalone_starter, trial, 7 days.
     // 2. Update tenant: signupMode='standalone', plan='standalone_starter',
-    //    planStatus='trial', trialEndsAt=14d, listingTier='none',
+    //    planStatus='trial', trialEndsAt=7d, listingTier='none',
     //    claimed=false, publicProfileEnabled=false, onboardingCompleted=false.
     //    Setting onboardingCompleted=false ensures the StandaloneOnboarding
     //    wizard runs after the picker.
-    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await db.$transaction(async (tx) => {
       const existingSub = await tx.subscription.findFirst({

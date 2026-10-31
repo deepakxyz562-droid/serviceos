@@ -50,16 +50,42 @@ export async function GET(request: NextRequest) {
       where.tenantId = user.tenantId;
       if (customerIdParam) where.customerId = customerIdParam;
 
-      const profileIdParam = searchParams.get('profileId');
+      let profileIdParam = searchParams.get('profileId');
+      if (!profileIdParam) {
+        try {
+          const tenant = await db.tenant.findUnique({
+            where: { id: user.tenantId },
+            select: { settingsJson: true },
+          });
+          if (tenant?.settingsJson) {
+            const parsed = JSON.parse(tenant.settingsJson);
+            if (parsed.activeGbpLocationId) {
+              profileIdParam = String(parsed.activeGbpLocationId);
+            }
+          }
+          if (!profileIdParam) {
+            const googleAccount = await db.socialAccount.findFirst({
+              where: { tenantId: user.tenantId, platform: 'googlebusiness', isActive: true },
+              select: { accountId: true, metadata: true },
+            });
+            if (googleAccount?.metadata) {
+              const meta = typeof googleAccount.metadata === 'string' ? JSON.parse(googleAccount.metadata) : googleAccount.metadata;
+              if (meta?.activeProfileId) profileIdParam = String(meta.activeProfileId);
+              else if (googleAccount.accountId) profileIdParam = String(googleAccount.accountId);
+            }
+          }
+        } catch {}
+      }
+
       if (profileIdParam && profileIdParam !== 'all') {
-        if (profileIdParam === '5008') {
-          where.OR = [
-            { googleReviewId: { startsWith: '5008' } },
-            { googleReviewId: { startsWith: 'goog_rev_' } },
-          ];
-        } else {
-          where.googleReviewId = { startsWith: profileIdParam };
-        }
+        const shortMatch = profileIdParam.length > 4 ? profileIdParam.slice(-4) : profileIdParam;
+        where.OR = [
+          { googleReviewId: { startsWith: profileIdParam } },
+          { googleReviewId: { startsWith: shortMatch } },
+          ...(profileIdParam === '5008' || shortMatch === '5008'
+            ? [{ googleReviewId: { startsWith: 'goog_rev_' } }]
+            : []),
+        ];
       }
     }
 

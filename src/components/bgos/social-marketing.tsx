@@ -2095,10 +2095,13 @@ export function SocialMediaView({
     }
   }, []);
 
-  const fetchReviews = useCallback(async () => {
+  const fetchReviews = useCallback(async (profileId?: string) => {
     setReviewsLoading(true);
     try {
-      const res = await authFetch('/api/reviews?limit=50&source=google');
+      const url = profileId
+        ? `/api/reviews?limit=50&source=google&profileId=${profileId}`
+        : '/api/reviews?limit=50&source=google';
+      const res = await authFetch(url);
       if (res.ok) {
         const json = await res.json();
         setReviews(Array.isArray(json?.reviews) ? json.reviews : []);
@@ -2109,6 +2112,17 @@ export function SocialMediaView({
       setReviewsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const handleProfileChange = (e: any) => {
+      const newProfileId = e?.detail?.profileId;
+      fetchReviews(newProfileId);
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('gbp-profile-changed', handleProfileChange);
+      return () => window.removeEventListener('gbp-profile-changed', handleProfileChange);
+    }
+  }, [fetchReviews]);
 
   const fetchFilteredPosts = useCallback(async () => {
     const query: Record<PostStatusFilter, string> = {

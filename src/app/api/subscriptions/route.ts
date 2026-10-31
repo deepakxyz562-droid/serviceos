@@ -579,7 +579,7 @@ export async function POST(request: NextRequest) {
     //   status stays 'pending_payment' until /api/paypal/activate-subscription
     //   (recurring) or /api/paypal/capture-order (one-time) flips it to
     //   'active'. The tenant retains trial access in the meantime.
-    const trialDays = 14;
+    const trialDays = 7;
     const trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
 
     let endDate: Date;

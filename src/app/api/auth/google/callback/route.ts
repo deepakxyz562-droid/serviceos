@@ -82,7 +82,7 @@ async function createTenantForGoogleUser(
       email: userEmail,
       plan: signupPlan,
       planStatus: 'trial',
-      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
+      trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7-day trial
       onboardingCompleted,
       onboardingStep: 1,
       claimed: isStandalone ? false : true,
@@ -127,7 +127,7 @@ async function createTenantForGoogleUser(
         amount: signupPlan === 'standalone_business' ? 19 : (signupPlan === 'standalone_starter' ? 10 : 0),
         currency: 'USD',
         billingCycle: 'monthly',
-        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         maxUsers: signupPlan === 'standalone_business' ? 10 : (signupPlan === 'standalone_starter' ? 3 : 5),
         maxJobs: 200,
         maxWorkflows: 10,

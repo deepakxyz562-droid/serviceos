@@ -73,7 +73,7 @@ interface ManageProfileDialogProps {
     mapsUrl?: string | null;
   } | null;
   onSuccess?: () => void;
-  initialTab?: 'basics' | 'description' | 'hours';
+  initialTab?: 'contact' | 'ai' | 'posts' | 'basics' | 'description' | 'hours';
 }
 
 export function GbpManageProfileDialog({
@@ -81,9 +81,15 @@ export function GbpManageProfileDialog({
   onOpenChange,
   place,
   onSuccess,
-  initialTab = 'basics',
+  initialTab = 'contact',
 }: ManageProfileDialogProps) {
-  const [activeTab, setActiveTab] = useState<'basics' | 'description' | 'hours'>(initialTab);
+  const normalizedInitial =
+    initialTab === 'basics' || initialTab === 'hours'
+      ? 'contact'
+      : initialTab === 'description'
+      ? 'ai'
+      : initialTab;
+  const [activeTab, setActiveTab] = useState<'contact' | 'ai' | 'posts'>(normalizedInitial);
 
   // Form fields
   const [title, setTitle] = useState('');
@@ -93,6 +99,11 @@ export function GbpManageProfileDialog({
   const [website, setWebsite] = useState('');
   const [description, setDescription] = useState('');
   const [hours, setHours] = useState<Record<string, DaySchedule>>(DEFAULT_HOURS);
+
+  // Quick Google Post state
+  const [newPostContent, setNewPostContent] = useState('');
+  const [isPublishingPost, setIsPublishingPost] = useState(false);
+  const [recentPosts, setRecentPosts] = useState<Array<{ id: string; content: string; status: string; createdAt?: string }>>([]);
 
   // Saving state
   const [saving, setSaving] = useState(false);
@@ -115,11 +126,50 @@ export function GbpManageProfileDialog({
       }
       setVariations([]);
       setSelectedVariation(null);
+
+      // Fetch recent posts
+      void authFetch('/api/social/posts?platform=googlebusiness&limit=5')
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data?.data)) setRecentPosts(data.data);
+        })
+        .catch(() => {});
     }
     if (open && initialTab) {
-      setActiveTab(initialTab);
+      const norm =
+        initialTab === 'basics' || initialTab === 'hours'
+          ? 'contact'
+          : initialTab === 'description'
+          ? 'ai'
+          : initialTab;
+      setActiveTab(norm);
     }
   }, [open, place, initialTab]);
+
+  const handlePublishQuickPost = async () => {
+    if (!newPostContent.trim()) return;
+    setIsPublishingPost(true);
+    try {
+      const res = await authFetch('/api/social/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: newPostContent.trim(),
+          targets: [{ platform: 'googlebusiness' }],
+          status: 'published',
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to post to Google Business Profile');
+      toast.success('Post published directly to Google Business Profile!');
+      setNewPostContent('');
+      const updated = await authFetch('/api/social/posts?platform=googlebusiness&limit=5').then((r) => r.json());
+      if (Array.isArray(updated?.data)) setRecentPosts(updated.data);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to publish post');
+    } finally {
+      setIsPublishingPost(false);
+    }
+  };
 
   const handleRewrite = async () => {
     setRewriting(true);
@@ -237,22 +287,22 @@ export function GbpManageProfileDialog({
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="mt-2 w-full">
           <TabsList className="grid w-full grid-cols-3 rounded-xl bg-slate-100 p-1">
-            <TabsTrigger value="basics" className="rounded-lg text-xs font-semibold">
-              <Store className="mr-1.5 size-3.5" />
-              Basics
+            <TabsTrigger value="contact" className="rounded-lg text-xs font-semibold">
+              <MapPin className="mr-1.5 size-3.5" />
+              Contact & Address
             </TabsTrigger>
-            <TabsTrigger value="description" className="rounded-lg text-xs font-semibold">
+            <TabsTrigger value="ai" className="rounded-lg text-xs font-semibold">
               <Sparkles className="mr-1.5 size-3.5" />
-              AI Description
+              AI & Automation
             </TabsTrigger>
-            <TabsTrigger value="hours" className="rounded-lg text-xs font-semibold">
-              <Clock className="mr-1.5 size-3.5" />
-              Hours
+            <TabsTrigger value="posts" className="rounded-lg text-xs font-semibold">
+              <FileText className="mr-1.5 size-3.5" />
+              Post on Google
             </TabsTrigger>
           </TabsList>
 
-          {/* TAB 1: Business Basics */}
-          <TabsContent value="basics" className="space-y-4 pt-4">
+          {/* TAB 1: Contact & Address + Operating Hours */}
+          <TabsContent value="contact" className="space-y-4 pt-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700">Business Name</label>
               <Input
@@ -317,6 +367,59 @@ export function GbpManageProfileDialog({
               </div>
             </div>
 
+            {/* Operating Hours Accordion */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <Clock className="size-3.5 text-primary" /> Business Operating Hours
+              </label>
+              <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50/70 p-2.5">
+                {DAYS_OF_WEEK.map((day) => {
+                  const config = hours[day] || { open: false, openTime: '09:00', closeTime: '18:00' };
+                  return (
+                    <div
+                      key={day}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-2 shadow-2xs"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDay(day)}
+                          className={`size-4 rounded border text-white transition flex items-center justify-center ${
+                            config.open ? 'border-primary bg-primary' : 'border-slate-300 bg-white'
+                          }`}
+                        >
+                          {config.open && <Check className="size-3 stroke-[3]" />}
+                        </button>
+                        <span className={`text-xs ${config.open ? 'text-slate-900 font-semibold' : 'text-slate-400'}`}>
+                          {day}
+                        </span>
+                      </div>
+
+                      {config.open ? (
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            type="time"
+                            value={config.openTime}
+                            onChange={(e) => handleTimeChange(day, 'openTime', e.target.value)}
+                            className="h-6 w-20 rounded border-slate-200 text-[11px] px-1.5"
+                          />
+                          <span className="text-[11px] text-slate-400">to</span>
+                          <Input
+                            type="time"
+                            value={config.closeTime}
+                            onChange={(e) => handleTimeChange(day, 'closeTime', e.target.value)}
+                            className="h-6 w-20 rounded border-slate-200 text-[11px] px-1.5"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-[11px] font-medium text-slate-400 italic">Closed</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {place?.mapsUrl && (
               <a
                 href={place.mapsUrl}
@@ -330,13 +433,13 @@ export function GbpManageProfileDialog({
             )}
           </TabsContent>
 
-          {/* TAB 2: Description + AI Rewrite */}
-          <TabsContent value="description" className="space-y-4 pt-4">
+          {/* TAB 2: AI & Automation */}
+          <TabsContent value="ai" className="space-y-4 pt-4">
             <div className="flex items-center justify-between">
               <div>
-                <label className="text-xs font-semibold text-slate-700">Business Description</label>
+                <label className="text-xs font-semibold text-slate-700">AI Profile Description</label>
                 <p className="text-[11px] text-slate-400">
-                  Google allows up to 750 characters. No URLs or promotional phone numbers.
+                  Google allows up to 750 characters. Optimized for local Google Maps keywords.
                 </p>
               </div>
               <Button
@@ -363,7 +466,7 @@ export function GbpManageProfileDialog({
 
             <div className="relative">
               <Textarea
-                rows={5}
+                rows={4}
                 maxLength={750}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -449,57 +552,50 @@ export function GbpManageProfileDialog({
             )}
           </TabsContent>
 
-          {/* TAB 3: Business Hours */}
-          <TabsContent value="hours" className="space-y-3 pt-4">
-            <p className="text-xs text-slate-500">
-              Set standard business opening and closing hours for customers visiting your location.
-            </p>
+          {/* TAB 3: Post on Google */}
+          <TabsContent value="posts" className="space-y-4 pt-4">
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4 space-y-3">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <FileText className="size-3.5 text-primary" /> Create Quick Google Post / Offer
+              </label>
+              <Textarea
+                rows={3}
+                value={newPostContent}
+                onChange={(e) => setNewPostContent(e.target.value)}
+                placeholder="Write an announcement, festival offer, or update for your Google profile..."
+                className="rounded-xl border-slate-200 text-xs bg-white"
+              />
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={handlePublishQuickPost}
+                  disabled={isPublishingPost || !newPostContent.trim()}
+                  className="rounded-xl text-xs font-bold gap-1.5"
+                >
+                  {isPublishingPost ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                  Publish to Google
+                </Button>
+              </div>
+            </div>
 
-            <div className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
-              {DAYS_OF_WEEK.map((day) => {
-                const config = hours[day] || { open: false, openTime: '09:00', closeTime: '18:00' };
-                return (
-                  <div
-                    key={day}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-2.5 shadow-2xs"
-                  >
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleDay(day)}
-                        className={`size-4 rounded-md border text-white transition flex items-center justify-center ${
-                          config.open ? 'border-primary bg-primary' : 'border-slate-300 bg-white'
-                        }`}
-                      >
-                        {config.open && <Check className="size-3 stroke-[3]" />}
-                      </button>
-                      <span className={`text-xs font-medium ${config.open ? 'text-slate-900 font-semibold' : 'text-slate-400'}`}>
-                        {day}
-                      </span>
-                    </div>
-
-                    {config.open ? (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="time"
-                          value={config.openTime}
-                          onChange={(e) => handleTimeChange(day, 'openTime', e.target.value)}
-                          className="h-7 w-24 rounded-lg border-slate-200 text-xs px-2"
-                        />
-                        <span className="text-xs text-slate-400">to</span>
-                        <Input
-                          type="time"
-                          value={config.closeTime}
-                          onChange={(e) => handleTimeChange(day, 'closeTime', e.target.value)}
-                          className="h-7 w-24 rounded-lg border-slate-200 text-xs px-2"
-                        />
+            {/* Recent Posts Feed */}
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-800">Recent Live &amp; Scheduled Posts</p>
+              {recentPosts.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-2">No recent Google posts found.</p>
+              ) : (
+                <div className="space-y-2">
+                  {recentPosts.map((p) => (
+                    <div key={p.id} className="rounded-xl border border-slate-100 bg-white p-3 flex items-center justify-between gap-3 shadow-2xs">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-slate-800 font-medium truncate">{p.content}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Status: {p.status}</p>
                       </div>
-                    ) : (
-                      <span className="text-xs font-medium text-slate-400 italic">Closed</span>
-                    )}
-                  </div>
-                );
-              })}
+                      <Badge variant="outline" className="text-[10px] shrink-0">{p.status}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>

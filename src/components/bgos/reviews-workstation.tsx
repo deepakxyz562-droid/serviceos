@@ -736,8 +736,85 @@ export function ReviewsView({
         if (mounted) setIsLoading(false);
       });
 
+    const handleProfileChange = (e: any) => {
+      const newProfileId = e?.detail?.profileId;
+      setIsLoading(true);
+      const url = newProfileId
+        ? `/api/reviews?limit=50&source=google&profileId=${newProfileId}`
+        : '/api/reviews?limit=50&source=google';
+      authFetch(url)
+        .then(async (res) => {
+          if (!res.ok) throw new Error('Failed to load reviews');
+          return res.json();
+        })
+        .then((data) => {
+          if (!mounted) return;
+          if (data?.reviews && Array.isArray(data.reviews)) {
+            const avatarBgs = [
+              'bg-[#009F50]',
+              'bg-emerald-600',
+              'bg-blue-600',
+              'bg-rose-600',
+              'bg-amber-600',
+              'bg-purple-600',
+              'bg-teal-600',
+            ];
+            const mapped: ReviewItem[] = data.reviews.map((r: any, idx: number) => {
+              const authorName = r.authorName || r.reviewerName || 'Customer';
+              const initials =
+                authorName
+                  .split(' ')
+                  .filter(Boolean)
+                  .map((w: string) => w[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase() || 'CU';
+              const parsedResp = safeJsonParse(r.responseJson);
+              const rawRating = Number(r.rating);
+              const validRating =
+                Number.isFinite(rawRating) && rawRating >= 1 && rawRating <= 5 ? rawRating : 5;
+              const comment = r.comment || r.text || '';
+              const words = comment.toLowerCase().match(/\b[a-z]{5,}\b/g) || [];
+              const extractedKeywords = Array.from(new Set(words)).slice(0, 4);
+              return {
+                id: r.id,
+                name: authorName,
+                initials,
+                avatarBg: avatarBgs[idx % avatarBgs.length],
+                rating: validRating,
+                timeAgo:
+                  r.relativeTime ||
+                  r.timeAgo ||
+                  (r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recently'),
+                text: comment,
+                keywords: extractedKeywords,
+                replied:
+                  r.status === 'replied' || Boolean(r.response || r.replyText || parsedResp?.comment),
+                replyText: r.response || r.replyText || parsedResp?.comment || '',
+                replyEdited: r.updatedAt ? new Date(r.updatedAt).toLocaleDateString() : undefined,
+                location: r.location || r.city || undefined,
+                reviewCount: r.reviewCount || 1,
+              };
+            });
+            setReviewsList(mapped);
+            if (mapped[0]) setSelectedReviewId(mapped[0].id);
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (mounted) setIsLoading(false);
+        });
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('gbp-profile-changed', handleProfileChange);
+    }
+
     return () => {
       mounted = false;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('gbp-profile-changed', handleProfileChange);
+      }
     };
   }, [initialReviews, isDemo]);
 

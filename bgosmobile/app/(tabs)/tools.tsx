@@ -58,7 +58,7 @@ export default function ToolsScreen() {
 
   function confirmDeleteAccount() {
     Alert.alert(
-      'Delete Account',
+      'Delete Account & Workspace',
       'Are you sure you want to permanently delete your account and all associated workspace data? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -76,11 +76,13 @@ export default function ToolsScreen() {
   }
 
   const data = workspace.data;
+  const planCode = data?.plan.code ? data.plan.code.toUpperCase() : 'GROWTH';
+  const isTrial = data?.plan.status === 'trial';
 
   return (
     <Screen
-      title="All Tools & Operations"
-      subtitle="Complete business hub, growth suite, communications & settings."
+      title="Settings & Hub"
+      subtitle="My plan, social accounts, growth tools, privacy & settings."
       onRefresh={workspace.refresh}
     >
       <ErrorNotice message={error || workspace.error} retry={workspace.refresh} />
@@ -91,34 +93,189 @@ export default function ToolsScreen() {
         </Card>
       ) : null}
 
-      {/* User & Workspace Profile Header Card */}
-      <Card style={{ padding: 18, backgroundColor: colors.surface }}>
-        <View style={[ui.row, { justifyContent: 'space-between' }]}>
-          <View style={[ui.row, { gap: 14 }]}>
-            <Avatar name={user?.name || workspace.data?.name || 'My Account'} size={52} />
-            <View>
-              <Text style={[ui.heading, { fontSize: 18 }]}>{user?.name || 'Account Owner'}</Text>
-              <Text style={ui.body}>{workspace.data?.name || 'Your Business'}</Text>
-              <Text style={ui.caption}>{user?.email || 'Registered Business Profile'}</Text>
+      {/* ─────────────────────────────────────────────────────────────
+          1. MY PLAN & BILLING
+          ───────────────────────────────────────────────────────────── */}
+      <Card style={{ gap: 14 }}>
+        <View style={[ui.row, { justifyContent: 'space-between', alignItems: 'flex-start' }]}>
+          <View style={{ gap: 2 }}>
+            <View style={[ui.row, { gap: 6, alignItems: 'center' }]}>
+              <MaterialIcons name="credit-card" size={20} color={colors.brand} />
+              <Text style={ui.heading}>My Plan</Text>
             </View>
+            <Text style={ui.caption}>7-Day Free Trial & Subscriptions</Text>
           </View>
-          <Badge label={data?.plan.code || 'Plan unavailable'} accent />
+          <Badge label={planCode} accent />
+        </View>
+
+        {isTrial && (
+          <View
+            style={{
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: '#FEF3C7',
+              borderWidth: 1,
+              borderColor: '#FDE68A',
+              gap: 4,
+            }}
+          >
+            <View style={[ui.row, { gap: 6, alignItems: 'center' }]}>
+              <MaterialIcons name="verified" size={16} color="#D97706" />
+              <Text style={{ color: '#92400E', fontWeight: '800', fontSize: 13 }}>
+                7 Days Free Trial Active
+              </Text>
+            </View>
+            <Text style={{ color: '#B45309', fontSize: 11, lineHeight: 16 }}>
+              All Growth Employee AI automations, Google Business synchronization & WhatsApp review requests are unlocked.
+            </Text>
+          </View>
+        )}
+
+        <View style={[ui.row, { gap: 8 }]}>
+          <View style={{ flex: 1, padding: 10, borderRadius: 10, backgroundColor: colors.background }}>
+            <Text style={ui.caption}>Contacts</Text>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: colors.ink }}>
+              {data?.usage?.contacts ?? 0}
+            </Text>
+          </View>
+          <View style={{ flex: 1, padding: 10, borderRadius: 10, backgroundColor: colors.background }}>
+            <Text style={ui.caption}>Active Forms</Text>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: colors.ink }}>
+              {data?.usage?.forms ?? 0}
+            </Text>
+          </View>
+          <View style={{ flex: 1, padding: 10, borderRadius: 10, backgroundColor: colors.background }}>
+            <Text style={ui.caption}>Lead Credits</Text>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: colors.ink }}>
+              {data?.usage?.usedLeadCredits ?? 0}/{data?.usage?.leadCreditLimit ?? 100}
+            </Text>
+          </View>
+        </View>
+
+        <View style={[ui.row, { gap: 10 }]}>
+          <View style={{ flex: 1 }}>
+            <Action
+              label="Upgrade Plan (₹)"
+              icon="stars"
+              onPress={() => router.push('/my-plan')}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Action
+              secondary
+              label="Web Billing"
+              icon="receipt"
+              onPress={() => run(() => Linking.openURL(getBgosWebUrl('billing')))}
+            />
+          </View>
         </View>
       </Card>
 
-      {/* COMMUNICATIONS & SALES */}
-      <Card>
-        <Text style={ui.heading}>Communications & Sales</Text>
-        <MenuRow title="Unified Inbox & Chat" detail="WhatsApp, Instagram & visitor radar" icon="chat" onPress={() => router.push('/(tabs)/inbox')} />
-        <MenuRow title="Business Phone & Keypad" detail="Dialpad, call logs & transcription" icon="phone" onPress={() => router.push('/(tabs)/phone')} />
-        <MenuRow title="Leads & CRM Pipeline" detail="Manage leads, statuses & follow-ups" icon="people-outline" onPress={() => router.push('/(tabs)/leads')} />
-        <MenuRow title="Appointments Calendar" detail="Review agenda & book time slots" icon="event" onPress={() => router.push('/(tabs)/appointments')} />
-        <MenuRow title="Form Inquiries & Surveys" detail="Intake forms & customer submissions" icon="description" onPress={() => router.push('/(tabs)/submissions')} />
+      {/* ─────────────────────────────────────────────────────────────
+          2. SOCIAL ACCOUNTS & CHANNELS
+          ───────────────────────────────────────────────────────────── */}
+      <Card style={{ gap: 12 }}>
+        <View style={[ui.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
+          <View style={[ui.row, { gap: 6, alignItems: 'center' }]}>
+            <MaterialIcons name="share" size={20} color={colors.brand} />
+            <Text style={ui.heading}>Social Accounts</Text>
+          </View>
+          <Badge label="Connected Channels" />
+        </View>
+
+        <View style={{ gap: 8 }}>
+          <View
+            style={[
+              ui.row,
+              {
+                padding: 10,
+                borderRadius: 10,
+                backgroundColor: colors.background,
+                justifyContent: 'space-between',
+              },
+            ]}
+          >
+            <View style={[ui.row, { gap: 8, alignItems: 'center' }]}>
+              <MaterialIcons name="storefront" size={20} color="#4285F4" />
+              <View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }}>
+                  Google Business Profile
+                </Text>
+                <Text style={{ fontSize: 10, color: colors.muted }}>
+                  100% Safe · Reviews, Posts & Photos
+                </Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.success }}>Active</Text>
+          </View>
+
+          <View
+            style={[
+              ui.row,
+              {
+                padding: 10,
+                borderRadius: 10,
+                backgroundColor: colors.background,
+                justifyContent: 'space-between',
+              },
+            ]}
+          >
+            <View style={[ui.row, { gap: 8, alignItems: 'center' }]}>
+              <MaterialIcons name="chat" size={20} color="#25D366" />
+              <View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }}>
+                  Meta WhatsApp Cloud API
+                </Text>
+                <Text style={{ fontSize: 10, color: colors.muted }}>
+                  Review requests & lead follow-up
+                </Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.brand }}>Enabled</Text>
+          </View>
+
+          <View
+            style={[
+              ui.row,
+              {
+                padding: 10,
+                borderRadius: 10,
+                backgroundColor: colors.background,
+                justifyContent: 'space-between',
+              },
+            ]}
+          >
+            <View style={[ui.row, { gap: 8, alignItems: 'center' }]}>
+              <MaterialIcons name="public" size={20} color="#1877F2" />
+              <View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }}>
+                  Facebook & Instagram
+                </Text>
+                <Text style={{ fontSize: 10, color: colors.muted }}>
+                  Cross-post promotional campaigns
+                </Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.muted }}>Available</Text>
+          </View>
+        </View>
+
+        <Action
+          secondary
+          label="Manage Integrations & Channels"
+          icon="link"
+          onPress={() => router.push('/(tabs)/integrations')}
+        />
       </Card>
 
-      {/* GOOGLE GROWTH & BRAND BRAIN */}
+      {/* ─────────────────────────────────────────────────────────────
+          3. TOOLS & OPERATIONS
+          ───────────────────────────────────────────────────────────── */}
       <Card>
-        <Text style={ui.heading}>Google Growth & Brand Brain</Text>
+        <View style={[ui.row, { gap: 6, alignItems: 'center', marginBottom: 6 }]}>
+          <MaterialIcons name="build" size={20} color={colors.brand} />
+          <Text style={ui.heading}>Tools</Text>
+        </View>
         <MenuRow
           title="Brand Brain (AI Preferences)"
           detail="Products, branding, founder bio & AI guardrails"
@@ -127,7 +284,7 @@ export default function ToolsScreen() {
         />
         <MenuRow
           title="Manage Google Profile"
-          detail="AI description rewrite, hours, photos & posts"
+          detail="Contact & Address, AI & Automation, Post on Google"
           icon="storefront"
           onPress={() => router.push('/manage-profile')}
         />
@@ -136,6 +293,12 @@ export default function ToolsScreen() {
           detail="Printable countertop review cards with verified Google rating"
           icon="qr-code-2"
           onPress={() => router.push('/qr-standee')}
+        />
+        <MenuRow
+          title="Keyword Planner"
+          detail="Local SEO ranking discovery for your city"
+          icon="travel-explore"
+          onPress={() => router.push('/keyword-planner')}
         />
         <MenuRow
           title="4-Tier Growth Report"
@@ -150,57 +313,29 @@ export default function ToolsScreen() {
           onPress={() => router.push('/reply-settings')}
         />
         <MenuRow
-          title="Keyword Planner"
-          detail="Local SEO ranking discovery for your city"
-          icon="travel-explore"
-          onPress={() => router.push('/keyword-planner')}
+          title="Unified Inbox & Chat"
+          detail="WhatsApp, Instagram & visitor radar"
+          icon="chat"
+          onPress={() => router.push('/(tabs)/inbox')}
+        />
+        <MenuRow
+          title="Business Phone & Keypad"
+          detail="Dialpad, call logs & transcription"
+          icon="phone"
+          onPress={() => router.push('/(tabs)/phone')}
+        />
+        <MenuRow
+          title="Leads & CRM Pipeline"
+          detail="Manage leads, statuses & follow-ups"
+          icon="people-outline"
+          onPress={() => router.push('/(tabs)/leads')}
         />
       </Card>
 
-      {/* AI & AUTOMATION */}
-      <Card>
-        <Text style={ui.heading}>AI & Automation</Text>
-        <MenuRow title="AI Assistant Studio" detail="Assistant bots, test lab & knowledge setup" icon="smart-toy" onPress={() => router.push('/(tabs)/agents')} />
-        <MenuRow title="Channel Integrations" detail="Connected social and messaging accounts" icon="link" onPress={() => router.push('/(tabs)/integrations')} />
-        <MenuRow title="Team Permissions · Web" detail="Manage workspace members and access" icon="people-outline" onPress={() => run(() => Linking.openURL(getBgosWebUrl('settings')))} />
-      </Card>
-
-      {/* MY PLAN & USAGE METERS (Screen 24 in mockups) */}
-      <Card style={{ gap: 14 }}>
-        <View style={[ui.row, { justifyContent: 'space-between' }]}>
-          <View>
-            <Text style={ui.heading}>My Plan & Usage</Text>
-            <Text style={ui.caption}>{data?.plan.code || 'Plan unavailable'}</Text>
-          </View>
-          <Badge label={data?.plan.status || 'Status unavailable'} />
-        </View>
-
-        <Text style={ui.body}>Open billing to view current usage, limits and subscription details.</Text>
-
-        <View style={[ui.row, { gap: 10, marginTop: 4 }]}>
-          <View style={{ flex: 1 }}>
-            <Action
-              secondary
-              label="Manage Plan"
-              icon="credit-card"
-              onPress={() => run(() => Linking.openURL(getBgosWebUrl('billing')))}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Action
-              secondary
-              label="Billing History"
-              icon="receipt"
-              onPress={() => run(() => Linking.openURL(getBgosWebUrl('billing')))}
-            />
-          </View>
-        </View>
-      </Card>
-
-      {/* DIGITAL IDENTITY & SCANNABLE QR */}
+      {/* Digital Identity & Scannable QR */}
       {data && (
         <Card style={{ gap: 12 }}>
-          <Text style={ui.heading}>Digital Identity & QR</Text>
+          <Text style={ui.heading}>Digital Identity & Scannable QR</Text>
           {([['profile', 'Digital Business Card'], ['booking', 'Online Booking Page'], ['form', 'Customer Intake Form']] as const).map(
             ([key, label]) => (
               <View key={key} style={{ gap: 6 }}>
@@ -243,50 +378,63 @@ export default function ToolsScreen() {
         </Card>
       )}
 
-      {/* WORKSPACE PREFERENCES */}
-      {data && (
-        <Card style={{ gap: 12 }}>
-          <Text style={ui.heading}>Preferences & Notifications</Text>
+      {/* ─────────────────────────────────────────────────────────────
+          4. ACCOUNT & WORKSPACE
+          ───────────────────────────────────────────────────────────── */}
+      <Card style={{ gap: 12 }}>
+        <View style={[ui.row, { gap: 6, alignItems: 'center' }]}>
+          <MaterialIcons name="person" size={20} color={colors.brand} />
+          <Text style={ui.heading}>Account</Text>
+        </View>
 
-          {([['profileAssistant', 'AI Assistant on Digital Card'], ['offlineReply', 'Instant Offline Auto-reply']] as const).map(
-            ([key, label]) => (
-              <View key={key} style={[ui.row, { justifyContent: 'space-between' }]}>
-                <Text style={[ui.body, { flex: 1, color: colors.ink }]}>{label}</Text>
-                <Switch
-                  accessibilityLabel={label}
-                  disabled={busy}
-                  value={data.automations[key]}
-                  onValueChange={(val) => run(() => update({ [key]: val }))}
-                  trackColor={{ true: colors.brand }}
-                />
-              </View>
-            )
-          )}
+        <View style={[ui.row, { gap: 14, alignItems: 'center' }]}>
+          <Avatar name={user?.name || workspace.data?.name || 'My Account'} size={48} />
+          <View style={{ flex: 1 }}>
+            <Text style={[ui.heading, { fontSize: 16 }]}>{user?.name || 'Account Owner'}</Text>
+            <Text style={ui.body}>{workspace.data?.name || 'Your Business'}</Text>
+            <Text style={ui.caption}>{user?.email || 'Registered Business Profile'}</Text>
+          </View>
+        </View>
 
-          <Action
-            secondary
-            disabled={busy}
-            label="Enable Push Notifications"
-            icon="notifications"
-            onPress={() =>
-              run(async () => {
-                await enablePush();
-                setNotice('Push notifications enabled for this device.');
-              })
-            }
-          />
+        {data && (
+          <View style={{ gap: 10, marginTop: 4 }}>
+            {([['profileAssistant', 'AI Assistant on Digital Card'], ['offlineReply', 'Instant Offline Auto-reply']] as const).map(
+              ([key, label]) => (
+                <View key={key} style={[ui.row, { justifyContent: 'space-between' }]}>
+                  <Text style={[ui.body, { flex: 1, color: colors.ink }]}>{label}</Text>
+                  <Switch
+                    accessibilityLabel={label}
+                    disabled={busy}
+                    value={data.automations[key]}
+                    onValueChange={(val) => run(() => update({ [key]: val }))}
+                    trackColor={{ true: colors.brand }}
+                  />
+                </View>
+              )
+            )}
 
-          <Action
-            secondary
-            disabled={busy}
-            label={data.mode === 'local' ? 'Workspace: Local Business (Switch to Agency)' : 'Workspace: Agency (Switch to Local)'}
-            onPress={() => run(() => update({ mode: data.mode === 'local' ? 'agency' : 'local' }))}
-          />
-        </Card>
-      )}
+            <Action
+              secondary
+              disabled={busy}
+              label="Enable Push Notifications"
+              icon="notifications"
+              onPress={() =>
+                run(async () => {
+                  await enablePush();
+                  setNotice('Push notifications enabled for this device.');
+                })
+              }
+            />
 
-      {/* ACCOUNT & SIGNOUT */}
-      <Card style={{ gap: 10 }}>
+            <Action
+              secondary
+              disabled={busy}
+              label={data.mode === 'local' ? 'Workspace: Local Business (Switch to Agency)' : 'Workspace: Agency (Switch to Local)'}
+              onPress={() => run(() => update({ mode: data.mode === 'local' ? 'agency' : 'local' }))}
+            />
+          </View>
+        )}
+
         <Action
           secondary
           disabled={busy}
@@ -299,13 +447,73 @@ export default function ToolsScreen() {
             })
           }
         />
-        <Action
-          danger
-          disabled={busy}
-          label="Delete Account & Workspace"
-          icon="delete-forever"
-          onPress={confirmDeleteAccount}
+      </Card>
+
+      {/* ─────────────────────────────────────────────────────────────
+          5. PRIVACY & DATA SECURITY
+          ───────────────────────────────────────────────────────────── */}
+      <Card style={{ gap: 10 }}>
+        <View style={[ui.row, { gap: 6, alignItems: 'center' }]}>
+          <MaterialIcons name="shield" size={20} color={colors.brand} />
+          <Text style={ui.heading}>Privacy & Security</Text>
+        </View>
+
+        <View style={{ gap: 6, backgroundColor: colors.background, padding: 12, borderRadius: 12 }}>
+          <View style={[ui.row, { gap: 6, alignItems: 'center' }]}>
+            <MaterialIcons name="lock" size={16} color={colors.brand} />
+            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }}>
+              100% Safe & Secure
+            </Text>
+          </View>
+          <Text style={{ fontSize: 11, color: colors.muted, lineHeight: 16 }}>
+            • BGOS connects to Google Business Profile only for reviews, posts, and profile management.
+          </Text>
+          <Text style={{ fontSize: 11, color: colors.muted, lineHeight: 16 }}>
+            • It cannot read your personal Gmail inbox or private emails.
+          </Text>
+          <Text style={{ fontSize: 11, color: colors.muted, lineHeight: 16 }}>
+            • Your customer contacts, leads, and review responses remain 100% isolated to your workspace.
+          </Text>
+        </View>
+      </Card>
+
+      {/* ─────────────────────────────────────────────────────────────
+          6. LEGAL & COMPLIANCE
+          ───────────────────────────────────────────────────────────── */}
+      <Card style={{ gap: 10 }}>
+        <View style={[ui.row, { gap: 6, alignItems: 'center' }]}>
+          <MaterialIcons name="policy" size={20} color={colors.brand} />
+          <Text style={ui.heading}>Legal</Text>
+        </View>
+
+        <MenuRow
+          title="Terms of Service"
+          detail="Merchant terms, usage boundaries & subscription policies"
+          icon="description"
+          onPress={() => run(() => Linking.openURL(absolute('/terms-of-service')))}
         />
+        <MenuRow
+          title="Privacy Policy"
+          detail="Google API Limited Use & data handling disclosures"
+          icon="verified-user"
+          onPress={() => run(() => Linking.openURL(absolute('/privacy-policy')))}
+        />
+        <MenuRow
+          title="Data Deletion Request"
+          detail="Permanently remove third-party integration tokens"
+          icon="security"
+          onPress={() => run(() => Linking.openURL(absolute('/data-deletion')))}
+        />
+
+        <View style={{ marginTop: 8 }}>
+          <Action
+            danger
+            disabled={busy}
+            label="Delete Account & Workspace"
+            icon="delete-forever"
+            onPress={confirmDeleteAccount}
+          />
+        </View>
       </Card>
     </Screen>
   );

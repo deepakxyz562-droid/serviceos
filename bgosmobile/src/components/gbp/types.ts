@@ -89,6 +89,7 @@ export type GbpPlaceResult = {
     address: string;
     phone?: string;
     website?: string;
+    description?: string;
     placeId?: string;
     mapsUrl?: string;
     reviewUrl?: string;
@@ -105,6 +106,7 @@ export type GbpPlaceResult = {
     address?: string;
     phone?: string;
     website?: string;
+    description?: string;
     completionScore?: number;
     missingFields?: string[];
   } | null;

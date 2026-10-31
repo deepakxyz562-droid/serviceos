@@ -4,6 +4,7 @@ export interface BgosWorkspace {
   links: { profile: string | null; booking: string | null; form: string | null; review: string | null };
   automations: { profileAssistant: boolean; offlineReply: boolean };
   plan: { code: string; status: string };
+  usage?: { contacts: number; forms: number; usedLeadCredits: number; leadCreditLimit: number };
 }
 export interface BgosConversation {
   id: string; customerName: string; channel: string; lastMessage: string;
