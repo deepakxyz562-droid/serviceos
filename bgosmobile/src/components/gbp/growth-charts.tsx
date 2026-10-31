@@ -12,9 +12,11 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export function WeeklyScoreLineChart({
   history,
   filterLabel = 'This Week',
+  hideHeader = false,
 }: {
   history?: { date: string; score: number | null }[];
   filterLabel?: string;
+  hideHeader?: boolean;
 }) {
   const chartHeight = 130;
 
@@ -45,16 +47,18 @@ export function WeeklyScoreLineChart({
 
   return (
     <View style={{ gap: 10, paddingVertical: 4 }}>
-      {/* Title & Filter Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
-          Growth in Marketing Score
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Text style={{ fontSize: 13, color: '#E11D48' }}>🔻</Text>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: '#E11D48' }}>{filterLabel}</Text>
+      {/* Title & Filter Header (hidden if parent container already shows it) */}
+      {!hideHeader && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
+            Growth in Marketing Score
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={{ fontSize: 13, color: '#E11D48' }}>🔻</Text>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#E11D48' }}>{filterLabel}</Text>
+          </View>
         </View>
-      </View>
+      )}
 
       {/* Grid with Y-axis percentages: 100%, 75%, 50%, 25%, 0% */}
       <View style={{ height: chartHeight, justifyContent: 'space-between', paddingVertical: 4, position: 'relative' }}>

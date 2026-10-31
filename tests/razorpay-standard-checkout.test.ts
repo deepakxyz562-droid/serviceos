@@ -93,4 +93,26 @@ describe('Razorpay Standard Web Checkout Integration', () => {
     expect(data.payment_id).toBe(paymentId);
     expect(data.order_id).toBe(orderId);
   });
+
+  it('creates razorpay orders for starter and growth plans with correct amounts in paise', async () => {
+    // Starter: ₹499 -> 49900 paise
+    const starterReq = new NextRequest('http://localhost:3000/api/create-order', {
+      method: 'POST',
+      body: JSON.stringify({ amount: 49900, currency: 'INR', planCode: 'starter' }),
+    });
+    const starterRes = await createOrderHandler(starterReq);
+    const starterData = await starterRes.json();
+    expect(starterRes.status).toBe(200);
+    expect(starterData.amount).toBe(49900);
+
+    // Growth: ₹1,499 -> 149900 paise
+    const growthReq = new NextRequest('http://localhost:3000/api/create-order', {
+      method: 'POST',
+      body: JSON.stringify({ amount: 149900, currency: 'INR', planCode: 'growth' }),
+    });
+    const growthRes = await createOrderHandler(growthReq);
+    const growthData = await growthRes.json();
+    expect(growthRes.status).toBe(200);
+    expect(growthData.amount).toBe(149900);
+  });
 });

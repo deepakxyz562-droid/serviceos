@@ -202,105 +202,65 @@ export default function ManageGoogleProfileScreen() {
       </Card>
 
       {/* 2. 3-Pillar Tab Segment Bar */}
-      <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 12, padding: 4, gap: 4 }}>
-        <Pressable
-          onPress={() => setActiveTab('contact')}
-          style={{
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 5,
-            paddingVertical: 9,
-            borderRadius: 9,
-            backgroundColor: activeTab === 'contact' ? '#FFFFFF' : 'transparent',
-            shadowColor: '#000',
-            shadowOpacity: activeTab === 'contact' ? 0.08 : 0,
-            shadowRadius: 2,
-            elevation: activeTab === 'contact' ? 2 : 0,
-          }}
-        >
-          <MaterialIcons
-            name="place"
-            size={16}
-            color={activeTab === 'contact' ? colors.brand : colors.muted}
-          />
-          <Text
-            style={{
-              fontSize: 11.5,
-              fontWeight: '700',
-              color: activeTab === 'contact' ? colors.brand : colors.muted,
-            }}
-          >
-            Contact & Address
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => setActiveTab('ai')}
-          style={{
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 5,
-            paddingVertical: 9,
-            borderRadius: 9,
-            backgroundColor: activeTab === 'ai' ? '#FFFFFF' : 'transparent',
-            shadowColor: '#000',
-            shadowOpacity: activeTab === 'ai' ? 0.08 : 0,
-            shadowRadius: 2,
-            elevation: activeTab === 'ai' ? 2 : 0,
-          }}
-        >
-          <MaterialIcons
-            name="auto-awesome"
-            size={16}
-            color={activeTab === 'ai' ? '#7C3AED' : colors.muted}
-          />
-          <Text
-            style={{
-              fontSize: 11.5,
-              fontWeight: '700',
-              color: activeTab === 'ai' ? '#7C3AED' : colors.muted,
-            }}
-          >
-            AI & Automation
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => setActiveTab('posts')}
-          style={{
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 5,
-            paddingVertical: 9,
-            borderRadius: 9,
-            backgroundColor: activeTab === 'posts' ? '#FFFFFF' : 'transparent',
-            shadowColor: '#000',
-            shadowOpacity: activeTab === 'posts' ? 0.08 : 0,
-            shadowRadius: 2,
-            elevation: activeTab === 'posts' ? 2 : 0,
-          }}
-        >
-          <MaterialIcons
-            name="article"
-            size={16}
-            color={activeTab === 'posts' ? colors.brand : colors.muted}
-          />
-          <Text
-            style={{
-              fontSize: 11.5,
-              fontWeight: '700',
-              color: activeTab === 'posts' ? colors.brand : colors.muted,
-            }}
-          >
-            Post on Google
-          </Text>
-        </Pressable>
+      <View
+        style={{
+          flexDirection: 'row',
+          backgroundColor: '#F1F5F9',
+          borderRadius: 14,
+          padding: 4,
+          gap: 4,
+          borderWidth: 1,
+          borderColor: '#E2E8F0',
+        }}
+      >
+        {[
+          { key: 'contact' as ProfileTab, label: 'Contact & Info', icon: 'place' as const, color: colors.brand },
+          { key: 'ai' as ProfileTab, label: 'AI Studio', icon: 'auto-awesome' as const, color: '#7C3AED' },
+          { key: 'posts' as ProfileTab, label: 'Google Posts', icon: 'article' as const, color: '#2563EB' },
+        ].map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              onPress={() => setActiveTab(tab.key)}
+              style={({ pressed }) => ({
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
+                paddingVertical: 10,
+                borderRadius: 10,
+                backgroundColor: isActive ? '#FFFFFF' : 'transparent',
+                shadowColor: '#0F172A',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: isActive ? 0.08 : 0,
+                shadowRadius: 3,
+                elevation: isActive ? 2 : 0,
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <MaterialIcons
+                name={tab.icon}
+                size={16}
+                color={isActive ? tab.color : colors.muted}
+              />
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: isActive ? '800' : '600',
+                  color: isActive ? colors.ink : colors.muted,
+                  letterSpacing: -0.2,
+                }}
+                numberOfLines={1}
+              >
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {/* ──────────────── TAB 1: CONTACT & ADDRESS ──────────────── */}

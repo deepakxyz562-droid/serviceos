@@ -86,17 +86,31 @@ export async function POST(request: NextRequest) {
     if (body.gateway === 'razorpay' || (!body.gateway && body.action !== 'activate' && keyId && keySecret)) {
       if (chosenPlan && chosenPlan.priceInr > 0) {
         const amountPaise = chosenPlan.priceInr * 100;
-        const razorpay = new Razorpay({ key_id: keyId!, key_secret: keySecret! });
-        const order = await razorpay.orders.create({
-          amount: amountPaise,
-          currency: 'INR',
-          receipt: `bgos_${body.plan}_${Date.now()}`,
-          notes: {
-            tenantId: user.tenantId,
-            plan: body.plan,
-            platform: 'bgos',
+        const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+        const orderRes = await fetch('https://api.razorpay.com/v1/orders', {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${auth}`,
+            'Content-Type': 'application/json',
           },
+          body: JSON.stringify({
+            amount: amountPaise,
+            currency: 'INR',
+            receipt: `bgos_${body.plan}_${Date.now()}`,
+            notes: {
+              tenantId: user.tenantId,
+              plan: body.plan,
+              platform: 'bgos',
+            },
+          }),
         });
+
+        const order = await orderRes.json();
+        if (!orderRes.ok) {
+          const errDesc = order?.error?.description || 'Razorpay order creation failed';
+          return NextResponse.json({ error: errDesc }, { status: orderRes.status });
+        }
+
         return NextResponse.json({
           gateway: 'razorpay',
           order_id: order.id,

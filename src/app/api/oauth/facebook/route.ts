@@ -129,9 +129,8 @@ export async function GET(request: NextRequest) {
     const originHost =
       request.nextUrl.searchParams.get('originHost') ||
       request.headers.get('referer') ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      'https://bgos.fieseros.com';
-    const cleanOrigin = originHost.startsWith('http') ? originHost.split('?')[0].replace(/\/+$/, '') : 'https://bgos.fieseros.com';
+      (hostHeader ? `${proto}://${hostHeader}` : process.env.NEXT_PUBLIC_APP_URL || 'https://bgos.fieseros.com');
+    const cleanOrigin = originHost.startsWith('http') ? originHost.split('?')[0].replace(/\/+$/, '') : (hostHeader ? `${proto}://${hostHeader}` : 'https://bgos.fieseros.com');
     const returnUrl = `${cleanOrigin}/?view=socialMedia`;
 
     if (request.headers.get('accept')?.includes('text/html')) {

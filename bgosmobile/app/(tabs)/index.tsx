@@ -174,19 +174,21 @@ function GrowthCockpitQuickStrip() {
   ];
 
   return (
-    <Card style={{ padding: 12, gap: 10 }}>
+    <Card style={{ padding: 14, gap: 12 }}>
       <View style={[ui.row, { justifyContent: 'space-between' }]}>
         <View style={[ui.row, { gap: 6 }]}>
-          <MaterialIcons name="auto-awesome" size={16} color={colors.brand} />
-          <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }}>
+          <MaterialIcons name="auto-awesome" size={17} color={colors.brand} />
+          <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }}>
             Growth & Brand Cockpit
           </Text>
         </View>
         <Pressable accessibilityRole="button" onPress={() => router.push('/preferences')}>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: colors.brand }}>Configure AI →</Text>
+          <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.brand }}>Configure AI →</Text>
         </Pressable>
       </View>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+
+      {/* 2x2 Executive Cockpit Grid */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {shortcuts.map((sc) => (
           <Pressable
             key={sc.label}
@@ -194,23 +196,24 @@ function GrowthCockpitQuickStrip() {
             accessibilityLabel={`Open ${sc.label}`}
             onPress={() => router.push(sc.route as any)}
             style={({ pressed }) => ({
-              flex: 1,
+              width: '48.5%',
+              flexDirection: 'row',
               alignItems: 'center',
-              paddingVertical: 10,
-              paddingHorizontal: 4,
-              borderRadius: 10,
+              paddingVertical: 12,
+              paddingHorizontal: 10,
+              borderRadius: 13,
               backgroundColor: colors.surface,
               borderWidth: 1,
               borderColor: colors.line,
-              opacity: pressed ? 0.7 : 1,
-              gap: 4,
+              opacity: pressed ? 0.75 : 1,
+              gap: 9,
             })}
           >
             <View
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
+                width: 38,
+                height: 38,
+                borderRadius: 11,
                 backgroundColor: sc.bg,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -218,12 +221,15 @@ function GrowthCockpitQuickStrip() {
             >
               <MaterialIcons name={sc.icon} size={20} color={sc.color} />
             </View>
-            <Text style={{ fontSize: 10.5, fontWeight: '800', color: colors.ink, textAlign: 'center' }} numberOfLines={1}>
-              {sc.label}
-            </Text>
-            <Text style={{ fontSize: 9, color: colors.muted, textAlign: 'center', fontWeight: '600' }} numberOfLines={1}>
-              {sc.desc}
-            </Text>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }} numberOfLines={1}>
+                {sc.label}
+              </Text>
+              <Text style={{ fontSize: 10, color: colors.muted, fontWeight: '600' }} numberOfLines={1}>
+                {sc.desc}
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={16} color={colors.muted} />
           </Pressable>
         ))}
       </View>
@@ -325,28 +331,71 @@ function MarketingScoreCard({
             }
             scrollEventThrottle={16}
           >
-            {/* Slide 0: Speedometer */}
-            <View style={{ width: slideW, alignItems: 'center', gap: 10, paddingVertical: 6 }}>
+            {/* Slide 0: Speedometer & Goal Reach Slider */}
+            <View style={{ width: slideW, minHeight: 220, justifyContent: 'center', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
               <View style={{ position: 'relative', alignItems: 'center' }}>
                 <Speedometer score={score!.score ?? 0} size={210} />
                 <View style={{ position: 'absolute', bottom: 0, alignItems: 'center' }} pointerEvents="none">
-                  <Text style={{ fontSize: 30, fontWeight: '900', color: scoreBandColor(score!.score), letterSpacing: -0.8 }}>
+                  <Text style={{ fontSize: 32, fontWeight: '900', color: scoreBandColor(score!.score), letterSpacing: -0.8 }}>
                     {Math.round(score!.score ?? 0)}%
                   </Text>
                 </View>
               </View>
-              <Text style={{ fontSize: 10, color: colors.muted, fontWeight: '600' }}>
-                Goal: Reach 80%+ to dominate Google Local 3-Pack
-              </Text>
+
+              {/* Goal Reach Milestone Slider */}
+              <View
+                style={{
+                  width: '92%',
+                  backgroundColor: '#F8FAFC',
+                  borderRadius: 12,
+                  paddingVertical: 9,
+                  paddingHorizontal: 12,
+                  gap: 6,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <MaterialIcons name="flag" size={15} color={colors.brand} />
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.ink }}>
+                      Goal: 80% Local 3-Pack Target
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: '800',
+                      color: (score?.score ?? 0) >= 80 ? colors.brand : '#D97706',
+                    }}
+                  >
+                    {(score?.score ?? 0) >= 80
+                      ? 'Goal Reached! 🏆'
+                      : `${Math.max(0, 80 - Math.round(score?.score ?? 0))}% to reach`}
+                  </Text>
+                </View>
+
+                {/* Progress Track */}
+                <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                  <View
+                    style={{
+                      width: `${Math.min(100, Math.max(5, score?.score ?? 0))}%`,
+                      height: '100%',
+                      backgroundColor: scoreBandColor(score!.score),
+                      borderRadius: 3,
+                    }}
+                  />
+                </View>
+              </View>
             </View>
 
-            {/* Slide 1: Growth Line Chart */}
-            <View style={{ width: slideW, paddingVertical: 6, paddingHorizontal: 4 }}>
-              <WeeklyScoreLineChart history={score!.weekHistory || []} filterLabel="This Week" />
+            {/* Slide 1: Growth Line Chart (hideHeader prevents duplicate title) */}
+            <View style={{ width: slideW, minHeight: 220, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 4 }}>
+              <WeeklyScoreLineChart history={score!.weekHistory || []} filterLabel="This Week" hideHeader />
             </View>
 
             {/* Slide 2: Marketing Tracker Table */}
-            <View style={{ width: slideW, paddingVertical: 6, paddingHorizontal: 4 }}>
+            <View style={{ width: slideW, minHeight: 220, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 4 }}>
               <MarketingTrackerSlide width={slideW - 8} items={trackerItems} />
             </View>
           </ScrollView>

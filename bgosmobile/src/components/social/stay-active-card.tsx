@@ -48,11 +48,10 @@ export function StayActiveSocialMediaCard() {
 
   async function handleConnect(platform: 'facebook' | 'instagram') {
     const platformLabel = platform === 'facebook' ? 'Facebook' : 'Instagram';
-    const appScheme = platform === 'instagram' ? 'instagram://app' : 'fb://feed';
 
     Alert.alert(
       `Connect ${platformLabel}`,
-      `Meta requires logging in with the Facebook account that manages your ${platformLabel} Business profile to enable auto-posting.\n\nYou can also launch the installed ${platformLabel} app directly.`,
+      `Choose how you would like to interact with ${platformLabel}:\n\n• Open ${platformLabel} App: Opens your installed mobile app directly.\n• Auto-Post OAuth: Connects Meta API to schedule and publish posts from BGOS.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -60,10 +59,27 @@ export function StayActiveSocialMediaCard() {
           onPress: () => void openInstalledApp(platform),
         },
         {
-          text: 'Connect Meta OAuth',
+          text: 'Auto-Post OAuth',
           onPress: async () => {
             setConnectingKey(platform);
             try {
+              // Preflight check if Meta App credentials are ready
+              const precheck = await fetch(`${WEB_URL}/api/oauth/${platform}`, {
+                headers: { Accept: 'application/json' },
+              }).catch(() => null);
+
+              if (precheck && precheck.status === 503) {
+                Alert.alert(
+                  'Meta App Required',
+                  `Meta OAuth credentials (META_APP_ID / META_APP_SECRET) are not configured on this server yet.\n\nYou can still use the "Open App" button to post directly from your device!`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: `Open ${platformLabel} App`, onPress: () => void openInstalledApp(platform) },
+                  ]
+                );
+                return;
+              }
+
               const oauthUrl = `${WEB_URL}/api/oauth/${platform}`;
               // Open in-app secure browser session rather than kicking out to external Safari
               await WebBrowser.openBrowserAsync(oauthUrl, {
@@ -73,7 +89,9 @@ export function StayActiveSocialMediaCard() {
               await accountsRes.refresh();
             } catch {
               // Fallback to Linking
-              await Linking.openURL(`${WEB_URL}/api/oauth/${platform}`);
+              await Linking.openURL(`${WEB_URL}/api/oauth/${platform}`).catch(() => {
+                Alert.alert('Unable to Open', `Could not open ${platformLabel} connection.`);
+              });
             } finally {
               setConnectingKey(null);
             }

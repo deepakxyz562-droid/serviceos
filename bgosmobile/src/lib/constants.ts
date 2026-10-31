@@ -1,3 +1,5 @@
+import Constants from 'expo-constants';
+
 export const BRAND = {
   name: 'BGOS',
   tagline: 'Business Growth Operating System',
@@ -7,9 +9,26 @@ export const BRAND = {
   inkColor: '#070B2D',     // Ink Navy
 };
 
+function resolveDefaultHost(): string {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, '');
+  }
+  // When running locally in Expo, dynamically connect to the dev machine LAN IP
+  if (__DEV__) {
+    const hostUri = Constants.expoConfig?.hostUri;
+    if (hostUri) {
+      const devIp = hostUri.split(':')[0];
+      if (devIp) {
+        return `http://${devIp}:3000`;
+      }
+    }
+  }
+  return 'https://bgos.fieseros.com';
+}
+
 // Default backend API base URL for BGOS
-export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'https://bgos.fieseros.com').replace(/\/$/, '');
-export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://bgos.fieseros.com').replace(/\/$/, '');
+export const API_BASE_URL = resolveDefaultHost();
+export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || resolveDefaultHost()).replace(/\/$/, '');
 
 export const API_PATHS = {
   login: '/api/auth/login',

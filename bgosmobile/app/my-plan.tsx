@@ -14,7 +14,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Screen, Card, Action, Badge, Loading, colors, ui } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
+import { getToken } from '../src/lib/auth';
 import { WEB_URL } from '../src/lib/constants';
+import * as WebBrowser from 'expo-web-browser';
 
 interface BillingResponse {
   subscription: {
@@ -96,56 +98,29 @@ export default function MyPlanScreen() {
   async function handleActivatePlan(planCode: string) {
     const selected = BGOS_DEFAULT_PLANS.find((p) => p.code === planCode);
     const planName = selected?.name || planCode.toUpperCase();
-    const priceFormatted = selected ? `₹${selected.priceInr.toLocaleString('en-IN')}/mo` : '';
+    setActivatingPlan(planCode);
 
-    Alert.alert(
-      `Upgrade to ${planName} (${priceFormatted})`,
-      `Select your preferred payment and activation option for ${planName}:`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: '🇮🇳 Razorpay (Web UPI)',
-          onPress: async () => {
-            await Linking.openURL(`${WEB_URL}/app?view=billing`);
-          },
-        },
-        {
-          text: '⚡ Instant Activate',
-          onPress: async () => {
-            setActivatingPlan(planCode);
-            try {
-              const res = await apiRequest<{
-                success?: boolean;
-                activated?: boolean;
-                message?: string;
-                url?: string;
-              }>('/api/bgos/billing', {
-                method: 'POST',
-                body: { plan: planCode, action: 'activate' },
-              });
+    try {
+      const token = await getToken();
+      const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+      const checkoutUrl = `${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos${tokenParam}`;
 
-              if (res?.url) {
-                await Linking.openURL(res.url);
-              } else if (res?.activated || res?.success) {
-                Alert.alert(
-                  '🎉 Plan Activated!',
-                  res.message || `${planName} plan is now active for your business.`,
-                  [{ text: 'Done', onPress: () => void billingRes.refresh() }]
-                );
-                await billingRes.refresh();
-              } else {
-                Alert.alert('Success', `${planName} activated!`);
-                await billingRes.refresh();
-              }
-            } catch (err) {
-              Alert.alert('Activation Notice', (err as Error).message || 'Could not complete plan activation.');
-            } finally {
-              setActivatingPlan(null);
-            }
-          },
-        },
-      ]
-    );
+      // Open Razorpay Standard Checkout in-app sheet directly
+      await WebBrowser.openBrowserAsync(checkoutUrl, {
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+        controlsColor: colors.brand,
+      });
+
+      await billingRes.refresh();
+    } catch (err) {
+      try {
+        await Linking.openURL(`${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos`);
+      } catch {
+        Alert.alert('Checkout Notice', (err as Error)?.message || 'Could not launch payment checkout.');
+      }
+    } finally {
+      setActivatingPlan(null);
+    }
   }
 
   async function handleManageSubscription() {
@@ -155,12 +130,12 @@ export default function MyPlanScreen() {
         body: { action: 'portal' },
       });
       if (res?.url) {
-        await Linking.openURL(res.url);
+        await WebBrowser.openBrowserAsync(res.url);
       } else {
-        await Linking.openURL(`${WEB_URL}/app?view=billing`);
+        await WebBrowser.openBrowserAsync(`${WEB_URL}/app?product=bgos&view=billing`);
       }
     } catch {
-      await Linking.openURL(`${WEB_URL}/app?view=billing`);
+      await WebBrowser.openBrowserAsync(`${WEB_URL}/app?product=bgos&view=billing`);
     }
   }
 

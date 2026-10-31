@@ -14,7 +14,7 @@ export default async function CustomerPortalPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = searchParams ? await searchParams : {};
-  if (params.product === 'bgos') {
+  if (params.product === 'bgos' || params.view === 'billing') {
     return <HomePageClient />;
   }
   return <CustomerWebApp />;
