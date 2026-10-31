@@ -42,7 +42,8 @@ export function StayActiveSocialMediaCard() {
 
       const ticketQuery = ticket ? `?ticket=${encodeURIComponent(ticket)}` : '';
       const returnUrlQuery = ticket ? `&returnUrl=${encodeURIComponent('bgos://auth-callback')}` : `?returnUrl=${encodeURIComponent('bgos://auth-callback')}`;
-      const oauthUrl = `${WEB_URL}/api/oauth/${platform}${ticketQuery}${returnUrlQuery}`;
+      const originHostQuery = `&originHost=${encodeURIComponent(WEB_URL)}`;
+      const oauthUrl = `${WEB_URL}/api/oauth/${platform}${ticketQuery}${returnUrlQuery}${originHostQuery}`;
 
       const result = await WebBrowser.openAuthSessionAsync(oauthUrl, 'bgos://auth-callback');
       await accountsRes.refresh();
