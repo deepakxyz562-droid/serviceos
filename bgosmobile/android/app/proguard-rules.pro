@@ -19,6 +19,9 @@
 -keep class expo.modules.** { *; }
 -keep class * extends expo.modules.kotlin.modules.Module { *; }
 -keep class * extends expo.modules.core.interfaces.Package { *; }
+-dontwarn expo.modules.**
+-dontwarn expo.modules.core.errors.**
+-dontwarn expo.modules.kotlin.types.**
 
 # Expo SecureStore (Keystore persistence)
 -keep class expo.modules.securestore.** { *; }
