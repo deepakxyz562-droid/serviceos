@@ -13,6 +13,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors, ui } from '../ui';
 import { useResource } from '../../hooks/use-resource';
 import { apiRequest } from '../../lib/api';
+import { getToken } from '../../lib/auth';
 import { WEB_URL } from '../../lib/constants';
 
 interface SocialAccount {
@@ -63,9 +64,14 @@ export function StayActiveSocialMediaCard() {
           onPress: async () => {
             setConnectingKey(platform);
             try {
+              const token = await getToken();
+              const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
+              const precheckHeaders: Record<string, string> = { Accept: 'application/json' };
+              if (token) precheckHeaders.Authorization = `Bearer ${token}`;
+
               // Preflight check if Meta App credentials are ready
-              const precheck = await fetch(`${WEB_URL}/api/oauth/${platform}`, {
-                headers: { Accept: 'application/json' },
+              const precheck = await fetch(`${WEB_URL}/api/oauth/${platform}${tokenQuery}`, {
+                headers: precheckHeaders,
               }).catch(() => null);
 
               if (precheck && precheck.status === 503) {
@@ -80,7 +86,7 @@ export function StayActiveSocialMediaCard() {
                 return;
               }
 
-              const oauthUrl = `${WEB_URL}/api/oauth/${platform}`;
+              const oauthUrl = `${WEB_URL}/api/oauth/${platform}${tokenQuery}`;
               // Open in-app secure browser session rather than kicking out to external Safari
               await WebBrowser.openBrowserAsync(oauthUrl, {
                 presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
@@ -88,8 +94,9 @@ export function StayActiveSocialMediaCard() {
               });
               await accountsRes.refresh();
             } catch {
-              // Fallback to Linking
-              await Linking.openURL(`${WEB_URL}/api/oauth/${platform}`).catch(() => {
+              const token = await getToken();
+              const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
+              await Linking.openURL(`${WEB_URL}/api/oauth/${platform}${tokenQuery}`).catch(() => {
                 Alert.alert('Unable to Open', `Could not open ${platformLabel} connection.`);
               });
             } finally {

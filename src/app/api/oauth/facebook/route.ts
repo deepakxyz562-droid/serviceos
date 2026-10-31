@@ -118,12 +118,14 @@ export async function GET(request: NextRequest) {
     orderBy: { provider: 'asc' },
   });
 
-  const clientId =
+  const clientId = (
     cred?.clientId ||
     process.env.META_CLIENT_ID ||
     process.env.META_APP_ID ||
+    process.env['META_APP_ID '] ||
     process.env.FACEBOOK_APP_ID ||
-    process.env.FACEBOOK_CLIENT_ID;
+    process.env.FACEBOOK_CLIENT_ID
+  )?.trim();
 
   if (!clientId) {
     const originHost =

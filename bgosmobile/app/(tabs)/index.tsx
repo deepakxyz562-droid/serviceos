@@ -167,71 +167,138 @@ function MoreToolsGrid() {
 function GrowthCockpitQuickStrip() {
   const router = useRouter();
   const shortcuts = [
-    { label: 'Brand Brain', desc: 'Tone & Story', route: '/preferences', icon: 'psychology' as const, bg: '#EDE9FE', color: '#7C3AED' },
-    { label: 'Manage Profile', desc: 'Hours & Info', route: '/manage-profile', icon: 'storefront' as const, bg: '#EFF6FF', color: '#2563EB' },
-    { label: 'QR Standee', desc: 'Review Cards', route: '/qr-standee', icon: 'qr-code-2' as const, bg: '#ECFDF5', color: '#059669' },
-    { label: 'Growth Report', desc: 'Monthly PDF', route: '/growth-report', icon: 'analytics' as const, bg: '#FEF3C7', color: '#D97706' },
+    {
+      label: 'Brand Brain',
+      desc: 'Tone & Story',
+      route: '/preferences',
+      icon: 'psychology' as const,
+      cardBg: '#FAF5FF',
+      borderColor: '#E9D5FF',
+      iconBg: '#EDE9FE',
+      iconColor: '#7C3AED',
+    },
+    {
+      label: 'Manage Profile',
+      desc: 'Hours & Info',
+      route: '/manage-profile',
+      icon: 'storefront' as const,
+      cardBg: '#F0F9FF',
+      borderColor: '#BAE6FD',
+      iconBg: '#E0F2FE',
+      iconColor: '#0284C7',
+    },
+    {
+      label: 'QR Standee',
+      desc: 'Review Cards',
+      route: '/qr-standee',
+      icon: 'qr-code-2' as const,
+      cardBg: '#F0FDF4',
+      borderColor: '#BBF7D0',
+      iconBg: '#DCFCE7',
+      iconColor: '#059669',
+    },
+    {
+      label: 'Growth Report',
+      desc: 'Monthly PDF',
+      route: '/growth-report',
+      icon: 'analytics' as const,
+      cardBg: '#FFFBEB',
+      borderColor: '#FED7AA',
+      iconBg: '#FEF3C7',
+      iconColor: '#D97706',
+    },
   ];
+
+  const row1 = shortcuts.slice(0, 2);
+  const row2 = shortcuts.slice(2, 4);
+
+  const renderTile = (sc: (typeof shortcuts)[number]) => (
+    <Pressable
+      key={sc.label}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${sc.label}`}
+      onPress={() => router.push(sc.route as any)}
+      style={({ pressed }) => ({
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+        borderRadius: 14,
+        backgroundColor: sc.cardBg,
+        borderWidth: 1,
+        borderColor: sc.borderColor,
+        opacity: pressed ? 0.75 : 1,
+        gap: 9,
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 2,
+        elevation: 1,
+      })}
+    >
+      <View
+        style={{
+          width: 38,
+          height: 38,
+          borderRadius: 11,
+          backgroundColor: sc.iconBg,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <MaterialIcons name={sc.icon} size={20} color={sc.iconColor} />
+      </View>
+      <View style={{ flex: 1, gap: 1.5 }}>
+        <Text
+          style={{ fontSize: 12.5, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }}
+          numberOfLines={1}
+        >
+          {sc.label}
+        </Text>
+        <Text style={{ fontSize: 10, color: colors.muted, fontWeight: '600' }} numberOfLines={1}>
+          {sc.desc}
+        </Text>
+      </View>
+      <MaterialIcons name="chevron-right" size={16} color={sc.iconColor} style={{ opacity: 0.7 }} />
+    </Pressable>
+  );
 
   return (
     <Card style={{ padding: 14, gap: 12 }}>
+      {/* Cockpit Header with Active Mission Control Chip */}
       <View style={[ui.row, { justifyContent: 'space-between' }]}>
-        <View style={[ui.row, { gap: 6 }]}>
+        <View style={[ui.row, { gap: 7 }]}>
           <MaterialIcons name="auto-awesome" size={17} color={colors.brand} />
           <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }}>
             Growth & Brand Cockpit
           </Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#ECFDF5',
+              paddingHorizontal: 6,
+              paddingVertical: 2,
+              borderRadius: 8,
+              gap: 4,
+              borderWidth: 1,
+              borderColor: '#A7F3D0',
+            }}
+          >
+            <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#059669' }} />
+            <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#047857' }}>4 Hubs</Text>
+          </View>
         </View>
         <Pressable accessibilityRole="button" onPress={() => router.push('/preferences')}>
           <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.brand }}>Configure AI →</Text>
         </Pressable>
       </View>
 
-      {/* 2x2 Executive Cockpit Grid */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-        {shortcuts.map((sc) => (
-          <Pressable
-            key={sc.label}
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${sc.label}`}
-            onPress={() => router.push(sc.route as any)}
-            style={({ pressed }) => ({
-              width: '48.5%',
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingVertical: 12,
-              paddingHorizontal: 10,
-              borderRadius: 13,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.line,
-              opacity: pressed ? 0.75 : 1,
-              gap: 9,
-            })}
-          >
-            <View
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 11,
-                backgroundColor: sc.bg,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <MaterialIcons name={sc.icon} size={20} color={sc.color} />
-            </View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }} numberOfLines={1}>
-                {sc.label}
-              </Text>
-              <Text style={{ fontSize: 10, color: colors.muted, fontWeight: '600' }} numberOfLines={1}>
-                {sc.desc}
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={16} color={colors.muted} />
-          </Pressable>
-        ))}
+      {/* 2x2 Pixel-Perfect Executive Grid */}
+      <View style={{ gap: 9 }}>
+        <View style={{ flexDirection: 'row', gap: 9 }}>{row1.map(renderTile)}</View>
+        <View style={{ flexDirection: 'row', gap: 9 }}>{row2.map(renderTile)}</View>
       </View>
     </Card>
   );

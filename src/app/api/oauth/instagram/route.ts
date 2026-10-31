@@ -110,14 +110,16 @@ export async function GET(request: NextRequest) {
     orderBy: { provider: 'desc' },
   });
 
-  const clientId =
+  const clientId = (
     cred?.clientId ||
     process.env.INSTAGRAM_CLIENT_ID ||
     process.env.INSTAGRAM_APP_ID ||
     process.env.META_CLIENT_ID ||
     process.env.META_APP_ID ||
+    process.env['META_APP_ID '] ||
     process.env.FACEBOOK_APP_ID ||
-    process.env.FACEBOOK_CLIENT_ID;
+    process.env.FACEBOOK_CLIENT_ID
+  )?.trim();
 
   if (!clientId) {
     const originHost =

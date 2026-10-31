@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Suspense, useEffect, useState } from 'react';
+import Script from 'next/script';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, ShieldCheck, Zap, AlertCircle, ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -49,17 +50,26 @@ function loadRazorpayScript(): Promise<boolean> {
     if (typeof window === 'undefined') return resolve(false);
     if ((window as any).Razorpay) return resolve(true);
 
-    const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+    );
     if (existing) {
-      existing.addEventListener('load', () => resolve(true));
-      existing.addEventListener('error', () => resolve(false));
-      return;
+      if ((window as any).Razorpay) return resolve(true);
+      // Remove stale/failed script to allow a fresh load attempt
+      existing.remove();
     }
 
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     script.async = true;
-    script.onload = () => resolve(true);
+    script.crossOrigin = 'anonymous';
+    script.onload = () => {
+      if ((window as any).Razorpay) {
+        resolve(true);
+      } else {
+        setTimeout(() => resolve(Boolean((window as any).Razorpay)), 150);
+      }
+    };
     script.onerror = () => resolve(false);
     document.body.appendChild(script);
   });
@@ -330,14 +340,17 @@ function RazorpayCheckoutContent() {
 
 export default function RazorpayCheckoutPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-          <Loader2 className="size-8 animate-spin text-[#009F50]" />
-        </div>
-      }
-    >
-      <RazorpayCheckoutContent />
-    </Suspense>
+    <>
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+            <Loader2 className="size-8 animate-spin text-[#009F50]" />
+          </div>
+        }
+      >
+        <RazorpayCheckoutContent />
+      </Suspense>
+    </>
   );
 }

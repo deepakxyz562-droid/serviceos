@@ -126,23 +126,27 @@ export async function GET(request: NextRequest) {
     orderBy: { provider: 'desc' }, // 'instagram' before 'facebook' alphabetically reversed
   });
 
-  const clientId =
+  const clientId = (
     cred?.clientId ||
     process.env.INSTAGRAM_CLIENT_ID ||
     process.env.INSTAGRAM_APP_ID ||
     process.env.META_CLIENT_ID ||
     process.env.META_APP_ID ||
+    process.env['META_APP_ID '] ||
     process.env.FACEBOOK_APP_ID ||
-    process.env.FACEBOOK_CLIENT_ID;
+    process.env.FACEBOOK_CLIENT_ID
+  )?.trim();
 
-  const clientSecret =
+  const clientSecret = (
     cred?.clientSecret ||
     process.env.INSTAGRAM_CLIENT_SECRET ||
     process.env.INSTAGRAM_APP_SECRET ||
     process.env.META_CLIENT_SECRET ||
     process.env.META_APP_SECRET ||
+    process.env['META_APP_SECRET '] ||
     process.env.FACEBOOK_APP_SECRET ||
-    process.env.FACEBOOK_CLIENT_SECRET;
+    process.env.FACEBOOK_CLIENT_SECRET
+  )?.trim();
 
   if (!clientId || !clientSecret) {
     return renderErrorPage(
@@ -376,7 +380,7 @@ export async function GET(request: NextRequest) {
 
   // ── 10. Clear the CSRF cookie + redirect to dashboard ──────────────────
   const redirectUrl = new URL(
-    '/dashboard?view=social-accounts&connected=instagram',
+    '/app?product=bgos&view=socialMedia&connected=instagram',
     appUrl,
   );
   const res = NextResponse.redirect(redirectUrl.toString());
