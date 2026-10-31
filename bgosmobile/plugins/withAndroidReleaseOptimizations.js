@@ -4,16 +4,33 @@ const {
 } = require('expo/config-plugins');
 
 function withAndroidReleaseOptimizations(config) {
-  // 1. Ensure targetSdkVersion 35 and compileSdkVersion 35 in project build.gradle
+  // 1. Ensure compileSdkVersion 36, targetSdkVersion 35, and stable androidx.core
   config = withProjectBuildGradle(config, (modConfig) => {
     let contents = modConfig.modResults.contents;
-    if (!contents.includes('targetSdkVersion = 35')) {
+    if (contents.includes('compileSdkVersion = 35')) {
+      contents = contents.replace('compileSdkVersion = 35', 'compileSdkVersion = 36');
+    }
+    if (!contents.includes('compileSdkVersion = 36')) {
       contents = contents.replace(
         /buildscript\s*\{/,
-        `buildscript {\n  ext {\n    buildToolsVersion = "35.0.0"\n    minSdkVersion = 24\n    compileSdkVersion = 35\n    targetSdkVersion = 35\n    ndkVersion = "26.1.10909125"\n  }`
+        `buildscript {\n  ext {\n    buildToolsVersion = "35.0.0"\n    minSdkVersion = 24\n    compileSdkVersion = 36\n    targetSdkVersion = 35\n    ndkVersion = "26.1.10909125"\n  }`
       );
-      modConfig.modResults.contents = contents;
     }
+    // Force stable androidx.core to avoid bleeding-edge 1.18.0 alpha mismatches
+    if (!contents.includes("force 'androidx.core:core:")) {
+      const forceResolution = `
+  configurations.all {
+    resolutionStrategy {
+      force 'androidx.core:core:1.15.0'
+      force 'androidx.core:core-ktx:1.15.0'
+    }
+  }`;
+      contents = contents.replace(
+        /allprojects\s*\{[\s\S]*?repositories\s*\{[\s\S]*?\}/,
+        (match) => `${match}\n${forceResolution}`
+      );
+    }
+    modConfig.modResults.contents = contents;
     return modConfig;
   });
 

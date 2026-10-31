@@ -28,6 +28,8 @@ export default ({ config }: ConfigContext): any => ({
   android: {
     package: 'com.fieseros.bgos',
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#009F50' },
+    compileSdkVersion: 36,
+    targetSdkVersion: 35,
     permissions: ['POST_NOTIFICATIONS'],
     blockedPermissions: [
       'android.permission.RECORD_AUDIO',
