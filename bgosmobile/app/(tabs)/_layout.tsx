@@ -7,19 +7,19 @@ import { colors } from '../../src/components/ui';
 import { usePendingReplies } from '../../src/hooks/use-pending-replies';
 
 /**
- * Bottom navigation — BGOS AI Growth Employee benchmark bar:
- *  - Home (Business overview & metrics)
- *  - Review Replies (Live Google reviews awaiting reply with counter badge)
- *  - AI Post (Elevated circular floating action button for 1-tap post creation)
- *  - Google Post (Articles, offers & updates)
- *  - Google Media (Photos, store assets & gallery)
+ * Bottom Navigation — BGOS Growth Employee bar:
+ *  - Home: Business overview, growth radar & actions
+ *  - Reviews: Google reviews stream with pending badge
+ *  - AI Post: 1-Tap post creation & marketing studio
+ *  - Posts: Google Business Posts & articles
+ *  - Media: Photos & store asset manager
  */
 const visible = [
   ['index', 'Home', 'home'],
-  ['reviews', 'Review Replies', 'chat-bubble'],
+  ['reviews', 'Reviews', 'rate-review'],
   ['marketing', 'AI Post', 'auto-awesome'],
-  ['posts', 'Google Post', 'article'],
-  ['photos', 'Google Media', 'photo-library'],
+  ['posts', 'Posts', 'article'],
+  ['photos', 'Media', 'photo-library'],
 ] as const;
 
 const hidden = [
@@ -46,11 +46,11 @@ function CenterAiPostButton(props: any) {
       accessibilityLabel="AI Post Creation"
       style={({ pressed }) => [
         styles.centerButtonOuter,
-        pressed && { transform: [{ scale: 0.94 }] },
+        pressed && { transform: [{ scale: 0.95 }] },
       ]}
     >
       <View style={[styles.centerAiCircle, focused && styles.centerAiCircleActive]}>
-        <MaterialIcons name="auto-awesome" size={24} color="#FFFFFF" />
+        <MaterialIcons name="auto-awesome" size={22} color="#FFFFFF" />
       </View>
       <Text style={[styles.centerAiLabel, focused && styles.centerAiLabelActive]}>
         AI Post
@@ -61,7 +61,6 @@ function CenterAiPostButton(props: any) {
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  // Badge on Review Replies = Google reviews still awaiting a reply
   const pendingReplies = usePendingReplies(60000);
 
   return (
@@ -72,18 +71,22 @@ export default function TabLayout() {
           backgroundColor: '#FFFFFF',
           borderTopColor: '#E2E8F0',
           borderTopWidth: 1,
-          height: 62 + insets.bottom,
+          height: 58 + insets.bottom,
           paddingBottom: Math.max(insets.bottom, 6),
           paddingTop: 6,
-          elevation: 10,
+          elevation: 8,
           shadowColor: '#070B2D',
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.07,
-          shadowRadius: 8,
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 6,
         },
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.muted,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '700', marginTop: 2 },
+        tabBarLabelStyle: {
+          fontSize: 10.5,
+          fontWeight: '700',
+          marginTop: 1,
+        },
       }}
     >
       {visible.map(([name, title, icon]) => {
@@ -108,7 +111,11 @@ export default function TabLayout() {
               title,
               tabBarIcon: ({ color, focused }) => (
                 <View style={[styles.standardIconContainer, focused && styles.activePill]}>
-                  <MaterialIcons name={icon} color={focused ? colors.brand : colors.muted} size={22} />
+                  <MaterialIcons
+                    name={icon as any}
+                    color={focused ? colors.brand : colors.muted}
+                    size={23}
+                  />
                 </View>
               ),
               ...(name === 'reviews' && pendingReplies != null && pendingReplies > 0
@@ -139,41 +146,39 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -18,
+    paddingTop: 2,
   },
   centerAiCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 8,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.28,
+    shadowRadius: 4,
+    elevation: 4,
   },
   centerAiCircleActive: {
     backgroundColor: colors.brandDark,
     transform: [{ scale: 1.04 }],
   },
   centerAiLabel: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '700',
     color: colors.muted,
-    marginTop: 3,
+    marginTop: 2,
   },
   centerAiLabelActive: {
     color: colors.brand,
     fontWeight: '800',
   },
   standardIconContainer: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 12,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },

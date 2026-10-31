@@ -283,6 +283,12 @@ export default function ToolsScreen() {
           onPress={() => router.push('/preferences')}
         />
         <MenuRow
+          title="1-Tap WhatsApp Reviews"
+          detail="Send personalized 5★ Google review invites to customer chats"
+          icon="chat"
+          onPress={() => router.push('/(tabs)/reviews')}
+        />
+        <MenuRow
           title="Manage Google Profile"
           detail="Contact & Address, AI & Automation, Post on Google"
           icon="storefront"

@@ -17,6 +17,7 @@ import { Card, Empty, ErrorNotice, Loading, Screen, colors, ui } from '../../src
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { relativeDate } from '../../src/components/gbp/bits';
+import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import type { GbpPlaceResult, Review } from '../../src/components/gbp/types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -157,6 +158,7 @@ export default function ReviewRepliesScreen() {
   const [localError, setLocalError] = useState<string | null>(null);
   const [topSlide, setTopSlide] = useState(0);
   const [slideWidth, setSlideWidth] = useState(SCREEN_WIDTH - 32);
+  const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
 
   const activeProfile = discover.data?.activeProfile;
   const shortId = activeProfile?.shortId || (gbpPlace.data?.place?.locationId ? `#${gbpPlace.data.place.locationId.slice(-4)}` : '');
@@ -402,24 +404,45 @@ export default function ReviewRepliesScreen() {
           else router.push('/(tabs)');
         }}
         rightAction={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open Reply Settings"
-            onPress={() => router.push('/reply-settings')}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 4,
-              backgroundColor: '#0F172A',
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 20,
-              opacity: pressed ? 0.8 : 1,
-            })}
-          >
-            <MaterialIcons name="settings" size={14} color="#FFFFFF" />
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>Settings</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="1-Tap WhatsApp Review Request"
+              onPress={() => setReviewSheetOpen(true)}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: '#25D366',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 20,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <MaterialIcons name="chat" size={13} color="#FFFFFF" />
+              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>+ Ask Review</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open Reply Settings"
+              onPress={() => router.push('/reply-settings')}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: '#0F172A',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 20,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <MaterialIcons name="settings" size={13} color="#FFFFFF" />
+              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#FFFFFF' }}>Settings</Text>
+            </Pressable>
+          </View>
         }
         onRefresh={async () => {
           await Promise.all([reviews.refresh(), gbpPlace.refresh(), discover.refresh()]).catch(() => {});
@@ -841,6 +864,72 @@ export default function ReviewRepliesScreen() {
           </View>
         </View>
 
+        {/* 1-Tap WhatsApp Google Reviews Highlight Card */}
+        <View
+          style={{
+            backgroundColor: '#F0FDF4',
+            borderColor: '#BBF7D0',
+            borderWidth: 1,
+            borderRadius: 16,
+            padding: 14,
+            marginBottom: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            shadowColor: '#16A34A',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+            <View
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 21,
+                backgroundColor: '#25D366',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <MaterialIcons name="chat" size={22} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#166534' }}>
+                  1-Tap WhatsApp Reviews
+                </Text>
+                <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#15803D' }}>DIRECT</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 11, color: '#15803D', marginTop: 2, lineHeight: 15 }}>
+                Send personalized 5-star Google review invites directly to customer chats.
+              </Text>
+            </View>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Send Review Request on WhatsApp"
+            onPress={() => setReviewSheetOpen(true)}
+            style={({ pressed }) => ({
+              backgroundColor: '#16A34A',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 10,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
+              Request →
+            </Text>
+          </Pressable>
+        </View>
+
         {/* ── REVIEW LIST ── */}
         {reviews.loading ? (
           <Loading />
@@ -1240,6 +1329,14 @@ export default function ReviewRepliesScreen() {
       >
         <MaterialIcons name="mic" size={24} color="#FFFFFF" />
       </Pressable>
+      {/* 1-Tap WhatsApp Google Review Request Sheet */}
+      <ReviewRequestSheet
+        visible={reviewSheetOpen}
+        onClose={() => setReviewSheetOpen(false)}
+        businessName={activeProfile?.name || gbpPlace.data?.place?.title || 'Our Business'}
+        reviewUrl={gbpPlace.data?.place?.reviewUrl || gbpPlace.data?.place?.mapsUrl || 'https://search.google.com/local/writereview'}
+        apiRequest={apiRequest}
+      />
     </View>
   );
 }

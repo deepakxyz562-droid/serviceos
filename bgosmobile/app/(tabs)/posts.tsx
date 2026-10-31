@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { Screen, Action, colors, ui } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { PostsBoard } from '../../src/components/gbp/posts-list';
+import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
 import type { GbpPlaceResult } from '../../src/components/gbp/types';
 
 /**
@@ -85,6 +86,9 @@ export default function GooglePostScreen() {
           </Text>
         ) : null}
       </View>
+
+      {/* Stay Active on Social Media (Facebook & Instagram connection) */}
+      <StayActiveSocialMediaCard />
 
       <View style={[ui.row, { justifyContent: 'space-between' }]}>
         <Text style={ui.heading}>Your Google Posts</Text>

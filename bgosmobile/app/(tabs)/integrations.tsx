@@ -3,6 +3,7 @@ import { Linking, Text, View } from 'react-native';
 import { Screen, Card, Action, Badge, Empty, ErrorNotice, Loading, ui } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { getBgosChannelsWebUrl } from '../../src/lib/bgos-urls';
+import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
 type Account = { id: string; platform: string; accountName: string; isActive: boolean; tokenExpiry?: string };
 type WhatsAppTemplateSetup = {
   setupStatus?: {
@@ -71,6 +72,9 @@ export default function IntegrationsScreen() {
           </Text>
         </Card>
       )}
+
+      {/* Stay Active on Social Media (Facebook & Instagram connection) */}
+      <StayActiveSocialMediaCard />
       {resource.loading ? (
         <Loading />
       ) : resource.data?.data.length ? (

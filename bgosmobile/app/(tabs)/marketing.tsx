@@ -24,10 +24,20 @@ import { futureLocalTime } from '../../src/lib/dates';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import { PostsBoard } from '../../src/components/gbp/posts-list';
 import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
+import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
 import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 import type { GbpPlaceResult } from '../../src/components/gbp/types';
 
 type Account = { id: string; platform: string; accountName: string; accountId?: string; isActive: boolean };
+
+type BrandProfileData = {
+  profile?: {
+    businessName?: string;
+    industry?: string;
+    services?: string[];
+    products?: string[];
+  };
+};
 
 export default function MarketingScreen() {
   const router = useRouter();
@@ -40,6 +50,7 @@ export default function MarketingScreen() {
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const discover = useResource<{ activeProfile?: { id: string; name: string } }>('/api/gbp/accounts/discover');
   const accounts = useResource<{ data: Account[] }>('/api/social/accounts');
+  const brandProfile = useResource<BrandProfileData>('/api/brand-profile');
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -214,6 +225,58 @@ export default function MarketingScreen() {
     setOpen(true);
   }
 
+  const dynamicServices = React.useMemo(() => {
+    const brandServices = [
+      ...(brandProfile.data?.profile?.services || []),
+      ...(brandProfile.data?.profile?.products || []),
+    ].filter(Boolean);
+
+    if (brandServices.length > 0) {
+      return brandServices.slice(0, 6).map((s) => ({
+        label: `✨ ${s.slice(0, 24)}`,
+        val: s,
+      }));
+    }
+
+    const category = (gbpPlace.data?.place?.category || '').toLowerCase();
+    const title = (discover.data?.activeProfile?.name || gbpPlace.data?.place?.title || '').toLowerCase();
+
+    if (category.includes('software') || category.includes('tech') || title.includes('fieser') || title.includes('zozo')) {
+      return [
+        { label: '💻 Custom Web Apps', val: 'modern responsive web application and client portal development' },
+        { label: '🤖 AI Chatbots & Agents', val: 'smart AI receptionist, chatbots and 24/7 automated business workflows' },
+        { label: '📱 Mobile App Development', val: 'high-performance native iOS and Android mobile app development' },
+        { label: '📈 Local SEO & Maps Growth', val: 'Google Business Profile local SEO ranking and Google Maps visibility' },
+        { label: '⚡ Cloud & SaaS Consulting', val: 'cloud infrastructure setup, software integrations and SaaS consulting' },
+      ];
+    }
+
+    if (category.includes('market') || category.includes('community') || title.includes('market') || title.includes('ganga')) {
+      return [
+        { label: '🏪 Store Directory & Stalls', val: 'daily fresh grocery, electronics and retail stalls directory' },
+        { label: '🛍️ Weekend Shopping Bazaar', val: 'special weekend wholesale deals on everyday essentials' },
+        { label: '🅿️ Parking & Amenities', val: 'spacious two-wheeler and four-wheeler visitor parking' },
+        { label: '🎁 Festive Discounts', val: 'limited-time festive offers from local market retailers' },
+      ];
+    }
+
+    if (category.includes('fabricat') || category.includes('weld') || title.includes('fabricat')) {
+      return [
+        { label: '🚪 Gates & Grills', val: 'custom gate and window grill fabrication' },
+        { label: '🛡️ SS Railings', val: 'grade 304 stainless steel balcony and staircase railings' },
+        { label: '🏭 Industrial Sheds', val: 'heavy-duty industrial factory shed and roofing structure' },
+        { label: '✨ Laser Cutting', val: 'designer CNC metal laser cutting and decorative screens' },
+      ];
+    }
+
+    return [
+      { label: '⭐ 5-Star Customer Service', val: 'five-star customer service and verified quality guarantee' },
+      { label: '🎁 Exclusive Promotion', val: 'special discount for local customers this week' },
+      { label: '🕒 Fast Turnaround', val: 'quick response and same-day priority service' },
+      { label: '📍 Visit Our Location', val: 'visit our verified local store or showroom today' },
+    ];
+  }, [brandProfile.data, gbpPlace.data, discover.data]);
+
   return (
     <View style={{ flex: 1 }}>
       <Screen
@@ -310,6 +373,9 @@ export default function MarketingScreen() {
           </Pressable>
         </View>
 
+        {/* Stay Active on Social Media (Facebook & Instagram connection) */}
+        <StayActiveSocialMediaCard />
+
         {/* 6 status pills (2 rows) + fetched post list + Approve/Reject on Pending */}
         <PostsBoard refreshKey={boardRefresh} />
       </Screen>
@@ -379,7 +445,12 @@ export default function MarketingScreen() {
       </View>
 
       {/* 3-Step Create / Preview Modal (Google Post Studio) */}
-      <Modal visible={open} animationType="slide" onRequestClose={() => { if (!busy) setOpen(false); }}>
+      <Modal
+        visible={open}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => { if (!busy) setOpen(false); }}
+      >
         <Screen
           title={step === 0 ? 'Create Google Post' : step === 1 ? 'Google Post Details' : 'Preview & Publish'}
           subtitle={`Step ${step + 1} of 3`}
@@ -425,16 +496,10 @@ export default function MarketingScreen() {
                 placeholder="e.g. Weekend special on plumbing tune-up. 15% discount for local homeowners. Call today…"
               />
 
-              {/* 2-Click Offering Chips (Grexa / Dhanda AI Benchmark) */}
+              {/* 2-Click Offering Chips (Dynamic from Brand Brain / Category) */}
               <Text style={ui.label}>🔥 Select Service to Promote (2-Click Draft)</Text>
               <View style={[ui.row, { gap: 6, flexWrap: 'wrap' }]}>
-                {[
-                  { label: '🚪 Gates & Grills', val: 'custom gate and window grill fabrication' },
-                  { label: '🛡️ SS Railings', val: 'grade 304 stainless steel balcony and staircase railings' },
-                  { label: '🏭 Factory Sheds', val: 'heavy-duty industrial factory shed and roofing structure' },
-                  { label: '✨ Laser Cutting', val: 'designer CNC metal laser cutting and decorative screens' },
-                  { label: '🔧 Welding Repair', val: 'urgent on-site welding and rolling shutter repair service' },
-                ].map((item) => (
+                {dynamicServices.map((item) => (
                   <Chip
                     key={item.label}
                     label={item.label}

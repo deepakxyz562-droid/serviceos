@@ -98,6 +98,7 @@ const MORE_TOOLS: {
 }[] = [
   { label: 'My Plan', route: '/my-plan', icon: 'credit-card' },
   { label: 'Brand Brain', route: '/preferences', icon: 'psychology' },
+  { label: 'WhatsApp Reviews', route: '/(tabs)/reviews', icon: 'chat' },
   { label: 'Manage Profile', route: '/manage-profile', icon: 'storefront' },
   { label: 'QR Standee', route: '/qr-standee', icon: 'qr-code-2' },
   { label: 'Growth Report', route: '/growth-report', icon: 'picture-as-pdf' },

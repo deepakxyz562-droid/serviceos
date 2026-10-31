@@ -94,23 +94,52 @@ export default function MyPlanScreen() {
     : 7;
 
   async function handleActivatePlan(planCode: string) {
-    setActivatingPlan(planCode);
-    try {
-      const res = await apiRequest<{ url: string }>('/api/bgos/billing', {
-        method: 'POST',
-        body: { plan: planCode },
-      });
-      if (res?.url) {
-        await Linking.openURL(res.url);
-      } else {
-        await Linking.openURL(`${WEB_URL}/app?view=billing`);
-      }
-    } catch {
-      // Direct fallback to authenticated web billing checkout
-      await Linking.openURL(`${WEB_URL}/app?view=billing`);
-    } finally {
-      setActivatingPlan(null);
-    }
+    const selected = BGOS_DEFAULT_PLANS.find((p) => p.code === planCode);
+    const planName = selected?.name || planCode.toUpperCase();
+    const priceFormatted = selected ? `₹${selected.priceInr.toLocaleString('en-IN')}/mo` : '';
+
+    Alert.alert(
+      `Activate ${planName} Plan`,
+      `Upgrade your business workspace to ${planName} for ${priceFormatted}. All AI automations, review auto-replies, and WhatsApp growth tools will be unlocked.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm & Activate',
+          onPress: async () => {
+            setActivatingPlan(planCode);
+            try {
+              const res = await apiRequest<{
+                success?: boolean;
+                activated?: boolean;
+                message?: string;
+                url?: string;
+              }>('/api/bgos/billing', {
+                method: 'POST',
+                body: { plan: planCode, action: 'activate' },
+              });
+
+              if (res?.url) {
+                await Linking.openURL(res.url);
+              } else if (res?.activated || res?.success) {
+                Alert.alert(
+                  '🎉 Plan Activated!',
+                  res.message || `${planName} plan is now active for your business.`,
+                  [{ text: 'Done', onPress: () => void billingRes.refresh() }]
+                );
+                await billingRes.refresh();
+              } else {
+                Alert.alert('Success', `${planName} activated!`);
+                await billingRes.refresh();
+              }
+            } catch (err) {
+              Alert.alert('Activation Notice', (err as Error).message || 'Could not complete plan activation.');
+            } finally {
+              setActivatingPlan(null);
+            }
+          },
+        },
+      ]
+    );
   }
 
   async function handleManageSubscription() {

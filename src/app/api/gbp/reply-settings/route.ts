@@ -34,18 +34,65 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const requestedProfileId = searchParams.get('profileId');
+
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
       select: { name: true, phone: true, settingsJson: true },
     });
 
-    const socialAccount = await db.socialAccount.findFirst({
-      where: {
-        tenantId: user.tenantId,
-        platform: 'googlebusiness',
-        isActive: true,
-      },
-    });
+    const tenantSettings = readSettingsJson(tenant?.settingsJson);
+    const targetLocationId = requestedProfileId || (tenantSettings.activeGbpLocationId as string | undefined);
+
+    let socialAccount = null;
+    if (targetLocationId) {
+      socialAccount = await db.socialAccount.findFirst({
+        where: {
+          tenantId: user.tenantId,
+          platform: 'googlebusiness',
+          isActive: true,
+          OR: [
+            { accountId: targetLocationId },
+            { id: targetLocationId },
+          ],
+        },
+      });
+
+      if (!socialAccount) {
+        const allAccounts = await db.socialAccount.findMany({
+          where: {
+            tenantId: user.tenantId,
+            platform: 'googlebusiness',
+            isActive: true,
+          },
+        });
+        socialAccount =
+          allAccounts.find((sa) => {
+            try {
+              const meta = typeof sa.metadata === 'string' ? JSON.parse(sa.metadata) : sa.metadata;
+              return (
+                meta?.locationId === targetLocationId ||
+                meta?.activeProfileId === targetLocationId ||
+                sa.accountId?.endsWith(targetLocationId)
+              );
+            } catch {
+              return false;
+            }
+          }) || null;
+      }
+    }
+
+    if (!socialAccount) {
+      socialAccount = await db.socialAccount.findFirst({
+        where: {
+          tenantId: user.tenantId,
+          platform: 'googlebusiness',
+          isActive: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+    }
 
     let googleEmail = user.email || '';
     let locationTitle = tenant?.name || 'My Business';
@@ -55,7 +102,10 @@ export async function GET(request: NextRequest) {
         const meta = typeof socialAccount.metadata === 'string' ? JSON.parse(socialAccount.metadata) : socialAccount.metadata;
         if (meta.googleEmail) googleEmail = meta.googleEmail;
         if (meta.locationTitle) locationTitle = meta.locationTitle;
+        else if (socialAccount.accountName) locationTitle = socialAccount.accountName;
       } catch {}
+    } else if (socialAccount?.accountName) {
+      locationTitle = socialAccount.accountName;
     }
 
     // Dynamic count of replies published in the last 24h

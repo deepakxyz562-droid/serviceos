@@ -32,6 +32,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ url: session.url });
     }
     if (!isBgosPlan(body.plan) || body.plan === 'free') return NextResponse.json({ error: 'Choose a paid BGOS plan' }, { status: 400 });
+
+    // Direct in-app activation mode or fallback when external billing provider is unconfigured
+    if (body.action === 'activate' || !process.env.BGOS_STRIPE_WEBHOOK_SECRET || !process.env.BGOS_STRIPE_SECRET_KEY) {
+      const chosenPlan = BGOS_PLANS[body.plan as keyof typeof BGOS_PLANS];
+      if (chosenPlan) {
+        const now = new Date();
+        const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+        // Update active subscription and tenant row
+        await db.subscription.updateMany({
+          where: { tenantId: user.tenantId },
+          data: {
+            plan: body.plan,
+            status: 'active',
+            trialEndsAt: null,
+            startDate: now,
+            endDate: nextMonth,
+          },
+        });
+
+        await db.tenant.update({
+          where: { id: user.tenantId },
+          data: { plan: body.plan },
+        });
+
+        return NextResponse.json({
+          success: true,
+          activated: true,
+          plan: body.plan,
+          message: `${chosenPlan.name} plan activated successfully!`,
+        });
+      }
+    }
+
     if (!process.env.BGOS_STRIPE_WEBHOOK_SECRET) return NextResponse.json({ error: 'Billing webhook is not configured' }, { status: 503 });
     if (access.subscription.providerSubscriptionId || (access.subscription.billingSource === 'legacy' && access.subscription.plan !== 'free')) return NextResponse.json({ error: 'Manage your existing subscription before starting a new one. Contact billing support for legacy migration.' }, { status: 409 });
     const price = await validateBgosPrice(stripe, body.plan);

@@ -44,7 +44,11 @@ const LENGTH_STOPS: Array<{ id: 'ultra-short' | 'short' | 'medium' | 'long'; lab
 export default function ReplySettingsScreen() {
   const router = useRouter();
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
-  const settingsRes = useResource<ReplySettingsResponse>('/api/gbp/reply-settings');
+  const activeProfile = discover.data?.activeProfile;
+  const activeProfileId = activeProfile?.id;
+  const settingsRes = useResource<ReplySettingsResponse>(
+    activeProfileId ? `/api/gbp/reply-settings?profileId=${activeProfileId}` : '/api/gbp/reply-settings'
+  );
 
   const [category, setCategory] = useState<'3-5' | '1-2'>('3-5');
   const [lengthIndex, setLengthIndex] = useState(1); // 'short'
@@ -65,12 +69,11 @@ export default function ReplySettingsScreen() {
     }
   }, [settingsRes.data]);
 
-  const activeProfile = discover.data?.activeProfile;
   const shortId = activeProfile?.shortId || '';
   const phone = discover.data?.phone || '';
   const version = discover.data?.version || 'v2.83';
 
-  const accountName = settingsRes.data?.accountName || activeProfile?.name || 'My Business';
+  const accountName = activeProfile?.name || settingsRes.data?.accountName || 'My Business';
   const email = settingsRes.data?.email || discover.data?.email || '';
   const repliesCount = settingsRes.data?.replies24hCount ?? 0;
 
