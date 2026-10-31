@@ -76,6 +76,22 @@ const PLATFORMS: PlatformMeta[] = [
     oauthScopes: 'business.manage',
   },
   {
+    key: 'facebook',
+    label: 'Facebook Page',
+    icon: Facebook,
+    color: 'bg-blue-600',
+    description: 'Publish updates, photos, videos and reach local customers on your official Facebook Page.',
+    oauthScopes: 'pages_show_list,pages_read_engagement,pages_manage_posts',
+  },
+  {
+    key: 'instagram',
+    label: 'Instagram Business',
+    icon: Instagram,
+    color: 'bg-pink-600',
+    description: 'Publish visual posts, branded graphics, and reels to your Instagram Business account.',
+    oauthScopes: 'instagram_basic,instagram_content_publish,pages_show_list',
+  },
+  {
     key: 'whatsapp',
     label: 'WhatsApp 1-Tap Reviews',
     icon: MessageSquare,

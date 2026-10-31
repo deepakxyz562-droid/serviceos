@@ -64,6 +64,22 @@ function getPageId(account: SocialAccountData): string {
 }
 
 /**
+ * Check if a media URL represents a video file.
+ */
+function isVideoUrl(url: string): boolean {
+  if (!url) return false;
+  const clean = url.split('?')[0].toLowerCase();
+  return (
+    clean.endsWith('.mp4') ||
+    clean.endsWith('.mov') ||
+    clean.endsWith('.webm') ||
+    clean.endsWith('.m4v') ||
+    clean.endsWith('.avi') ||
+    clean.endsWith('.mkv')
+  );
+}
+
+/**
  * Split a "{pageId}_{postId}" composite ID into its parts.
  *
  * FB's /feed endpoint returns post IDs in this format. To call /insights
@@ -156,15 +172,39 @@ const facebookAdapter: PlatformAdapter = {
     const message = (params.content || '').trim();
     const hasMedia = Array.isArray(params.mediaUrls) && params.mediaUrls.length > 0;
 
-    // ─── Photo post (single image) ───
+    // ─── Media post (Video or Photo) ───
     if (hasMedia) {
-      const imageUrl = params.mediaUrls[0];
-      if (!imageUrl) {
+      const mediaUrl = params.mediaUrls[0];
+      if (!mediaUrl) {
         throw new Error('[facebook adapter] mediaUrls[0] is empty');
       }
 
+      // Video post via /{pageId}/videos
+      if (isVideoUrl(mediaUrl)) {
+        const videoBody = new URLSearchParams();
+        videoBody.set('file_url', mediaUrl);
+        videoBody.set('access_token', account.accessToken);
+        if (message) videoBody.set('description', message);
+
+        const videoRes = await graphFetch<{ id: string }>(
+          `${GRAPH_API_BASE}/${pageId}/videos`,
+          {
+            method: 'POST',
+            body: videoBody,
+          },
+        );
+
+        if (!videoRes.id) {
+          throw new Error('[facebook adapter] Video publish returned no ID');
+        }
+
+        const externalPostId = `${pageId}_${videoRes.id}`;
+        return { externalPostId };
+      }
+
+      // Photo post via /{pageId}/photos
       const body = new URLSearchParams();
-      body.set('url', imageUrl);
+      body.set('url', mediaUrl);
       body.set('access_token', account.accessToken);
       if (message) body.set('caption', message);
       // `published=true` (default) creates the photo as a Page post

@@ -89,7 +89,28 @@ export default function MarketingScreen() {
           ? a.id === activeProfileId || a.accountId === activeProfileId
           : a.accountName?.toLowerCase().includes('fieser') || a.accountId === '10777612572223040949')
     ) || available.find((a) => a.platform === 'googlebusiness' && a.isActive);
-  const targets = gbpAccount ? [{ platform: 'googlebusiness', socialAccountId: gbpAccount.id }] : [];
+  const fbAccount = available.find((a) => a.platform === 'facebook' && a.isActive);
+  const igAccount = available.find((a) => a.platform === 'instagram' && a.isActive);
+
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['googlebusiness']);
+  const [postFormat, setPostFormat] = useState<'image_text' | 'image_only' | 'video' | 'text'>('image_text');
+  const [headline, setHeadline] = useState('A little self-care goes a long way.');
+  const [subtitle, setSubtitle] = useState('Refresh your look with a personalised hair consultation. Book your next visit.');
+
+  const targets = React.useMemo(() => {
+    const list: { platform: string; socialAccountId: string }[] = [];
+    if (selectedPlatforms.includes('googlebusiness') && gbpAccount) {
+      list.push({ platform: 'googlebusiness', socialAccountId: gbpAccount.id });
+    }
+    if (selectedPlatforms.includes('facebook') && fbAccount) {
+      list.push({ platform: 'facebook', socialAccountId: fbAccount.id });
+    }
+    if (selectedPlatforms.includes('instagram') && igAccount) {
+      list.push({ platform: 'instagram', socialAccountId: igAccount.id });
+    }
+    return list;
+  }, [selectedPlatforms, gbpAccount, fbAccount, igAccount]);
+
   const mediaUrls = media.split('\n').map((s) => s.trim()).filter(Boolean);
 
   async function generate() {
@@ -100,11 +121,18 @@ export default function MarketingScreen() {
         method: 'POST',
         body: {
           topic,
-          platforms: ['googlebusiness'],
-          tone: 'Friendly and professional',
+          platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['googlebusiness'],
+          tone: 'Friendly, premium, and professional',
         },
       });
       setContent(data.caption);
+      const lines = data.caption.split('\n').map((l) => l.trim()).filter(Boolean);
+      if (lines.length > 0) {
+        setHeadline(lines[0].replace(/^[#*"\s]+|[#*"\s]+$/g, '').slice(0, 60));
+        if (lines.length > 1) {
+          setSubtitle(lines.slice(1, 3).join(' ').replace(/#[A-Za-z0-9_]+/g, '').trim().slice(0, 140));
+        }
+      }
     } catch (e) {
       // Never fabricate a caption when the AI service fails — surface the real
       // error so the user can retry or write the caption below manually.
@@ -125,14 +153,19 @@ export default function MarketingScreen() {
       return;
     }
 
-    if (status !== 'draft' && !gbpAccount) {
+    if (status !== 'draft' && targets.length === 0) {
       setError(
-        'Connect your Google Business Profile to publish or schedule posts to Google. You can save as a Draft in the meantime.'
+        'Connect at least one social account (Google Business, Facebook, or Instagram) to publish. You can save as a Draft in the meantime.'
       );
       return;
     }
 
-    const contentCheck = validateSocialPost(content.trim(), ['googlebusiness'], mediaUrls);
+    if (selectedPlatforms.includes('instagram') && (postFormat === 'text' || mediaUrls.length === 0)) {
+      setError('Instagram requires a photo or video. Please add a media URL to publish to Instagram.');
+      return;
+    }
+
+    const contentCheck = validateSocialPost(content.trim(), selectedPlatforms, mediaUrls);
     if (contentCheck) {
       setError(contentCheck);
       return;
@@ -488,11 +521,74 @@ export default function MarketingScreen() {
 
           <ErrorNotice message={error} />
 
-          {/* STEP 1: CONTENT */}
+          {/* STEP 1: CONTENT & FORMAT */}
           {step === 0 && (
             <Card style={{ gap: 12 }}>
+              {/* Target Channels */}
+              <Text style={ui.label}>Target Channels</Text>
+              <View style={[ui.row, { gap: 6, flexWrap: 'wrap' }]}>
+                {[
+                  { key: 'googlebusiness', label: 'Google Business 📍' },
+                  { key: 'facebook', label: 'Facebook Page 📘' },
+                  { key: 'instagram', label: 'Instagram Business 📷' },
+                ].map((ch) => {
+                  const active = selectedPlatforms.includes(ch.key);
+                  return (
+                    <Chip
+                      key={ch.key}
+                      label={ch.label}
+                      selected={active}
+                      onPress={() => {
+                        setSelectedPlatforms((prev) =>
+                          active ? prev.filter((k) => k !== ch.key) : [...prev, ch.key]
+                        );
+                      }}
+                    />
+                  );
+                })}
+              </View>
+
+              {/* Post Format Selector */}
+              <Text style={ui.label}>Post Format</Text>
+              <View style={[ui.row, { gap: 6, flexWrap: 'wrap' }]}>
+                {[
+                  { key: 'image_text', label: '🎨 Image + Text (Branded Split Card)' },
+                  { key: 'image_only', label: '🖼️ Image Only' },
+                  { key: 'video', label: '🎬 Video / Reel' },
+                  { key: 'text', label: '📝 Text Update' },
+                ].map((fmt) => (
+                  <Chip
+                    key={fmt.key}
+                    label={fmt.label}
+                    selected={postFormat === fmt.key}
+                    onPress={() => setPostFormat(fmt.key as any)}
+                  />
+                ))}
+              </View>
+
+              {/* Branded Card Headline & Subtitle if image_text */}
+              {postFormat === 'image_text' && (
+                <View style={{ gap: 8, backgroundColor: '#FAF8F5', padding: 10, borderRadius: 10 }}>
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#78350F' }}>
+                    Branded Graphic Header & Body (Bloom & Co. Style)
+                  </Text>
+                  <Field
+                    label="Headline"
+                    value={headline}
+                    onChangeText={setHeadline}
+                    placeholder="e.g. A little self-care goes a long way."
+                  />
+                  <Field
+                    label="Description / Subtitle"
+                    value={subtitle}
+                    onChangeText={setSubtitle}
+                    placeholder="e.g. Refresh your look with a personalised hair consultation."
+                  />
+                </View>
+              )}
+
               <Field
-                label="What would you like to share on Google?"
+                label="Topic or Offer to Share"
                 value={topic}
                 onChangeText={setTopic}
                 multiline
@@ -617,44 +713,114 @@ export default function MarketingScreen() {
           {/* STEP 3: PREVIEW & PUBLISH */}
           {step === 2 && (
             <Card style={{ gap: 12 }}>
-              <View style={[ui.row, { gap: 8 }]}>
-                <Badge label="GOOGLE BUSINESS" accent />
-                <Badge label={gbpPostType.toUpperCase().replace('_', ' ')} />
+              <View style={[ui.row, { gap: 8, flexWrap: 'wrap' }]}>
+                {selectedPlatforms.map((p) => (
+                  <Badge key={p} label={p.toUpperCase()} accent={p === 'googlebusiness'} />
+                ))}
+                <Badge label={postFormat.toUpperCase().replace('_', ' ')} />
               </View>
 
-              {/* Google Business Feed Preview Simulation */}
-              <View style={[ui.card, { padding: 14, gap: 10, backgroundColor: colors.surface }]}>
-                <View style={[ui.row, { gap: 10 }]}>
-                  <Avatar name={workspace.data?.name || 'Your Business'} size={38} />
-                  <View>
-                    <Text style={ui.heading}>{workspace.data?.name || 'Your Business'}</Text>
-                    <Text style={ui.caption}>Google Business Profile · Live Update</Text>
+              {/* Format-Specific Live Preview Simulation */}
+              {postFormat === 'image_text' ? (
+                /* The Bloom & Co. SALON Branded Split Card from Screenshot 2 */
+                <View
+                  style={{
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: '#E5E7EB',
+                    backgroundColor: '#FDFBF7',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row' }}>
+                    {mediaUrls[0] ? (
+                      <Image
+                        source={{ uri: mediaUrls[0] }}
+                        style={{ width: '45%', height: 190 }}
+                        accessibilityLabel="Post image"
+                        alt="Post image"
+                      />
+                    ) : (
+                      <View
+                        style={{
+                          width: '45%',
+                          height: 190,
+                          backgroundColor: '#F3F4F6',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: 8,
+                        }}
+                      >
+                        <MaterialIcons name="image" size={32} color="#9CA3AF" />
+                        <Text style={{ fontSize: 10, color: '#9CA3AF', textAlign: 'center', marginTop: 4 }}>
+                          Add photo
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={{ flex: 1, padding: 12, justifyContent: 'space-between', gap: 6 }}>
+                      <View style={{ gap: 4 }}>
+                        <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>
+                          🌿 {workspace.data?.name || 'Bloom & Co. SALON'}
+                        </Text>
+                        <View style={{ width: 24, height: 1.5, backgroundColor: '#374151', marginVertical: 2 }} />
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: '800',
+                            color: '#111827',
+                            lineHeight: 17,
+                          }}
+                        >
+                          {headline || 'A little self-care goes a long way.'}
+                        </Text>
+                        <Text numberOfLines={3} style={{ fontSize: 10.5, color: '#4B5563', lineHeight: 14 }}>
+                          {subtitle || 'Refresh your look with a personalised hair consultation. Book your next visit.'}
+                        </Text>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 6, paddingTop: 4 }}>
+                        <View style={{ flex: 1, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#D1D5DB', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#374151' }}>✏️ Edit</Text>
+                        </View>
+                        <View style={{ flex: 1, paddingVertical: 4, borderRadius: 6, backgroundColor: colors.brand, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#FFFFFF' }}>📅 Schedule</Text>
+                        </View>
+                      </View>
+                    </View>
                   </View>
                 </View>
-
-                <Text style={ui.body}>{content}</Text>
-
-                {couponCode ? (
-                  <View style={{ alignSelf: 'flex-start', backgroundColor: colors.brandSoft, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brandDark }}>Coupon: {couponCode}</Text>
-                  </View>
-                ) : null}
-
-                {mediaUrls[0] ? (
-                  <Image
-                    source={{ uri: mediaUrls[0] }}
-                    style={{ width: '100%', height: 210, borderRadius: 12 }}
-                    accessibilityLabel="Post preview"
-                    alt="Post preview"
-                  />
-                ) : null}
-
-                <View style={{ alignSelf: 'flex-start', backgroundColor: colors.brand, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
-                    {ctaType === 'CALL' ? '📞 Call Now' : ctaType === 'BOOK' ? '📅 Book' : ctaType === 'ORDER_ONLINE' ? '🛍️ Order' : '📖 Learn More'}
+              ) : postFormat === 'video' ? (
+                /* Video / Reel Preview */
+                <View style={{ backgroundColor: '#000000', borderRadius: 14, height: 180, alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="play-circle-outline" size={44} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', marginTop: 4 }}>
+                    Reel / Video Post Preview
                   </Text>
                 </View>
-              </View>
+              ) : (
+                /* Standard Feed Preview */
+                <View style={[ui.card, { padding: 14, gap: 10, backgroundColor: colors.surface }]}>
+                  <View style={[ui.row, { gap: 10 }]}>
+                    <Avatar name={workspace.data?.name || 'Your Business'} size={38} />
+                    <View>
+                      <Text style={ui.heading}>{workspace.data?.name || 'Your Business'}</Text>
+                      <Text style={ui.caption}>Public Post · Live Update</Text>
+                    </View>
+                  </View>
+
+                  <Text style={ui.body}>{content}</Text>
+
+                  {mediaUrls[0] ? (
+                    <Image
+                      source={{ uri: mediaUrls[0] }}
+                      style={{ width: '100%', height: 200, borderRadius: 12 }}
+                      accessibilityLabel="Post preview"
+                      alt="Post preview"
+                    />
+                  ) : null}
+                </View>
+              )}
 
               <Field label="Schedule Date (YYYY-MM-DD, Optional)" value={date} onChangeText={setDate} placeholder="2026-10-15" />
               <Field label="Schedule Time (HH:MM, Optional)" value={time} onChangeText={setTime} placeholder="14:30" />
@@ -662,7 +828,7 @@ export default function MarketingScreen() {
               <View style={[ui.row, { gap: 10 }]}>
                 <View style={{ flex: 1 }}>
                   <Action
-                    label={busy ? 'Publishing…' : '✓ Publish to Google'}
+                    label={busy ? 'Publishing…' : '✓ Publish to Channels'}
                     disabled={busy}
                     onPress={() => save('published')}
                   />

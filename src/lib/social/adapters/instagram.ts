@@ -76,7 +76,23 @@ function getIgBusinessId(account: SocialAccountData): string {
   if (typeof metaId === 'string' && metaId.trim()) {
     return metaId.trim();
   }
-  return account.accountId;
+  return (account.accountId || '').trim();
+}
+
+/**
+ * Check if a media URL represents a video file.
+ */
+function isVideoUrl(url: string): boolean {
+  if (!url) return false;
+  const clean = url.split('?')[0].toLowerCase();
+  return (
+    clean.endsWith('.mp4') ||
+    clean.endsWith('.mov') ||
+    clean.endsWith('.webm') ||
+    clean.endsWith('.m4v') ||
+    clean.endsWith('.avi') ||
+    clean.endsWith('.mkv')
+  );
 }
 
 /**
@@ -152,20 +168,26 @@ const instagramAdapter: PlatformAdapter = {
 
     if (!Array.isArray(params.mediaUrls) || params.mediaUrls.length === 0) {
       throw new Error(
-        '[instagram adapter] Instagram requires at least one image — text-only posts are not supported',
+        '[instagram adapter] Instagram requires at least one image or video — text-only posts are not supported',
       );
     }
 
-    const imageUrl = params.mediaUrls[0];
-    if (!imageUrl || typeof imageUrl !== 'string') {
+    const mediaUrl = params.mediaUrls[0];
+    if (!mediaUrl || typeof mediaUrl !== 'string') {
       throw new Error('[instagram adapter] mediaUrls[0] is empty or invalid');
     }
 
+    const isVideo = isVideoUrl(mediaUrl);
     const caption = (params.content || '').trim();
 
     // ─── Step 1: create media container ───
     const createBody = new URLSearchParams();
-    createBody.set('image_url', imageUrl);
+    if (isVideo) {
+      createBody.set('media_type', 'REELS');
+      createBody.set('video_url', mediaUrl);
+    } else {
+      createBody.set('image_url', mediaUrl);
+    }
     createBody.set('access_token', account.accessToken);
     if (caption) createBody.set('caption', caption);
 
@@ -182,16 +204,27 @@ const instagramAdapter: PlatformAdapter = {
     }
     const containerId = createRes.id;
 
-    // ─── Step 2: publish the container ───
-    //
-    // NOTE: Graph API may return a 400 "media not ready" error if we
-    // publish immediately after creating the container, because IG
-    // downloads + processes the image asynchronously. In practice, for
-    // small images (<5MB) on a stable public URL, this is rarely an
-    // issue. If we wanted to be robust against slow image processing,
-    // we'd poll GET /{containerId}?fields=status_code until status_code
-    // === 'FINISHED' before publishing. That's a future enhancement —
-    // for v1 we publish immediately and surface the error to the user.
+    // ─── Step 2: for videos, poll container until FINISHED ───
+    if (isVideo) {
+      let attempts = 0;
+      while (attempts < 8) {
+        await new Promise((r) => setTimeout(r, 2000));
+        try {
+          const statusRes = await graphFetch<{ status_code?: string; status?: string }>(
+            `${GRAPH_API_BASE}/${containerId}?fields=status_code,status&access_token=${account.accessToken}`,
+          );
+          if (statusRes.status_code === 'FINISHED') break;
+          if (statusRes.status_code === 'ERROR') {
+            throw new Error(`[instagram adapter] Video container processing failed: ${statusRes.status || 'unknown'}`);
+          }
+        } catch (pollErr) {
+          console.warn('[instagram adapter] status polling warning:', pollErr);
+        }
+        attempts++;
+      }
+    }
+
+    // ─── Step 3: publish the container ───
     const publishBody = new URLSearchParams();
     publishBody.set('creation_id', containerId);
     publishBody.set('access_token', account.accessToken);

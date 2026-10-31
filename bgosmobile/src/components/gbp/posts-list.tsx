@@ -75,8 +75,9 @@ const EMPTY_COPY: Record<PostPill, { title: string; detail: string }> = {
   },
 };
 
-function postsPath(pill: PostPill): string {
-  const base = '/api/social/posts?platform=googlebusiness&limit=20';
+function postsPath(pill: PostPill, platform?: string): string {
+  const platQuery = platform && platform !== 'all' ? `platform=${encodeURIComponent(platform)}&` : '';
+  const base = `/api/social/posts?${platQuery}limit=20`;
   if (APPROVAL_PILLS.includes(pill)) return `${base}&approval=${pill}`;
   if (pill === 'posted') return `${base}&status=published`;
   if (pill === 'failed') return `${base}&status=failed`;
@@ -88,7 +89,7 @@ function postsPath(pill: PostPill): string {
  * `draft` and `failed` buckets (both are "never went live") — if both fetches
  * fail the error is surfaced, one succeeding still renders data.
  */
-export function usePillPosts(pill: PostPill) {
+export function usePillPosts(pill: PostPill, platform?: string) {
   const [rows, setRows] = useState<SocialPostRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,8 +102,8 @@ export function usePillPosts(pill: PostPill) {
       let list: SocialPostRow[];
       if (pill === 'not_posted') {
         const [drafts, failed] = await Promise.allSettled([
-          apiRequest<{ data: SocialPostRow[] }>(postsPath('not_posted')),
-          apiRequest<{ data: SocialPostRow[] }>('/api/social/posts?platform=googlebusiness&limit=20&status=failed'),
+          apiRequest<{ data: SocialPostRow[] }>(postsPath('not_posted', platform)),
+          apiRequest<{ data: SocialPostRow[] }>(`/api/social/posts?${platform && platform !== 'all' ? `platform=${platform}&` : ''}limit=20&status=failed`),
         ]);
         if (drafts.status === 'rejected' && failed.status === 'rejected') {
           const reason = drafts.reason;
@@ -113,7 +114,7 @@ export function usePillPosts(pill: PostPill) {
           ...(failed.status === 'fulfilled' ? failed.value.data || [] : []),
         ].sort((a, b) => (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0));
       } else {
-        const res = await apiRequest<{ data: SocialPostRow[] }>(postsPath(pill));
+        const res = await apiRequest<{ data: SocialPostRow[] }>(postsPath(pill, platform));
         list = res.data || [];
       }
       if (version === generation.current) {
@@ -127,7 +128,7 @@ export function usePillPosts(pill: PostPill) {
     } finally {
       if (version === generation.current) setLoading(false);
     }
-  }, [pill]);
+  }, [pill, platform]);
 
   useFocusEffect(
     useCallback(() => {
@@ -170,33 +171,85 @@ export function PostCard({
 }) {
   const badge = statusBadge(post);
   const media = post.mediaUrls?.[0];
+  const lines = (post.content || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const title = lines[0] || 'Business Update';
+  const snippet = lines.length > 1 ? lines.slice(1).join(' ') : lines[0] || 'No description';
+
   return (
-    <Card style={{ gap: 10 }}>
-      <View style={[ui.row, { justifyContent: 'space-between' }]}>
-        <View style={[ui.row, { gap: 6 }]}>
-          <Text style={{ fontSize: 12, fontWeight: '800', color: badge.success ? colors.success : badge.danger ? colors.danger : colors.muted }}>
-            {badge.label}
+    <Card style={{ padding: 12, gap: 10 }}>
+      {/* Sleek horizontal card layout matching Google Post Screenshot */}
+      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+        {media ? (
+          <Image
+            source={{ uri: media }}
+            style={{ width: 72, height: 72, borderRadius: 12, backgroundColor: colors.soft }}
+            accessibilityLabel="Post image"
+            alt="Post image"
+          />
+        ) : (
+          <View
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 12,
+              backgroundColor: '#EFF6FF',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <MaterialIcons name="article" size={30} color="#3B82F6" />
+          </View>
+        )}
+
+        <View style={{ flex: 1, gap: 3 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text numberOfLines={1} style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink, flex: 1 }}>
+              {title}
+            </Text>
+            <MaterialIcons name="more-horiz" size={18} color="#9CA3AF" />
+          </View>
+
+          <Text numberOfLines={2} style={{ fontSize: 11.5, color: colors.muted, lineHeight: 16 }}>
+            {snippet}
           </Text>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <MaterialIcons name="event" size={12} color="#6B7280" />
+              <Text style={{ fontSize: 10.5, color: '#6B7280', fontWeight: '600' }}>
+                {post.scheduledAt
+                  ? relativeDate(post.scheduledAt)
+                  : post.publishedAt
+                    ? relativeDate(post.publishedAt)
+                    : post.createdAt
+                      ? relativeDate(post.createdAt)
+                      : 'Recently'}
+              </Text>
+            </View>
+
+            <View
+              style={{
+                backgroundColor: badge.success ? '#ECFDF5' : badge.danger ? '#FEF2F2' : '#F0FDF4',
+                borderColor: badge.success ? '#A7F3D0' : badge.danger ? '#FECACA' : '#BBF7D0',
+                borderWidth: 1,
+                borderRadius: 6,
+                paddingHorizontal: 6,
+                paddingVertical: 1.5,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: '800',
+                  color: badge.success ? '#059669' : badge.danger ? '#DC2626' : '#16A34A',
+                }}
+              >
+                {badge.label}
+              </Text>
+            </View>
+          </View>
         </View>
-        {post.publishedAt ? (
-          <Text style={ui.caption}>{relativeDate(post.publishedAt)}</Text>
-        ) : post.scheduledAt ? (
-          <Text style={ui.caption}>📅 {relativeDate(post.scheduledAt)}</Text>
-        ) : post.createdAt ? (
-          <Text style={ui.caption}>{relativeDate(post.createdAt)}</Text>
-        ) : null}
       </View>
-
-      <Text style={ui.body}>{post.content}</Text>
-
-      {media ? (
-        <Image
-          source={{ uri: media }}
-          style={{ width: '100%', height: 180, borderRadius: 12, backgroundColor: colors.soft }}
-          accessibilityLabel="Post image"
-          alt="Post image"
-        />
-      ) : null}
 
       {post.status === 'failed' || post.failureReason ? (
         <View
@@ -321,13 +374,15 @@ export function PostCard({
  */
 export function PostsBoard({
   refreshKey = 0,
+  platform = 'all',
   onNeedCompose,
 }: {
   refreshKey?: number;
+  platform?: string;
   onNeedCompose?: () => void;
 }) {
   const [pill, setPill] = useState<PostPill>('pending');
-  const board = usePillPosts(pill);
+  const board = usePillPosts(pill, platform);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   // Parent bumped refreshKey (e.g. composer saved) → refetch current pill.
