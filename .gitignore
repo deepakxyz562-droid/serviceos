@@ -87,6 +87,9 @@ db/*.db-journal
 !quote-flow-mobile/assets/**
 !bosmobile/assets/
 !bosmobile/assets/**
+!bgosmobile/assets/
+!bgosmobile/assets/**
+!bgosmobile/android/app/src/main/res/**
 .expo/
 
 # Agent context files
