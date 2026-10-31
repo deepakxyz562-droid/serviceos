@@ -78,6 +78,7 @@ export async function GET(request: NextRequest) {
     provider?: string;
     ts?: number;
     returnUrl?: string;
+    redirectUri?: string;
   };
   try {
     state = JSON.parse(Buffer.from(stateParam, 'base64url').toString());
@@ -160,9 +161,9 @@ export async function GET(request: NextRequest) {
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
     getAppUrlFromRequest(request);
-  const redirectUri = cred?.redirectUri
+  const redirectUri = state.redirectUri || (cred?.redirectUri
     ? cred.redirectUri
-    : `${appUrl}/api/oauth/instagram/callback`;
+    : `${appUrl}/api/oauth/instagram/callback`);
 
   // ── 5. Exchange auth code for a user access token ──────────────────────
   //
@@ -389,9 +390,10 @@ export async function GET(request: NextRequest) {
     return res;
   }
 
+  const returnHost = state.redirectUri ? new URL(state.redirectUri).origin : appUrl;
   const redirectUrl = new URL(
     '/app?product=bgos&view=socialMedia&connected=instagram',
-    appUrl,
+    returnHost,
   );
   const res = NextResponse.redirect(redirectUrl.toString());
   res.cookies.delete('ig_oauth_csrf');

@@ -188,11 +188,11 @@ a, button { background: #009F50; color: white; border: none; padding: 0.65rem 1.
   }
 
   // ── 3. Resolve redirect URI ────────────────────────────────────────────
-  // The Meta App Dashboard MUST have this exact URI registered under
-  // "Valid OAuth Redirect URIs". Note: if the superadmin configured a
-  // custom redirectUri on the credential (e.g. shared with the FB flow),
-  // we respect it — but it must point at THIS callback path.
+  // Prefer the redirectUri configured on the credential, otherwise derive
+  // dynamically from originHost so requests from bgos.fieseros.com or
+  // fieseros.com match their corresponding Valid OAuth Redirect URIs.
   const appUrl =
+    originHost ||
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
     getAppUrlFromRequest(request);
@@ -216,6 +216,7 @@ a, button { background: #009F50; color: white; border: none; padding: 0.65rem 1.
       flow: 'publishing',
       platform: 'instagram',
       returnUrl,
+      redirectUri: callbackUrl,
     }),
   ).toString('base64url');
 

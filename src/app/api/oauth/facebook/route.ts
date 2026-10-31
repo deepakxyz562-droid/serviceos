@@ -195,9 +195,10 @@ a, button { background: #009F50; color: white; border: none; padding: 0.65rem 1.
 
   // ── 3. Resolve redirect URI ────────────────────────────────────────────
   // Prefer the redirectUri configured on the credential, otherwise derive
-  // from the app URL. The Meta App Dashboard MUST have this exact URI
-  // registered under "Valid OAuth Redirect URIs".
+  // dynamically from originHost so requests from bgos.fieseros.com or
+  // fieseros.com match their corresponding Valid OAuth Redirect URIs.
   const appUrl =
+    originHost ||
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
     getAppUrlFromRequest(request);
@@ -221,6 +222,7 @@ a, button { background: #009F50; color: white; border: none; padding: 0.65rem 1.
       flow: 'publishing',
       platform: 'facebook',
       returnUrl,
+      redirectUri: callbackUrl,
     }),
   ).toString('base64url');
 

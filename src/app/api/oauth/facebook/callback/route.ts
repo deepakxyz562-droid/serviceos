@@ -60,6 +60,7 @@ export async function GET(request: NextRequest) {
     flow?: string;
     platform?: string;
     returnUrl?: string;
+    redirectUri?: string;
   };
   try {
     state = JSON.parse(Buffer.from(stateParam, 'base64url').toString());
@@ -137,9 +138,9 @@ export async function GET(request: NextRequest) {
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
     getAppUrlFromRequest(request);
-  const redirectUri = cred?.redirectUri
+  const redirectUri = state.redirectUri || (cred?.redirectUri
     ? cred.redirectUri
-    : `${appUrl}/api/oauth/facebook/callback`;
+    : `${appUrl}/api/oauth/facebook/callback`);
 
   // ── 5. Exchange auth code for a user access token ──────────────────────
   //
@@ -335,9 +336,10 @@ export async function GET(request: NextRequest) {
     return res;
   }
 
+  const returnHost = state.redirectUri ? new URL(state.redirectUri).origin : appUrl;
   const redirectUrl = new URL(
     '/app?product=bgos&view=socialMedia&connected=facebook',
-    appUrl,
+    returnHost,
   );
   const res = NextResponse.redirect(redirectUrl.toString());
   res.cookies.delete('fb_oauth_csrf');
