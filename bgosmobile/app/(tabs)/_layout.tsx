@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import { usePendingReplies } from '../../src/hooks/use-pending-replies';
  * Bottom Navigation — BGOS Growth Employee bar:
  *  - Home: Business overview, growth radar & actions
  *  - Reviews: Google reviews stream with pending badge
- *  - AI Post: 1-Tap post creation & marketing studio
+ *  - AI Post: 1-Tap post creation & marketing studio (prominent center badge)
  *  - Posts: Google Business Posts & articles
  *  - Media: Photos & store asset manager
  */
@@ -37,31 +37,15 @@ const hidden = [
   'tools',
 ] as const;
 
-function CenterAiPostButton(props: any) {
-  const focused = props.accessibilityState?.selected;
-  return (
-    <Pressable
-      {...props}
-      accessibilityRole="button"
-      accessibilityLabel="AI Post Creation"
-      style={({ pressed }) => [
-        styles.centerButtonOuter,
-        pressed && { transform: [{ scale: 0.95 }] },
-      ]}
-    >
-      <View style={[styles.centerAiCircle, focused && styles.centerAiCircleActive]}>
-        <MaterialIcons name="auto-awesome" size={22} color="#FFFFFF" />
-      </View>
-      <Text style={[styles.centerAiLabel, focused && styles.centerAiLabelActive]}>
-        AI Post
-      </Text>
-    </Pressable>
-  );
-}
-
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const pendingReplies = usePendingReplies(60000);
+
+  const tabHeight = Platform.select({
+    ios: insets.bottom > 0 ? 60 + insets.bottom : 64,
+    default: 66,
+  });
+  const tabPaddingBottom = insets.bottom > 0 ? insets.bottom : 8;
 
   return (
     <Tabs
@@ -71,8 +55,8 @@ export default function TabLayout() {
           backgroundColor: '#FFFFFF',
           borderTopColor: '#E2E8F0',
           borderTopWidth: 1,
-          height: 58 + insets.bottom,
-          paddingBottom: Math.max(insets.bottom, 6),
+          height: tabHeight,
+          paddingBottom: tabPaddingBottom,
           paddingTop: 6,
           elevation: 8,
           shadowColor: '#070B2D',
@@ -85,23 +69,12 @@ export default function TabLayout() {
         tabBarLabelStyle: {
           fontSize: 10.5,
           fontWeight: '700',
-          marginTop: 1,
+          marginTop: 2,
         },
       }}
     >
       {visible.map(([name, title, icon]) => {
-        if (name === 'marketing') {
-          return (
-            <Tabs.Screen
-              key={name}
-              name={name}
-              options={{
-                title,
-                tabBarButton: (props) => <CenterAiPostButton {...props} />,
-              }}
-            />
-          );
-        }
+        const isCenter = name === 'marketing';
 
         return (
           <Tabs.Screen
@@ -109,15 +82,23 @@ export default function TabLayout() {
             name={name}
             options={{
               title,
-              tabBarIcon: ({ color, focused }) => (
-                <View style={[styles.standardIconContainer, focused && styles.activePill]}>
+              tabBarIcon: ({ color, focused }) => {
+                if (isCenter) {
+                  return (
+                    <View style={[styles.centerAiPill, focused && styles.centerAiPillActive]}>
+                      <MaterialIcons name="auto-awesome" size={20} color="#FFFFFF" />
+                    </View>
+                  );
+                }
+
+                return (
                   <MaterialIcons
                     name={icon as any}
                     color={focused ? colors.brand : colors.muted}
-                    size={23}
+                    size={24}
                   />
-                </View>
-              ),
+                );
+              },
               ...(name === 'reviews' && pendingReplies != null && pendingReplies > 0
                 ? {
                     tabBarBadge: pendingReplies > 99 ? '99+' : pendingReplies,
@@ -142,16 +123,10 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  centerButtonOuter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 2,
-  },
-  centerAiCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  centerAiPill: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
@@ -160,29 +135,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.28,
     shadowRadius: 4,
     elevation: 4,
+    marginTop: -2,
   },
-  centerAiCircleActive: {
+  centerAiPillActive: {
     backgroundColor: colors.brandDark,
-    transform: [{ scale: 1.04 }],
-  },
-  centerAiLabel: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: colors.muted,
-    marginTop: 2,
-  },
-  centerAiLabelActive: {
-    color: colors.brand,
-    fontWeight: '800',
-  },
-  standardIconContainer: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activePill: {
-    backgroundColor: colors.brandSoft,
+    transform: [{ scale: 1.05 }],
   },
 });
+

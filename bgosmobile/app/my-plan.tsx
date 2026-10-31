@@ -99,12 +99,18 @@ export default function MyPlanScreen() {
     const priceFormatted = selected ? `₹${selected.priceInr.toLocaleString('en-IN')}/mo` : '';
 
     Alert.alert(
-      `Activate ${planName} Plan`,
-      `Upgrade your business workspace to ${planName} for ${priceFormatted}. All AI automations, review auto-replies, and WhatsApp growth tools will be unlocked.`,
+      `Upgrade to ${planName} (${priceFormatted})`,
+      `Select your preferred payment and activation option for ${planName}:`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Confirm & Activate',
+          text: '🇮🇳 Razorpay (Web UPI)',
+          onPress: async () => {
+            await Linking.openURL(`${WEB_URL}/app?view=billing`);
+          },
+        },
+        {
+          text: '⚡ Instant Activate',
           onPress: async () => {
             setActivatingPlan(planCode);
             try {

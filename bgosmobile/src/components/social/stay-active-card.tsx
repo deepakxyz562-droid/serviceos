@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, ui } from '../ui';
 import { useResource } from '../../hooks/use-resource';
@@ -30,35 +31,56 @@ export function StayActiveSocialMediaCard() {
   const fbAccount = accounts.find((a) => a.platform === 'facebook' && a.isActive);
   const igAccount = accounts.find((a) => a.platform === 'instagram' && a.isActive);
 
-  async function handleConnect(platform: 'facebook' | 'instagram') {
-    setConnectingKey(platform);
+  async function openInstalledApp(platform: 'facebook' | 'instagram') {
+    const scheme = platform === 'instagram' ? 'instagram://app' : 'fb://feed';
+    const webFallback = platform === 'instagram' ? 'https://instagram.com' : 'https://facebook.com';
     try {
-      // In web BGOS, OAuth connects via /api/oauth/facebook or web integrations
-      const oauthUrl = `${WEB_URL}/api/oauth/${platform}`;
-      const canOpen = await Linking.canOpenURL(oauthUrl);
-      if (canOpen) {
-        await Linking.openURL(oauthUrl);
+      const supported = await Linking.canOpenURL(scheme);
+      if (supported) {
+        await Linking.openURL(scheme);
       } else {
-        Alert.alert(
-          `Connect ${platform === 'facebook' ? 'Facebook' : 'Instagram'}`,
-          `To connect your official ${platform === 'facebook' ? 'Facebook Page' : 'Instagram Business account'}, open BGOS Web Channels or log in through Meta Business Suite.`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Open Web Integrations',
-              onPress: () => void Linking.openURL(`${WEB_URL}/app?view=integrations`),
-            },
-          ]
-        );
+        await Linking.openURL(webFallback);
       }
     } catch {
-      Alert.alert(
-        'Connection Info',
-        `Meta OAuth requires a verified business redirect. Open BGOS Web Settings > Social Accounts to complete ${platform === 'facebook' ? 'Facebook' : 'Instagram'} verification.`
-      );
-    } finally {
-      setConnectingKey(null);
+      await Linking.openURL(webFallback);
     }
+  }
+
+  async function handleConnect(platform: 'facebook' | 'instagram') {
+    const platformLabel = platform === 'facebook' ? 'Facebook' : 'Instagram';
+    const appScheme = platform === 'instagram' ? 'instagram://app' : 'fb://feed';
+
+    Alert.alert(
+      `Connect ${platformLabel}`,
+      `Meta requires logging in with the Facebook account that manages your ${platformLabel} Business profile to enable auto-posting.\n\nYou can also launch the installed ${platformLabel} app directly.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Open ${platformLabel} App`,
+          onPress: () => void openInstalledApp(platform),
+        },
+        {
+          text: 'Connect Meta OAuth',
+          onPress: async () => {
+            setConnectingKey(platform);
+            try {
+              const oauthUrl = `${WEB_URL}/api/oauth/${platform}`;
+              // Open in-app secure browser session rather than kicking out to external Safari
+              await WebBrowser.openBrowserAsync(oauthUrl, {
+                presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+                controlsColor: colors.brand,
+              });
+              await accountsRes.refresh();
+            } catch {
+              // Fallback to Linking
+              await Linking.openURL(`${WEB_URL}/api/oauth/${platform}`);
+            } finally {
+              setConnectingKey(null);
+            }
+          },
+        },
+      ]
+    );
   }
 
   const channels = [

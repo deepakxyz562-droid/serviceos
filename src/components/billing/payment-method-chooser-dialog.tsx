@@ -3,21 +3,11 @@
 /**
  * Payment Method Chooser Dialog.
  *
- * Shown when a tenant clicks "Upgrade" on a plan in the billing page. Presents
- * two payment options side-by-side:
- *
- *   1. PayPal (primary, recommended) — opens the existing PayPalCheckoutDialog.
- *   2. Pay with Card (via Creem) — calls /api/creem/checkout and redirects to
- *      the Creem-hosted checkout URL via `window.location.href`.
- *
- * Each option is disabled (with a helpful note) when the corresponding payment
- * provider is not configured. PayPal is fetched from /api/paypal/config (which
- * reads PAYPAL_CLIENT_ID/PAYPAL_CLIENT_SECRET env vars). Creem is fetched from
- * /api/creem/config (which reads the RevenueFeatureToggle row set by the
- * superadmin).
- *
- * If neither is configured, the dialog shows a single "Contact admin" notice
- * and the Continue button is disabled.
+ * Shown when a tenant clicks "Upgrade" on a plan in the billing page.
+ * Supports:
+ *   1. 🇮🇳 Razorpay (Recommended for Indian Users) — UPI, Netbanking, Cards (INR ₹)
+ *   2. 🌐 Creem (Recommended for International Users) — Global Cards, Apple Pay, Google Pay (USD $)
+ *   3. 🅿️ PayPal (Legacy fallback)
  */
 import { useEffect, useState } from 'react';
 import {
@@ -28,6 +18,7 @@ import {
   AlertCircle,
   ShieldCheck,
   Sparkles,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -47,11 +38,6 @@ import { authFetch } from '@/lib/client-auth';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-/**
- * Minimal plan shape required by the chooser. Mirrors the `Plan` interface in
- * billing-view.tsx so we don't need to import it (which would create a circular
- * dependency — the billing view imports this dialog).
- */
 export interface ChooserPlan {
   id: string;
   name: string;
@@ -63,11 +49,10 @@ interface PaymentMethodChooserDialogProps {
   plan: ChooserPlan | null;
   billingCycle: 'monthly' | 'yearly';
   onClose: () => void;
-  /** Called when the user picks PayPal — the parent opens the existing PayPalCheckoutDialog. */
   onChoosePayPal: (plan: ChooserPlan) => void;
 }
 
-type Method = 'paypal' | 'creem';
+type Method = 'razorpay' | 'creem' | 'paypal';
 
 interface PayPalConfigResponse {
   configured: boolean;
@@ -78,7 +63,24 @@ interface CreemConfigResponse {
   configured: boolean;
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') return resolve(false);
+    if ((window as any).Razorpay) return resolve(true);
+    const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true));
+      existing.addEventListener('error', () => resolve(false));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
 
 export function PaymentMethodChooserDialog({
   plan,
@@ -86,12 +88,13 @@ export function PaymentMethodChooserDialog({
   onClose,
   onChoosePayPal,
 }: PaymentMethodChooserDialogProps) {
-  const [selected, setSelected] = useState<Method>('creem');
+  const [selected, setSelected] = useState<Method>('razorpay');
+  const [razorpayConfigured, setRazorpayConfigured] = useState<boolean>(true);
   const [paypalConfigured, setPaypalConfigured] = useState<boolean | null>(null);
   const [creemConfigured, setCreemConfigured] = useState<boolean | null>(null);
-  const [redirecting, setRedirecting] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  // ─── Load availability for both providers in parallel ─────────────────
+  // ─── Load availability for providers in parallel ─────────────────────
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -103,21 +106,14 @@ export function PaymentMethodChooserDialog({
       ]);
       if (cancelled) return;
 
-      const paypalOk =
-        paypalRes.status === 'fulfilled' && paypalRes.value?.configured === true;
-      const creemOk =
-        creemRes.status === 'fulfilled' && creemRes.value?.configured === true;
+      const paypalOk = paypalRes.status === 'fulfilled' && paypalRes.value?.configured === true;
+      const creemOk = creemRes.status === 'fulfilled' && creemRes.value?.configured === true;
 
       setPaypalConfigured(paypalOk);
       setCreemConfigured(creemOk);
 
-      // Default to Creem (the platform's primary gateway). If Creem is
-      // unavailable, fall back to PayPal (if configured).
-      if (!creemOk && paypalOk) {
-        setSelected('paypal');
-      } else if (creemOk) {
-        setSelected('creem');
-      }
+      // Default to Razorpay for Indian users / standard checkout
+      setSelected('razorpay');
     }
     load();
     return () => {
@@ -125,32 +121,104 @@ export function PaymentMethodChooserDialog({
     };
   }, []);
 
-  // Reset the redirect flag if the dialog re-opens for a different plan.
   useEffect(() => {
-    setRedirecting(false);
+    setBusy(false);
   }, [plan?.id]);
 
-  // ─── Early-out when there's no plan ─────────────────────────────────────
   if (!plan) return null;
 
-  const loading = paypalConfigured === null || creemConfigured === null;
-  const neitherConfigured =
-    !loading && paypalConfigured === false && creemConfigured === false;
-  const selectedAvailable =
-    (selected === 'paypal' && paypalConfigured === true) ||
-    (selected === 'creem' && creemConfigured === true);
-
-  const displayPrice = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+  const displayUsdPrice = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+  const inrMultiplier = 85;
+  const inrPrice = Math.round(displayUsdPrice * inrMultiplier);
   const cycleLabel = billingCycle === 'yearly' ? 'yearly' : 'monthly';
 
-  // ─── Continue handler ───────────────────────────────────────────────────
   async function handleContinue() {
     if (!plan) return;
 
+    // ── 1. Razorpay Checkout Flow (India) ──────────────────────────────────
+    if (selected === 'razorpay') {
+      setBusy(true);
+      try {
+        const scriptOk = await loadRazorpayScript();
+        if (!scriptOk) throw new Error('Razorpay checkout script failed to load.');
+
+        const amountPaise = inrPrice * 100;
+        const res = await authFetch('/api/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: amountPaise,
+            currency: 'INR',
+            planCode: plan.id,
+            notes: {
+              planName: plan.name,
+              billingCycle,
+            },
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data?.order_id) {
+          throw new Error(data?.error || 'Could not initiate Razorpay order.');
+        }
+
+        const options = {
+          key: data.key_id || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TuLATkapPzzHZc',
+          amount: data.amount,
+          currency: 'INR',
+          name: 'FieserOS / BOS',
+          description: `${plan.name} (${billingCycle}) · ₹${inrPrice.toLocaleString('en-IN')}`,
+          order_id: data.order_id,
+          theme: { color: '#009F50' },
+          modal: {
+            ondismiss: () => {
+              setBusy(false);
+              toast.info('Razorpay payment window closed.');
+            },
+          },
+          handler: async (resp: any) => {
+            try {
+              const verifyRes = await authFetch('/api/verify-payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  razorpay_order_id: resp.razorpay_order_id,
+                  razorpay_payment_id: resp.razorpay_payment_id,
+                  razorpay_signature: resp.razorpay_signature,
+                  planCode: plan.id,
+                }),
+              });
+              const verifyData = await verifyRes.json();
+              if (verifyRes.ok && verifyData.success) {
+                toast.success('Payment verified! Subscription activated.');
+                onClose();
+                window.location.reload();
+              } else {
+                toast.error(verifyData.error || 'Verification failed.');
+              }
+            } catch (err: any) {
+              toast.error(err?.message || 'Verification error.');
+            } finally {
+              setBusy(false);
+            }
+          },
+        };
+
+        const razorpayInstance = new (window as any).Razorpay(options);
+        razorpayInstance.open();
+        return;
+      } catch (err: any) {
+        setBusy(false);
+        toast.error(err?.message || 'Could not launch Razorpay checkout.');
+        return;
+      }
+    }
+
+    // ── 2. PayPal Flow ─────────────────────────────────────────────────────
     if (selected === 'paypal') {
       if (!paypalConfigured) {
         toast.error('PayPal is not configured', {
-          description: 'Please contact your platform admin or choose another method.',
+          description: 'Please contact platform admin or choose Razorpay.',
         });
         return;
       }
@@ -158,164 +226,149 @@ export function PaymentMethodChooserDialog({
       return;
     }
 
-    // Creem path — call the checkout endpoint and redirect.
-    if (!creemConfigured) {
-      toast.error('Creem is not configured', {
-        description: 'Please contact your platform admin or choose another method.',
-      });
-      return;
-    }
-
-    setRedirecting(true);
-    try {
-      const res = await authFetch('/api/creem/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plan: plan.id,
-          billingCycle,
-        }),
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        checkoutUrl?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.checkoutUrl) {
-        throw new Error(data.error || `Failed to start Creem checkout (HTTP ${res.status}).`);
+    // ── 3. Creem Flow (International) ──────────────────────────────────────
+    if (selected === 'creem') {
+      if (!creemConfigured) {
+        toast.error('Creem is not configured', {
+          description: 'Please contact platform admin or choose Razorpay.',
+        });
+        return;
       }
-      // Hard-redirect to Creem's hosted checkout. This navigates away from the
-      // app, so any local state cleanup is moot — the user returns via the
-      // success_url we configured on the server (which points back to /billing).
-      window.location.href = data.checkoutUrl;
-    } catch (err) {
-      setRedirecting(false);
-      toast.error('Could not start Creem checkout', {
-        description: err instanceof Error ? err.message : 'Please try again.',
-      });
+
+      setBusy(true);
+      try {
+        const res = await authFetch('/api/creem/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            plan: plan.id,
+            billingCycle,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.checkoutUrl) {
+          throw new Error(data.error || 'Failed to start Creem checkout.');
+        }
+        window.location.href = data.checkoutUrl;
+      } catch (err: any) {
+        setBusy(false);
+        toast.error('Could not start Creem checkout', {
+          description: err?.message || 'Please try again.',
+        });
+      }
     }
   }
 
-  // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <Dialog open={!!plan} onOpenChange={(open) => { if (!open && !redirecting) onClose(); }}>
+    <Dialog open={!!plan} onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wallet className="size-5" />
-            Choose a payment method
+            Choose Payment Method
           </DialogTitle>
           <DialogDescription>
-            You&apos;re upgrading to the <strong className="text-foreground">{plan.name}</strong>{' '}
-            plan — ${displayPrice.toFixed(2)} USD / {cycleLabel}. Select how you&apos;d like to pay.
+            Upgrading to <strong className="text-foreground">{plan.name}</strong> ({cycleLabel}) ·{' '}
+            {selected === 'razorpay' ? `₹${inrPrice.toLocaleString('en-IN')} INR` : `$${displayUsdPrice.toFixed(2)} USD`}.
           </DialogDescription>
         </DialogHeader>
-
-        {neitherConfigured && (
-          <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
-            <AlertCircle className="size-4 mt-0.5 shrink-0" />
-            <div className="min-w-0">
-              <p className="font-medium">No payment methods configured</p>
-              <p className="text-xs mt-0.5 opacity-90">
-                Neither PayPal nor Creem is available on this platform. Please
-                contact your administrator to enable a payment provider.
-              </p>
-            </div>
-          </div>
-        )}
 
         <RadioGroup
           value={selected}
           onValueChange={(v) => setSelected(v as Method)}
-          className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1"
+          className="grid grid-cols-1 gap-3 pt-1"
         >
-          {/* Creem option (primary / recommended — platform default) */}
+          {/* Razorpay Option (India - UPI, Netbanking, Cards) */}
+          <label
+            htmlFor="method-razorpay"
+            className={`relative flex flex-col gap-2 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
+              selected === 'razorpay'
+                ? 'border-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/20'
+                : 'border-border hover:border-emerald-500/40 hover:bg-muted/40'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <RadioGroupItem id="method-razorpay" value="razorpay" />
+                <Zap className="size-5 text-emerald-600 dark:text-emerald-400" />
+                <Label htmlFor="method-razorpay" className="font-bold text-sm cursor-pointer">
+                  🇮🇳 Razorpay (India · UPI / Cards / Netbanking)
+                </Label>
+              </div>
+              <Badge className="bg-emerald-600 text-white border-none text-[10px] font-bold">
+                Instant UPI
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground ml-6">
+              Pay ₹{inrPrice.toLocaleString('en-IN')} via Google Pay, PhonePe, Paytm, BHIM UPI, Netbanking, or RuPay/Visa/Mastercard.
+            </p>
+            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 ml-6 flex items-center gap-1 font-medium">
+              <ShieldCheck className="size-3 text-emerald-600" />
+              Direct Standard Web Checkout · Instant Activation
+            </p>
+          </label>
+
+          {/* Creem Option (International - Cards, Apple Pay, Google Pay) */}
           <label
             htmlFor="method-creem"
-            className={`relative flex flex-col gap-2 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
+            className={`relative flex flex-col gap-2 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
               selected === 'creem'
                 ? 'border-primary bg-primary/5'
                 : 'border-border hover:border-primary/40 hover:bg-muted/40'
-            } ${creemConfigured === false ? 'opacity-60 cursor-not-allowed' : ''}`}
+            } ${creemConfigured === false ? 'opacity-60' : ''}`}
           >
             <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <RadioGroupItem
-                  id="method-creem"
-                  value="creem"
-                  disabled={creemConfigured === false}
-                />
-                <CreditCard className="size-5 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[10px]">
-                <Sparkles className="size-2.5 mr-1" />
-                Recommended
-              </Badge>
-            </div>
-            <div className="space-y-0.5">
-              <Label htmlFor="method-creem" className="text-sm font-semibold cursor-pointer">
-                Pay with Card (Creem)
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Visa, Mastercard, AMEX via Creem. Hosted, secure checkout. Subscription renews automatically.
-              </p>
-            </div>
-            {creemConfigured === false && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                <AlertCircle className="size-3" />
-                Card payments not configured — contact admin
-              </p>
-            )}
-            {creemConfigured === true && (
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                <ShieldCheck className="size-3 text-emerald-500" />
-                Powered by Creem
-              </p>
-            )}
-          </label>
-
-          {/* PayPal option (secondary) */}
-          <label
-            htmlFor="method-paypal"
-            className={`relative flex flex-col gap-2 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
-              selected === 'paypal'
-                ? 'border-primary bg-primary/5'
-                : 'border-border hover:border-primary/40 hover:bg-muted/40'
-            } ${paypalConfigured === false ? 'opacity-60 cursor-not-allowed' : ''}`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <RadioGroupItem
-                  id="method-paypal"
-                  value="paypal"
-                  disabled={paypalConfigured === false}
-                />
-                <Wallet className="size-5 text-[#003087] dark:text-blue-400" />
+              <div className="flex items-center gap-2.5">
+                <RadioGroupItem id="method-creem" value="creem" />
+                <CreditCard className="size-5 text-blue-600 dark:text-blue-400" />
+                <Label htmlFor="method-creem" className="font-bold text-sm cursor-pointer">
+                  🌐 Creem (International · Global Cards & Apple Pay)
+                </Label>
               </div>
               <Badge variant="outline" className="text-[10px]">
-                PayPal
+                USD ($)
               </Badge>
             </div>
-            <div className="space-y-0.5">
-              <Label htmlFor="method-paypal" className="text-sm font-semibold cursor-pointer">
-                Pay with PayPal
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                PayPal balance, bank, or card.
-              </p>
-            </div>
-            {paypalConfigured === false && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                <AlertCircle className="size-3" />
-                PayPal not configured — contact admin
-              </p>
-            )}
-            {paypalConfigured === true && (
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <p className="text-xs text-muted-foreground ml-6">
+              Pay ${displayUsdPrice.toFixed(2)} USD via international Visa, Mastercard, AMEX, Apple Pay, or Google Pay.
+            </p>
+            {creemConfigured === true ? (
+              <p className="text-[11px] text-muted-foreground ml-6 flex items-center gap-1">
                 <ShieldCheck className="size-3 text-emerald-500" />
-                Secured by PayPal
+                Powered by Creem Merchant of Record
               </p>
-            )}
+            ) : creemConfigured === false ? (
+              <p className="text-[11px] text-amber-600 ml-6 flex items-center gap-1">
+                <AlertCircle className="size-3" />
+                Creem not configured on platform
+              </p>
+            ) : null}
           </label>
+
+          {/* PayPal Option (Secondary fallback) */}
+          {paypalConfigured && (
+            <label
+              htmlFor="method-paypal"
+              className={`relative flex flex-col gap-2 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
+                selected === 'paypal'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/40 hover:bg-muted/40'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <RadioGroupItem id="method-paypal" value="paypal" />
+                  <Wallet className="size-5 text-[#003087]" />
+                  <Label htmlFor="method-paypal" className="font-bold text-sm cursor-pointer">
+                    PayPal (International Wallet & Bank)
+                  </Label>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground ml-6">
+                Pay ${displayUsdPrice.toFixed(2)} USD using your PayPal account balance or linked bank.
+              </p>
+            </label>
+          )}
         </RadioGroup>
 
         <DialogFooter className="gap-2 sm:gap-2 pt-2">
@@ -323,29 +376,24 @@ export function PaymentMethodChooserDialog({
             type="button"
             variant="outline"
             onClick={onClose}
-            disabled={loading || redirecting}
+            disabled={busy}
           >
             Cancel
           </Button>
           <Button
             type="button"
             onClick={handleContinue}
-            disabled={loading || redirecting || neitherConfigured || !selectedAvailable}
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
+            disabled={busy}
+            className="bg-[#009F50] text-white hover:bg-[#008A45] font-bold"
           >
-            {redirecting ? (
+            {busy ? (
               <>
                 <Loader2 className="size-4 mr-2 animate-spin" />
-                Redirecting…
-              </>
-            ) : loading ? (
-              <>
-                <Loader2 className="size-4 mr-2 animate-spin" />
-                Loading…
+                Processing…
               </>
             ) : (
               <>
-                Continue
+                Continue with {selected === 'razorpay' ? 'Razorpay' : selected === 'creem' ? 'Creem' : 'PayPal'}
                 <ArrowRight className="size-4 ml-2" />
               </>
             )}
