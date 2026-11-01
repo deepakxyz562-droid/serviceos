@@ -640,6 +640,14 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   PublicChatMessage: {
     session: { targetTable: 'PublicChatSession', fkColumn: 'sessionId' },
   },
+  SocialPost: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    metrics: { targetTable: 'SocialPostMetric', targetFkColumn: 'socialPostId', isMany: true },
+  },
+  SocialPostMetric: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    socialPost: { targetTable: 'SocialPost', fkColumn: 'socialPostId' },
+  },
   EventWebhook: {
     workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },
   },

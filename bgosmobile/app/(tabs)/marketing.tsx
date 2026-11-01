@@ -113,31 +113,38 @@ export default function MarketingScreen() {
 
   const mediaUrls = media.split('\n').map((s) => s.trim()).filter(Boolean);
 
-  async function generate() {
+  async function generate(forcedTopic?: string) {
     setBusy(true);
     setError(null);
+    const activeTopic = (typeof forcedTopic === 'string' ? forcedTopic : topic).trim();
     try {
-      const data = await apiRequest<{ caption: string }>('/api/social/ai-caption', {
+      const data = await apiRequest<{
+        caption: string;
+        title?: string;
+        headline?: string;
+        subtitle?: string;
+        imageUrl?: string;
+        hashtags?: string[];
+      }>('/api/social/ai-generate-post', {
         method: 'POST',
         body: {
-          topic,
-          platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['googlebusiness'],
+          topic: activeTopic || 'Special promotional announcement and customer appreciation',
+          platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['googlebusiness', 'facebook', 'instagram'],
           tone: 'Friendly, premium, and professional',
         },
       });
       setContent(data.caption);
-      const lines = data.caption.split('\n').map((l) => l.trim()).filter(Boolean);
-      if (lines.length > 0) {
-        setHeadline(lines[0].replace(/^[#*"\s]+|[#*"\s]+$/g, '').slice(0, 60));
-        if (lines.length > 1) {
-          setSubtitle(lines.slice(1, 3).join(' ').replace(/#[A-Za-z0-9_]+/g, '').trim().slice(0, 140));
-        }
+      if (data.headline) setHeadline(data.headline);
+      if (data.subtitle) setSubtitle(data.subtitle);
+      if (data.imageUrl) {
+        setMedia(data.imageUrl);
+        setPostFormat('image_text');
       }
     } catch (e) {
       // Never fabricate a caption when the AI service fails — surface the real
       // error so the user can retry or write the caption below manually.
       setError(
-        `${(e as Error).message || 'AI caption generation failed.'} You can retry, or write the caption below manually.`
+        `${(e as Error).message || 'AI post generation failed.'} You can retry, or write the caption below manually.`
       );
     } finally {
       setBusy(false);

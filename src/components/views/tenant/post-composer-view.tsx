@@ -293,19 +293,22 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
     setMediaUrls((prev) => prev.filter((u) => u !== url));
   };
 
-  const handleAiGenerate = async () => {
-    if (!aiTopic.trim()) {
+  const [isRegeneratingGraphic, setIsRegeneratingGraphic] = useState(false);
+
+  const handleAiGenerate = async (forcedTopic?: string) => {
+    const topicToUse = (typeof forcedTopic === 'string' ? forcedTopic : aiTopic).trim();
+    if (!topicToUse) {
       toast.error('Enter a topic for the AI to write about');
       return;
     }
     const platformsToTarget = selectedPlatforms.length > 0 ? selectedPlatforms : ['googlebusiness', 'facebook', 'instagram'];
     setIsGenerating(true);
     try {
-      const res = await authFetch('/api/social/ai-caption', {
+      const res = await authFetch('/api/social/ai-generate-post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topic: aiTopic,
+          topic: topicToUse,
           platforms: platformsToTarget,
           tone: aiTone,
         }),
@@ -314,17 +317,14 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
         const json = await res.json();
         if (json.caption) {
           setContent(json.caption);
-
-          // Extract or generate headline & subtitle for the branded split card
-          const lines = json.caption.split('\n').map((l: string) => l.trim()).filter(Boolean);
-          if (lines.length > 0) {
-            const firstLine = lines[0].replace(/^[#*"\s]+|[#*"\s]+$/g, '');
-            setBrandHeadline(firstLine.slice(0, 70));
-            if (lines.length > 1) {
-              setBrandSubtitle(lines.slice(1, 3).join(' ').replace(/#[A-Za-z0-9_]+/g, '').trim().slice(0, 160));
-            }
+          if (json.headline) setBrandHeadline(json.headline);
+          if (json.subtitle) setBrandSubtitle(json.subtitle);
+          if (json.title) setGbpOfferTitle(json.title);
+          if (json.imageUrl) {
+            setMediaUrls([json.imageUrl]);
+            setPostFormat('image_text');
           }
-          toast.success('AI post created with branded headline!');
+          toast.success('✨ AI Post with SEO copy & 1080x1080 graphic generated!');
         } else {
           toast.error(json.error || 'AI returned an empty response');
         }
@@ -336,6 +336,33 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
       toast.error('Network error calling AI');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleRegenerateGraphic = async () => {
+    setIsRegeneratingGraphic(true);
+    try {
+      const res = await authFetch('/api/social/ai-generate-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: brandHeadline || content.slice(0, 80) || 'Special Announcement',
+          badge: 'SPECIAL',
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.imageUrl) {
+          setMediaUrls([json.imageUrl]);
+          toast.success('🎨 Branded 1080x1080 graphic updated!');
+        }
+      } else {
+        toast.error('Could not generate graphic');
+      }
+    } catch {
+      toast.error('Error regenerating graphic');
+    } finally {
+      setIsRegeneratingGraphic(false);
     }
   };
 
@@ -380,7 +407,7 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
     return null;
   };
 
-  const buildPayload = (status: 'draft' | 'scheduled' | 'published') => {
+  const buildPayload = (status: 'draft' | 'scheduled' | 'published', overrideMedia?: string[]) => {
     const targets = selectedAccountIds.map((accId) => {
       const acc = accounts.find((a) => a.id === accId)!;
       return { platform: acc.platform, socialAccountId: acc.id };
@@ -395,7 +422,7 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
 
     const payload: Record<string, unknown> = {
       content: effectiveContent,
-      mediaUrls,
+      mediaUrls: overrideMedia || mediaUrls,
       linkUrl: linkUrl || undefined,
       targets,
       status,
@@ -439,11 +466,38 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
     }
     setIsSaving(true);
     setPublishResult(null);
+
+    let activeMedia = [...mediaUrls];
+
+    // If Image with Text format has no uploaded photo, auto-generate the branded 1080x1080 graphic
+    if (postFormat === 'image_text' && activeMedia.length === 0 && (brandHeadline || content)) {
+      try {
+        toast.info('Generating 1080x1080 branded graphic for social channels…');
+        const genRes = await authFetch('/api/social/ai-generate-post', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            topic: brandHeadline || content.slice(0, 100),
+            badge: 'SPECIAL',
+          }),
+        });
+        if (genRes.ok) {
+          const genJson = await genRes.json();
+          if (genJson.imageUrl) {
+            activeMedia = [genJson.imageUrl];
+            setMediaUrls(activeMedia);
+          }
+        }
+      } catch (genErr) {
+        console.warn('Auto graphic generation error:', genErr);
+      }
+    }
+
     try {
       const res = await authFetch('/api/social/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload(status)),
+        body: JSON.stringify(buildPayload(status, activeMedia)),
       });
       if (res.ok) {
         const json = await res.json().catch(() => ({}));
@@ -737,22 +791,22 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
               {/* Quick Prompt Ideas */}
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {[
-                  'Weekend Self-Care Special',
-                  'Meet Your Stylist',
-                  'A Fresh Look For You',
-                  'New Season Makeover',
-                  'Client 5-Star Spotlight',
-                ].map((prompt) => (
+                  { label: '🏷️ Weekend 20% Off Promo', prompt: 'Weekend special discount 20% off on premium services' },
+                  { label: '⭐ 5-Star Review Spotlight', prompt: 'Thanking our loyal clients for incredible 5-star reviews and love' },
+                  { label: '💡 Pro Service Advice', prompt: 'Top 3 essential tips for maintenance, care, and best results' },
+                  { label: '🚀 New Service Launch', prompt: 'Excited to announce our new signature service package now live' },
+                  { label: '🌸 Festive / Holiday Special', prompt: 'Festive season celebrations and exclusive booking slots' },
+                ].map((item) => (
                   <button
-                    key={prompt}
+                    key={item.label}
                     type="button"
                     onClick={() => {
-                      setAiTopic(prompt);
-                      toast.info(`Prompt set: "${prompt}". Click Generate!`);
+                      setAiTopic(item.prompt);
+                      void handleAiGenerate(item.prompt);
                     }}
-                    className="px-2 py-0.5 rounded-md border bg-card/80 hover:bg-muted text-[10px] font-semibold text-foreground transition-colors"
+                    className="px-2.5 py-1 rounded-lg border border-border bg-card hover:bg-muted text-[11px] font-semibold text-foreground transition-all hover:scale-[1.02] shadow-2xs cursor-pointer"
                   >
-                    {prompt}
+                    {item.label}
                   </button>
                 ))}
               </div>
@@ -800,6 +854,26 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
                     placeholder="e.g. Refresh your look with a personalised hair consultation. Book your next visit."
                     className="min-h-20 text-xs"
                   />
+                </div>
+                <div className="pt-2 flex items-center justify-between border-t border-border">
+                  <span className="text-[11px] text-muted-foreground">
+                    Auto-composites into 1080x1080 graphic for Meta & Google.
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRegenerateGraphic}
+                    disabled={isRegeneratingGraphic}
+                    className="h-8 text-xs font-semibold gap-1.5 border-primary/30 text-primary hover:bg-primary/5"
+                  >
+                    {isRegeneratingGraphic ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Wand2 className="size-3.5" />
+                    )}
+                    <span>Regenerate 1080x1080 Graphic</span>
+                  </Button>
                 </div>
               </CardContent>
             </Card>

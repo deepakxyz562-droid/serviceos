@@ -18,13 +18,25 @@ import { logActivity } from '@/lib/activity-log';
  * record for audit). DELETE on a 'draft' hard-deletes the row.
  */
 
-function safeJsonArray(raw: string | null): unknown[] {
+function safeJsonArray(raw: string | null | unknown): unknown[] {
   if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+function safeJsonObject(raw: string | null | unknown): Record<string, unknown> | null {
+  if (!raw) return null;
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
   }
 }
 
@@ -35,7 +47,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
@@ -60,15 +72,17 @@ export async function GET(
       return NextResponse.json({ error: 'Post not found.' }, { status: 404 });
     }
 
+    const metricsList = Array.isArray(post.metrics) ? post.metrics : [];
+
     return NextResponse.json({
       data: {
         ...post,
         mediaUrls: safeJsonArray(post.mediaUrls),
         publishTargets: safeJsonArray(post.publishTargets),
-        gbpOfferData: post.gbpOfferData ? safeJsonArray(post.gbpOfferData)[0] : null,
-        metrics: post.metrics.map((m) => ({
+        gbpOfferData: safeJsonObject(post.gbpOfferData),
+        metrics: metricsList.map((m) => ({
           ...m,
-          extraMetrics: m.extraMetrics ? safeJsonArray(m.extraMetrics)[0] : null,
+          extraMetrics: safeJsonObject(m.extraMetrics),
         })),
       },
     });
@@ -97,7 +111,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
@@ -197,7 +211,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
