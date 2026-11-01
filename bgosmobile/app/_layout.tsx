@@ -1,3 +1,4 @@
+import '../src/lib/runtime-polyfills';
 import React, { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';

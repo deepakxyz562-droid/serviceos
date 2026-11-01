@@ -1,3 +1,4 @@
+import '../../src/lib/runtime-polyfills';
 import { createDesign, validateDesign, createFieserosCampaignDesign, type MarketingDesign } from '../../../shared/marketing-design';
 import { EditableDesign } from '../../src/components/design/editable-design';
 import * as Crypto from 'expo-crypto';
@@ -16,7 +17,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Screen,
@@ -84,7 +85,6 @@ const DEFAULT_ALT_HEADLINES = [
 ];
 
 export default function MarketingScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ generate?: string; mode?: string }>();
   const pendingRequest = useRef<{ body: string; key: string } | null>(null);
@@ -160,7 +160,7 @@ export default function MarketingScreen() {
       setActiveMode('posts');
       router.setParams({ mode: '' });
     }
-  }, [params.generate, params.mode, router]);
+  }, [params.generate, params.mode]);
 
   // Social account resolution
   const availableAccounts = accounts.data?.data || [];
