@@ -90,8 +90,10 @@ import {
   Play,
   Type,
   LayoutTemplate,
+  FolderOpen,
   type LucideIcon,
 } from 'lucide-react';
+import { MarketingCanvasStudio } from '@/components/bgos/marketing-canvas-studio';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -740,6 +742,7 @@ interface ReviewDto {
   createdAt?: string | null;
   responseJson?: string | null;
   source?: string | null;
+  reviewUrl?: string | null;
 }
 
 interface PhotoDto {
@@ -764,6 +767,8 @@ interface SocialAccountRow {
   platform: string;
   accountName?: string;
   isActive?: boolean;
+  accountId?: string;
+  metadata?: any;
 }
 
 function TabLoader() {
@@ -1783,7 +1788,7 @@ export function SocialMediaView({
     auth?.tenant?.name || auth?.workspace?.name || (isDemo ? 'Your Business' : 'BGOS');
   const businessInitial = businessName.trim().charAt(0).toUpperCase() || 'Y';
 
-  const [activeTab, setActiveTab] = useState<SocialTab>(initialTab || 'overview');
+  const [activeTab, setActiveTab] = useState<SocialTab>(initialTab || 'composer');
 
   // ── AI Content studio state ──
   const [studioPrompt, setStudioPrompt] = useState('');
@@ -3179,17 +3184,11 @@ export function SocialMediaView({
   // ── Tab definitions ───────────────────────────────────────────────────────
 
   const PRIMARY_TABS: { id: SocialTab; label: string; Icon: LucideIcon }[] = [
-    { id: 'composer', label: 'Create (Studio)', Icon: Sparkles },
-    { id: 'posts', label: 'Posts & Approvals', Icon: FileText },
-    { id: 'overview', label: 'Overview', Icon: Layers },
-    { id: 'review-replies', label: 'Review Replies', Icon: MessageSquare },
-    { id: 'google-media', label: 'Media Library', Icon: ImageIcon },
+    { id: 'composer', label: 'Create', Icon: Sparkles },
+    { id: 'posts', label: 'Content library', Icon: FolderOpen },
+    { id: 'overview', label: 'Calendar', Icon: Calendar },
     { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
-    { id: 'accounts', label: 'Connected Accounts', Icon: Share2 },
-  ];
-
-  const ADVANCED_TABS: { id: SocialTab; label: string; Icon: LucideIcon; count?: number }[] = [
-    { id: 'templates', label: 'Meta Templates', Icon: LayoutTemplate },
+    { id: 'templates', label: 'Brand kit', Icon: Palette },
   ];
 
   const FILTER_LABELS: Record<PostStatusFilter, string> = {
@@ -3286,35 +3285,15 @@ export function SocialMediaView({
           </div>
         </div>
 
-        {/* Right Action Cluster */}
-        <div className="flex items-center flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setActiveTab('analytics')}
-            className="h-9 gap-1.5 bg-card shadow-2xs text-xs font-medium rounded-xl"
-          >
-            <BarChart3 className="size-3.5 text-muted-foreground" />
-            <span>Analytics</span>
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setActiveTab('posts')}
-            className="h-9 gap-1.5 bg-card text-foreground font-semibold text-xs shadow-2xs rounded-xl"
-          >
-            <FileText className="size-3.5 text-muted-foreground" />
-            <span>Posts & Approvals</span>
-          </Button>
-
+        {/* Right Action Cluster — single New Creation button matching Canva design */}
+        <div className="flex items-center gap-2">
           <Button
             size="sm"
             onClick={() => setActiveTab('composer')}
             className="h-9 gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs rounded-xl px-4"
           >
             <Plus className="size-4" />
-            <span>New Creation</span>
+            <span>New creation</span>
           </Button>
         </div>
       </div>
@@ -3326,55 +3305,47 @@ export function SocialMediaView({
         </div>
       )}
 
-      {/* ─── 2. Primary Dhanda Tabs ─── */}
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-card/60 px-2 pt-1 rounded-t-xl">
-        {PRIMARY_TABS.map(({ id, label, Icon }) => {
-          const isActive = activeTab === id;
-          return (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`relative px-3.5 py-2.5 text-xs font-semibold transition-colors flex items-center gap-2 whitespace-nowrap ${
-                isActive
-                  ? 'text-primary'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Icon className={`size-4 ${isActive ? 'text-primary' : 'text-muted-foreground/70'}`} />
-              <span>{label}</span>
-              {isActive && (
-                <span className="absolute bottom-0 left-2 right-2 h-[2.5px] rounded-t-full bg-primary" />
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/* ─── 2. Primary Tabs (Exact match to Canva Studio design) ─── */}
+      <div className="flex items-center justify-between border-b border-border bg-card/60 px-2 pt-1 rounded-t-xl overflow-x-auto">
+        <div className="flex items-center gap-1">
+          {PRIMARY_TABS.map(({ id, label, Icon }) => {
+            const isActive = activeTab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={`relative px-3.5 py-2.5 text-xs font-semibold transition-colors flex items-center gap-2 whitespace-nowrap ${
+                  isActive
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className={`size-4 ${isActive ? 'text-primary' : 'text-muted-foreground/70'}`} />
+                <span>{label}</span>
+                {isActive && (
+                  <span className="absolute bottom-0 left-2 right-2 h-[2.5px] rounded-t-full bg-primary" />
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-      {/* ─── 2b. Advanced overflow row (small pills — all functionality reachable) ─── */}
-      <div className="flex items-center gap-1.5 overflow-x-auto bg-card/60 border-b border-border/60 px-2.5 py-1.5">
-        <span className="text-[10px] font-extrabold tracking-widest text-muted-foreground/70 uppercase shrink-0 pr-1">
-          Advanced
-        </span>
-        {ADVANCED_TABS.map(({ id, label, Icon, count }) => {
-          const isActive = activeTab === id;
-          return (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 whitespace-nowrap border transition-all ${
-                isActive
-                  ? 'bg-(--primary-soft) border-primary/30 text-primary'
-                  : 'bg-card border-border text-muted-foreground hover:text-foreground hover:border-primary/20'
-              }`}
-            >
-              <Icon className="size-3" />
-              <span>
-                {label}
-                {count !== undefined ? ` (${count})` : ''}
-              </span>
-            </button>
-          );
-        })}
+        {/* Far Right: Connected accounts */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('accounts')}
+          className={`relative px-3.5 py-2.5 text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            activeTab === 'accounts'
+              ? 'text-primary font-bold'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Share2 className="size-3.5 text-muted-foreground" />
+          <span>Connected accounts</span>
+          {activeTab === 'accounts' && (
+            <span className="absolute bottom-0 left-2 right-2 h-[2.5px] rounded-t-full bg-primary" />
+          )}
+        </button>
       </div>
 
       {/* ─── TAB: Accounts (drilldown) ──────────────────────────────────── */}
@@ -3384,11 +3355,21 @@ export function SocialMediaView({
         </Suspense>
       )}
 
-      {/* ─── TAB: Composer (drilldown) ──────────────────────────────────── */}
+      {/* ─── TAB: Create Studio (Canva-style 2-Column AI Marketing Studio) ── */}
       {activeTab === 'composer' && (
-        <Suspense fallback={<TabLoader />}>
-          <PostComposerView embedded />
-        </Suspense>
+        <MarketingCanvasStudio
+          businessName={businessName}
+          category={detectedCategory}
+          connectedAccounts={socialAccounts.map((a) => ({
+            id: a.id,
+            platform: a.platform,
+            name: a.accountName || a.platform,
+          }))}
+          onPublishSuccess={() => {
+            setActiveTab('posts');
+          }}
+          onNavigateToPosts={() => setActiveTab('posts')}
+        />
       )}
 
       {/* ─── TAB: Posts (drilldown, single posts list) ──────────────────── */}

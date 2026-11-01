@@ -194,17 +194,22 @@ export default function ReviewRepliesScreen() {
   const pending = useMemo(() => all.filter(isPending), [all, isPending]);
   const failed = useMemo(() => all.filter(isSyncFailed), [all, isSyncFailed]);
   const replied = useMemo(() => all.filter(isLiveReplied), [all, isLiveReplied]);
-  const totalRatings = all.length > 0 ? (reviews.data?.pagination?.total ?? all.length) : (gbpPlace.data?.metrics?.totalReviews ?? 0);
+  const totalRatings =
+    gbpPlace.data?.metrics?.totalReviews && gbpPlace.data.metrics.totalReviews > 0
+      ? gbpPlace.data.metrics.totalReviews
+      : all.length > 0
+      ? reviews.data?.pagination?.total ?? all.length
+      : 0;
 
-  // Dynamic Average Rating Calculation with fallback to Google place metrics
+  // Dynamic Average Rating Calculation: Prioritize official Google place metrics, fallback to reviews
   const averageRating = useMemo(() => {
-    if (all.length > 0) {
-      const sum = all.reduce((acc, r) => acc + (r.rating || 5), 0);
-      return (sum / all.length).toFixed(1);
-    }
     const placeAvg = gbpPlace.data?.metrics?.avgRating;
     if (placeAvg && placeAvg > 0) {
       return Number(placeAvg).toFixed(1);
+    }
+    if (all.length > 0) {
+      const sum = all.reduce((acc, r) => acc + (r.rating || 5), 0);
+      return (sum / all.length).toFixed(1);
     }
     return '0.0';
   }, [all, gbpPlace.data]);
