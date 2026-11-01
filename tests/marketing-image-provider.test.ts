@@ -23,3 +23,18 @@ it('rejects text-only responses and does not fetch arbitrary image URLs',async()
  m.fetch.mockResolvedValue(new Response(JSON.stringify({choices:[{message:{images:[{image_url:{url:'https://internal.example/private'}}]}}]})));
  await expect(generateDesignImage('Test','openrouter',new AbortController().signal)).rejects.toThrow('supported image');expect(m.fetch).toHaveBeenCalledTimes(1);
 });
+it('formats poster generation prompts with high-fidelity creative instructions',async()=>{
+ m.fetch.mockResolvedValue(new Response(JSON.stringify({candidates:[{content:{parts:[{inlineData:{mimeType:'image/png',data:Buffer.from('poster').toString('base64')}}]}}]})));
+ await generateDesignImage('Fieseros AI Assistant','gemini',new AbortController().signal,true);
+ const sentBody=JSON.parse(m.fetch.mock.calls[0][1].body);
+ expect(sentBody.contents[0].parts[0].text).toContain('promotional poster graphic (1080x1350 portrait format)');
+ expect(sentBody.contents[0].parts[0].text).toContain('Fieseros AI Assistant');
+});
+it('detects [POSTER] prefix in prompt text automatically',async()=>{
+ m.fetch.mockResolvedValue(new Response(JSON.stringify({candidates:[{content:{parts:[{inlineData:{mimeType:'image/png',data:Buffer.from('poster').toString('base64')}}]}}]})));
+ await generateDesignImage('[POSTER] Plumbing Seasonal Offer','gemini',new AbortController().signal);
+ const sentBody=JSON.parse(m.fetch.mock.calls[0][1].body);
+ expect(sentBody.contents[0].parts[0].text).toContain('promotional poster graphic (1080x1350 portrait format)');
+ expect(sentBody.contents[0].parts[0].text).toContain('Plumbing Seasonal Offer');
+ expect(sentBody.contents[0].parts[0].text).not.toContain('[POSTER]');
+});

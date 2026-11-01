@@ -2,6 +2,7 @@ import '../../src/lib/runtime-polyfills';
 import { createDesign, validateDesign, createFieserosCampaignDesign, type MarketingDesign } from '../../../shared/marketing-design';
 import { EditableDesign } from '../../src/components/design/editable-design';
 import * as Crypto from 'expo-crypto';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
@@ -96,6 +97,10 @@ export default function MarketingScreen() {
   const discover = useResource<{ activeProfile?: { id: string; name: string } }>('/api/gbp/accounts/discover');
   const accounts = useResource<{ data: Account[] }>('/api/social/accounts');
   const brandProfile = useResource<BrandProfileData>('/api/brand-profile');
+  const promptSuggestions = useResource<{
+    business?: { name?: string; category?: string };
+    suggestions: Array<{ id: string; type: string; icon: string; title: string; prompt: string }>;
+  }>('/api/social/prompts/suggestions');
 
   // ── Mode Switch: Studio / Create vs Posts & Approvals ───────────────────────
   const [activeMode, setActiveMode] = useState<'studio' | 'posts'>(
@@ -111,7 +116,9 @@ export default function MarketingScreen() {
   const [activeUserPrompt, setActiveUserPrompt] = useState(
     'Create a professional social media marketing post promoting the Fieseros AI Assistant.'
   );
-  const [generationMode, setGenerationMode] = useState<'graphic' | 'image_only'>('graphic');
+  const [generationMode, setGenerationMode] = useState<'poster' | 'graphic' | 'image_only'>('poster');
+  const [activeVisualFormat, setActiveVisualFormat] = useState<'poster' | 'canvas'>('poster');
+  const [customPosterUri, setCustomPosterUri] = useState<string | null>(null);
   const [alternativeHeadlines, setAlternativeHeadlines] = useState<string[]>(DEFAULT_ALT_HEADLINES);
   const [selectedLayout, setSelectedLayout] = useState<LayoutId>('editorial');
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:5' | '9:16'>('4:5');
@@ -270,6 +277,24 @@ export default function MarketingScreen() {
     }
   }
 
+  async function handlePickCustomPoster() {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.9,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setCustomPosterUri(result.assets[0].uri);
+        setActiveVisualFormat('poster');
+        setSuccessNotice('Custom promotional graphic loaded!');
+        setTimeout(() => setSuccessNotice(null), 3000);
+      }
+    } catch {
+      Alert.alert('Notice', 'Could not open photo library.');
+    }
+  }
+
   // AI Generation Trigger
   async function generatePost(customTopic?: string) {
     const topicToUse = (typeof customTopic === 'string' ? customTopic : promptInput).trim() || activeUserPrompt;
@@ -294,7 +319,9 @@ export default function MarketingScreen() {
 
       setPromptInput('');
       setSuccessNotice(
-        generationMode === 'image_only'
+        generationMode === 'poster'
+          ? 'Finished AI Poster campaign created with high-res graphics & copy!'
+          : generationMode === 'image_only'
           ? 'AI generated background image without text overlays!'
           : 'AI generated fresh design and copy directly to canvas!'
       );
@@ -322,7 +349,7 @@ export default function MarketingScreen() {
       return;
     }
 
-    const mediaList = bgPhotoUrl ? [bgPhotoUrl] : [];
+    const mediaList = activeVisualFormat === 'poster' && customPosterUri ? [customPosterUri] : bgPhotoUrl ? [bgPhotoUrl] : [];
     const contentCheck = validateSocialPost(caption.trim(), selectedPlatforms, mediaList);
     if (contentCheck) {
       setError(contentCheck);
@@ -714,12 +741,79 @@ export default function MarketingScreen() {
                 </View>
               </ScrollView>
 
-              {/* Bottom Sticky Action Bar: Mode Selector + Prompt Input + Open Design CTA */}
+              {/* Bottom Sticky Action Bar: Suggestions + Mode Selector + Prompt Input + Open Design CTA */}
               <View style={styles.promptInputContainer}>
+                {/* Dynamic Prompt Suggestions based on Google Business Profile & Website */}
+                {promptSuggestions.data?.suggestions && promptSuggestions.data.suggestions.length > 0 && (
+                  <View style={{ marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                        💡 Suggested for your business:
+                      </Text>
+                      <Pressable onPress={() => promptSuggestions.refresh()} hitSlop={8}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#009F50' }}>🎲 Refresh Ideas</Text>
+                      </Pressable>
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 2 }}>
+                      {promptSuggestions.data.suggestions.map((s) => (
+                        <Pressable
+                          key={s.id}
+                          onPress={() => setPromptInput(s.prompt)}
+                          style={({ pressed }) => [
+                            {
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              paddingHorizontal: 10,
+                              paddingVertical: 5,
+                              borderRadius: 10,
+                              backgroundColor: '#FFFFFF',
+                              borderWidth: 1,
+                              borderColor: '#E2E8F0',
+                            },
+                            pressed && { opacity: 0.7 },
+                          ]}
+                        >
+                          <Text style={{ fontSize: 12 }}>{s.icon}</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>{s.title}</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
                 {/* Generation Mode Switcher */}
                 <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
                   <Pressable
-                    onPress={() => setGenerationMode('graphic')}
+                    onPress={() => {
+                      setGenerationMode('poster');
+                      setActiveVisualFormat('poster');
+                    }}
+                    style={[
+                      styles.modeBtn,
+                      generationMode === 'poster' && styles.modeBtnActive,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="auto-awesome"
+                      size={14}
+                      color={generationMode === 'poster' ? '#009F50' : '#64748B'}
+                    />
+                    <Text
+                      style={[
+                        styles.modeBtnText,
+                        generationMode === 'poster' && styles.modeBtnTextActive,
+                      ]}
+                    >
+                      🖼️ AI Poster
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      setGenerationMode('graphic');
+                      setActiveVisualFormat('canvas');
+                    }}
                     style={[
                       styles.modeBtn,
                       generationMode === 'graphic' && styles.modeBtnActive,
@@ -736,9 +830,10 @@ export default function MarketingScreen() {
                         generationMode === 'graphic' && styles.modeBtnTextActive,
                       ]}
                     >
-                      🎨 Graphic (Text & UI)
+                      ✏️ Editable
                     </Text>
                   </Pressable>
+
                   <Pressable
                     onPress={() => setGenerationMode('image_only')}
                     style={[
@@ -757,7 +852,7 @@ export default function MarketingScreen() {
                         generationMode === 'image_only' && styles.modeBtnTextActive,
                       ]}
                     >
-                      🖼️ Image Only
+                      📷 Photo
                     </Text>
                   </Pressable>
                 </View>
@@ -834,43 +929,103 @@ export default function MarketingScreen() {
                   </Pressable>
                 </View>
 
-                {/* ── LIVE VISUAL CANVAS ── */}
-                <Pressable onPress={()=>loadDesignDrafts()} style={{padding:12}}><Text>Open saved design</Text></Pressable>
-                {moreDrafts&&<Pressable onPress={()=>loadDesignDrafts(draftPage+1)}><Text>Load more drafts</Text></Pressable>}
-                {designDrafts.map(d=><Pressable key={d.id} style={{padding:12}} onPress={()=>{try{setCustomDesign(validateDesign(JSON.parse(d.designJson)));setCaption(d.content);setEditingDesignId(d.id);setDesignRevision(d.updatedAt);savedDesignSnapshot.current=JSON.stringify({design:JSON.parse(d.designJson),caption:d.content});setDesignDrafts([]);}catch{setError('This design could not be opened.');}}}><Text>{d.content.slice(0,70)}</Text></Pressable>)}
-                <EditableDesign design={design} onChange={setCustomDesign} />
-
-                <View style={styles.canvasToolbar}>
-                  <Pressable onPress={() => setIsEditingText(true)} style={styles.toolItem}>
-                    <MaterialIcons name="text-fields" size={20} color="#0F172A" />
-                    <Text style={styles.toolLabel}>Text</Text>
-                  </Pressable>
-
-                  <Pressable onPress={handleUseMyPhoto} style={styles.toolItem}>
-                    <MaterialIcons name="insert-photo" size={20} color="#0F172A" />
-                    <Text style={styles.toolLabel}>Photo</Text>
-                  </Pressable>
-
+                {/* Visual Format Toggle: AI Creative Poster vs Editable Canvas */}
+                <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 12, padding: 3, marginBottom: 12 }}>
                   <Pressable
-                    onPress={() => {
-                      setColorTheme((prev) => (prev === 'emerald' ? 'sand' : prev === 'sand' ? 'dark' : 'emerald'));
-                    }}
-                    style={styles.toolItem}
+                    onPress={() => setActiveVisualFormat('poster')}
+                    style={[
+                      { flex: 1, paddingVertical: 7, alignItems: 'center', borderRadius: 10 },
+                      activeVisualFormat === 'poster' && { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, elevation: 1 }
+                    ]}
                   >
-                    <MaterialIcons name="palette" size={20} color="#009F50" />
-                    <Text style={styles.toolLabel}>Colours</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: activeVisualFormat === 'poster' ? '#009F50' : '#64748B' }}>
+                      🖼️ Finished AI Poster
+                    </Text>
                   </Pressable>
-
                   <Pressable
-                    onPress={() => {
-                      setAspectRatio((prev) => (prev === '1:1' ? '4:5' : prev === '4:5' ? '9:16' : '1:1'));
-                    }}
-                    style={styles.toolItem}
+                    onPress={() => setActiveVisualFormat('canvas')}
+                    style={[
+                      { flex: 1, paddingVertical: 7, alignItems: 'center', borderRadius: 10 },
+                      activeVisualFormat === 'canvas' && { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, elevation: 1 }
+                    ]}
                   >
-                    <MaterialIcons name="aspect-ratio" size={20} color="#0F172A" />
-                    <Text style={styles.toolLabel}>Resize</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: activeVisualFormat === 'canvas' ? '#009F50' : '#64748B' }}>
+                      ✏️ Editable Canvas
+                    </Text>
                   </Pressable>
                 </View>
+
+                {activeVisualFormat === 'poster' ? (
+                  <View style={{ marginBottom: 16 }}>
+                    <View style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#090D16', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, elevation: 3 }}>
+                      <Image
+                        source={customPosterUri ? { uri: customPosterUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
+                        style={{ width: '100%', aspectRatio: 4 / 5 }}
+                        resizeMode="cover"
+                      />
+                      <View style={{ position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(0,0,0,0.75)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                        <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>FINISHED POSTER · 1080 × 1350</Text>
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                      <Pressable
+                        onPress={handlePickCustomPoster}
+                        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#009F50', backgroundColor: '#F0FDF4' }}
+                      >
+                        <MaterialIcons name="file-upload" size={18} color="#009F50" />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50' }}>Upload Custom Poster</Text>
+                      </Pressable>
+                      {customPosterUri && (
+                        <Pressable
+                          onPress={() => setCustomPosterUri(null)}
+                          style={{ paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#FFFFFF' }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#64748B' }}>Reset</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  </View>
+                ) : (
+                  <>
+                    <Pressable onPress={()=>loadDesignDrafts()} style={{padding:12}}><Text>Open saved design</Text></Pressable>
+                    {moreDrafts&&<Pressable onPress={()=>loadDesignDrafts(draftPage+1)}><Text>Load more drafts</Text></Pressable>}
+                    {designDrafts.map(d=><Pressable key={d.id} style={{padding:12}} onPress={()=>{try{setCustomDesign(validateDesign(JSON.parse(d.designJson)));setCaption(d.content);setEditingDesignId(d.id);setDesignRevision(d.updatedAt);savedDesignSnapshot.current=JSON.stringify({design:JSON.parse(d.designJson),caption:d.content});setDesignDrafts([]);}catch{setError('This design could not be opened.');}}}><Text>{d.content.slice(0,70)}</Text></Pressable>)}
+                    <EditableDesign design={design} onChange={setCustomDesign} />
+
+                    <View style={styles.canvasToolbar}>
+                      <Pressable onPress={() => setIsEditingText(true)} style={styles.toolItem}>
+                        <MaterialIcons name="text-fields" size={20} color="#0F172A" />
+                        <Text style={styles.toolLabel}>Text</Text>
+                      </Pressable>
+
+                      <Pressable onPress={handleUseMyPhoto} style={styles.toolItem}>
+                        <MaterialIcons name="insert-photo" size={20} color="#0F172A" />
+                        <Text style={styles.toolLabel}>Photo</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => {
+                          setColorTheme((prev) => (prev === 'emerald' ? 'sand' : prev === 'sand' ? 'dark' : 'emerald'));
+                        }}
+                        style={styles.toolItem}
+                      >
+                        <MaterialIcons name="palette" size={20} color="#009F50" />
+                        <Text style={styles.toolLabel}>Colours</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => {
+                          setAspectRatio((prev) => (prev === '1:1' ? '4:5' : prev === '4:5' ? '9:16' : '1:1'));
+                        }}
+                        style={styles.toolItem}
+                      >
+                        <MaterialIcons name="aspect-ratio" size={20} color="#0F172A" />
+                        <Text style={styles.toolLabel}>Resize</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )}
 
                 {/* Summary Row 1: Caption */}
                 <Pressable onPress={() => setIsEditingCaption(true)} style={styles.summaryRow}>
@@ -996,7 +1151,15 @@ export default function MarketingScreen() {
                     <MaterialIcons name="more-horiz" size={20} color="#64748B" />
                   </View>
 
-                  <EditableDesign design={design} />
+                  {activeVisualFormat === 'poster' ? (
+                    <Image
+                      source={customPosterUri ? { uri: customPosterUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
+                      style={{ width: '100%', aspectRatio: 4 / 5 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <EditableDesign design={design} />
+                  )}
 
                   {/* Social Action Icons */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10 }}>

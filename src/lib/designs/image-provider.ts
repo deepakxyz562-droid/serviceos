@@ -1,11 +1,15 @@
 import { db } from '@/lib/db';
 import { decryptKey } from '@/lib/ai-key-crypto';
-export async function generateDesignImage(prompt:string,provider:'gemini'|'openrouter',signal:AbortSignal) {
+export async function generateDesignImage(prompt:string,provider:'gemini'|'openrouter',signal:AbortSignal,isPoster?:boolean) {
   const key=await db.aiProviderKey.findFirst({where:{provider,isActive:true},orderBy:{priority:'asc'}});
   if(!key)throw new Error(`Configure an active ${provider} key in Superadmin`);
   const secret=decryptKey(key.encryptedKey);
   const model=provider==='gemini'?(process.env.BGOS_GEMINI_IMAGE_MODEL||'gemini-2.5-flash-image'):(process.env.BGOS_OPENROUTER_IMAGE_MODEL||'google/gemini-2.5-flash-image');
-  const text=`Create a professional marketing background photograph or illustration. Do not include any lettering, logos, watermarks, prices or text: those will be separate editable layers. Brief: ${prompt}`;
+  const isPosterMode=isPoster||prompt.startsWith('[POSTER]');
+  const cleanPrompt=prompt.replace(/^\[POSTER\]\s*/,'').trim();
+  const text=isPosterMode
+    ? `Create a premium, clean promotional poster graphic (1080x1350 portrait format) with professional visual typography, modern UI layout, and clear contrasting elements based on this brief: ${cleanPrompt}`
+    : `Create a professional marketing background photograph or illustration. Do not include any lettering, logos, watermarks, prices or text: those will be separate editable layers. Brief: ${cleanPrompt}`;
   const response=await fetch(provider==='gemini'?`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`:'https://openrouter.ai/api/v1/chat/completions',{
     method:'POST',signal,headers:{'Content-Type':'application/json',...(provider==='gemini'?{'x-goog-api-key':secret}:{Authorization:`Bearer ${secret}`})},
     body:JSON.stringify(provider==='gemini'?{contents:[{parts:[{text}]}],generationConfig:{responseModalities:['TEXT','IMAGE']}}:{model,messages:[{role:'user',content:text}],modalities:['image','text']})

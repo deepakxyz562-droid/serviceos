@@ -33,6 +33,7 @@ import {
   X,
   Link2,
   Upload,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -194,7 +195,11 @@ export function MarketingCanvasStudio({
     'Create a professional social media marketing post promoting the Fieseros AI Assistant for field service businesses (plumbing, HVAC, electrical, cleaning, landscaping).'
   );
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generationMode, setGenerationMode] = useState<'graphic' | 'image_only'>('graphic');
+  const [generationMode, setGenerationMode] = useState<'poster' | 'graphic' | 'image_only'>('poster');
+  const [activeVisualFormat, setActiveVisualFormat] = useState<'poster' | 'canvas'>('poster');
+  const [posterUrl, setPosterUrl] = useState<string>('/images/fieseros-ai-assistant-poster.jpg');
+  const [suggestions, setSuggestions] = useState<Array<{ id: string; type: string; icon: string; title: string; prompt: string }>>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [alternativeHeadlines, setAlternativeHeadlines] = useState<string[]>(DEFAULT_ALT_HEADLINES);
 
   // Active Direction & Design Elements
@@ -254,6 +259,41 @@ export function MarketingCanvasStudio({
       toast.error('Could not load saved designs');
     }
   };
+
+  const fetchSuggestions = useCallback(async (refresh = false) => {
+    setLoadingSuggestions(true);
+    try {
+      const res = await authFetch(`/api/social/prompts/suggestions${refresh ? '?refresh=1' : ''}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.suggestions)) {
+          setSuggestions(data.suggestions);
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchSuggestions(false);
+  }, [fetchSuggestions]);
+
+  const handlePosterUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        setPosterUrl(result);
+        setActiveVisualFormat('poster');
+        toast.success('Custom promotional graphic uploaded!');
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // Modals
@@ -354,7 +394,7 @@ export function MarketingCanvasStudio({
     toast.success('Headline updated on canvas!');
   };
 
-  // AI Prompt Send — Direct generation on canvas without template directions
+  // AI Prompt Send — Direct generation on canvas or high-res poster
   const handleSendPrompt = async () => {
     const text = promptInput.trim();
     if (!text) return;
@@ -362,6 +402,77 @@ export function MarketingCanvasStudio({
     setIsGenerating(true);
     setActiveUserPrompt(text);
     setPromptInput('');
+
+    if (generationMode === 'poster') {
+      try {
+        const requestId = `web-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        const [genRes, imageRes] = await Promise.all([
+          authFetch('/api/social/designs/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: text, design, caption, mode: 'graphic' }),
+          }),
+          authFetch('/api/social/designs/image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: text,
+              provider: 'gemini',
+              requestId,
+              isPoster: true,
+            }),
+          }),
+        ]);
+
+        if (genRes.ok) {
+          const json = await genRes.json();
+          setCaption(json.caption);
+          if (Array.isArray(json.alternativeHeadlines) && json.alternativeHeadlines.length > 0) {
+            setAlternativeHeadlines(json.alternativeHeadlines);
+          }
+          if (json.design) setCustomDesign(json.design);
+        }
+
+        if (imageRes.ok) {
+          const pollStart = Date.now();
+          const poll = setInterval(async () => {
+            try {
+              const check = await authFetch(`/api/social/designs/image?id=${requestId}`);
+              if (check.ok) {
+                const job = await check.json();
+                if (job.status === 'completed' && job.result?.url) {
+                  clearInterval(poll);
+                  setPosterUrl(job.result.url);
+                  setActiveVisualFormat('poster');
+                  setIsGenerating(false);
+                  toast.success('Finished AI Poster generated successfully!');
+                } else if (job.status === 'failed') {
+                  clearInterval(poll);
+                  setIsGenerating(false);
+                  toast.info(job.error || 'AI generation key pending. Retaining sample.');
+                }
+              }
+              if (Date.now() - pollStart > 60000) {
+                clearInterval(poll);
+                setIsGenerating(false);
+              }
+            } catch {
+              clearInterval(poll);
+              setIsGenerating(false);
+            }
+          }, 2500);
+          return;
+        } else {
+          setActiveVisualFormat('poster');
+          toast.success('Campaign copy updated! Ready for publishing.');
+        }
+      } catch {
+        toast.error('Generation failed. Retaining current poster.');
+      } finally {
+        setIsGenerating(false);
+      }
+      return;
+    }
 
     try {
       const res = await authFetch('/api/social/designs/generate', {
@@ -449,7 +560,7 @@ export function MarketingCanvasStudio({
           status: 'draft',
           expectedUpdatedAt:draftRevision,
           content: caption,
-          mediaUrls: [photoUrl],
+          mediaUrls: [activeVisualFormat === 'poster' ? posterUrl : photoUrl],
           design,
           linkUrl,
           platforms: selectedChannels,
@@ -493,7 +604,7 @@ export function MarketingCanvasStudio({
           status: publishMode === 'schedule' ? 'scheduled' : 'published',
           scheduledAt: publishMode === 'schedule' ? scheduledDateTime : null,
           content: caption,
-          mediaUrls: [photoUrl],
+          mediaUrls: [activeVisualFormat === 'poster' ? posterUrl : photoUrl],
           design,
           linkUrl,
           platforms: selectedChannels,
@@ -714,33 +825,86 @@ export function MarketingCanvasStudio({
               </button>
             </div>
 
+            {/* Dynamic Prompt Suggestions based on Google Business Profile & Website */}
+            {suggestions.length > 0 && (
+              <div className="space-y-1.5 p-3 rounded-2xl bg-muted/30 border border-border/60">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <span>💡 Suggested for your business:</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => fetchSuggestions(true)}
+                    disabled={loadingSuggestions}
+                    className="text-[11px] text-primary hover:underline flex items-center gap-1 font-semibold disabled:opacity-50 cursor-pointer"
+                  >
+                    <span>🎲 Refresh Ideas</span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                  {suggestions.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setPromptInput(s.prompt);
+                        toast.info(`Loaded suggestion: ${s.title}`);
+                      }}
+                      className="shrink-0 px-2.5 py-1 rounded-xl text-xs font-medium bg-card border border-border/80 hover:border-primary/50 hover:bg-primary/5 text-foreground transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                    >
+                      <span>{s.icon}</span>
+                      <span>{s.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 6. Prompt Input Bar with Mode Switcher */}
             <div className="space-y-2">
-              {/* Dual Mode Switcher Pill */}
+              {/* 3-Way Mode Switcher Pill */}
               <div className="flex items-center gap-1.5 p-1 bg-muted/40 rounded-xl border border-border/60 text-xs">
                 <button
                   type="button"
-                  onClick={() => setGenerationMode('graphic')}
-                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  onClick={() => {
+                    setGenerationMode('poster');
+                    setActiveVisualFormat('poster');
+                  }}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all ${
+                    generationMode === 'poster'
+                      ? 'bg-card text-foreground shadow-2xs border border-border/80'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Sparkles className="size-3.5 text-primary" />
+                  <span>🖼️ AI Poster</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGenerationMode('graphic');
+                    setActiveVisualFormat('canvas');
+                  }}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all ${
                     generationMode === 'graphic'
                       ? 'bg-card text-foreground shadow-2xs border border-border/80'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <Palette className="size-3.5 text-primary" />
-                  <span>🎨 Graphic (Text & UI)</span>
+                  <span>✏️ Editable Canvas</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setGenerationMode('image_only')}
-                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all ${
                     generationMode === 'image_only'
                       ? 'bg-card text-foreground shadow-2xs border border-border/80'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <ImageIcon className="size-3.5 text-primary" />
-                  <span>🖼️ Image Only</span>
+                  <span>📷 Photo Only</span>
                 </button>
               </div>
 
@@ -755,7 +919,9 @@ export function MarketingCanvasStudio({
                     }
                   }}
                   placeholder={
-                    generationMode === 'image_only'
+                    generationMode === 'poster'
+                      ? 'Describe your campaign to generate a finished AI creative poster (e.g. Fieseros AI Assistant)...'
+                      : generationMode === 'image_only'
                       ? 'Describe the image or photography to generate...'
                       : 'Describe your promotional campaign, offer or layout adjustments...'
                   }
@@ -804,20 +970,41 @@ export function MarketingCanvasStudio({
 
         {/* ─── RIGHT COLUMN: Live Visual Canvas & Editor (7 cols) ───────────── */}
         <div className="lg:col-span-7 space-y-4">
-          {/* Top View Selector Tabs: Design | Channel preview */}
+          {/* Top View Selector Tabs: Finished AI Poster | Editable Canvas | Channel preview */}
           <div className="flex items-center justify-between border-b border-border pb-1">
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4 sm:gap-6">
               <button
                 type="button"
-                onClick={() => setActiveRightTab('design')}
-                className={`relative py-2 text-xs font-bold transition-colors ${
-                  activeRightTab === 'design'
+                onClick={() => {
+                  setActiveRightTab('design');
+                  setActiveVisualFormat('poster');
+                }}
+                className={`relative py-2 text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                  activeRightTab === 'design' && activeVisualFormat === 'poster'
                     ? 'text-primary'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <span>Design</span>
-                {activeRightTab === 'design' && (
+                <span>🖼️ Finished AI Poster</span>
+                {activeRightTab === 'design' && activeVisualFormat === 'poster' && (
+                  <span className="absolute bottom-[-1px] left-0 right-0 h-[2.5px] rounded-t-full bg-primary" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveRightTab('design');
+                  setActiveVisualFormat('canvas');
+                }}
+                className={`relative py-2 text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                  activeRightTab === 'design' && activeVisualFormat === 'canvas'
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <span>✏️ Editable Canvas</span>
+                {activeRightTab === 'design' && activeVisualFormat === 'canvas' && (
                   <span className="absolute bottom-[-1px] left-0 right-0 h-[2.5px] rounded-t-full bg-primary" />
                 )}
               </button>
@@ -891,62 +1078,124 @@ export function MarketingCanvasStudio({
           </div>
 
           {activeRightTab === 'design' ? (
-            /* ─── LIVE VISUAL CANVAS ─────────────────────────────────────────── */
-            <div className="space-y-3">
-              <EditableMarketingDesign design={design} onChange={setCustomDesign} />
+            activeVisualFormat === 'poster' ? (
+              /* ─── FINISHED AI CREATIVE POSTER VIEW ────────────────────────── */
+              <div className="space-y-3">
+                <div className="relative rounded-2xl overflow-hidden border border-border shadow-md bg-gradient-to-b from-card to-muted/20 flex flex-col items-center justify-center p-3 sm:p-5">
+                  <div className="relative max-w-[420px] w-full aspect-[4/5] rounded-xl overflow-hidden shadow-2xl bg-zinc-950 border border-border/80 group">
+                    <img
+                      src={posterUrl}
+                      alt="Promotional marketing poster"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-3 left-3 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-white tracking-wide uppercase border border-white/20 shadow-xs">
+                      Finished Creative Poster • 1080 × 1350
+                    </div>
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                      <a
+                        href={posterUrl}
+                        download="marketing-poster.jpg"
+                        className="p-1.5 rounded-lg bg-black/70 hover:bg-black text-white text-xs backdrop-blur-md border border-white/20 shadow-xs transition-colors"
+                        title="Download image"
+                      >
+                        <Download className="size-3.5" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
 
-              {/* ─── Canvas Quick Tools Bar (Below Canvas) ──────────────────── */}
-              <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 border-t border-border/40 flex-wrap">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditTextOpen(true)}
-                  className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card"
-                >
-                  <Type className="size-3.5 text-muted-foreground" />
-                  <span>Edit text</span>
-                </Button>
+                {/* Poster Quick Tools Bar */}
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40 flex-wrap">
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer h-8 px-3 text-xs font-semibold rounded-xl border border-border bg-card hover:bg-muted/50 transition-all text-foreground shadow-2xs">
+                    <Upload className="size-3.5 text-primary" />
+                    <span>Upload custom graphic</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={handlePosterUpload}
+                      className="hidden"
+                    />
+                  </label>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setReplaceImageOpen(true)}
-                  className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card"
-                >
-                  <ImageIcon className="size-3.5 text-muted-foreground" />
-                  <span>Replace image</span>
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setBrandColoursOpen(true)}
-                  className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card"
-                >
-                  <Palette className="size-3.5 text-muted-foreground" />
-                  <span>Brand colours</span>
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const ratios: AspectRatio[] = ['1:1', '4:5', '16:9', '9:16'];
-                    const nextRatio = ratios[(ratios.indexOf(aspectRatio) + 1) % ratios.length];
-                    setAspectRatio(nextRatio);
-                    toast.info(`Aspect ratio changed to ${nextRatio}`);
-                  }}
-                  className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card"
-                >
-                  <Maximize2 className="size-3.5 text-muted-foreground" />
-                  <span>Resize</span>
-                </Button>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={posterUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-xl border border-border bg-card hover:bg-muted/50 transition-all text-muted-foreground hover:text-foreground"
+                    >
+                      <ExternalLink className="size-3.5" />
+                      <span>View full size</span>
+                    </a>
+                    <a
+                      href={posterUrl}
+                      download="marketing-poster.jpg"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-xs"
+                    >
+                      <Download className="size-3.5" />
+                      <span>Download</span>
+                    </a>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* ─── LIVE VISUAL CANVAS ─────────────────────────────────────────── */
+              <div className="space-y-3">
+                <EditableMarketingDesign design={design} onChange={setCustomDesign} />
+
+                {/* ─── Canvas Quick Tools Bar (Below Canvas) ──────────────────── */}
+                <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 border-t border-border/40 flex-wrap">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditTextOpen(true)}
+                    className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card"
+                  >
+                    <Type className="size-3.5 text-muted-foreground" />
+                    <span>Edit text</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setReplaceImageOpen(true)}
+                    className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card"
+                  >
+                    <ImageIcon className="size-3.5 text-muted-foreground" />
+                    <span>Replace image</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBrandColoursOpen(true)}
+                    className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card"
+                  >
+                    <Palette className="size-3.5 text-muted-foreground" />
+                    <span>Brand colours</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const ratios: AspectRatio[] = ['1:1', '4:5', '16:9', '9:16'];
+                      const nextRatio = ratios[(ratios.indexOf(aspectRatio) + 1) % ratios.length];
+                      setAspectRatio(nextRatio);
+                      toast.info(`Aspect ratio changed to ${nextRatio}`);
+                    }}
+                    className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card"
+                  >
+                    <Maximize2 className="size-3.5 text-muted-foreground" />
+                    <span>Resize</span>
+                  </Button>
+                </div>
+              </div>
+            )
           ) : (
             /* ─── CHANNEL PREVIEW VIEW (Instagram / Facebook Mockup) ───────── */
             <div className="bg-card border border-border/80 rounded-2xl p-4 sm:p-6 space-y-4 max-w-lg mx-auto shadow-sm">
@@ -969,7 +1218,7 @@ export function MarketingCanvasStudio({
                 {/* Media */}
                 <div
                   className="w-full aspect-square bg-cover bg-center"
-                  style={{ backgroundImage: `url(${photoUrl})` }}
+                  style={{ backgroundImage: `url(${activeVisualFormat === 'poster' ? posterUrl : photoUrl})` }}
                 />
 
                 {/* Caption & Actions */}
