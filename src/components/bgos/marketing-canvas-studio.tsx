@@ -241,7 +241,15 @@ export function MarketingCanvasStudio({
   // Auto-sync selectedChannels with connected accounts
   useEffect(() => {
     if (connectedAccounts && connectedAccounts.length > 0) {
-      const activePlatforms = Array.from(new Set(connectedAccounts.map((a) => a.platform)));
+      const activePlatforms = Array.from(
+        new Set(
+          connectedAccounts.map((a) =>
+            a.platform === 'gbp' || a.platform === 'google_business' || a.platform === 'google'
+              ? 'googlebusiness'
+              : a.platform
+          )
+        )
+      );
       if (activePlatforms.length > 0) {
         setSelectedChannels((prev) => {
           const valid = prev.filter((p) => activePlatforms.includes(p));
@@ -250,6 +258,18 @@ export function MarketingCanvasStudio({
       }
     }
   }, [connectedAccounts]);
+
+  const isPlatformConnected = useCallback(
+    (platform: string) =>
+      connectedAccounts.some((a) => {
+        if (a.platform === platform) return true;
+        if (platform === 'googlebusiness' && (a.platform === 'gbp' || a.platform === 'google_business' || a.platform === 'google')) {
+          return true;
+        }
+        return false;
+      }),
+    [connectedAccounts]
+  );
 
   const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(() => createFieserosCampaignDesign());
   const design = customDesign || createDesign({ brand: businessName, headline, subtitle: subheadText, badge: badgeText, cta: ctaText, photo: photoUrl, ratio: aspectRatio });
@@ -562,7 +582,12 @@ export function MarketingCanvasStudio({
   const getResolvedTargets = useCallback(() => {
     return selectedChannels
       .map((p) => {
-        const found = connectedAccounts.find((a) => a.platform === p);
+        const found = connectedAccounts.find(
+          (a) =>
+            a.platform === p ||
+            (p === 'googlebusiness' &&
+              (a.platform === 'gbp' || a.platform === 'google_business' || a.platform === 'google'))
+        );
         return found ? { platform: p, socialAccountId: found.id } : null;
       })
       .filter(Boolean);
@@ -1875,7 +1900,7 @@ export function MarketingCanvasStudio({
                   <span>Instagram</span>
                 </div>
                 <span className="text-[10px] font-normal opacity-75">
-                  {connectedAccounts.some((a) => a.platform === 'instagram') ? '🟢 Connected' : '⚪ Not connected'}
+                  {isPlatformConnected('instagram') ? '🟢 Connected' : '⚪ Not connected'}
                 </span>
               </button>
 
@@ -1897,7 +1922,7 @@ export function MarketingCanvasStudio({
                   <span>Facebook</span>
                 </div>
                 <span className="text-[10px] font-normal opacity-75">
-                  {connectedAccounts.some((a) => a.platform === 'facebook') ? '🟢 Connected' : '⚪ Not connected'}
+                  {isPlatformConnected('facebook') ? '🟢 Connected' : '⚪ Not connected'}
                 </span>
               </button>
 
@@ -1919,7 +1944,7 @@ export function MarketingCanvasStudio({
                   <span>Google</span>
                 </div>
                 <span className="text-[10px] font-normal opacity-75">
-                  {connectedAccounts.some((a) => a.platform === 'googlebusiness') ? '🟢 Connected' : '⚪ Not connected'}
+                  {isPlatformConnected('googlebusiness') ? '🟢 Connected' : '⚪ Not connected'}
                 </span>
               </button>
             </div>
@@ -1994,7 +2019,7 @@ export function MarketingCanvasStudio({
             >
               Back to design
             </Button>
-            {connectedAccounts.length > 0 && selectedChannels.some((p) => connectedAccounts.some((a) => a.platform === p)) ? (
+            {connectedAccounts.length > 0 && selectedChannels.some((p) => isPlatformConnected(p)) ? (
               <Button
                 type="button"
                 disabled={isPublishing || selectedChannels.length === 0}
@@ -2004,8 +2029,8 @@ export function MarketingCanvasStudio({
                 {isPublishing
                   ? 'Publishing...'
                   : publishMode === 'schedule'
-                  ? `Schedule to ${selectedChannels.filter((p) => connectedAccounts.some((a) => a.platform === p)).length} accounts`
-                  : `Publish to ${selectedChannels.filter((p) => connectedAccounts.some((a) => a.platform === p)).length} accounts`}
+                  ? `Schedule to ${selectedChannels.filter((p) => isPlatformConnected(p)).length} accounts`
+                  : `Publish to ${selectedChannels.filter((p) => isPlatformConnected(p)).length} accounts`}
               </Button>
             ) : (
               <Button
