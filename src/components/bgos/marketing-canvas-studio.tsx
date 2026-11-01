@@ -29,6 +29,7 @@ import {
   SlidersHorizontal,
   X,
   Link2,
+  Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -97,27 +98,56 @@ const CURATED_PHOTOS = [
   {
     id: 'p1',
     label: 'Minimal Bouclé Living',
+    category: 'interior',
     url: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1200&q=80',
   },
   {
     id: 'p2',
     label: 'Warm Clay & Plants',
+    category: 'interior',
     url: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80',
   },
   {
     id: 'p3',
     label: 'Deep Emerald Minimalist',
+    category: 'luxury',
     url: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1200&q=80',
   },
   {
     id: 'p4',
     label: 'Sunlit Studio Desk',
+    category: 'interior',
     url: 'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=1200&q=80',
   },
   {
     id: 'p5',
-    label: 'Scandinavian Oak Lounge',
-    url: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80',
+    label: 'Salon & Spa Treatment',
+    category: 'salon',
+    url: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    id: 'p6',
+    label: 'Artisanal Cafe & Dining',
+    category: 'food',
+    url: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    id: 'p7',
+    label: 'Luxury Auto & Detailing',
+    category: 'auto',
+    url: 'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    id: 'p8',
+    label: 'Modern Home & Craft',
+    category: 'service',
+    url: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    id: 'p9',
+    label: 'Wellness & Fitness Studio',
+    category: 'wellness',
+    url: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1200&q=80',
   },
 ];
 
@@ -181,10 +211,27 @@ export function MarketingCanvasStudio({
   // Modals
   const [editTextOpen, setEditTextOpen] = useState(false);
   const [replaceImageOpen, setReplaceImageOpen] = useState(false);
+  const [photoCategory, setPhotoCategory] = useState<string>('all');
   const [brandColoursOpen, setBrandColoursOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [channelPickerOpen, setChannelPickerOpen] = useState(false);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        pushHistory();
+        setPhotoUrl(result);
+        setReplaceImageOpen(false);
+        toast.success('Custom photo applied to canvas!');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // History for Undo / Redo
   const [history, setHistory] = useState<
@@ -245,7 +292,7 @@ export function MarketingCanvasStudio({
     setPhotoUrl(dir.photoUrl);
   };
 
-  // AI Prompt Send
+  // AI Prompt Send — Full dynamic ChatGPT/Gemini-style generation
   const handleSendPrompt = async () => {
     const text = promptInput.trim();
     if (!text) return;
@@ -254,31 +301,44 @@ export function MarketingCanvasStudio({
     setPromptInput('');
 
     try {
-      const res = await authFetch('/api/social/ai-caption', {
+      const res = await authFetch('/api/social/ai-generate-post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topic: `Create high-converting social creative for ${businessName} (${category}): ${text}. Include a catchy headline, discount/offer badge, subhead, CTA, and an engaging caption.`,
-          platforms: ['instagram', 'facebook', 'googlebusiness'],
-          tone: 'Professional, friendly, premium',
+          topic: text,
+          platforms: selectedChannels,
+          tone: 'Friendly, premium, minimal, high-converting',
         }),
       });
 
       if (res.ok) {
         const json = await res.json();
-        if (json.caption) {
-          setCaption(json.caption);
+        pushHistory();
+        if (json.caption) setCaption(json.caption);
+        if (json.headline) setHeadline(json.headline);
+        if (json.badge) setBadgeText(json.badge);
+        if (json.subtitle) setSubheadText(json.subtitle);
+        if (json.ctaText) setCtaText(json.ctaText);
+        if (json.photoUrl) setPhotoUrl(json.photoUrl);
+        if (Array.isArray(json.layouts) && json.layouts.length > 0) {
+          setDirections(
+            json.layouts.map((l: any) => ({
+              id: l.id,
+              name: l.name,
+              headline: l.headline,
+              badge: l.badge,
+              subhead: l.subtitle,
+              ctaText: l.ctaText || 'Book now',
+              theme: l.theme,
+              photoUrl: l.photoUrl,
+            }))
+          );
         }
-        // Extract headline or offer if present
-        if (text.toLowerCase().includes('weekend') || text.toLowerCase().includes('off')) {
-          setHeadline('Make more of your weekend.');
-          setBadgeText('20% OFF');
-        } else if (text.length < 40) {
-          setHeadline(text);
-        }
-        toast.success('Creative directions generated with your brand colors!');
+        toast.success('Generated dynamic design & content based on your prompt!');
       } else {
         // Fallback enhancement
+        pushHistory();
+        if (text.length < 50) setHeadline(text);
         setCaption(`Special offer for ${businessName} customers! ${text}. Book your appointment today.`);
         toast.success('Updated creative ideas!');
       }
@@ -319,11 +379,22 @@ export function MarketingCanvasStudio({
     }
   };
 
+  // Build resolved target list for publish / save
+  const getResolvedTargets = useCallback(() => {
+    return selectedChannels
+      .map((p) => {
+        const found = connectedAccounts.find((a) => a.platform === p);
+        return found ? { platform: p, socialAccountId: found.id } : null;
+      })
+      .filter(Boolean);
+  }, [selectedChannels, connectedAccounts]);
+
   // Save Draft
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const handleSaveDraft = async () => {
     setIsSavingDraft(true);
     try {
+      const targets = getResolvedTargets();
       const res = await authFetch('/api/social/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -333,7 +404,13 @@ export function MarketingCanvasStudio({
           mediaUrls: [photoUrl],
           linkUrl,
           platforms: selectedChannels,
+          targets: targets.length > 0 ? targets : undefined,
           headline,
+          gbpOfferData: {
+            title: headline,
+            couponCode: badgeText.replace(/[^A-Za-z0-9]/g, ''),
+            redeemUrl: linkUrl,
+          },
         }),
       });
       if (res.ok) {
@@ -353,6 +430,7 @@ export function MarketingCanvasStudio({
   const handlePublishNow = async () => {
     setIsPublishing(true);
     try {
+      const targets = getResolvedTargets();
       const res = await authFetch('/api/social/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -363,7 +441,13 @@ export function MarketingCanvasStudio({
           mediaUrls: [photoUrl],
           linkUrl,
           platforms: selectedChannels,
+          targets: targets.length > 0 ? targets : undefined,
           headline,
+          gbpOfferData: {
+            title: headline,
+            couponCode: badgeText.replace(/[^A-Za-z0-9]/g, ''),
+            redeemUrl: linkUrl,
+          },
         }),
       });
 
@@ -378,6 +462,18 @@ export function MarketingCanvasStudio({
         if (onPublishSuccess && json.post?.id) {
           onPublishSuccess(json.post.id);
         } else if (onNavigateToPosts) {
+          onNavigateToPosts();
+        }
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        toast.error(errJson?.error || 'Failed to publish post. Please check connected accounts.');
+      }
+    } catch {
+      toast.error('Network error during publishing.');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
           onNavigateToPosts();
         }
       } else {
@@ -718,11 +814,13 @@ export function MarketingCanvasStudio({
                 />
 
                 {/* Canvas Typography & Branding Layout */}
-                <div className="relative z-10 w-full h-full p-8 sm:p-12 flex flex-col justify-between">
+                <div className="relative z-10 w-full h-full p-8 sm:p-12 flex flex-col justify-between select-none">
                   {/* Brand Topmark */}
                   <div>
                     <span
-                      className={`text-xs sm:text-sm font-extrabold tracking-[0.3em] uppercase block ${
+                      onClick={() => setEditTextOpen(true)}
+                      title="Click to edit brand name"
+                      className={`text-xs sm:text-sm font-extrabold tracking-[0.3em] uppercase inline-block cursor-pointer hover:ring-2 hover:ring-primary/60 hover:ring-dashed rounded-xs px-1.5 py-0.5 transition-all ${
                         theme === 'emerald_gold' ? 'text-amber-300/90' : 'text-stone-800/90'
                       }`}
                     >
@@ -733,7 +831,9 @@ export function MarketingCanvasStudio({
                   {/* Main Headline & Offer Block */}
                   <div className="space-y-4 max-w-[85%]">
                     <h2
-                      className={`text-2xl sm:text-4xl lg:text-5xl font-serif font-medium leading-[1.1] tracking-tight ${
+                      onClick={() => setEditTextOpen(true)}
+                      title="Click to edit headline (Canva style)"
+                      className={`text-2xl sm:text-4xl lg:text-5xl font-serif font-medium leading-[1.1] tracking-tight cursor-pointer hover:ring-2 hover:ring-primary/60 hover:ring-dashed rounded-md p-1 transition-all ${
                         theme === 'emerald_gold' ? 'text-white' : 'text-stone-900'
                       }`}
                     >
@@ -742,7 +842,9 @@ export function MarketingCanvasStudio({
 
                     <div className="space-y-1">
                       <div
-                        className={`text-3xl sm:text-5xl font-serif font-black tracking-tight ${
+                        onClick={() => setEditTextOpen(true)}
+                        title="Click to edit badge/discount (Canva style)"
+                        className={`text-3xl sm:text-5xl font-serif font-black tracking-tight cursor-pointer hover:ring-2 hover:ring-primary/60 hover:ring-dashed rounded-md p-1 transition-all ${
                           theme === 'emerald_gold' ? 'text-amber-400' : 'text-stone-900'
                         }`}
                       >
@@ -750,7 +852,9 @@ export function MarketingCanvasStudio({
                       </div>
                       {subheadText && (
                         <p
-                          className={`text-xs sm:text-sm font-medium ${
+                          onClick={() => setEditTextOpen(true)}
+                          title="Click to edit subtitle (Canva style)"
+                          className={`text-xs sm:text-sm font-medium cursor-pointer hover:ring-2 hover:ring-primary/60 hover:ring-dashed rounded-md p-1 transition-all ${
                             theme === 'emerald_gold' ? 'text-stone-300' : 'text-stone-700'
                           }`}
                         >
@@ -764,7 +868,8 @@ export function MarketingCanvasStudio({
                       <button
                         type="button"
                         onClick={() => setEditTextOpen(true)}
-                        className="px-6 py-2.5 rounded-lg text-xs sm:text-sm font-bold text-white shadow-xs transition-transform hover:scale-[1.02]"
+                        title="Click to edit button text (Canva style)"
+                        className="px-6 py-2.5 rounded-lg text-xs sm:text-sm font-bold text-white shadow-xs transition-transform hover:scale-[1.02] cursor-pointer hover:ring-2 hover:ring-white/80 hover:ring-dashed"
                         style={{
                           backgroundColor:
                             theme === 'emerald_gold' ? '#009F50' : '#0B4D2C',
@@ -1005,16 +1110,49 @@ export function MarketingCanvasStudio({
 
       {/* ─── MODAL: Replace Image ─────────────────────────────────────────── */}
       <Dialog open={replaceImageOpen} onOpenChange={setReplaceImageOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold">Select Creative Photo</DialogTitle>
+            <DialogTitle className="text-base font-bold">Replace Canvas Background Image</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="text-xs text-muted-foreground">
-              Choose from curated high-resolution photography tailored for {businessName}:
-            </p>
+            {/* Upload Button */}
+            <label className="flex items-center justify-center gap-2 p-3.5 rounded-xl border border-dashed border-primary/50 bg-primary/5 hover:bg-primary/10 text-primary cursor-pointer text-xs font-bold transition-all">
+              <Upload className="size-4" />
+              <span>Upload Custom Photo (from Computer/Device)</span>
+              <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+            </label>
+
+            {/* Category Filter Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              {[
+                { id: 'all', label: 'All Photos' },
+                { id: 'interior', label: 'Minimal Living' },
+                { id: 'salon', label: 'Salon & Spa' },
+                { id: 'food', label: 'Cafe & Dining' },
+                { id: 'auto', label: 'Auto & Tech' },
+                { id: 'luxury', label: 'Emerald Luxury' },
+                { id: 'service', label: 'Home Services' },
+              ].map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setPhotoCategory(c.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+                    photoCategory === c.id
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Photo Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {CURATED_PHOTOS.map((photo) => (
+              {CURATED_PHOTOS.filter(
+                (p) => photoCategory === 'all' || p.category === photoCategory
+              ).map((photo) => (
                 <button
                   key={photo.id}
                   type="button"
@@ -1024,7 +1162,9 @@ export function MarketingCanvasStudio({
                     setReplaceImageOpen(false);
                     toast.success('Updated canvas photography!');
                   }}
-                  className="group rounded-xl overflow-hidden border border-border hover:border-primary/60 transition-all text-left"
+                  className={`group rounded-xl overflow-hidden border transition-all text-left relative ${
+                    photoUrl === photo.url ? 'border-primary ring-2 ring-primary/40' : 'border-border hover:border-primary/60'
+                  }`}
                 >
                   <div
                     className="h-24 w-full bg-cover bg-center"
@@ -1033,12 +1173,17 @@ export function MarketingCanvasStudio({
                   <div className="p-2 bg-card">
                     <p className="text-[10px] font-bold text-foreground truncate">{photo.label}</p>
                   </div>
+                  {photoUrl === photo.url && (
+                    <div className="absolute top-1.5 right-1.5 size-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                      <Check className="size-2.5 stroke-[3]" />
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
 
             <div className="space-y-1.5 pt-2 border-t border-border">
-              <label className="text-xs font-bold text-foreground">Custom Image URL</label>
+              <label className="text-xs font-bold text-foreground">Or Direct Image URL</label>
               <Input
                 value={photoUrl}
                 onChange={(e) => setPhotoUrl(e.target.value)}
@@ -1056,7 +1201,7 @@ export function MarketingCanvasStudio({
               }}
               className="bg-primary text-primary-foreground font-bold text-xs"
             >
-              Apply Photo
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

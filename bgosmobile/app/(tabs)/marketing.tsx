@@ -230,6 +230,8 @@ export default function MarketingScreen() {
         headline?: string;
         subtitle?: string;
         badge?: string;
+        ctaText?: string;
+        photoUrl?: string;
         imageUrl?: string;
         bookingUrl?: string;
         offerDetails?: { discountText?: string; startDate?: string; endDate?: string };
@@ -250,7 +252,9 @@ export default function MarketingScreen() {
       if (data.headline) setHeadline(data.headline);
       if (data.subtitle) setSubtitle(data.subtitle);
       if (data.badge) setDiscountBadge(data.badge);
-      if (data.imageUrl) setBgPhotoUrl(data.imageUrl);
+      if (data.ctaText) setCtaText(data.ctaText);
+      if (data.photoUrl) setBgPhotoUrl(data.photoUrl);
+      else if (data.imageUrl) setBgPhotoUrl(data.imageUrl);
       if (data.bookingUrl) setBookingLink(data.bookingUrl);
 
       setPromptInput('');
@@ -274,8 +278,8 @@ export default function MarketingScreen() {
       return;
     }
 
-    if (status !== 'draft' && targets.length === 0) {
-      setError('Connect at least one social account (Google Business, Facebook, or Instagram) to publish.');
+    if (status !== 'draft' && targets.length === 0 && selectedPlatforms.length === 0) {
+      setError('Select at least one social account to publish.');
       return;
     }
 
@@ -291,7 +295,8 @@ export default function MarketingScreen() {
 
     const body: Record<string, unknown> = {
       content: caption.trim(),
-      targets,
+      targets: targets.length > 0 ? targets : undefined,
+      platforms: selectedPlatforms,
       mediaUrls: mediaList,
       status,
       gbpPostType: 'offer',
@@ -345,8 +350,8 @@ export default function MarketingScreen() {
 
   function handleUseMyPhoto() {
     Alert.alert(
-      'Use My Photo',
-      'Select a photo source for this creative:',
+      'Replace Background Photo',
+      'Select a photo for this creative:',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -357,10 +362,24 @@ export default function MarketingScreen() {
             ),
         },
         {
-          text: 'Foliage / Clean Plant',
+          text: 'Salon & Spa Treatment',
           onPress: () =>
             setBgPhotoUrl(
-              'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1080&q=80'
+              'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1080&q=80'
+            ),
+        },
+        {
+          text: 'Artisanal Cafe & Food',
+          onPress: () =>
+            setBgPhotoUrl(
+              'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1080&q=80'
+            ),
+        },
+        {
+          text: 'Auto & Detailing',
+          onPress: () =>
+            setBgPhotoUrl(
+              'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=1080&q=80'
             ),
         },
         {
@@ -738,49 +757,57 @@ export default function MarketingScreen() {
                     ]}
                   >
                     {/* Brand Name */}
-                    <Text
-                      style={[
-                        styles.canvasBrandHeader,
-                        colorTheme === 'dark' ? { color: '#F8FAFC' } : { color: '#1E293B' },
-                      ]}
-                    >
-                      {businessDisplayName.toUpperCase()}
-                    </Text>
+                    <Pressable onPress={() => setIsEditingText(true)}>
+                      <Text
+                        style={[
+                          styles.canvasBrandHeader,
+                          colorTheme === 'dark' ? { color: '#F8FAFC' } : { color: '#1E293B' },
+                        ]}
+                      >
+                        {businessDisplayName.toUpperCase()}
+                      </Text>
+                    </Pressable>
 
                     {/* Headline */}
-                    <Text
-                      style={[
-                        styles.canvasHeadline,
-                        colorTheme === 'dark' ? { color: '#FFFFFF' } : { color: '#0F172A' },
-                      ]}
-                    >
-                      {headline}
-                    </Text>
+                    <Pressable onPress={() => setIsEditingText(true)}>
+                      <Text
+                        style={[
+                          styles.canvasHeadline,
+                          colorTheme === 'dark' ? { color: '#FFFFFF' } : { color: '#0F172A' },
+                        ]}
+                      >
+                        {headline}
+                      </Text>
+                    </Pressable>
 
                     {/* Discount Badge */}
-                    <Text
-                      style={[
-                        styles.canvasDiscount,
-                        colorTheme === 'dark' ? { color: '#34D399' } : { color: '#009F50' },
-                      ]}
-                    >
-                      {discountBadge}
-                    </Text>
+                    <Pressable onPress={() => setIsEditingText(true)}>
+                      <Text
+                        style={[
+                          styles.canvasDiscount,
+                          colorTheme === 'dark' ? { color: '#34D399' } : { color: '#009F50' },
+                        ]}
+                      >
+                        {discountBadge}
+                      </Text>
+                    </Pressable>
 
                     {/* Subtitle */}
-                    <Text
-                      style={[
-                        styles.canvasSubtitle,
-                        colorTheme === 'dark' ? { color: '#E2E8F0' } : { color: '#334155' },
-                      ]}
-                    >
-                      {subtitle}
-                    </Text>
+                    <Pressable onPress={() => setIsEditingText(true)}>
+                      <Text
+                        style={[
+                          styles.canvasSubtitle,
+                          colorTheme === 'dark' ? { color: '#E2E8F0' } : { color: '#334155' },
+                        ]}
+                      >
+                        {subtitle}
+                      </Text>
+                    </Pressable>
 
                     {/* CTA Button */}
-                    <View style={styles.canvasCtaBtn}>
+                    <Pressable onPress={() => setIsEditingText(true)} style={styles.canvasCtaBtn}>
                       <Text style={styles.canvasCtaBtnText}>{ctaText}</Text>
-                    </View>
+                    </Pressable>
                   </View>
                 </View>
 

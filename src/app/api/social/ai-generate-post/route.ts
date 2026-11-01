@@ -72,9 +72,10 @@ Tone: ${tone}
 Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just raw JSON):
 {
   "title": "Short catchy title (under 60 chars) suitable for Google Business update & Facebook headline",
-  "headline": "Punchy graphic headline (3 to 6 words) for the image banner (e.g. 'A Little Self-Care Goes a Long Way')",
+  "headline": "Punchy graphic headline (3 to 6 words) for the image banner (e.g. 'Make more of your weekend.')",
   "subtitle": "Clear supporting sentence for the image banner (under 100 chars)",
-  "badge": "Short badge tag (e.g. 'SPECIAL OFFER', '20% OFF', 'POPULAR CHOICE', 'PRO TIP')",
+  "badge": "Short badge tag (e.g. '20% OFF', 'SPECIAL OFFER', 'POPULAR CHOICE', 'LIMITED TIME')",
+  "ctaText": "Short action button label (2 to 3 words, e.g. 'Book now', 'Claim offer', 'Order now', 'Get quote')",
   "caption": "Full rich social media caption (100 to 200 words) formatted with natural spacing, 3 bullet points of benefits/highlights, and a strong call-to-action with phone and website mention",
   "hashtags": ["list", "of", "6-8", "local", "SEO", "hashtags", "with", "hash"]
 }
@@ -331,6 +332,33 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       console.warn('[ai-generate-post] ImageResponse render/upload warning:', renderErr);
     }
 
+    const finalCta = generated.ctaText || 'Book now';
+
+    const getContextPhoto = (tText: string, ind: string) => {
+      const q = (tText + ' ' + ind).toLowerCase();
+      if (q.includes('salon') || q.includes('hair') || q.includes('spa') || q.includes('massage') || q.includes('beauty')) {
+        return 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1200&q=80';
+      }
+      if (q.includes('food') || q.includes('restaurant') || q.includes('cafe') || q.includes('pizza') || q.includes('coffee') || q.includes('dine') || q.includes('menu')) {
+        return 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80';
+      }
+      if (q.includes('auto') || q.includes('car') || q.includes('mechanic') || q.includes('detailing') || q.includes('wash')) {
+        return 'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=1200&q=80';
+      }
+      if (q.includes('plumb') || q.includes('ac') || q.includes('repair') || q.includes('electric') || q.includes('home service') || q.includes('clean')) {
+        return 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80';
+      }
+      if (q.includes('fitness') || q.includes('gym') || q.includes('yoga') || q.includes('workout')) {
+        return 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1200&q=80';
+      }
+      if (q.includes('dental') || q.includes('clinic') || q.includes('doctor') || q.includes('health') || q.includes('care')) {
+        return 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&w=1200&q=80';
+      }
+      return 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1200&q=80';
+    };
+
+    const chosenPhoto = body.photoUrl || getContextPhoto(topic, tenant?.industry || '');
+
     const layouts = [
       {
         id: 'editorial',
@@ -338,29 +366,29 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
         headline: finalHeadline,
         subtitle: finalSubtitle,
         badge: finalBadge,
-        ctaText: 'Book now',
+        ctaText: finalCta,
         theme: 'sand_olive',
-        photoUrl: body.photoUrl || 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80',
+        photoUrl: chosenPhoto,
       },
       {
         id: 'photo_led',
         name: 'Photo-led',
-        headline: finalBadge || '20% OFF',
-        subtitle: 'Selected services',
+        headline: finalBadge || 'SPECIAL OFFER',
+        subtitle: finalSubtitle || 'Selected services',
         badge: 'LIMITED TIME',
-        ctaText: 'Book now',
+        ctaText: finalCta,
         theme: 'beige',
-        photoUrl: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1080&q=80',
+        photoUrl: chosenPhoto,
       },
       {
         id: 'bold',
         name: 'Bold',
-        headline: 'WEEKEND OFFER',
-        subtitle: 'Selected services',
-        badge: finalBadge || '20% OFF',
-        ctaText: 'Claim offer',
+        headline: finalHeadline.toUpperCase(),
+        subtitle: finalSubtitle || 'Selected services',
+        badge: finalBadge,
+        ctaText: finalCta,
         theme: 'emerald_gold',
-        photoUrl: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1080&q=80',
+        photoUrl: chosenPhoto,
       },
     ];
 
@@ -370,10 +398,12 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       headline: finalHeadline,
       subtitle: finalSubtitle,
       badge: finalBadge,
+      ctaText: finalCta,
       caption: finalCaption,
       hashtags: hashtagsArray,
       hashtagsText,
-      imageUrl,
+      imageUrl: imageUrl || chosenPhoto,
+      photoUrl: chosenPhoto,
       layouts,
       bookingUrl: tenant?.website || `https://${tenantId}.fieseros.com/book`,
       offerDetails: {
