@@ -1,5 +1,3 @@
-import { persistDesignAssets } from '@/lib/designs/assets';
-import { validateDesign } from '../../../../../../shared/marketing-design';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -148,7 +146,10 @@ export async function PATCH(
     if(body.design !== undefined && (!body.expectedUpdatedAt || new Date(body.expectedUpdatedAt).getTime()!==new Date(existing.updatedAt).getTime())) return NextResponse.json({error:'This design was changed elsewhere. Reopen the latest draft before saving.'},{status:409});
     const data: Record<string, unknown> = {};
     if (body.design !== undefined) {
-      try { data.designJson = JSON.stringify(await persistDesignAssets(body.design, tenantId, user.id)); } catch (error) {
+      try {
+        const { persistDesignAssets } = await import('@/lib/designs/assets');
+        data.designJson = JSON.stringify(await persistDesignAssets(body.design, tenantId, user.id));
+      } catch (error) {
         return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid design' }, { status: 400 });
       }
     }

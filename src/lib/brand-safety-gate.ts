@@ -60,8 +60,6 @@ export function validateBrandSafety(
   const otherNames = (context.knownOtherTenantNames || [
     'Singh Fabrications',
     'Singh Fabrication',
-    'FieserOS',
-    'Deepak Chandra',
     'Jodha Group',
     '13SB Cleaning',
     'Mr Handy Man',
@@ -70,7 +68,8 @@ export function validateBrandSafety(
     'UL Roofing',
   ]).filter((name) => {
     const n = name.toLowerCase().trim();
-    // Exclude if it's part of the active business name
+    // Exclude platform brand names and active business name
+    if (n === 'fieseros' || n === 'fieseros ai assistant') return false;
     return n.length > 3 && !activeNameLower.includes(n) && !n.includes(activeNameLower);
   });
 

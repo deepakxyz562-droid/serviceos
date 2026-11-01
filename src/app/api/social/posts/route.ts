@@ -1,6 +1,3 @@
-import { persistDesignAssets } from '@/lib/designs/assets';
-import { validateDesign } from '../../../../../shared/marketing-design';
-import { renderDesign } from '@/lib/designs/render';
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createHash } from 'node:crypto';
 import { getAuthUser } from '@/lib/auth';
@@ -221,7 +218,10 @@ export async function POST(request: NextRequest) {
     const isDraft = (body?.status || 'draft') === 'draft';
     let design;
     if (body.design !== undefined) {
-      try { design = await persistDesignAssets(body.design, tenantId, user.id); } catch (error) {
+      try {
+        const { persistDesignAssets } = await import('@/lib/designs/assets');
+        design = await persistDesignAssets(body.design, tenantId, user.id);
+      } catch (error) {
         return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid design' }, { status: 400 });
       }
     }
@@ -382,6 +382,7 @@ export async function POST(request: NextRequest) {
     const hasPreRenderedMedia = Array.isArray(body.mediaUrls) && body.mediaUrls.length > 0 && typeof body.mediaUrls[0] === 'string' && body.mediaUrls[0].trim().length > 0;
     if (design && !isDraft && !(body.isPoster && hasPreRenderedMedia)) {
       try {
+        const { renderDesign } = await import('@/lib/designs/render');
         const rendered = await renderDesign(design, tenantId);
         if (rendered?.imageUrl) {
           body.mediaUrls = [rendered.imageUrl];

@@ -599,6 +599,7 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
   },
   Tenant: {
+    brandProfile: { targetTable: 'BrandProfile', targetFkColumn: 'tenantId', isMany: false },
     subscriptions: { targetTable: 'Subscription', targetFkColumn: 'tenantId', isMany: true },
     workspaces: { targetTable: 'Workspace', targetFkColumn: 'tenantId', isMany: true },
     users: { targetTable: 'User', targetFkColumn: 'tenantId', isMany: true },

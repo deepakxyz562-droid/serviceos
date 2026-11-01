@@ -385,7 +385,7 @@ export default function MarketingScreen() {
     }
 
     const isPosterMode = activeVisualFormat === 'poster';
-    const resolvedPosterUrl = customPosterUri || `${WEB_URL}/images/fieseros-ai-assistant-poster.jpg`;
+    const resolvedPosterUrl = customPosterUri || `${WEB_URL}/images/fieseros-ai-assistant-poster.jpg?v=1`;
     const mediaList = isPosterMode ? [resolvedPosterUrl] : bgPhotoUrl ? [bgPhotoUrl] : [];
     const contentCheck = validateSocialPost(caption.trim(), selectedPlatforms, mediaList);
     if (contentCheck) {

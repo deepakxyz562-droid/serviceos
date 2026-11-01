@@ -198,7 +198,7 @@ export function MarketingCanvasStudio({
   const [generatingStage, setGeneratingStage] = useState<string>('');
   const [generationMode, setGenerationMode] = useState<'poster' | 'graphic' | 'image_only'>('poster');
   const [activeVisualFormat, setActiveVisualFormat] = useState<'poster' | 'canvas'>('poster');
-  const [posterUrl, setPosterUrl] = useState<string>('/images/fieseros-ai-assistant-poster.jpg');
+  const [posterUrl, setPosterUrl] = useState<string>('/images/fieseros-ai-assistant-poster.jpg?v=1');
   const [suggestions, setSuggestions] = useState<Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string }>>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [alternativeHeadlines, setAlternativeHeadlines] = useState<string[]>(DEFAULT_ALT_HEADLINES);
@@ -603,7 +603,7 @@ export function MarketingCanvasStudio({
     try {
       const targets = getResolvedTargets();
       const isPosterMode = activeVisualFormat === 'poster';
-      const resolvedPosterUrl = posterUrl || '/images/fieseros-ai-assistant-poster.jpg';
+      const resolvedPosterUrl = posterUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1';
       const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [photoUrl] : [];
 
       const res = await authFetch(editingDraftId ? `/api/social/posts/${editingDraftId}` : '/api/social/posts', {
@@ -650,7 +650,7 @@ export function MarketingCanvasStudio({
     try {
       const targets = getResolvedTargets();
       const isPosterMode = activeVisualFormat === 'poster';
-      const resolvedPosterUrl = posterUrl || '/images/fieseros-ai-assistant-poster.jpg';
+      const resolvedPosterUrl = posterUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1';
       const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [photoUrl] : [];
 
       const res = await authFetch('/api/social/posts', {
@@ -802,7 +802,7 @@ export function MarketingCanvasStudio({
                       alt="Visual Preview"
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg';
+                        (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg?v=1';
                       }}
                     />
                     {isGenerating && (
@@ -1209,7 +1209,7 @@ export function MarketingCanvasStudio({
                       src={posterUrl}
                       alt="Promotional marketing poster"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg';
+                        (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg?v=1';
                       }}
                       className={`w-full h-full object-cover transition-all duration-500 ${isGenerating ? 'opacity-30 scale-95 blur-xs' : 'opacity-100 scale-100'}`}
                     />

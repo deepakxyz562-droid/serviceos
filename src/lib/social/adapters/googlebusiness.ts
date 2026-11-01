@@ -317,22 +317,36 @@ export const googleBusinessAdapter: PlatformAdapter = {
 
     if (postType === 'offer') {
       body.topicType = 'OFFER';
-      if (params.gbpOfferData) {
-        const offer: Record<string, unknown> = {
-          title: params.gbpOfferData.title,
-        };
-        // GBP expects dates in YYYY-MM-DD format. If the composer sends
-        // ISO strings (with time), we strip the time portion.
-        if (params.gbpOfferData.startDate) {
-          offer.startDate = normalizeGbpDate(params.gbpOfferData.startDate);
-        }
-        if (params.gbpOfferData.endDate) {
-          offer.endDate = normalizeGbpDate(params.gbpOfferData.endDate);
-        }
-        if (params.gbpOfferData.couponCode) {
-          offer.couponCode = params.gbpOfferData.couponCode;
-        }
-        body.offer = offer;
+      const offerData = params.gbpOfferData;
+      const startD = offerData?.startDate && !isNaN(new Date(offerData.startDate).getTime())
+        ? new Date(offerData.startDate)
+        : new Date();
+      const endD = offerData?.endDate && !isNaN(new Date(offerData.endDate).getTime())
+        ? new Date(offerData.endDate)
+        : new Date(Date.now() + 7 * 86400000);
+
+      body.event = {
+        title: (offerData?.title || params.content).slice(0, 58),
+        schedule: {
+          startDate: {
+            year: startD.getFullYear(),
+            month: startD.getMonth() + 1,
+            day: startD.getDate(),
+          },
+          endDate: {
+            year: endD.getFullYear(),
+            month: endD.getMonth() + 1,
+            day: endD.getDate(),
+          },
+        },
+      };
+
+      const offerObj: Record<string, unknown> = {};
+      if (offerData?.couponCode) offerObj.couponCode = offerData.couponCode;
+      const redeemUrl = offerData?.redeemUrl || params.linkUrl;
+      if (redeemUrl) offerObj.redeemOnlineUrl = redeemUrl;
+      if (Object.keys(offerObj).length > 0) {
+        body.offer = offerObj;
       }
     } else if (postType === 'event') {
       body.topicType = 'EVENT';
@@ -388,6 +402,34 @@ export const googleBusinessAdapter: PlatformAdapter = {
       throw new Error(
         `GBP publish network error: ${errorMessage(err, 'fetch failed')}`,
       );
+    }
+
+    if (!res.ok && postType === 'offer') {
+      const errClone = res.clone();
+      const errText = await errClone.text().catch(() => '');
+      if (errText.includes('INVALID_ARGUMENT') || res.status === 400) {
+        console.warn('[googlebusiness] OFFER payload not accepted, falling back to STANDARD post:', errText);
+        const fallbackBody: Record<string, unknown> = {
+          summary: params.content,
+          topicType: 'STANDARD',
+        };
+        if (body.media) fallbackBody.media = body.media;
+        if (params.linkUrl || params.gbpOfferData?.redeemUrl) {
+          fallbackBody.callToAction = {
+            actionType: 'LEARN_MORE',
+            url: params.linkUrl || (params.gbpOfferData?.redeemUrl as string),
+          };
+        }
+        res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${account.accessToken}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify(fallbackBody),
+        });
+      }
     }
 
     await assertOk(res, 'publish');
