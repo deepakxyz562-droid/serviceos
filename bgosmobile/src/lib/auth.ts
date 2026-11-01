@@ -62,3 +62,21 @@ export async function clearTokens() {
     if (results.some(result => result.status === 'rejected')) throw new Error('Could not remove saved credentials from this device. Please retry sign out.');
   });
 }
+
+export async function isOnboardingDone(userIdOrTenant: string): Promise<boolean> {
+  try {
+    if (!userIdOrTenant) return false;
+    const val = await SecureStore.getItemAsync(`bgos_onboarding_done_${userIdOrTenant}`);
+    return val === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export async function setOnboardingDone(userIdOrTenant: string, done: boolean): Promise<void> {
+  try {
+    if (!userIdOrTenant) return;
+    await SecureStore.setItemAsync(`bgos_onboarding_done_${userIdOrTenant}`, done ? 'true' : 'false');
+  } catch {}
+}
+

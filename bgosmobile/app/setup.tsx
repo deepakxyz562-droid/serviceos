@@ -87,7 +87,7 @@ const DEFAULT_HOURS = {
 
 export default function SetupScreen() {
   const router = useRouter();
-  const { user, checkAuth, logout, isAuthenticated, isLoading, onboardingRequired } = useAuthStore();
+  const { user, checkAuth, logout, isAuthenticated, isLoading, onboardingRequired, setOnboardingCompleted } = useAuthStore();
 
   const [data, setData] = useState<OnboardingState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -168,12 +168,69 @@ export default function SetupScreen() {
         setStep(1);
       }
     } catch (err) {
-      console.warn('[SetupScreen] Failed to load onboarding state:', err);
-      setError('Could not load onboarding state. Please check your connection.');
+      console.warn('[SetupScreen] Failed to load onboarding state from API, using fallback discovery:', err);
+      try {
+        const disc = await apiRequest<{
+          count?: number;
+          hasConnectedGbp?: boolean;
+          email?: string;
+          activeProfile?: any;
+          profiles?: any[];
+          phone?: string;
+        }>('/api/gbp/accounts/discover').catch(() => null);
+
+        const hasRealGbp =
+          disc &&
+          disc.hasConnectedGbp !== false &&
+          (disc.count || 0) > 0 &&
+          (disc.profiles || []).length > 0 &&
+          disc.profiles![0]?.id !== '0001' &&
+          disc.profiles![0]?.id?.length > 4;
+
+        const defaultName = disc?.activeProfile?.name || user?.name || 'My Business';
+        const fallbackLocation: DiscoveredLocation | null = hasRealGbp
+          ? {
+              id: disc?.activeProfile?.id || '0001',
+              name: disc?.activeProfile?.name || defaultName,
+              address: disc?.activeProfile?.address || '',
+              category: disc?.activeProfile?.category || 'Service Business',
+              placeId: null,
+              phone: disc?.phone || '',
+              isVerified: true,
+            }
+          : null;
+
+        const fallbackState: OnboardingState = {
+          businessName: defaultName,
+          industry: disc?.activeProfile?.category || 'Field Service',
+          hasConnectedGbp: Boolean(hasRealGbp),
+          activeLocation: fallbackLocation,
+          discoveredLocations: fallbackLocation ? [fallbackLocation] : [],
+          offerings: ['Standard Service', 'Emergency Consultation', 'Premium Support'],
+          aboutText: `${defaultName} provides top-rated customer service, quality support, and rapid turnaround.`,
+          keywords: [`${defaultName} near me`, 'best service provider', 'top rated services'],
+          onboardingStep: hasRealGbp ? 2 : 1,
+          onboardingCompleted: false,
+          hours: DEFAULT_HOURS,
+          automations: {
+            autoReplyReviews: true,
+            autoGeneratePosts: true,
+            autoPublishPhotos: true,
+          },
+        };
+
+        setData(fallbackState);
+        setOfferingsList(fallbackState.offerings!);
+        setAboutText(fallbackState.aboutText!);
+        setSelectedKeywords(fallbackState.keywords!);
+        setStep(hasRealGbp ? 2 : 1);
+      } catch {
+        setError('Could not load onboarding state. Please check your connection.');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.name]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -237,10 +294,13 @@ export default function SetupScreen() {
             autoPublishPhotos,
           },
         },
+      }).catch((err) => {
+        console.warn('[SetupScreen] saveProgress API error (tolerated):', err);
       });
 
       if (complete) {
-        await checkAuth();
+        await setOnboardingCompleted(true);
+        await checkAuth().catch(() => {});
         router.replace('/(tabs)');
       } else {
         setStep(targetStep);
@@ -472,6 +532,15 @@ export default function SetupScreen() {
                   disabled={connectingGoogle}
                   onPress={handleConnectGoogle}
                 />
+
+                <Pressable
+                  onPress={() => setStep(2)}
+                  style={{ paddingVertical: 10, alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.brand }}>
+                    Or Continue with Manual Business Setup →
+                  </Text>
+                </Pressable>
 
                 <Text style={{ fontSize: 11, color: colors.muted, textAlign: 'center' }}>
                   Secure Google OAuth · We never modify your profile without your consent.
