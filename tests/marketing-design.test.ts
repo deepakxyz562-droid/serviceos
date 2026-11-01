@@ -1,7 +1,16 @@
 import { describe,it,expect } from 'vitest';
-import { createDesign,validateDesign } from '../shared/marketing-design';
+import { createDesign,validateDesign,createFieserosCampaignDesign } from '../shared/marketing-design';
 const base=()=>createDesign({brand:'A business',headline:'Our services',subtitle:'Contact us',badge:'',cta:'Learn more',photo:'https://images.unsplash.com/example'});
 describe('editable marketing source documents',()=>{
+  it('validates the Fieseros AI Assistant 4:5 portrait campaign design',()=>{
+    const d = createFieserosCampaignDesign();
+    expect(d.width).toBe(1080);
+    expect(d.height).toBe(1350);
+    expect(d.background).toBe('#062419');
+    expect(validateDesign(d)).toEqual(d);
+    expect(d.layers.some(l => l.text === 'Less admin. More jobs.')).toBe(true);
+    expect(d.layers.some(l => l.id === 'cmd_text')).toBe(true);
+  });
   it.each(['1:1','4:5','9:16','16:9'])('round trips a %s document without losing layers',ratio=>{
     const d=createDesign({brand:'Business',headline:'Hello',subtitle:'Services',badge:'New',cta:'Contact',photo:'',ratio});
     expect(validateDesign(JSON.parse(JSON.stringify(d)))).toEqual(d);

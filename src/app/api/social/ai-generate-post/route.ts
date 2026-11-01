@@ -73,6 +73,7 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
 {
   "title": "Short catchy title (under 60 chars) suitable for Google Business update & Facebook headline",
   "headline": "Punchy graphic headline (3 to 6 words) for the image banner (e.g. 'Make more of your weekend.')",
+  "alternativeHeadlines": ["Punchy alternative headline 1", "Punchy alternative headline 2", "Punchy alternative headline 3"],
   "subtitle": "Clear supporting sentence for the image banner (under 100 chars)",
   "badge": "Short badge tag (e.g. '20% OFF', 'SPECIAL OFFER', 'POPULAR CHOICE', 'LIMITED TIME')",
   "ctaText": "Short action button label (2 to 3 words, e.g. 'Book now', 'Claim offer', 'Order now', 'Get quote')",
@@ -99,6 +100,7 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       ctaText?: string;
       title?: string;
       headline?: string;
+      alternativeHeadlines?: string[];
       subtitle?: string;
       badge?: string;
       caption?: string;
@@ -397,6 +399,13 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       success: true,
       title: finalTitle,
       headline: finalHeadline,
+      alternativeHeadlines: Array.isArray(generated.alternativeHeadlines) && generated.alternativeHeadlines.length > 0
+        ? generated.alternativeHeadlines.slice(0, 3)
+        : [
+            'From one instruction to a connected workflow.',
+            'Run your field service business in plain English.',
+            'Stop juggling apps. Just tell your assistant.',
+          ],
       subtitle: finalSubtitle,
       badge: finalBadge,
       ctaText: finalCta,

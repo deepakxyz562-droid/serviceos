@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { createDesign, validateDesign, type MarketingDesign } from '../../../shared/marketing-design';
+import { createDesign, validateDesign, createFieserosCampaignDesign, type MarketingDesign, type DesignLayer } from '../../../shared/marketing-design';
 import { EditableMarketingDesign } from './editable-marketing-design';
 import {
   Sparkles,
@@ -17,6 +17,7 @@ import {
   Maximize2,
   Share2,
   FileText,
+  Copy,
   Calendar,
   Clock,
   Info,
@@ -161,6 +162,24 @@ interface MarketingCanvasStudioProps {
   onNavigateToPosts?: () => void;
 }
 
+const DEFAULT_CAPTION = `Switching between customer calls, job diaries, quote calculators, and messaging apps eats away the hours you should be spending on the tools or growing your business.
+
+Meet the Fieseros AI Assistant—turning natural conversation into connected field service workflows.
+
+Just say: “Schedule a boiler repair for Sarah tomorrow, assign Mike, create a £350 quote, and prepare her confirmation.”
+
+In seconds, Fieseros maps the customer, books the job, drafts the quote, and queues her confirmation for your review. Less repetitive admin, zero lost paperwork, and more time to focus on your customers and high-value jobs.
+
+Discover what Fieseros can do for your business: https://fieseros.com
+
+#Fieseros #FieldServiceManagement #TradeBusiness #HVAC #Plumbing`;
+
+const DEFAULT_ALT_HEADLINES = [
+  'From one instruction to a connected workflow.',
+  'Run your field service business in plain English.',
+  'Stop juggling apps. Just tell your assistant.',
+];
+
 export function MarketingCanvasStudio({
   businessName = 'Fieseros',
   category = 'Professional Services',
@@ -171,63 +190,70 @@ export function MarketingCanvasStudio({
   // ─── Studio State ─────────────────────────────────────────────────────────
 
   const [promptInput, setPromptInput] = useState('');
+  const [activeUserPrompt, setActiveUserPrompt] = useState(
+    'Create a professional social media marketing post promoting the Fieseros AI Assistant for field service businesses (plumbing, HVAC, electrical, cleaning, landscaping).'
+  );
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationMode, setGenerationMode] = useState<'graphic' | 'image_only'>('graphic');
+  const [alternativeHeadlines, setAlternativeHeadlines] = useState<string[]>(DEFAULT_ALT_HEADLINES);
 
   // Active Direction & Design Elements
   const [directions, setDirections] = useState<CreativeDirection[]>(DEFAULT_DIRECTIONS);
-  const [selectedDirectionId, setSelectedDirectionId] = useState<VisualDirectionId>('editorial');
+  const [selectedDirectionId, setSelectedDirectionId] = useState<VisualDirectionId>('bold');
 
   const activeDirection = useMemo(
     () => directions.find((d) => d.id === selectedDirectionId) || directions[0],
     [directions, selectedDirectionId]
   );
 
-  // Canvas overrides
-  const [headline, setHeadline] = useState('Make more of your weekend.');
-  const [badgeText, setBadgeText] = useState('20% OFF');
-  const [subheadText, setSubheadText] = useState('Selected services');
-  const [ctaText, setCtaText] = useState('Book now');
+  // Canvas overrides — initialized for Fieseros AI Assistant campaign
+  const [headline, setHeadline] = useState('Less admin. More jobs.');
+  const [badgeText, setBadgeText] = useState('AI WORKFLOW');
+  const [subheadText, setSubheadText] = useState('Meet your Fieseros AI Assistant.');
+  const [ctaText, setCtaText] = useState('Explore Fieseros');
   const [photoUrl, setPhotoUrl] = useState(
     'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1200&q=80'
   );
-  const [theme, setTheme] = useState<'sand_olive' | 'beige' | 'emerald_gold'>('sand_olive');
+  const [theme, setTheme] = useState<'sand_olive' | 'beige' | 'emerald_gold'>('emerald_gold');
 
   // Caption state
-  const [caption, setCaption] = useState(
-    'Your weekend plans, upgraded. Save 20% on selected services. Book your appointment today.'
-  );
+  const [caption, setCaption] = useState(DEFAULT_CAPTION);
   const [isEditingCaption, setIsEditingCaption] = useState(false);
 
-  // Canvas Settings
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
+  // Canvas Settings — 4:5 Portrait default
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('4:5');
   const [activeRightTab, setActiveRightTab] = useState<'design' | 'preview'>('design');
 
   // Social & Scheduling Settings
-  const [linkUrl, setLinkUrl] = useState('https://fieseros.com/book');
+  const [linkUrl, setLinkUrl] = useState('https://fieseros.com');
   const [offerStartDate, setOfferStartDate] = useState('6 Nov');
   const [offerEndDate, setOfferEndDate] = useState('8 Nov');
   const [selectedChannels, setSelectedChannels] = useState<string[]>(['instagram', 'facebook']);
   const [publishMode, setPublishMode] = useState<'now' | 'schedule'>('now');
   const [scheduledDateTime, setScheduledDateTime] = useState('');
 
-  const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(null);
-  const design = customDesign || createDesign({ brand:businessName,headline,subtitle:subheadText,badge:badgeText,cta:ctaText,photo:photoUrl,ratio:aspectRatio });
-  useEffect(()=>setCustomDesign(null),[businessName,headline,subheadText,badgeText,ctaText,photoUrl,aspectRatio]);
+  const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(() => createFieserosCampaignDesign());
+  const design = customDesign || createDesign({ brand: businessName, headline, subtitle: subheadText, badge: badgeText, cta: ctaText, photo: photoUrl, ratio: aspectRatio });
 
-  const [designDrafts,setDesignDrafts] = useState<Array<{id:string;content:string;designJson:string;updatedAt:string}>>([]);
-  const [draftRevision,setDraftRevision]=useState<string|null>(null);
-  const savedDesignSnapshot=useRef('');
-  const [editingDraftId,setEditingDraftId] = useState<string|null>(null);
-  const [draftPage,setDraftPage]=useState(1);
-  const [moreDrafts,setMoreDrafts]=useState(false);
-  const loadDesignDrafts = async (page=1) => {
+  const [designDrafts, setDesignDrafts] = useState<Array<{ id: string; content: string; designJson: string; updatedAt: string }>>([]);
+  const [draftRevision, setDraftRevision] = useState<string | null>(null);
+  const savedDesignSnapshot = useRef('');
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [draftPage, setDraftPage] = useState(1);
+  const [moreDrafts, setMoreDrafts] = useState(false);
+  const loadDesignDrafts = async (page = 1) => {
     try {
-      const res=await authFetch(`/api/social/posts?status=draft&limit=20&page=${page}`);
-      if(!res.ok)throw new Error('Load failed');
-      const json=await res.json();
-      const rows=(json.data||[]).filter((p:{designJson?:string})=>p.designJson);
-      setDesignDrafts(previous=>page===1?rows:[...previous,...rows]);setDraftPage(page);setMoreDrafts((json.data||[]).length===20);
-    } catch {toast.error('Could not load saved designs');}
+      const res = await authFetch(`/api/social/posts?status=draft&limit=20&page=${page}`);
+      if (!res.ok) throw new Error('Load failed');
+      const json = await res.json();
+      const rows = (json.data || []).filter((p: { designJson?: string }) => p.designJson);
+      setDesignDrafts((previous) => (page === 1 ? rows : [...previous, ...rows]));
+      setDraftPage(page);
+      setMoreDrafts((json.data || []).length === 20);
+    } catch {
+      toast.error('Could not load saved designs');
+    }
+  };
   };
 
   // Modals
@@ -314,25 +340,51 @@ export function MarketingCanvasStudio({
     setPhotoUrl(dir.photoUrl);
   };
 
-  // AI Prompt Send — Full dynamic ChatGPT/Gemini-style generation
+  const handleSelectHeadline = (newHeadline: string) => {
+    pushHistory();
+    setHeadline(newHeadline);
+    if (customDesign) {
+      setCustomDesign({
+        ...customDesign,
+        layers: customDesign.layers.map((l) =>
+          l.id === 'headline' ? { ...l, text: newHeadline } : l
+        ),
+      });
+    }
+    toast.success('Headline updated on canvas!');
+  };
+
+  // AI Prompt Send — Direct generation on canvas without template directions
   const handleSendPrompt = async () => {
     const text = promptInput.trim();
     if (!text) return;
 
     setIsGenerating(true);
+    setActiveUserPrompt(text);
     setPromptInput('');
 
     try {
       const res = await authFetch('/api/social/designs/generate', {
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({prompt:text,design,caption}),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text, design, caption, mode: generationMode }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
       setCustomDesign(json.design);
       setCaption(json.caption);
-      toast.success('Design updated. Every layer remains editable.');
-
+      if (Array.isArray(json.alternativeHeadlines) && json.alternativeHeadlines.length > 0) {
+        setAlternativeHeadlines(json.alternativeHeadlines);
+      }
+      const hlLayer = json.design?.layers?.find((l: DesignLayer) => l.id === 'headline');
+      if (hlLayer?.text) {
+        setHeadline(hlLayer.text);
+      }
+      toast.success(
+        generationMode === 'image_only'
+          ? 'Image background generated without text overlays.'
+          : 'Design updated. Every layer remains editable.'
+      );
     } catch {
       setPromptInput(text);
       toast.error('Generation failed. Your design is unchanged. Please retry.');
@@ -523,65 +575,57 @@ export function MarketingCanvasStudio({
             {/* User message */}
             <div className="flex items-start justify-end gap-2.5">
               <div className="bg-muted/70 hover:bg-muted text-foreground text-xs leading-relaxed rounded-2xl rounded-tr-xs p-3.5 max-w-[85%] border border-border/50">
-                Create a 20% off weekend offer with a premium, minimal design.
+                {activeUserPrompt}
               </div>
               <div className="size-7 rounded-full bg-slate-800 text-white font-bold text-[10px] flex items-center justify-center shrink-0 mt-1">
                 DC
               </div>
             </div>
 
-            {/* AI Assistant response */}
+            {/* AI Assistant Direct Generation State */}
             <div className="flex items-start gap-2.5">
               <div className="size-7 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0 mt-1 border border-primary/20">
                 <Sparkles className="size-3.5" />
               </div>
               <div className="space-y-3 flex-1 min-w-0">
-                <p className="text-xs font-medium text-foreground">
-                  Here are three creative directions using your brand colours.
-                </p>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className="text-xs font-semibold text-foreground">
+                    Content & design synthesized directly to canvas.
+                  </p>
+                  <Badge variant="outline" className="text-[10px] font-semibold text-primary border-primary/20 bg-primary/5">
+                    {generationMode === 'image_only' ? '🖼️ Image Only' : '🎨 Graphic + Copy'}
+                  </Badge>
+                </div>
 
-                {/* 3 Creative Direction Cards */}
-                <div className="grid grid-cols-3 gap-2.5">
-                  {directions.map((dir) => {
-                    const isSelected = selectedDirectionId === dir.id;
-                    return (
-                      <button
-                        key={dir.id}
-                        type="button"
-                        onClick={() => handleSelectDirection(dir)}
-                        className={`group relative text-left rounded-xl overflow-hidden border transition-all ${
-                          isSelected
-                            ? 'border-primary ring-2 ring-primary/20 shadow-xs'
-                            : 'border-border/80 hover:border-primary/40 bg-muted/20'
-                        }`}
-                      >
-                        {/* Selected Checkmark Badge */}
-                        {isSelected && (
-                          <div className="absolute top-1.5 right-1.5 size-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xs z-10">
-                            <Check className="size-3 stroke-[3]" />
-                          </div>
-                        )}
-
-                        {/* Thumbnail Preview */}
-                        <div
-                          className="h-20 w-full bg-cover bg-center relative"
-                          style={{ backgroundImage: `url(${dir.photoUrl})` }}
+                {/* Alternative Headlines Chips */}
+                <div className="space-y-2 pt-1 bg-muted/20 border border-border/60 rounded-xl p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                      <Sparkles className="size-3 text-primary" />
+                      Alternative Headlines
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">Click to apply to canvas</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {alternativeHeadlines.map((altHl, idx) => {
+                      const isActive = headline === altHl;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectHeadline(altHl)}
+                          className={`w-full text-left p-2.5 rounded-lg text-xs font-medium border transition-all flex items-start justify-between gap-2 ${
+                            isActive
+                              ? 'bg-primary/10 border-primary text-primary font-bold shadow-2xs'
+                              : 'bg-card border-border/80 hover:border-primary/40 text-foreground hover:bg-muted/50'
+                          }`}
                         >
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
-                          <div className="absolute bottom-1.5 left-1.5 right-1.5">
-                            <span className="text-[9px] font-bold text-white uppercase tracking-wider drop-shadow-xs truncate block">
-                              {dir.badge}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Label */}
-                        <div className="p-2 bg-card">
-                          <p className="text-[11px] font-bold text-foreground truncate">{dir.name}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
+                          <span className="leading-snug flex-1">"{altHl}"</span>
+                          {isActive && <Check className="size-3.5 text-primary shrink-0 mt-0.5 stroke-[3]" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -591,9 +635,23 @@ export function MarketingCanvasStudio({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
                   <FileText className="size-3.5 text-primary" />
-                  <span>Caption</span>
+                  <span>Marketing Caption</span>
+                  <span className="text-[10px] text-muted-foreground font-normal ml-1">
+                    ({caption.trim().split(/\s+/).filter(Boolean).length} words · 5 hashtags)
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(caption);
+                      toast.success('Caption copied to clipboard!');
+                    }}
+                    className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1"
+                  >
+                    <Copy className="size-3" />
+                    <span>Copy</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setIsEditingCaption(!isEditingCaption)}
@@ -615,11 +673,11 @@ export function MarketingCanvasStudio({
                 <Textarea
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
-                  rows={3}
+                  rows={6}
                   className="text-xs bg-card resize-none"
                 />
               ) : (
-                <p className="text-xs text-muted-foreground leading-relaxed select-text">
+                <p className="text-xs text-muted-foreground leading-relaxed select-text whitespace-pre-line">
                   {caption}
                 </p>
               )}
@@ -628,7 +686,7 @@ export function MarketingCanvasStudio({
             {/* 4. Info Alert */}
             <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-2 text-xs text-blue-700 dark:text-blue-300">
               <Info className="size-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
-              <span>Add offer dates and a booking link before publishing.</span>
+              <span>Click any text or element on the canvas to edit inline. All changes are saved automatically.</span>
             </div>
 
             {/* 5. Prompt Modifier Pills */}
@@ -656,24 +714,57 @@ export function MarketingCanvasStudio({
               </button>
             </div>
 
-            {/* 6. Prompt Input Bar */}
-            <div className="relative border border-border/80 rounded-2xl bg-card p-2 shadow-2xs focus-within:border-primary/50 transition-all">
-              <Textarea
-                value={promptInput}
-                onChange={(e) => setPromptInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendPrompt();
-                  }
-                }}
-                placeholder="Describe your next idea or ask for a change..."
-                rows={2}
-                className="border-0 focus-visible:ring-0 shadow-none text-xs resize-none p-1 placeholder:text-muted-foreground/70"
-              />
+            {/* 6. Prompt Input Bar with Mode Switcher */}
+            <div className="space-y-2">
+              {/* Dual Mode Switcher Pill */}
+              <div className="flex items-center gap-1.5 p-1 bg-muted/40 rounded-xl border border-border/60 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setGenerationMode('graphic')}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                    generationMode === 'graphic'
+                      ? 'bg-card text-foreground shadow-2xs border border-border/80'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Palette className="size-3.5 text-primary" />
+                  <span>🎨 Graphic (Text & UI)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGenerationMode('image_only')}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                    generationMode === 'image_only'
+                      ? 'bg-card text-foreground shadow-2xs border border-border/80'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <ImageIcon className="size-3.5 text-primary" />
+                  <span>🖼️ Image Only</span>
+                </button>
+              </div>
 
-              <div className="flex items-center justify-between pt-1 border-t border-border/40 mt-1">
-                <div className="flex items-center gap-1.5">
+              <div className="relative border border-border/80 rounded-2xl bg-card p-2 shadow-2xs focus-within:border-primary/50 transition-all">
+                <Textarea
+                  value={promptInput}
+                  onChange={(e) => setPromptInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendPrompt();
+                    }
+                  }}
+                  placeholder={
+                    generationMode === 'image_only'
+                      ? 'Describe the image or photography to generate...'
+                      : 'Describe your promotional campaign, offer or layout adjustments...'
+                  }
+                  rows={2}
+                  className="border-0 focus-visible:ring-0 shadow-none text-xs resize-none p-1 placeholder:text-muted-foreground/70"
+                />
+
+                <div className="flex items-center justify-between pt-1 border-t border-border/40 mt-1">
+                  <div className="flex items-center gap-1.5">
                   <Button
                     type="button"
                     variant="ghost"
@@ -750,11 +841,29 @@ export function MarketingCanvasStudio({
             {/* Undo / Redo + Aspect Ratio Controls */}
             <div className="flex items-center gap-2">
               {/* Aspect Ratio Picker */}
-              <div className="flex items-center gap-1 bg-card border border-border rounded-xl px-2.5 py-1 text-xs font-semibold text-foreground">
+              <button
+                type="button"
+                onClick={() => {
+                  const ratios: AspectRatio[] = ['4:5', '1:1', '9:16', '16:9'];
+                  const nextRatio = ratios[(ratios.indexOf(aspectRatio) + 1) % ratios.length];
+                  setAspectRatio(nextRatio);
+                  toast.info(`Aspect ratio changed to ${nextRatio}`);
+                }}
+                className="flex items-center gap-1 bg-card hover:bg-muted/50 border border-border rounded-xl px-2.5 py-1 text-xs font-semibold text-foreground transition-all cursor-pointer"
+              >
                 <span className="size-2.5 border border-foreground/60 rounded-xs" />
-                <span>Square · {aspectRatio}</span>
+                <span>
+                  {aspectRatio === '4:5'
+                    ? 'Portrait'
+                    : aspectRatio === '1:1'
+                    ? 'Square'
+                    : aspectRatio === '9:16'
+                    ? 'Story'
+                    : 'Landscape'}{' '}
+                  · {aspectRatio}
+                </span>
                 <ChevronDown className="size-3.5 text-muted-foreground ml-1" />
-              </div>
+              </button>
 
               {/* Undo / Redo */}
               <div className="flex items-center border border-border rounded-xl bg-card overflow-hidden">

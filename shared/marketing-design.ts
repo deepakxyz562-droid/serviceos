@@ -35,3 +35,37 @@ export function createDesign(input: { brand: string; headline: string; subtitle:
     {...layer('cta','text',height-140,80),text:input.cta,fontSize:36},
   ] };
 }
+export function createFieserosCampaignDesign(): MarketingDesign {
+  const width = 1080;
+  const height = 1350;
+  return {
+    version: 1,
+    width,
+    height,
+    background: '#062419',
+    layers: [
+      { id: 'brand', type: 'text', x: 60, y: 50, width: 300, height: 50, text: 'FIESEROS', color: '#ffffff', background: 'transparent', fontSize: 32, opacity: 1 },
+      { id: 'badge', type: 'text', x: 780, y: 50, width: 240, height: 46, text: 'AI WORKFLOW', color: '#34d399', background: '#093a26', fontSize: 22, opacity: 1 },
+      { id: 'headline', type: 'text', x: 60, y: 130, width: 960, height: 110, text: 'Less admin. More jobs.', color: '#ffffff', background: 'transparent', fontSize: 72, opacity: 1 },
+      { id: 'subtitle', type: 'text', x: 60, y: 245, width: 960, height: 60, text: 'Meet your Fieseros AI Assistant.', color: '#34d399', background: 'transparent', fontSize: 34, opacity: 1 },
+      { id: 'supporting', type: 'text', x: 60, y: 310, width: 960, height: 80, text: 'Customers, jobs, quotes and messages—connected through one conversation.', color: '#94a3b8', background: 'transparent', fontSize: 26, opacity: 1 },
+      { id: 'cmd_bg', type: 'shape', x: 60, y: 410, width: 960, height: 210, text: '', color: 'transparent', background: '#093a26', fontSize: 16, opacity: 0.95 },
+      { id: 'cmd_label', type: 'text', x: 90, y: 430, width: 400, height: 35, text: 'AI COMMAND', color: '#34d399', background: 'transparent', fontSize: 22, opacity: 1 },
+      { id: 'cmd_text', type: 'text', x: 90, y: 475, width: 900, height: 120, text: '“Schedule a boiler repair for Sarah tomorrow, assign Mike, create a £350 quote, and prepare her confirmation.”', color: '#ffffff', background: 'transparent', fontSize: 28, opacity: 1 },
+      { id: 'wf_label', type: 'text', x: 60, y: 645, width: 500, height: 35, text: 'PROPOSED WORKFLOW', color: '#94a3b8', background: 'transparent', fontSize: 20, opacity: 1 },
+      { id: 'card_step_1', type: 'shape', x: 60, y: 690, width: 225, height: 180, text: '', color: 'transparent', background: '#0a3020', fontSize: 16, opacity: 1 },
+      { id: 'text_step_1', type: 'text', x: 75, y: 705, width: 195, height: 150, text: '👤 Customer\nSarah J.\n(New enquiry)', color: '#ffffff', background: 'transparent', fontSize: 24, opacity: 1 },
+      { id: 'card_step_2', type: 'shape', x: 305, y: 690, width: 225, height: 180, text: '', color: 'transparent', background: '#0a3020', fontSize: 16, opacity: 1 },
+      { id: 'text_step_2', type: 'text', x: 320, y: 705, width: 195, height: 150, text: '🔧 Job\nBoiler Repair\nTomorrow 9am', color: '#ffffff', background: 'transparent', fontSize: 24, opacity: 1 },
+      { id: 'card_step_3', type: 'shape', x: 550, y: 690, width: 225, height: 180, text: '', color: 'transparent', background: '#0a3020', fontSize: 16, opacity: 1 },
+      { id: 'text_step_3', type: 'text', x: 565, y: 705, width: 195, height: 150, text: '📋 Quote\n£350.00\nDraft ready', color: '#ffffff', background: 'transparent', fontSize: 24, opacity: 1 },
+      { id: 'card_step_4', type: 'shape', x: 795, y: 690, width: 225, height: 180, text: '', color: 'transparent', background: '#0a3020', fontSize: 16, opacity: 1 },
+      { id: 'text_step_4', type: 'text', x: 810, y: 705, width: 195, height: 150, text: '✉️ Confirm\nMike assigned\nSMS queued', color: '#ffffff', background: 'transparent', fontSize: 24, opacity: 1 },
+      { id: 'review_btn_bg', type: 'shape', x: 390, y: 900, width: 300, height: 60, text: '', color: 'transparent', background: '#0f4830', fontSize: 16, opacity: 1 },
+      { id: 'review_btn_text', type: 'text', x: 390, y: 915, width: 300, height: 40, text: '✓ Review actions', color: '#34d399', background: 'transparent', fontSize: 24, opacity: 1 },
+      { id: 'cta_bg', type: 'shape', x: 60, y: 1020, width: 360, height: 85, text: '', color: 'transparent', background: '#009f50', fontSize: 16, opacity: 1 },
+      { id: 'cta', type: 'text', x: 90, y: 1042, width: 300, height: 50, text: 'Explore Fieseros →', color: '#ffffff', background: 'transparent', fontSize: 34, opacity: 1 },
+      { id: 'footer', type: 'text', x: 60, y: 1250, width: 400, height: 50, text: 'fieseros.com', color: '#94a3b8', background: 'transparent', fontSize: 28, opacity: 1 },
+    ],
+  };
+}

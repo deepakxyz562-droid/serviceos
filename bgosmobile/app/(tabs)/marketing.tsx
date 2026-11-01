@@ -1,4 +1,4 @@
-import { createDesign, validateDesign, type MarketingDesign } from '../../../shared/marketing-design';
+import { createDesign, validateDesign, createFieserosCampaignDesign, type MarketingDesign } from '../../../shared/marketing-design';
 import { EditableDesign } from '../../src/components/design/editable-design';
 import * as Crypto from 'expo-crypto';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
@@ -65,6 +65,24 @@ interface CreativeLayout {
   photoUrl: string;
 }
 
+const DEFAULT_CAPTION = `Switching between customer calls, job diaries, quote calculators, and messaging apps eats away the hours you should be spending on the tools or growing your business.
+
+Meet the Fieseros AI Assistant—turning natural conversation into connected field service workflows.
+
+Just say: “Schedule a boiler repair for Sarah tomorrow, assign Mike, create a £350 quote, and prepare her confirmation.”
+
+In seconds, Fieseros maps the customer, books the job, drafts the quote, and queues her confirmation for your review. Less repetitive admin, zero lost paperwork, and more time to focus on your customers and high-value jobs.
+
+Discover what Fieseros can do for your business: https://fieseros.com
+
+#Fieseros #FieldServiceManagement #TradeBusiness #HVAC #Plumbing`;
+
+const DEFAULT_ALT_HEADLINES = [
+  'From one instruction to a connected workflow.',
+  'Run your field service business in plain English.',
+  'Stop juggling apps. Just tell your assistant.',
+];
+
 export default function MarketingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -91,25 +109,25 @@ export default function MarketingScreen() {
   // ── Content State ──────────────────────────────────────────────────────────
   const [promptInput, setPromptInput] = useState('');
   const [activeUserPrompt, setActiveUserPrompt] = useState(
-    'Create a 20% off weekend offer with a premium, minimal design.'
+    'Create a professional social media marketing post promoting the Fieseros AI Assistant.'
   );
+  const [generationMode, setGenerationMode] = useState<'graphic' | 'image_only'>('graphic');
+  const [alternativeHeadlines, setAlternativeHeadlines] = useState<string[]>(DEFAULT_ALT_HEADLINES);
   const [selectedLayout, setSelectedLayout] = useState<LayoutId>('editorial');
-  const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:5' | '9:16'>('1:1');
+  const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:5' | '9:16'>('4:5');
   const [colorTheme, setColorTheme] = useState<'emerald' | 'sand' | 'dark'>('emerald');
 
-  // Graphic content elements
-  const [headline, setHeadline] = useState('Make more of your weekend.');
-  const [discountBadge, setDiscountBadge] = useState('20% OFF');
-  const [subtitle, setSubtitle] = useState('Selected services. Book your appointment today.');
-  const [ctaText, setCtaText] = useState('Book now');
+  // Graphic content elements — Fieseros campaign initialized
+  const [headline, setHeadline] = useState('Less admin. More jobs.');
+  const [discountBadge, setDiscountBadge] = useState('AI WORKFLOW');
+  const [subtitle, setSubtitle] = useState('Meet your Fieseros AI Assistant.');
+  const [ctaText, setCtaText] = useState('Explore Fieseros');
   const [bgPhotoUrl, setBgPhotoUrl] = useState(
     'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80'
   );
 
   // Caption & copy
-  const [caption, setCaption] = useState(
-    'Your weekend plans, upgraded. Save 20% on selected services. Book your appointment today.\n\n✨ Premium personalized service\n✨ Fast priority booking\n📍 Visit our local studio or book online!\n\n#WeekendVibes #SpecialOffer #LocalBusiness #QualityService'
-  );
+  const [caption, setCaption] = useState(DEFAULT_CAPTION);
   const [isEditingCaption, setIsEditingCaption] = useState(false);
   const [captionDraft, setCaptionDraft] = useState(caption);
   const [isEditingText, setIsEditingText] = useState(false);
@@ -118,7 +136,7 @@ export default function MarketingScreen() {
   const [reviewPlatform, setReviewPlatform] = useState<'instagram' | 'facebook' | 'googlebusiness'>('instagram');
   const [offerStartDate, setOfferStartDate] = useState('6 Nov');
   const [offerEndDate, setOfferEndDate] = useState('8 Nov');
-  const [bookingLink, setBookingLink] = useState('https://fieseros.com/book');
+  const [bookingLink, setBookingLink] = useState('https://fieseros.com');
   const [scheduleMode, setScheduleMode] = useState<'now' | 'schedule'>('now');
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
@@ -219,19 +237,37 @@ export default function MarketingScreen() {
     return list;
   }, [selectedPlatforms, gbpAccount, fbAccount, igAccount]);
 
-  const [customDesign,setCustomDesign]=useState<MarketingDesign|null>(null);
-  const design = customDesign || createDesign({brand:businessDisplayName,headline,subtitle,badge:discountBadge,cta:ctaText,photo:bgPhotoUrl,ratio:aspectRatio});
-  useEffect(()=>setCustomDesign(null),[businessDisplayName,headline,subtitle,discountBadge,ctaText,bgPhotoUrl,aspectRatio]);
+  const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(() => createFieserosCampaignDesign());
+  const design = customDesign || createDesign({ brand: businessDisplayName, headline, subtitle, badge: discountBadge, cta: ctaText, photo: bgPhotoUrl, ratio: aspectRatio });
 
-  const [designRevision,setDesignRevision]=useState<string|null>(null);
-  const savedDesignSnapshot=useRef('');
-  const [editingDesignId,setEditingDesignId]=useState<string|null>(null);
-  const [designDrafts,setDesignDrafts]=useState<Array<{id:string;content:string;designJson:string;updatedAt:string}>>([]);
-  const [draftPage,setDraftPage]=useState(1);
-  const [moreDrafts,setMoreDrafts]=useState(false);
-  async function loadDesignDrafts(page=1){
-    try{const result=await apiRequest<{data:Array<{id:string;content:string;designJson:string;updatedAt:string}>}>(`/api/social/posts?status=draft&limit=20&page=${page}`);const rows=result.data.filter(d=>d.designJson);setDesignDrafts(previous=>page===1?rows:[...previous,...rows]);setDraftPage(page);setMoreDrafts(result.data.length===20);}
-    catch{setError('Could not load saved designs. Please retry.');}
+  function handleSelectHeadline(newHeadline: string) {
+    setHeadline(newHeadline);
+    if (customDesign) {
+      setCustomDesign({
+        ...customDesign,
+        layers: customDesign.layers.map((l) =>
+          l.id === 'headline' ? { ...l, text: newHeadline } : l
+        ),
+      });
+    }
+  }
+
+  const [designRevision, setDesignRevision] = useState<string | null>(null);
+  const savedDesignSnapshot = useRef('');
+  const [editingDesignId, setEditingDesignId] = useState<string | null>(null);
+  const [designDrafts, setDesignDrafts] = useState<Array<{ id: string; content: string; designJson: string; updatedAt: string }>>([]);
+  const [draftPage, setDraftPage] = useState(1);
+  const [moreDrafts, setMoreDrafts] = useState(false);
+  async function loadDesignDrafts(page = 1) {
+    try {
+      const result = await apiRequest<{ data: Array<{ id: string; content: string; designJson: string; updatedAt: string }> }>(`/api/social/posts?status=draft&limit=20&page=${page}`);
+      const rows = result.data.filter((d) => d.designJson);
+      setDesignDrafts((previous) => (page === 1 ? rows : [...previous, ...rows]));
+      setDraftPage(page);
+      setMoreDrafts(result.data.length === 20);
+    } catch {
+      setError('Could not load saved designs. Please retry.');
+    }
   }
 
   // AI Generation Trigger
@@ -241,15 +277,27 @@ export default function MarketingScreen() {
     setError(null);
     setActiveUserPrompt(topicToUse);
     try {
-      const data = await apiRequest<{design:MarketingDesign;caption:string}>('/api/social/designs/generate', {
-        method:'POST',body:{prompt:topicToUse,design,caption},
+      const data = await apiRequest<{ design: MarketingDesign; caption: string; alternativeHeadlines?: string[] }>('/api/social/designs/generate', {
+        method: 'POST',
+        body: { prompt: topicToUse, design, caption, mode: generationMode },
       });
       setCustomDesign(data.design);
       setCaption(data.caption);
       setCaptionDraft(data.caption);
+      if (Array.isArray(data.alternativeHeadlines) && data.alternativeHeadlines.length > 0) {
+        setAlternativeHeadlines(data.alternativeHeadlines);
+      }
+      const hlLayer = data.design?.layers?.find((l) => l.id === 'headline');
+      if (hlLayer?.text) {
+        setHeadline(hlLayer.text);
+      }
 
       setPromptInput('');
-      setSuccessNotice('AI generated fresh creative directions!');
+      setSuccessNotice(
+        generationMode === 'image_only'
+          ? 'AI generated background image without text overlays!'
+          : 'AI generated fresh design and copy directly to canvas!'
+      );
       setTimeout(() => setSuccessNotice(null), 3500);
     } catch (err: unknown) {
       setError((err as Error).message || 'AI generation failed. You can customize the fields manually below.');
@@ -586,42 +634,36 @@ export default function MarketingScreen() {
                   </View>
                   <View style={styles.aiBubble}>
                     <Text style={styles.aiBubbleText}>
-                      Here are three layouts using your brand colours:
+                      Design & copy generated directly to your canvas.
                     </Text>
                   </View>
                 </View>
 
-                {/* 3 Creative Direction Cards */}
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 10, paddingVertical: 10 }}
-                >
-                  {layouts.map((layout) => {
-                    const isSelected = selectedLayout === layout.id;
+                {/* Alternative Headlines Chips */}
+                <View style={styles.altHeadlinesBox}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="auto-awesome" size={14} color="#009F50" />
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Alternative Headlines</Text>
+                    </View>
+                    <Text style={{ fontSize: 10, color: '#64748B' }}>Tap to apply</Text>
+                  </View>
+                  {alternativeHeadlines.map((altHl, idx) => {
+                    const isSelected = headline === altHl;
                     return (
                       <Pressable
-                        key={layout.id}
-                        onPress={() => {
-                          setSelectedLayout(layout.id);
-                          if (layout.photoUrl) setBgPhotoUrl(layout.photoUrl);
-                        }}
-                        style={[styles.layoutCard, isSelected && styles.layoutCardSelected]}
+                        key={idx}
+                        onPress={() => handleSelectHeadline(altHl)}
+                        style={[styles.altHlItem, isSelected && styles.altHlItemSelected]}
                       >
-                        {isSelected && (
-                          <View style={styles.selectedCheckPill}>
-                            <MaterialIcons name="check" size={14} color="#FFFFFF" />
-                          </View>
-                        )}
-                        <Image source={{ uri: layout.photoUrl }} style={styles.layoutThumb} />
-                        <View style={styles.layoutInfo}>
-                          <Text style={styles.layoutName}>{layout.name}</Text>
-                          <Text style={styles.layoutBadge}>{layout.badge}</Text>
-                        </View>
+                        <Text style={[styles.altHlText, isSelected && styles.altHlTextSelected]}>
+                          "{altHl}"
+                        </Text>
+                        {isSelected && <MaterialIcons name="check" size={14} color="#009F50" />}
                       </Pressable>
                     );
                   })}
-                </ScrollView>
+                </View>
 
                 {/* Caption Card */}
                 <View style={styles.captionBox}>
@@ -630,7 +672,9 @@ export default function MarketingScreen() {
                       <MaterialIcons name="description" size={16} color="#009F50" />
                       <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Caption</Text>
                     </View>
-                    <Text style={{ fontSize: 11, color: '#009F50', fontWeight: '700' }}>✓ Draft saved</Text>
+                    <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>
+                      {caption.trim().split(/\s+/).filter(Boolean).length} words · 5 hashtags
+                    </Text>
                   </View>
 
                   <Text style={styles.captionText}>{caption}</Text>
@@ -670,8 +714,54 @@ export default function MarketingScreen() {
                 </View>
               </ScrollView>
 
-              {/* Bottom Sticky Action Bar: Prompt Input + Open Design CTA */}
+              {/* Bottom Sticky Action Bar: Mode Selector + Prompt Input + Open Design CTA */}
               <View style={styles.promptInputContainer}>
+                {/* Generation Mode Switcher */}
+                <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+                  <Pressable
+                    onPress={() => setGenerationMode('graphic')}
+                    style={[
+                      styles.modeBtn,
+                      generationMode === 'graphic' && styles.modeBtnActive,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="palette"
+                      size={14}
+                      color={generationMode === 'graphic' ? '#009F50' : '#64748B'}
+                    />
+                    <Text
+                      style={[
+                        styles.modeBtnText,
+                        generationMode === 'graphic' && styles.modeBtnTextActive,
+                      ]}
+                    >
+                      🎨 Graphic (Text & UI)
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setGenerationMode('image_only')}
+                    style={[
+                      styles.modeBtn,
+                      generationMode === 'image_only' && styles.modeBtnActive,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="image"
+                      size={14}
+                      color={generationMode === 'image_only' ? '#009F50' : '#64748B'}
+                    />
+                    <Text
+                      style={[
+                        styles.modeBtnText,
+                        generationMode === 'image_only' && styles.modeBtnTextActive,
+                      ]}
+                    >
+                      🖼️ Image Only
+                    </Text>
+                  </Pressable>
+                </View>
+
                 <View style={styles.promptInputRow}>
                   <Pressable onPress={handleUseMyPhoto} style={{ padding: 6 }}>
                     <MaterialIcons name="attach-file" size={20} color="#64748B" />
@@ -680,7 +770,11 @@ export default function MarketingScreen() {
                   <TextInput
                     value={promptInput}
                     onChangeText={setPromptInput}
-                    placeholder="Describe an idea or ask for a change..."
+                    placeholder={
+                      generationMode === 'image_only'
+                        ? 'Describe image to generate...'
+                        : 'Describe an idea or ask for a change...'
+                    }
                     placeholderTextColor="#94A3B8"
                     style={styles.promptInput}
                     returnKeyType="send"
@@ -1327,6 +1421,65 @@ const styles = StyleSheet.create({
     color: '#009F50',
     fontWeight: '700',
     marginTop: 2,
+  },
+  modeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  modeBtnActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#009F50',
+  },
+  modeBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  modeBtnTextActive: {
+    color: '#009F50',
+  },
+  altHeadlinesBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginVertical: 10,
+    gap: 6,
+  },
+  altHlItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  altHlItemSelected: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#009F50',
+  },
+  altHlText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1E293B',
+    flex: 1,
+    marginRight: 6,
+  },
+  altHlTextSelected: {
+    color: '#009F50',
+    fontWeight: '700',
   },
   captionBox: {
     backgroundColor: '#FFFFFF',
