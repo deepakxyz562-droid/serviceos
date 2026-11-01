@@ -69,6 +69,7 @@ db/*.db-journal
 !/public/bos/products/*.png
 !/apps/bos/public/bos/*.png
 !/apps/bos/public/bos/products/*.png
+!/public/images/**
 
 # Mobile app assets MUST NOT be ignored (required for EAS Build)
 # The *.png rule above excludes ALL png files globally. EAS Build

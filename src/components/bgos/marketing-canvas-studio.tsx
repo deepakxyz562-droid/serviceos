@@ -195,10 +195,11 @@ export function MarketingCanvasStudio({
     'Create a professional social media marketing post promoting the Fieseros AI Assistant for field service businesses (plumbing, HVAC, electrical, cleaning, landscaping).'
   );
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingStage, setGeneratingStage] = useState<string>('');
   const [generationMode, setGenerationMode] = useState<'poster' | 'graphic' | 'image_only'>('poster');
   const [activeVisualFormat, setActiveVisualFormat] = useState<'poster' | 'canvas'>('poster');
   const [posterUrl, setPosterUrl] = useState<string>('/images/fieseros-ai-assistant-poster.jpg');
-  const [suggestions, setSuggestions] = useState<Array<{ id: string; type: string; icon: string; title: string; prompt: string }>>([]);
+  const [suggestions, setSuggestions] = useState<Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string }>>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [alternativeHeadlines, setAlternativeHeadlines] = useState<string[]>(DEFAULT_ALT_HEADLINES);
 
@@ -237,10 +238,23 @@ export function MarketingCanvasStudio({
   const [publishMode, setPublishMode] = useState<'now' | 'schedule'>('now');
   const [scheduledDateTime, setScheduledDateTime] = useState('');
 
+  // Auto-sync selectedChannels with connected accounts
+  useEffect(() => {
+    if (connectedAccounts && connectedAccounts.length > 0) {
+      const activePlatforms = Array.from(new Set(connectedAccounts.map((a) => a.platform)));
+      if (activePlatforms.length > 0) {
+        setSelectedChannels((prev) => {
+          const valid = prev.filter((p) => activePlatforms.includes(p));
+          return valid.length > 0 ? valid : [activePlatforms[0]];
+        });
+      }
+    }
+  }, [connectedAccounts]);
+
   const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(() => createFieserosCampaignDesign());
   const design = customDesign || createDesign({ brand: businessName, headline, subtitle: subheadText, badge: badgeText, cta: ctaText, photo: photoUrl, ratio: aspectRatio });
 
-  const [designDrafts, setDesignDrafts] = useState<Array<{ id: string; content: string; designJson: string; updatedAt: string }>>([]);
+  const [designDrafts, setDesignDrafts] = useState<Array<{ id: string; content: string; designJson?: string; mediaUrls?: string[]; updatedAt: string }>>([]);
   const [draftRevision, setDraftRevision] = useState<string | null>(null);
   const savedDesignSnapshot = useRef('');
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
@@ -251,7 +265,7 @@ export function MarketingCanvasStudio({
       const res = await authFetch(`/api/social/posts?status=draft&limit=20&page=${page}`);
       if (!res.ok) throw new Error('Load failed');
       const json = await res.json();
-      const rows = (json.data || []).filter((p: { designJson?: string }) => p.designJson);
+      const rows = (json.data || []).filter((p: { designJson?: string; mediaUrls?: string[] }) => p.designJson || (Array.isArray(p.mediaUrls) && p.mediaUrls.length > 0));
       setDesignDrafts((previous) => (page === 1 ? rows : [...previous, ...rows]));
       setDraftPage(page);
       setMoreDrafts((json.data || []).length === 20);
@@ -400,6 +414,7 @@ export function MarketingCanvasStudio({
     if (!text) return;
 
     setIsGenerating(true);
+    setGeneratingStage('Synthesizing marketing message and headlines...');
     setActiveUserPrompt(text);
     setPromptInput('');
 
@@ -434,6 +449,7 @@ export function MarketingCanvasStudio({
         }
 
         if (imageRes.ok) {
+          setGeneratingStage('Rendering high-resolution AI poster graphic (1080 × 1350)...');
           const pollStart = Date.now();
           const poll = setInterval(async () => {
             try {
@@ -445,36 +461,43 @@ export function MarketingCanvasStudio({
                   setPosterUrl(job.result.url);
                   setActiveVisualFormat('poster');
                   setIsGenerating(false);
+                  setGeneratingStage('');
                   toast.success('Finished AI Poster generated successfully!');
                 } else if (job.status === 'failed') {
                   clearInterval(poll);
                   setIsGenerating(false);
+                  setGeneratingStage('');
                   toast.info(job.error || 'AI generation key pending. Retaining sample.');
                 }
               }
               if (Date.now() - pollStart > 60000) {
                 clearInterval(poll);
                 setIsGenerating(false);
+                setGeneratingStage('');
               }
             } catch {
               clearInterval(poll);
               setIsGenerating(false);
+              setGeneratingStage('');
             }
           }, 2500);
           return;
         } else {
           setActiveVisualFormat('poster');
+          setIsGenerating(false);
+          setGeneratingStage('');
           toast.success('Campaign copy updated! Ready for publishing.');
         }
       } catch {
-        toast.error('Generation failed. Retaining current poster.');
-      } finally {
         setIsGenerating(false);
+        setGeneratingStage('');
+        toast.error('Generation failed. Retaining current poster.');
       }
       return;
     }
 
     try {
+      setGeneratingStage('Synthesizing canvas design layers...');
       const res = await authFetch('/api/social/designs/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -501,6 +524,7 @@ export function MarketingCanvasStudio({
       toast.error('Generation failed. Your design is unchanged. Please retry.');
     } finally {
       setIsGenerating(false);
+      setGeneratingStage('');
     }
   };
 
@@ -553,15 +577,20 @@ export function MarketingCanvasStudio({
     setIsSavingDraft(true);
     try {
       const targets = getResolvedTargets();
+      const isPosterMode = activeVisualFormat === 'poster';
+      const resolvedPosterUrl = posterUrl || '/images/fieseros-ai-assistant-poster.jpg';
+      const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [photoUrl] : [];
+
       const res = await authFetch(editingDraftId ? `/api/social/posts/${editingDraftId}` : '/api/social/posts', {
         method: editingDraftId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'draft',
-          expectedUpdatedAt:draftRevision,
+          expectedUpdatedAt: draftRevision,
           content: caption,
-          mediaUrls: [activeVisualFormat === 'poster' ? posterUrl : photoUrl],
-          design,
+          mediaUrls: mediaList,
+          isPoster: isPosterMode,
+          design: isPosterMode ? undefined : design,
           linkUrl,
           platforms: selectedChannels,
           targets: targets.length > 0 ? targets : undefined,
@@ -595,17 +624,22 @@ export function MarketingCanvasStudio({
     setIsPublishing(true);
     try {
       const targets = getResolvedTargets();
+      const isPosterMode = activeVisualFormat === 'poster';
+      const resolvedPosterUrl = posterUrl || '/images/fieseros-ai-assistant-poster.jpg';
+      const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [photoUrl] : [];
+
       const res = await authFetch('/api/social/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          draftId:editingDraftId||undefined,
-          expectedUpdatedAt:draftRevision,
+          draftId: editingDraftId || undefined,
+          expectedUpdatedAt: draftRevision,
           status: publishMode === 'schedule' ? 'scheduled' : 'published',
           scheduledAt: publishMode === 'schedule' ? scheduledDateTime : null,
           content: caption,
-          mediaUrls: [activeVisualFormat === 'poster' ? posterUrl : photoUrl],
-          design,
+          mediaUrls: mediaList,
+          isPoster: isPosterMode,
+          design: isPosterMode ? undefined : design,
           linkUrl,
           platforms: selectedChannels,
           targets: targets.length > 0 ? targets : undefined,
@@ -654,8 +688,33 @@ export function MarketingCanvasStudio({
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" className="rounded border px-3 py-2" onClick={()=>loadDesignDrafts()}>Open saved design</button>
         {moreDrafts&&<button type="button" onClick={()=>loadDesignDrafts(draftPage+1)}>Load more drafts</button>}
-        {designDrafts.length>0&&<select aria-label="Saved designs" className="rounded border p-2" value={editingDraftId||''} onChange={e=>{const draft=designDrafts.find(d=>d.id===e.target.value);if(!draft)return;try{setCustomDesign(validateDesign(JSON.parse(draft.designJson)));setCaption(draft.content);setEditingDraftId(draft.id);setDraftRevision(draft.updatedAt);savedDesignSnapshot.current=JSON.stringify({design:JSON.parse(draft.designJson),caption:draft.content});}catch{toast.error('This design could not be opened');}}}>
-          <option value="">Choose a draft</option>{designDrafts.map(d=><option key={d.id} value={d.id}>{d.content.slice(0,70)}</option>)}
+        {designDrafts.length>0&&<select aria-label="Saved designs" className="rounded-xl border border-border/80 bg-card text-xs p-2" value={editingDraftId||''} onChange={e=>{
+          const draft=designDrafts.find(d=>d.id===e.target.value);
+          if(!draft)return;
+          try{
+            if (Array.isArray(draft.mediaUrls) && draft.mediaUrls.length > 0 && typeof draft.mediaUrls[0] === 'string') {
+              setPosterUrl(draft.mediaUrls[0]);
+              setActiveVisualFormat('poster');
+            }
+            if (draft.designJson) {
+              try {
+                setCustomDesign(validateDesign(JSON.parse(draft.designJson)));
+                savedDesignSnapshot.current=JSON.stringify({design:JSON.parse(draft.designJson),caption:draft.content});
+              } catch {
+                // Ignore if pure poster
+              }
+            } else {
+              savedDesignSnapshot.current=JSON.stringify({design:null,caption:draft.content});
+            }
+            setCaption(draft.content || '');
+            setEditingDraftId(draft.id);
+            setDraftRevision(draft.updatedAt);
+            toast.success('Design draft loaded!');
+          }catch{
+            toast.error('This design could not be opened');
+          }
+        }}>
+          <option value="">Choose a draft</option>{designDrafts.map(d=><option key={d.id} value={d.id}>{d.content ? d.content.slice(0,70) : 'Saved draft'}</option>)}
         </select>}
       </div>
       {/* ─── 2-Column Canvas Studio Layout ──────────────────────────────────── */}
@@ -701,11 +760,47 @@ export function MarketingCanvasStudio({
               <div className="space-y-3 flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <p className="text-xs font-semibold text-foreground">
-                    Content & design synthesized directly to canvas.
+                    {isGenerating
+                      ? generatingStage || 'Synthesizing creative post...'
+                      : 'Content & design synthesized directly to canvas.'}
                   </p>
                   <Badge variant="outline" className="text-[10px] font-semibold text-primary border-primary/20 bg-primary/5">
-                    {generationMode === 'image_only' ? '🖼️ Image Only' : '🎨 Graphic + Copy'}
+                    {generationMode === 'image_only' ? '🖼️ Image Only' : generationMode === 'poster' ? '🖼️ AI Poster' : '🎨 Graphic + Copy'}
                   </Badge>
+                </div>
+
+                {/* Generated Creative Preview Card in Chat */}
+                <div className="border border-border/80 rounded-xl p-2.5 bg-background/80 flex items-center gap-3 shadow-2xs">
+                  <div className="size-14 rounded-lg overflow-hidden shrink-0 border border-border/60 bg-muted/30 relative">
+                    <img
+                      src={activeVisualFormat === 'poster' ? posterUrl : photoUrl}
+                      alt="Visual Preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg';
+                      }}
+                    />
+                    {isGenerating && (
+                      <div className="absolute inset-0 bg-background/70 backdrop-blur-xs flex items-center justify-center">
+                        <Sparkles className="size-4 text-primary animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-foreground truncate">{headline}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{subheadText || caption.slice(0, 50)}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveRightTab('design');
+                        setActiveVisualFormat('poster');
+                      }}
+                      className="text-[10px] font-bold text-primary hover:underline mt-0.5 flex items-center gap-1"
+                    >
+                      <span>View full canvas</span>
+                      <span>→</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Alternative Headlines Chips */}
@@ -838,7 +933,8 @@ export function MarketingCanvasStudio({
                     disabled={loadingSuggestions}
                     className="text-[11px] text-primary hover:underline flex items-center gap-1 font-semibold disabled:opacity-50 cursor-pointer"
                   >
-                    <span>🎲 Refresh Ideas</span>
+                    <RotateCw className={`size-3 ${loadingSuggestions ? 'animate-spin' : ''}`} />
+                    <span>Refresh Ideas</span>
                   </button>
                 </div>
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
@@ -848,12 +944,12 @@ export function MarketingCanvasStudio({
                       type="button"
                       onClick={() => {
                         setPromptInput(s.prompt);
-                        toast.info(`Loaded suggestion: ${s.title}`);
+                        toast.info(`Loaded suggestion: ${s.title || s.chipLabel || 'Marketing idea'}`);
                       }}
-                      className="shrink-0 px-2.5 py-1 rounded-xl text-xs font-medium bg-card border border-border/80 hover:border-primary/50 hover:bg-primary/5 text-foreground transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                      className="shrink-0 px-2.5 py-1 rounded-xl text-xs font-semibold bg-card border border-border/80 hover:border-primary/50 hover:bg-primary/5 text-foreground transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
                     >
-                      <span>{s.icon}</span>
-                      <span>{s.title}</span>
+                      <span>{s.icon || '💡'}</span>
+                      <span>{s.title || s.chipLabel}</span>
                     </button>
                   ))}
                 </div>
@@ -1087,8 +1183,29 @@ export function MarketingCanvasStudio({
                     <img
                       src={posterUrl}
                       alt="Promotional marketing poster"
-                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg';
+                      }}
+                      className={`w-full h-full object-cover transition-all duration-500 ${isGenerating ? 'opacity-30 scale-95 blur-xs' : 'opacity-100 scale-100'}`}
                     />
+
+                    {/* Animated AI Generator Overlay */}
+                    {isGenerating && (
+                      <div className="absolute inset-0 bg-background/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20 animate-in fade-in duration-300">
+                        <div className="size-14 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center mb-3 shadow-inner">
+                          <Sparkles className="size-7 text-primary animate-pulse" />
+                        </div>
+                        <h4 className="text-sm font-bold text-foreground">Creating Your AI Campaign</h4>
+                        <p className="text-xs text-muted-foreground mt-1 max-w-xs leading-relaxed">
+                          {generatingStage || 'Synthesizing professional poster layout & copy...'}
+                        </p>
+                        <div className="flex items-center gap-2 mt-4">
+                          <span className="size-2 rounded-full bg-primary animate-ping" />
+                          <span className="text-[11px] font-semibold text-primary">Gemini Vision & Layout</span>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="absolute top-3 left-3 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-white tracking-wide uppercase border border-white/20 shadow-xs">
                       Finished Creative Poster • 1080 × 1350
                     </div>
@@ -1572,7 +1689,13 @@ export function MarketingCanvasStudio({
                   </div>
                   <div>
                     <div className="text-xs font-bold">Instagram</div>
-                    <div className="text-[11px] text-muted-foreground">Feed & Story</div>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                      <span>Feed & Story</span>
+                      <span>·</span>
+                      <span className={isPlatformConnected('instagram') ? 'text-emerald-600 font-semibold' : 'text-muted-foreground'}>
+                        {isPlatformConnected('instagram') ? 'Connected' : 'Not connected'}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div
@@ -1604,7 +1727,13 @@ export function MarketingCanvasStudio({
                   </div>
                   <div>
                     <div className="text-xs font-bold">Facebook Page</div>
-                    <div className="text-[11px] text-muted-foreground">Official Business Page</div>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                      <span>Official Business Page</span>
+                      <span>·</span>
+                      <span className={isPlatformConnected('facebook') ? 'text-emerald-600 font-semibold' : 'text-muted-foreground'}>
+                        {isPlatformConnected('facebook') ? 'Connected' : 'Not connected'}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div
@@ -1636,7 +1765,13 @@ export function MarketingCanvasStudio({
                   </div>
                   <div>
                     <div className="text-xs font-bold">Google Business Profile</div>
-                    <div className="text-[11px] text-muted-foreground">Local Search & Maps Update</div>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                      <span>Local Search & Maps Update</span>
+                      <span>·</span>
+                      <span className={isPlatformConnected('googlebusiness') ? 'text-emerald-600 font-semibold' : 'text-muted-foreground'}>
+                        {isPlatformConnected('googlebusiness') ? 'Connected' : 'Not connected'}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div
@@ -1708,6 +1843,18 @@ export function MarketingCanvasStudio({
           </DialogHeader>
 
           <div className="space-y-5 py-2">
+            {connectedAccounts.length === 0 && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2.5">
+                <Info className="size-4 shrink-0 text-amber-600 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold">No social accounts connected yet</p>
+                  <p className="text-[11px] text-amber-700/90 dark:text-amber-300/90 leading-relaxed">
+                    Connect your Google Business Profile, Facebook, or Instagram in the Accounts tab to publish live, or save this design as a draft.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Platform toggles */}
             <div className="flex items-center gap-2">
               <button
@@ -1717,14 +1864,19 @@ export function MarketingCanvasStudio({
                     prev.includes('instagram') ? prev.filter((c) => c !== 'instagram') : [...prev, 'instagram']
                   );
                 }}
-                className={`flex-1 p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                className={`flex-1 p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
                   selectedChannels.includes('instagram')
                     ? 'border-pink-500 bg-pink-500/10 text-pink-700 dark:text-pink-300'
                     : 'border-border text-muted-foreground'
                 }`}
               >
-                <Instagram className="size-4" />
-                <span>Instagram</span>
+                <div className="flex items-center gap-1.5">
+                  <Instagram className="size-4" />
+                  <span>Instagram</span>
+                </div>
+                <span className="text-[10px] font-normal opacity-75">
+                  {connectedAccounts.some((a) => a.platform === 'instagram') ? '🟢 Connected' : '⚪ Not connected'}
+                </span>
               </button>
 
               <button
@@ -1734,14 +1886,19 @@ export function MarketingCanvasStudio({
                     prev.includes('facebook') ? prev.filter((c) => c !== 'facebook') : [...prev, 'facebook']
                   );
                 }}
-                className={`flex-1 p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                className={`flex-1 p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
                   selectedChannels.includes('facebook')
                     ? 'border-blue-600 bg-blue-600/10 text-blue-700 dark:text-blue-300'
                     : 'border-border text-muted-foreground'
                 }`}
               >
-                <Facebook className="size-4" />
-                <span>Facebook</span>
+                <div className="flex items-center gap-1.5">
+                  <Facebook className="size-4" />
+                  <span>Facebook</span>
+                </div>
+                <span className="text-[10px] font-normal opacity-75">
+                  {connectedAccounts.some((a) => a.platform === 'facebook') ? '🟢 Connected' : '⚪ Not connected'}
+                </span>
               </button>
 
               <button
@@ -1751,14 +1908,19 @@ export function MarketingCanvasStudio({
                     prev.includes('googlebusiness') ? prev.filter((c) => c !== 'googlebusiness') : [...prev, 'googlebusiness']
                   );
                 }}
-                className={`flex-1 p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                className={`flex-1 p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
                   selectedChannels.includes('googlebusiness')
                     ? 'border-emerald-600 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300'
                     : 'border-border text-muted-foreground'
                 }`}
               >
-                <Sparkles className="size-4 text-emerald-600" />
-                <span>Google</span>
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="size-4 text-emerald-600" />
+                  <span>Google</span>
+                </div>
+                <span className="text-[10px] font-normal opacity-75">
+                  {connectedAccounts.some((a) => a.platform === 'googlebusiness') ? '🟢 Connected' : '⚪ Not connected'}
+                </span>
               </button>
             </div>
 
@@ -1832,18 +1994,32 @@ export function MarketingCanvasStudio({
             >
               Back to design
             </Button>
-            <Button
-              type="button"
-              disabled={isPublishing || selectedChannels.length === 0}
-              onClick={handlePublishNow}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs px-6"
-            >
-              {isPublishing
-                ? 'Publishing...'
-                : publishMode === 'schedule'
-                ? `Schedule to ${selectedChannels.length} accounts`
-                : `Publish to ${selectedChannels.length} accounts`}
-            </Button>
+            {connectedAccounts.length > 0 && selectedChannels.some((p) => connectedAccounts.some((a) => a.platform === p)) ? (
+              <Button
+                type="button"
+                disabled={isPublishing || selectedChannels.length === 0}
+                onClick={handlePublishNow}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs px-6"
+              >
+                {isPublishing
+                  ? 'Publishing...'
+                  : publishMode === 'schedule'
+                  ? `Schedule to ${selectedChannels.filter((p) => connectedAccounts.some((a) => a.platform === p)).length} accounts`
+                  : `Publish to ${selectedChannels.filter((p) => connectedAccounts.some((a) => a.platform === p)).length} accounts`}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                disabled={isSavingDraft}
+                onClick={() => {
+                  void handleSaveDraft(false);
+                  setReviewModalOpen(false);
+                }}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs px-6"
+              >
+                {isSavingDraft ? 'Saving draft...' : 'Save as Draft'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

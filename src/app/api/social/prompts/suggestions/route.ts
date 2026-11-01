@@ -13,6 +13,8 @@ export interface PromptSuggestion {
   prompt: string;
   headline: string;
   aspectRatio: '4:5' | '1:1';
+  icon: string;
+  title: string;
 }
 
 function parseJsonArray(raw: string | null | undefined): string[] {
@@ -29,6 +31,25 @@ function parseJsonArray(raw: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+function normalizeSuggestion(s: Partial<PromptSuggestion> & { id: string; prompt: string }): PromptSuggestion {
+  const chipLabel = (s.chipLabel || s.headline || '💡 Marketing Idea').trim();
+  // Extract emoji if present at the start of chipLabel
+  const emojiMatch = chipLabel.match(/^([\p{Emoji_Presentation}\p{Extended_Pictographic}]+|\S+)\s*(.*)$/u);
+  const icon = s.icon || (emojiMatch ? emojiMatch[1] : '💡');
+  const title = s.title || (emojiMatch && emojiMatch[2] ? emojiMatch[2] : chipLabel.replace(/^💡\s*/, ''));
+  return {
+    id: s.id,
+    category: (s.category as PromptSuggestion['category']) || 'service',
+    chipLabel: s.chipLabel || `${icon} ${title}`,
+    icon: icon || '💡',
+    title: title || chipLabel,
+    badge: s.badge || 'RECOMMENDED',
+    prompt: s.prompt,
+    headline: s.headline || title,
+    aspectRatio: s.aspectRatio === '1:1' ? '1:1' : '4:5',
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -156,7 +177,7 @@ id (string), category ("service" | "offer" | "review" | "ai_assistant" | "urgenc
             industry,
             website,
             location,
-            suggestions: parsed.slice(0, 5),
+            suggestions: parsed.slice(0, 5).map((p: any) => normalizeSuggestion(p)),
           });
         }
       } catch {
@@ -169,7 +190,7 @@ id (string), category ("service" | "offer" | "review" | "ai_assistant" | "urgenc
       industry,
       website,
       location,
-      suggestions: baselineSuggestions,
+      suggestions: baselineSuggestions.map((b) => normalizeSuggestion(b)),
     });
   } catch (err: unknown) {
     console.error('[/api/social/prompts/suggestions]', err);

@@ -100,7 +100,7 @@ export default function MarketingScreen() {
   const brandProfile = useResource<BrandProfileData>('/api/brand-profile');
   const promptSuggestions = useResource<{
     business?: { name?: string; category?: string };
-    suggestions: Array<{ id: string; type: string; icon: string; title: string; prompt: string }>;
+    suggestions: Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string }>;
   }>('/api/social/prompts/suggestions');
 
   // ── Mode Switch: Studio / Create vs Posts & Approvals ───────────────────────
@@ -892,8 +892,8 @@ export default function MarketingScreen() {
                             pressed && { opacity: 0.7 },
                           ]}
                         >
-                          <Text style={{ fontSize: 12 }}>{s.icon}</Text>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>{s.title}</Text>
+                          <Text style={{ fontSize: 12 }}>{s.icon || '💡'}</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>{s.title || s.chipLabel || 'Idea'}</Text>
                         </Pressable>
                       ))}
                     </ScrollView>

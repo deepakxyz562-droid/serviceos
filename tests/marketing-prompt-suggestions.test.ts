@@ -62,6 +62,13 @@ it('returns 5 tailored prompt suggestions based on tenant profile and reviews', 
   const hero = json.suggestions.find((s: any) => s.category === 'service');
   expect(hero.chipLabel).toContain('Emergency Boiler Repair');
   expect(hero.prompt).toContain('Emergency Boiler Repair');
+  expect(hero.icon).toBeDefined();
+  expect(hero.title).toContain('Emergency Boiler Repair');
+  json.suggestions.forEach((s: any) => {
+    expect(s.icon).toBeDefined();
+    expect(s.title).toBeDefined();
+    expect(s.chipLabel).toBeDefined();
+  });
 
   const reviewSugg = json.suggestions.find((s: any) => s.category === 'review');
   expect(reviewSugg.chipLabel).toContain('David M.');
