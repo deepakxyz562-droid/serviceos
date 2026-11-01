@@ -1,10 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-const m = vi.hoisted(() => ({ create: vi.fn(), findUnique: vi.fn(), accounts: vi.fn(), publish: vi.fn(), after: vi.fn() }));
+const m = vi.hoisted(() => ({ create: vi.fn(), findUnique: vi.fn(), accounts: vi.fn(), publish: vi.fn(), after: vi.fn(), renderDesign: vi.fn() }));
 vi.mock('next/server', async original => ({ ...await original<typeof import('next/server')>(), after: m.after }));
 vi.mock('@/lib/auth', () => ({ getAuthUser: async () => ({ id: 'u', tenantId: 't' }) }));
 vi.mock('@/lib/db', () => ({ db: { socialPost: { create: m.create, findUnique: m.findUnique }, socialAccount: { findMany: m.accounts } } }));
 vi.mock('@/lib/social/publisher', () => ({ publishPost: m.publish }));
+vi.mock('@/lib/designs/render', () => ({ renderDesign: m.renderDesign }));
 vi.mock('@/lib/activity-log', () => ({ logActivity: async () => {} }));
 import { POST } from '@/app/api/social/posts/route';
 beforeEach(() => {
@@ -33,4 +34,19 @@ it('rejects a past schedule and account/platform mismatch', async () => {
   expect((await POST(request({ status: 'scheduled', scheduledAt: '2020-01-01' }))).status).toBe(400);
   expect((await POST(request({ targets: [{ socialAccountId: 'a', platform: 'instagram' }] }))).status).toBe(400);
   expect(m.create).not.toHaveBeenCalled();
+});
+it('bypasses renderDesign when isPoster is true with finished mediaUrls', async () => {
+  const dummyDesign = { version: 1, width: 1080, height: 1080, background: '#000000', layers: [] };
+  const res = await POST(request({ isPoster: true, mediaUrls: ['https://example.com/poster.jpg'], design: dummyDesign }, 'key-poster-12345678'));
+  expect(res.status).toBe(201);
+  expect(m.renderDesign).not.toHaveBeenCalled();
+  expect(m.create.mock.calls[0][0].data.mediaUrls).toBe(JSON.stringify(['https://example.com/poster.jpg']));
+});
+it('falls back to mediaUrls gracefully if renderDesign fails without throwing 500', async () => {
+  m.renderDesign.mockRejectedValue(new Error('Font download timeout'));
+  const dummyDesign = { version: 1, width: 1080, height: 1080, background: '#000000', layers: [] };
+  const res = await POST(request({ mediaUrls: ['https://example.com/fallback.jpg'], design: dummyDesign }, 'key-fallback-12345678'));
+  expect(res.status).toBe(201);
+  expect(m.renderDesign).toHaveBeenCalled();
+  expect(m.create.mock.calls[0][0].data.mediaUrls).toBe(JSON.stringify(['https://example.com/fallback.jpg']));
 });

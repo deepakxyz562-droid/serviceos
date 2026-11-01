@@ -192,6 +192,7 @@ interface CreatePostBody {
   draftId?: string;
   expectedUpdatedAt?: string;
   design?: unknown;
+  isPoster?: boolean;
   content: string;
   mediaUrls?: string[];
   linkUrl?: string;
@@ -377,9 +378,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Render the exact source revision before queuing publication.
-    if (design && !isDraft) {
-      const rendered = await renderDesign(design, tenantId);
-      body.mediaUrls = [rendered.imageUrl];
+    // If body.isPoster or if mediaUrls already has a valid finished image, use it directly.
+    const hasPreRenderedMedia = Array.isArray(body.mediaUrls) && body.mediaUrls.length > 0 && typeof body.mediaUrls[0] === 'string' && body.mediaUrls[0].trim().length > 0;
+    if (design && !isDraft && !(body.isPoster && hasPreRenderedMedia)) {
+      try {
+        const rendered = await renderDesign(design, tenantId);
+        if (rendered?.imageUrl) {
+          body.mediaUrls = [rendered.imageUrl];
+        }
+      } catch (renderError) {
+        console.warn('[api/social/posts] renderDesign warning:', renderError instanceof Error ? renderError.message : renderError);
+        // If we already have a mediaUrl (e.g. background photo or asset), fall back to it gracefully
+        if (!hasPreRenderedMedia) {
+          return NextResponse.json(
+            { error: `Could not export design image: ${renderError instanceof Error ? renderError.message : 'Rendering error'}` },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     // Persist the post.

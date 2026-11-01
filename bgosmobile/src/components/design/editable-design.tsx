@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Crypto from 'expo-crypto';
 import { apiRequest } from '../../lib/api';
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, Image, Pressable, ScrollView, Linking } from 'react-native';
+import { View, Text, TextInput, Image, Pressable, ScrollView, Linking, Dimensions } from 'react-native';
 import type { MarketingDesign, DesignLayer } from '../../../../shared/marketing-design';
 export function EditableDesign({design,onChange}:{design:MarketingDesign;onChange?:(d:MarketingDesign)=>void}) {
   const [fontLoaded]=useFonts({BgosDesign:require('../../../assets/fonts/BgosDesign-Regular.ttf')});
@@ -22,7 +22,10 @@ export function EditableDesign({design,onChange}:{design:MarketingDesign;onChang
   const [width,setWidth]=useState(320);
   const [selected,setSelected]=useState('headline');
   const layer=design.layers.find(l=>l.id===selected);
-  const scale=width/design.width;
+  const maxStageHeight=Math.min(340,Math.round(Dimensions.get('window').height*0.38));
+  const scale=Math.min(width/design.width,maxStageHeight/design.height);
+  const stageWidth=design.width*scale;
+  const stageHeight=design.height*scale;
   const patch=(values:Partial<DesignLayer>)=>commit({...design,layers:design.layers.map(l=>l.id===selected?{...l,...values}:l)});
   function applyImage(asset:{url:string;assetId:string}){
     const existing=design.layers.find(l=>l.id===selected&&l.type==='image')||design.layers.find(l=>l.type==='image');
@@ -46,7 +49,7 @@ export function EditableDesign({design,onChange}:{design:MarketingDesign;onChang
   }
   if(!fontLoaded)return <Text>Loading design font…</Text>;
   return <View style={{gap:12}}>
-    <View onLayout={e=>setWidth(e.nativeEvent.layout.width)} style={{width:'100%',aspectRatio:design.width/design.height,backgroundColor:design.background,overflow:'hidden',borderRadius:12}}>
+    <View onLayout={e=>setWidth(e.nativeEvent.layout.width)} style={{width:stageWidth,height:stageHeight,alignSelf:'center',backgroundColor:design.background,overflow:'hidden',borderRadius:12}}>
       {onChange&&<><View pointerEvents="none" style={{position:'absolute',left:'50%',top:0,bottom:0,borderLeftWidth:1,borderColor:'#00b89c55'}}/><View pointerEvents="none" style={{position:'absolute',top:'50%',left:0,right:0,borderTopWidth:1,borderColor:'#00b89c55'}}/></>}
       {design.layers.map(l=><GestureLayer key={l.id} layer={l} design={design} scale={scale} selected={!!onChange&&selected===l.id} onSelect={()=>setSelected(l.id)} onCommit={onChange?next=>commit({...design,layers:design.layers.map(item=>item.id===next.id?next:item)}):undefined}/>)}
     </View>

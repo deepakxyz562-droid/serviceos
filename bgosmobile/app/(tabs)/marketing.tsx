@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Image,
   Linking,
   Modal,
@@ -186,6 +187,19 @@ export default function MarketingScreen() {
 
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram', 'facebook']);
 
+  // Sync selectedPlatforms with connected accounts so publishing doesn't target disconnected channels
+  useEffect(() => {
+    if (availableAccounts.length > 0) {
+      const activePlatforms = Array.from(new Set(availableAccounts.filter((a) => a.isActive).map((a) => a.platform)));
+      if (activePlatforms.length > 0) {
+        setSelectedPlatforms((prev) => {
+          const valid = prev.filter((p) => activePlatforms.includes(p));
+          return valid.length > 0 ? valid : [activePlatforms[0]];
+        });
+      }
+    }
+  }, [availableAccounts]);
+
   const businessDisplayName =
     discover.data?.activeProfile?.name ||
     brandProfile.data?.profile?.businessName ||
@@ -282,13 +296,34 @@ export default function MarketingScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        quality: 0.9,
+        quality: 0.85,
+        base64: true,
       });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        setCustomPosterUri(result.assets[0].uri);
-        setActiveVisualFormat('poster');
-        setSuccessNotice('Custom promotional graphic loaded!');
-        setTimeout(() => setSuccessNotice(null), 3000);
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        setBusy(true);
+        try {
+          if (asset.base64) {
+            const mime = asset.mimeType || 'image/jpeg';
+            const uploaded = await apiRequest<{ url: string; assetId?: string }>('/api/social/designs/assets', {
+              method: 'POST',
+              body: { data: `data:${mime};base64,${asset.base64}` },
+            });
+            setCustomPosterUri(uploaded.url);
+          } else {
+            setCustomPosterUri(asset.uri);
+          }
+          setActiveVisualFormat('poster');
+          setSuccessNotice('Custom promotional graphic uploaded & saved!');
+          setTimeout(() => setSuccessNotice(null), 3000);
+        } catch {
+          setCustomPosterUri(asset.uri);
+          setActiveVisualFormat('poster');
+          setSuccessNotice('Custom promotional graphic loaded!');
+          setTimeout(() => setSuccessNotice(null), 3000);
+        } finally {
+          setBusy(false);
+        }
       }
     } catch {
       Alert.alert('Notice', 'Could not open photo library.');
@@ -349,7 +384,9 @@ export default function MarketingScreen() {
       return;
     }
 
-    const mediaList = activeVisualFormat === 'poster' && customPosterUri ? [customPosterUri] : bgPhotoUrl ? [bgPhotoUrl] : [];
+    const isPosterMode = activeVisualFormat === 'poster';
+    const resolvedPosterUrl = customPosterUri || `${WEB_URL}/images/fieseros-ai-assistant-poster.jpg`;
+    const mediaList = isPosterMode ? [resolvedPosterUrl] : bgPhotoUrl ? [bgPhotoUrl] : [];
     const contentCheck = validateSocialPost(caption.trim(), selectedPlatforms, mediaList);
     if (contentCheck) {
       setError(contentCheck);
@@ -364,9 +401,10 @@ export default function MarketingScreen() {
       targets: targets.length > 0 ? targets : undefined,
       platforms: selectedPlatforms,
       mediaUrls: mediaList,
-      design,
-      expectedUpdatedAt:designRevision,
-      ...(status!=='draft'&&editingDesignId?{draftId:editingDesignId}:{}),
+      isPoster: isPosterMode,
+      design: isPosterMode ? undefined : design,
+      expectedUpdatedAt: designRevision,
+      ...(status !== 'draft' && editingDesignId ? { draftId: editingDesignId } : {}),
       status,
       gbpPostType: 'offer',
       ...(scheduledAt ? { scheduledAt } : {}),
@@ -426,7 +464,49 @@ export default function MarketingScreen() {
     }
   }
 
-  function handleUseMyPhoto() {
+  async function handleUseMyPhoto() {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.85,
+        base64: true,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        setBusy(true);
+        try {
+          let remoteUrl = asset.uri;
+          if (asset.base64) {
+            const mime = asset.mimeType || 'image/jpeg';
+            const uploaded = await apiRequest<{ url: string; assetId?: string }>('/api/social/designs/assets', {
+              method: 'POST',
+              body: { data: `data:${mime};base64,${asset.base64}` },
+            });
+            remoteUrl = uploaded.url;
+          }
+          setBgPhotoUrl(remoteUrl);
+          if (customDesign) {
+            setCustomDesign({
+              ...customDesign,
+              layers: customDesign.layers.map((l) =>
+                l.type === 'image' ? { ...l, url: remoteUrl, src: remoteUrl } : l
+              ),
+            });
+          }
+          setSuccessNotice('Photo uploaded to design canvas!');
+          setTimeout(() => setSuccessNotice(null), 3000);
+          return;
+        } catch {
+          setBgPhotoUrl(asset.uri);
+        } finally {
+          setBusy(false);
+        }
+      }
+    } catch {
+      // fallback to presets
+    }
+
     Alert.alert(
       'Replace Background Photo',
       'Select a photo for this creative:',
@@ -665,6 +745,44 @@ export default function MarketingScreen() {
                     </Text>
                   </View>
                 </View>
+
+                {/* Live Creative Design Preview Card in Step 1 */}
+                <Pressable
+                  onPress={() => {
+                    setStudioStep(2);
+                    setStudioSubTab('design');
+                  }}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    overflow: 'hidden',
+                    marginBottom: 12,
+                    shadowColor: '#000',
+                    shadowOpacity: 0.06,
+                    shadowRadius: 5,
+                    elevation: 2,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="auto-awesome" size={14} color="#009F50" />
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Generated Creative Preview</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#009F50' }}>Tap to view/edit</Text>
+                      <MaterialIcons name="chevron-right" size={16} color="#009F50" />
+                    </View>
+                  </View>
+                  <View style={{ height: 210, backgroundColor: '#090D16', alignItems: 'center', justifyContent: 'center', padding: 6 }}>
+                    <Image
+                      source={customPosterUri ? { uri: customPosterUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="contain"
+                    />
+                  </View>
+                </Pressable>
 
                 {/* Alternative Headlines Chips */}
                 <View style={styles.altHeadlinesBox}>
@@ -957,11 +1075,24 @@ export default function MarketingScreen() {
 
                 {activeVisualFormat === 'poster' ? (
                   <View style={{ marginBottom: 16 }}>
-                    <View style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#090D16', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, elevation: 3 }}>
+                    <View style={{
+                      height: Math.min(340, Math.round(Dimensions.get('window').height * 0.38)),
+                      aspectRatio: 4 / 5,
+                      alignSelf: 'center',
+                      borderRadius: 16,
+                      overflow: 'hidden',
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      backgroundColor: '#090D16',
+                      shadowColor: '#000',
+                      shadowOpacity: 0.12,
+                      shadowRadius: 8,
+                      elevation: 3
+                    }}>
                       <Image
                         source={customPosterUri ? { uri: customPosterUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
-                        style={{ width: '100%', aspectRatio: 4 / 5 }}
-                        resizeMode="cover"
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="contain"
                       />
                       <View style={{ position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(0,0,0,0.75)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
                         <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>FINISHED POSTER · 1080 × 1350</Text>
@@ -1152,11 +1283,13 @@ export default function MarketingScreen() {
                   </View>
 
                   {activeVisualFormat === 'poster' ? (
-                    <Image
-                      source={customPosterUri ? { uri: customPosterUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
-                      style={{ width: '100%', aspectRatio: 4 / 5 }}
-                      resizeMode="cover"
-                    />
+                    <View style={{ height: Math.min(320, Math.round(Dimensions.get('window').height * 0.36)), backgroundColor: '#090D16', alignItems: 'center', justifyContent: 'center' }}>
+                      <Image
+                        source={customPosterUri ? { uri: customPosterUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="contain"
+                      />
+                    </View>
                   ) : (
                     <EditableDesign design={design} />
                   )}
