@@ -247,18 +247,26 @@ export async function GET(request: NextRequest) {
 
   // ── 7. For each Page, look up its linked IG Business Account ───────────
   //
-  // GET /{pageId}?fields=instagram_business_account&access_token={pageToken}
+  // GET /{pageId}?fields=instagram_business_account{id,username,name,profile_picture_url},connected_instagram_account{id,username,name}&access_token={pageToken}
   //
-  // Returns: { instagram_business_account: { id: "1789..." } } if the Page
+  // Returns: { instagram_business_account: { id: "1789...", ... } } if the Page
   // has a linked IG Business Account, or { } (empty) if it doesn't.
   //
-  // We fire these in parallel (one request per Page) for speed. Pages
-  // without an IG Business Account are silently skipped — the user may
-  // have some Pages with IG and some without.
+  // Diagnostic tracking for clearer user troubleshooting:
+  const pageDiagnostics: Array<{
+    pageId: string;
+    pageName: string;
+    hasPersonalIg: boolean;
+    personalIgUsername?: string;
+  }> = [];
+
   const igAccountLookups = await Promise.allSettled(
     pages.map(async (page) => {
       const lookupUrl = new URL(`https://graph.facebook.com/v18.0/${page.id}`);
-      lookupUrl.searchParams.set('fields', 'instagram_business_account');
+      lookupUrl.searchParams.set(
+        'fields',
+        'instagram_business_account{id,username,name,profile_picture_url},connected_instagram_account{id,username,name}',
+      );
       lookupUrl.searchParams.set('access_token', page.access_token);
       const res = await fetch(lookupUrl.toString(), {
         method: 'GET',
@@ -269,9 +277,30 @@ export async function GET(request: NextRequest) {
         throw new Error(`Lookup IG for Page ${page.id} failed (${res.status}): ${text.slice(0, 200)}`);
       }
       const body = (await res.json()) as {
-        instagram_business_account?: { id: string };
+        instagram_business_account?: {
+          id: string;
+          username?: string;
+          name?: string;
+          profile_picture_url?: string;
+        };
+        connected_instagram_account?: {
+          id: string;
+          username?: string;
+          name?: string;
+        };
       };
-      if (!body.instagram_business_account?.id) {
+
+      const hasBusiness = !!body.instagram_business_account?.id;
+      const hasPersonal = !!body.connected_instagram_account?.id && !hasBusiness;
+
+      pageDiagnostics.push({
+        pageId: page.id,
+        pageName: page.name,
+        hasPersonalIg: hasPersonal,
+        personalIgUsername: body.connected_instagram_account?.username || body.connected_instagram_account?.name,
+      });
+
+      if (!hasBusiness) {
         // Page has no IG Business Account linked — skip silently.
         return null;
       }
@@ -279,7 +308,9 @@ export async function GET(request: NextRequest) {
         pageId: page.id,
         pageName: page.name,
         pageAccessToken: page.access_token,
-        igBusinessId: body.instagram_business_account.id,
+        igBusinessId: body.instagram_business_account!.id,
+        username: body.instagram_business_account!.username || body.instagram_business_account!.name || null,
+        profilePictureUrl: body.instagram_business_account!.profile_picture_url || null,
       };
     }),
   );
@@ -296,21 +327,53 @@ export async function GET(request: NextRequest) {
     .filter((v): v is NonNullable<typeof v> => v !== null);
 
   if (igAccounts.length === 0) {
+    const personalAccountPage = pageDiagnostics.find((p) => p.hasPersonalIg);
+    const firstPage = pages[0];
+    const settingsUrl = firstPage
+      ? `https://www.facebook.com/${firstPage.id}/settings/?tab=linked_instagram`
+      : 'https://business.facebook.com/latest/settings/instagram_accounts';
+
+    if (personalAccountPage) {
+      const igHandle = personalAccountPage.personalIgUsername
+        ? `@${personalAccountPage.personalIgUsername}`
+        : 'your Instagram account';
+      return renderErrorPage(
+        `Your Facebook Page <strong>"${personalAccountPage.pageName}"</strong> is connected to ${igHandle}, but it is currently a <strong>Personal profile</strong>.<br/><br/>` +
+        `Meta requires a <strong>Professional Account</strong> (Business or Creator) for third-party publishing.<br/><br/>` +
+        `<strong>How to fix in 30 seconds:</strong><br/>` +
+        `1. Open the Instagram app on your phone.<br/>` +
+        `2. Go to your <strong>Profile → Edit Profile → Switch to Professional Account</strong> (choose Business or Creator).<br/>` +
+        `3. Return to BGOS and click <strong>Connect Instagram</strong> again.`,
+        state.returnUrl,
+        {
+          label: 'Open Facebook Page Settings',
+          url: settingsUrl,
+        },
+      );
+    }
+
+    const pageNames = pages.map((p) => `"${p.name}"`).join(', ');
     return renderErrorPage(
-      'None of your Facebook Pages have a linked Instagram Business Account. ' +
-        'Convert your Instagram account to a Business profile and link it to a Facebook Page at https://business.instagram.com.',
+      `Your Facebook account manages the Page ${pageNames}, but no Instagram Business Account is linked to it yet.<br/><br/>` +
+      `<strong>How to link in 60 seconds:</strong><br/>` +
+      `1. Open Facebook Page Settings → <strong>Linked Accounts → Instagram</strong>.<br/>` +
+      `2. Click <strong>Connect Account</strong> and log in to your Instagram account.<br/>` +
+      `3. Confirm that the account is set as a free <strong>Professional (Business or Creator)</strong> profile.<br/>` +
+      `4. Return to BGOS and click <strong>Connect Instagram</strong> again.`,
+      state.returnUrl,
+      {
+        label: `Link Instagram to ${pages[0]?.name || 'Page'} on Facebook`,
+        url: settingsUrl,
+      },
     );
   }
 
-  // ── 8. For each IG Business Account, fetch its username (for display)
-  //
-  // GET /{igBusinessId}?fields=username,profile_picture_url&access_token={pageToken}
-  //
-  // We use the PAGE token (not the user token) because IG Business data
-  // is accessible via the Page token when the IG account is linked to
-  // that Page.
+  // ── 8. For each IG Business Account, ensure username & profile picture are loaded
   const igProfileLookups = await Promise.allSettled(
     igAccounts.map(async (acc) => {
+      if (acc.username) {
+        return acc;
+      }
       const profileUrl = new URL(
         `https://graph.facebook.com/v18.0/${acc.igBusinessId}`,
       );
@@ -321,7 +384,6 @@ export async function GET(request: NextRequest) {
         headers: { Accept: 'application/json' },
       });
       if (!res.ok) {
-        // Non-fatal — we can store without a username (fall back to IG ID).
         return { ...acc, username: null as string | null };
       }
       const body = (await res.json()) as {
@@ -504,38 +566,56 @@ function getAppUrlFromRequest(request: NextRequest): string {
  * the OAuth callback is loaded in a top-level browser navigation — the
  * user needs to see a human-readable message, not a JSON payload.
  */
-function renderErrorPage(message: string, returnUrl?: string): NextResponse {
+function renderErrorPage(
+  message: string,
+  returnUrl?: string,
+  actionLink?: { label: string; url: string },
+): NextResponse {
   if (returnUrl && returnUrl.startsWith('bgos://')) {
     const mobileRedirect = new URL(returnUrl);
-    mobileRedirect.searchParams.set('error', message);
+    const plain = message.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    mobileRedirect.searchParams.set('error', plain);
     return NextResponse.redirect(mobileRedirect.toString());
   }
-  const safe = message
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+
+  const safeReturnUrl =
+    returnUrl && !returnUrl.startsWith('bgos://')
+      ? returnUrl
+      : '/dashboard?view=social-accounts';
+
   return new NextResponse(
-    `<!html>
-<html><head><title>Connection Failed</title><style>
-body { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #fef2f2; }
-.card { text-align: center; padding: 3rem; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 480px; }
-.icon { width: 64px; height: 64px; margin: 0 auto 1rem; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; }
-h1 { color: #991b1b; margin: 0 0 0.5rem; font-size: 1.5rem; }
-p { color: #4b5563; margin: 0 0 1.5rem; line-height: 1.5; }
-a, button { background: #dc2626; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+    `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Instagram Connection Notice</title><style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #fafafa; padding: 1.5rem; }
+.card { text-align: left; padding: 2.25rem; background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); max-width: 520px; border: 1px solid #e5e7eb; box-sizing: border-box; width: 100%; }
+.icon { width: 52px; height: 52px; margin: 0 auto 1.25rem; background: #fdf2f8; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #db2777; }
+h1 { color: #111827; margin: 0 0 1rem; font-size: 1.35rem; font-weight: 700; text-align: center; }
+.content { color: #4b5563; margin: 0 0 1.5rem; line-height: 1.6; font-size: 0.9rem; }
+.actions { display: flex; flex-direction: column; gap: 0.75rem; text-align: center; }
+.btn-primary { background: #009F50; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-block; font-size: 0.9rem; transition: opacity 0.15s; }
+.btn-primary:hover { opacity: 0.9; }
+.btn-secondary { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; padding: 0.7rem 1.25rem; border-radius: 10px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; font-size: 0.85rem; }
+.btn-secondary:hover { background: #e5e7eb; }
 </style></head>
 <body>
 <div class="card">
-  <div class="icon">✗</div>
-  <h1>Instagram Connection Failed</h1>
-  <p>${safe}</p>
-  <a href="/dashboard?view=social-accounts">Back to Dashboard</a>
+  <div class="icon">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+  </div>
+  <h1>Instagram Connection Setup</h1>
+  <div class="content">${message}</div>
+  <div class="actions">
+    ${
+      actionLink
+        ? `<a href="${actionLink.url}" target="_blank" rel="noopener noreferrer" class="btn-primary">${actionLink.label} ↗</a>`
+        : ''
+    }
+    <a href="${safeReturnUrl}" class="btn-secondary">Back to BGOS Dashboard</a>
+  </div>
 </div>
 <script>
   if (window.opener) {
-    window.opener.postMessage({ type: 'oauth_error', provider: 'instagram', error: ${JSON.stringify(message)} }, '*');
-    setTimeout(() => window.close(), 3000);
+    window.opener.postMessage({ type: 'oauth_error', provider: 'instagram', error: ${JSON.stringify(message.replace(/<[^>]*>/g, ' '))} }, '*');
   }
 </script>
 </body></html>`,
