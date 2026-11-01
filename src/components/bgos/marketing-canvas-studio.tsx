@@ -967,8 +967,9 @@ export function MarketingCanvasStudio({
             </div>
           </div>
         </div>
+      </div>
 
-        {/* ─── RIGHT COLUMN: Live Visual Canvas & Editor (7 cols) ───────────── */}
+      {/* ─── RIGHT COLUMN: Live Visual Canvas & Editor (7 cols) ───────────── */}
         <div className="lg:col-span-7 space-y-4">
           {/* Top View Selector Tabs: Finished AI Poster | Editable Canvas | Channel preview */}
           <div className="flex items-center justify-between border-b border-border pb-1">
