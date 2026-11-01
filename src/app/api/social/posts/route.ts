@@ -336,12 +336,18 @@ export async function POST(request: NextRequest) {
       severity: 'info',
     }).catch(() => {});
 
-    // If publish-now, fire the orchestrator. We DON'T await the full
-    // publish (it can take 5-30s for multi-platform posts) — return
-    // immediately with status='publishing' and let the UI poll.
+    // If publish-now, fire the orchestrator.
+    // The orchestrator runs in background and the UI polls /api/social/posts/[id] for completion.
     if (publishNow) {
-      // Fire-and-forget — the orchestrator never throws.
-      after(() => publishPost(post.id));
+      if (typeof after === 'function') {
+        try {
+          after(() => publishPost(post.id));
+        } catch {
+          void publishPost(post.id);
+        }
+      } else {
+        void publishPost(post.id);
+      }
     }
 
     return NextResponse.json(

@@ -16,6 +16,7 @@ import {
   Send,
   Save,
   Wand2,
+  Zap,
   Link as LinkIcon,
   AlertCircle,
   Video,
@@ -176,6 +177,8 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
 
   // Submit
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishResult, setPublishResult] = useState<{ status: string; failureReason?: string | null } | null>(null);
 
   // ── Load connected accounts ──
   const loadAccounts = useCallback(async () => {
@@ -339,6 +342,10 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
   const validate = (): string | null => {
     if (selectedAccountIds.length === 0) return 'Select at least one connected social account.';
 
+    if (hasInstagram && mediaUrls.length === 0) {
+      return 'Instagram requires a photo or video. Please upload an image or video, or deselect Instagram.';
+    }
+
     if (postFormat === 'text') {
       if (!content.trim()) return 'Post text is required.';
       if (hasInstagram) {
@@ -431,6 +438,7 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
       return;
     }
     setIsSaving(true);
+    setPublishResult(null);
     try {
       const res = await authFetch('/api/social/posts', {
         method: 'POST',
@@ -438,25 +446,70 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
         body: JSON.stringify(buildPayload(status)),
       });
       if (res.ok) {
-        if (status === 'published') {
-          toast.success('Post submitted for instant publishing across selected platforms!');
+        const json = await res.json().catch(() => ({}));
+        const postId = json?.data?.id;
+
+        if (status === 'published' && postId) {
+          setIsPublishing(true);
+          setIsSaving(false);
+          toast.info('Publishing to selected channels…');
+
+          // Poll for post completion (up to 12s)
+          let pollAttempts = 0;
+          let finalPost: any = null;
+
+          while (pollAttempts < 8) {
+            await new Promise((r) => setTimeout(r, 1500));
+            try {
+              const checkRes = await authFetch(`/api/social/posts/${postId}`);
+              if (checkRes.ok) {
+                const checkJson = await checkRes.json();
+                const currentStatus = checkJson?.data?.status;
+                if (currentStatus === 'published' || currentStatus === 'failed' || currentStatus === 'partial') {
+                  finalPost = checkJson.data;
+                  break;
+                }
+              }
+            } catch {}
+            pollAttempts++;
+          }
+
+          setIsPublishing(false);
+
+          if (finalPost) {
+            setPublishResult(finalPost);
+            if (finalPost.status === 'published') {
+              toast.success('🎉 Published successfully across your selected channels!');
+              // Reset form on success
+              setContent('');
+              setMediaUrls([]);
+              setLinkUrl('');
+              setAiTopic('');
+              setGbpOfferTitle('');
+              setGbpOfferCoupon('');
+              setGbpOfferStartDate('');
+              setGbpOfferEndDate('');
+              setPinterestBoard('');
+              setScheduledAt('');
+            } else if (finalPost.status === 'partial') {
+              toast.warning(`⚠️ Partially published: ${finalPost.failureReason || 'Some channels failed'}`);
+            } else {
+              // Failed: do NOT wipe the form so user text is preserved!
+              toast.error(`❌ Publishing failed: ${finalPost.failureReason || 'Failed to publish to channels'}`, { duration: 9000 });
+            }
+          } else {
+            toast.success('Post queued for publishing! You can view live status in Posts List.');
+          }
         } else if (status === 'scheduled') {
           toast.success('Post successfully scheduled.');
+          // Reset form
+          setContent('');
+          setMediaUrls([]);
+          setLinkUrl('');
+          setScheduledAt('');
         } else {
-          toast.success('Draft saved.');
+          toast.success('Draft saved successfully.');
         }
-        // Reset form
-        setContent('');
-        setMediaUrls([]);
-        setLinkUrl('');
-        setAiTopic('');
-        setGbpOfferTitle('');
-        setGbpOfferCoupon('');
-        setGbpOfferStartDate('');
-        setGbpOfferEndDate('');
-        setPinterestBoard('');
-        setScheduledAt('');
-        setPublishMode('now');
       } else {
         const json = await res.json().catch(() => ({}));
         toast.error(json.error || `Failed to ${status === 'published' ? 'publish' : 'save'} post`);
@@ -465,6 +518,7 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
       toast.error('Network error saving post');
     } finally {
       setIsSaving(false);
+      setIsPublishing(false);
     }
   };
 
@@ -973,33 +1027,38 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
               <CardTitle className="text-sm font-bold">Publishing Options</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant={publishMode === 'now' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setPublishMode('now')}
-                  className={cn(
-                    'h-9 text-xs font-semibold rounded-xl',
-                    publishMode === 'now' && 'bg-primary text-primary-foreground',
-                  )}
-                >
-                  <Send className="size-3.5 mr-1" />
-                  Publish Now
-                </Button>
-                <Button
-                  type="button"
-                  variant={publishMode === 'schedule' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setPublishMode('schedule')}
-                  className={cn(
-                    'h-9 text-xs font-semibold rounded-xl',
-                    publishMode === 'schedule' && 'bg-primary text-primary-foreground',
-                  )}
-                >
-                  <CalendarClock className="size-3.5 mr-1" />
-                  Schedule
-                </Button>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground block mb-1.5">
+                  Publishing Schedule
+                </Label>
+                <div className="grid grid-cols-2 gap-1 p-1 bg-muted/60 rounded-xl border border-border/60">
+                  <button
+                    type="button"
+                    onClick={() => setPublishMode('now')}
+                    className={cn(
+                      'flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all',
+                      publishMode === 'now'
+                        ? 'bg-background text-foreground shadow-xs font-bold'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <Zap className="size-3.5 text-amber-500" />
+                    Publish Now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPublishMode('schedule')}
+                    className={cn(
+                      'flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all',
+                      publishMode === 'schedule'
+                        ? 'bg-background text-foreground shadow-xs font-bold'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <CalendarClock className="size-3.5 text-primary" />
+                    Schedule
+                  </button>
+                </div>
               </div>
 
               {publishMode === 'schedule' && (
@@ -1014,27 +1073,65 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
                 </div>
               )}
 
+              {/* Status Notice if previous publish had an error */}
+              {publishResult && publishResult.status === 'failed' && (
+                <div className="p-2.5 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-destructive space-y-1">
+                  <div className="font-bold flex items-center gap-1">
+                    <AlertCircle className="size-3.5" /> Publishing Failed
+                  </div>
+                  <div className="text-[11px] leading-relaxed break-words">
+                    {publishResult.failureReason || 'Failed to publish to selected channels.'}
+                  </div>
+                </div>
+              )}
+
+              {publishResult && publishResult.status === 'published' && (
+                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 space-y-1">
+                  <div className="font-bold flex items-center gap-1">
+                    <CheckCircle2 className="size-3.5" /> Published Successfully
+                  </div>
+                  <div className="text-[11px]">
+                    Your post is now live across your selected channels!
+                  </div>
+                </div>
+              )}
+
+              {/* SINGLE Primary Action Button */}
               <Button
                 className="w-full h-10 text-xs font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs gap-1.5"
-                disabled={isSaving}
+                disabled={isSaving || isPublishing}
                 onClick={() =>
                   submitPost(publishMode === 'schedule' ? 'scheduled' : 'published')
                 }
               >
-                {isSaving ? (
-                  <Loader2 className="size-4 animate-spin" />
+                {isSaving || isPublishing ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    {isPublishing
+                      ? 'Publishing to Channels…'
+                      : publishMode === 'schedule'
+                      ? 'Scheduling…'
+                      : 'Saving…'}
+                  </>
                 ) : publishMode === 'schedule' ? (
-                  <CalendarClock className="size-4" />
+                  <>
+                    <CalendarClock className="size-4" />
+                    Schedule Post
+                  </>
                 ) : (
-                  <Send className="size-4" />
+                  <>
+                    <Send className="size-4" />
+                    {selectedAccountIds.length > 0
+                      ? `Publish Now (${selectedAccountIds.length} channel${selectedAccountIds.length > 1 ? 's' : ''}) 🚀`
+                      : 'Publish Now 🚀'}
+                  </>
                 )}
-                {publishMode === 'schedule' ? 'Schedule Post' : 'Publish to Channels'}
               </Button>
 
               <Button
                 variant="outline"
                 className="w-full h-9 text-xs font-semibold rounded-xl"
-                disabled={isSaving}
+                disabled={isSaving || isPublishing}
                 onClick={() => submitPost('draft')}
               >
                 <Save className="size-3.5 mr-1" />
