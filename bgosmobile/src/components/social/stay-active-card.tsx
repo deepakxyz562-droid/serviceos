@@ -62,6 +62,72 @@ export function StayActiveSocialMediaCard() {
     }
   }
 
+  const allConnected = Boolean(fbAccount && igAccount);
+  const anyConnected = Boolean(fbAccount || igAccount);
+
+  // ── When accounts are connected: show a sleek compact status strip (no giant buttons) ──
+  if (allConnected) {
+    return (
+      <View style={styles.compactConnectedStrip}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+          <View style={styles.greenDot} />
+          <Text style={styles.compactConnectedText} numberOfLines={1}>
+            Facebook & Instagram Active ({fbAccount?.accountName || 'Connected'})
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Manage Connected Accounts"
+          onPress={() => {
+            Alert.alert(
+              'Connected Social Accounts',
+              `• Facebook: ${fbAccount?.accountName || 'Active'}\n• Instagram: ${igAccount?.accountName || 'Active'}`,
+              [
+                { text: 'Done' },
+                { text: 'Reconnect Facebook', onPress: () => handleConnect('facebook') },
+                { text: 'Reconnect Instagram', onPress: () => handleConnect('instagram') },
+              ]
+            );
+          }}
+          style={styles.managePill}
+        >
+          <Text style={styles.managePillText}>Manage ⌵</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (anyConnected) {
+    const connectedName = fbAccount ? 'Facebook' : 'Instagram';
+    const missingKey = fbAccount ? 'instagram' : 'facebook';
+    const missingName = fbAccount ? 'Instagram' : 'Facebook';
+    const busy = connectingKey === missingKey;
+
+    return (
+      <View style={styles.compactConnectedStrip}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+          <View style={styles.greenDot} />
+          <Text style={styles.compactConnectedText} numberOfLines={1}>
+            {connectedName} Active · Connect {missingName}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={() => handleConnect(missingKey)}
+          style={styles.connectPill}
+        >
+          {busy ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Text style={styles.connectPillText}>+ {missingName}</Text>
+          )}
+        </Pressable>
+      </View>
+    );
+  }
+
+  // ── When none are connected: show the connect card ──
   const channels = [
     {
       key: 'facebook' as const,
@@ -152,6 +218,54 @@ export function StayActiveSocialMediaCard() {
 }
 
 const styles = StyleSheet.create({
+  compactConnectedStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginVertical: 4,
+  },
+  greenDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#009F50',
+  },
+  compactConnectedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065F46',
+    flex: 1,
+  },
+  managePill: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  managePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#009F50',
+  },
+  connectPill: {
+    backgroundColor: '#009F50',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  connectPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,

@@ -328,7 +328,17 @@ function MarketingScoreCard({
       {/* Dynamic Header according to active slide */}
       {slide === 0 ? (
         <View style={[ui.row, { justifyContent: 'space-between' }]}>
-          <View style={[ui.row, { gap: 6 }]}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              if (!connected) return;
+              Alert.alert(
+                'Marketing Score (0–100%)',
+                `Your composite score is ${Math.round(score!.score ?? 0)}%.\n\nIt measures 4 weighted pillars:\n• Profile Setup (40% weight)\n• Review Reply Rate (20% weight)\n• 30-Day Posts & Photos (20% weight)\n• Google Customer Engagement (20% weight)\n\nTip: Profile setup may be 88% complete, but regular posts and review replies are needed to boost your overall Marketing Score to 80%+.`
+              );
+            }}
+            style={[ui.row, { gap: 6 }]}
+          >
             <Text style={ui.heading}>Marketing Score</Text>
             {connected ? (
               <View style={{ backgroundColor: `${scoreBandColor(score!.score)}22`, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
@@ -337,7 +347,7 @@ function MarketingScoreCard({
                 </Text>
               </View>
             ) : null}
-          </View>
+          </Pressable>
           {connected ? (
             <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/growth')}>
               <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Improve Score →</Text>

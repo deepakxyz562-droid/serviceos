@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Screen,
   Card,
@@ -64,6 +65,7 @@ interface CreativeLayout {
 
 export default function MarketingScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ generate?: string; mode?: string }>();
   const pendingRequest = useRef<{ body: string; key: string } | null>(null);
   const saving = useRef(false);
@@ -373,7 +375,7 @@ export default function MarketingScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+    <View style={{ flex: 1, backgroundColor: '#F8FAFC', paddingTop: Math.max(insets.top, 12) }}>
       {/* ── Top Mode Switcher Bar ────────────────────────────────────────── */}
       <View style={styles.modeBar}>
         <Pressable

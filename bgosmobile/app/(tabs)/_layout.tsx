@@ -108,18 +108,6 @@ export default function TabLayout() {
                   />
                 );
               },
-              ...(name === 'reviews' && pendingReplies != null && pendingReplies > 0
-                ? {
-                    tabBarBadge: pendingReplies > 99 ? '99+' : pendingReplies,
-                    tabBarBadgeStyle: {
-                      backgroundColor: colors.danger,
-                      fontSize: 10,
-                      fontWeight: '800',
-                      color: '#FFFFFF',
-                      marginTop: 2,
-                    },
-                  }
-                : {}),
             }}
           />
         );

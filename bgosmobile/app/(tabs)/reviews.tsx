@@ -30,7 +30,7 @@ interface DiscoverResponse {
 }
 
 type ReviewsResponse = { reviews: Review[]; pagination?: { total: number } };
-type ReplyFilter = 'all' | 'pending' | 'failed' | 'replied';
+type ReviewFilter = 'all' | '5star' | '4star' | '3star' | 'critical' | 'replied';
 
 interface KeywordUsage {
   keyword: string;
@@ -146,7 +146,7 @@ export default function ReviewRepliesScreen() {
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
 
-  const [filter, setFilter] = useState<ReplyFilter>('all');
+  const [filter, setFilter] = useState<ReviewFilter>('all');
   const [drafts, setDrafts] = useState<Record<string, { text: string; keywords?: KeywordUsage[] }>>({});
   const [draftBusyId, setDraftBusyId] = useState<string | null>(null);
   const [replyBusyId, setReplyBusyId] = useState<string | null>(null);
@@ -247,14 +247,19 @@ export default function ReviewRepliesScreen() {
     });
   }, [all, averageRating]);
 
-  const shown =
-    filter === 'pending'
-      ? pending
-      : filter === 'failed'
-        ? failed
-        : filter === 'replied'
-          ? replied
-          : all;
+  const fiveStars = useMemo(() => all.filter((r) => Math.round(r.rating || 5) === 5), [all]);
+  const fourStars = useMemo(() => all.filter((r) => Math.round(r.rating || 5) === 4), [all]);
+  const threeStars = useMemo(() => all.filter((r) => Math.round(r.rating || 5) === 3), [all]);
+  const critical = useMemo(() => all.filter((r) => Math.round(r.rating || 5) <= 2), [all]);
+
+  const shown = useMemo(() => {
+    if (filter === '5star') return fiveStars;
+    if (filter === '4star') return fourStars;
+    if (filter === '3star') return threeStars;
+    if (filter === 'critical') return critical;
+    if (filter === 'replied') return replied;
+    return all;
+  }, [all, filter, fiveStars, fourStars, threeStars, critical, replied]);
 
   async function handleTriggerAutoReply() {
     if (autoReplyBusy) return;
@@ -411,8 +416,8 @@ export default function ReviewRepliesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       <Screen
-        title="Review Replies"
-        subtitle={`Google Business Profile • ${shortId.replace('#', '') ? `${shortId.replace('#', '')} • ` : ''}${version}`}
+        title="Google Reviews"
+        subtitle={`Verified customer reviews on Google Maps • ${shortId.replace('#', '') ? `${shortId.replace('#', '')} • ` : ''}${version}`}
         showBack={true}
         onBack={() => {
           if (router.canGoBack?.()) router.back();
@@ -669,7 +674,7 @@ export default function ReviewRepliesScreen() {
           </View>
         </View>
 
-        {/* ── FILTER PILLS: All | Pending | Failed Sync | Live on Google ── */}
+        {/* ── FILTER PILLS: All | 5★ | 4★ | 3★ | Critical | Replied ── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 6, gap: 6 }}>
           <ScrollView
             horizontal
@@ -698,14 +703,14 @@ export default function ReviewRepliesScreen() {
               </Text>
             </Pressable>
 
-            {/* Pending */}
+            {/* 5 Stars */}
             <Pressable
-              onPress={() => setFilter('pending')}
+              onPress={() => setFilter('5star')}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 5,
-                backgroundColor: filter === 'pending' ? '#0F172A' : '#F1F5F9',
+                backgroundColor: filter === '5star' ? '#0F172A' : '#F1F5F9',
                 paddingHorizontal: 12,
                 paddingVertical: 7,
                 borderRadius: 20,
@@ -713,70 +718,92 @@ export default function ReviewRepliesScreen() {
             >
               <Text
                 style={{
-                  color: filter === 'pending' ? '#FFFFFF' : '#64748B',
-                  fontWeight: filter === 'pending' ? '800' : '600',
+                  color: filter === '5star' ? '#FFFFFF' : '#F59E0B',
+                  fontWeight: filter === '5star' ? '800' : '700',
                   fontSize: 12.5,
                 }}
               >
-                Pending
+                ⭐ 5 Stars ({fiveStars.length})
               </Text>
-              {pending.length > 0 ? (
-                <View
-                  style={{
-                    backgroundColor: '#E11D48',
-                    paddingHorizontal: 6,
-                    paddingVertical: 1,
-                    borderRadius: 9,
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800' }}>
-                    {pending.length}
-                  </Text>
-                </View>
-              ) : null}
             </Pressable>
 
-            {/* Failed Sync */}
+            {/* 4 Stars */}
             <Pressable
-              onPress={() => setFilter('failed')}
+              onPress={() => setFilter('4star')}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 5,
-                backgroundColor: filter === 'failed' ? '#0F172A' : failed.length > 0 ? '#FEF3C7' : '#F1F5F9',
+                backgroundColor: filter === '4star' ? '#0F172A' : '#F1F5F9',
                 paddingHorizontal: 12,
                 paddingVertical: 7,
                 borderRadius: 20,
-                borderWidth: failed.length > 0 && filter !== 'failed' ? 1 : 0,
-                borderColor: '#F59E0B',
               }}
             >
               <Text
                 style={{
-                  color: filter === 'failed' ? '#FFFFFF' : failed.length > 0 ? '#B45309' : '#64748B',
-                  fontWeight: filter === 'failed' ? '800' : '700',
+                  color: filter === '4star' ? '#FFFFFF' : '#64748B',
+                  fontWeight: filter === '4star' ? '800' : '600',
                   fontSize: 12.5,
                 }}
               >
-                Failed Sync
+                ⭐ 4 Stars ({fourStars.length})
               </Text>
-              {failed.length > 0 ? (
-                <View
-                  style={{
-                    backgroundColor: filter === 'failed' ? '#F59E0B' : '#D97706',
-                    paddingHorizontal: 6,
-                    paddingVertical: 1,
-                    borderRadius: 9,
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800' }}>
-                    {failed.length}
-                  </Text>
-                </View>
-              ) : null}
             </Pressable>
 
-            {/* Replied / Live on Google */}
+            {/* 3 Stars */}
+            <Pressable
+              onPress={() => setFilter('3star')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: filter === '3star' ? '#0F172A' : '#F1F5F9',
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 20,
+              }}
+            >
+              <Text
+                style={{
+                  color: filter === '3star' ? '#FFFFFF' : '#64748B',
+                  fontWeight: filter === '3star' ? '800' : '600',
+                  fontSize: 12.5,
+                }}
+              >
+                ⭐ 3 Stars ({threeStars.length})
+              </Text>
+            </Pressable>
+
+            {/* Critical 1-2 Stars */}
+            {critical.length > 0 && (
+              <Pressable
+                onPress={() => setFilter('critical')}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5,
+                  backgroundColor: filter === 'critical' ? '#0F172A' : '#FEF2F2',
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: '#FECACA',
+                }}
+              >
+                <Text
+                  style={{
+                    color: filter === 'critical' ? '#FFFFFF' : '#DC2626',
+                    fontWeight: '800',
+                    fontSize: 12.5,
+                  }}
+                >
+                  ⚠️ 1-2 Stars ({critical.length})
+                </Text>
+              </Pressable>
+            )}
+
+            {/* Replied */}
             <Pressable
               onPress={() => setFilter('replied')}
               style={{
@@ -793,7 +820,7 @@ export default function ReviewRepliesScreen() {
                   fontSize: 12.5,
                 }}
               >
-                Live on Google ({replied.length})
+                ✓ Replied ({replied.length})
               </Text>
             </Pressable>
           </ScrollView>
@@ -975,8 +1002,8 @@ export default function ReviewRepliesScreen() {
           <Loading />
         ) : shown.length === 0 ? (
           <Empty
-            title={filter === 'pending' ? 'No pending reviews 🎉' : 'No reviews found'}
-            detail="Google reviews will display here automatically."
+            title={filter === 'critical' ? 'No critical reviews 🎉' : 'No reviews found'}
+            detail="Verified Google reviews will display here automatically."
           />
         ) : (
           shown.map((review) => {
