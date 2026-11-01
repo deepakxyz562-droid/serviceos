@@ -331,6 +331,39 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       console.warn('[ai-generate-post] ImageResponse render/upload warning:', renderErr);
     }
 
+    const layouts = [
+      {
+        id: 'editorial',
+        name: 'Editorial',
+        headline: finalHeadline,
+        subtitle: finalSubtitle,
+        badge: finalBadge,
+        ctaText: 'Book now',
+        theme: 'sand_olive',
+        photoUrl: body.photoUrl || 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80',
+      },
+      {
+        id: 'photo_led',
+        name: 'Photo-led',
+        headline: finalBadge || '20% OFF',
+        subtitle: 'Selected services',
+        badge: 'LIMITED TIME',
+        ctaText: 'Book now',
+        theme: 'beige',
+        photoUrl: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1080&q=80',
+      },
+      {
+        id: 'bold',
+        name: 'Bold',
+        headline: 'WEEKEND OFFER',
+        subtitle: 'Selected services',
+        badge: finalBadge || '20% OFF',
+        ctaText: 'Claim offer',
+        theme: 'emerald_gold',
+        photoUrl: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1080&q=80',
+      },
+    ];
+
     return NextResponse.json({
       success: true,
       title: finalTitle,
@@ -341,6 +374,13 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       hashtags: hashtagsArray,
       hashtagsText,
       imageUrl,
+      layouts,
+      bookingUrl: tenant?.website || `https://${tenantId}.fieseros.com/book`,
+      offerDetails: {
+        discountText: finalBadge,
+        startDate: new Date().toISOString().slice(0, 10),
+        endDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      },
     });
   } catch (err: unknown) {
     console.error('[api/social/ai-generate-post] error:', err);

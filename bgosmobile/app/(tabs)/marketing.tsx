@@ -1,6 +1,18 @@
 import * as Crypto from 'expo-crypto';
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Image, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -17,11 +29,9 @@ import {
 } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
-import { getToken } from '../../src/lib/auth';
 import { WEB_URL } from '../../src/lib/constants';
 import { validateSocialPost } from '../../src/lib/social-validation';
 import { futureLocalTime } from '../../src/lib/dates';
-import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import { PostsBoard } from '../../src/components/gbp/posts-list';
 import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
 import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
@@ -39,65 +49,159 @@ type BrandProfileData = {
   };
 };
 
+export type LayoutId = 'editorial' | 'photo_led' | 'bold';
+
+interface CreativeLayout {
+  id: LayoutId;
+  name: string;
+  headline: string;
+  subtitle: string;
+  badge: string;
+  ctaText: string;
+  theme: string;
+  photoUrl: string;
+}
+
 export default function MarketingScreen() {
   const router = useRouter();
-  // "Generate text post" CTA on the Google Post tab lands here with ?generate=1
-  // → the composer opens straight away.
-  const params = useLocalSearchParams<{ generate?: string }>();
+  const params = useLocalSearchParams<{ generate?: string; mode?: string }>();
   const pendingRequest = useRef<{ body: string; key: string } | null>(null);
   const saving = useRef(false);
+
+  // ── Resources ─────────────────────────────────────────────────────────────
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const discover = useResource<{ activeProfile?: { id: string; name: string } }>('/api/gbp/accounts/discover');
   const accounts = useResource<{ data: Account[] }>('/api/social/accounts');
   const brandProfile = useResource<BrandProfileData>('/api/brand-profile');
 
-  const [open, setOpen] = useState(false);
-  const [step, setStep] = useState(0);
-  const [topic, setTopic] = useState('');
-  const [content, setContent] = useState('');
-  const [gbpPostType, setGbpPostType] = useState<'whats_new' | 'offer' | 'event'>('whats_new');
-  const [ctaType, setCtaType] = useState<'LEARN_MORE' | 'CALL' | 'BOOK' | 'ORDER_ONLINE'>('LEARN_MORE');
-  const [couponCode, setCouponCode] = useState('');
-  const [media, setMedia] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
+  // ── Mode Switch: Studio / Create vs Posts & Approvals ───────────────────────
+  const [activeMode, setActiveMode] = useState<'studio' | 'posts'>(
+    params.mode === 'posts' ? 'posts' : 'studio'
+  );
+
+  // ── Studio 3-Step Flow (01 Create -> 02 Design -> 03 Review) ───────────────
+  const [studioStep, setStudioStep] = useState<1 | 2 | 3>(1);
+  const [studioSubTab, setStudioSubTab] = useState<'chat' | 'design'>('chat');
+
+  // ── Content State ──────────────────────────────────────────────────────────
+  const [promptInput, setPromptInput] = useState('');
+  const [activeUserPrompt, setActiveUserPrompt] = useState(
+    'Create a 20% off weekend offer with a premium, minimal design.'
+  );
+  const [selectedLayout, setSelectedLayout] = useState<LayoutId>('editorial');
+  const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:5' | '9:16'>('1:1');
+  const [colorTheme, setColorTheme] = useState<'emerald' | 'sand' | 'dark'>('emerald');
+
+  // Graphic content elements
+  const [headline, setHeadline] = useState('Make more of your weekend.');
+  const [discountBadge, setDiscountBadge] = useState('20% OFF');
+  const [subtitle, setSubtitle] = useState('Selected services. Book your appointment today.');
+  const [ctaText, setCtaText] = useState('Book now');
+  const [bgPhotoUrl, setBgPhotoUrl] = useState(
+    'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80'
+  );
+
+  // Caption & copy
+  const [caption, setCaption] = useState(
+    'Your weekend plans, upgraded. Save 20% on selected services. Book your appointment today.\n\n✨ Premium personalized service\n✨ Fast priority booking\n📍 Visit our local studio or book online!\n\n#WeekendVibes #SpecialOffer #LocalBusiness #QualityService'
+  );
+  const [isEditingCaption, setIsEditingCaption] = useState(false);
+  const [captionDraft, setCaptionDraft] = useState(caption);
+  const [isEditingText, setIsEditingText] = useState(false);
+
+  // Offer details & Review step
+  const [reviewPlatform, setReviewPlatform] = useState<'instagram' | 'facebook' | 'googlebusiness'>('instagram');
+  const [offerStartDate, setOfferStartDate] = useState('6 Nov');
+  const [offerEndDate, setOfferEndDate] = useState('8 Nov');
+  const [bookingLink, setBookingLink] = useState('https://fieseros.com/book');
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'schedule'>('now');
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+
+  // Status & loading
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState('');
-  const [requestOpen, setRequestOpen] = useState(false);
-  const [videoModalOpen, setVideoModalOpen] = useState(false);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [boardRefresh, setBoardRefresh] = useState(0);
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
 
+  // Handle URL params
   useEffect(() => {
     if (params.generate === '1') {
-      setError(null);
-      setOpen(true);
-      // Clear the flag so a later push with ?generate=1 re-triggers the composer.
+      setActiveMode('studio');
+      setStudioStep(1);
+      setStudioSubTab('chat');
       router.setParams({ generate: '' });
     }
-  }, [params.generate, router]);
+    if (params.mode === 'posts') {
+      setActiveMode('posts');
+      router.setParams({ mode: '' });
+    }
+  }, [params.generate, params.mode, router]);
 
-  const available = accounts.data?.data || [];
+  // Social account resolution
+  const availableAccounts = accounts.data?.data || [];
   const activeProfileId = discover.data?.activeProfile?.id;
   const gbpAccount =
-    available.find(
+    availableAccounts.find(
       (a) =>
         a.platform === 'googlebusiness' &&
         a.isActive &&
         (activeProfileId
           ? a.id === activeProfileId || a.accountId === activeProfileId
           : a.accountName?.toLowerCase().includes('fieser') || a.accountId === '10777612572223040949')
-    ) || available.find((a) => a.platform === 'googlebusiness' && a.isActive);
-  const fbAccount = available.find((a) => a.platform === 'facebook' && a.isActive);
-  const igAccount = available.find((a) => a.platform === 'instagram' && a.isActive);
+    ) || availableAccounts.find((a) => a.platform === 'googlebusiness' && a.isActive);
+  const fbAccount = availableAccounts.find((a) => a.platform === 'facebook' && a.isActive);
+  const igAccount = availableAccounts.find((a) => a.platform === 'instagram' && a.isActive);
 
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['googlebusiness']);
-  const [postFormat, setPostFormat] = useState<'image_text' | 'image_only' | 'video' | 'text'>('image_text');
-  const [headline, setHeadline] = useState('A little self-care goes a long way.');
-  const [subtitle, setSubtitle] = useState('Refresh your look with a personalised hair consultation. Book your next visit.');
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram', 'facebook']);
 
-  const targets = React.useMemo(() => {
+  const businessDisplayName =
+    discover.data?.activeProfile?.name ||
+    brandProfile.data?.profile?.businessName ||
+    gbpPlace.data?.place?.title ||
+    'Fieseros';
+
+  // 3 Creative Directions
+  const layouts: CreativeLayout[] = useMemo(
+    () => [
+      {
+        id: 'editorial',
+        name: 'Editorial',
+        headline: headline || 'Make more of your weekend.',
+        subtitle: subtitle || 'Selected services. Book your appointment today.',
+        badge: discountBadge || '20% OFF',
+        ctaText: ctaText || 'Book now',
+        theme: 'sand_olive',
+        photoUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80',
+      },
+      {
+        id: 'photo_led',
+        name: 'Photo-led',
+        headline: discountBadge || '20% OFF',
+        subtitle: 'Selected services',
+        badge: 'EXCLUSIVE',
+        ctaText: 'Book now',
+        theme: 'beige',
+        photoUrl: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1080&q=80',
+      },
+      {
+        id: 'bold',
+        name: 'Bold',
+        headline: 'WEEKEND OFFER',
+        subtitle: 'Selected services',
+        badge: discountBadge || '20% OFF',
+        ctaText: 'Claim offer',
+        theme: 'emerald_gold',
+        photoUrl: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1080&q=80',
+      },
+    ],
+    [headline, subtitle, discountBadge, ctaText]
+  );
+
+  // Targets for publishing
+  const targets = useMemo(() => {
     const list: { platform: string; socialAccountId: string }[] = [];
     if (selectedPlatforms.includes('googlebusiness') && gbpAccount) {
       list.push({ platform: 'googlebusiness', socialAccountId: gbpAccount.id });
@@ -111,68 +215,70 @@ export default function MarketingScreen() {
     return list;
   }, [selectedPlatforms, gbpAccount, fbAccount, igAccount]);
 
-  const mediaUrls = media.split('\n').map((s) => s.trim()).filter(Boolean);
-
-  async function generate(forcedTopic?: string) {
+  // AI Generation Trigger
+  async function generatePost(customTopic?: string) {
+    const topicToUse = (typeof customTopic === 'string' ? customTopic : promptInput).trim() || activeUserPrompt;
     setBusy(true);
     setError(null);
-    const activeTopic = (typeof forcedTopic === 'string' ? forcedTopic : topic).trim();
+    setActiveUserPrompt(topicToUse);
     try {
       const data = await apiRequest<{
         caption: string;
         title?: string;
         headline?: string;
         subtitle?: string;
+        badge?: string;
         imageUrl?: string;
-        hashtags?: string[];
+        bookingUrl?: string;
+        offerDetails?: { discountText?: string; startDate?: string; endDate?: string };
+        layouts?: CreativeLayout[];
       }>('/api/social/ai-generate-post', {
         method: 'POST',
         body: {
-          topic: activeTopic || 'Special promotional announcement and customer appreciation',
-          platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['googlebusiness', 'facebook', 'instagram'],
-          tone: 'Friendly, premium, and professional',
+          topic: topicToUse,
+          platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['instagram', 'facebook', 'googlebusiness'],
+          tone: 'Friendly, premium, minimal, high-converting',
         },
       });
-      setContent(data.caption);
+
+      if (data.caption) {
+        setCaption(data.caption);
+        setCaptionDraft(data.caption);
+      }
       if (data.headline) setHeadline(data.headline);
       if (data.subtitle) setSubtitle(data.subtitle);
-      if (data.imageUrl) {
-        setMedia(data.imageUrl);
-        setPostFormat('image_text');
-      }
-    } catch (e) {
-      // Never fabricate a caption when the AI service fails — surface the real
-      // error so the user can retry or write the caption below manually.
-      setError(
-        `${(e as Error).message || 'AI post generation failed.'} You can retry, or write the caption below manually.`
-      );
+      if (data.badge) setDiscountBadge(data.badge);
+      if (data.imageUrl) setBgPhotoUrl(data.imageUrl);
+      if (data.bookingUrl) setBookingLink(data.bookingUrl);
+
+      setPromptInput('');
+      setSuccessNotice('AI generated fresh creative directions!');
+      setTimeout(() => setSuccessNotice(null), 3500);
+    } catch (err: unknown) {
+      setError((err as Error).message || 'AI generation failed. You can customize the fields manually below.');
     } finally {
       setBusy(false);
     }
   }
 
-  async function save(status: 'draft' | 'scheduled' | 'published') {
+  // Publishing / Scheduling handler
+  async function submitPost(status: 'published' | 'scheduled' | 'draft') {
     if (busy || saving.current) return;
     setError(null);
-    const scheduledAt = status === 'scheduled' ? futureLocalTime(date, time) : null;
+
+    const scheduledAt = status === 'scheduled' ? futureLocalTime(scheduleDate, scheduleTime) : null;
     if (status === 'scheduled' && !scheduledAt) {
-      setError('Choose a valid future date and time.');
+      setError('Please choose a valid future date and time to schedule.');
       return;
     }
 
     if (status !== 'draft' && targets.length === 0) {
-      setError(
-        'Connect at least one social account (Google Business, Facebook, or Instagram) to publish. You can save as a Draft in the meantime.'
-      );
+      setError('Connect at least one social account (Google Business, Facebook, or Instagram) to publish.');
       return;
     }
 
-    if (selectedPlatforms.includes('instagram') && (postFormat === 'text' || mediaUrls.length === 0)) {
-      setError('Instagram requires a photo or video. Please add a media URL to publish to Instagram.');
-      return;
-    }
-
-    const contentCheck = validateSocialPost(content.trim(), selectedPlatforms, mediaUrls);
+    const mediaList = bgPhotoUrl ? [bgPhotoUrl] : [];
+    const contentCheck = validateSocialPost(caption.trim(), selectedPlatforms, mediaList);
     if (contentCheck) {
       setError(contentCheck);
       return;
@@ -180,20 +286,20 @@ export default function MarketingScreen() {
 
     saving.current = true;
     setBusy(true);
+
     const body: Record<string, unknown> = {
-      content: content.trim(),
+      content: caption.trim(),
       targets,
-      mediaUrls,
+      mediaUrls: mediaList,
       status,
-      gbpPostType,
+      gbpPostType: 'offer',
       ...(scheduledAt ? { scheduledAt } : {}),
+      gbpOfferData: {
+        title: headline,
+        couponCode: discountBadge.replace(/[^A-Za-z0-9]/g, ''),
+        redeemUrl: bookingLink,
+      },
     };
-    if (gbpPostType === 'offer') {
-      body.gbpOfferData = {
-        title: topic.trim() || 'Special Offer',
-        couponCode: couponCode.trim(),
-      };
-    }
 
     const serialized = JSON.stringify(body);
     if (pendingRequest.current?.body !== serialized) {
@@ -207,704 +313,1390 @@ export default function MarketingScreen() {
         headers: { 'Idempotency-Key': pendingRequest.current!.key },
       });
       pendingRequest.current = null;
-      setOpen(false);
-      setContent('');
-      setTopic('');
-      setCouponCode('');
-      setDate('');
-      setTime('');
-      setStep(0);
-      setNotice(
+      setSuccessNotice(
         status === 'published'
-          ? 'Post published to your Google Business Profile! 🚀'
+          ? 'Post published successfully to your selected accounts! 🚀'
           : status === 'scheduled'
-          ? 'Post scheduled for your Google Business Profile.'
-          : 'Draft saved. Find it under the Not Posted pill.'
+          ? 'Post scheduled successfully!'
+          : 'Draft saved in your Posts Library.'
       );
       setBoardRefresh((k) => k + 1);
-    } catch (e) {
-      setError((e as Error).message);
+      // Switch to Posts & Approvals tab so user can see it live
+      setTimeout(() => {
+        setActiveMode('posts');
+      }, 1200);
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to save or publish post.');
     } finally {
       saving.current = false;
       setBusy(false);
     }
   }
 
-  async function openGoogleConnect() {
-    try {
-      let ticketParam = '';
-      try {
-        const res = await apiRequest<{ ticket: string }>('/api/bgos/mobile-auth/handoff', { method: 'POST' });
-        if (res?.ticket) ticketParam = `&ticket=${encodeURIComponent(res.ticket)}`;
-      } catch {}
-      await Linking.openURL(`${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&returnView=socialMedia${ticketParam}`);
-    } catch {
-      setError('Could not open the browser to connect Google. Try again or connect from BGOS web.');
+  // Quick caption modifiers
+  function handleMakeShorter() {
+    const lines = caption.split('\n').filter(Boolean);
+    if (lines.length > 2) {
+      setCaption(lines.slice(0, 2).join('\n\n') + '\n\n#SpecialOffer #Fieseros');
     }
   }
 
-  function handleGoogleChipPress() {
-    if (gbpAccount) {
-      Alert.alert('Google Business Profile Connected ✅', 'Your Google Business Profile is active and ready to publish posts.');
-    } else {
-      Alert.alert(
-        'Connect Google Business Profile',
-        'Link your verified Google profile to publish posts, local offers, and updates directly from BGOS.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: '1-Click Connect',
-            onPress: () => {
-              void openGoogleConnect();
-            },
-          },
-        ]
-      );
-    }
+  function handleUseMyPhoto() {
+    Alert.alert(
+      'Use My Photo',
+      'Select a photo source for this creative:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Modern Chair / Interior',
+          onPress: () =>
+            setBgPhotoUrl(
+              'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80'
+            ),
+        },
+        {
+          text: 'Foliage / Clean Plant',
+          onPress: () =>
+            setBgPhotoUrl(
+              'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1080&q=80'
+            ),
+        },
+        {
+          text: 'Emerald Luxury Texture',
+          onPress: () =>
+            setBgPhotoUrl(
+              'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1080&q=80'
+            ),
+        },
+      ]
+    );
   }
-
-  function openComposer() {
-    setError(null);
-    setOpen(true);
-  }
-
-  const dynamicServices = React.useMemo(() => {
-    const brandServices = [
-      ...(brandProfile.data?.profile?.services || []),
-      ...(brandProfile.data?.profile?.products || []),
-    ].filter(Boolean);
-
-    if (brandServices.length > 0) {
-      return brandServices.slice(0, 6).map((s) => ({
-        label: `✨ ${s.slice(0, 24)}`,
-        val: s,
-      }));
-    }
-
-    const category = (gbpPlace.data?.place?.category || '').toLowerCase();
-    const title = (discover.data?.activeProfile?.name || gbpPlace.data?.place?.title || '').toLowerCase();
-
-    if (category.includes('software') || category.includes('tech') || title.includes('fieser') || title.includes('zozo')) {
-      return [
-        { label: '💻 Custom Web Apps', val: 'modern responsive web application and client portal development' },
-        { label: '🤖 AI Chatbots & Agents', val: 'smart AI receptionist, chatbots and 24/7 automated business workflows' },
-        { label: '📱 Mobile App Development', val: 'high-performance native iOS and Android mobile app development' },
-        { label: '📈 Local SEO & Maps Growth', val: 'Google Business Profile local SEO ranking and Google Maps visibility' },
-        { label: '⚡ Cloud & SaaS Consulting', val: 'cloud infrastructure setup, software integrations and SaaS consulting' },
-      ];
-    }
-
-    if (category.includes('market') || category.includes('community') || title.includes('market') || title.includes('ganga')) {
-      return [
-        { label: '🏪 Store Directory & Stalls', val: 'daily fresh grocery, electronics and retail stalls directory' },
-        { label: '🛍️ Weekend Shopping Bazaar', val: 'special weekend wholesale deals on everyday essentials' },
-        { label: '🅿️ Parking & Amenities', val: 'spacious two-wheeler and four-wheeler visitor parking' },
-        { label: '🎁 Festive Discounts', val: 'limited-time festive offers from local market retailers' },
-      ];
-    }
-
-    if (category.includes('fabricat') || category.includes('weld') || title.includes('fabricat')) {
-      return [
-        { label: '🚪 Gates & Grills', val: 'custom gate and window grill fabrication' },
-        { label: '🛡️ SS Railings', val: 'grade 304 stainless steel balcony and staircase railings' },
-        { label: '🏭 Industrial Sheds', val: 'heavy-duty industrial factory shed and roofing structure' },
-        { label: '✨ Laser Cutting', val: 'designer CNC metal laser cutting and decorative screens' },
-      ];
-    }
-
-    return [
-      { label: '⭐ 5-Star Customer Service', val: 'five-star customer service and verified quality guarantee' },
-      { label: '🎁 Exclusive Promotion', val: 'special discount for local customers this week' },
-      { label: '🕒 Fast Turnaround', val: 'quick response and same-day priority service' },
-      { label: '📍 Visit Our Location', val: 'visit our verified local store or showroom today' },
-    ];
-  }, [brandProfile.data, gbpPlace.data, discover.data]);
 
   return (
-    <View style={{ flex: 1 }}>
-      <Screen
-        title="AI Post"
-        subtitle="AI-powered Google updates, local offers & post scheduling."
-        showBack={true}
-        onBack={() => {
-          if (router.canGoBack?.()) router.back();
-          else router.push('/(tabs)/index');
-        }}
-        onRefresh={async () => {
-          await Promise.all([accounts.refresh(), workspace.refresh(), gbpPlace.refresh()]).catch(() => {});
-          setBoardRefresh((k) => k + 1);
-        }}
-        rightAction={
-          <Action
-            compact
-            label="＋ Post"
-            icon="auto-awesome"
-            onPress={openComposer}
+    <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+      {/* ── Top Mode Switcher Bar ────────────────────────────────────────── */}
+      <View style={styles.modeBar}>
+        <Pressable
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeMode === 'studio' }}
+          onPress={() => setActiveMode('studio')}
+          style={[styles.modeTab, activeMode === 'studio' && styles.modeTabActive]}
+        >
+          <MaterialIcons
+            name="auto-awesome"
+            size={16}
+            color={activeMode === 'studio' ? '#009F50' : '#64748B'}
           />
-        }
-      >
-        {notice ? (
-          <View style={{ backgroundColor: colors.successSoft, padding: 12, borderRadius: 12, marginBottom: 8 }}>
-            <Text style={{ color: colors.success, fontWeight: '700' }}>✓ {notice}</Text>
-          </View>
-        ) : null}
-
-        <ErrorNotice message={error || accounts.error} retry={() => accounts.refresh()} />
-
-        {/* Viral Video Banner (Dhanda AI benchmark) — Interactive */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Try Generating Viral Video"
-          onPress={() => setVideoModalOpen(true)}
-          style={({ pressed }) => ({
-            backgroundColor: '#FAF5FF',
-            borderColor: '#E9D5FF',
-            borderWidth: 1,
-            borderRadius: 14,
-            padding: 12,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            opacity: pressed ? 0.85 : 1,
-          })}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 16 }}>🎬</Text>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B21A8' }}>
-              Try Generating Viral Video (0/5)
-            </Text>
-          </View>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Explore →</Text>
-        </Pressable>
-
-        {/* Keyword Planner Tip (Dhanda AI benchmark) */}
-        <View
-          style={{
-            backgroundColor: '#EFF6FF',
-            borderColor: '#BFDBFE',
-            borderWidth: 1,
-            borderRadius: 14,
-            padding: 12,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-            <Text style={{ fontSize: 16 }}>💡</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: '#1E40AF' }}>
-                Google works best with keywords
-              </Text>
-              <Text style={{ fontSize: 11, color: '#3B82F6', marginTop: 1 }}>
-                Using your keywords we post daily on your Google Profile.
-              </Text>
-            </View>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open Keyword Planner"
-            onPress={() => router.push('/keyword-planner')}
-            style={{
-              backgroundColor: '#2563EB',
-              paddingHorizontal: 10,
-              paddingVertical: 5,
-              borderRadius: 8,
-            }}
-          >
-            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>Keywords</Text>
-          </Pressable>
-        </View>
-
-        {/* Stay Active on Social Media (Facebook & Instagram connection) */}
-        <StayActiveSocialMediaCard />
-
-        {/* 6 status pills (2 rows) + fetched post list + Approve/Reject on Pending */}
-        <PostsBoard refreshKey={boardRefresh} />
-      </Screen>
-
-      {/* Floating full-width gradient CTA + voice mic (Dhanda AI benchmark) */}
-      <View
-        pointerEvents="box-none"
-        style={{
-          position: 'absolute',
-          left: 12,
-          right: 12,
-          bottom: 8,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 10,
-        }}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Generate AI Post"
-          disabled={busy}
-          onPress={openComposer}
-          style={({ pressed }) => ({
-            flex: 1,
-            minHeight: 50,
-            borderRadius: 25,
-            overflow: 'hidden',
-            opacity: busy ? 0.6 : pressed ? 0.85 : 1,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.25,
-            shadowRadius: 6,
-            elevation: 8,
-          })}
-        >
-          <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row' }}>
-            <View style={{ flex: 1, backgroundColor: '#C084FC' }} />
-            <View style={{ flex: 1, backgroundColor: '#A855F7' }} />
-          </View>
-          <View style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <MaterialIcons name="auto-awesome" size={17} color="#FFFFFF" />
-            <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>Generate AI Post ✨</Text>
-          </View>
+          <Text style={[styles.modeTabText, activeMode === 'studio' && styles.modeTabTextActive]}>
+            Studio / Create
+          </Text>
         </Pressable>
 
         <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Voice assistant"
-          onPress={() => Alert.alert('Voice Assistant', 'Speak your marketing request in Hindi or English…')}
-          style={({ pressed }) => ({
-            width: 50,
-            height: 50,
-            borderRadius: 25,
-            backgroundColor: colors.brand,
-            alignItems: 'center',
-            justifyContent: 'center',
-            opacity: pressed ? 0.85 : 1,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.25,
-            shadowRadius: 6,
-            elevation: 8,
-          })}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeMode === 'posts' }}
+          onPress={() => setActiveMode('posts')}
+          style={[styles.modeTab, activeMode === 'posts' && styles.modeTabActive]}
         >
-          <MaterialIcons name="mic" size={22} color="#FFFFFF" />
+          <MaterialIcons
+            name="list-alt"
+            size={16}
+            color={activeMode === 'posts' ? '#009F50' : '#64748B'}
+          />
+          <Text style={[styles.modeTabText, activeMode === 'posts' && styles.modeTabTextActive]}>
+            Posts & Approvals
+          </Text>
         </Pressable>
       </View>
 
-      {/* 3-Step Create / Preview Modal (Google Post Studio) */}
-      <Modal
-        visible={open}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => { if (!busy) setOpen(false); }}
-      >
-        <Screen
-          title={step === 0 ? 'Create Google Post' : step === 1 ? 'Google Post Details' : 'Preview & Publish'}
-          subtitle={`Step ${step + 1} of 3`}
-          showBack={true}
-          onBack={() => {
-            if (busy) return;
-            if (step > 0) {
-              setStep(step - 1);
-            } else {
-              setOpen(false);
-            }
-          }}
-        >
-          {/* Visual Stepper */}
-          <View style={[ui.row, { justifyContent: 'space-between', marginBottom: 12 }]}>
-            {['1. Content & AI', '2. Google Details', '3. Publish & Schedule'].map((name, i) => (
-              <Text
-                key={name}
-                style={{
-                  fontSize: 12,
-                  fontWeight: '700',
-                  color: step === i ? colors.brand : colors.muted,
-                  borderBottomWidth: step === i ? 2 : 0,
-                  borderBottomColor: colors.brand,
-                  paddingBottom: 4,
-                }}
-              >
-                {name}
-              </Text>
-            ))}
+      {/* Global Alerts / Notices */}
+      {successNotice && (
+        <View style={styles.successNotice}>
+          <MaterialIcons name="check-circle" size={16} color="#009F50" />
+          <Text style={styles.successNoticeText}>{successNotice}</Text>
+        </View>
+      )}
+
+      {error && (
+        <View style={styles.errorBanner}>
+          <MaterialIcons name="error-outline" size={16} color="#DC2626" />
+          <Text style={styles.errorBannerText}>{error}</Text>
+        </View>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          MODE 2: POSTS & APPROVALS (All 6 status pills, Approve/Reject, etc.)
+          ══════════════════════════════════════════════════════════════════════ */}
+      {activeMode === 'posts' && (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 90 }}>
+          {/* Connected Social Accounts Header */}
+          <StayActiveSocialMediaCard />
+
+          {/* Quick Header */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 12 }}>
+            <View>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Posts & Approvals</Text>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>Filter by live lifecycle status</Text>
+            </View>
+            <Pressable
+              onPress={() => setActiveMode('studio')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: '#009F50',
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 20,
+              }}
+            >
+              <MaterialIcons name="add" size={16} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>New Post</Text>
+            </Pressable>
           </View>
 
-          <ErrorNotice message={error} />
+          {/* Shared 6-Pill Posts Board */}
+          <PostsBoard refreshKey={boardRefresh} />
+        </ScrollView>
+      )}
 
-          {/* STEP 1: CONTENT & FORMAT */}
-          {step === 0 && (
-            <Card style={{ gap: 12 }}>
-              {/* Target Channels */}
-              <Text style={ui.label}>Target Channels</Text>
-              <View style={[ui.row, { gap: 6, flexWrap: 'wrap' }]}>
-                {[
-                  { key: 'googlebusiness', label: 'Google Business 📍' },
-                  { key: 'facebook', label: 'Facebook Page 📘' },
-                  { key: 'instagram', label: 'Instagram Business 📷' },
-                ].map((ch) => {
-                  const active = selectedPlatforms.includes(ch.key);
-                  return (
-                    <Chip
-                      key={ch.key}
-                      label={ch.label}
-                      selected={active}
-                      onPress={() => {
-                        setSelectedPlatforms((prev) =>
-                          active ? prev.filter((k) => k !== ch.key) : [...prev, ch.key]
-                        );
-                      }}
-                    />
-                  );
-                })}
-              </View>
-
-              {/* Post Format Selector */}
-              <Text style={ui.label}>Post Format</Text>
-              <View style={[ui.row, { gap: 6, flexWrap: 'wrap' }]}>
-                {[
-                  { key: 'image_text', label: '🎨 Image + Text (Branded Split Card)' },
-                  { key: 'image_only', label: '🖼️ Image Only' },
-                  { key: 'video', label: '🎬 Video / Reel' },
-                  { key: 'text', label: '📝 Text Update' },
-                ].map((fmt) => (
-                  <Chip
-                    key={fmt.key}
-                    label={fmt.label}
-                    selected={postFormat === fmt.key}
-                    onPress={() => setPostFormat(fmt.key as any)}
-                  />
-                ))}
-              </View>
-
-              {/* Branded Card Headline & Subtitle if image_text */}
-              {postFormat === 'image_text' && (
-                <View style={{ gap: 8, backgroundColor: '#FAF8F5', padding: 10, borderRadius: 10 }}>
-                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#78350F' }}>
-                    Branded Graphic Header & Body (Bloom & Co. Style)
-                  </Text>
-                  <Field
-                    label="Headline"
-                    value={headline}
-                    onChangeText={setHeadline}
-                    placeholder="e.g. A little self-care goes a long way."
-                  />
-                  <Field
-                    label="Description / Subtitle"
-                    value={subtitle}
-                    onChangeText={setSubtitle}
-                    placeholder="e.g. Refresh your look with a personalised hair consultation."
-                  />
-                </View>
-              )}
-
-              <Field
-                label="Topic or Offer to Share"
-                value={topic}
-                onChangeText={setTopic}
-                multiline
-                placeholder="e.g. Weekend special on plumbing tune-up. 15% discount for local homeowners. Call today…"
-              />
-
-              {/* 2-Click Offering Chips (Dynamic from Brand Brain / Category) */}
-              <Text style={ui.label}>🔥 Select Service to Promote (2-Click Draft)</Text>
-              <View style={[ui.row, { gap: 6, flexWrap: 'wrap' }]}>
-                {dynamicServices.map((item) => (
-                  <Chip
-                    key={item.label}
-                    label={item.label}
-                    selected={topic === item.val}
-                    onPress={() => setTopic(item.val)}
-                  />
-                ))}
-              </View>
-
-              {/* Quick Prompt Tags */}
-              <Text style={ui.label}>Quick Topic Tags</Text>
-              <View style={[ui.row, { gap: 6 }]}>
-                {['Special Offer', 'New Service', 'Weekend Discount', 'Local Update'].map((tag) => (
-                  <Chip
-                    key={tag}
-                    label={tag}
-                    selected={topic.includes(tag)}
-                    onPress={() => setTopic((prev) => (prev ? `${prev} - ${tag}` : tag))}
-                  />
-                ))}
-              </View>
-
-              <Action
-                secondary
-                icon="auto-awesome"
-                label={busy ? 'Generating Caption…' : '✨ Generate with Google AI'}
-                disabled={busy}
-                onPress={generate}
-              />
-
-              <Field
-                label="Post Caption (Local SEO Optimized)"
-                value={content}
-                onChangeText={setContent}
-                multiline
-                placeholder="Caption will appear here or write your own…"
-              />
-
-              <Field
-                label="Media URL (Image)"
-                value={media}
-                onChangeText={setMedia}
-                placeholder="https://your-cdn.com/photo.jpg"
-                autoCapitalize="none"
-              />
-
-              <Action
-                label="Next: Google Post Details →"
-                disabled={!content.trim()}
-                onPress={() => setStep(1)}
-              />
-            </Card>
-          )}
-
-          {/* STEP 2: GOOGLE POST DETAILS */}
-          {step === 1 && (
-            <Card style={{ gap: 14 }}>
-              <View>
-                <Text style={ui.heading}>Google Post Format</Text>
-                <Text style={ui.caption}>Select how this update appears on your Google Maps & Search profile.</Text>
-              </View>
-
-              <View style={[ui.row, { gap: 8 }]}>
-                {[
-                  { key: 'whats_new', label: "What's New" },
-                  { key: 'offer', label: 'Special Offer' },
-                  { key: 'event', label: 'Event' },
-                ].map((type) => (
-                  <Chip
-                    key={type.key}
-                    label={type.label}
-                    selected={gbpPostType === type.key}
-                    onPress={() => setGbpPostType(type.key as any)}
-                  />
-                ))}
-              </View>
-
-              <View style={{ gap: 8 }}>
-                <Text style={ui.label}>Call-to-Action (CTA) Button on Google</Text>
-                <View style={[ui.row, { gap: 6, flexWrap: 'wrap' }]}>
-                  {[
-                    { key: 'LEARN_MORE', label: 'Learn More' },
-                    { key: 'CALL', label: 'Call Now' },
-                    { key: 'BOOK', label: 'Book Online' },
-                    { key: 'ORDER_ONLINE', label: 'Order Online' },
-                  ].map((cta) => (
-                    <Chip
-                      key={cta.key}
-                      label={cta.label}
-                      selected={ctaType === cta.key}
-                      onPress={() => setCtaType(cta.key as any)}
-                    />
-                  ))}
-                </View>
-              </View>
-
-              {gbpPostType === 'offer' && (
-                <Field
-                  label="Coupon / Discount Code (Optional)"
-                  value={couponCode}
-                  onChangeText={setCouponCode}
-                  placeholder="e.g. SUMMER20"
-                  autoCapitalize="characters"
-                />
-              )}
-
-              <Action label="Next: Preview & Publish →" onPress={() => setStep(2)} />
-              <Action secondary label="← Back to Content" onPress={() => setStep(0)} />
-            </Card>
-          )}
-
-          {/* STEP 3: PREVIEW & PUBLISH */}
-          {step === 2 && (
-            <Card style={{ gap: 12 }}>
-              <View style={[ui.row, { gap: 8, flexWrap: 'wrap' }]}>
-                {selectedPlatforms.map((p) => (
-                  <Badge key={p} label={p.toUpperCase()} accent={p === 'googlebusiness'} />
-                ))}
-                <Badge label={postFormat.toUpperCase().replace('_', ' ')} />
-              </View>
-
-              {/* Format-Specific Live Preview Simulation */}
-              {postFormat === 'image_text' ? (
-                /* The Bloom & Co. SALON Branded Split Card from Screenshot 2 */
-                <View
-                  style={{
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: '#E5E7EB',
-                    backgroundColor: '#FDFBF7',
-                    overflow: 'hidden',
+      {/* ══════════════════════════════════════════════════════════════════════
+          MODE 1: STUDIO / CREATE (3-Step Wizard from Screenshots)
+          ══════════════════════════════════════════════════════════════════════ */}
+      {activeMode === 'studio' && (
+        <View style={{ flex: 1 }}>
+          {/* Sub-Tab Navigation Header (Chat | Design) */}
+          <View style={styles.subTabBar}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {studioStep > 1 && (
+                <Pressable
+                  onPress={() => {
+                    if (studioStep === 3) setStudioStep(2);
+                    else if (studioStep === 2) setStudioStep(1);
                   }}
+                  style={{ padding: 4 }}
                 >
-                  <View style={{ flexDirection: 'row' }}>
-                    {mediaUrls[0] ? (
-                      <Image
-                        source={{ uri: mediaUrls[0] }}
-                        style={{ width: '45%', height: 190 }}
-                        accessibilityLabel="Post image"
-                        alt="Post image"
-                      />
-                    ) : (
-                      <View
-                        style={{
-                          width: '45%',
-                          height: 190,
-                          backgroundColor: '#F3F4F6',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: 8,
-                        }}
-                      >
-                        <MaterialIcons name="image" size={32} color="#9CA3AF" />
-                        <Text style={{ fontSize: 10, color: '#9CA3AF', textAlign: 'center', marginTop: 4 }}>
-                          Add photo
-                        </Text>
-                      </View>
-                    )}
-
-                    <View style={{ flex: 1, padding: 12, justifyContent: 'space-between', gap: 6 }}>
-                      <View style={{ gap: 4 }}>
-                        <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>
-                          🌿 {workspace.data?.name || 'Bloom & Co. SALON'}
-                        </Text>
-                        <View style={{ width: 24, height: 1.5, backgroundColor: '#374151', marginVertical: 2 }} />
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            fontWeight: '800',
-                            color: '#111827',
-                            lineHeight: 17,
-                          }}
-                        >
-                          {headline || 'A little self-care goes a long way.'}
-                        </Text>
-                        <Text numberOfLines={3} style={{ fontSize: 10.5, color: '#4B5563', lineHeight: 14 }}>
-                          {subtitle || 'Refresh your look with a personalised hair consultation. Book your next visit.'}
-                        </Text>
-                      </View>
-
-                      <View style={{ flexDirection: 'row', gap: 6, paddingTop: 4 }}>
-                        <View style={{ flex: 1, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#D1D5DB', alignItems: 'center' }}>
-                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#374151' }}>✏️ Edit</Text>
-                        </View>
-                        <View style={{ flex: 1, paddingVertical: 4, borderRadius: 6, backgroundColor: colors.brand, alignItems: 'center' }}>
-                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#FFFFFF' }}>📅 Schedule</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              ) : postFormat === 'video' ? (
-                /* Video / Reel Preview */
-                <View style={{ backgroundColor: '#000000', borderRadius: 14, height: 180, alignItems: 'center', justifyContent: 'center' }}>
-                  <MaterialIcons name="play-circle-outline" size={44} color="#FFFFFF" />
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', marginTop: 4 }}>
-                    Reel / Video Post Preview
-                  </Text>
-                </View>
-              ) : (
-                /* Standard Feed Preview */
-                <View style={[ui.card, { padding: 14, gap: 10, backgroundColor: colors.surface }]}>
-                  <View style={[ui.row, { gap: 10 }]}>
-                    <Avatar name={workspace.data?.name || 'Your Business'} size={38} />
-                    <View>
-                      <Text style={ui.heading}>{workspace.data?.name || 'Your Business'}</Text>
-                      <Text style={ui.caption}>Public Post · Live Update</Text>
-                    </View>
-                  </View>
-
-                  <Text style={ui.body}>{content}</Text>
-
-                  {mediaUrls[0] ? (
-                    <Image
-                      source={{ uri: mediaUrls[0] }}
-                      style={{ width: '100%', height: 200, borderRadius: 12 }}
-                      accessibilityLabel="Post preview"
-                      alt="Post preview"
-                    />
-                  ) : null}
-                </View>
+                  <MaterialIcons name="arrow-back" size={20} color="#0F172A" />
+                </Pressable>
               )}
-
-              <Field label="Schedule Date (YYYY-MM-DD, Optional)" value={date} onChangeText={setDate} placeholder="2026-10-15" />
-              <Field label="Schedule Time (HH:MM, Optional)" value={time} onChangeText={setTime} placeholder="14:30" />
-
-              <View style={[ui.row, { gap: 10 }]}>
-                <View style={{ flex: 1 }}>
-                  <Action
-                    label={busy ? 'Publishing…' : '✓ Publish to Channels'}
-                    disabled={busy}
-                    onPress={() => save('published')}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Action
-                    secondary
-                    label="Schedule for Later"
-                    disabled={busy || !date.trim()}
-                    onPress={() => save('scheduled')}
-                  />
-                </View>
+              <View>
+                <Text style={styles.studioHeaderTitle}>
+                  {studioStep === 1 ? 'Marketing Studio' : studioStep === 2 ? headline : 'Review Post'}
+                </Text>
+                <Pressable style={styles.brandPill}>
+                  <Text style={styles.brandPillText}>F {businessDisplayName} · #0949 ⌵</Text>
+                </Pressable>
               </View>
+            </View>
 
-              <Action secondary label="Save as Draft" disabled={busy} onPress={() => save('draft')} />
-              <Action secondary label="← Back to Post Details" disabled={busy} onPress={() => setStep(1)} />
-            </Card>
+            {/* Chat vs Design toggle */}
+            {studioStep <= 2 && (
+              <View style={styles.segmentedToggle}>
+                <Pressable
+                  onPress={() => {
+                    setStudioStep(1);
+                    setStudioSubTab('chat');
+                  }}
+                  style={[styles.segBtn, studioSubTab === 'chat' && styles.segBtnActive]}
+                >
+                  <MaterialIcons
+                    name="chat-bubble-outline"
+                    size={14}
+                    color={studioSubTab === 'chat' ? '#009F50' : '#64748B'}
+                  />
+                  <Text style={[styles.segBtnText, studioSubTab === 'chat' && styles.segBtnTextActive]}>
+                    Chat
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    setStudioStep(2);
+                    setStudioSubTab('design');
+                  }}
+                  style={[styles.segBtn, studioSubTab === 'design' && styles.segBtnActive]}
+                >
+                  <MaterialIcons
+                    name="image"
+                    size={14}
+                    color={studioSubTab === 'design' ? '#009F50' : '#64748B'}
+                  />
+                  <Text style={[styles.segBtnText, studioSubTab === 'design' && styles.segBtnTextActive]}>
+                    Design
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+
+            {studioStep === 3 && (
+              <View style={styles.draftBadge}>
+                <Text style={styles.draftBadgeText}>● Draft</Text>
+              </View>
+            )}
+          </View>
+
+          {/* ──────────────────────────────────────────────────────────────────
+              STEP 1: 01 · Create (Conversational Copilot & Layouts)
+              ────────────────────────────────────────────────────────────────── */}
+          {studioStep === 1 && (
+            <View style={{ flex: 1 }}>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: 14, paddingBottom: 110 }}
+                keyboardShouldPersistTaps="handled"
+              >
+                {/* User Prompt Bubble */}
+                <View style={styles.userBubbleContainer}>
+                  <View style={styles.userBubble}>
+                    <Text style={styles.userBubbleText}>{activeUserPrompt}</Text>
+                  </View>
+                  <View style={styles.userAvatar}>
+                    <Text style={styles.userAvatarText}>DC</Text>
+                  </View>
+                </View>
+
+                {/* AI Reply Bubble */}
+                <View style={styles.aiBubbleContainer}>
+                  <View style={styles.aiAvatar}>
+                    <MaterialIcons name="auto-awesome" size={16} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.aiBubble}>
+                    <Text style={styles.aiBubbleText}>
+                      Here are three layouts using your brand colours:
+                    </Text>
+                  </View>
+                </View>
+
+                {/* 3 Creative Direction Cards */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 10, paddingVertical: 10 }}
+                >
+                  {layouts.map((layout) => {
+                    const isSelected = selectedLayout === layout.id;
+                    return (
+                      <Pressable
+                        key={layout.id}
+                        onPress={() => {
+                          setSelectedLayout(layout.id);
+                          if (layout.photoUrl) setBgPhotoUrl(layout.photoUrl);
+                        }}
+                        style={[styles.layoutCard, isSelected && styles.layoutCardSelected]}
+                      >
+                        {isSelected && (
+                          <View style={styles.selectedCheckPill}>
+                            <MaterialIcons name="check" size={14} color="#FFFFFF" />
+                          </View>
+                        )}
+                        <Image source={{ uri: layout.photoUrl }} style={styles.layoutThumb} />
+                        <View style={styles.layoutInfo}>
+                          <Text style={styles.layoutName}>{layout.name}</Text>
+                          <Text style={styles.layoutBadge}>{layout.badge}</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* Caption Card */}
+                <View style={styles.captionBox}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="description" size={16} color="#009F50" />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Caption</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#009F50', fontWeight: '700' }}>✓ Draft saved</Text>
+                  </View>
+
+                  <Text style={styles.captionText}>{caption}</Text>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 }}>
+                    <Pressable onPress={() => setIsEditingCaption(true)}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50' }}>Edit caption</Text>
+                    </Pressable>
+                    <Pressable onPress={handleMakeShorter}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>Make shorter</Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* Quick Action Pills */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                  <Pressable onPress={handleMakeShorter} style={styles.quickPill}>
+                    <MaterialIcons name="format-align-left" size={14} color="#475569" />
+                    <Text style={styles.quickPillText}>Less text</Text>
+                  </Pressable>
+
+                  <Pressable onPress={handleUseMyPhoto} style={styles.quickPill}>
+                    <MaterialIcons name="photo-camera" size={14} color="#475569" />
+                    <Text style={styles.quickPillText}>Use my photo</Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      const next = selectedLayout === 'editorial' ? 'photo_led' : selectedLayout === 'photo_led' ? 'bold' : 'editorial';
+                      setSelectedLayout(next);
+                    }}
+                    style={styles.quickPill}
+                  >
+                    <MaterialIcons name="shuffle" size={14} color="#475569" />
+                    <Text style={styles.quickPillText}>Change style</Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
+
+              {/* Bottom Sticky Action Bar: Prompt Input + Open Design CTA */}
+              <View style={styles.promptInputContainer}>
+                <View style={styles.promptInputRow}>
+                  <Pressable onPress={handleUseMyPhoto} style={{ padding: 6 }}>
+                    <MaterialIcons name="attach-file" size={20} color="#64748B" />
+                  </Pressable>
+
+                  <TextInput
+                    value={promptInput}
+                    onChangeText={setPromptInput}
+                    placeholder="Describe an idea or ask for a change..."
+                    placeholderTextColor="#94A3B8"
+                    style={styles.promptInput}
+                    returnKeyType="send"
+                    onSubmitEditing={() => generatePost()}
+                  />
+
+                  <Pressable onPress={handleUseMyPhoto} style={{ padding: 6 }}>
+                    <MaterialIcons name="image" size={20} color="#64748B" />
+                  </Pressable>
+
+                  <Pressable
+                    disabled={busy}
+                    onPress={() => generatePost()}
+                    style={[styles.sendBtn, busy && { opacity: 0.5 }]}
+                  >
+                    {busy ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <MaterialIcons name="arrow-forward" size={18} color="#FFFFFF" />
+                    )}
+                  </Pressable>
+                </View>
+
+                <Pressable
+                  onPress={() => {
+                    setStudioStep(2);
+                    setStudioSubTab('design');
+                  }}
+                  style={styles.primaryActionButton}
+                >
+                  <Text style={styles.primaryActionText}>Open design →</Text>
+                </Pressable>
+              </View>
+            </View>
           )}
 
-          <Action secondary label="Close" onPress={() => setOpen(false)} />
-        </Screen>
-      </Modal>
+          {/* ──────────────────────────────────────────────────────────────────
+              STEP 2: 02 · Design (Live Visual Canvas & Tools)
+              ────────────────────────────────────────────────────────────────── */}
+          {studioStep === 2 && (
+            <View style={{ flex: 1 }}>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 110 }}>
+                {/* Ratio Selector & Undo */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Pressable
+                    onPress={() => {
+                      setAspectRatio((prev) => (prev === '1:1' ? '4:5' : prev === '4:5' ? '9:16' : '1:1'));
+                    }}
+                    style={styles.ratioPill}
+                  >
+                    <MaterialIcons name="crop-square" size={14} color="#0F172A" />
+                    <Text style={styles.ratioPillText}>Square · {aspectRatio} ⌵</Text>
+                  </Pressable>
 
-      {/* 1-Tap WhatsApp Review Request Sheet */}
-      <ReviewRequestSheet
-        visible={requestOpen}
-        onClose={() => setRequestOpen(false)}
-        businessName={gbpPlace.data?.place?.title || workspace.data?.name || 'Your Business'}
-        reviewUrl={
-          gbpPlace.data?.place?.reviewUrl ||
-          (gbpPlace.data?.place?.placeId
-            ? `https://search.google.com/local/writereview?placeid=${gbpPlace.data.place.placeId}`
-            : gbpPlace.data?.place?.mapsUrl ||
-              `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                gbpPlace.data?.place?.title || workspace.data?.name || 'Your Business'
-              )}`)
-        }
-        apiRequest={apiRequest}
-      />
+                  <Pressable onPress={() => generatePost()} style={{ padding: 6 }}>
+                    <MaterialIcons name="undo" size={20} color="#64748B" />
+                  </Pressable>
+                </View>
 
-      {/* AI Viral Video & Reel Studio Modal */}
-      <ViralVideoModal
-        visible={videoModalOpen}
-        onClose={() => setVideoModalOpen(false)}
-        businessName={workspace.data?.name || gbpPlace.data?.place?.title || 'My Business'}
-        onSchedule={(videoScript) => {
-          setTopic(videoScript.hook);
-          setContent(`${videoScript.hook}\n\n${videoScript.scenes.map(s => `Scene ${s.scene}: ${s.onScreenText}`).join('\n')}\n\n${videoScript.hashtags}`);
-          setNotice('Video reel script loaded into post composer.');
-          setOpen(true);
-        }}
-      />
+                {/* ── LIVE VISUAL CANVAS ── */}
+                <View
+                  style={[
+                    styles.canvasContainer,
+                    aspectRatio === '4:5' && { aspectRatio: 4 / 5 },
+                    aspectRatio === '9:16' && { aspectRatio: 9 / 16 },
+                  ]}
+                >
+                  <Image source={{ uri: bgPhotoUrl }} style={StyleSheet.absoluteFill} />
+
+                  {/* Canvas Overlays depending on layout theme */}
+                  <View
+                    style={[
+                      styles.canvasOverlay,
+                      colorTheme === 'dark' && { backgroundColor: 'rgba(7,11,45,0.72)' },
+                      colorTheme === 'sand' && { backgroundColor: 'rgba(247,243,234,0.65)' },
+                      colorTheme === 'emerald' && { backgroundColor: 'rgba(0,159,80,0.18)' },
+                    ]}
+                  >
+                    {/* Brand Name */}
+                    <Text
+                      style={[
+                        styles.canvasBrandHeader,
+                        colorTheme === 'dark' ? { color: '#F8FAFC' } : { color: '#1E293B' },
+                      ]}
+                    >
+                      {businessDisplayName.toUpperCase()}
+                    </Text>
+
+                    {/* Headline */}
+                    <Text
+                      style={[
+                        styles.canvasHeadline,
+                        colorTheme === 'dark' ? { color: '#FFFFFF' } : { color: '#0F172A' },
+                      ]}
+                    >
+                      {headline}
+                    </Text>
+
+                    {/* Discount Badge */}
+                    <Text
+                      style={[
+                        styles.canvasDiscount,
+                        colorTheme === 'dark' ? { color: '#34D399' } : { color: '#009F50' },
+                      ]}
+                    >
+                      {discountBadge}
+                    </Text>
+
+                    {/* Subtitle */}
+                    <Text
+                      style={[
+                        styles.canvasSubtitle,
+                        colorTheme === 'dark' ? { color: '#E2E8F0' } : { color: '#334155' },
+                      ]}
+                    >
+                      {subtitle}
+                    </Text>
+
+                    {/* CTA Button */}
+                    <View style={styles.canvasCtaBtn}>
+                      <Text style={styles.canvasCtaBtnText}>{ctaText}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Canvas Toolbar: Text | Photo | Colours | Resize */}
+                <View style={styles.canvasToolbar}>
+                  <Pressable onPress={() => setIsEditingText(true)} style={styles.toolItem}>
+                    <MaterialIcons name="text-fields" size={20} color="#0F172A" />
+                    <Text style={styles.toolLabel}>Text</Text>
+                  </Pressable>
+
+                  <Pressable onPress={handleUseMyPhoto} style={styles.toolItem}>
+                    <MaterialIcons name="insert-photo" size={20} color="#0F172A" />
+                    <Text style={styles.toolLabel}>Photo</Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      setColorTheme((prev) => (prev === 'emerald' ? 'sand' : prev === 'sand' ? 'dark' : 'emerald'));
+                    }}
+                    style={styles.toolItem}
+                  >
+                    <MaterialIcons name="palette" size={20} color="#009F50" />
+                    <Text style={styles.toolLabel}>Colours</Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      setAspectRatio((prev) => (prev === '1:1' ? '4:5' : prev === '4:5' ? '9:16' : '1:1'));
+                    }}
+                    style={styles.toolItem}
+                  >
+                    <MaterialIcons name="aspect-ratio" size={20} color="#0F172A" />
+                    <Text style={styles.toolLabel}>Resize</Text>
+                  </Pressable>
+                </View>
+
+                {/* Summary Row 1: Caption */}
+                <Pressable onPress={() => setIsEditingCaption(true)} style={styles.summaryRow}>
+                  <MaterialIcons name="description" size={18} color="#64748B" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.summaryTitle}>Caption</Text>
+                    <Text numberOfLines={1} style={styles.summarySubtitle}>
+                      {caption}
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
+                </Pressable>
+
+                {/* Summary Row 2: Target Channels */}
+                <Pressable
+                  onPress={() => {
+                    Alert.alert('Publishing Channels', 'Select destination channels:', [
+                      {
+                        text: selectedPlatforms.includes('instagram') ? '✓ Instagram' : '＋ Instagram',
+                        onPress: () =>
+                          setSelectedPlatforms((prev) =>
+                            prev.includes('instagram') ? prev.filter((p) => p !== 'instagram') : [...prev, 'instagram']
+                          ),
+                      },
+                      {
+                        text: selectedPlatforms.includes('facebook') ? '✓ Facebook' : '＋ Facebook',
+                        onPress: () =>
+                          setSelectedPlatforms((prev) =>
+                            prev.includes('facebook') ? prev.filter((p) => p !== 'facebook') : [...prev, 'facebook']
+                          ),
+                      },
+                      {
+                        text: selectedPlatforms.includes('googlebusiness') ? '✓ Google Business' : '＋ Google Business',
+                        onPress: () =>
+                          setSelectedPlatforms((prev) =>
+                            prev.includes('googlebusiness')
+                              ? prev.filter((p) => p !== 'googlebusiness')
+                              : [...prev, 'googlebusiness']
+                          ),
+                      },
+                      { text: 'Done' },
+                    ]);
+                  }}
+                  style={styles.summaryRow}
+                >
+                  <MaterialIcons name="groups" size={18} color="#64748B" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.summaryTitle}>
+                      {selectedPlatforms.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' + ')}
+                    </Text>
+                    <Text style={styles.summarySubtitle}>{selectedPlatforms.length} accounts selected</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
+                </Pressable>
+              </ScrollView>
+
+              {/* Step 2 Sticky Footer: Save Draft & Review CTA */}
+              <View style={styles.dualStickyFooter}>
+                <Pressable
+                  disabled={busy}
+                  onPress={() => submitPost('draft')}
+                  style={styles.secondaryButton}
+                >
+                  <Text style={styles.secondaryButtonText}>Save draft</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setStudioStep(3)}
+                  style={styles.primaryFlexButton}
+                >
+                  <Text style={styles.primaryActionText}>Review & schedule →</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* ──────────────────────────────────────────────────────────────────
+              STEP 3: 03 · Review (Channel Preview & Schedule Parameters)
+              ────────────────────────────────────────────────────────────────── */}
+          {studioStep === 3 && (
+            <View style={{ flex: 1 }}>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 110 }}>
+                {/* Channel Selector Pills */}
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                  <Pressable
+                    onPress={() => setReviewPlatform('instagram')}
+                    style={[
+                      styles.platformTab,
+                      reviewPlatform === 'instagram' && styles.platformTabActive,
+                    ]}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: reviewPlatform === 'instagram' ? '#009F50' : '#64748B' }}>
+                      📸 Instagram
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => setReviewPlatform('facebook')}
+                    style={[
+                      styles.platformTab,
+                      reviewPlatform === 'facebook' && styles.platformTabActive,
+                    ]}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: reviewPlatform === 'facebook' ? '#009F50' : '#64748B' }}>
+                      📘 Facebook
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {/* ── Mockup Feed Card (Instagram Style) ── */}
+                <View style={styles.mockupCard}>
+                  {/* Account Header */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={styles.mockupAvatar}>
+                        <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>F</Text>
+                      </View>
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>{businessDisplayName}</Text>
+                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>Just now</Text>
+                      </View>
+                    </View>
+                    <MaterialIcons name="more-horiz" size={20} color="#64748B" />
+                  </View>
+
+                  {/* Rendered Post Graphic */}
+                  <View style={{ width: '100%', aspectRatio: 1, backgroundColor: '#E2E8F0', overflow: 'hidden' }}>
+                    <Image source={{ uri: bgPhotoUrl }} style={StyleSheet.absoluteFill} />
+                    <View style={[styles.canvasOverlay, { padding: 18 }]}>
+                      <Text style={[styles.canvasBrandHeader, { fontSize: 12 }]}>{businessDisplayName.toUpperCase()}</Text>
+                      <Text style={[styles.canvasHeadline, { fontSize: 20 }]}>{headline}</Text>
+                      <Text style={[styles.canvasDiscount, { fontSize: 28 }]}>{discountBadge}</Text>
+                      <Text style={[styles.canvasSubtitle, { fontSize: 12 }]}>{subtitle}</Text>
+                      <View style={[styles.canvasCtaBtn, { paddingHorizontal: 12, paddingVertical: 6 }]}>
+                        <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}>{ctaText}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Social Action Icons */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                      <MaterialIcons name="favorite-border" size={22} color="#0F172A" />
+                      <MaterialIcons name="chat-bubble-outline" size={20} color="#0F172A" />
+                      <MaterialIcons name="send" size={20} color="#0F172A" />
+                    </View>
+                    <MaterialIcons name="bookmark-border" size={22} color="#0F172A" />
+                  </View>
+
+                  {/* Caption snippet */}
+                  <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
+                    <Text style={{ fontSize: 12, color: '#334155', lineHeight: 18 }}>
+                      <Text style={{ fontWeight: '800', color: '#0F172A' }}>{businessDisplayName} </Text>
+                      {caption}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Offer Details Box */}
+                <View style={styles.configCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    <MaterialIcons name="calendar-today" size={16} color="#009F50" />
+                    <Text style={styles.configCardTitle}>Offer details</Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 4 }}>Starts</Text>
+                      <TextInput
+                        value={offerStartDate}
+                        onChangeText={setOfferStartDate}
+                        style={styles.configInput}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 4 }}>Ends</Text>
+                      <TextInput
+                        value={offerEndDate}
+                        onChangeText={setOfferEndDate}
+                        style={styles.configInput}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {/* Booking Link Box */}
+                <View style={styles.configCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    <MaterialIcons name="link" size={16} color="#009F50" />
+                    <Text style={styles.configCardTitle}>Booking link</Text>
+                  </View>
+                  <TextInput
+                    value={bookingLink}
+                    onChangeText={setBookingLink}
+                    placeholder="https://yourbusiness.com/book"
+                    style={styles.configInput}
+                  />
+                  <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 4 }}>
+                    Required for the "{ctaText}" action button.
+                  </Text>
+                </View>
+
+                {/* Schedule Selector */}
+                <View style={styles.configCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="schedule" size={16} color="#009F50" />
+                      <Text style={styles.configCardTitle}>Schedule</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 8, padding: 2 }}>
+                      <Pressable
+                        onPress={() => setScheduleMode('now')}
+                        style={[styles.scheduleBtn, scheduleMode === 'now' && styles.scheduleBtnActive]}
+                      >
+                        <Text style={[styles.scheduleBtnText, scheduleMode === 'now' && styles.scheduleBtnTextActive]}>
+                          Now
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setScheduleMode('schedule')}
+                        style={[styles.scheduleBtn, scheduleMode === 'schedule' && styles.scheduleBtnActive]}
+                      >
+                        <Text style={[styles.scheduleBtnText, scheduleMode === 'schedule' && styles.scheduleBtnTextActive]}>
+                          Schedule
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {scheduleMode === 'schedule' && (
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                      <TextInput
+                        placeholder="YYYY-MM-DD"
+                        value={scheduleDate}
+                        onChangeText={setScheduleDate}
+                        style={[styles.configInput, { flex: 1 }]}
+                      />
+                      <TextInput
+                        placeholder="HH:MM"
+                        value={scheduleTime}
+                        onChangeText={setScheduleTime}
+                        style={[styles.configInput, { flex: 1 }]}
+                      />
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
+
+              {/* Step 3 Sticky Footer: Publish / Schedule CTA */}
+              <View style={styles.promptInputContainer}>
+                <Pressable
+                  disabled={busy}
+                  onPress={() => submitPost(scheduleMode === 'now' ? 'published' : 'scheduled')}
+                  style={[styles.primaryActionButton, busy && { opacity: 0.6 }]}
+                >
+                  {busy ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.primaryActionText}>
+                      {scheduleMode === 'now'
+                        ? `Publish to ${selectedPlatforms.length} accounts`
+                        : 'Schedule post'}
+                    </Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* Modal: Edit Caption */}
+          <Modal visible={isEditingCaption} animationType="slide" transparent>
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Edit Caption</Text>
+                  <Pressable onPress={() => setIsEditingCaption(false)}>
+                    <MaterialIcons name="close" size={22} color="#64748B" />
+                  </Pressable>
+                </View>
+                <TextInput
+                  multiline
+                  value={captionDraft}
+                  onChangeText={setCaptionDraft}
+                  style={styles.captionModalInput}
+                />
+                <Pressable
+                  onPress={() => {
+                    setCaption(captionDraft);
+                    setIsEditingCaption(false);
+                  }}
+                  style={styles.modalDoneBtn}
+                >
+                  <Text style={styles.modalDoneBtnText}>Save Caption</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Modal: Edit Canvas Text */}
+          <Modal visible={isEditingText} animationType="slide" transparent>
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Edit Design Text</Text>
+                  <Pressable onPress={() => setIsEditingText(false)}>
+                    <MaterialIcons name="close" size={22} color="#64748B" />
+                  </Pressable>
+                </View>
+
+                <Text style={styles.modalInputLabel}>Headline</Text>
+                <TextInput value={headline} onChangeText={setHeadline} style={styles.configInput} />
+
+                <Text style={styles.modalInputLabel}>Discount / Offer Badge</Text>
+                <TextInput value={discountBadge} onChangeText={setDiscountBadge} style={styles.configInput} />
+
+                <Text style={styles.modalInputLabel}>Subtitle</Text>
+                <TextInput value={subtitle} onChangeText={setSubtitle} style={styles.configInput} />
+
+                <Text style={styles.modalInputLabel}>Button Text</Text>
+                <TextInput value={ctaText} onChangeText={setCtaText} style={styles.configInput} />
+
+                <Pressable onPress={() => setIsEditingText(false)} style={styles.modalDoneBtn}>
+                  <Text style={styles.modalDoneBtnText}>Apply to Design</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  channelChip: {
+  modeBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  modeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+  },
+  modeTabActive: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  modeTabText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  modeTabTextActive: {
+    color: '#009F50',
+  },
+  successNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ECFDF5',
+    borderBottomWidth: 1,
+    borderBottomColor: '#A7F3D0',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  successNoticeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#009F50',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FECACA',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  errorBannerText: {
+    fontSize: 12,
+    color: '#DC2626',
+    flex: 1,
+  },
+  subTabBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  studioHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  brandPill: {
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  brandPillText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  segmentedToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    padding: 2,
+  },
+  segBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 12,
+    borderRadius: 6,
   },
-  channelChipText: {
+  segBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  segBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  segBtnTextActive: {
+    color: '#009F50',
+  },
+  draftBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  draftBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#009F50',
+  },
+  userBubbleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    gap: 8,
+    marginVertical: 8,
+  },
+  userBubble: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 16,
+    borderBottomRightRadius: 4,
+    padding: 12,
+    maxWidth: '80%',
+  },
+  userBubbleText: {
+    fontSize: 13,
+    color: '#1E293B',
+    lineHeight: 18,
+  },
+  userAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#009F50',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userAvatarText: {
     color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 11,
+  },
+  aiBubbleContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginVertical: 8,
+  },
+  aiAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#009F50',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiBubble: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 16,
+    borderBottomLeftRadius: 4,
+    padding: 12,
+    maxWidth: '80%',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
+  aiBubbleText: {
+    fontSize: 13,
+    color: '#065F46',
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  layoutCard: {
+    width: 140,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  layoutCardSelected: {
+    borderColor: '#009F50',
+  },
+  selectedCheckPill: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    zIndex: 10,
+    backgroundColor: '#009F50',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  layoutThumb: {
+    width: '100%',
+    height: 90,
+    backgroundColor: '#CBD5E1',
+  },
+  layoutInfo: {
+    padding: 8,
+  },
+  layoutName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  layoutBadge: {
+    fontSize: 10,
+    color: '#009F50',
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  captionBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginTop: 10,
+  },
+  captionText: {
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 18,
+  },
+  quickPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  quickPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  promptInputContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    padding: 12,
+    gap: 8,
+  },
+  promptInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  promptInput: {
+    flex: 1,
+    fontSize: 12,
+    color: '#0F172A',
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+  },
+  sendBtn: {
+    backgroundColor: '#009F50',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryActionButton: {
+    backgroundColor: '#009F50',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryActionText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  ratioPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  ratioPillText: {
     fontSize: 12,
     fontWeight: '700',
+    color: '#0F172A',
+  },
+  canvasContainer: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  canvasOverlay: {
+    ...StyleSheet.absoluteFill,
+    padding: 24,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  canvasBrandHeader: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 2,
+    color: '#1E293B',
+  },
+  canvasHeadline: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#0F172A',
+    lineHeight: 30,
+    maxWidth: '85%',
+  },
+  canvasDiscount: {
+    fontSize: 36,
+    fontWeight: '900',
+    color: '#009F50',
+  },
+  canvasSubtitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+    maxWidth: '80%',
+  },
+  canvasCtaBtn: {
+    backgroundColor: '#009F50',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  canvasCtaBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  canvasToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 10,
+    marginVertical: 12,
+  },
+  toolItem: {
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 12,
+  },
+  toolLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 8,
+  },
+  summaryTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  summarySubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  dualStickyFooter: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    padding: 12,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButtonText: {
+    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  primaryFlexButton: {
+    flex: 2,
+    backgroundColor: '#009F50',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  platformTab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  platformTabActive: {
+    borderColor: '#009F50',
+    backgroundColor: '#ECFDF5',
+  },
+  mockupCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    marginBottom: 14,
+  },
+  mockupAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#009F50',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  configCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 10,
+  },
+  configCardTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  configInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: 12,
+    color: '#0F172A',
+  },
+  scheduleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  scheduleBtnActive: {
+    backgroundColor: '#009F50',
+  },
+  scheduleBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  scheduleBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 18,
+    maxHeight: '80%',
+  },
+  captionModalInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 13,
+    color: '#0F172A',
+    height: 140,
+    textAlignVertical: 'top',
+  },
+  modalDoneBtn: {
+    backgroundColor: '#009F50',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  modalDoneBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  modalInputLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    marginTop: 8,
+    marginBottom: 4,
   },
 });

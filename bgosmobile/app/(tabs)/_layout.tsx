@@ -18,12 +18,13 @@ import { useAuthStore } from '../../src/stores/auth-store';
 const visible = [
   ['index', 'Home', 'home'],
   ['reviews', 'Reviews', 'rate-review'],
-  ['marketing', 'AI Post', 'auto-awesome'],
-  ['posts', 'Posts', 'article'],
+  ['marketing', 'Marketing', 'auto-awesome'],
   ['photos', 'Media', 'photo-library'],
+  ['tools', 'Tools', 'grid-view'],
 ] as const;
 
 const hidden = [
+  'posts',
   'growth',
   'leads',
   'inbox',
@@ -35,7 +36,6 @@ const hidden = [
   'integrations',
   'settings',
   'agents',
-  'tools',
 ] as const;
 
 export default function TabLayout() {

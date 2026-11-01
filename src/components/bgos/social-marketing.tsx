@@ -2651,7 +2651,7 @@ export function SocialMediaView({
       setActiveTab('google-media');
       setGrowthDrawerOpen(false);
     } else {
-      setActiveTab('ai-content');
+      setActiveTab('composer');
       setGrowthDrawerOpen(false);
     }
   };
@@ -3178,18 +3178,17 @@ export function SocialMediaView({
   // ── Tab definitions ───────────────────────────────────────────────────────
 
   const PRIMARY_TABS: { id: SocialTab; label: string; Icon: LucideIcon }[] = [
+    { id: 'composer', label: 'Create (Studio)', Icon: Sparkles },
+    { id: 'posts', label: 'Posts & Approvals', Icon: FileText },
     { id: 'overview', label: 'Overview', Icon: Layers },
     { id: 'review-replies', label: 'Review Replies', Icon: MessageSquare },
-    { id: 'ai-content', label: 'AI Post', Icon: Sparkles },
-    { id: 'google-post', label: 'Google Post', Icon: Search },
-    { id: 'google-media', label: 'Google Media', Icon: ImageIcon },
+    { id: 'google-media', label: 'Media Library', Icon: ImageIcon },
+    { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
+    { id: 'accounts', label: 'Connected Accounts', Icon: Share2 },
   ];
 
   const ADVANCED_TABS: { id: SocialTab; label: string; Icon: LucideIcon; count?: number }[] = [
-    { id: 'composer', label: 'Composer', Icon: PenSquare },
-    { id: 'posts', label: 'Posts', Icon: FileText, count: postsTotal },
-    { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
-    { id: 'accounts', label: 'Accounts', Icon: Share2, count: connectedCount },
+    { id: 'templates', label: 'Meta Templates', Icon: LayoutTemplate },
   ];
 
   const FILTER_LABELS: Record<PostStatusFilter, string> = {
@@ -3295,36 +3294,26 @@ export function SocialMediaView({
             className="h-9 gap-1.5 bg-card shadow-2xs text-xs font-medium rounded-xl"
           >
             <BarChart3 className="size-3.5 text-muted-foreground" />
-            <span>View Analytics</span>
+            <span>Analytics</span>
           </Button>
 
           <Button
-            size="sm"
-            onClick={() => setCreateCampaignOpen(true)}
             variant="outline"
+            size="sm"
+            onClick={() => setActiveTab('posts')}
             className="h-9 gap-1.5 bg-card text-foreground font-semibold text-xs shadow-2xs rounded-xl"
           >
-            <Plus className="size-3.5" />
-            <span>Create Campaign</span>
+            <FileText className="size-3.5 text-muted-foreground" />
+            <span>Posts & Approvals</span>
           </Button>
 
           <Button
-            variant="outline"
             size="sm"
             onClick={() => setActiveTab('composer')}
-            className="h-9 gap-1.5 bg-card text-foreground font-semibold text-xs shadow-2xs rounded-xl"
-          >
-            <PenSquare className="size-3.5 text-primary" />
-            <span>Create Post</span>
-          </Button>
-
-          <Button
-            size="sm"
-            onClick={() => setActiveTab('ai-content')}
             className="h-9 gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs rounded-xl px-4"
           >
             <Plus className="size-4" />
-            <span>Create Content</span>
+            <span>New Creation</span>
           </Button>
         </div>
       </div>
