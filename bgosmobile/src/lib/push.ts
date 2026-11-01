@@ -8,7 +8,12 @@ import * as SecureStore from 'expo-secure-store';
 const PUSH_TOKEN_KEY = 'bgos_push_token';
 const PUSH_ENABLED_KEY = 'bgos_push_enabled';
 
+const isExpoGo =
+  Constants.appOwnership === 'expo' ||
+  (Constants as Record<string, unknown>)?.executionEnvironment === 'storeClient';
+
 export async function isPushPermissionGranted(): Promise<boolean> {
+  if (isExpoGo) return false;
   try {
     const settings = await Notifications.getPermissionsAsync();
     return settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
@@ -18,6 +23,7 @@ export async function isPushPermissionGranted(): Promise<boolean> {
 }
 
 export async function requestPushPermissions(): Promise<boolean> {
+  if (isExpoGo) return false;
   try {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
@@ -44,6 +50,12 @@ export async function requestPushPermissions(): Promise<boolean> {
 }
 
 export async function enablePush(): Promise<{ success: boolean; message: string }> {
+  if (isExpoGo) {
+    return {
+      success: false,
+      message: 'Push notifications require a development build (expo-dev-client) instead of Expo Go.',
+    };
+  }
   try {
     const granted = await requestPushPermissions();
     if (!granted) {

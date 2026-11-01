@@ -123,6 +123,39 @@ export default function SetupScreen() {
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
 
+  // Category-based AI offerings
+  const aiSuggestedOfferings = useMemo(() => {
+    const ind = (data?.industry || data?.activeLocation?.category || '').toLowerCase();
+    if (ind.includes('cafe') || ind.includes('restaurant') || ind.includes('food')) {
+      return ['Specialty Coffee', 'Artisan Sandwiches', 'Cold Brew', 'Breakfast Combos', 'Desserts & Pastries', 'Dine-in Experience'];
+    }
+    if (ind.includes('dental') || ind.includes('health') || ind.includes('clinic')) {
+      return ['General Consultation', 'Teeth Cleaning', 'Emergency Dental Care', 'Root Canal Treatment', 'Cosmetic Dentistry'];
+    }
+    if (ind.includes('salon') || ind.includes('spa')) {
+      return ['Hair Cut & Styling', 'Deep Cleansing Facial', 'Hair Coloring', 'Bridal Makeup', 'Manicure & Pedicure'];
+    }
+    return ['Premium Service', 'Emergency Consultation', 'Maintenance & Repair', 'Express Booking', 'Annual Package'];
+  }, [data]);
+
+  // AI-suggested keywords
+  const aiSuggestedKeywords = useMemo(() => {
+    const name = data?.businessName || 'best cafe';
+    const ind = data?.industry || 'vashi';
+    return [
+      `${name} near me`,
+      `${ind} near me`,
+      `best ${ind} in city`,
+      `top rated ${name}`,
+      `affordable ${ind}`,
+      `fast ${ind} near me`,
+      `${ind} for couples`,
+      `best ${ind} near station`,
+      `family ${ind} near me`,
+      `${name} opening hours`,
+    ];
+  }, [data]);
+
   // Fetch initial onboarding state
   const loadState = useCallback(async () => {
     try {
@@ -238,12 +271,11 @@ export default function SetupScreen() {
     }
   }, [isAuthenticated, loadState]);
 
-  if (!isLoading && !isAuthenticated) {
-    return <Redirect href="/login" />;
-  }
-  if (!isLoading && isAuthenticated && !onboardingRequired && data?.onboardingCompleted) {
-    return <Redirect href="/(tabs)" />;
-  }
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [isLoading, isAuthenticated, router]);
 
   // Google Connect OAuth
   async function handleConnectGoogle() {
@@ -336,39 +368,12 @@ export default function SetupScreen() {
     ).catch(() => {});
   }
 
-  // Category-based AI offerings
-  const aiSuggestedOfferings = useMemo(() => {
-    const ind = (data?.industry || data?.activeLocation?.category || '').toLowerCase();
-    if (ind.includes('cafe') || ind.includes('restaurant') || ind.includes('food')) {
-      return ['Specialty Coffee', 'Artisan Sandwiches', 'Cold Brew', 'Breakfast Combos', 'Desserts & Pastries', 'Dine-in Experience'];
-    }
-    if (ind.includes('dental') || ind.includes('health') || ind.includes('clinic')) {
-      return ['General Consultation', 'Teeth Cleaning', 'Emergency Dental Care', 'Root Canal Treatment', 'Cosmetic Dentistry'];
-    }
-    if (ind.includes('salon') || ind.includes('spa')) {
-      return ['Hair Cut & Styling', 'Deep Cleansing Facial', 'Hair Coloring', 'Bridal Makeup', 'Manicure & Pedicure'];
-    }
-    return ['Premium Service', 'Emergency Consultation', 'Maintenance & Repair', 'Express Booking', 'Annual Package'];
-  }, [data]);
-
-  // AI-suggested keywords
-  const aiSuggestedKeywords = useMemo(() => {
-    const name = data?.businessName || 'best cafe';
-    const ind = data?.industry || 'vashi';
-    return [
-      `${name} near me`,
-      `${ind} near me`,
-      `best ${ind} in city`,
-      `top rated ${name}`,
-      `affordable ${ind}`,
-      `fast ${ind} near me`,
-      `${ind} for couples`,
-      `best ${ind} near station`,
-      `family ${ind} near me`,
-      `${name} opening hours`,
-    ];
-  }, [data]);
-
+  if (!isLoading && !isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
+  if (!isLoading && isAuthenticated && !onboardingRequired && data?.onboardingCompleted) {
+    return <Redirect href="/(tabs)" />;
+  }
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -415,7 +420,14 @@ export default function SetupScreen() {
             onPress={() => {
               Alert.alert('Sign Out', 'Do you want to log out of BGOS?', [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Sign Out', style: 'destructive', onPress: () => void logout() },
+                {
+                  text: 'Sign Out',
+                  style: 'destructive',
+                  onPress: async () => {
+                    await logout();
+                    router.replace('/login');
+                  },
+                },
               ]);
             }}
             style={styles.headerIconButton}
