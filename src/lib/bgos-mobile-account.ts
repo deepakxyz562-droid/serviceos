@@ -19,9 +19,17 @@ export async function resolveBgosMobileAccount(userId: string, workspaceId?: str
   }
   if (!user.tenantId || user.tenant?.suspendedAt || (workspaceId && workspace && workspace.id !== workspaceId) || !isBgosIdentity({ user, workspace })) throw new ProductAccessError('BGOS_REQUIRED', 403);
   const effectiveProduct = workspace?.productType || 'bgos';
+  const gbpCount = await db.socialAccount.count({
+    where: {
+      tenantId: user.tenantId,
+      platform: 'googlebusiness',
+      isActive: true,
+    },
+  });
+  const onboardingRequired = !user.tenant?.onboardingCompleted || gbpCount === 0;
   return {
     user: { ...user, workspaceId: workspace?.id || user.workspaceId },
     workspace: { id: workspace?.id || 'default_bgos', productType: effectiveProduct, name: workspace?.name || 'BGOS' },
-    onboardingRequired: false
+    onboardingRequired,
   };
 }

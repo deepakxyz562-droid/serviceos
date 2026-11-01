@@ -38,6 +38,10 @@ const BusinessBlueprintWizard = dynamic(
   () => import('@/components/onboarding/business-blueprint-wizard').then(m => ({ default: m.BusinessBlueprintWizard })),
   { ssr: false, loading: () => <ViewLoader /> }
 );
+const BgosGbpOnboardingWizard = dynamic(
+  () => import('@/components/bgos/onboarding/bgos-gbp-onboarding-wizard').then(m => ({ default: m.BgosGbpOnboardingWizard })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
 const AppLayout = dynamic(
   () => import('@/components/layout/app-layout').then(m => ({ default: m.AppLayout })),
   { ssr: false, loading: () => <ViewLoader /> }
@@ -176,6 +180,12 @@ function isProductOnboardingCompleted(data: any, product: string): boolean {
     return false;
   }
 
+  if (product === 'bgos') {
+    if (settings?.productOnboarding?.bgos === true) return true;
+    if (w?.productType === 'bgos' && t.onboardingCompleted) return true;
+    return Boolean(t.onboardingCompleted);
+  }
+
   if (product === 'marketplace') {
     return t.signupMode === 'listing_only' && Boolean(t.onboardingCompleted);
   }
@@ -245,7 +255,7 @@ export default function HomePageClient() {
   //   'saas'           → full 4-step SaaSOnboarding wizard (signupMode='crm_trial')
   //   'listing'        → mini 1-step ListingOnboarding wizard (signupMode='listing_only')
   const [onboardingView, setOnboardingView] = useState<
-    null | 'mode_selector' | 'saas' | 'listing' | 'standalone' | 'bos'
+    null | 'mode_selector' | 'saas' | 'listing' | 'standalone' | 'bos' | 'bgos'
   >(null);
 
   // Handle Google OAuth callback URL parameters.
@@ -408,7 +418,9 @@ export default function HomePageClient() {
             data.user.role !== 'employee';
 
           if (needsOnboarding) {
-            if (hostProduct === 'chatbotly') {
+            if (hostProduct === 'bgos') {
+              setOnboardingView('bgos');
+            } else if (hostProduct === 'chatbotly') {
               setOnboardingView('standalone');
             } else if (hostProduct === 'bos') {
               setOnboardingView('bos');
@@ -564,8 +576,12 @@ export default function HomePageClient() {
                 parsed.user.role !== 'customer' &&
                 parsed.user.role !== 'employee';
 
+              const isBgos = getAppProduct(parsed) === 'bgos' || parsed.workspace?.productType === 'bgos';
+
               if (needsOnboarding) {
-                if (isStandalone) {
+                if (isBgos) {
+                  setOnboardingView('bgos');
+                } else if (isStandalone) {
                   setOnboardingView('standalone');
                 } else if (sm === 'listing_only') {
                   setOnboardingView('listing');
@@ -1214,6 +1230,24 @@ export default function HomePageClient() {
             onComplete={() => {
               setOnboardingView(null);
               useAppStore.getState().setCurrentView('commerce');
+            }}
+          />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+    // BGOS Google Business Profile 5-step onboarding wizard
+    if (onboardingView === 'bgos') {
+      return (
+        <>
+          <BgosGbpOnboardingWizard
+            tenant={auth.tenant as any}
+            user={auth.user as any}
+            onComplete={() => {
+              setOnboardingView(null);
+              setShowOnboarding(false);
+              useAppStore.getState().setCurrentView('dashboard');
             }}
           />
           <PWAInstallBanner />

@@ -279,8 +279,14 @@ export function BgosDashboard({ initialTasks, initialActivities, isDemo: isDemoP
   }, [auth?.user?.name, auth?.user?.firstName]);
 
   const businessName = useMemo(() => {
-    return auth?.tenant?.name || auth?.workspace?.name || 'Service Enterprise';
-  }, [auth?.tenant?.name, auth?.workspace?.name]);
+    let settings: any = {};
+    try {
+      settings = typeof (auth?.tenant as any)?.settingsJson === 'string'
+        ? JSON.parse((auth?.tenant as any).settingsJson)
+        : (auth?.tenant as any)?.settingsJson || {};
+    } catch {}
+    return settings.activeGbpTitle || auth?.tenant?.name || auth?.workspace?.name || 'Business Profile';
+  }, [auth?.tenant, auth?.workspace]);
 
   const businessLocation = useMemo(() => {
     return (auth?.tenant as any)?.address || (auth?.tenant as any)?.city || 'Headquarters';
@@ -621,6 +627,61 @@ const DEMO_SOURCE_BREAKDOWN = [
             </div>
             <ChevronDown className="size-4 text-slate-400 ml-1" />
           </button>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          GOOGLE BUSINESS PROFILE OPTIMIZING TIMELINE (Screenshot 5)
+         ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center font-extrabold text-blue-600 text-sm">
+              G
+            </div>
+            <div>
+              <h2 className="text-sm font-extrabold text-slate-900 dark:text-slate-100">
+                Google Business Profile
+              </h2>
+              <p className="text-xs text-slate-500">Autonomous Local SEO & Ranking Autopilot</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-850">
+              <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+              Optimizing
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+              <CheckCircle2 className="size-4" /> GBP Connected
+            </div>
+            <p className="text-[11px] text-slate-500">Verified profile linked with Maps telemetry active.</p>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+              <CheckCircle2 className="size-4" /> Business Fingerprint +6
+            </div>
+            <p className="text-[11px] text-slate-500">Keywords curated & missing ranking gaps identified.</p>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+              <CheckCircle2 className="size-4" /> Automations Active +7
+            </div>
+            <p className="text-[11px] text-slate-500">Auto review replies & weekly posting schedule armed.</p>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-purple-50/70 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/40 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-purple-700 dark:text-purple-300">
+              <Sparkles className="size-4" /> Continuous Rank Boost
+            </div>
+            <p className="text-[11px] text-slate-500">Local citations and fresh Maps media updates ongoing.</p>
+          </div>
         </div>
       </div>
 

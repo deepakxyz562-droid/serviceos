@@ -60,7 +60,9 @@ export async function GET(request: NextRequest) {
         .trim();
       const shortId = `#${id.slice(-4)}`;
       const initial = name.trim().charAt(0).toUpperCase() || 'B';
-      const isPrimary = id === '10777612572223040949' || name.toLowerCase().includes('fieser');
+      const isPrimary = tenantSettings.activeGbpLocationId
+        ? id === String(tenantSettings.activeGbpLocationId)
+        : profiles.length === 0;
 
       profiles.push({
         id,
@@ -68,25 +70,26 @@ export async function GET(request: NextRequest) {
         shortId,
         initial,
         isPrimary,
-        category: meta.category || (isPrimary ? 'Software company' : undefined),
+        category: meta.category,
         address: meta.address,
       });
     }
 
-    // Fallback if no social account connected
+    // Honest handling: if no genuine Google Business account is connected, return empty
     if (profiles.length === 0) {
-      const tenantName = tenant?.name || 'My Business';
-      const tenantIdShort = tenant?.id ? tenant.id.slice(-4) : '0001';
-      profiles.push({
-        id: tenantIdShort,
-        name: tenantName,
-        shortId: `#${tenantIdShort}`,
-        initial: tenantName.charAt(0).toUpperCase() || 'B',
-        isPrimary: true,
+      return NextResponse.json({
+        email: googleEmail,
+        count: 0,
+        hasConnectedGbp: false,
+        activeProfileId: null,
+        activeProfile: null,
+        profiles: [],
+        phone: tenant?.phone || '',
+        version: 'v2.83',
       });
     }
 
-    // Sort profiles so FieserOS / Primary is always first
+    // Sort profiles so the selected/active profile is first
     profiles.sort((a, b) => {
       if (a.isPrimary && !b.isPrimary) return -1;
       if (!a.isPrimary && b.isPrimary) return 1;
@@ -96,14 +99,15 @@ export async function GET(request: NextRequest) {
     const activeProfileId = String(
       tenantSettings.activeGbpLocationId ||
         profiles.find((p) => p.isPrimary)?.id ||
-        profiles[0].id,
+        profiles[0]?.id || '',
     );
-    const activeProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0];
+    const activeProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0] || null;
 
     return NextResponse.json({
       email: googleEmail,
       count: profiles.length,
-      activeProfileId: activeProfile.id,
+      hasConnectedGbp: true,
+      activeProfileId: activeProfile ? activeProfile.id : null,
       activeProfile,
       profiles,
       phone: tenant?.phone || '',

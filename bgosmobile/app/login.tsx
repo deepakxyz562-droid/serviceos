@@ -1,6 +1,7 @@
 import { Redirect, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Linking, Platform, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, Text, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuthStore } from '../src/stores/auth-store';
 import { isAppleAuthAvailable } from '../src/lib/apple-auth';
@@ -21,10 +22,6 @@ export default function LoginScreen() {
   const { login, loginGoogle, loginApple, logout, checkAuth, error, isAuthenticated, isLoading, onboardingRequired } = useAuthStore();
   const [localError, setLocalError] = useState<string | null>(null);
 
-  if (!isLoading && isAuthenticated) {
-    return <Redirect href={onboardingRequired ? '/setup' : '/(tabs)'} />;
-  }
-
   useEffect(() => {
     let active = true;
     if (Platform.OS === 'ios') {
@@ -40,6 +37,10 @@ export default function LoginScreen() {
       active = false;
     };
   }, []);
+
+  if (!isLoading && isAuthenticated) {
+    return <Redirect href={onboardingRequired ? '/setup' : '/(tabs)'} />;
+  }
 
   async function signInEmail() {
     setBusy(true);
@@ -168,21 +169,29 @@ export default function LoginScreen() {
               onChangeText={setPassword}
               secureTextEntry={!visible}
               autoComplete="current-password"
+              rightElement={
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => setVisible(!visible)}
+                  accessibilityRole="button"
+                  accessibilityLabel={visible ? 'Hide password' : 'Show password'}
+                >
+                  <MaterialIcons
+                    name={visible ? 'visibility' : 'visibility-off'}
+                    size={20}
+                    color={colors.muted}
+                  />
+                </Pressable>
+              }
               onSubmitEditing={() => {
                 if (email.trim() && password && !busy) signInEmail();
               }}
-            />
-            <Action
-              secondary
-              label={visible ? 'Hide password' : 'Show password'}
-              onPress={() => setVisible(!visible)}
             />
             <Action
               label={busy ? 'Signing in…' : 'Sign In'}
               disabled={busy || !email.trim() || !password}
               onPress={signInEmail}
             />
-            <Action secondary label="Recover password" disabled={busy} onPress={() => router.push('/recover')} />
           </>
         )}
 
@@ -204,7 +213,24 @@ export default function LoginScreen() {
           </View>
         )}
 
-        <Action secondary label="Retry saved session" disabled={busy} onPress={checkAuth} />
+        <View style={{ alignItems: 'center', marginTop: 10 }}>
+          <Pressable
+            hitSlop={8}
+            disabled={busy}
+            onPress={() => router.push('/recover')}
+          >
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: '600',
+                color: colors.brand,
+                textDecorationLine: 'underline',
+              }}
+            >
+              Forgot password? Recover account
+            </Text>
+          </Pressable>
+        </View>
       </Card>
 
       <Text style={[ui.body, { textAlign: 'center', marginTop: 12 }]}>

@@ -435,16 +435,41 @@ export function MenuRow({
   );
 }
 
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
+export function Field({
+  label,
+  rightElement,
+  ...props
+}: TextInputProps & { label: string; rightElement?: React.ReactNode }) {
   return (
     <View style={{ gap: 6 }}>
       <Text style={ui.label}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        placeholderTextColor={colors.muted}
-        {...props}
-        style={[ui.input, props.multiline && { minHeight: 96, textAlignVertical: 'top' }, props.style]}
-      />
+      <View style={{ position: 'relative', justifyContent: 'center' }}>
+        <TextInput
+          accessibilityLabel={label}
+          placeholderTextColor={colors.muted}
+          {...props}
+          style={[
+            ui.input,
+            rightElement ? { paddingRight: 44 } : null,
+            props.multiline && { minHeight: 96, textAlignVertical: 'top' },
+            props.style,
+          ]}
+        />
+        {rightElement ? (
+          <View
+            style={{
+              position: 'absolute',
+              right: 12,
+              top: 0,
+              bottom: 0,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            {rightElement}
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }

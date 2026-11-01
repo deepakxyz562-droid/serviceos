@@ -35,18 +35,22 @@ async function ensureSupportAccount(email: string, passwordPlain: string) {
           phone: '+91 61279 67087',
           plan: 'growth',
           planStatus: 'active',
-          onboardingCompleted: true,
-          onboardingStep: 5,
+          onboardingCompleted: false,
+          onboardingStep: 1,
           industry: 'Field Services',
         },
       });
     } else {
+      const gbpCount = await db.socialAccount.count({
+        where: { tenantId: tenant.id, platform: 'googlebusiness', isActive: true },
+      }).catch(() => 0);
+
       tenant = await db.tenant.update({
         where: { id: tenant.id },
         data: {
           plan: 'growth',
           planStatus: 'active',
-          onboardingCompleted: true,
+          onboardingCompleted: gbpCount > 0 ? Boolean(tenant.onboardingCompleted) : false,
           suspendedAt: null,
         },
       });
@@ -316,7 +320,7 @@ export async function POST(request: NextRequest) {
         },
         token,
         refreshToken: tokens.refreshToken,
-        onboardingRequired: bgos?.onboardingRequired || false,
+        onboardingRequired: bgos ? bgos.onboardingRequired : (!user.tenant?.onboardingCompleted),
         workspace: bgos?.workspace || (user.workspace ? {id:user.workspace.id,productType:user.workspace.productType,name:user.workspace.name} : null),
         tenant: user.tenant
           ? {
