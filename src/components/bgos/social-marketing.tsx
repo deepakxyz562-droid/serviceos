@@ -1831,6 +1831,7 @@ export function SocialMediaView({
   const [publishedTotal, setPublishedTotal] = useState(0);
 
   // ── Connections state ──
+  const [activeProfileId, setActiveProfileId] = useState<string | undefined>();
   const [connectedPlatforms, setConnectedPlatforms] = useState<Set<string>>(
     () => new Set(isDemo ? ['whatsapp', 'email', 'sms'] : [])
   );
@@ -2126,6 +2127,7 @@ export function SocialMediaView({
   useEffect(() => {
     const handleProfileChange = (e: any) => {
       const newProfileId = e?.detail?.profileId;
+      setActiveProfileId(newProfileId);
       fetchReviews(newProfileId);
     };
     if (typeof window !== 'undefined') {
@@ -3358,10 +3360,12 @@ export function SocialMediaView({
         <MarketingCanvasStudio
           businessName={businessName}
           category={detectedCategory}
+          activeProfileId={activeProfileId}
           connectedAccounts={socialAccounts.map((a) => ({
             id: a.id,
             platform: a.platform,
             name: a.accountName || a.platform,
+            accountId: a.accountId,
           }))}
           onPublishSuccess={() => {
             setActiveTab('posts');

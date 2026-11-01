@@ -185,7 +185,7 @@ export default function MarketingScreen() {
   const fbAccount = availableAccounts.find((a) => a.platform === 'facebook' && a.isActive);
   const igAccount = availableAccounts.find((a) => a.platform === 'instagram' && a.isActive);
 
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram', 'facebook']);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['googlebusiness', 'instagram', 'facebook']);
 
   // Sync selectedPlatforms with connected accounts so publishing doesn't target disconnected channels
   useEffect(() => {
@@ -194,7 +194,10 @@ export default function MarketingScreen() {
       if (activePlatforms.length > 0) {
         setSelectedPlatforms((prev) => {
           const valid = prev.filter((p) => activePlatforms.includes(p));
-          return valid.length > 0 ? valid : [activePlatforms[0]];
+          const withGbp = activePlatforms.includes('googlebusiness') && !valid.includes('googlebusiness')
+            ? ['googlebusiness', ...valid]
+            : valid;
+          return withGbp.length > 0 ? withGbp : [activePlatforms[0]];
         });
       }
     }

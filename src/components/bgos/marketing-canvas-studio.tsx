@@ -158,7 +158,8 @@ const CURATED_PHOTOS = [
 interface MarketingCanvasStudioProps {
   businessName?: string;
   category?: string;
-  connectedAccounts?: Array<{ id: string; platform: string; name: string }>;
+  activeProfileId?: string;
+  connectedAccounts?: Array<{ id: string; platform: string; name: string; accountId?: string }>;
   onPublishSuccess?: (postId: string) => void;
   onNavigateToPosts?: () => void;
 }
@@ -184,6 +185,7 @@ const DEFAULT_ALT_HEADLINES = [
 export function MarketingCanvasStudio({
   businessName = 'Fieseros',
   category = 'Professional Services',
+  activeProfileId,
   connectedAccounts = [],
   onPublishSuccess,
   onNavigateToPosts,
@@ -230,11 +232,11 @@ export function MarketingCanvasStudio({
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('4:5');
   const [activeRightTab, setActiveRightTab] = useState<'design' | 'preview'>('design');
 
-  // Social & Scheduling Settings
+  // Social & Scheduling Settings — Default to Google Business + Instagram + Facebook
   const [linkUrl, setLinkUrl] = useState('https://fieseros.com');
   const [offerStartDate, setOfferStartDate] = useState('6 Nov');
   const [offerEndDate, setOfferEndDate] = useState('8 Nov');
-  const [selectedChannels, setSelectedChannels] = useState<string[]>(['instagram', 'facebook']);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(['googlebusiness', 'instagram', 'facebook']);
   const [publishMode, setPublishMode] = useState<'now' | 'schedule'>('now');
   const [scheduledDateTime, setScheduledDateTime] = useState('');
 
@@ -253,7 +255,10 @@ export function MarketingCanvasStudio({
       if (activePlatforms.length > 0) {
         setSelectedChannels((prev) => {
           const valid = prev.filter((p) => activePlatforms.includes(p));
-          return valid.length > 0 ? valid : [activePlatforms[0]];
+          const withGbp = activePlatforms.includes('googlebusiness') && !valid.includes('googlebusiness')
+            ? ['googlebusiness', ...valid]
+            : valid;
+          return withGbp.length > 0 ? withGbp : [activePlatforms[0]];
         });
       }
     }
@@ -578,20 +583,39 @@ export function MarketingCanvasStudio({
     }
   };
 
+  // Normalize relative media URLs to absolute URLs
+  const toAbsoluteUrl = useCallback((url: string) => {
+    if (!url || typeof url !== 'string') return url;
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
+    const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://bgos.fieseros.com';
+    return `${origin.replace(/\/+$/, '')}/${url.replace(/^\/+/, '')}`;
+  }, []);
+
   // Build resolved target list for publish / save
   const getResolvedTargets = useCallback(() => {
     return selectedChannels
       .map((p) => {
-        const found = connectedAccounts.find(
-          (a) =>
-            a.platform === p ||
-            (p === 'googlebusiness' &&
-              (a.platform === 'gbp' || a.platform === 'google_business' || a.platform === 'google'))
-        );
+        if (p === 'googlebusiness') {
+          const gbpList = connectedAccounts.filter(
+            (a) => a.platform === 'googlebusiness' || a.platform === 'gbp' || a.platform === 'google_business' || a.platform === 'google'
+          );
+          if (gbpList.length === 0) return null;
+          // Smart match: activeProfileId, location ID 10777612572223040949 (FieserOS), businessName, or first active GBP
+          const target =
+            gbpList.find(
+              (a) =>
+                (activeProfileId && (a.id === activeProfileId || a.accountId === activeProfileId)) ||
+                a.accountId === '10777612572223040949' ||
+                a.name?.toLowerCase().includes('fieser') ||
+                (businessName && a.name?.toLowerCase().includes(businessName.toLowerCase()))
+            ) || gbpList[0];
+          return { platform: 'googlebusiness', socialAccountId: target.id };
+        }
+        const found = connectedAccounts.find((a) => a.platform === p);
         return found ? { platform: p, socialAccountId: found.id } : null;
       })
       .filter(Boolean);
-  }, [selectedChannels, connectedAccounts]);
+  }, [selectedChannels, connectedAccounts, activeProfileId, businessName]);
 
   // Save Draft
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -603,8 +627,8 @@ export function MarketingCanvasStudio({
     try {
       const targets = getResolvedTargets();
       const isPosterMode = activeVisualFormat === 'poster';
-      const resolvedPosterUrl = posterUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1';
-      const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [photoUrl] : [];
+      const resolvedPosterUrl = toAbsoluteUrl(posterUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1');
+      const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [toAbsoluteUrl(photoUrl)] : [];
 
       const res = await authFetch(editingDraftId ? `/api/social/posts/${editingDraftId}` : '/api/social/posts', {
         method: editingDraftId ? 'PATCH' : 'POST',
@@ -620,6 +644,7 @@ export function MarketingCanvasStudio({
           platforms: selectedChannels,
           targets: targets.length > 0 ? targets : undefined,
           headline,
+          gbpPostType: headline || badgeText ? 'offer' : 'whats_new',
           gbpOfferData: {
             title: headline,
             couponCode: badgeText.replace(/[^A-Za-z0-9]/g, ''),
@@ -650,8 +675,8 @@ export function MarketingCanvasStudio({
     try {
       const targets = getResolvedTargets();
       const isPosterMode = activeVisualFormat === 'poster';
-      const resolvedPosterUrl = posterUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1';
-      const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [photoUrl] : [];
+      const resolvedPosterUrl = toAbsoluteUrl(posterUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1');
+      const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [toAbsoluteUrl(photoUrl)] : [];
 
       const res = await authFetch('/api/social/posts', {
         method: 'POST',
@@ -669,6 +694,7 @@ export function MarketingCanvasStudio({
           platforms: selectedChannels,
           targets: targets.length > 0 ? targets : undefined,
           headline,
+          gbpPostType: headline || badgeText ? 'offer' : 'whats_new',
           gbpOfferData: {
             title: headline,
             couponCode: badgeText.replace(/[^A-Za-z0-9]/g, ''),

@@ -377,6 +377,17 @@ export async function POST(request: NextRequest) {
       offerData.approvalStatus = body.approvalStatus;
     }
 
+    // Ensure media URLs are absolute public URLs for external adapters (GBP, FB, IG)
+    const serverOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://bgos.fieseros.com';
+    if (Array.isArray(body.mediaUrls)) {
+      body.mediaUrls = body.mediaUrls.map((u) => {
+        if (typeof u === 'string' && u.startsWith('/')) {
+          return `${serverOrigin.replace(/\/+$/, '')}/${u.replace(/^\/+/, '')}`;
+        }
+        return u;
+      });
+    }
+
     // Render the exact source revision before queuing publication.
     // If body.isPoster or if mediaUrls already has a valid finished image, use it directly.
     const hasPreRenderedMedia = Array.isArray(body.mediaUrls) && body.mediaUrls.length > 0 && typeof body.mediaUrls[0] === 'string' && body.mediaUrls[0].trim().length > 0;
@@ -414,7 +425,7 @@ export async function POST(request: NextRequest) {
         scheduledAt: publishNow ? now : scheduledAt,
         publishedAt: null,
         failureReason: null,
-        gbpPostType: body.gbpPostType || null,
+        gbpPostType: body.gbpPostType || (body.gbpOfferData ? 'offer' : null),
         gbpOfferData: Object.keys(offerData).length > 0 ? JSON.stringify(offerData) : null,
         pinterestBoard: body.pinterestBoard || null,
         createdById: user.id,

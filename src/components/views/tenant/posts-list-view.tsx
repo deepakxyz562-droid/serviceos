@@ -473,11 +473,23 @@ export function PostsListView({ embedded = false }: { embedded?: boolean } = {})
                     </div>
 
                     {/* Platform Icons Overlay */}
-                    <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 bg-black/60 backdrop-blur-xs px-2 py-1 rounded-full">
+                    <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 bg-black/75 backdrop-blur-xs px-2.5 py-1 rounded-full text-white text-[10px]">
                       {platforms.length > 0 ? (
                         platforms.map((p) => {
                           const IconComp = PLATFORM_ICONS[p] || Share2;
-                          return <IconComp key={p} className="size-3 text-white" />;
+                          const targetObj = Array.isArray(post.publishTargets) ? post.publishTargets.find((t) => t.platform === p) : null;
+                          const isPub = targetObj?.status === 'published';
+                          const isFail = targetObj?.status === 'failed';
+                          return (
+                            <span key={p} className="flex items-center gap-1" title={`${p}: ${targetObj?.status || 'targeted'}`}>
+                              <IconComp className="size-3 text-white" />
+                              <span
+                                className={`size-1.5 rounded-full ${
+                                  isPub ? 'bg-emerald-400' : isFail ? 'bg-rose-400' : 'bg-amber-400'
+                                }`}
+                              />
+                            </span>
+                          );
                         })
                       ) : (
                         <span className="text-[10px] text-white font-medium">All Channels</span>
@@ -705,6 +717,55 @@ export function PostsListView({ embedded = false }: { embedded?: boolean } = {})
                   </a>
                 </div>
               )}
+
+              {/* Delivery Breakdown Per Channel */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                  Publishing Channels & Delivery Status
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {Array.isArray(viewPost.publishTargets) && viewPost.publishTargets.length > 0 ? (
+                    viewPost.publishTargets.map((t) => {
+                      const IconComp = PLATFORM_ICONS[t.platform] || Share2;
+                      const isPub = t.status === 'published';
+                      const isFail = t.status === 'failed';
+                      return (
+                        <div
+                          key={t.platform + t.socialAccountId}
+                          className="p-2.5 rounded-xl border border-border bg-card flex items-center justify-between text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`size-6 rounded-md flex items-center justify-center text-white ${
+                                PLATFORM_COLORS[t.platform] || 'bg-muted-foreground'
+                              }`}
+                            >
+                              <IconComp className="size-3.5" />
+                            </div>
+                            <span className="font-semibold capitalize">
+                              {t.platform === 'googlebusiness' ? 'Google Business' : t.platform}
+                            </span>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] font-bold ${
+                              isPub
+                                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                                : isFail
+                                ? 'bg-rose-500/10 text-rose-600 border-rose-500/20'
+                                : 'bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {t.status.toUpperCase()}
+                          </Badge>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-xs text-muted-foreground col-span-2">No specific social channels targeted.</p>
+                  )}
+                </div>
+              </div>
 
               {viewPost.failureReason && (
                 <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-destructive">
