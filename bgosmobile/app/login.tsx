@@ -205,6 +205,36 @@ export default function LoginScreen() {
         )}
 
         <Action secondary label="Retry saved session" disabled={busy} onPress={checkAuth} />
+
+        <View style={{ alignItems: 'center', marginVertical: 8 }}>
+          <Text style={ui.caption}>── play store reviewer & demo access ──</Text>
+        </View>
+
+        <Action
+          secondary
+          label={busy ? 'Signing in…' : 'Google Play Reviewer / Demo Access 🚀'}
+          icon="verified-user"
+          disabled={busy}
+          onPress={() => {
+            setEmail('google-reviewer@fieseros.com');
+            setPassword('BgosReview2026!');
+            setMethod('email');
+            setBusy(true);
+            setLocalError(null);
+            void (async () => {
+              try {
+                const ok = await login('google-reviewer@fieseros.com', 'BgosReview2026!');
+                if (!ok) {
+                  setLocalError('Sign-in failed. Please check network connection.');
+                }
+              } catch (e) {
+                setLocalError(e instanceof Error ? e.message : 'Sign-in failed');
+              } finally {
+                setBusy(false);
+              }
+            })();
+          }}
+        />
       </Card>
 
       <Text style={[ui.body, { textAlign: 'center', marginTop: 12 }]}>
