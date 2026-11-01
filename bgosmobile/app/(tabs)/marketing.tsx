@@ -1,3 +1,5 @@
+import { createDesign, validateDesign, type MarketingDesign } from '../../../shared/marketing-design';
+import { EditableDesign } from '../../src/components/design/editable-design';
 import * as Crypto from 'expo-crypto';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
@@ -217,6 +219,21 @@ export default function MarketingScreen() {
     return list;
   }, [selectedPlatforms, gbpAccount, fbAccount, igAccount]);
 
+  const [customDesign,setCustomDesign]=useState<MarketingDesign|null>(null);
+  const design = customDesign || createDesign({brand:businessDisplayName,headline,subtitle,badge:discountBadge,cta:ctaText,photo:bgPhotoUrl,ratio:aspectRatio});
+  useEffect(()=>setCustomDesign(null),[businessDisplayName,headline,subtitle,discountBadge,ctaText,bgPhotoUrl,aspectRatio]);
+
+  const [designRevision,setDesignRevision]=useState<string|null>(null);
+  const savedDesignSnapshot=useRef('');
+  const [editingDesignId,setEditingDesignId]=useState<string|null>(null);
+  const [designDrafts,setDesignDrafts]=useState<Array<{id:string;content:string;designJson:string;updatedAt:string}>>([]);
+  const [draftPage,setDraftPage]=useState(1);
+  const [moreDrafts,setMoreDrafts]=useState(false);
+  async function loadDesignDrafts(page=1){
+    try{const result=await apiRequest<{data:Array<{id:string;content:string;designJson:string;updatedAt:string}>}>(`/api/social/posts?status=draft&limit=20&page=${page}`);const rows=result.data.filter(d=>d.designJson);setDesignDrafts(previous=>page===1?rows:[...previous,...rows]);setDraftPage(page);setMoreDrafts(result.data.length===20);}
+    catch{setError('Could not load saved designs. Please retry.');}
+  }
+
   // AI Generation Trigger
   async function generatePost(customTopic?: string) {
     const topicToUse = (typeof customTopic === 'string' ? customTopic : promptInput).trim() || activeUserPrompt;
@@ -224,38 +241,12 @@ export default function MarketingScreen() {
     setError(null);
     setActiveUserPrompt(topicToUse);
     try {
-      const data = await apiRequest<{
-        caption: string;
-        title?: string;
-        headline?: string;
-        subtitle?: string;
-        badge?: string;
-        ctaText?: string;
-        photoUrl?: string;
-        imageUrl?: string;
-        bookingUrl?: string;
-        offerDetails?: { discountText?: string; startDate?: string; endDate?: string };
-        layouts?: CreativeLayout[];
-      }>('/api/social/ai-generate-post', {
-        method: 'POST',
-        body: {
-          topic: topicToUse,
-          platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['instagram', 'facebook', 'googlebusiness'],
-          tone: 'Friendly, premium, minimal, high-converting',
-        },
+      const data = await apiRequest<{design:MarketingDesign;caption:string}>('/api/social/designs/generate', {
+        method:'POST',body:{prompt:topicToUse,design,caption},
       });
-
-      if (data.caption) {
-        setCaption(data.caption);
-        setCaptionDraft(data.caption);
-      }
-      if (data.headline) setHeadline(data.headline);
-      if (data.subtitle) setSubtitle(data.subtitle);
-      if (data.badge) setDiscountBadge(data.badge);
-      if (data.ctaText) setCtaText(data.ctaText);
-      if (data.photoUrl) setBgPhotoUrl(data.photoUrl);
-      else if (data.imageUrl) setBgPhotoUrl(data.imageUrl);
-      if (data.bookingUrl) setBookingLink(data.bookingUrl);
+      setCustomDesign(data.design);
+      setCaption(data.caption);
+      setCaptionDraft(data.caption);
 
       setPromptInput('');
       setSuccessNotice('AI generated fresh creative directions!');
@@ -268,7 +259,7 @@ export default function MarketingScreen() {
   }
 
   // Publishing / Scheduling handler
-  async function submitPost(status: 'published' | 'scheduled' | 'draft') {
+  async function submitPost(status: 'published' | 'scheduled' | 'draft', autosave=false) {
     if (busy || saving.current) return;
     setError(null);
 
@@ -298,6 +289,9 @@ export default function MarketingScreen() {
       targets: targets.length > 0 ? targets : undefined,
       platforms: selectedPlatforms,
       mediaUrls: mediaList,
+      design,
+      expectedUpdatedAt:designRevision,
+      ...(status!=='draft'&&editingDesignId?{draftId:editingDesignId}:{}),
       status,
       gbpPostType: 'offer',
       ...(scheduledAt ? { scheduledAt } : {}),
@@ -314,15 +308,17 @@ export default function MarketingScreen() {
     }
 
     try {
-      await apiRequest('/api/social/posts', {
-        method: 'POST',
+      const saved = await apiRequest<{data?:{id:string;updatedAt:string}}>(status === 'draft' && editingDesignId ? `/api/social/posts/${editingDesignId}` : '/api/social/posts', {
+        method: status === 'draft' && editingDesignId ? 'PATCH' : 'POST',
         body,
         headers: { 'Idempotency-Key': pendingRequest.current!.key },
       });
+      if(status === 'draft' && saved.data?.id){setEditingDesignId(saved.data.id);setDesignRevision(saved.data.updatedAt);savedDesignSnapshot.current=JSON.stringify({design,caption});}
+      if(autosave)return;
       pendingRequest.current = null;
       setSuccessNotice(
         status === 'published'
-          ? 'Post published successfully to your selected accounts! 🚀'
+          ? 'Post queued for publishing. Check Posts for delivery status.'
           : status === 'scheduled'
           ? 'Post scheduled successfully!'
           : 'Draft saved in your Posts Library.'
@@ -339,6 +335,13 @@ export default function MarketingScreen() {
       setBusy(false);
     }
   }
+
+  const designSnapshot=JSON.stringify({design,caption});
+  useEffect(()=>{
+    if(!editingDesignId||busy||savedDesignSnapshot.current===designSnapshot)return;
+    const timer=setTimeout(()=>{savedDesignSnapshot.current=designSnapshot;void submitPost('draft',true);},1500);
+    return ()=>clearTimeout(timer);
+  },[designSnapshot,editingDesignId,busy]);
 
   // Quick caption modifiers
   function handleMakeShorter() {
@@ -738,80 +741,11 @@ export default function MarketingScreen() {
                 </View>
 
                 {/* ── LIVE VISUAL CANVAS ── */}
-                <View
-                  style={[
-                    styles.canvasContainer,
-                    aspectRatio === '4:5' && { aspectRatio: 4 / 5 },
-                    aspectRatio === '9:16' && { aspectRatio: 9 / 16 },
-                  ]}
-                >
-                  <Image source={{ uri: bgPhotoUrl }} style={StyleSheet.absoluteFill} />
+                <Pressable onPress={()=>loadDesignDrafts()} style={{padding:12}}><Text>Open saved design</Text></Pressable>
+                {moreDrafts&&<Pressable onPress={()=>loadDesignDrafts(draftPage+1)}><Text>Load more drafts</Text></Pressable>}
+                {designDrafts.map(d=><Pressable key={d.id} style={{padding:12}} onPress={()=>{try{setCustomDesign(validateDesign(JSON.parse(d.designJson)));setCaption(d.content);setEditingDesignId(d.id);setDesignRevision(d.updatedAt);savedDesignSnapshot.current=JSON.stringify({design:JSON.parse(d.designJson),caption:d.content});setDesignDrafts([]);}catch{setError('This design could not be opened.');}}}><Text>{d.content.slice(0,70)}</Text></Pressable>)}
+                <EditableDesign design={design} onChange={setCustomDesign} />
 
-                  {/* Canvas Overlays depending on layout theme */}
-                  <View
-                    style={[
-                      styles.canvasOverlay,
-                      colorTheme === 'dark' && { backgroundColor: 'rgba(7,11,45,0.72)' },
-                      colorTheme === 'sand' && { backgroundColor: 'rgba(247,243,234,0.65)' },
-                      colorTheme === 'emerald' && { backgroundColor: 'rgba(0,159,80,0.18)' },
-                    ]}
-                  >
-                    {/* Brand Name */}
-                    <Pressable onPress={() => setIsEditingText(true)}>
-                      <Text
-                        style={[
-                          styles.canvasBrandHeader,
-                          colorTheme === 'dark' ? { color: '#F8FAFC' } : { color: '#1E293B' },
-                        ]}
-                      >
-                        {businessDisplayName.toUpperCase()}
-                      </Text>
-                    </Pressable>
-
-                    {/* Headline */}
-                    <Pressable onPress={() => setIsEditingText(true)}>
-                      <Text
-                        style={[
-                          styles.canvasHeadline,
-                          colorTheme === 'dark' ? { color: '#FFFFFF' } : { color: '#0F172A' },
-                        ]}
-                      >
-                        {headline}
-                      </Text>
-                    </Pressable>
-
-                    {/* Discount Badge */}
-                    <Pressable onPress={() => setIsEditingText(true)}>
-                      <Text
-                        style={[
-                          styles.canvasDiscount,
-                          colorTheme === 'dark' ? { color: '#34D399' } : { color: '#009F50' },
-                        ]}
-                      >
-                        {discountBadge}
-                      </Text>
-                    </Pressable>
-
-                    {/* Subtitle */}
-                    <Pressable onPress={() => setIsEditingText(true)}>
-                      <Text
-                        style={[
-                          styles.canvasSubtitle,
-                          colorTheme === 'dark' ? { color: '#E2E8F0' } : { color: '#334155' },
-                        ]}
-                      >
-                        {subtitle}
-                      </Text>
-                    </Pressable>
-
-                    {/* CTA Button */}
-                    <Pressable onPress={() => setIsEditingText(true)} style={styles.canvasCtaBtn}>
-                      <Text style={styles.canvasCtaBtnText}>{ctaText}</Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                {/* Canvas Toolbar: Text | Photo | Colours | Resize */}
                 <View style={styles.canvasToolbar}>
                   <Pressable onPress={() => setIsEditingText(true)} style={styles.toolItem}>
                     <MaterialIcons name="text-fields" size={20} color="#0F172A" />
@@ -968,19 +902,7 @@ export default function MarketingScreen() {
                     <MaterialIcons name="more-horiz" size={20} color="#64748B" />
                   </View>
 
-                  {/* Rendered Post Graphic */}
-                  <View style={{ width: '100%', aspectRatio: 1, backgroundColor: '#E2E8F0', overflow: 'hidden' }}>
-                    <Image source={{ uri: bgPhotoUrl }} style={StyleSheet.absoluteFill} />
-                    <View style={[styles.canvasOverlay, { padding: 18 }]}>
-                      <Text style={[styles.canvasBrandHeader, { fontSize: 12 }]}>{businessDisplayName.toUpperCase()}</Text>
-                      <Text style={[styles.canvasHeadline, { fontSize: 20 }]}>{headline}</Text>
-                      <Text style={[styles.canvasDiscount, { fontSize: 28 }]}>{discountBadge}</Text>
-                      <Text style={[styles.canvasSubtitle, { fontSize: 12 }]}>{subtitle}</Text>
-                      <View style={[styles.canvasCtaBtn, { paddingHorizontal: 12, paddingVertical: 6 }]}>
-                        <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}>{ctaText}</Text>
-                      </View>
-                    </View>
-                  </View>
+                  <EditableDesign design={design} />
 
                   {/* Social Action Icons */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10 }}>

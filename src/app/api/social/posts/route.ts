@@ -1,3 +1,6 @@
+import { persistDesignAssets } from '@/lib/designs/assets';
+import { validateDesign } from '../../../../../shared/marketing-design';
+import { renderDesign } from '@/lib/designs/render';
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createHash } from 'node:crypto';
 import { getAuthUser } from '@/lib/auth';
@@ -108,6 +111,8 @@ export async function GET(request: NextRequest) {
           approvalStatus: true,
           content: true,
           mediaUrls: true,
+          designJson: true,
+          updatedAt: true,
           linkUrl: true,
           publishTargets: true,
           scheduledAt: true,
@@ -184,6 +189,9 @@ function safeJsonObject(raw: string | null | unknown): Record<string, unknown> |
 // ─── POST — create ─────────────────────────────────────────────────────────
 
 interface CreatePostBody {
+  draftId?: string;
+  expectedUpdatedAt?: string;
+  design?: unknown;
   content: string;
   mediaUrls?: string[];
   linkUrl?: string;
@@ -210,6 +218,12 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as CreatePostBody;
     const isDraft = (body?.status || 'draft') === 'draft';
+    let design;
+    if (body.design !== undefined) {
+      try { design = await persistDesignAssets(body.design, tenantId, user.id); } catch (error) {
+        return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid design' }, { status: 400 });
+      }
+    }
 
     if (!body || !body.content || !body.content.trim()) {
       return NextResponse.json(
@@ -252,22 +266,7 @@ export async function POST(request: NextRequest) {
           socialAccountId: a.id,
         }));
       } else {
-        // Create or find a simulated sandbox connected account so publishing never crashes
-        let sandboxAccount = await db.socialAccount.findFirst({
-          where: { tenantId, platform: 'googlebusiness' },
-        });
-        if (!sandboxAccount) {
-          sandboxAccount = await db.socialAccount.create({
-            data: {
-              tenantId,
-              platform: 'googlebusiness',
-              accountName: `${user.name || 'Business'} (Preview)`,
-              accountId: `preview_${tenantId.slice(0, 8)}`,
-              isActive: true,
-            },
-          });
-        }
-        targets = [{ platform: 'googlebusiness', socialAccountId: sandboxAccount.id }];
+        return NextResponse.json({error:'Connect a social account before publishing. You can still save this design as a draft.'},{status:400});
       }
     }
 
@@ -330,8 +329,8 @@ export async function POST(request: NextRequest) {
       include: { brandProfile: true },
     }) : null;
     const activeBusinessName = tenantRecord?.brandProfile?.businessName || tenantRecord?.name || 'Business';
-    const forbiddenPhrases = safeJsonArray(tenantRecord?.brandProfile?.forbiddenPhrases) as string[];
-    const competitors = safeJsonArray(tenantRecord?.brandProfile?.competitors) as string[];
+    const forbiddenPhrases = safeJsonArray(tenantRecord?.brandProfile?.forbiddenPhrases ?? null) as string[];
+    const competitors = safeJsonArray(tenantRecord?.brandProfile?.competitors ?? null) as string[];
 
     const safetyCheck = validateBrandSafety(body.content, {
       tenantId,
@@ -372,20 +371,26 @@ export async function POST(request: NextRequest) {
       status: 'pending' as const,
     }));
 
-    const offerData = body.gbpOfferData ? { ...body.gbpOfferData } : {};
+    const offerData: Record<string, unknown> = body.gbpOfferData ? { ...body.gbpOfferData } : {};
     if (body.approvalStatus) {
       offerData.approvalStatus = body.approvalStatus;
     }
 
+    // Render the exact source revision before queuing publication.
+    if (design && !isDraft) {
+      const rendered = await renderDesign(design, tenantId);
+      body.mediaUrls = [rendered.imageUrl];
+    }
+
     // Persist the post.
     let created = true;
-    const post = await db.socialPost.create({
-      data: {
+    const postData = {
         ...(requestId ? { id: requestId } : {}),
         tenantId,
         status: initialStatus,
         approvalStatus: body.approvalStatus || null,
         content: body.content,
+        designJson: design ? JSON.stringify(design) : null,
         mediaUrls: JSON.stringify(body.mediaUrls || []),
         linkUrl: body.linkUrl || null,
         publishTargets: JSON.stringify(publishTargets),
@@ -396,25 +401,38 @@ export async function POST(request: NextRequest) {
         gbpOfferData: Object.keys(offerData).length > 0 ? JSON.stringify(offerData) : null,
         pinterestBoard: body.pinterestBoard || null,
         createdById: user.id,
-      },
-      select: {
+      };
+    const postSelect = {
         id: true,
         status: true,
         content: true,
         mediaUrls: true,
+        designJson: true,
         linkUrl: true,
         publishTargets: true,
         scheduledAt: true,
         publishedAt: true,
         createdAt: true,
-      },
-    }).catch(async (error) => {
+        updatedAt: true,
+      } as const;
+    let post;
+    if(body.draftId){
+      if(!body.expectedUpdatedAt || !Number.isFinite(new Date(body.expectedUpdatedAt).getTime()))return NextResponse.json({error:'Reopen the latest draft before publishing'},{status:409});
+      const {id: ignoredId,createdById: ignoredCreator,...updateData}=postData;
+      const promoted=await db.socialPost.updateMany({where:{id:body.draftId,tenantId,status:'draft',updatedAt:new Date(body.expectedUpdatedAt)},data:{...updateData,updatedAt:new Date()}});
+      if(promoted.count!==1)return NextResponse.json({error:'The draft changed or was already published. Reopen it before retrying.'},{status:409});
+      post=await db.socialPost.findFirst({where:{id:body.draftId,tenantId},select:postSelect});
+      if(!post)return NextResponse.json({error:'Draft not found'},{status:404});
+    }else{
+      post=await db.socialPost.create({data:postData,select:postSelect }).catch(async (error) => {
       if (!requestId) throw error;
       const existing = await db.socialPost.findUnique({ where: { id: requestId } });
       if (!existing) throw error;
       created = false;
       return existing;
     });
+    }
+
 
     if (!created) return NextResponse.json({ data: { ...post, mediaUrls: safeJsonArray(post.mediaUrls), publishTargets: safeJsonArray(post.publishTargets) } });
 

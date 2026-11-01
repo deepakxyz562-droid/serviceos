@@ -1,3 +1,5 @@
+import { persistDesignAssets } from '@/lib/designs/assets';
+import { validateDesign } from '../../../../../../shared/marketing-design';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -95,6 +97,8 @@ export async function GET(
 // ─── PATCH ─────────────────────────────────────────────────────────────────
 
 interface PatchBody {
+  expectedUpdatedAt?: string;
+  design?: unknown;
   content?: string;
   mediaUrls?: string[];
   linkUrl?: string | null;
@@ -125,7 +129,7 @@ export async function PATCH(
 
     const existing = await db.socialPost.findFirst({
       where: { id, tenantId },
-      select: { id: true, status: true, publishTargets: true },
+      select: { id: true, status: true, publishTargets: true, updatedAt: true },
     });
     if (!existing) {
       return NextResponse.json({ error: 'Post not found.' }, { status: 404 });
@@ -141,7 +145,13 @@ export async function PATCH(
       );
     }
 
+    if(body.design !== undefined && (!body.expectedUpdatedAt || new Date(body.expectedUpdatedAt).getTime()!==new Date(existing.updatedAt).getTime())) return NextResponse.json({error:'This design was changed elsewhere. Reopen the latest draft before saving.'},{status:409});
     const data: Record<string, unknown> = {};
+    if (body.design !== undefined) {
+      try { data.designJson = JSON.stringify(await persistDesignAssets(body.design, tenantId, user.id)); } catch (error) {
+        return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid design' }, { status: 400 });
+      }
+    }
     if (typeof body.content === 'string') data.content = body.content;
     if (Array.isArray(body.mediaUrls)) data.mediaUrls = JSON.stringify(body.mediaUrls);
     if (body.linkUrl !== undefined) data.linkUrl = body.linkUrl || null;
@@ -164,13 +174,14 @@ export async function PATCH(
       );
     }
 
-    const updated = await db.socialPost.update({
-      where: { id },
-      data,
+    const saved=await db.socialPost.updateMany({where:{id,tenantId,status:'draft',updatedAt:existing.updatedAt},data:{...data,updatedAt:new Date()}});
+    if(saved.count!==1)return NextResponse.json({error:'The draft changed while saving. Reopen it and retry.'},{status:409});
+    const updated=await db.socialPost.findFirst({where:{id,tenantId},
       select: {
         id: true,
         status: true,
         content: true,
+        designJson: true,
         mediaUrls: true,
         linkUrl: true,
         publishTargets: true,
@@ -179,6 +190,7 @@ export async function PATCH(
         updatedAt: true,
       },
     });
+    if(!updated)return NextResponse.json({error:'Draft not found'},{status:404});
 
     await logActivity({
       tenantId,

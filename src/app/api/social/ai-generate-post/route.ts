@@ -96,6 +96,7 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
     });
 
     let generated: {
+      ctaText?: string;
       title?: string;
       headline?: string;
       subtitle?: string;

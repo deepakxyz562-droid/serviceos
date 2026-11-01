@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { createDesign, validateDesign, type MarketingDesign } from '../../../shared/marketing-design';
+import { EditableMarketingDesign } from './editable-marketing-design';
 import {
   Sparkles,
   Send,
@@ -208,6 +210,26 @@ export function MarketingCanvasStudio({
   const [publishMode, setPublishMode] = useState<'now' | 'schedule'>('now');
   const [scheduledDateTime, setScheduledDateTime] = useState('');
 
+  const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(null);
+  const design = customDesign || createDesign({ brand:businessName,headline,subtitle:subheadText,badge:badgeText,cta:ctaText,photo:photoUrl,ratio:aspectRatio });
+  useEffect(()=>setCustomDesign(null),[businessName,headline,subheadText,badgeText,ctaText,photoUrl,aspectRatio]);
+
+  const [designDrafts,setDesignDrafts] = useState<Array<{id:string;content:string;designJson:string;updatedAt:string}>>([]);
+  const [draftRevision,setDraftRevision]=useState<string|null>(null);
+  const savedDesignSnapshot=useRef('');
+  const [editingDraftId,setEditingDraftId] = useState<string|null>(null);
+  const [draftPage,setDraftPage]=useState(1);
+  const [moreDrafts,setMoreDrafts]=useState(false);
+  const loadDesignDrafts = async (page=1) => {
+    try {
+      const res=await authFetch(`/api/social/posts?status=draft&limit=20&page=${page}`);
+      if(!res.ok)throw new Error('Load failed');
+      const json=await res.json();
+      const rows=(json.data||[]).filter((p:{designJson?:string})=>p.designJson);
+      setDesignDrafts(previous=>page===1?rows:[...previous,...rows]);setDraftPage(page);setMoreDrafts((json.data||[]).length===20);
+    } catch {toast.error('Could not load saved designs');}
+  };
+
   // Modals
   const [editTextOpen, setEditTextOpen] = useState(false);
   const [replaceImageOpen, setReplaceImageOpen] = useState(false);
@@ -301,49 +323,19 @@ export function MarketingCanvasStudio({
     setPromptInput('');
 
     try {
-      const res = await authFetch('/api/social/ai-generate-post', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: text,
-          platforms: selectedChannels,
-          tone: 'Friendly, premium, minimal, high-converting',
-        }),
+      const res = await authFetch('/api/social/designs/generate', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({prompt:text,design,caption}),
       });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Generation failed');
+      setCustomDesign(json.design);
+      setCaption(json.caption);
+      toast.success('Design updated. Every layer remains editable.');
 
-      if (res.ok) {
-        const json = await res.json();
-        pushHistory();
-        if (json.caption) setCaption(json.caption);
-        if (json.headline) setHeadline(json.headline);
-        if (json.badge) setBadgeText(json.badge);
-        if (json.subtitle) setSubheadText(json.subtitle);
-        if (json.ctaText) setCtaText(json.ctaText);
-        if (json.photoUrl) setPhotoUrl(json.photoUrl);
-        if (Array.isArray(json.layouts) && json.layouts.length > 0) {
-          setDirections(
-            json.layouts.map((l: any) => ({
-              id: l.id,
-              name: l.name,
-              headline: l.headline,
-              badge: l.badge,
-              subhead: l.subtitle,
-              ctaText: l.ctaText || 'Book now',
-              theme: l.theme,
-              photoUrl: l.photoUrl,
-            }))
-          );
-        }
-        toast.success('Generated dynamic design & content based on your prompt!');
-      } else {
-        // Fallback enhancement
-        pushHistory();
-        if (text.length < 50) setHeadline(text);
-        setCaption(`Special offer for ${businessName} customers! ${text}. Book your appointment today.`);
-        toast.success('Updated creative ideas!');
-      }
     } catch {
-      toast.error('Network error generating AI directions. Showing updated layout.');
+      setPromptInput(text);
+      toast.error('Generation failed. Your design is unchanged. Please retry.');
     } finally {
       setIsGenerating(false);
     }
@@ -391,17 +383,22 @@ export function MarketingCanvasStudio({
 
   // Save Draft
   const [isSavingDraft, setIsSavingDraft] = useState(false);
-  const handleSaveDraft = async () => {
+  const handleSaveDraft = async (silent=false) => {
+    if(isSavingDraft || isPublishing)return;
+    const snapshot=JSON.stringify({design,caption});
+    savedDesignSnapshot.current=snapshot;
     setIsSavingDraft(true);
     try {
       const targets = getResolvedTargets();
-      const res = await authFetch('/api/social/posts', {
-        method: 'POST',
+      const res = await authFetch(editingDraftId ? `/api/social/posts/${editingDraftId}` : '/api/social/posts', {
+        method: editingDraftId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'draft',
+          expectedUpdatedAt:draftRevision,
           content: caption,
           mediaUrls: [photoUrl],
+          design,
           linkUrl,
           platforms: selectedChannels,
           targets: targets.length > 0 ? targets : undefined,
@@ -414,12 +411,16 @@ export function MarketingCanvasStudio({
         }),
       });
       if (res.ok) {
-        toast.success('Draft saved successfully!');
+        const saved=await res.json();
+        if(saved.data?.id)setEditingDraftId(saved.data.id);
+        if(saved.data?.updatedAt)setDraftRevision(saved.data.updatedAt);
+        savedDesignSnapshot.current=snapshot;
+        if(!silent)toast.success('Draft saved successfully!');
       } else {
-        toast.info('Draft saved in local workspace!');
+        toast.error('Draft could not be saved. Please retry.');
       }
     } catch {
-      toast.info('Draft saved in local session!');
+      toast.error('Draft could not be saved. Check your connection and retry.');
     } finally {
       setIsSavingDraft(false);
     }
@@ -435,10 +436,13 @@ export function MarketingCanvasStudio({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          draftId:editingDraftId||undefined,
+          expectedUpdatedAt:draftRevision,
           status: publishMode === 'schedule' ? 'scheduled' : 'published',
           scheduledAt: publishMode === 'schedule' ? scheduledDateTime : null,
           content: caption,
           mediaUrls: [photoUrl],
+          design,
           linkUrl,
           platforms: selectedChannels,
           targets: targets.length > 0 ? targets : undefined,
@@ -456,7 +460,7 @@ export function MarketingCanvasStudio({
         toast.success(
           publishMode === 'schedule'
             ? 'Post scheduled successfully!'
-            : 'Post published to selected channels!'
+            : 'Post queued for publishing. Check Posts for delivery status.'
         );
         setReviewModalOpen(false);
         if (onPublishSuccess && json.post?.id) {
@@ -474,21 +478,23 @@ export function MarketingCanvasStudio({
       setIsPublishing(false);
     }
   };
-          onNavigateToPosts();
-        }
-      } else {
-        const json = await res.json().catch(() => ({}));
-        toast.error(json.error || 'Failed to publish post');
-      }
-    } catch {
-      toast.error('Network error during publishing');
-    } finally {
-      setIsPublishing(false);
-    }
-  };
+
+  const currentDesignSnapshot=JSON.stringify({design,caption});
+  useEffect(()=>{
+    if(!editingDraftId||isSavingDraft||isPublishing||savedDesignSnapshot.current===currentDesignSnapshot)return;
+    const timer=setTimeout(()=>{void handleSaveDraft(true);},1500);
+    return ()=>clearTimeout(timer);
+  },[currentDesignSnapshot,editingDraftId,isSavingDraft,isPublishing]);
 
   return (
     <div className="w-full space-y-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" className="rounded border px-3 py-2" onClick={()=>loadDesignDrafts()}>Open saved design</button>
+        {moreDrafts&&<button type="button" onClick={()=>loadDesignDrafts(draftPage+1)}>Load more drafts</button>}
+        {designDrafts.length>0&&<select aria-label="Saved designs" className="rounded border p-2" value={editingDraftId||''} onChange={e=>{const draft=designDrafts.find(d=>d.id===e.target.value);if(!draft)return;try{setCustomDesign(validateDesign(JSON.parse(draft.designJson)));setCaption(draft.content);setEditingDraftId(draft.id);setDraftRevision(draft.updatedAt);savedDesignSnapshot.current=JSON.stringify({design:JSON.parse(draft.designJson),caption:draft.content});}catch{toast.error('This design could not be opened');}}}>
+          <option value="">Choose a draft</option>{designDrafts.map(d=><option key={d.id} value={d.id}>{d.content.slice(0,70)}</option>)}
+        </select>}
+      </div>
       {/* ─── 2-Column Canvas Studio Layout ──────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* ─── LEFT COLUMN: Creative Copilot (5 cols) ───────────────────────── */}
@@ -778,112 +784,7 @@ export function MarketingCanvasStudio({
           {activeRightTab === 'design' ? (
             /* ─── LIVE VISUAL CANVAS ─────────────────────────────────────────── */
             <div className="space-y-3">
-              <div
-                className={`w-full rounded-2xl overflow-hidden border border-border/80 shadow-md relative transition-all duration-300 flex items-center justify-center ${
-                  aspectRatio === '1:1'
-                    ? 'aspect-square max-h-[580px]'
-                    : aspectRatio === '4:5'
-                    ? 'aspect-[4/5] max-h-[620px]'
-                    : aspectRatio === '16:9'
-                    ? 'aspect-video max-h-[480px]'
-                    : 'aspect-[9/16] max-h-[640px]'
-                }`}
-                style={{
-                  backgroundColor:
-                    theme === 'sand_olive' ? '#FAF7F2' : theme === 'beige' ? '#F4EFEB' : '#072418',
-                }}
-              >
-                {/* Background Image Container */}
-                <div
-                  className="absolute inset-0 bg-cover bg-center transition-all duration-500"
-                  style={{
-                    backgroundImage: `url(${photoUrl})`,
-                    opacity: theme === 'emerald_gold' ? 0.35 : 0.92,
-                  }}
-                />
-
-                {/* Soft Vignette Overlay */}
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background:
-                      theme === 'emerald_gold'
-                        ? 'linear-gradient(180deg, rgba(7,36,24,0.92) 0%, rgba(7,36,24,0.75) 50%, rgba(7,36,24,0.95) 100%)'
-                        : 'linear-gradient(180deg, rgba(250,247,242,0.85) 0%, rgba(250,247,242,0.4) 40%, rgba(250,247,242,0.88) 100%)',
-                  }}
-                />
-
-                {/* Canvas Typography & Branding Layout */}
-                <div className="relative z-10 w-full h-full p-8 sm:p-12 flex flex-col justify-between select-none">
-                  {/* Brand Topmark */}
-                  <div>
-                    <span
-                      onClick={() => setEditTextOpen(true)}
-                      title="Click to edit brand name"
-                      className={`text-xs sm:text-sm font-extrabold tracking-[0.3em] uppercase inline-block cursor-pointer hover:ring-2 hover:ring-primary/60 hover:ring-dashed rounded-xs px-1.5 py-0.5 transition-all ${
-                        theme === 'emerald_gold' ? 'text-amber-300/90' : 'text-stone-800/90'
-                      }`}
-                    >
-                      {businessName}
-                    </span>
-                  </div>
-
-                  {/* Main Headline & Offer Block */}
-                  <div className="space-y-4 max-w-[85%]">
-                    <h2
-                      onClick={() => setEditTextOpen(true)}
-                      title="Click to edit headline (Canva style)"
-                      className={`text-2xl sm:text-4xl lg:text-5xl font-serif font-medium leading-[1.1] tracking-tight cursor-pointer hover:ring-2 hover:ring-primary/60 hover:ring-dashed rounded-md p-1 transition-all ${
-                        theme === 'emerald_gold' ? 'text-white' : 'text-stone-900'
-                      }`}
-                    >
-                      {headline}
-                    </h2>
-
-                    <div className="space-y-1">
-                      <div
-                        onClick={() => setEditTextOpen(true)}
-                        title="Click to edit badge/discount (Canva style)"
-                        className={`text-3xl sm:text-5xl font-serif font-black tracking-tight cursor-pointer hover:ring-2 hover:ring-primary/60 hover:ring-dashed rounded-md p-1 transition-all ${
-                          theme === 'emerald_gold' ? 'text-amber-400' : 'text-stone-900'
-                        }`}
-                      >
-                        {badgeText}
-                      </div>
-                      {subheadText && (
-                        <p
-                          onClick={() => setEditTextOpen(true)}
-                          title="Click to edit subtitle (Canva style)"
-                          className={`text-xs sm:text-sm font-medium cursor-pointer hover:ring-2 hover:ring-primary/60 hover:ring-dashed rounded-md p-1 transition-all ${
-                            theme === 'emerald_gold' ? 'text-stone-300' : 'text-stone-700'
-                          }`}
-                        >
-                          {subheadText}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* CTA Button */}
-                    <div className="pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditTextOpen(true)}
-                        title="Click to edit button text (Canva style)"
-                        className="px-6 py-2.5 rounded-lg text-xs sm:text-sm font-bold text-white shadow-xs transition-transform hover:scale-[1.02] cursor-pointer hover:ring-2 hover:ring-white/80 hover:ring-dashed"
-                        style={{
-                          backgroundColor:
-                            theme === 'emerald_gold' ? '#009F50' : '#0B4D2C',
-                        }}
-                      >
-                        {ctaText}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Bottom spacer / aesthetic balance */}
-                  <div />
-                </div>
-              </div>
+              <EditableMarketingDesign design={design} onChange={setCustomDesign} />
 
               {/* ─── Canvas Quick Tools Bar (Below Canvas) ──────────────────── */}
               <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 border-t border-border/40 flex-wrap">
@@ -1028,7 +929,7 @@ export function MarketingCanvasStudio({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={handleSaveDraft}
+                onClick={()=>handleSaveDraft()}
                 disabled={isSavingDraft}
                 className="h-9 px-4 text-xs font-semibold rounded-xl border-border bg-card"
               >

@@ -14,6 +14,8 @@ export class ApiError extends Error {
 }
 
 interface RequestOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: any;
   params?: Record<string, string | number | boolean | undefined | null>;
@@ -83,7 +85,10 @@ export async function apiRequest<T = any>(
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const cancel=()=>controller.abort();
+  if(options.signal?.aborted)controller.abort();
+  options.signal?.addEventListener('abort',cancel,{once:true});
+  const timeout = setTimeout(() => controller.abort(), Math.min(options.timeoutMs || 30000,180000));
   let response: Response;
   try {
     response = await fetch(url, {
@@ -97,6 +102,7 @@ export async function apiRequest<T = any>(
     throw error;
   } finally {
     clearTimeout(timeout);
+    options.signal?.removeEventListener('abort',cancel);
   }
 
   if (!skipAuth && revision !== sessionRevision()) throw new ApiError('Session ended.', 401);

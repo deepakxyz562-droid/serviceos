@@ -7954,6 +7954,7 @@ model SocialPost {
   approvalStatus  String?  // "pending" | "approved" | "rejected"
   content         String   // caption/text
   mediaUrls       String   @default("[]") // JSON array of image URLs
+  designJson      String?  // Versioned editable marketing design source
   linkUrl         String?
 
   // Per-platform publish results — JSON array of:
@@ -9578,4 +9579,23 @@ model OutreachQueue {
   @@index([status, createdAt])
   @@index([attemptedAt])
   @@index([sentAt])
+}
+
+model DesignGenerationJob {
+  id String @id
+  tenantId String
+  userId String
+  provider String
+  prompt String
+  status String @default("queued")
+  resultJson String?
+  error String?
+  subscriptionId String?
+  cancelRequested Boolean @default(false)
+  startedAt DateTime?
+  finishedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([tenantId, createdAt])
+  @@index([status, createdAt])
 }
