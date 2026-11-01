@@ -74,10 +74,8 @@ export async function GET(request: NextRequest) {
     if (status) where.status = status;
 
     // AI-post review workflow (Pending / Approved / Rejected pills).
-    // No `approval` param (or `approval=any`) → no approval filter (legacy).
-    if (approval && approval !== 'any') {
-      where.approvalStatus = approval;
-    }
+    // approvalStatus is handled gracefully in-memory and via gbpOfferData fallback
+    // to prevent schema mismatch crashes when the column is absent in PostgREST.
 
     // Platform filter — search the publishTargets JSON for an entry with that platform.
     // SQLite doesn't have JSON-path queries, so we use a `contains` on the raw JSON string.
@@ -98,12 +96,12 @@ export async function GET(request: NextRequest) {
       if (dateTo) where.createdAt.lte = new Date(dateTo);
     }
 
-    const [posts, total] = await Promise.all([
+    const [posts, totalCount] = await Promise.all([
       db.socialPost.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: approval && approval !== 'any' ? 0 : (page - 1) * limit,
+        take: approval && approval !== 'any' ? 100 : limit,
         select: {
           id: true,
           status: true,
@@ -116,6 +114,7 @@ export async function GET(request: NextRequest) {
           publishedAt: true,
           failureReason: true,
           gbpPostType: true,
+          gbpOfferData: true,
           pinterestBoard: true,
           createdById: true,
           createdAt: true,
@@ -126,16 +125,34 @@ export async function GET(request: NextRequest) {
       db.socialPost.count({ where }),
     ]);
 
-    // Parse JSON fields for client convenience.
-    const data = posts.map((p) => ({
-      ...p,
-      mediaUrls: safeJsonArray(p.mediaUrls),
-      publishTargets: safeJsonArray(p.publishTargets),
-    }));
+    // Parse JSON fields and resolve approvalStatus for client convenience.
+    let data = posts.map((p) => {
+      const offerData = safeJsonObject(p.gbpOfferData);
+      let resolvedApproval =
+        (p as Record<string, unknown>).approvalStatus ||
+        (offerData?.approvalStatus as string | null) ||
+        null;
+      if (!resolvedApproval && p.status === 'draft') {
+        resolvedApproval = 'pending';
+      }
+      return {
+        ...p,
+        approvalStatus: resolvedApproval,
+        mediaUrls: safeJsonArray(p.mediaUrls),
+        publishTargets: safeJsonArray(p.publishTargets),
+      };
+    });
+
+    let total = totalCount;
+    if (approval && approval !== 'any') {
+      data = data.filter((p) => p.approvalStatus === approval);
+      total = data.length;
+      data = data.slice((page - 1) * limit, page * limit);
+    }
 
     return NextResponse.json({
       data,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     });
   } catch (error) {
     console.error('[api/social/posts] GET error:', error);
@@ -150,6 +167,17 @@ function safeJsonArray(raw: string | null): unknown[] {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+function safeJsonObject(raw: string | null | unknown): Record<string, unknown> | null {
+  if (!raw) return null;
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
   }
 }
 

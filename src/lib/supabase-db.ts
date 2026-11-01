@@ -962,6 +962,7 @@ function applyWhereFilters(
   for (const [field, value] of Object.entries(where)) {
     if (value === undefined) continue;
     if (field.endsWith('Json')) continue;
+    if (field === 'approvalStatus') continue;
 
     if (field === 'AND' && Array.isArray(value)) {
       for (const cond of value as WhereInput[]) {

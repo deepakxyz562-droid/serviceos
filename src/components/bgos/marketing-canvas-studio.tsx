@@ -880,14 +880,14 @@ export function MarketingCanvasStudio({
           )}
 
           {/* ─── BOTTOM ACTION STRIP ────────────────────────────────────────── */}
-          <div className="pt-3 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="pt-3 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
             {/* Left: Connected Channels & Link */}
             <div className="flex items-center gap-3 flex-wrap">
               {/* Channels badge */}
               <button
                 type="button"
                 onClick={() => setChannelPickerOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-xs font-semibold text-foreground hover:border-primary/30 transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-xs font-semibold text-foreground hover:border-primary/30 transition-all cursor-pointer"
               >
                 <div className="flex items-center -space-x-1">
                   <span className="size-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[8px]">
@@ -905,7 +905,7 @@ export function MarketingCanvasStudio({
               <button
                 type="button"
                 onClick={() => setLinkEditorOpen(true)}
-                className="text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1"
+                className="text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
               >
                 <Link2 className="size-3.5" />
                 <span>Change link</span>
@@ -1135,6 +1135,126 @@ export function MarketingCanvasStudio({
               </div>
             </button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── MODAL: Select Connected Channels ─────────────────────────────── */}
+      <Dialog open={channelPickerOpen} onOpenChange={setChannelPickerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">Select Publishing Channels</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              Choose the social accounts where you want to publish or schedule this post:
+            </p>
+            <div className="space-y-2">
+              <label
+                onClick={() => {
+                  setSelectedChannels((prev) =>
+                    prev.includes('instagram') ? prev.filter((c) => c !== 'instagram') : [...prev, 'instagram']
+                  );
+                }}
+                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                  selectedChannels.includes('instagram')
+                    ? 'border-pink-500 bg-pink-500/5'
+                    : 'border-border hover:bg-muted/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-lg bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white flex items-center justify-center">
+                    <Instagram className="size-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold">Instagram</div>
+                    <div className="text-[11px] text-muted-foreground">Feed & Story</div>
+                  </div>
+                </div>
+                <div
+                  className={`size-5 rounded-md border flex items-center justify-center ${
+                    selectedChannels.includes('instagram')
+                      ? 'bg-primary border-primary text-primary-foreground'
+                      : 'border-input'
+                  }`}
+                >
+                  {selectedChannels.includes('instagram') && <Check className="size-3 stroke-[3]" />}
+                </div>
+              </label>
+
+              <label
+                onClick={() => {
+                  setSelectedChannels((prev) =>
+                    prev.includes('facebook') ? prev.filter((c) => c !== 'facebook') : [...prev, 'facebook']
+                  );
+                }}
+                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                  selectedChannels.includes('facebook')
+                    ? 'border-blue-600 bg-blue-600/5'
+                    : 'border-border hover:bg-muted/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+                    <Facebook className="size-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold">Facebook Page</div>
+                    <div className="text-[11px] text-muted-foreground">Official Business Page</div>
+                  </div>
+                </div>
+                <div
+                  className={`size-5 rounded-md border flex items-center justify-center ${
+                    selectedChannels.includes('facebook')
+                      ? 'bg-primary border-primary text-primary-foreground'
+                      : 'border-input'
+                  }`}
+                >
+                  {selectedChannels.includes('facebook') && <Check className="size-3 stroke-[3]" />}
+                </div>
+              </label>
+
+              <label
+                onClick={() => {
+                  setSelectedChannels((prev) =>
+                    prev.includes('googlebusiness') ? prev.filter((c) => c !== 'googlebusiness') : [...prev, 'googlebusiness']
+                  );
+                }}
+                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                  selectedChannels.includes('googlebusiness')
+                    ? 'border-emerald-600 bg-emerald-600/5'
+                    : 'border-border hover:bg-muted/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
+                    <Sparkles className="size-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold">Google Business Profile</div>
+                    <div className="text-[11px] text-muted-foreground">Local Search & Maps Update</div>
+                  </div>
+                </div>
+                <div
+                  className={`size-5 rounded-md border flex items-center justify-center ${
+                    selectedChannels.includes('googlebusiness')
+                      ? 'bg-primary border-primary text-primary-foreground'
+                      : 'border-input'
+                  }`}
+                >
+                  {selectedChannels.includes('googlebusiness') && <Check className="size-3 stroke-[3]" />}
+                </div>
+              </label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={() => setChannelPickerOpen(false)}
+              className="bg-primary text-primary-foreground font-bold text-xs"
+            >
+              Done ({selectedChannels.length} Selected)
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

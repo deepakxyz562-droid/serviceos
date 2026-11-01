@@ -132,7 +132,9 @@ const PostsListView = lazy(() =>
 const SocialAnalyticsView = lazy(() =>
   import('@/components/views/tenant/social-analytics-view').then((m) => ({ default: m.SocialAnalyticsView }))
 );
-import { BgosMetaTemplatesWorkstation } from './meta-templates-workstation';
+const BrandBrainView = lazy(() =>
+  import('@/components/views/tenant/brand-brain-view').then((m) => ({ default: m.BrandBrainView }))
+);
 
 // ─── Types & constants ──────────────────────────────────────────────────────
 
@@ -3274,13 +3276,9 @@ export function SocialMediaView({
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
                 Marketing Studio
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-(--primary-soft) text-primary text-xs font-semibold flex items-center gap-1 border border-primary/20">
-                <Sparkles className="size-3.5" /> AI Enabled
-              </span>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-              Create, publish and manage your marketing content across social, email, SMS and
-              WhatsApp.
+              Create something your customers will remember.
             </p>
           </div>
         </div>
@@ -3386,8 +3384,12 @@ export function SocialMediaView({
         </Suspense>
       )}
 
-      {/* ─── TAB: Meta Templates ────────────────────────────────────────── */}
-      {activeTab === 'templates' && <BgosMetaTemplatesWorkstation />}
+      {/* ─── TAB: Brand kit ─────────────────────────────────────────────── */}
+      {activeTab === 'templates' && (
+        <Suspense fallback={<TabLoader />}>
+          <BrandBrainView />
+        </Suspense>
+      )}
 
       {/* ─── TAB: Overview (Dhanda home) ────────────────────────────────── */}
       {activeTab === 'overview' && (
@@ -5746,30 +5748,32 @@ export function SocialMediaView({
       </Dialog>
 
       {/* ─── Floating Growth Action Pill (real /api/gbp/growth-actions) ─── */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2">
-        {growthState && (
+      {activeTab === 'overview' && (
+        <div className="fixed bottom-6 right-6 z-40 flex items-center gap-2">
+          {growthState && (
+            <button
+              type="button"
+              onClick={() => setGrowthDrawerOpen(true)}
+              className="px-4 py-2.5 rounded-full bg-linear-to-r from-amber-500 to-orange-500 text-white font-bold text-xs shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2 border border-white/20 cursor-pointer"
+            >
+              <Zap className="size-4 fill-white text-white animate-pulse" />
+              <span>
+                Growth Action ({growthState.totalDone ?? 0} of {growthState.totalTarget ?? 10} done •{' '}
+                {growthState.leftCount ?? 0} left)
+              </span>
+              <ChevronRight className="size-3.5" />
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => setGrowthDrawerOpen(true)}
-            className="px-4 py-2.5 rounded-full bg-linear-to-r from-amber-500 to-orange-500 text-white font-bold text-xs shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2 border border-white/20 cursor-pointer"
+            onClick={() => toast.info('Voice Assistant: Speak your marketing request in Hindi or English...')}
+            className="size-10 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-105 transition-all flex items-center justify-center border border-white/20 cursor-pointer"
+            title="Voice Marketing Assistant"
           >
-            <Zap className="size-4 fill-white text-white animate-pulse" />
-            <span>
-              Growth Action ({growthState.totalDone ?? 0} of {growthState.totalTarget ?? 10} done •{' '}
-              {growthState.leftCount ?? 0} left)
-            </span>
-            <ChevronRight className="size-3.5" />
+            <Mic className="size-4" />
           </button>
-        )}
-        <button
-          type="button"
-          onClick={() => toast.info('Voice Assistant: Speak your marketing request in Hindi or English...')}
-          className="size-10 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-105 transition-all flex items-center justify-center border border-white/20 cursor-pointer"
-          title="Voice Marketing Assistant"
-        >
-          <Mic className="size-4" />
-        </button>
-      </div>
+        </div>
+      )}
 
       {/* ─── Growth Action Drawer (real actions from the API) ───────────── */}
       <Dialog open={growthDrawerOpen} onOpenChange={setGrowthDrawerOpen}>
