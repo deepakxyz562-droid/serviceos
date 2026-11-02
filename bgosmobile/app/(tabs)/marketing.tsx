@@ -1,5 +1,11 @@
 import '../../src/lib/runtime-polyfills';
-import { createDesign, validateDesign, createFieserosCampaignDesign, type MarketingDesign } from '../../../shared/marketing-design';
+import {
+  createDesign,
+  validateDesign,
+  createFieserosCampaignDesign,
+  createCommercialPosterDesign,
+  type MarketingDesign,
+} from '../../../shared/marketing-design';
 import { EditableDesign } from '../../src/components/design/editable-design';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
@@ -85,6 +91,218 @@ const DEFAULT_ALT_HEADLINES = [
   'Run your field service business in plain English.',
   'Stop juggling apps. Just tell your assistant.',
 ];
+
+function AutoBrandedPosterCard({
+  photoUri,
+  headline,
+  subtitle,
+  badge,
+  ctaText,
+  businessName,
+  phone,
+  website,
+  height = 360,
+  aspectRatio = 4 / 5,
+  isGenerating = false,
+  generatingText,
+}: {
+  photoUri?: string | null;
+  headline: string;
+  subtitle?: string;
+  badge: string;
+  ctaText: string;
+  businessName: string;
+  phone?: string;
+  website?: string;
+  height?: number;
+  aspectRatio?: number;
+  isGenerating?: boolean;
+  generatingText?: string;
+}) {
+  const isCompact = height < 260;
+  return (
+    <View
+      style={{
+        height,
+        aspectRatio,
+        alignSelf: 'center',
+        borderRadius: isCompact ? 12 : 16,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        backgroundColor: '#090D16',
+        shadowColor: '#000',
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+        elevation: 4,
+        position: 'relative',
+      }}
+    >
+      <Image
+        source={photoUri ? { uri: photoUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
+        style={{ width: '100%', height: '100%' }}
+        resizeMode="cover"
+      />
+
+      {/* Top Header Scrim with Offer Badge */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          paddingHorizontal: isCompact ? 8 : 12,
+          paddingVertical: isCompact ? 6 : 10,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          backgroundColor: 'rgba(0,0,0,0.3)',
+        }}
+      >
+        <View
+          style={{
+            backgroundColor: '#009F50',
+            paddingHorizontal: isCompact ? 6 : 10,
+            paddingVertical: isCompact ? 2 : 4,
+            borderRadius: isCompact ? 5 : 8,
+            shadowColor: '#000',
+            shadowOpacity: 0.2,
+            shadowRadius: 3,
+          }}
+        >
+          <Text
+            style={{
+              color: '#FFFFFF',
+              fontSize: isCompact ? 8.5 : 10.5,
+              fontWeight: '800',
+              letterSpacing: 0.5,
+            }}
+          >
+            {badge || 'SPECIAL OFFER'}
+          </Text>
+        </View>
+        <View
+          style={{
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            paddingHorizontal: isCompact ? 5 : 8,
+            paddingVertical: isCompact ? 2 : 3.5,
+            borderRadius: 6,
+          }}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: isCompact ? 8 : 9.5, fontWeight: '700' }}>1080 × 1350</Text>
+        </View>
+      </View>
+
+      {/* Center Content Scrim: Dynamic Headline */}
+      <View
+        style={{
+          position: 'absolute',
+          bottom: isCompact ? 38 : 48,
+          left: 0,
+          right: 0,
+          paddingHorizontal: isCompact ? 10 : 14,
+          paddingVertical: isCompact ? 6 : 12,
+          backgroundColor: 'rgba(9, 13, 22, 0.74)',
+        }}
+      >
+        <Text
+          numberOfLines={2}
+          style={{
+            color: '#FFFFFF',
+            fontSize: isCompact ? 12 : 16,
+            fontWeight: '900',
+            lineHeight: isCompact ? 16 : 22,
+            letterSpacing: -0.3,
+          }}
+        >
+          {headline || 'Professional Business Services'}
+        </Text>
+        {subtitle ? (
+          <Text
+            numberOfLines={1}
+            style={{
+              color: '#A7F3D0',
+              fontSize: isCompact ? 9 : 11,
+              fontWeight: '700',
+              marginTop: isCompact ? 1 : 3,
+            }}
+          >
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+
+      {/* Auto-Branded Footer Strip */}
+      <View
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: isCompact ? 38 : 48,
+          backgroundColor: '#0F172A',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: isCompact ? 8 : 12,
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(255,255,255,0.15)',
+        }}
+      >
+        <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+          <Text
+            numberOfLines={1}
+            style={{ color: '#FFFFFF', fontSize: isCompact ? 9.5 : 11.5, fontWeight: '800' }}
+          >
+            {businessName || 'Fieseros Pro'}
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={{ color: '#94A3B8', fontSize: isCompact ? 8 : 9.5, fontWeight: '600' }}
+          >
+            {phone ? `📞 ${phone}` : 'Verified Local Business'}
+          </Text>
+        </View>
+        <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+          <View
+            style={{
+              backgroundColor: '#22C55E',
+              paddingHorizontal: isCompact ? 5 : 7,
+              paddingVertical: isCompact ? 1.5 : 2.5,
+              borderRadius: 6,
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: isCompact ? 7.5 : 9, fontWeight: '800' }}>
+              {ctaText || 'BOOK ONLINE'}
+            </Text>
+          </View>
+          <Text style={{ color: '#94A3B8', fontSize: isCompact ? 7 : 8.5, marginTop: 1 }}>
+            {website ? website.replace(/^https?:\/\//, '').slice(0, 18) : 'bgos.fieseros.com'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Loading Overlay if generating */}
+      {isGenerating && (
+        <View
+          style={{
+            ...StyleSheet.absoluteFill,
+            backgroundColor: 'rgba(9, 13, 22, 0.85)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 12,
+            zIndex: 10,
+          }}
+        >
+          <ActivityIndicator size="small" color="#009F50" />
+          <Text style={{ color: '#FFFFFF', fontSize: isCompact ? 9.5 : 11, fontWeight: '700', marginTop: 6, textAlign: 'center' }}>
+            {generatingText || 'AI Rendering Visual...'}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
 
 export default function MarketingScreen() {
   const insets = useSafeAreaInsets();
@@ -331,8 +549,45 @@ export default function MarketingScreen() {
     return list;
   }, [selectedPlatforms, gbpAccount, fbAccount, igAccount]);
 
-  const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(() => createFieserosCampaignDesign());
-  const design = customDesign || createDesign({ brand: businessDisplayName, headline, subtitle, badge: discountBadge, cta: ctaText, photo: bgPhotoUrl, ratio: aspectRatio });
+  const effectiveBusinessName =
+    workspace.data?.bookingPageConfig?.businessName ||
+    workspace.data?.name ||
+    brandProfile.data?.profile?.businessName ||
+    gbpPlace.data?.place?.title ||
+    discover.data?.activeProfile?.name ||
+    'Fieseros Pro';
+  const effectiveBusinessPhone = workspace.data?.bookingPageConfig?.phone;
+  const effectiveBusinessWebsite = workspace.data?.links?.profile || 'bgos.fieseros.com';
+
+  const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(null);
+  const design = useMemo(() => {
+    if (customDesign) return customDesign;
+    return createCommercialPosterDesign({
+      brand: effectiveBusinessName,
+      headline,
+      subtitle,
+      badge: discountBadge,
+      cta: ctaText,
+      phone: effectiveBusinessPhone,
+      website: effectiveBusinessWebsite,
+      photo: customPosterUri || bgPhotoUrl,
+      ratio: aspectRatio,
+      theme: colorTheme,
+    });
+  }, [
+    customDesign,
+    effectiveBusinessName,
+    headline,
+    subtitle,
+    discountBadge,
+    ctaText,
+    effectiveBusinessPhone,
+    effectiveBusinessWebsite,
+    customPosterUri,
+    bgPhotoUrl,
+    aspectRatio,
+    colorTheme,
+  ]);
 
   function handleSelectHeadline(newHeadline: string) {
     setHeadline(newHeadline);
@@ -343,6 +598,53 @@ export default function MarketingScreen() {
           l.id === 'headline' ? { ...l, text: newHeadline } : l
         ),
       });
+    }
+  }
+
+  function handleUpdateHeadline(val: string) {
+    setHeadline(val);
+    if (customDesign) {
+      setCustomDesign({
+        ...customDesign,
+        layers: customDesign.layers.map((l) => (l.id === 'headline' ? { ...l, text: val } : l)),
+      });
+    }
+  }
+
+  function handleUpdateDiscountBadge(val: string) {
+    setDiscountBadge(val);
+    if (customDesign) {
+      setCustomDesign({
+        ...customDesign,
+        layers: customDesign.layers.map((l) => (l.id === 'badge' ? { ...l, text: val } : l)),
+      });
+    }
+  }
+
+  function handleUpdateCtaText(val: string) {
+    setCtaText(val);
+    if (customDesign) {
+      setCustomDesign({
+        ...customDesign,
+        layers: customDesign.layers.map((l) => (l.id === 'cta' ? { ...l, text: `${val} →` } : l)),
+      });
+    }
+  }
+
+  function handleCustomDesignChange(updated: MarketingDesign) {
+    setCustomDesign(updated);
+    const hl = updated.layers.find((l) => l.id === 'headline');
+    if (hl?.text && hl.text !== headline) setHeadline(hl.text);
+    const bd = updated.layers.find((l) => l.id === 'badge');
+    if (bd?.text && bd.text !== discountBadge) setDiscountBadge(bd.text);
+    const sub = updated.layers.find((l) => l.id === 'subtitle');
+    if (sub?.text && sub.text !== subtitle) setSubtitle(sub.text);
+    const ct = updated.layers.find((l) => l.id === 'cta');
+    if (ct?.text && ct.text !== ctaText) setCtaText(ct.text.replace(/→$/, '').trim());
+    const ph = updated.layers.find((l) => l.id === 'bg_photo');
+    if (ph?.src && ph.src !== customPosterUri) {
+      setCustomPosterUri(ph.src);
+      setBgPhotoUrl(ph.src);
     }
   }
 
@@ -433,7 +735,6 @@ export default function MarketingScreen() {
 
       const [data, imageInit] = await Promise.all([genPromise, imagePromise]);
 
-      setCustomDesign(data.design);
       setCaption(data.caption);
       setCaptionDraft(data.caption);
       if (Array.isArray(data.alternativeHeadlines) && data.alternativeHeadlines.length > 0) {
@@ -443,6 +744,15 @@ export default function MarketingScreen() {
       if (hlLayer?.text) {
         setHeadline(hlLayer.text);
       }
+      const bdLayer = data.design?.layers?.find((l) => l.id === 'badge');
+      if (bdLayer?.text) {
+        setDiscountBadge(bdLayer.text);
+      }
+      const subLayer = data.design?.layers?.find((l) => l.id === 'subtitle');
+      if (subLayer?.text) {
+        setSubtitle(subLayer.text);
+      }
+      setCustomDesign(data.design);
 
       setPromptInput('');
       setSuccessNotice(
@@ -465,8 +775,18 @@ export default function MarketingScreen() {
             );
             if (check?.status === 'completed' && check.result?.url) {
               clearInterval(pollInterval);
-              setCustomPosterUri(check.result.url);
-              setBgPhotoUrl(check.result.url);
+              const generatedUrl = check.result.url;
+              setCustomPosterUri(generatedUrl);
+              setBgPhotoUrl(generatedUrl);
+              setCustomDesign((prev) => {
+                if (!prev) return null;
+                return {
+                  ...prev,
+                  layers: prev.layers.map((l) =>
+                    l.id === 'bg_photo' || l.type === 'image' ? { ...l, src: generatedUrl } : l
+                  ),
+                };
+              });
             } else if (check?.status === 'failed' || check?.status === 'cancelled' || Date.now() - pollStart > 45000) {
               clearInterval(pollInterval);
             }
@@ -516,7 +836,7 @@ export default function MarketingScreen() {
       platforms: selectedPlatforms,
       mediaUrls: mediaList,
       isPoster: isPosterMode,
-      design: isPosterMode ? undefined : design,
+      design: design,
       expectedUpdatedAt: designRevision,
       ...(status !== 'draft' && editingDesignId ? { draftId: editingDesignId } : {}),
       status,
@@ -1107,11 +1427,18 @@ export default function MarketingScreen() {
                       <MaterialIcons name="chevron-right" size={16} color="#009F50" />
                     </View>
                   </View>
-                  <View style={{ height: 210, backgroundColor: '#090D16', alignItems: 'center', justifyContent: 'center', padding: 6 }}>
-                    <Image
-                      source={customPosterUri ? { uri: customPosterUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
-                      style={{ width: '100%', height: '100%' }}
-                      resizeMode="contain"
+                  <View style={{ padding: 10, backgroundColor: '#0B0F19', alignItems: 'center', justifyContent: 'center' }}>
+                    <AutoBrandedPosterCard
+                      photoUri={customPosterUri}
+                      headline={headline}
+                      subtitle={subtitle}
+                      badge={discountBadge}
+                      ctaText={ctaText}
+                      businessName={effectiveBusinessName}
+                      phone={effectiveBusinessPhone}
+                      website={effectiveBusinessWebsite}
+                      height={230}
+                      isGenerating={busy && generationMode === 'poster'}
                     />
                   </View>
                 </Pressable>
@@ -1407,93 +1734,18 @@ export default function MarketingScreen() {
 
                 {activeVisualFormat === 'poster' ? (
                   <View style={{ marginBottom: 16 }}>
-                    <View style={{
-                      height: Math.min(360, Math.round(Dimensions.get('window').height * 0.40)),
-                      aspectRatio: 4 / 5,
-                      alignSelf: 'center',
-                      borderRadius: 16,
-                      overflow: 'hidden',
-                      borderWidth: 1,
-                      borderColor: '#E2E8F0',
-                      backgroundColor: '#090D16',
-                      shadowColor: '#000',
-                      shadowOpacity: 0.15,
-                      shadowRadius: 10,
-                      elevation: 4
-                    }}>
-                      <Image
-                        source={customPosterUri ? { uri: customPosterUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
-                        style={{ width: '100%', height: '100%' }}
-                        resizeMode="cover"
-                      />
-
-                      {/* Top Header Scrim with Offer Badge */}
-                      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ backgroundColor: '#009F50', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 3 }}>
-                          <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800', letterSpacing: 0.5 }}>
-                            {discountBadge || 'SPECIAL OFFER'}
-                          </Text>
-                        </View>
-                        <View style={{ backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 8, paddingVertical: 3.5, borderRadius: 6 }}>
-                          <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '700' }}>1080 × 1350</Text>
-                        </View>
-                      </View>
-
-                      {/* Center Content Scrim: Dynamic Headline */}
-                      <View style={{
-                        position: 'absolute',
-                        bottom: 48,
-                        left: 0,
-                        right: 0,
-                        paddingHorizontal: 14,
-                        paddingVertical: 12,
-                        backgroundColor: 'rgba(9, 13, 22, 0.72)',
-                      }}>
-                        <Text numberOfLines={2} style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', lineHeight: 22, letterSpacing: -0.3 }}>
-                          {headline || 'Professional Business Services'}
-                        </Text>
-                        {subtitle ? (
-                          <Text numberOfLines={1} style={{ color: '#A7F3D0', fontSize: 11, fontWeight: '700', marginTop: 3 }}>
-                            {subtitle}
-                          </Text>
-                        ) : null}
-                      </View>
-
-                      {/* Auto-Branded Footer Strip */}
-                      <View style={{
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        height: 48,
-                        backgroundColor: '#0F172A',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        paddingHorizontal: 12,
-                        borderTopWidth: 1,
-                        borderTopColor: 'rgba(255,255,255,0.15)',
-                      }}>
-                        <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-                          <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>
-                            {workspace.data?.bookingPageConfig?.businessName || workspace.data?.name || 'Fieseros Pro'}
-                          </Text>
-                          <Text numberOfLines={1} style={{ color: '#94A3B8', fontSize: 9.5, fontWeight: '600' }}>
-                            {workspace.data?.bookingPageConfig?.phone ? `📞 ${workspace.data.bookingPageConfig.phone}` : 'Verified Local Business'}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-                          <View style={{ backgroundColor: '#22C55E', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 6 }}>
-                            <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}>
-                              {ctaText || 'BOOK ONLINE'}
-                            </Text>
-                          </View>
-                          <Text style={{ color: '#94A3B8', fontSize: 8.5, marginTop: 2 }}>
-                            {workspace.data?.links?.profile ? workspace.data.links.profile.slice(0, 18) : 'bgos.fieseros.com'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
+                    <AutoBrandedPosterCard
+                      photoUri={customPosterUri}
+                      headline={headline}
+                      subtitle={subtitle}
+                      badge={discountBadge}
+                      ctaText={ctaText}
+                      businessName={effectiveBusinessName}
+                      phone={effectiveBusinessPhone}
+                      website={effectiveBusinessWebsite}
+                      height={Math.min(360, Math.round(Dimensions.get('window').height * 0.40))}
+                      isGenerating={busy && generationMode === 'poster'}
+                    />
 
                     {/* Quick Poster Customization Controls: Headline & Offer Inputs */}
                     <View style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, padding: 12, marginTop: 12, gap: 10 }}>
@@ -1506,7 +1758,7 @@ export default function MarketingScreen() {
                         <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Headline</Text>
                         <TextInput
                           value={headline}
-                          onChangeText={setHeadline}
+                          onChangeText={handleUpdateHeadline}
                           placeholder="e.g. 50% Off First Service"
                           style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12.5, color: '#0F172A' }}
                         />
@@ -1517,7 +1769,7 @@ export default function MarketingScreen() {
                           <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Offer Tag</Text>
                           <TextInput
                             value={discountBadge}
-                            onChangeText={setDiscountBadge}
+                            onChangeText={handleUpdateDiscountBadge}
                             placeholder="e.g. 20% OFF"
                             style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0F172A' }}
                           />
@@ -1526,7 +1778,7 @@ export default function MarketingScreen() {
                           <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Button Text</Text>
                           <TextInput
                             value={ctaText}
-                            onChangeText={setCtaText}
+                            onChangeText={handleUpdateCtaText}
                             placeholder="e.g. Book Now"
                             style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0F172A' }}
                           />
@@ -1557,7 +1809,7 @@ export default function MarketingScreen() {
                     <Pressable onPress={()=>loadDesignDrafts()} style={{padding:12}}><Text>Open saved design</Text></Pressable>
                     {moreDrafts&&<Pressable onPress={()=>loadDesignDrafts(draftPage+1)}><Text>Load more drafts</Text></Pressable>}
                     {designDrafts.map(d=><Pressable key={d.id} style={{padding:12}} onPress={()=>{try{setCustomDesign(validateDesign(JSON.parse(d.designJson)));setCaption(d.content);setEditingDesignId(d.id);setDesignRevision(d.updatedAt);savedDesignSnapshot.current=JSON.stringify({design:JSON.parse(d.designJson),caption:d.content});setDesignDrafts([]);}catch{setError('This design could not be opened.');}}}><Text>{d.content.slice(0,70)}</Text></Pressable>)}
-                    <EditableDesign design={design} onChange={setCustomDesign} />
+                    <EditableDesign design={design} onChange={handleCustomDesignChange} />
 
                     <View style={styles.canvasToolbar}>
                       <Pressable onPress={() => setIsEditingText(true)} style={styles.toolItem}>
@@ -1718,15 +1970,21 @@ export default function MarketingScreen() {
                   </View>
 
                   {activeVisualFormat === 'poster' ? (
-                    <View style={{ height: Math.min(320, Math.round(Dimensions.get('window').height * 0.36)), backgroundColor: '#090D16', alignItems: 'center', justifyContent: 'center' }}>
-                      <Image
-                        source={customPosterUri ? { uri: customPosterUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
-                        style={{ width: '100%', height: '100%' }}
-                        resizeMode="contain"
+                    <View style={{ backgroundColor: '#090D16', paddingVertical: 4 }}>
+                      <AutoBrandedPosterCard
+                        photoUri={customPosterUri}
+                        headline={headline}
+                        subtitle={subtitle}
+                        badge={discountBadge}
+                        ctaText={ctaText}
+                        businessName={effectiveBusinessName}
+                        phone={effectiveBusinessPhone}
+                        website={effectiveBusinessWebsite}
+                        height={Math.min(320, Math.round(Dimensions.get('window').height * 0.36))}
                       />
                     </View>
                   ) : (
-                    <EditableDesign design={design} />
+                    <EditableDesign design={design} onChange={handleCustomDesignChange} />
                   )}
 
                   {/* Social Action Icons */}

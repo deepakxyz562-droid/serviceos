@@ -1,7 +1,14 @@
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { createDesign, validateDesign, createFieserosCampaignDesign, type MarketingDesign, type DesignLayer } from '../../../shared/marketing-design';
+import {
+  createDesign,
+  validateDesign,
+  createFieserosCampaignDesign,
+  createCommercialPosterDesign,
+  type MarketingDesign,
+  type DesignLayer,
+} from '../../../shared/marketing-design';
 import { EditableMarketingDesign } from './editable-marketing-design';
 import {
   Sparkles,
@@ -279,10 +286,42 @@ export function MarketingCanvasStudio({
     [connectedAccounts]
   );
 
-  const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(() => createFieserosCampaignDesign());
-  const design = customDesign || createDesign({ brand: businessName, headline, subtitle: subheadText, badge: badgeText, cta: ctaText, photo: photoUrl, ratio: aspectRatio });
-
   const [workspaceInfo, setWorkspaceInfo] = useState<{ name?: string; phone?: string; slug?: string; businessName?: string } | null>(null);
+
+  const effectiveBusinessName = workspaceInfo?.businessName || workspaceInfo?.name || businessName || 'Fieseros Pro';
+  const effectivePhone = workspaceInfo?.phone;
+  const effectiveWebsite = workspaceInfo?.slug ? `fieseros.com/p/${workspaceInfo.slug}` : 'bgos.fieseros.com';
+
+  const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(null);
+  const design = useMemo(() => {
+    if (customDesign) return customDesign;
+    return createCommercialPosterDesign({
+      brand: effectiveBusinessName,
+      headline,
+      subtitle: subheadText,
+      badge: badgeText,
+      cta: ctaText,
+      phone: effectivePhone,
+      website: effectiveWebsite,
+      photo: activeVisualFormat === 'poster' ? (posterUrl || photoUrl) : photoUrl,
+      ratio: aspectRatio,
+      theme: theme === 'sand_olive' ? 'sand' : theme === 'emerald_gold' ? 'emerald' : 'dark',
+    });
+  }, [
+    customDesign,
+    effectiveBusinessName,
+    headline,
+    subheadText,
+    badgeText,
+    ctaText,
+    effectivePhone,
+    effectiveWebsite,
+    activeVisualFormat,
+    posterUrl,
+    photoUrl,
+    aspectRatio,
+    theme,
+  ]);
 
   useEffect(() => {
     authFetch('/api/bgos/workspace')
@@ -496,7 +535,15 @@ export function MarketingCanvasStudio({
           if (Array.isArray(json.alternativeHeadlines) && json.alternativeHeadlines.length > 0) {
             setAlternativeHeadlines(json.alternativeHeadlines);
           }
-          if (json.design) setCustomDesign(json.design);
+          if (json.design) {
+            setCustomDesign(json.design);
+            const hl = json.design.layers?.find((l: any) => l.id === 'headline' || l.type === 'text');
+            if (hl?.text) setHeadline(hl.text);
+            const bd = json.design.layers?.find((l: any) => l.id === 'badge');
+            if (bd?.text) setBadgeText(bd.text);
+            const sub = json.design.layers?.find((l: any) => l.id === 'subtitle');
+            if (sub?.text) setSubheadText(sub.text);
+          }
         }
 
         if (imageRes.ok) {
@@ -511,7 +558,16 @@ export function MarketingCanvasStudio({
                 const job = await check.json();
                 if (job.status === 'completed' && job.result?.url) {
                   clearInterval(poll);
-                  setPosterUrl(job.result.url);
+                  const newImg = job.result.url;
+                  setPosterUrl(newImg);
+                  setPhotoUrl(newImg);
+                  setCustomDesign((prev) => {
+                    if (!prev) return null;
+                    return {
+                      ...prev,
+                      layers: prev.layers.map((l) => (l.id === 'bg_photo' || l.type === 'image' ? { ...l, src: newImg } : l)),
+                    };
+                  });
                   setActiveVisualFormat('poster');
                   setIsGenerating(false);
                   setGeneratingStage('');
@@ -667,7 +723,7 @@ export function MarketingCanvasStudio({
           content: caption,
           mediaUrls: mediaList,
           isPoster: isPosterMode,
-          design: isPosterMode ? undefined : design,
+          design: design,
           linkUrl,
           platforms: selectedChannels,
           targets: targets.length > 0 ? targets : undefined,
@@ -717,7 +773,7 @@ export function MarketingCanvasStudio({
           content: caption,
           mediaUrls: mediaList,
           isPoster: isPosterMode,
-          design: isPosterMode ? undefined : design,
+          design: design,
           linkUrl,
           platforms: selectedChannels,
           targets: targets.length > 0 ? targets : undefined,
@@ -1449,10 +1505,50 @@ export function MarketingCanvasStudio({
                 </div>
 
                 {/* Media */}
-                <div
-                  className="w-full aspect-square bg-cover bg-center"
-                  style={{ backgroundImage: `url(${activeVisualFormat === 'poster' ? posterUrl : photoUrl})` }}
-                />
+                {activeVisualFormat === 'poster' ? (
+                  <div className="relative w-full aspect-[4/5] bg-zinc-950 overflow-hidden">
+                    <img
+                      src={posterUrl}
+                      alt="Promotional marketing poster"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg?v=1';
+                      }}
+                    />
+                    {/* Top Scrim */}
+                    <div className="absolute top-2.5 inset-x-2.5 flex items-center justify-between pointer-events-none">
+                      <span className="bg-primary text-primary-foreground font-black text-[9.5px] px-2 py-0.5 rounded uppercase shadow-xs pointer-events-auto">
+                        {badgeText || 'SPECIAL OFFER'}
+                      </span>
+                    </div>
+                    {/* Bottom Headline Scrim */}
+                    <div className="absolute bottom-11 inset-x-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent p-3 text-white">
+                      <p className="font-extrabold text-sm leading-snug line-clamp-2">
+                        {headline || 'Professional Business Services'}
+                      </p>
+                      {subheadText && (
+                        <p className="text-[10.5px] text-emerald-300 font-semibold mt-0.5 line-clamp-1">
+                          {subheadText}
+                        </p>
+                      )}
+                    </div>
+                    {/* Auto-Branded Footer Strip */}
+                    <div className="absolute bottom-0 inset-x-0 h-11 bg-slate-950/95 px-3 flex items-center justify-between text-white border-t border-white/10">
+                      <div className="min-w-0 pr-2">
+                        <p className="font-bold text-[10.5px] truncate">{effectiveBusinessName}</p>
+                        <p className="text-[9px] text-slate-400 truncate">{effectivePhone ? `📞 ${effectivePhone}` : 'Verified Pro'}</p>
+                      </div>
+                      <span className="text-[9px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded shrink-0">
+                        {ctaText || 'BOOK ONLINE'}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="w-full aspect-square bg-cover bg-center"
+                    style={{ backgroundImage: `url(${photoUrl})` }}
+                  />
+                )}
 
                 {/* Caption & Actions */}
                 <div className="p-3 space-y-2">

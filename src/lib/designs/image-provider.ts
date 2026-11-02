@@ -93,7 +93,7 @@ export function buildHighQualityImagePrompt(rawPrompt: string, isPoster?: boolea
   const cleanPrompt = rawPrompt.replace(/^\[POSTER\]\s*/, '').trim();
 
   if (isPosterMode) {
-    return `Ultra-high quality modern commercial promotional poster design, 1080x1350 vertical format. Award-winning advertising agency aesthetic, bold visual hierarchy, striking contrast, premium corporate color harmony, clean sharp elements. Brief: ${cleanPrompt}. Highly detailed, pristine layout, elegant marketing composition.`;
+    return `Ultra-high quality commercial promotional advertising photography for a professional service business. Subject: ${cleanPrompt}. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures. Perfectly composed with generous negative space for digital typography overlay. High-end editorial photography style, perfectly exposed, vivid realistic colors. Clean modern commercial background. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO FONTS, NO WATERMARKS, NO LOGOS, pure visual photography only.`;
   }
 
   return `Award-winning commercial promotional photography for a professional service business. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures, clean modern background. Authentic, trustworthy, and welcoming atmosphere. Brief: ${cleanPrompt}. High-end editorial photography style, perfectly exposed, vivid realistic colors, no text, no watermarks, no logos, no distorted features, no blurry artifacts.`;

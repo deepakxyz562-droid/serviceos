@@ -35,6 +35,214 @@ export function createDesign(input: { brand: string; headline: string; subtitle:
     {...layer('cta','text',height-140,80),text:input.cta,fontSize:36},
   ] };
 }
+
+export function createCommercialPosterDesign(input: {
+  brand: string;
+  headline: string;
+  subtitle?: string;
+  badge?: string;
+  cta?: string;
+  phone?: string;
+  website?: string;
+  photo?: string;
+  ratio?: string;
+  theme?: 'emerald' | 'sand' | 'dark';
+}): MarketingDesign {
+  const sizes: Record<string, [number, number]> = {
+    '1:1': [1080, 1080],
+    '4:5': [1080, 1350],
+    '9:16': [1080, 1920],
+    '16:9': [1920, 1080],
+  };
+  const [width, height] = sizes[input.ratio || '4:5'] || sizes['4:5'];
+
+  const themeColors = {
+    emerald: {
+      bg: '#062419',
+      badgeBg: '#009f50',
+      badgeText: '#ffffff',
+      subColor: '#34d399',
+      ctaBg: '#009f50',
+    },
+    sand: {
+      bg: '#1c1917',
+      badgeBg: '#b45309',
+      badgeText: '#ffffff',
+      subColor: '#fde047',
+      ctaBg: '#b45309',
+    },
+    dark: {
+      bg: '#090d16',
+      badgeBg: '#2563eb',
+      badgeText: '#ffffff',
+      subColor: '#60a5fa',
+      ctaBg: '#2563eb',
+    },
+  }[input.theme || 'emerald'];
+
+  const brandText = (input.brand || 'Professional Service').trim();
+  const headlineText = (input.headline || 'Top-Rated Professional Services').trim();
+  const badgeText = (input.badge || 'SPECIAL OFFER').trim().toUpperCase();
+  const subText = (input.subtitle || 'Fast turnaround & 100% satisfaction guaranteed.').trim();
+  const ctaLabel = (input.cta || 'BOOK NOW').trim().toUpperCase();
+  const phoneText = input.phone ? ` • ${input.phone.trim()}` : '';
+  const webText = input.website ? input.website.replace(/^https?:\/\//, '') : 'fieseros.com';
+  const photoSrc = input.photo && input.photo.trim().length > 0
+    ? input.photo.trim()
+    : 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80';
+
+  const footerH = 140;
+  const bottomContentH = 460;
+  const bottomStartY = height - bottomContentH;
+
+  const layers: DesignLayer[] = [
+    // 1. Background image (full canvas)
+    {
+      id: 'bg_photo',
+      type: 'image',
+      x: 0,
+      y: 0,
+      width,
+      height,
+      src: photoSrc,
+      color: '#ffffff',
+      background: 'transparent',
+      fontSize: 16,
+      opacity: 1,
+    },
+    // 2. Top Scrim (dark gradient simulation)
+    {
+      id: 'top_scrim',
+      type: 'shape',
+      x: 0,
+      y: 0,
+      width,
+      height: 140,
+      color: 'transparent',
+      background: '#000000',
+      fontSize: 16,
+      opacity: 0.55,
+    },
+    // 3. Top Offer Badge
+    {
+      id: 'badge',
+      type: 'text',
+      x: 50,
+      y: 40,
+      width: Math.min(320, width - 100),
+      height: 48,
+      text: badgeText,
+      color: themeColors.badgeText,
+      background: themeColors.badgeBg,
+      fontSize: 22,
+      opacity: 1,
+    },
+    // 4. Top Brand
+    {
+      id: 'brand',
+      type: 'text',
+      x: Math.min(400, width - 260),
+      y: 45,
+      width: Math.max(200, width - 450),
+      height: 40,
+      text: brandText.toUpperCase(),
+      color: '#ffffff',
+      background: 'transparent',
+      fontSize: 22,
+      opacity: 1,
+    },
+    // 5. Bottom Dark Scrim (ensures headline & subtitle are 100% readable)
+    {
+      id: 'bottom_scrim',
+      type: 'shape',
+      x: 0,
+      y: bottomStartY,
+      width,
+      height: bottomContentH,
+      color: 'transparent',
+      background: '#090d16',
+      fontSize: 16,
+      opacity: 0.88,
+    },
+    // 6. Headline (Main marketing hook)
+    {
+      id: 'headline',
+      type: 'text',
+      x: 50,
+      y: bottomStartY + 30,
+      width: width - 100,
+      height: 150,
+      text: headlineText,
+      color: '#ffffff',
+      background: 'transparent',
+      fontSize: width > 1080 ? 76 : 64,
+      opacity: 1,
+    },
+    // 7. Subtitle (Offer details / supporting text)
+    {
+      id: 'subtitle',
+      type: 'text',
+      x: 50,
+      y: bottomStartY + 190,
+      width: width - 100,
+      height: 80,
+      text: subText,
+      color: themeColors.subColor,
+      background: 'transparent',
+      fontSize: 32,
+      opacity: 1,
+    },
+    // 8. Auto-Branded Footer Background
+    {
+      id: 'footer_bg',
+      type: 'shape',
+      x: 0,
+      y: height - footerH,
+      width,
+      height: footerH,
+      color: 'transparent',
+      background: '#05080e',
+      fontSize: 16,
+      opacity: 0.98,
+    },
+    // 9. Footer Business Details (Name + Phone)
+    {
+      id: 'footer_brand',
+      type: 'text',
+      x: 50,
+      y: height - footerH + 35,
+      width: Math.max(200, width - 360),
+      height: 70,
+      text: `${brandText}${phoneText}\n${webText}`,
+      color: '#ffffff',
+      background: 'transparent',
+      fontSize: 24,
+      opacity: 1,
+    },
+    // 10. Call To Action Button
+    {
+      id: 'cta',
+      type: 'text',
+      x: width - 290,
+      y: height - footerH + 42,
+      width: 240,
+      height: 56,
+      text: `${ctaLabel} →`,
+      color: '#ffffff',
+      background: themeColors.ctaBg,
+      fontSize: 22,
+      opacity: 1,
+    },
+  ];
+
+  return validateDesign({
+    version: 1,
+    width,
+    height,
+    background: themeColors.bg,
+    layers,
+  });
+}
 export function createFieserosCampaignDesign(): MarketingDesign {
   const width = 1080;
   const height = 1350;
