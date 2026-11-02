@@ -306,6 +306,80 @@ export default function ReviewRepliesScreen() {
     }
   }
 
+  const [websiteBusy, setWebsiteBusy] = useState(false);
+
+  async function handleGenerateWebsite() {
+    if (websiteBusy) return;
+    try {
+      setWebsiteBusy(true);
+      const res = await apiRequest<{ success: boolean; websiteUrl: string; message: string }>('/api/gbp/website/generate', {
+        method: 'POST',
+        body: JSON.stringify({ syncToGoogle: true }),
+      });
+      if (res?.websiteUrl) {
+        Alert.alert(
+          'Google Business Website',
+          `${res.message || 'Website generated!'}\n\nURL: ${res.websiteUrl}`,
+          [
+            { text: 'View Site', onPress: () => Linking.openURL(res.websiteUrl) },
+            { text: 'OK' },
+          ]
+        );
+      }
+    } catch (e: any) {
+      Alert.alert('Website Builder', e?.message || 'Failed to generate website');
+    } finally {
+      setWebsiteBusy(false);
+    }
+  }
+
+  async function handleShowRankings() {
+    try {
+      const res = await apiRequest<any>('/api/gbp/rankings');
+      if (res) {
+        Alert.alert(
+          'Google Maps Ranking Status',
+          `📍 City: ${res.cityName}\n🏆 Average Maps Rank: #${res.currentAvgRank} (was #${res.initialAvgRank})\n📈 Improvement: +${res.totalImprovement} positions gained!\n🔥 Top 3 Local Pack: ${res.inTop3PackPct}% domination\n\nTop tracked: ${res.keywords?.[0]?.keyword || 'Local service'} (#${res.keywords?.[0]?.currentRank || 1})`,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch {
+      Alert.alert('Rankings', 'Could not fetch live ranking status');
+    }
+  }
+
+  function handleCreateGooglePage() {
+    Alert.prompt
+      ? Alert.prompt(
+          'Create Google Business Page',
+          'Enter your business name to create your Google Maps listing:',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Create',
+              onPress: async (name?: string) => {
+                if (!name?.trim()) return;
+                try {
+                  const res = await apiRequest<any>('/api/gbp/locations/create', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      businessName: name.trim(),
+                      primaryCategory: 'Software company',
+                      locality: 'Patna',
+                      regionCode: 'IN',
+                    }),
+                  });
+                  Alert.alert('Google Business Page', res.message || 'Page created successfully!');
+                } catch (e: any) {
+                  Alert.alert('Error', e?.message || 'Failed to create page');
+                }
+              },
+            },
+          ]
+        )
+      : Linking.openURL('https://business.google.com/create');
+  }
+
 
 
   async function handleShareReply(text: string) {
@@ -934,6 +1008,79 @@ export default function ReviewRepliesScreen() {
               </>
             )}
           </View>
+        </View>
+
+        {/* Quick Tools: Website Builder, Local Rankings, Page Creation */}
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+          <Pressable
+            disabled={websiteBusy}
+            onPress={handleGenerateWebsite}
+            style={({ pressed }) => ({
+              flex: 1,
+              backgroundColor: '#FFFFFF',
+              borderWidth: 1,
+              borderColor: '#CBD5E1',
+              paddingVertical: 8,
+              paddingHorizontal: 8,
+              borderRadius: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              opacity: websiteBusy ? 0.6 : pressed ? 0.8 : 1,
+            })}
+          >
+            {websiteBusy ? (
+              <ActivityIndicator size="small" color="#009F50" />
+            ) : (
+              <>
+                <MaterialIcons name="language" size={15} color="#009F50" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>Create Website</Text>
+              </>
+            )}
+          </Pressable>
+
+          <Pressable
+            onPress={handleShowRankings}
+            style={({ pressed }) => ({
+              flex: 1,
+              backgroundColor: '#FFFFFF',
+              borderWidth: 1,
+              borderColor: '#CBD5E1',
+              paddingVertical: 8,
+              paddingHorizontal: 8,
+              borderRadius: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <MaterialIcons name="trending-up" size={15} color="#009F50" />
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>Rank Status</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={handleCreateGooglePage}
+            style={({ pressed }) => ({
+              flex: 1,
+              backgroundColor: '#FFFFFF',
+              borderWidth: 1,
+              borderColor: '#CBD5E1',
+              paddingVertical: 8,
+              paddingHorizontal: 8,
+              borderRadius: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <MaterialIcons name="add-business" size={15} color="#009F50" />
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>Create Page</Text>
+          </Pressable>
         </View>
 
         {/* 1-Tap WhatsApp Google Reviews Highlight Card */}

@@ -20,6 +20,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Star,
+  Building2,
   MessageSquare,
   Clock,
   Sparkles,
@@ -83,6 +84,9 @@ import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 import { parseAddress, formatAddress } from '@/components/bgos/settings';
 import { GbpStandeeModal } from '@/components/bgos/gbp-standee-modal';
+import { RankTracker } from '@/components/bgos/rank-tracker';
+import { GbpPageCreateModal } from '@/components/bgos/gbp-page-create-modal';
+import { GbpWebsiteBuilderCard } from '@/components/bgos/gbp-website-builder-card';
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -99,6 +103,7 @@ export interface ReviewItem {
   replied: boolean;
   failedSync?: boolean;
   publishedToGoogle?: boolean;
+  status?: 'published' | 'pending' | 'hidden';
   replyText?: string;
   replyEdited?: string;
   replyKeywords?: Array<{ keyword: string; volume: string }>;
@@ -429,6 +434,7 @@ export function ReviewsView({
   const [sortOrder, setSortOrder] = useState('newest');
   const [quickReplyId, setQuickReplyId] = useState<string | null>(null);
   const [quickReplyText, setQuickReplyText] = useState('');
+  const [createPageOpen, setCreatePageOpen] = useState(false);
 
   // Active Review
   const selectedReview = reviewsList.find((r) => r.id === selectedReviewId) || reviewsList[0];
@@ -719,6 +725,7 @@ export function ReviewsView({
             replied: !!(parsedResp && parsedResp.text && parsedResp.publishedToGoogle),
             failedSync: !!(parsedResp && parsedResp.text && !parsedResp.publishedToGoogle),
             publishedToGoogle: Boolean(parsedResp?.publishedToGoogle),
+            status: (r.status as 'published' | 'pending' | 'hidden') || 'published',
             replyText: parsedResp?.text || undefined,
             replyEdited: parsedResp?.repliedAt ? 'Published' : undefined,
             replyKeywords: parsedResp?.keywords || (parsedResp?.text ? [
@@ -1203,6 +1210,11 @@ export function ReviewsView({
       toast.error('Reply text cannot be empty');
       return;
     }
+    const currentRev = reviewsList.find((r) => r.id === targetId);
+    if (currentRev?.status === 'pending') {
+      toast.error('Review is pending Google verification. Reply updates are paused.');
+      return;
+    }
     let persisted = false;
     let toastMessage = 'Reply saved and published to Google Business Profile!';
     try {
@@ -1215,6 +1227,10 @@ export function ReviewsView({
         persisted = true;
         const data = await res.json().catch(() => ({}));
         if (data.message) toastMessage = data.message;
+      } else if (res.status === 409) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || 'Review is pending Google review. Updates are paused.');
+        return;
       } else {
         // Fallback to direct review update
         const legacyRes = await authFetch(`/api/reviews/${targetId}`, {
@@ -1227,6 +1243,11 @@ export function ReviewsView({
             }),
           }),
         });
+        if (legacyRes.status === 409) {
+          const data = await legacyRes.json().catch(() => ({}));
+          toast.error(data.error || 'Review is in pending status. Updates are locked.');
+          return;
+        }
         persisted = legacyRes.ok;
       }
     } catch {
@@ -1817,6 +1838,16 @@ export function ReviewsView({
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setCreatePageOpen(true)}
+            className="h-9 gap-1.5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-xl px-3 shadow-2xs"
+          >
+            <Building2 className="size-3.5 text-[#009F50]" />
+            <span>Create Google Page</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() =>
               window.open(
                 connectedPlace?.mapsUrl ||
@@ -1849,6 +1880,7 @@ export function ReviewsView({
       <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200/90 dark:border-slate-800 bg-white/60 dark:bg-slate-900/50 px-2 pt-1 rounded-t-xl">
         {[
           { id: 'overview', label: 'Overview', Icon: BarChart3 },
+          { id: 'rankings', label: 'Rankings & History', Icon: TrendingUp },
           { id: 'reviews', label: 'Reviews', count: totalReviews, Icon: Star },
           { id: 'generate-replies', label: 'Generate Replies', count: unrepliedCount, Icon: Sparkles },
           { id: 'review-requests', label: 'Review Requests', Icon: Send },
@@ -1888,6 +1920,9 @@ export function ReviewsView({
          ═══════════════════════════════════════════════════════════════════════ */}
       {activeSubTab === 'overview' && (
         <div className="space-y-5">
+          {/* Google Business Website Builder Card */}
+          <GbpWebsiteBuilderCard businessSlug={businessSlug} isGbpConnected={isGbpConnected} />
+
           {/* ─── 0. Google Business Connection Notice ─── */}
           {!isGbpConnected && !isDemo && !initialReviews && (
             <div className="p-4 sm:p-5 rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2999,6 +3034,11 @@ export function ReviewsView({
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
+          TAB: LOCAL RANKING STATUS & IMPROVEMENT HISTORY
+         ═══════════════════════════════════════════════════════════════════════ */}
+      {activeSubTab === 'rankings' && <RankTracker />}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
           TAB 2: REVIEWS (TRIAGE WORKSTATION, TELEMETRY STRIP & AI REPLY)
          ═══════════════════════════════════════════════════════════════════════ */}
       {activeSubTab === 'reviews' && (
@@ -3244,14 +3284,26 @@ export function ReviewsView({
                           variant="secondary"
                           className={cn(
                             'text-[10px] px-1.5 py-0.2 shrink-0 font-semibold',
-                            item.replied
-                              ? 'bg-[#E8F8EF] text-[#009F50] dark:bg-emerald-950 dark:text-emerald-300'
-                              : item.failedSync
-                                ? 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                                : 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                            item.status === 'pending'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
+                              : item.status === 'hidden'
+                                ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                : item.replied
+                                  ? 'bg-[#E8F8EF] text-[#009F50] dark:bg-emerald-950 dark:text-emerald-300'
+                                  : item.failedSync
+                                    ? 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                    : 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
                           )}
                         >
-                          {item.replied ? 'Live on Google' : item.failedSync ? 'Sync Failed' : 'Pending'}
+                          {item.status === 'pending'
+                            ? 'Pending Review'
+                            : item.status === 'hidden'
+                              ? 'Hidden'
+                              : item.replied
+                                ? 'Live on Google'
+                                : item.failedSync
+                                  ? 'Sync Failed'
+                                  : 'Unreplied'}
                         </Badge>
                       </div>
 
@@ -3298,14 +3350,26 @@ export function ReviewsView({
                             variant="secondary"
                             className={cn(
                               'text-[10px] px-1.5 py-0.2 font-semibold',
-                              selectedReview.replied
-                                ? 'bg-[#E8F8EF] text-[#009F50]'
-                                : selectedReview.failedSync
-                                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                                  : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                              selectedReview.status === 'pending'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
+                                : selectedReview.status === 'hidden'
+                                  ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                  : selectedReview.replied
+                                    ? 'bg-[#E8F8EF] text-[#009F50]'
+                                    : selectedReview.failedSync
+                                      ? 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                      : 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
                             )}
                           >
-                            {selectedReview.replied ? 'Live on Google' : selectedReview.failedSync ? 'Sync Failed' : 'Pending'}
+                            {selectedReview.status === 'pending'
+                              ? 'Pending Review'
+                              : selectedReview.status === 'hidden'
+                                ? 'Hidden'
+                                : selectedReview.replied
+                                  ? 'Live on Google'
+                                  : selectedReview.failedSync
+                                    ? 'Sync Failed'
+                                    : 'Unreplied'}
                           </Badge>
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
@@ -3331,6 +3395,18 @@ export function ReviewsView({
                       <MoreHorizontal className="size-4" />
                     </button>
                   </div>
+
+                  {selectedReview.status === 'pending' && (
+                    <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200">
+                      <Clock className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                      <div>
+                        <span className="font-bold">Pending Google Verification / Review:</span>
+                        <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">
+                          This review is undergoing Google moderation or verification. Reply editing, deletion, and publishing are paused until approved.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-normal">
@@ -3423,7 +3499,12 @@ export function ReviewsView({
                             <Button
                               variant="ghost"
                               size="sm"
+                              disabled={selectedReview.status === 'pending'}
                               onClick={async () => {
+                                if (selectedReview.status === 'pending') {
+                                  toast.error('Cannot delete reply while review is pending Google approval.');
+                                  return;
+                                }
                                 if (!confirm('Are you sure you want to delete this reply?')) return;
                                 try {
                                   await authFetch(`/api/reviews/${selectedReview.id}/reply`, { method: 'DELETE' });
@@ -3442,10 +3523,21 @@ export function ReviewsView({
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setIsEditingReply(true)}
+                            disabled={selectedReview.status === 'pending'}
+                            onClick={() => {
+                              if (selectedReview.status === 'pending') {
+                                toast.error('Reply updates are paused while review is pending Google approval.');
+                                return;
+                              }
+                              setIsEditingReply(true);
+                            }}
                             className="h-7 text-xs font-semibold"
                           >
-                            {replyDraft ? 'Edit Reply' : 'Write Reply'}
+                            {selectedReview.status === 'pending'
+                              ? 'Reply Locked (Pending Approval)'
+                              : replyDraft
+                                ? 'Edit Reply'
+                                : 'Write Reply'}
                           </Button>
                         </div>
                       </div>
@@ -3815,6 +3907,11 @@ export function ReviewsView({
           </div>
         </div>
       )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          TAB: LOCAL RANKING STATUS & IMPROVEMENT HISTORY
+         ═══════════════════════════════════════════════════════════════════════ */}
+      {activeSubTab === 'rankings' && <RankTracker />}
 
       {/* ═══════════════════════════════════════════════════════════════════════
           TAB 5: POSTS (GOOGLE BUSINESS POSTS MANAGER)
@@ -4773,6 +4870,15 @@ export function ReviewsView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 8. Create Google Business Page Wizard Modal */}
+      <GbpPageCreateModal
+        open={createPageOpen}
+        onOpenChange={setCreatePageOpen}
+        defaultBusinessName={profileTitle || businessName}
+        defaultCity={profileCity || ''}
+        onSuccess={() => handleSyncGbp()}
+      />
     </div>
   );
 }

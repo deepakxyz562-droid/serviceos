@@ -54,6 +54,17 @@ export async function PUT(
       return NextResponse.json({ error: 'Review not found' }, { status: 404 });
     }
 
+    // Stop updating review content/replies if review is in pending status (unless explicitly updating status)
+    if (existing.status === 'pending' && body.status === undefined) {
+      return NextResponse.json(
+        {
+          error: 'Review is currently in pending status with Google. Content and reply updates are locked until approved.',
+          status: 'pending',
+        },
+        { status: 409 }
+      );
+    }
+
     const updateData: Record<string, unknown> = {};
     // All these fields exist on the Review model in prisma/schema.prisma
     // (PHASE-1-SCHEMA added authorName, source, status, responseJson,
@@ -111,6 +122,17 @@ export async function DELETE(
 
     if (!existing) {
       return NextResponse.json({ error: 'Review not found' }, { status: 404 });
+    }
+
+    // Stop deleting review if review is in pending status with Google
+    if (existing.status === 'pending') {
+      return NextResponse.json(
+        {
+          error: 'Review is currently in pending status with Google. Deletion is locked until approved.',
+          status: 'pending',
+        },
+        { status: 409 }
+      );
     }
 
     await db.review.delete({ where: { id } });

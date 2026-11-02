@@ -81,10 +81,14 @@ export function ReviewCard({
             ) : null}
           </View>
         </View>
-        {reply ? (
+        {review.status === 'pending' ? (
+          <Pill label="Pending Google Review" bg={gbpColors.amberSoft} color="#B45309" icon="schedule" />
+        ) : review.status === 'hidden' ? (
+          <Pill label="Hidden" bg="#F1F5F9" color="#64748B" icon="visibility-off" />
+        ) : reply ? (
           <Pill label="Replied" bg={gbpColors.emeraldSoft} color={gbpColors.emerald} icon="check-circle" />
         ) : (
-          <Pill label="Pending" bg={gbpColors.amberSoft} color="#B45309" icon="schedule" />
+          <Pill label="Unreplied" bg={gbpColors.amberSoft} color="#B45309" icon="schedule" />
         )}
       </View>
 
@@ -114,6 +118,26 @@ export function ReviewCard({
           No written comment — rated {rating} stars.
         </Text>
       )}
+
+      {review.status === 'pending' ? (
+        <View
+          style={{
+            backgroundColor: '#FEF3C7',
+            padding: 9,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: '#FDE68A',
+            gap: 2,
+          }}
+        >
+          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#92400E' }}>
+            ⏳ Pending Google Verification
+          </Text>
+          <Text style={{ fontSize: 11, color: '#B45309', lineHeight: 15 }}>
+            This review is undergoing Google verification. Reply updates are paused until approved.
+          </Text>
+        </View>
+      ) : null}
 
       {reply ? (
         /* ── Replied: AI accordion + light-gray reply card ── */
@@ -214,14 +238,20 @@ export function ReviewCard({
                     <Pressable
                       accessibilityRole="button"
                       onPress={() => {
+                        if (review.status === 'pending') {
+                          Alert.alert('Reply Locked', 'Cannot edit reply while review is pending Google verification.');
+                          return;
+                        }
                         setEditText(reply.text || '');
                         setEditing(true);
                       }}
                       hitSlop={8}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                     >
-                      <MaterialIcons name="edit" size={13} color={colors.brand} />
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>✎ Edit</Text>
+                      <MaterialIcons name="edit" size={13} color={review.status === 'pending' ? colors.muted : colors.brand} />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: review.status === 'pending' ? colors.muted : colors.brand }}>
+                        {review.status === 'pending' ? 'Locked' : '✎ Edit'}
+                      </Text>
                     </Pressable>
                   </View>
                   {!reply.publishedToGoogle ? (
@@ -405,6 +435,12 @@ export function ReviewCard({
               </Pressable>
             </View>
           )}
+        </View>
+      ) : review.status === 'pending' ? (
+        <View style={{ paddingVertical: 8, alignItems: 'center' }}>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.muted }}>
+            🔒 Replies paused while pending Google review
+          </Text>
         </View>
       ) : (
         /* ── Pending, no draft yet ── */

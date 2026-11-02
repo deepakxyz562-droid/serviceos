@@ -138,6 +138,8 @@ const BrandBrainView = lazy(() =>
 
 // ─── Types & constants ──────────────────────────────────────────────────────
 
+import { AutopilotStudio } from './autopilot-studio';
+
 type SocialTab =
   | 'overview'
   | 'review-replies'
@@ -148,7 +150,8 @@ type SocialTab =
   | 'posts'
   | 'analytics'
   | 'templates'
-  | 'accounts';
+  | 'accounts'
+  | 'autopilot';
 
 type PostStatusFilter =
   | 'pending'
@@ -3189,6 +3192,7 @@ export function SocialMediaView({
 
   const PRIMARY_TABS: { id: SocialTab; label: string; Icon: LucideIcon }[] = [
     { id: 'composer', label: 'Create', Icon: Sparkles },
+    { id: 'autopilot', label: 'Autopilot (30d / 1yr)', Icon: Zap },
     { id: 'posts', label: 'Content library', Icon: FolderOpen },
     { id: 'overview', label: 'Calendar', Icon: Calendar },
     { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
@@ -3372,6 +3376,11 @@ export function SocialMediaView({
           }}
           onNavigateToPosts={() => setActiveTab('posts')}
         />
+      )}
+
+      {/* ─── TAB: Autopilot (30-Day / 1-Year Daily Autonomous Posting) ──── */}
+      {activeTab === 'autopilot' && (
+        <AutopilotStudio onConnectAccount={() => setActiveTab('accounts')} />
       )}
 
       {/* ─── TAB: Posts (drilldown, single posts list) ──────────────────── */}

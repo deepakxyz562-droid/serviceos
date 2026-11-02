@@ -135,6 +135,9 @@ describe('BGOS Review Replies & Auto-Reply Pipeline', () => {
       role: 'ADMIN',
     } as any);
 
+    // Published review ready for reply
+    mockReviews[0].status = 'published';
+
     const req = new NextRequest('http://localhost:3000/api/reviews/rev-1/reply', {
       method: 'POST',
       body: JSON.stringify({ replyText: 'Thank you for your support!' }),

@@ -38,6 +38,17 @@ export async function POST(
       return NextResponse.json({ error: 'Review not found' }, { status: 404 });
     }
 
+    // Lock updates if the review is currently in pending status with Google
+    if (review.status === 'pending') {
+      return NextResponse.json(
+        {
+          error: 'Review is currently in pending status with Google. Reply updates are paused until approved or verified.',
+          status: 'pending',
+        },
+        { status: 409 },
+      );
+    }
+
     if (review.googleReviewId && !reviewLocationId(review.googleReviewId)) {
       return NextResponse.json({ error: 'Sync this review from Google to verify its location before replying.' }, { status: 409 });
     }
@@ -138,6 +149,17 @@ export async function DELETE(
 
     if (!review) {
       return NextResponse.json({ error: 'Review not found' }, { status: 404 });
+    }
+
+    // Lock updates if the review is currently in pending status with Google
+    if (review.status === 'pending') {
+      return NextResponse.json(
+        {
+          error: 'Review is currently in pending status with Google. Reply updates are paused until approved or verified.',
+          status: 'pending',
+        },
+        { status: 409 },
+      );
     }
 
     if (review.googleReviewId && !reviewLocationId(review.googleReviewId)) {

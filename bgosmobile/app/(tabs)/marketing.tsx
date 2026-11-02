@@ -103,10 +103,79 @@ export default function MarketingScreen() {
     suggestions: Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string }>;
   }>('/api/social/prompts/suggestions');
 
-  // ── Mode Switch: Studio / Create vs Posts & Approvals ───────────────────────
-  const [activeMode, setActiveMode] = useState<'studio' | 'posts'>(
-    params.mode === 'posts' ? 'posts' : 'studio'
+  // ── Mode Switch: Studio / Create vs Autopilot vs Posts & Approvals ──────────
+  const [activeMode, setActiveMode] = useState<'studio' | 'autopilot' | 'posts'>(
+    params.mode === 'posts' ? 'posts' : params.mode === 'autopilot' ? 'autopilot' : 'studio'
   );
+
+  // ── Autopilot State ────────────────────────────────────────────────────────
+  const [apConfig, setApConfig] = useState<{
+    enabled: boolean;
+    duration: '30_days' | '1_year';
+    platforms: string[];
+    postingTime: string;
+    totalPostsCreated: number;
+    daysRemaining: number;
+  }>({
+    enabled: false,
+    duration: '30_days',
+    platforms: ['googlebusiness', 'instagram', 'facebook'],
+    postingTime: '09:00',
+    totalPostsCreated: 0,
+    daysRemaining: 30,
+  });
+  const [apLoading, setApLoading] = useState(false);
+  const [apTriggering, setApTriggering] = useState(false);
+
+  const loadAutopilot = async () => {
+    try {
+      setApLoading(true);
+      const res = await apiRequest<{ config: any; daysRemaining: number }>('/api/social/autopilot');
+      if (res?.config) {
+        setApConfig({
+          enabled: res.config.enabled,
+          duration: res.config.duration || '30_days',
+          platforms: res.config.platforms || ['googlebusiness', 'instagram', 'facebook'],
+          postingTime: res.config.postingTime || '09:00',
+          totalPostsCreated: res.config.totalPostsCreated || 0,
+          daysRemaining: res.daysRemaining || 30,
+        });
+      }
+    } catch {} finally {
+      setApLoading(false);
+    }
+  };
+
+  const saveAutopilot = async (updates: Partial<typeof apConfig> & { triggerPostNow?: boolean }) => {
+    try {
+      setApLoading(true);
+      const res = await apiRequest<{ config: any; daysRemaining: number; message: string }>('/api/social/autopilot', {
+        method: 'POST',
+        body: JSON.stringify({
+          enabled: updates.enabled !== undefined ? updates.enabled : apConfig.enabled,
+          duration: updates.duration || apConfig.duration,
+          platforms: updates.platforms || apConfig.platforms,
+          postingTime: updates.postingTime || apConfig.postingTime,
+          triggerPostNow: updates.triggerPostNow || false,
+        }),
+      });
+      if (res?.config) {
+        setApConfig({
+          enabled: res.config.enabled,
+          duration: res.config.duration,
+          platforms: res.config.platforms,
+          postingTime: res.config.postingTime,
+          totalPostsCreated: res.config.totalPostsCreated,
+          daysRemaining: res.daysRemaining,
+        });
+        Alert.alert('Autopilot', res.message || 'Settings saved successfully');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to update autopilot');
+    } finally {
+      setApLoading(false);
+    }
+  };
 
   // ── Studio 3-Step Flow (01 Create -> 02 Design -> 03 Review) ───────────────
   const [studioStep, setStudioStep] = useState<1 | 2 | 3>(1);
@@ -570,7 +639,26 @@ export default function MarketingScreen() {
             color={activeMode === 'studio' ? '#009F50' : '#64748B'}
           />
           <Text style={[styles.modeTabText, activeMode === 'studio' && styles.modeTabTextActive]}>
-            Studio / Create
+            Studio
+          </Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeMode === 'autopilot' }}
+          onPress={() => {
+            setActiveMode('autopilot');
+            loadAutopilot();
+          }}
+          style={[styles.modeTab, activeMode === 'autopilot' && styles.modeTabActive]}
+        >
+          <MaterialIcons
+            name="bolt"
+            size={16}
+            color={activeMode === 'autopilot' ? '#009F50' : '#64748B'}
+          />
+          <Text style={[styles.modeTabText, activeMode === 'autopilot' && styles.modeTabTextActive]}>
+            Autopilot (30d/1yr)
           </Text>
         </Pressable>
 
@@ -586,7 +674,7 @@ export default function MarketingScreen() {
             color={activeMode === 'posts' ? '#009F50' : '#64748B'}
           />
           <Text style={[styles.modeTabText, activeMode === 'posts' && styles.modeTabTextActive]}>
-            Posts & Approvals
+            Posts
           </Text>
         </Pressable>
       </View>
@@ -604,6 +692,205 @@ export default function MarketingScreen() {
           <MaterialIcons name="error-outline" size={16} color="#DC2626" />
           <Text style={styles.errorBannerText}>{error}</Text>
         </View>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          MODE 3: AUTOPILOT (30-Day / 1-Year Multi-Platform Engine)
+          ══════════════════════════════════════════════════════════════════════ */}
+      {activeMode === 'autopilot' && (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 90 }}>
+          {/* Hero Banner */}
+          <View
+            style={{
+              backgroundColor: '#0F172A',
+              borderRadius: 16,
+              padding: 16,
+              marginBottom: 16,
+              borderWidth: 1,
+              borderColor: '#1E293B',
+              gap: 8,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: '#064E3B',
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 20,
+                }}
+              >
+                <MaterialIcons name="bolt" size={14} color="#34D399" />
+                <Text style={{ color: '#34D399', fontSize: 11, fontWeight: '700' }}>
+                  {apConfig.enabled ? 'Autopilot Active' : 'Autopilot Paused'}
+                </Text>
+              </View>
+              <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '600' }}>
+                {apConfig.daysRemaining} days left
+              </Text>
+            </View>
+
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>
+              Daily Multi-Platform Autopilot
+            </Text>
+            <Text style={{ color: '#94A3B8', fontSize: 12, lineHeight: 18 }}>
+              Automatically create and publish daily localized updates with Flux-1 Schnell graphics to Google, Instagram, and Facebook.
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+              <Pressable
+                onPress={() => saveAutopilot({ enabled: !apConfig.enabled })}
+                style={{
+                  flex: 1,
+                  backgroundColor: apConfig.enabled ? '#D97706' : '#009F50',
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 6,
+                }}
+              >
+                <MaterialIcons name={apConfig.enabled ? 'pause' : 'play-arrow'} size={16} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
+                  {apConfig.enabled ? 'Pause Autopilot' : 'Activate Daily Posting'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={async () => {
+                  try {
+                    setApTriggering(true);
+                    Alert.alert('Generating Post', "Dispatching today's post across your connected channels...");
+                    await saveAutopilot({ triggerPostNow: true, enabled: true });
+                  } finally {
+                    setApTriggering(false);
+                  }
+                }}
+                disabled={apTriggering}
+                style={{
+                  backgroundColor: '#1E293B',
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#334155',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {apTriggering ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Post Today</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Duration Selector */}
+          <Card style={{ marginBottom: 14, gap: 12 }}>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Campaign Duration</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                onPress={() => saveAutopilot({ duration: '30_days' })}
+                style={{
+                  flex: 1,
+                  padding: 12,
+                  borderRadius: 12,
+                  borderWidth: 2,
+                  borderColor: apConfig.duration === '30_days' ? '#009F50' : '#E2E8F0',
+                  backgroundColor: apConfig.duration === '30_days' ? '#F0FDF4' : '#FFFFFF',
+                  gap: 4,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>30 Days</Text>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>1 post daily for 1 month (30 posts)</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => saveAutopilot({ duration: '1_year' })}
+                style={{
+                  flex: 1,
+                  padding: 12,
+                  borderRadius: 12,
+                  borderWidth: 2,
+                  borderColor: apConfig.duration === '1_year' ? '#009F50' : '#E2E8F0',
+                  backgroundColor: apConfig.duration === '1_year' ? '#F0FDF4' : '#FFFFFF',
+                  gap: 4,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>1 Full Year</Text>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>365 daily posts with theme rotation</Text>
+              </Pressable>
+            </View>
+          </Card>
+
+          {/* Channels Selection */}
+          <Card style={{ marginBottom: 14, gap: 12 }}>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Publishing Channels</Text>
+            {[
+              { id: 'googlebusiness', name: 'Google Business Profile', icon: 'place' },
+              { id: 'instagram', name: 'Instagram', icon: 'camera-alt' },
+              { id: 'facebook', name: 'Facebook Page', icon: 'public' },
+            ].map((ch) => {
+              const active = apConfig.platforms.includes(ch.id);
+              return (
+                <Pressable
+                  key={ch.id}
+                  onPress={() => {
+                    const next = active
+                      ? apConfig.platforms.filter((p) => p !== ch.id)
+                      : [...apConfig.platforms, ch.id];
+                    if (next.length === 0) {
+                      Alert.alert('Notice', 'Please keep at least one channel selected.');
+                      return;
+                    }
+                    saveAutopilot({ platforms: next });
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 10,
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#F1F5F9',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <MaterialIcons name={ch.icon as any} size={18} color="#009F50" />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#0F172A' }}>{ch.name}</Text>
+                  </View>
+                  <MaterialIcons
+                    name={active ? 'check-box' : 'check-box-outline-blank'}
+                    size={22}
+                    color={active ? '#009F50' : '#94A3B8'}
+                  />
+                </Pressable>
+              );
+            })}
+          </Card>
+
+          {/* Progress Summary */}
+          <Card style={{ gap: 8 }}>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Engine Status</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>Total Posts Created</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>{apConfig.totalPostsCreated} posts</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>Preferred Daily Time</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>{apConfig.postingTime} AM</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>Image Provider</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50' }}>Cloudflare Flux-1 Schnell</Text>
+            </View>
+          </Card>
+        </ScrollView>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
