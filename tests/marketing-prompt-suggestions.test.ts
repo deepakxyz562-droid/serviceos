@@ -9,6 +9,9 @@ const m = vi.hoisted(() => ({
     tenant: {
       findUnique: vi.fn(),
     },
+    socialAccount: {
+      findMany: vi.fn(),
+    },
     review: {
       findMany: vi.fn(),
     },
@@ -30,7 +33,7 @@ beforeEach(() => {
     city: 'Leeds',
     website: 'https://fieseros.com',
     brandProfile: {
-      businessName: 'Fieseros',
+      businessName: 'Fieseros Heating',
       industry: 'Plumbing & Heating',
       location: 'Leeds & West Yorkshire',
       website: 'https://fieseros.com',
@@ -39,6 +42,7 @@ beforeEach(() => {
       currentOffers: '£50 off new boiler installations',
     },
   });
+  m.db.socialAccount.findMany.mockResolvedValue([]);
   m.db.review.findMany.mockResolvedValue([
     { author: 'David M.', text: 'Super fast boiler repair, Mike was punctual and professional.', rating: 5 },
   ]);
@@ -50,11 +54,11 @@ it('requires authentication to fetch suggestions', async () => {
   expect(res.status).toBe(401);
 });
 
-it('returns 5 tailored prompt suggestions based on tenant profile and reviews', async () => {
+it('returns 5 tailored prompt suggestions for HVAC when configured with trade services', async () => {
   const res = await GET(new NextRequest('http://localhost/api/social/prompts/suggestions'));
   expect(res.status).toBe(200);
   const json = await res.json();
-  expect(json.businessName).toBe('Fieseros');
+  expect(json.businessName).toBe('Fieseros Heating');
   expect(json.website).toBe('https://fieseros.com');
   expect(Array.isArray(json.suggestions)).toBe(true);
   expect(json.suggestions.length).toBe(5);
@@ -70,10 +74,60 @@ it('returns 5 tailored prompt suggestions based on tenant profile and reviews', 
     expect(s.chipLabel).toBeDefined();
   });
 
-  const reviewSugg = json.suggestions.find((s: any) => s.category === 'review');
-  expect(reviewSugg.chipLabel).toContain('David M.');
-  expect(reviewSugg.prompt).toContain('David M.');
-
   const aiSugg = json.suggestions.find((s: any) => s.category === 'ai_assistant');
+  expect(aiSugg).toBeDefined();
+  expect(aiSugg.chipLabel).toContain('Booking');
+  expect(aiSugg.prompt).toContain('Fieseros Heating');
+});
+
+it('prioritizes connected Google Business Profile for FieserOS and eliminates HVAC suggestions', async () => {
+  m.db.tenant.findUnique.mockResolvedValue({
+    name: 'Deepak Chandra',
+    industry: 'Services',
+    city: 'Patna',
+    website: null,
+    brandProfile: {
+      businessName: 'deepak chandra',
+      industry: 'Services',
+      location: null,
+      website: null,
+      services: null, // null/empty services!
+      usps: null,
+      currentOffers: null,
+    },
+  });
+  m.db.socialAccount.findMany.mockResolvedValue([
+    {
+      id: 'acc-fieseros',
+      platform: 'googlebusiness',
+      accountName: 'FieserOS',
+      metadata: JSON.stringify({
+        locationId: '10777612572223040949',
+        locationTitle: 'FieserOS',
+        category: 'Software company',
+        website: 'https://fieseros.com/',
+        address: '80, Murlichak, Jagdeopath, Patna, Bihar, 800014',
+      }),
+      updatedAt: new Date(),
+    },
+  ]);
+
+  const res = await GET(new NextRequest('http://localhost/api/social/prompts/suggestions'));
+  expect(res.status).toBe(200);
+  const json = await res.json();
+
+  expect(json.businessName).toBe('FieserOS');
+  expect(json.industry).toBe('Software company');
+  expect(json.website).toBe('https://fieseros.com/');
+
+  // Ensure NO boiler repair or emergency heating appears
+  const allPrompts = json.suggestions.map((s: any) => `${s.chipLabel} ${s.prompt} ${s.headline}`).join(' ');
+  expect(allPrompts).not.toContain('Emergency Heating');
+  expect(allPrompts).not.toContain('Boiler Repair');
+
+  // Verify software / AI assistant suggestions are present
+  const aiSugg = json.suggestions.find((s: any) => s.category === 'ai_assistant');
+  expect(aiSugg).toBeDefined();
+  expect(aiSugg.chipLabel).toContain('AI Workflow');
   expect(aiSugg.prompt).toContain('Fieseros AI Assistant');
 });

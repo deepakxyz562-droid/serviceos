@@ -302,7 +302,12 @@ export function MarketingCanvasStudio({
   const fetchSuggestions = useCallback(async (refresh = false) => {
     setLoadingSuggestions(true);
     try {
-      const res = await authFetch(`/api/social/prompts/suggestions${refresh ? '?refresh=1' : ''}`);
+      const params = new URLSearchParams();
+      if (refresh) params.set('refresh', '1');
+      if (activeProfileId) params.set('profileId', activeProfileId);
+      if (businessName) params.set('businessName', businessName);
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const res = await authFetch(`/api/social/prompts/suggestions${query}`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.suggestions)) {
@@ -314,7 +319,7 @@ export function MarketingCanvasStudio({
     } finally {
       setLoadingSuggestions(false);
     }
-  }, []);
+  }, [activeProfileId, businessName]);
 
   useEffect(() => {
     void fetchSuggestions(false);
@@ -474,11 +479,13 @@ export function MarketingCanvasStudio({
         }
 
         if (imageRes.ok) {
+          const imageJson = await imageRes.json().catch(() => null);
+          const targetJobId = imageJson?.jobId || requestId;
           setGeneratingStage('Rendering high-resolution AI poster graphic (1080 × 1350)...');
           const pollStart = Date.now();
           const poll = setInterval(async () => {
             try {
-              const check = await authFetch(`/api/social/designs/image?id=${requestId}`);
+              const check = await authFetch(`/api/social/designs/image?id=${encodeURIComponent(targetJobId)}`);
               if (check.ok) {
                 const job = await check.json();
                 if (job.status === 'completed' && job.result?.url) {
@@ -488,7 +495,7 @@ export function MarketingCanvasStudio({
                   setIsGenerating(false);
                   setGeneratingStage('');
                   toast.success('Finished AI Poster generated successfully!');
-                } else if (job.status === 'failed') {
+                } else if (job.status === 'failed' || job.status === 'cancelled' || job.status === 'uncertain') {
                   clearInterval(poll);
                   setIsGenerating(false);
                   setGeneratingStage('');
