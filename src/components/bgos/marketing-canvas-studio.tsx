@@ -282,6 +282,24 @@ export function MarketingCanvasStudio({
   const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(() => createFieserosCampaignDesign());
   const design = customDesign || createDesign({ brand: businessName, headline, subtitle: subheadText, badge: badgeText, cta: ctaText, photo: photoUrl, ratio: aspectRatio });
 
+  const [workspaceInfo, setWorkspaceInfo] = useState<{ name?: string; phone?: string; slug?: string; businessName?: string } | null>(null);
+
+  useEffect(() => {
+    authFetch('/api/bgos/workspace')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          setWorkspaceInfo({
+            name: data.name,
+            phone: data.phone,
+            slug: data.slug,
+            businessName: data.businessName,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const [designDrafts, setDesignDrafts] = useState<Array<{ id: string; content: string; designJson?: string; mediaUrls?: string[]; updatedAt: string }>>([]);
   const [draftRevision, setDraftRevision] = useState<string | null>(null);
   const savedDesignSnapshot = useRef('');
@@ -1267,18 +1285,54 @@ export function MarketingCanvasStudio({
                       </div>
                     )}
 
-                    <div className="absolute top-3 left-3 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-white tracking-wide uppercase border border-white/20 shadow-xs">
-                      Finished Creative Poster • 1080 × 1350
+                    {/* Top Scrim with Offer Badge & Dimensions */}
+                    <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
+                      <div className="bg-primary/95 text-primary-foreground font-black text-[11px] px-2.5 py-1 rounded-lg uppercase tracking-wider shadow-sm pointer-events-auto">
+                        {badgeText || 'SPECIAL OFFER'}
+                      </div>
+                      <div className="bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-white tracking-wide uppercase border border-white/20 shadow-xs pointer-events-auto flex items-center gap-1.5">
+                        <span>1080 × 1350</span>
+                        <a
+                          href={posterUrl}
+                          download="marketing-poster.jpg"
+                          className="hover:text-primary transition-colors ml-1"
+                          title="Download image"
+                        >
+                          <Download className="size-3" />
+                        </a>
+                      </div>
                     </div>
-                    <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                      <a
-                        href={posterUrl}
-                        download="marketing-poster.jpg"
-                        className="p-1.5 rounded-lg bg-black/70 hover:bg-black text-white text-xs backdrop-blur-md border border-white/20 shadow-xs transition-colors"
-                        title="Download image"
-                      >
-                        <Download className="size-3.5" />
-                      </a>
+
+                    {/* Headline Banner Scrim */}
+                    <div className="absolute bottom-14 inset-x-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent p-4 text-white">
+                      <h3 className="font-black text-lg sm:text-xl leading-tight drop-shadow-sm">
+                        {headline || 'Professional Business Services'}
+                      </h3>
+                      {subheadText && (
+                        <p className="text-xs text-emerald-300 font-semibold mt-1">
+                          {subheadText}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Auto-Branded Footer Strip */}
+                    <div className="absolute bottom-0 inset-x-0 h-14 bg-slate-950/95 backdrop-blur-md border-t border-white/10 px-4 flex items-center justify-between text-white">
+                      <div className="min-w-0 pr-3">
+                        <p className="font-extrabold text-xs text-white truncate">
+                          {workspaceInfo?.businessName || workspaceInfo?.name || businessName || 'Fieseros Pro'}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-medium truncate">
+                          {workspaceInfo?.phone ? `📞 ${workspaceInfo.phone}` : 'Verified Local Business'}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-500 text-white px-2 py-0.5 rounded-md shadow-xs">
+                          {ctaText || 'BOOK ONLINE'}
+                        </span>
+                        <p className="text-[9px] text-slate-400 font-mono mt-0.5">
+                          {workspaceInfo?.slug ? `fieseros.com/p/${workspaceInfo.slug.slice(0, 16)}` : 'bgos.fieseros.com'}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>

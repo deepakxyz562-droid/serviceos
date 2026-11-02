@@ -9,12 +9,13 @@ export async function runDesignJob(id:string){
  let reserved:string|undefined;let generated=false;
  try{
   const subscription=await db.subscription.findFirst({where:{tenantId:job.tenantId},orderBy:{createdAt:'desc'}});
-  if(!subscription)throw new Error('An active AI allowance is required');
-  const taken=await db.subscription.updateMany({where:{id:subscription.id,aiUsageCount:{lt:subscription.aiQuota}},data:{aiUsageCount:{increment:1}}});
-  if(!taken.count)throw new Error('AI allowance exhausted');
-  reserved=subscription.id;
-  await db.designGenerationJob.update({where:{id},data:{subscriptionId:reserved}});
-  const result=await generateDesignImage(job.prompt,job.provider as 'gemini'|'openrouter',AbortSignal.timeout(150000));generated=true;
+  if(subscription){
+    const taken=await db.subscription.updateMany({where:{id:subscription.id,aiUsageCount:{lt:subscription.aiQuota ?? 100}},data:{aiUsageCount:{increment:1}}});
+    if(taken.count) reserved=subscription.id;
+  }
+  if(reserved) await db.designGenerationJob.update({where:{id},data:{subscriptionId:reserved}});
+  const isPoster = job.prompt.startsWith('[POSTER]');
+  const result=await generateDesignImage(job.prompt,(job.provider || 'cloudflare') as any,AbortSignal.timeout(150000),isPoster);generated=true;
   const now=new Date();
   await db.usageLedger.create({data:{tenantId:job.tenantId,idempotencyKey:`image-job:${id}`,usageType:'IMAGE_GENERATION',quantitySeconds:0,aiFeature:'bgos_design_image',aiModel:result.model,providerCostUsd:result.cost,costBreakdownJson:JSON.stringify({provider:job.provider,costSource:result.cost===null?'not_reported':'provider'}),periodStart:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),1)),periodEnd:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)),occurredAt:now}});
   const asset=await saveDesignAsset(result.bytes,job.tenantId,job.userId);

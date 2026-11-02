@@ -410,17 +410,36 @@ export default function MarketingScreen() {
     setError(null);
     setActiveUserPrompt(topicToUse);
     try {
-      const data = await apiRequest<{ design: MarketingDesign; caption: string; alternativeHeadlines?: string[] }>('/api/social/designs/generate', {
+      const requestId = `mob-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      // 1. Generate campaign copy, headline, and alternative headlines
+      const genPromise = apiRequest<{ design: MarketingDesign; caption: string; alternativeHeadlines?: string[] }>('/api/social/designs/generate', {
         method: 'POST',
         body: { prompt: topicToUse, design, caption, mode: generationMode },
       });
+
+      // 2. If in poster mode, trigger Cloudflare Flux AI image generation asynchronously
+      let imagePromise: Promise<any> | null = null;
+      if (generationMode === 'poster') {
+        imagePromise = apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
+          method: 'POST',
+          body: {
+            prompt: topicToUse,
+            provider: 'cloudflare',
+            requestId,
+            isPoster: true,
+          },
+        }).catch(() => null);
+      }
+
+      const [data, imageInit] = await Promise.all([genPromise, imagePromise]);
+
       setCustomDesign(data.design);
       setCaption(data.caption);
       setCaptionDraft(data.caption);
       if (Array.isArray(data.alternativeHeadlines) && data.alternativeHeadlines.length > 0) {
         setAlternativeHeadlines(data.alternativeHeadlines);
       }
-      const hlLayer = data.design?.layers?.find((l) => l.id === 'headline');
+      const hlLayer = data.design?.layers?.find((l) => l.id === 'headline' || l.type === 'text');
       if (hlLayer?.text) {
         setHeadline(hlLayer.text);
       }
@@ -428,12 +447,34 @@ export default function MarketingScreen() {
       setPromptInput('');
       setSuccessNotice(
         generationMode === 'poster'
-          ? 'Finished AI Poster campaign created with high-res graphics & copy!'
+          ? 'Finished AI Poster campaign created with auto-branded layout!'
           : generationMode === 'image_only'
           ? 'AI generated background image without text overlays!'
           : 'AI generated fresh design and copy directly to canvas!'
       );
       setTimeout(() => setSuccessNotice(null), 3500);
+
+      // 3. Poll for AI poster image if job was queued
+      if (imageInit?.jobId) {
+        const targetJobId = imageInit.jobId;
+        const pollStart = Date.now();
+        const pollInterval = setInterval(async () => {
+          try {
+            const check = await apiRequest<{ status: string; result?: { url?: string } }>(
+              `/api/social/designs/image?id=${encodeURIComponent(targetJobId)}`
+            );
+            if (check?.status === 'completed' && check.result?.url) {
+              clearInterval(pollInterval);
+              setCustomPosterUri(check.result.url);
+              setBgPhotoUrl(check.result.url);
+            } else if (check?.status === 'failed' || check?.status === 'cancelled' || Date.now() - pollStart > 45000) {
+              clearInterval(pollInterval);
+            }
+          } catch {
+            clearInterval(pollInterval);
+          }
+        }, 2000);
+      }
     } catch (err: unknown) {
       setError((err as Error).message || 'AI generation failed. You can customize the fields manually below.');
     } finally {
@@ -1367,7 +1408,7 @@ export default function MarketingScreen() {
                 {activeVisualFormat === 'poster' ? (
                   <View style={{ marginBottom: 16 }}>
                     <View style={{
-                      height: Math.min(340, Math.round(Dimensions.get('window').height * 0.38)),
+                      height: Math.min(360, Math.round(Dimensions.get('window').height * 0.40)),
                       aspectRatio: 4 / 5,
                       alignSelf: 'center',
                       borderRadius: 16,
@@ -1376,36 +1417,139 @@ export default function MarketingScreen() {
                       borderColor: '#E2E8F0',
                       backgroundColor: '#090D16',
                       shadowColor: '#000',
-                      shadowOpacity: 0.12,
-                      shadowRadius: 8,
-                      elevation: 3
+                      shadowOpacity: 0.15,
+                      shadowRadius: 10,
+                      elevation: 4
                     }}>
                       <Image
                         source={customPosterUri ? { uri: customPosterUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
                         style={{ width: '100%', height: '100%' }}
-                        resizeMode="contain"
+                        resizeMode="cover"
                       />
-                      <View style={{ position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(0,0,0,0.75)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                        <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>FINISHED POSTER · 1080 × 1350</Text>
+
+                      {/* Top Header Scrim with Offer Badge */}
+                      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ backgroundColor: '#009F50', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 3 }}>
+                          <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800', letterSpacing: 0.5 }}>
+                            {discountBadge || 'SPECIAL OFFER'}
+                          </Text>
+                        </View>
+                        <View style={{ backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 8, paddingVertical: 3.5, borderRadius: 6 }}>
+                          <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '700' }}>1080 × 1350</Text>
+                        </View>
+                      </View>
+
+                      {/* Center Content Scrim: Dynamic Headline */}
+                      <View style={{
+                        position: 'absolute',
+                        bottom: 48,
+                        left: 0,
+                        right: 0,
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                        backgroundColor: 'rgba(9, 13, 22, 0.72)',
+                      }}>
+                        <Text numberOfLines={2} style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', lineHeight: 22, letterSpacing: -0.3 }}>
+                          {headline || 'Professional Business Services'}
+                        </Text>
+                        {subtitle ? (
+                          <Text numberOfLines={1} style={{ color: '#A7F3D0', fontSize: 11, fontWeight: '700', marginTop: 3 }}>
+                            {subtitle}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      {/* Auto-Branded Footer Strip */}
+                      <View style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: 48,
+                        backgroundColor: '#0F172A',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingHorizontal: 12,
+                        borderTopWidth: 1,
+                        borderTopColor: 'rgba(255,255,255,0.15)',
+                      }}>
+                        <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                          <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>
+                            {workspace.data?.bookingPageConfig?.businessName || workspace.data?.name || 'Fieseros Pro'}
+                          </Text>
+                          <Text numberOfLines={1} style={{ color: '#94A3B8', fontSize: 9.5, fontWeight: '600' }}>
+                            {workspace.data?.bookingPageConfig?.phone ? `📞 ${workspace.data.bookingPageConfig.phone}` : 'Verified Local Business'}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                          <View style={{ backgroundColor: '#22C55E', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 6 }}>
+                            <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}>
+                              {ctaText || 'BOOK ONLINE'}
+                            </Text>
+                          </View>
+                          <Text style={{ color: '#94A3B8', fontSize: 8.5, marginTop: 2 }}>
+                            {workspace.data?.links?.profile ? workspace.data.links.profile.slice(0, 18) : 'bgos.fieseros.com'}
+                          </Text>
+                        </View>
                       </View>
                     </View>
 
-                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                      <Pressable
-                        onPress={handlePickCustomPoster}
-                        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#009F50', backgroundColor: '#F0FDF4' }}
-                      >
-                        <MaterialIcons name="file-upload" size={18} color="#009F50" />
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50' }}>Upload Custom Poster</Text>
-                      </Pressable>
-                      {customPosterUri && (
+                    {/* Quick Poster Customization Controls: Headline & Offer Inputs */}
+                    <View style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, padding: 12, marginTop: 12, gap: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Customize Poster Details</Text>
+                        <Text style={{ fontSize: 10.5, color: '#009F50', fontWeight: '700' }}>Live Auto-Branded</Text>
+                      </View>
+
+                      <View style={{ gap: 4 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Headline</Text>
+                        <TextInput
+                          value={headline}
+                          onChangeText={setHeadline}
+                          placeholder="e.g. 50% Off First Service"
+                          style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12.5, color: '#0F172A' }}
+                        />
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Offer Tag</Text>
+                          <TextInput
+                            value={discountBadge}
+                            onChangeText={setDiscountBadge}
+                            placeholder="e.g. 20% OFF"
+                            style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0F172A' }}
+                          />
+                        </View>
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Button Text</Text>
+                          <TextInput
+                            value={ctaText}
+                            onChangeText={setCtaText}
+                            placeholder="e.g. Book Now"
+                            style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0F172A' }}
+                          />
+                        </View>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 2 }}>
                         <Pressable
-                          onPress={() => setCustomPosterUri(null)}
-                          style={{ paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#FFFFFF' }}
+                          onPress={handlePickCustomPoster}
+                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#009F50', backgroundColor: '#F0FDF4' }}
                         >
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#64748B' }}>Reset</Text>
+                          <MaterialIcons name="file-upload" size={16} color="#009F50" />
+                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#009F50' }}>Upload Photo</Text>
                         </Pressable>
-                      )}
+                        {customPosterUri && (
+                          <Pressable
+                            onPress={() => setCustomPosterUri(null)}
+                            style={{ paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#F8FAFC' }}
+                          >
+                            <Text style={{ fontSize: 11.5, fontWeight: '600', color: '#64748B' }}>Reset</Text>
+                          </Pressable>
+                        )}
+                      </View>
                     </View>
                   </View>
                 ) : (
