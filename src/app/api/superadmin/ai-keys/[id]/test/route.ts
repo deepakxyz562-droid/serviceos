@@ -113,6 +113,30 @@ async function testProviderKey(provider: string, plaintextKey: string): Promise<
       if (!res.ok) throw new Error(await extractUpstreamError(res));
       return;
     }
+    case 'cloudflare': {
+      let authKey = plaintextKey;
+      let email = process.env.CLOUDFLARE_AUTH_EMAIL;
+      try {
+        const parsed = JSON.parse(plaintextKey);
+        if (parsed.authKey) authKey = parsed.authKey;
+        if (parsed.email) email = parsed.email;
+      } catch {}
+
+      const headers: Record<string, string> = {};
+      if (email && authKey.startsWith('cfk_')) {
+        headers['X-Auth-Key'] = authKey;
+        headers['X-Auth-Email'] = email;
+      } else {
+        headers['Authorization'] = `Bearer ${authKey}`;
+      }
+
+      const res = await fetchWithTimeout('https://api.cloudflare.com/client/v4/accounts', {
+        method: 'GET',
+        headers,
+      });
+      if (!res.ok) throw new Error(await extractUpstreamError(res));
+      return;
+    }
     default:
       throw new Error(`Unsupported provider: ${provider}`);
   }

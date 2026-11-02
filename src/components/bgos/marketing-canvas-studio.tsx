@@ -462,7 +462,7 @@ export function MarketingCanvasStudio({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               prompt: text,
-              provider: 'gemini',
+              provider: 'cloudflare',
               requestId,
               isPoster: true,
             }),
