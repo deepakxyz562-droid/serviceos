@@ -1,8 +1,10 @@
-import { NextRequest,NextResponse,after } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { runDesignJob } from '@/lib/designs/jobs';
-export const maxDuration=180;
+
+export const maxDuration = 180;
+
 export async function POST(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user?.tenantId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -17,22 +19,73 @@ export async function POST(request: NextRequest) {
     const rawPrompt = body.prompt.trim();
     const storedPrompt = (body.isPoster && !rawPrompt.startsWith('[POSTER]')) ? `[POSTER] ${rawPrompt}` : rawPrompt;
     const id = `${user.tenantId}:${body.requestId}`;
+
+    // Resolve business visual context
+    let category = typeof body.category === 'string' ? body.category.trim() : undefined;
+    let businessName = typeof body.businessName === 'string' ? body.businessName.trim() : undefined;
+    let website = typeof body.website === 'string' ? body.website.trim() : undefined;
+    let products = Array.isArray(body.products) ? body.products : undefined;
+    let services = Array.isArray(body.services) ? body.services : undefined;
+
+    // Fallback: query database for tenant brand profile if context not supplied by client
+    if (!category || !products || !businessName) {
+      try {
+        const [brandProfile, tenant] = await Promise.all([
+          db.brandProfile.findUnique({ where: { tenantId: user.tenantId } }).catch(() => null),
+          db.tenant.findUnique({ where: { id: user.tenantId } }).catch(() => null),
+        ]);
+        if (brandProfile) {
+          if (!businessName && brandProfile.businessName) businessName = brandProfile.businessName;
+          if (!category && brandProfile.industry) category = brandProfile.industry;
+          if (!website && brandProfile.website) website = brandProfile.website;
+          if (!products && brandProfile.products) {
+            try { products = JSON.parse(brandProfile.products); } catch {}
+          }
+          if (!services && brandProfile.services) {
+            try { services = JSON.parse(brandProfile.services); } catch {}
+          }
+        }
+        if (tenant) {
+          if (!businessName && tenant.name) businessName = tenant.name;
+          if (!website && tenant.website) website = tenant.website;
+        }
+      } catch {}
+    }
+
+    const contextJson = JSON.stringify({ category, businessName, products, services, website });
+
     const existing = await db.designGenerationJob.findFirst({ where: { id, tenantId: user.tenantId } });
     if (existing) {
       if (existing.prompt !== storedPrompt || existing.provider !== provider) {
         return NextResponse.json({ error: 'Request ID already used with different content' }, { status: 409 });
       }
+      if (existing.status === 'queued') {
+        void runDesignJob(id);
+      }
       return NextResponse.json({ jobId: id, status: existing.status }, { status: 202 });
     }
+
     await db.designGenerationJob.create({
-      data: { id, tenantId: user.tenantId, userId: user.id, prompt: storedPrompt, provider },
+      data: {
+        id,
+        tenantId: user.tenantId,
+        userId: user.id,
+        prompt: storedPrompt,
+        provider,
+        costBreakdownJson: contextJson,
+      },
     });
-    after(() => runDesignJob(id));
+
+    // Execute immediately in Node.js event loop
+    void runDesignJob(id);
+
     return NextResponse.json({ jobId: id, status: 'queued' }, { status: 202 });
-  } catch {
+  } catch (err) {
+    console.error('[/api/social/designs/image POST] error:', err);
     return NextResponse.json({ error: 'Could not queue image generation. Retry using the same request ID.' }, { status: 503 });
   }
 }
+
 export async function GET(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user?.tenantId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -43,7 +96,7 @@ export async function GET(request: NextRequest) {
       : [id, `${user.tenantId}:${id}`]
     : undefined;
 
-  const job = await db.designGenerationJob.findFirst({
+  let job = await db.designGenerationJob.findFirst({
     where: {
       tenantId: user.tenantId,
       ...(possibleIds ? { id: { in: possibleIds } } : {}),
@@ -51,10 +104,14 @@ export async function GET(request: NextRequest) {
     orderBy: { createdAt: 'desc' },
   });
   if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 });
-  // Self-healing: if job is queued and not cancelled, run it immediately on-demand without needing external cron!
+
+  // Self-healing: if job is queued and not cancelled, run and await completion directly
   if (job.status === 'queued' && !job.cancelRequested) {
-    after(() => runDesignJob(job.id));
+    await runDesignJob(job.id);
+    const refreshed = await db.designGenerationJob.findUnique({ where: { id: job.id } });
+    if (refreshed) job = refreshed;
   }
+
   return NextResponse.json({
     jobId: job.id,
     status: job.status,

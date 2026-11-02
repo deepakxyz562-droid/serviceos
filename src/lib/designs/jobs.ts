@@ -14,10 +14,29 @@ export async function runDesignJob(id:string){
     if(taken.count) reserved=subscription.id;
   }
   if(reserved) await db.designGenerationJob.update({where:{id},data:{subscriptionId:reserved}});
+
+  // Parse business visual context if stored
+  let visualContext: any = undefined;
+  if (job.costBreakdownJson) {
+    try {
+      const parsed = JSON.parse(job.costBreakdownJson);
+      if (parsed && typeof parsed === 'object' && (parsed.category || parsed.products || parsed.businessName)) {
+        visualContext = parsed;
+      }
+    } catch {}
+  }
+
   const isPoster = job.prompt.startsWith('[POSTER]');
-  const result=await generateDesignImage(job.prompt,(job.provider || 'cloudflare') as any,AbortSignal.timeout(150000),isPoster);generated=true;
+  const result=await generateDesignImage(
+    job.prompt,
+    (job.provider || 'cloudflare') as any,
+    AbortSignal.timeout(150000),
+    isPoster,
+    visualContext
+  );
+  generated=true;
   const now=new Date();
-  await db.usageLedger.create({data:{tenantId:job.tenantId,idempotencyKey:`image-job:${id}`,usageType:'IMAGE_GENERATION',quantitySeconds:0,aiFeature:'bgos_design_image',aiModel:result.model,providerCostUsd:result.cost,costBreakdownJson:JSON.stringify({provider:job.provider,costSource:result.cost===null?'not_reported':'provider'}),periodStart:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),1)),periodEnd:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)),occurredAt:now}});
+  await db.usageLedger.create({data:{tenantId:job.tenantId,idempotencyKey:`image-job:${id}`,usageType:'IMAGE_GENERATION',quantitySeconds:0,aiFeature:'bgos_design_image',aiModel:result.model,providerCostUsd:result.cost,costBreakdownJson:JSON.stringify({provider:job.provider,costSource:result.cost===null?'not_reported':'provider'}),periodStart:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),1)),periodEnd:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)),occurredAt:now}}).catch(()=>{});
   const asset=await saveDesignAsset(result.bytes,job.tenantId,job.userId);
   const current=await db.designGenerationJob.findUnique({where:{id}});
   await db.designGenerationJob.updateMany({where:{id,status:'running'},data:{status:current?.cancelRequested?'cancelled':'completed',resultJson:JSON.stringify(asset),finishedAt:new Date()}});

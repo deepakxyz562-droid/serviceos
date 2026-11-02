@@ -88,109 +88,230 @@ async function callCloudflareImage(
   return { bytes, model, cost: 0 };
 }
 
-export function buildHighQualityImagePrompt(rawPrompt: string, isPoster?: boolean): string {
+export interface BusinessVisualContext {
+  category?: string;
+  businessName?: string;
+  products?: string[] | string;
+  services?: string[] | string;
+  website?: string;
+}
+
+export function buildHighQualityImagePrompt(
+  rawPrompt: string,
+  isPosterOrContext?: boolean | BusinessVisualContext,
+  contextArg?: BusinessVisualContext
+): string {
+  const isPoster = typeof isPosterOrContext === 'boolean' ? isPosterOrContext : undefined;
+  const context =
+    typeof isPosterOrContext === 'object' && isPosterOrContext !== null
+      ? isPosterOrContext
+      : contextArg;
   const isPosterMode = isPoster || rawPrompt.startsWith('[POSTER]');
-  const cleanPrompt = rawPrompt.replace(/^\[POSTER\]\s*/, '').trim();
-  const lower = cleanPrompt.toLowerCase();
+  // Clean raw prompt by stripping [POSTER] tag, URLs, phone numbers, and conversational call-to-actions
+  const cleanPrompt = rawPrompt
+    .replace(/^\[POSTER\]\s*/i, '')
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/\b(call|order|book|visit|contact)\s+(now|today|us|online)?\b/gi, '')
+    .replace(/\b\d{7,}\b/g, '')
+    .trim();
 
-  let styleDescriptor = 'Award-winning commercial advertising photography';
-  let settingDescriptor = 'clean modern commercial setting with generous negative copy space for digital typography overlay';
+  const productsList = Array.isArray(context?.products)
+    ? context.products
+    : typeof context?.products === 'string'
+    ? [context.products]
+    : [];
+  const servicesList = Array.isArray(context?.services)
+    ? context.services
+    : typeof context?.services === 'string'
+    ? [context.services]
+    : [];
 
+  // Combine user prompt with business category, products, and services for domain detection
+  const allContext = [
+    context?.category,
+    context?.businessName,
+    ...productsList,
+    ...servicesList,
+    context?.website,
+    cleanPrompt,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  let domainSubject = '';
+  let styleDescriptor = 'Award-winning commercial promotional advertising photography';
+  let settingDescriptor =
+    'clean modern commercial setting with generous negative copy space for digital typography overlay';
+
+  // 1. Sweet Shop / Mithai / Confectionery / Bakery / Cafe / Food
   if (
-    lower.includes('sweet') ||
-    lower.includes('mithai') ||
-    lower.includes('bakery') ||
-    lower.includes('cake') ||
-    lower.includes('dessert') ||
-    lower.includes('ladoo') ||
-    lower.includes('gulab jamun') ||
-    lower.includes('kaju katli') ||
-    lower.includes('food') ||
-    lower.includes('restaurant') ||
-    lower.includes('cafe')
+    allContext.includes('sweet') ||
+    allContext.includes('mithai') ||
+    allContext.includes('bakery') ||
+    allContext.includes('cake') ||
+    allContext.includes('dessert') ||
+    allContext.includes('ladoo') ||
+    allContext.includes('gulab jamun') ||
+    allContext.includes('kaju katli') ||
+    allContext.includes('barfi') ||
+    allContext.includes('pastry') ||
+    allContext.includes('food') ||
+    allContext.includes('restaurant') ||
+    allContext.includes('cafe')
   ) {
     styleDescriptor =
       'Award-winning commercial gourmet food photography, mouthwatering artisanal confections, rich appetizing textures, pure desi ghee glazes, silver vark flakes, festive brass or marble platters';
     settingDescriptor =
       'warm gourmet food studio lighting, shallow depth of field, artful festive food styling with negative space';
-  } else if (
-    lower.includes('cloth') ||
-    lower.includes('saree') ||
-    lower.includes('fashion') ||
-    lower.includes('boutique') ||
-    lower.includes('apparel') ||
-    lower.includes('dress') ||
-    lower.includes('lehenga') ||
-    lower.includes('bridal') ||
-    lower.includes('suit') ||
-    lower.includes('kurti') ||
-    lower.includes('garment')
+
+    if (allContext.includes('hamper') || allContext.includes('gift') || allContext.includes('box')) {
+      domainSubject =
+        'Luxurious assorted Indian sweets and dry fruit gift hamper box, ornate festive packaging, artisanal mithai with silver vark and ribbon accents';
+    } else if (allContext.includes('kaju') || allContext.includes('katli')) {
+      domainSubject =
+        'Fresh diamond-cut Kaju Katli with delicate silver vark, garnished with slivered pistachios on a royal brass platter';
+    } else if (allContext.includes('cake') || allContext.includes('pastry') || allContext.includes('bakery')) {
+      domainSubject =
+        'Artisanal handcrafted gourmet bakery pastries, layered celebration cake, and fresh croissants in a warm Parisian cafe setting';
+    } else {
+      domainSubject =
+        'Artisanal traditional Indian sweets including fresh Kaju Katli with silver vark, golden Gulab Jamun, and Motichoor Ladoos garnished with pistachios and saffron, beautifully presented in an ornate festive brass thali';
+    }
+  }
+  // 2. Clothing / Fashion Boutique / Sarees / Bridal / Ethnic / Apparel
+  else if (
+    allContext.includes('cloth') ||
+    allContext.includes('saree') ||
+    allContext.includes('fashion') ||
+    allContext.includes('boutique') ||
+    allContext.includes('apparel') ||
+    allContext.includes('dress') ||
+    allContext.includes('lehenga') ||
+    allContext.includes('bridal') ||
+    allContext.includes('suit') ||
+    allContext.includes('kurti') ||
+    allContext.includes('garment') ||
+    allContext.includes('textile') ||
+    allContext.includes('tailor')
   ) {
     styleDescriptor =
       'High-end editorial fashion photography, luxurious designer textiles, elegant showroom mannequins, rich embroidery and fabric drape';
     settingDescriptor =
       'designer boutique studio lighting, soft natural shadows, minimalist aesthetic background with negative copy space';
-  } else if (
-    lower.includes('jewel') ||
-    lower.includes('gold') ||
-    lower.includes('diamond') ||
-    lower.includes('necklace') ||
-    lower.includes('ring') ||
-    lower.includes('ornament') ||
-    lower.includes('gem') ||
-    lower.includes('silver')
+
+    if (allContext.includes('bridal') || allContext.includes('lehenga') || allContext.includes('wedding')) {
+      domainSubject =
+        'Royal bridal designer lehenga with intricate golden zardozi embroidery and delicate dupatta drape displayed in a luxury boutique showroom';
+    } else if (allContext.includes('saree') || allContext.includes('ethnic')) {
+      domainSubject =
+        'Vibrant Banarasi and Kanjivaram silk sarees with rich golden zari borders and elegant pleating displayed against minimalist boutique arches';
+    } else if (allContext.includes('men') || allContext.includes('suit') || allContext.includes('sherwani')) {
+      domainSubject =
+        'Bespoke tailored luxury formal suits and designer ethnic sherwani displayed in an upscale modern tailoring studio';
+    } else {
+      domainSubject =
+        'High-end designer fashion collection, luxurious silk textiles and contemporary ethnic apparel gracefully draped in an elegant boutique showroom';
+    }
+  }
+  // 3. Jewellery / Gold / Diamond / Gems / Ornaments
+  else if (
+    allContext.includes('jewel') ||
+    allContext.includes('gold') ||
+    allContext.includes('diamond') ||
+    allContext.includes('necklace') ||
+    allContext.includes('ring') ||
+    allContext.includes('ornament') ||
+    allContext.includes('gem') ||
+    allContext.includes('silver')
   ) {
     styleDescriptor =
       'Ultra-luxury commercial high-jewelry advertising photography, sparkling 22K hallmark gold and certified diamond solitaires, macro lens, glittering faceted light refractions';
     settingDescriptor =
       'black velvet pedestal display, dramatic jewelry spotlighting, pristine premium composition with generous negative space';
-  } else if (
-    lower.includes('software') ||
-    lower.includes('app') ||
-    lower.includes('tech') ||
-    lower.includes('it ') ||
-    lower.includes('code') ||
-    lower.includes('cloud') ||
-    lower.includes('saas') ||
-    lower.includes('digital') ||
-    lower.includes('developer') ||
-    lower.includes('agency')
+
+    if (allContext.includes('diamond') || allContext.includes('solitaire') || allContext.includes('ring')) {
+      domainSubject =
+        'Brilliant-cut certified diamond solitaire rings and diamond necklace resting on black velvet, dramatic sparkling refractions and macro lens detail';
+    } else {
+      domainSubject =
+        'Ultra-luxury 22K hallmark gold bridal necklace set with matching earrings and bangles, glistening under dramatic jewelry studio lighting';
+    }
+  }
+  // 4. IT Services / Software Agency / SaaS / Web & Mobile Apps / Digital
+  else if (
+    allContext.includes('software') ||
+    allContext.includes('app') ||
+    allContext.includes('tech') ||
+    allContext.includes('it ') ||
+    allContext.includes('code') ||
+    allContext.includes('cloud') ||
+    allContext.includes('saas') ||
+    allContext.includes('digital') ||
+    allContext.includes('developer') ||
+    allContext.includes('agency') ||
+    allContext.includes('web')
   ) {
     styleDescriptor =
       'High-tech modern corporate technology photography, sleek software agency setup, modern code workspace, clean glass office environment';
     settingDescriptor =
       'contemporary ambient lighting, sharp focus, elegant negative copy space';
-  } else if (
-    lower.includes('plumb') ||
-    lower.includes('hvac') ||
-    lower.includes('ac ') ||
-    lower.includes('cooling') ||
-    lower.includes('clean') ||
-    lower.includes('repair') ||
-    lower.includes('service') ||
-    lower.includes('trade')
+
+    domainSubject =
+      'High-tech modern software engineering workspace, sleek ultrawide monitors displaying clean code and futuristic analytics dashboards in a glass architectural office with ambient lighting';
+  }
+  // 5. Home Services / Trades (HVAC, Plumbing, Cleaning, Repairs, Electrical)
+  else if (
+    allContext.includes('plumb') ||
+    allContext.includes('hvac') ||
+    allContext.includes('ac ') ||
+    allContext.includes('cooling') ||
+    allContext.includes('clean') ||
+    allContext.includes('repair') ||
+    allContext.includes('service') ||
+    allContext.includes('trade') ||
+    allContext.includes('boiler') ||
+    allContext.includes('heating')
   ) {
     styleDescriptor =
       'Award-winning commercial trade & home service photography, professional certified technician, clean modern tools, welcoming atmosphere';
     settingDescriptor =
       'bright natural studio lighting, ultra-sharp focus, shallow depth of field with copy space';
+
+    domainSubject =
+      'Certified professional service technician in clean modern uniform inspecting equipment with advanced diagnostic tools, friendly trustworthy atmosphere, bright clean setting';
   }
+  // 6. Custom Offerings / General Business
+  else if (context?.products?.length || context?.services?.length) {
+    const offerings = [...(context.products || []), ...(context.services || [])].slice(0, 3).join(', ');
+    domainSubject = `High-end commercial promotional product photography showcasing ${offerings}, premium craftsmanship, clean studio lighting`;
+  }
+  // 7. General Fallback
+  else {
+    domainSubject = cleanPrompt || 'Commercial business showcase and professional services';
+  }
+
+  // Combine synthesized subject with campaign visual theme
+  const finalSubject = cleanPrompt && cleanPrompt.length > 3 && !domainSubject.toLowerCase().includes(cleanPrompt.toLowerCase().slice(0, 12))
+    ? `${domainSubject}, themed around ${cleanPrompt}`
+    : domainSubject;
 
   if (isPosterMode) {
-    return `${styleDescriptor}. Subject: ${cleanPrompt}. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures. Perfectly composed in ${settingDescriptor}. High-end commercial aesthetic, perfectly exposed, vivid realistic colors. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO FONTS, NO WATERMARKS, NO LOGOS, pure visual photography only.`;
+    return `${styleDescriptor}. Subject: ${finalSubject}. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures. Perfectly composed in ${settingDescriptor}. High-end commercial aesthetic, perfectly exposed, vivid realistic colors. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO FONTS, NO WATERMARKS, NO LOGOS, pure visual photography only.`;
   }
 
-  return `${styleDescriptor}. Brief: ${cleanPrompt}. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures, clean modern background. Authentic, trustworthy, and welcoming atmosphere. Perfectly exposed, vivid realistic colors. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO FONTS, NO WATERMARKS, NO LOGOS, pure visual photography only.`;
+  return `${styleDescriptor}. Brief: ${finalSubject}. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures, clean modern background. Authentic, trustworthy, and welcoming atmosphere. Perfectly exposed, vivid realistic colors. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO FONTS, NO WATERMARKS, NO LOGOS, pure visual photography only.`;
 }
 
 export async function generateDesignImage(
   prompt: string,
   provider: ImageProvider,
   signal: AbortSignal,
-  isPoster?: boolean
+  isPoster?: boolean,
+  context?: BusinessVisualContext
 ) {
   const isPosterMode = isPoster || prompt.startsWith('[POSTER]');
-  const text = buildHighQualityImagePrompt(prompt, isPosterMode);
+  const text = buildHighQualityImagePrompt(prompt, isPosterMode, context);
 
   if (provider === 'cloudflare') {
     return await callCloudflareImage(text, signal);

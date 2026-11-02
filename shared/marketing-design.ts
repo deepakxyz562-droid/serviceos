@@ -36,6 +36,145 @@ export function createDesign(input: { brand: string; headline: string; subtitle:
   ] };
 }
 
+export type CommercialTheme =
+  | 'royal_gold'
+  | 'luxe_dark'
+  | 'rose_chic'
+  | 'cyber_tech'
+  | 'trust_amber'
+  | 'emerald'
+  | 'sand'
+  | 'dark';
+
+export interface CommercialThemeConfig {
+  id: CommercialTheme;
+  name: string;
+  bg: string;
+  badgeBg: string;
+  badgeText: string;
+  subColor: string;
+  ctaBg: string;
+  ctaText: string;
+  scrimBg: string;
+  footerBg: string;
+  accent: string;
+}
+
+export const COMMERCIAL_THEMES: Record<CommercialTheme, CommercialThemeConfig> = {
+  royal_gold: {
+    id: 'royal_gold',
+    name: 'Royal Gold (Festive & Sweets)',
+    bg: '#062419',
+    badgeBg: '#B45309',
+    badgeText: '#FFFFFF',
+    subColor: '#FDE047',
+    ctaBg: '#D97706',
+    ctaText: '#FFFFFF',
+    scrimBg: '#09150E',
+    footerBg: '#06100B',
+    accent: '#F59E0B',
+  },
+  luxe_dark: {
+    id: 'luxe_dark',
+    name: 'Luxe Dark (Jewellery & Luxury)',
+    bg: '#090D16',
+    badgeBg: '#CA8A04',
+    badgeText: '#000000',
+    subColor: '#FDE047',
+    ctaBg: '#CA8A04',
+    ctaText: '#000000',
+    scrimBg: '#0A0A0C',
+    footerBg: '#050507',
+    accent: '#EAB308',
+  },
+  rose_chic: {
+    id: 'rose_chic',
+    name: 'Rose Chic (Apparel & Boutique)',
+    bg: '#1F0B14',
+    badgeBg: '#E11D48',
+    badgeText: '#FFFFFF',
+    subColor: '#FECDD3',
+    ctaBg: '#E11D48',
+    ctaText: '#FFFFFF',
+    scrimBg: '#190810',
+    footerBg: '#0F040A',
+    accent: '#F43F5E',
+  },
+  cyber_tech: {
+    id: 'cyber_tech',
+    name: 'Cyber Tech (IT & Software)',
+    bg: '#0B0F19',
+    badgeBg: '#2563EB',
+    badgeText: '#FFFFFF',
+    subColor: '#38BDF8',
+    ctaBg: '#0891B2',
+    ctaText: '#FFFFFF',
+    scrimBg: '#090E1A',
+    footerBg: '#050810',
+    accent: '#06B6D4',
+  },
+  trust_amber: {
+    id: 'trust_amber',
+    name: 'Trust Amber (Services & Trades)',
+    bg: '#1C1917',
+    badgeBg: '#EA580C',
+    badgeText: '#FFFFFF',
+    subColor: '#FED7AA',
+    ctaBg: '#EA580C',
+    ctaText: '#FFFFFF',
+    scrimBg: '#171412',
+    footerBg: '#0C0A09',
+    accent: '#EA580C',
+  },
+  emerald: {
+    id: 'emerald',
+    name: 'Emerald Classic',
+    bg: '#062419',
+    badgeBg: '#009F50',
+    badgeText: '#FFFFFF',
+    subColor: '#34D399',
+    ctaBg: '#009F50',
+    ctaText: '#FFFFFF',
+    scrimBg: '#071A12',
+    footerBg: '#04100B',
+    accent: '#10B981',
+  },
+  sand: {
+    id: 'sand',
+    name: 'Sand Earth',
+    bg: '#1C1917',
+    badgeBg: '#B45309',
+    badgeText: '#FFFFFF',
+    subColor: '#FDE047',
+    ctaBg: '#B45309',
+    ctaText: '#FFFFFF',
+    scrimBg: '#171412',
+    footerBg: '#0C0A09',
+    accent: '#D97706',
+  },
+  dark: {
+    id: 'dark',
+    name: 'Dark Studio',
+    bg: '#090D16',
+    badgeBg: '#2563EB',
+    badgeText: '#FFFFFF',
+    subColor: '#60A5FA',
+    ctaBg: '#2563EB',
+    ctaText: '#FFFFFF',
+    scrimBg: '#090D16',
+    footerBg: '#05080E',
+    accent: '#3B82F6',
+  },
+};
+
+export const COMMERCIAL_THEME_KEYS: CommercialTheme[] = [
+  'royal_gold',
+  'luxe_dark',
+  'rose_chic',
+  'cyber_tech',
+  'trust_amber',
+];
+
 export function createCommercialPosterDesign(input: {
   brand: string;
   headline: string;
@@ -46,7 +185,7 @@ export function createCommercialPosterDesign(input: {
   website?: string;
   photo?: string;
   ratio?: string;
-  theme?: 'emerald' | 'sand' | 'dark';
+  theme?: CommercialTheme | string;
   logoUrl?: string;
   tagline?: string;
 }): MarketingDesign {
@@ -58,29 +197,7 @@ export function createCommercialPosterDesign(input: {
   };
   const [width, height] = sizes[input.ratio || '4:5'] || sizes['4:5'];
 
-  const themeColors = {
-    emerald: {
-      bg: '#062419',
-      badgeBg: '#009f50',
-      badgeText: '#ffffff',
-      subColor: '#34d399',
-      ctaBg: '#009f50',
-    },
-    sand: {
-      bg: '#1c1917',
-      badgeBg: '#b45309',
-      badgeText: '#ffffff',
-      subColor: '#fde047',
-      ctaBg: '#b45309',
-    },
-    dark: {
-      bg: '#090d16',
-      badgeBg: '#2563eb',
-      badgeText: '#ffffff',
-      subColor: '#60a5fa',
-      ctaBg: '#2563eb',
-    },
-  }[input.theme || 'emerald'];
+  const themeColors = (COMMERCIAL_THEMES[input.theme as CommercialTheme] || COMMERCIAL_THEMES.emerald);
 
   const brandText = (input.brand || 'Professional Business').trim();
   const headlineText = (input.headline || 'Top-Rated Professional Services').trim();
@@ -172,7 +289,7 @@ export function createCommercialPosterDesign(input: {
           },
         ]
       : []),
-    // 5. Bottom Dark Scrim (ensures headline & subtitle are 100% readable)
+    // 5. Bottom Scrim (ensures headline & subtitle are 100% readable)
     {
       id: 'bottom_scrim',
       type: 'shape',
@@ -181,7 +298,7 @@ export function createCommercialPosterDesign(input: {
       width,
       height: bottomContentH,
       color: 'transparent',
-      background: '#090d16',
+      background: themeColors.scrimBg,
       fontSize: 16,
       opacity: 0.88,
     },
@@ -222,7 +339,7 @@ export function createCommercialPosterDesign(input: {
       width,
       height: footerH,
       color: 'transparent',
-      background: '#05080e',
+      background: themeColors.footerBg,
       fontSize: 16,
       opacity: 0.98,
     },

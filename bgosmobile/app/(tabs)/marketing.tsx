@@ -5,6 +5,9 @@ import {
   createFieserosCampaignDesign,
   createCommercialPosterDesign,
   type MarketingDesign,
+  type CommercialTheme,
+  COMMERCIAL_THEMES,
+  COMMERCIAL_THEME_KEYS,
 } from '../../../shared/marketing-design';
 import { EditableDesign } from '../../src/components/design/editable-design';
 import * as Crypto from 'expo-crypto';
@@ -116,6 +119,7 @@ function AutoBrandedPosterCard({
   aspectRatio = 4 / 5,
   isGenerating = false,
   generatingText,
+  theme = 'royal_gold',
 }: {
   photoUri?: string | null;
   headline: string;
@@ -131,10 +135,12 @@ function AutoBrandedPosterCard({
   aspectRatio?: number;
   isGenerating?: boolean;
   generatingText?: string;
+  theme?: CommercialTheme | string;
 }) {
   const isCompact = height < 260;
   const cleanWeb = website ? website.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
   const initial = (businessName || 'B').trim().charAt(0).toUpperCase();
+  const themeConfig = COMMERCIAL_THEMES[theme as CommercialTheme] || COMMERCIAL_THEMES.royal_gold;
 
   return (
     <View
@@ -146,7 +152,7 @@ function AutoBrandedPosterCard({
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        backgroundColor: '#090D16',
+        backgroundColor: themeConfig.bg,
         shadowColor: '#000',
         shadowOpacity: 0.15,
         shadowRadius: 10,
@@ -177,18 +183,19 @@ function AutoBrandedPosterCard({
       >
         <View
           style={{
-            backgroundColor: '#009F50',
+            backgroundColor: themeConfig.badgeBg,
             paddingHorizontal: isCompact ? 6 : 10,
             paddingVertical: isCompact ? 2 : 4,
             borderRadius: isCompact ? 5 : 8,
             shadowColor: '#000',
-            shadowOpacity: 0.2,
-            shadowRadius: 3,
+            shadowOpacity: 0.25,
+            shadowRadius: 4,
+            elevation: 2,
           }}
         >
           <Text
             style={{
-              color: '#FFFFFF',
+              color: themeConfig.badgeText,
               fontSize: isCompact ? 8.5 : 10.5,
               fontWeight: '800',
               letterSpacing: 0.5,
@@ -224,7 +231,7 @@ function AutoBrandedPosterCard({
         </View>
       </View>
 
-      {/* Center Content Scrim: Dynamic Headline */}
+      {/* Center Content Scrim: Dynamic Headline with Theme Scrim */}
       <View
         style={{
           position: 'absolute',
@@ -233,7 +240,7 @@ function AutoBrandedPosterCard({
           right: 0,
           paddingHorizontal: isCompact ? 10 : 14,
           paddingVertical: isCompact ? 6 : 12,
-          backgroundColor: 'rgba(9, 13, 22, 0.74)',
+          backgroundColor: themeConfig.scrimBg,
         }}
       >
         <Text
@@ -244,6 +251,9 @@ function AutoBrandedPosterCard({
             fontWeight: '900',
             lineHeight: isCompact ? 16 : 22,
             letterSpacing: -0.3,
+            textShadowColor: 'rgba(0,0,0,0.95)',
+            textShadowOffset: { width: 0, height: 1 },
+            textShadowRadius: 6,
           }}
         >
           {headline || 'Professional Business Services'}
@@ -252,10 +262,13 @@ function AutoBrandedPosterCard({
           <Text
             numberOfLines={1}
             style={{
-              color: '#A7F3D0',
+              color: themeConfig.subColor,
               fontSize: isCompact ? 9 : 11,
               fontWeight: '700',
               marginTop: isCompact ? 1 : 3,
+              textShadowColor: 'rgba(0,0,0,0.85)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 4,
             }}
           >
             {subtitle}
@@ -263,7 +276,7 @@ function AutoBrandedPosterCard({
         ) : null}
       </View>
 
-      {/* Auto-Branded Footer Strip */}
+      {/* Auto-Branded Themed Footer Strip */}
       <View
         style={{
           position: 'absolute',
@@ -271,13 +284,13 @@ function AutoBrandedPosterCard({
           left: 0,
           right: 0,
           height: isCompact ? 38 : 50,
-          backgroundColor: '#0F172A',
+          backgroundColor: themeConfig.footerBg,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: isCompact ? 8 : 12,
           borderTopWidth: 1,
-          borderTopColor: 'rgba(255,255,255,0.15)',
+          borderTopColor: 'rgba(255,255,255,0.12)',
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, paddingRight: 6 }}>
@@ -300,7 +313,7 @@ function AutoBrandedPosterCard({
                 height: isCompact ? 22 : 28,
                 borderRadius: isCompact ? 5 : 6,
                 marginRight: 6,
-                backgroundColor: '#009F50',
+                backgroundColor: themeConfig.accent,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
@@ -319,7 +332,7 @@ function AutoBrandedPosterCard({
             </Text>
             <Text
               numberOfLines={1}
-              style={{ color: '#38BDF8', fontSize: isCompact ? 8 : 9.5, fontWeight: '600' }}
+              style={{ color: themeConfig.subColor, fontSize: isCompact ? 8 : 9.5, fontWeight: '600' }}
             >
               {tagline || (cleanWeb ? `🌐 ${cleanWeb}` : 'Verified Business')}
             </Text>
@@ -329,13 +342,13 @@ function AutoBrandedPosterCard({
         <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
           <View
             style={{
-              backgroundColor: '#22C55E',
+              backgroundColor: themeConfig.ctaBg,
               paddingHorizontal: isCompact ? 5 : 7,
               paddingVertical: isCompact ? 1.5 : 2.5,
               borderRadius: 6,
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontSize: isCompact ? 7.5 : 9, fontWeight: '800' }}>
+            <Text style={{ color: themeConfig.ctaText, fontSize: isCompact ? 7.5 : 9, fontWeight: '800' }}>
               {ctaText || 'VISIT STORE'}
             </Text>
           </View>
@@ -359,7 +372,7 @@ function AutoBrandedPosterCard({
             zIndex: 10,
           }}
         >
-          <ActivityIndicator size="small" color="#009F50" />
+          <ActivityIndicator size="small" color={themeConfig.accent} />
           <Text style={{ color: '#FFFFFF', fontSize: isCompact ? 9.5 : 11, fontWeight: '700', marginTop: 6, textAlign: 'center' }}>
             {generatingText || 'AI Rendering Visual...'}
           </Text>
@@ -476,7 +489,8 @@ export default function MarketingScreen() {
   const [alternativeHeadlines, setAlternativeHeadlines] = useState<string[]>(DEFAULT_ALT_HEADLINES);
   const [selectedLayout, setSelectedLayout] = useState<LayoutId>('editorial');
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:5' | '9:16'>('4:5');
-  const [colorTheme, setColorTheme] = useState<'emerald' | 'sand' | 'dark'>('emerald');
+  const [colorTheme, setColorTheme] = useState<CommercialTheme>('royal_gold');
+  const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
 
   // Graphic content elements — Fieseros campaign initialized
   const [headline, setHeadline] = useState('Less admin. More jobs.');
@@ -693,6 +707,106 @@ export default function MarketingScreen() {
     }
   };
 
+  useEffect(() => {
+    const combined = `${brandProfile.data?.profile?.industry || ''} ${gbpPlace.data?.place?.category || ''} ${effectiveBusinessName}`.toLowerCase();
+    if (/sweet|mithai|bakery|dessert|restaurant|cafe|food/.test(combined)) {
+      setColorTheme('royal_gold');
+    } else if (/jewel|gold|diamond|gem|luxury/.test(combined)) {
+      setColorTheme('luxe_dark');
+    } else if (/cloth|saree|boutique|fashion|bridal|apparel|garment|textile/.test(combined)) {
+      setColorTheme('rose_chic');
+    } else if (/software|tech|it\b|code|saas|cloud|digital|ai\b|data/.test(combined)) {
+      setColorTheme('cyber_tech');
+    } else if (/plumb|hvac|electr|repair|construct|paint|handyman|pest/.test(combined)) {
+      setColorTheme('trust_amber');
+    }
+  }, [brandProfile.data?.profile?.industry, gbpPlace.data?.place?.category, effectiveBusinessName]);
+
+  const cycleTheme = (nextTheme: CommercialTheme) => {
+    setColorTheme(nextTheme);
+    setCustomDesign(
+      createCommercialPosterDesign({
+        brand: effectiveBusinessName,
+        headline,
+        subtitle,
+        badge: discountBadge,
+        cta: ctaText,
+        phone: undefined,
+        website: effectiveBusinessWebsite,
+        photo: customPosterUri || bgPhotoUrl,
+        ratio: aspectRatio,
+        theme: nextTheme,
+        logoUrl: effectiveBusinessLogo || undefined,
+        tagline: effectiveBusinessTagline || undefined,
+      })
+    );
+  };
+
+  async function handleRegenerateImage() {
+    if (isGeneratingImage) return;
+    setIsGeneratingImage(true);
+    setError(null);
+    try {
+      const requestId = `mob-img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const res = await apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
+        method: 'POST',
+        body: {
+          prompt: activeUserPrompt || promptInput || 'commercial product photography',
+          provider: 'cloudflare',
+          requestId,
+          isPoster: true,
+          businessName: effectiveBusinessName,
+          category: brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category || '',
+          products: brandProfile.data?.profile?.products || '',
+          services: brandProfile.data?.profile?.services || '',
+          website: effectiveBusinessWebsite,
+        },
+      });
+
+      if (res?.jobId) {
+        const targetJobId = res.jobId;
+        const pollStart = Date.now();
+        const pollInterval = setInterval(async () => {
+          try {
+            const check = await apiRequest<{ status: string; result?: { url?: string } }>(
+              `/api/social/designs/image?id=${encodeURIComponent(targetJobId)}`
+            );
+            if (check?.status === 'completed' && check.result?.url) {
+              clearInterval(pollInterval);
+              setIsGeneratingImage(false);
+              const generatedUrl = check.result.url;
+              setCustomPosterUri(generatedUrl);
+              setBgPhotoUrl(generatedUrl);
+              setCustomDesign((prev) => {
+                if (!prev) return null;
+                return {
+                  ...prev,
+                  layers: prev.layers.map((l) =>
+                    l.id === 'bg_photo' || l.type === 'image' ? { ...l, src: generatedUrl } : l
+                  ),
+                };
+              });
+              setSuccessNotice('✨ Fresh commercial photo background generated!');
+              setTimeout(() => setSuccessNotice(null), 3500);
+            } else if (check?.status === 'failed' || check?.status === 'cancelled' || Date.now() - pollStart > 45000) {
+              clearInterval(pollInterval);
+              setIsGeneratingImage(false);
+              setError('Background image generation timed out. Please try again.');
+            }
+          } catch {
+            clearInterval(pollInterval);
+            setIsGeneratingImage(false);
+          }
+        }, 1500);
+      } else {
+        setIsGeneratingImage(false);
+      }
+    } catch (err: unknown) {
+      setIsGeneratingImage(false);
+      setError((err as Error).message || 'Failed to regenerate image.');
+    }
+  }
+
   const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(null);
   const design = useMemo(() => {
     if (customDesign) return customDesign;
@@ -859,6 +973,7 @@ export default function MarketingScreen() {
       // 2. If in poster mode, trigger Cloudflare Flux AI image generation asynchronously
       let imagePromise: Promise<any> | null = null;
       if (generationMode === 'poster') {
+        setIsGeneratingImage(true);
         imagePromise = apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
           method: 'POST',
           body: {
@@ -866,6 +981,11 @@ export default function MarketingScreen() {
             provider: 'cloudflare',
             requestId,
             isPoster: true,
+            businessName: effectiveBusinessName,
+            category: brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category || '',
+            products: brandProfile.data?.profile?.products || '',
+            services: brandProfile.data?.profile?.services || '',
+            website: effectiveBusinessWebsite,
           },
         }).catch(() => null);
       }
@@ -912,6 +1032,7 @@ export default function MarketingScreen() {
             );
             if (check?.status === 'completed' && check.result?.url) {
               clearInterval(pollInterval);
+              setIsGeneratingImage(false);
               const generatedUrl = check.result.url;
               setCustomPosterUri(generatedUrl);
               setBgPhotoUrl(generatedUrl);
@@ -926,11 +1047,15 @@ export default function MarketingScreen() {
               });
             } else if (check?.status === 'failed' || check?.status === 'cancelled' || Date.now() - pollStart > 45000) {
               clearInterval(pollInterval);
+              setIsGeneratingImage(false);
             }
           } catch {
             clearInterval(pollInterval);
+            setIsGeneratingImage(false);
           }
-        }, 2000);
+        }, 1500);
+      } else {
+        setIsGeneratingImage(false);
       }
     } catch (err: unknown) {
       setError((err as Error).message || 'AI generation failed. You can customize the fields manually below.');
@@ -1576,7 +1701,8 @@ export default function MarketingScreen() {
                       tagline={effectiveBusinessTagline}
                       website={effectiveBusinessWebsite}
                       height={230}
-                      isGenerating={busy && generationMode === 'poster'}
+                      theme={colorTheme}
+                      isGenerating={isGeneratingImage || (busy && generationMode === 'poster')}
                     />
                   </View>
                 </Pressable>
@@ -1632,7 +1758,7 @@ export default function MarketingScreen() {
                 </View>
 
                 {/* Quick Action Pills */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                   <Pressable onPress={handleMakeShorter} style={styles.quickPill}>
                     <MaterialIcons name="format-align-left" size={14} color="#475569" />
                     <Text style={styles.quickPillText}>Less text</Text>
@@ -1644,14 +1770,33 @@ export default function MarketingScreen() {
                   </Pressable>
 
                   <Pressable
+                    onPress={handleRegenerateImage}
+                    disabled={isGeneratingImage}
+                    style={[styles.quickPill, isGeneratingImage && { opacity: 0.6 }]}
+                  >
+                    {isGeneratingImage ? (
+                      <ActivityIndicator size="small" color="#009F50" />
+                    ) : (
+                      <MaterialIcons name="auto-awesome" size={14} color="#009F50" />
+                    )}
+                    <Text style={[styles.quickPillText, { color: '#009F50', fontWeight: '700' }]}>
+                      {isGeneratingImage ? 'Rendering...' : 'New image'}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
                     onPress={() => {
-                      const next = selectedLayout === 'editorial' ? 'photo_led' : selectedLayout === 'photo_led' ? 'bold' : 'editorial';
-                      setSelectedLayout(next);
+                      const curIndex = COMMERCIAL_THEME_KEYS.indexOf(colorTheme);
+                      const nextTheme = COMMERCIAL_THEME_KEYS[(curIndex + 1) % COMMERCIAL_THEME_KEYS.length];
+                      cycleTheme(nextTheme);
+                      Alert.alert('Style Updated', `Switched to ${COMMERCIAL_THEMES[nextTheme].name}`);
                     }}
                     style={styles.quickPill}
                   >
-                    <MaterialIcons name="shuffle" size={14} color="#475569" />
-                    <Text style={styles.quickPillText}>Change style</Text>
+                    <MaterialIcons name="palette" size={14} color="#475569" />
+                    <Text style={styles.quickPillText}>
+                      Style: {COMMERCIAL_THEMES[colorTheme]?.name?.split(' ')[0] || 'Modern'}
+                    </Text>
                   </Pressable>
                 </View>
               </ScrollView>
@@ -1891,7 +2036,8 @@ export default function MarketingScreen() {
                       tagline={effectiveBusinessTagline}
                       website={effectiveBusinessWebsite}
                       height={Math.min(360, Math.round(Dimensions.get('window').height * 0.40))}
-                      isGenerating={busy && generationMode === 'poster'}
+                      theme={colorTheme}
+                      isGenerating={isGeneratingImage || (busy && generationMode === 'poster')}
                     />
 
                     {/* Quick Poster Customization Controls: Headline & Offer Inputs */}
@@ -2198,6 +2344,7 @@ export default function MarketingScreen() {
                         tagline={effectiveBusinessTagline}
                         website={effectiveBusinessWebsite}
                         height={Math.min(320, Math.round(Dimensions.get('window').height * 0.36))}
+                        theme={colorTheme}
                       />
                     </View>
                   ) : (

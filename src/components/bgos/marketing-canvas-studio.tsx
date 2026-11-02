@@ -8,6 +8,9 @@ import {
   createCommercialPosterDesign,
   type MarketingDesign,
   type DesignLayer,
+  type CommercialTheme,
+  COMMERCIAL_THEMES,
+  COMMERCIAL_THEME_KEYS,
 } from '../../../shared/marketing-design';
 import { EditableMarketingDesign } from './editable-marketing-design';
 import {
@@ -71,7 +74,7 @@ interface CreativeDirection {
   badge: string;
   subhead: string;
   ctaText: string;
-  theme: 'sand_olive' | 'beige' | 'emerald_gold';
+  theme: CommercialTheme;
   photoUrl: string;
 }
 
@@ -83,7 +86,7 @@ const DEFAULT_DIRECTIONS: CreativeDirection[] = [
     badge: '20% OFF',
     subhead: 'Selected services',
     ctaText: 'Book now',
-    theme: 'sand_olive',
+    theme: 'royal_gold',
     photoUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1200&q=80',
   },
   {
@@ -93,7 +96,7 @@ const DEFAULT_DIRECTIONS: CreativeDirection[] = [
     badge: 'EXCLUSIVE',
     subhead: 'Selected services',
     ctaText: 'Book now',
-    theme: 'beige',
+    theme: 'rose_chic',
     photoUrl: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80',
   },
   {
@@ -103,7 +106,7 @@ const DEFAULT_DIRECTIONS: CreativeDirection[] = [
     badge: '20% OFF',
     subhead: 'Selected services',
     ctaText: 'Claim offer',
-    theme: 'emerald_gold',
+    theme: 'cyber_tech',
     photoUrl: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1200&q=80',
   },
 ];
@@ -232,7 +235,8 @@ export function MarketingCanvasStudio({
   const [photoUrl, setPhotoUrl] = useState(
     'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1200&q=80'
   );
-  const [theme, setTheme] = useState<'sand_olive' | 'beige' | 'emerald_gold'>('emerald_gold');
+  const [theme, setTheme] = useState<CommercialTheme>('royal_gold');
+  const activeThemeConfig = COMMERCIAL_THEMES[theme] || COMMERCIAL_THEMES.royal_gold;
 
   // Caption state
   const [caption, setCaption] = useState(DEFAULT_CAPTION);
@@ -311,7 +315,7 @@ export function MarketingCanvasStudio({
       website: effectiveWebsite,
       photo: activeVisualFormat === 'poster' ? (posterUrl || photoUrl) : photoUrl,
       ratio: aspectRatio,
-      theme: theme === 'sand_olive' ? 'sand' : theme === 'emerald_gold' ? 'emerald' : 'dark',
+      theme: theme,
       logoUrl: brandLogo || undefined,
       tagline: effectiveTagline || undefined,
     });
@@ -354,6 +358,18 @@ export function MarketingCanvasStudio({
           if (data.profile.businessName) setBrandName(data.profile.businessName);
           if (data.profile.website) setBrandWebsite(data.profile.website);
           if (data.profile.industry) setBrandTagline(data.profile.industry);
+          const combined = `${data.profile.industry || ''} ${data.profile.businessName || ''}`.toLowerCase();
+          if (/sweet|mithai|bakery|dessert|restaurant|cafe|food/.test(combined)) {
+            setTheme('royal_gold');
+          } else if (/jewel|gold|diamond|gem|luxury/.test(combined)) {
+            setTheme('luxe_dark');
+          } else if (/cloth|saree|boutique|fashion|bridal|apparel|garment|textile/.test(combined)) {
+            setTheme('rose_chic');
+          } else if (/software|tech|it\b|code|saas|cloud|digital|ai\b|data/.test(combined)) {
+            setTheme('cyber_tech');
+          } else if (/plumb|hvac|electr|repair|construct|paint|handyman|pest/.test(combined)) {
+            setTheme('trust_amber');
+          }
         }
         if (data?.logo) setBrandLogo(data.logo);
         if (data?.brandDetails?.logoUrl) setBrandLogo(data.brandDetails.logoUrl);
@@ -458,7 +474,7 @@ export function MarketingCanvasStudio({
       subheadText: string;
       ctaText: string;
       photoUrl: string;
-      theme: 'sand_olive' | 'beige' | 'emerald_gold';
+      theme: CommercialTheme;
     }>
   >([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -550,6 +566,9 @@ export function MarketingCanvasStudio({
               provider: 'cloudflare',
               requestId,
               isPoster: true,
+              businessName: effectiveBusinessName,
+              category: brandTagline || '',
+              website: effectiveWebsite,
             }),
           }),
         ]);
@@ -663,6 +682,82 @@ export function MarketingCanvasStudio({
   };
 
   // AI Helpers
+  const handleRegenerateImage = async () => {
+    if (isGenerating) return;
+    setIsGenerating(true);
+    setGeneratingStage('Rendering commercial photography background with Cloudflare AI...');
+    try {
+      const requestId = `web-img-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const res = await authFetch('/api/social/designs/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: activeUserPrompt || promptInput || 'commercial product photography',
+          provider: 'cloudflare',
+          requestId,
+          isPoster: true,
+          businessName: effectiveBusinessName,
+          category: brandTagline || '',
+          website: effectiveWebsite,
+        }),
+      });
+
+      if (res.ok) {
+        const imageJson = await res.json().catch(() => null);
+        const targetJobId = imageJson?.jobId || requestId;
+        const pollStart = Date.now();
+        const poll = setInterval(async () => {
+          try {
+            const check = await authFetch(`/api/social/designs/image?id=${encodeURIComponent(targetJobId)}`);
+            if (check.ok) {
+              const job = await check.json();
+              if (job.status === 'completed' && job.result?.url) {
+                clearInterval(poll);
+                const newImg = job.result.url;
+                setPosterUrl(newImg);
+                setPhotoUrl(newImg);
+                setCustomDesign((prev) => {
+                  if (!prev) return null;
+                  return {
+                    ...prev,
+                    layers: prev.layers.map((l) => (l.id === 'bg_photo' || l.type === 'image' ? { ...l, src: newImg } : l)),
+                  };
+                });
+                setActiveVisualFormat('poster');
+                setIsGenerating(false);
+                setGeneratingStage('');
+                toast.success('✨ Fresh AI commercial photo background generated!');
+              } else if (job.status === 'failed' || job.status === 'cancelled') {
+                clearInterval(poll);
+                setIsGenerating(false);
+                setGeneratingStage('');
+                toast.error(job.error || 'Image generation failed');
+              }
+            }
+            if (Date.now() - pollStart > 60000) {
+              clearInterval(poll);
+              setIsGenerating(false);
+              setGeneratingStage('');
+              toast.error('Image generation timed out');
+            }
+          } catch {
+            clearInterval(poll);
+            setIsGenerating(false);
+            setGeneratingStage('');
+          }
+        }, 1500);
+      } else {
+        setIsGenerating(false);
+        setGeneratingStage('');
+        toast.error('Could not initiate image generation');
+      }
+    } catch {
+      setIsGenerating(false);
+      setGeneratingStage('');
+      toast.error('Image generation encountered an error');
+    }
+  };
+
   const handleMakeShorter = () => {
     const sentences = caption.split('. ');
     if (sentences.length > 1) {
@@ -676,14 +771,28 @@ export function MarketingCanvasStudio({
   const handleModifierPill = (type: 'style' | 'less_text' | 'use_photo') => {
     pushHistory();
     if (type === 'style') {
-      const themes: Array<'sand_olive' | 'beige' | 'emerald_gold'> = [
-        'sand_olive',
-        'beige',
-        'emerald_gold',
-      ];
-      const nextTheme = themes[(themes.indexOf(theme) + 1) % themes.length];
+      const nextIndex = (COMMERCIAL_THEME_KEYS.indexOf(theme) + 1) % COMMERCIAL_THEME_KEYS.length;
+      const nextTheme = COMMERCIAL_THEME_KEYS[nextIndex];
       setTheme(nextTheme);
-      toast.success(`Switched brand style to ${nextTheme.replace('_', ' ')}!`);
+      if (customDesign) {
+        setCustomDesign(
+          createCommercialPosterDesign({
+            brand: effectiveBusinessName,
+            headline,
+            subtitle: subheadText,
+            badge: badgeText,
+            cta: ctaText,
+            phone: undefined,
+            website: effectiveWebsite,
+            photo: activeVisualFormat === 'poster' ? (posterUrl || photoUrl) : photoUrl,
+            ratio: aspectRatio,
+            theme: nextTheme,
+            logoUrl: brandLogo || undefined,
+            tagline: effectiveTagline || undefined,
+          })
+        );
+      }
+      toast.success(`Switched brand style to ${COMMERCIAL_THEMES[nextTheme].name}!`);
     } else if (type === 'less_text') {
       handleMakeShorter();
       setSubheadText('');
@@ -1368,7 +1477,10 @@ export function MarketingCanvasStudio({
 
                     {/* Top Scrim with Offer Badge & Dimensions */}
                     <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
-                      <div className="bg-primary/95 text-primary-foreground font-black text-[11px] px-2.5 py-1 rounded-lg uppercase tracking-wider shadow-sm pointer-events-auto">
+                      <div
+                        style={{ backgroundColor: activeThemeConfig.badgeBg, color: activeThemeConfig.badgeText }}
+                        className="font-black text-[11px] px-2.5 py-1 rounded-lg uppercase tracking-wider shadow-sm pointer-events-auto"
+                      >
                         {badgeText || 'SPECIAL OFFER'}
                       </div>
                       <div className="bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-white tracking-wide uppercase border border-white/20 shadow-xs pointer-events-auto flex items-center gap-1.5">
@@ -1385,24 +1497,39 @@ export function MarketingCanvasStudio({
                     </div>
 
                     {/* Headline Banner Scrim */}
-                    <div className="absolute bottom-14 inset-x-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent p-4 text-white">
-                      <h3 className="font-black text-lg sm:text-xl leading-tight drop-shadow-sm">
+                    <div
+                      style={{ backgroundColor: activeThemeConfig.scrimBg }}
+                      className="absolute bottom-14 inset-x-0 p-4 text-white"
+                    >
+                      <h3
+                        style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95)' }}
+                        className="font-black text-lg sm:text-xl leading-tight"
+                      >
                         {headline || 'Professional Business Services'}
                       </h3>
                       {subheadText && (
-                        <p className="text-xs text-emerald-300 font-semibold mt-1">
+                        <p
+                          style={{ color: activeThemeConfig.subColor, textShadow: '0 1px 4px rgba(0,0,0,0.85)' }}
+                          className="text-xs font-semibold mt-1"
+                        >
                           {subheadText}
                         </p>
                       )}
                     </div>
 
                     {/* Auto-Branded Footer Strip */}
-                    <div className="absolute bottom-0 inset-x-0 h-14 bg-slate-950/95 backdrop-blur-md border-t border-white/10 px-4 flex items-center justify-between text-white">
+                    <div
+                      style={{ backgroundColor: activeThemeConfig.footerBg }}
+                      className="absolute bottom-0 inset-x-0 h-14 backdrop-blur-md border-t border-white/10 px-4 flex items-center justify-between text-white"
+                    >
                       <div className="flex items-center gap-2.5 min-w-0 pr-3">
                         {brandLogo ? (
                           <img src={brandLogo} alt="Logo" className="size-8 rounded-lg object-cover bg-slate-900 border border-white/20 shrink-0" />
                         ) : (
-                          <div className="size-8 rounded-lg bg-emerald-600 flex items-center justify-center font-black text-white text-xs shrink-0">
+                          <div
+                            style={{ backgroundColor: activeThemeConfig.accent }}
+                            className="size-8 rounded-lg flex items-center justify-center font-black text-white text-xs shrink-0"
+                          >
                             {effectiveBusinessName.charAt(0).toUpperCase()}
                           </div>
                         )}
@@ -1410,13 +1537,19 @@ export function MarketingCanvasStudio({
                           <p className="font-extrabold text-xs text-white truncate">
                             {effectiveBusinessName}
                           </p>
-                          <p className="text-[10px] text-emerald-400 font-medium truncate">
+                          <p
+                            style={{ color: activeThemeConfig.subColor }}
+                            className="text-[10px] font-medium truncate"
+                          >
                             {effectiveTagline || `🌐 ${effectiveWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '')}`}
                           </p>
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-500 text-white px-2 py-0.5 rounded-md shadow-xs">
+                        <span
+                          style={{ backgroundColor: activeThemeConfig.ctaBg, color: activeThemeConfig.ctaText }}
+                          className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow-xs"
+                        >
                           {ctaText || 'VISIT STORE'}
                         </span>
                         <p className="text-[9px] text-sky-400 font-mono mt-0.5 truncate max-w-[120px]">
@@ -1429,18 +1562,42 @@ export function MarketingCanvasStudio({
 
                 {/* Poster Quick Tools Bar */}
                 <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40 flex-wrap">
-                  <label className="inline-flex items-center gap-1.5 cursor-pointer h-8 px-3 text-xs font-semibold rounded-xl border border-border bg-card hover:bg-muted/50 transition-all text-foreground shadow-2xs">
-                    <Upload className="size-3.5 text-primary" />
-                    <span>Upload custom graphic</span>
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      onChange={handlePosterUpload}
-                      className="hidden"
-                    />
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex items-center gap-1.5 cursor-pointer h-8 px-3 text-xs font-semibold rounded-xl border border-border bg-card hover:bg-muted/50 transition-all text-foreground shadow-2xs">
+                      <Upload className="size-3.5 text-primary" />
+                      <span>Upload custom graphic</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={handlePosterUpload}
+                        className="hidden"
+                      />
+                    </label>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRegenerateImage}
+                      disabled={isGenerating}
+                      className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card text-emerald-600 hover:text-emerald-700"
+                    >
+                      <Sparkles className="size-3.5 text-emerald-500" />
+                      <span>New AI photo</span>
+                    </Button>
+                  </div>
 
                   <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBrandColoursOpen(true)}
+                      className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card"
+                    >
+                      <Palette className="size-3.5 text-primary" />
+                      <span>Style: {activeThemeConfig.name.split(' ')[0]}</span>
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -1570,39 +1727,63 @@ export function MarketingCanvasStudio({
                     />
                     {/* Top Scrim */}
                     <div className="absolute top-2.5 inset-x-2.5 flex items-center justify-between pointer-events-none">
-                      <span className="bg-primary text-primary-foreground font-black text-[9.5px] px-2 py-0.5 rounded uppercase shadow-xs pointer-events-auto">
+                      <span
+                        style={{ backgroundColor: activeThemeConfig.badgeBg, color: activeThemeConfig.badgeText }}
+                        className="font-black text-[9.5px] px-2 py-0.5 rounded uppercase shadow-xs pointer-events-auto"
+                      >
                         {badgeText || 'SPECIAL OFFER'}
                       </span>
                     </div>
                     {/* Bottom Headline Scrim */}
-                    <div className="absolute bottom-11 inset-x-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent p-3 text-white">
-                      <p className="font-extrabold text-sm leading-snug line-clamp-2">
+                    <div
+                      style={{ backgroundColor: activeThemeConfig.scrimBg }}
+                      className="absolute bottom-11 inset-x-0 p-3 text-white"
+                    >
+                      <p
+                        style={{ textShadow: '0 1px 4px rgba(0,0,0,0.9)' }}
+                        className="font-extrabold text-sm leading-snug line-clamp-2"
+                      >
                         {headline || 'Professional Business Services'}
                       </p>
                       {subheadText && (
-                        <p className="text-[10.5px] text-emerald-300 font-semibold mt-0.5 line-clamp-1">
+                        <p
+                          style={{ color: activeThemeConfig.subColor }}
+                          className="text-[10.5px] font-semibold mt-0.5 line-clamp-1"
+                        >
                           {subheadText}
                         </p>
                       )}
                     </div>
                     {/* Auto-Branded Footer Strip */}
-                    <div className="absolute bottom-0 inset-x-0 h-11 bg-slate-950/95 px-3 flex items-center justify-between text-white border-t border-white/10">
+                    <div
+                      style={{ backgroundColor: activeThemeConfig.footerBg }}
+                      className="absolute bottom-0 inset-x-0 h-11 px-3 flex items-center justify-between text-white border-t border-white/10"
+                    >
                       <div className="flex items-center gap-2 min-w-0 pr-2">
                         {brandLogo ? (
                           <img src={brandLogo} alt="Logo" className="size-6 rounded-md object-cover bg-slate-900 border border-white/20 shrink-0" />
                         ) : (
-                          <div className="size-6 rounded-md bg-emerald-600 flex items-center justify-center font-black text-white text-[10px] shrink-0">
+                          <div
+                            style={{ backgroundColor: activeThemeConfig.accent }}
+                            className="size-6 rounded-md flex items-center justify-center font-black text-white text-[10px] shrink-0"
+                          >
                             {effectiveBusinessName.charAt(0).toUpperCase()}
                           </div>
                         )}
                         <div className="min-w-0">
                           <p className="font-bold text-[10.5px] truncate">{effectiveBusinessName}</p>
-                          <p className="text-[9px] text-emerald-400 truncate">
+                          <p
+                            style={{ color: activeThemeConfig.subColor }}
+                            className="text-[9px] truncate"
+                          >
                             {effectiveTagline || `🌐 ${effectiveWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '')}`}
                           </p>
                         </div>
                       </div>
-                      <span className="text-[9px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded shrink-0">
+                      <span
+                        style={{ backgroundColor: activeThemeConfig.ctaBg, color: activeThemeConfig.ctaText }}
+                        className="text-[9px] font-bold px-2 py-0.5 rounded shrink-0"
+                      >
                         {ctaText || 'VISIT STORE'}
                       </span>
                     </div>
@@ -1873,72 +2054,54 @@ export function MarketingCanvasStudio({
           <DialogHeader>
             <DialogTitle className="text-base font-bold">Brand Colour Themes</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <button
-              type="button"
-              onClick={() => {
-                pushHistory();
-                setTheme('sand_olive');
-                setBrandColoursOpen(false);
-                toast.success('Switched to Warm Sand & Olive!');
-              }}
-              className={`w-full p-3 rounded-xl border flex items-center justify-between text-left transition-all ${
-                theme === 'sand_olive' ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-border'
-              }`}
-            >
-              <div>
-                <p className="text-xs font-bold text-foreground">Editorial Minimal (Sand & Olive)</p>
-                <p className="text-[11px] text-muted-foreground">Warm bouclé and earth tones</p>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="size-4 rounded-full bg-[#FAF7F2] border border-border" />
-                <span className="size-4 rounded-full bg-[#0B4D2C]" />
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                pushHistory();
-                setTheme('beige');
-                setBrandColoursOpen(false);
-                toast.success('Switched to Neutral Beige!');
-              }}
-              className={`w-full p-3 rounded-xl border flex items-center justify-between text-left transition-all ${
-                theme === 'beige' ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-border'
-              }`}
-            >
-              <div>
-                <p className="text-xs font-bold text-foreground">Photo-led Neutral (Beige & Clay)</p>
-                <p className="text-[11px] text-muted-foreground">Soft organic lighting and clay accents</p>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="size-4 rounded-full bg-[#F4EFEB] border border-border" />
-                <span className="size-4 rounded-full bg-[#8C6D58]" />
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                pushHistory();
-                setTheme('emerald_gold');
-                setBrandColoursOpen(false);
-                toast.success('Switched to Bold Emerald & Gold!');
-              }}
-              className={`w-full p-3 rounded-xl border flex items-center justify-between text-left transition-all ${
-                theme === 'emerald_gold' ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-border'
-              }`}
-            >
-              <div>
-                <p className="text-xs font-bold text-foreground">Bold Brand (Deep Emerald & Gold)</p>
-                <p className="text-[11px] text-muted-foreground">High contrast luxury dark aesthetic</p>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="size-4 rounded-full bg-[#072418]" />
-                <span className="size-4 rounded-full bg-[#FBBF24]" />
-              </div>
-            </button>
+          <div className="space-y-2 py-2">
+            {COMMERCIAL_THEME_KEYS.map((themeKey) => {
+              const cfg = COMMERCIAL_THEMES[themeKey];
+              const isSelected = theme === themeKey;
+              return (
+                <button
+                  key={themeKey}
+                  type="button"
+                  onClick={() => {
+                    pushHistory();
+                    setTheme(themeKey);
+                    if (customDesign) {
+                      setCustomDesign(
+                        createCommercialPosterDesign({
+                          brand: effectiveBusinessName,
+                          headline,
+                          subtitle: subheadText,
+                          badge: badgeText,
+                          cta: ctaText,
+                          phone: undefined,
+                          website: effectiveWebsite,
+                          photo: activeVisualFormat === 'poster' ? (posterUrl || photoUrl) : photoUrl,
+                          ratio: aspectRatio,
+                          theme: themeKey,
+                          logoUrl: brandLogo || undefined,
+                          tagline: effectiveTagline || undefined,
+                        })
+                      );
+                    }
+                    setBrandColoursOpen(false);
+                    toast.success(`Switched to ${cfg.name}!`);
+                  }}
+                  className={`w-full p-3 rounded-xl border flex items-center justify-between text-left transition-all ${
+                    isSelected ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-border hover:bg-muted/30'
+                  }`}
+                >
+                  <div>
+                    <p className="text-xs font-bold text-foreground">{cfg.name}</p>
+                    <p className="text-[11px] text-muted-foreground">Coordinated badge, scrim & CTA palette</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="size-4 rounded-full border border-white/20 shadow-xs" style={{ backgroundColor: cfg.badgeBg }} title="Badge" />
+                    <span className="size-4 rounded-full border border-white/20 shadow-xs" style={{ backgroundColor: cfg.ctaBg }} title="CTA" />
+                    <span className="size-4 rounded-full border border-white/20 shadow-xs" style={{ backgroundColor: cfg.accent }} title="Accent" />
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </DialogContent>
       </Dialog>
