@@ -18,13 +18,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/auth-fetch';
+import { authFetch } from '@/lib/client-auth';
 
 interface AutopilotConfig {
   enabled: boolean;
   duration: '30_days' | '1_year';
   platforms: Array<'googlebusiness' | 'instagram' | 'facebook'>;
   postingTime: string;
+  timeZone?: string;
   startDate: string;
   endDate: string;
   lastRunAt?: string | null;
@@ -62,6 +63,7 @@ export function AutopilotStudio({ onConnectAccount }: { onConnectAccount?: () =>
     'instagram',
     'facebook',
   ]);
+  const [timeZone,setTimeZone]=useState(Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC');
   const [postingTime, setPostingTime] = useState('09:00');
 
   const fetchAutopilotData = async () => {
@@ -75,6 +77,7 @@ export function AutopilotStudio({ onConnectAccount }: { onConnectAccount?: () =>
         setDuration(json.config.duration);
         setPlatforms(json.config.platforms || ['googlebusiness', 'instagram', 'facebook']);
         setPostingTime(json.config.postingTime || '09:00');
+        setTimeZone(json.config.timeZone||Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC');
       }
     } catch (err: any) {
       toast.error('Failed to load autopilot configuration');
@@ -95,6 +98,7 @@ export function AutopilotStudio({ onConnectAccount }: { onConnectAccount?: () =>
         duration: overrides?.duration || duration,
         platforms: overrides?.platforms || platforms,
         postingTime: overrides?.postingTime || postingTime,
+        timeZone,
         triggerPostNow: overrides?.triggerPostNow || false,
       };
 
@@ -311,6 +315,7 @@ export function AutopilotStudio({ onConnectAccount }: { onConnectAccount?: () =>
                 </p>
               </div>
               <select
+                aria-label={`Posting time in ${timeZone}`}
                 value={postingTime}
                 onChange={(e) => setPostingTime(e.target.value)}
                 className="h-8 px-3 rounded-lg border border-border bg-background text-xs font-semibold"
@@ -321,6 +326,7 @@ export function AutopilotStudio({ onConnectAccount }: { onConnectAccount?: () =>
                 <option value="17:00">05:00 PM (Evening leisure)</option>
                 <option value="19:00">07:00 PM (Prime evening)</option>
               </select>
+              <span className="text-xs text-muted-foreground">Timezone: {timeZone}</span>
             </div>
           </div>
 

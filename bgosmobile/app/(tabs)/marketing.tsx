@@ -151,13 +151,14 @@ export default function MarketingScreen() {
       setApLoading(true);
       const res = await apiRequest<{ config: any; daysRemaining: number; message: string }>('/api/social/autopilot', {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           enabled: updates.enabled !== undefined ? updates.enabled : apConfig.enabled,
           duration: updates.duration || apConfig.duration,
           platforms: updates.platforms || apConfig.platforms,
           postingTime: updates.postingTime || apConfig.postingTime,
+          timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',
           triggerPostNow: updates.triggerPostNow || false,
-        }),
+        },
       });
       if (res?.config) {
         setApConfig({

@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     const recentPosts = await db.socialPost.findMany({
       where: {
         tenantId: user.tenantId,
-        createdById: { in: [user.id, 'system-autopilot'] },
+        id: { startsWith: 'autopilot_' },
       },
       orderBy: { createdAt: 'desc' },
       take: 10,
@@ -82,9 +82,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { enabled, duration, platforms, postingTime, triggerPostNow } = body;
 
+    if(!body||typeof body!=='object'||Array.isArray(body))return NextResponse.json({error:'Send a JSON object'},{status:400});
+    const { enabled, duration, platforms, postingTime, timeZone, triggerPostNow } = body;
+    if(platforms!==undefined&&(!Array.isArray(platforms)||!platforms.length||platforms.some((p:unknown)=>!['googlebusiness','instagram','facebook'].includes(String(p)))))return NextResponse.json({error:'Select valid publishing channels'},{status:400});
+    if(postingTime!==undefined&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(postingTime))return NextResponse.json({error:'Use HH:mm posting time'},{status:400});
+    if(timeZone!==undefined){try{new Intl.DateTimeFormat('en',{timeZone}).format();}catch{return NextResponse.json({error:'Invalid timezone'},{status:400});}}
+    if (duration !== undefined && !['30_days','1_year'].includes(duration)) return NextResponse.json({error:'Invalid duration'},{status:400});
+    if (enabled !== undefined && typeof enabled !== 'boolean') return NextResponse.json({error:'Invalid enabled value'},{status:400});
     const updates: Record<string, any> = {};
+    if (typeof timeZone === 'string')updates.timeZone=timeZone;
     if (typeof enabled === 'boolean') updates.enabled = enabled;
     if (duration === '30_days' || duration === '1_year') updates.duration = duration;
     if (Array.isArray(platforms)) updates.platforms = platforms;
@@ -92,8 +99,8 @@ export async function POST(request: NextRequest) {
 
     const updatedConfig = await saveTenantAutopilotConfig(user.tenantId, updates);
 
-    let triggerResult = null;
-    if (triggerPostNow || (enabled && updatedConfig.totalPostsCreated === 0)) {
+    let triggerResult: Awaited<ReturnType<typeof generateDailyAutopilotPost>> | null = null;
+    if (triggerPostNow) {
       triggerResult = await generateDailyAutopilotPost(user.tenantId, user.id);
     }
 

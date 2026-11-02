@@ -1,3 +1,4 @@
+import { extractLocationRef } from '@/lib/social/adapters/googlebusiness';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
+    if(!body||typeof body!=='object'||Array.isArray(body))return NextResponse.json({error:'Send a JSON object'},{status:400});
     const { syncToGoogle = true } = body;
 
     const tenant = await db.tenant.findUnique({
@@ -50,7 +52,7 @@ export async function POST(request: NextRequest) {
         publicProfileEnabled: true,
         description:
           tenant.description ||
-          `${tenant.brandProfile?.businessName || tenant.name} is a top-rated local service provider offering trusted solutions, verified customer reviews, and fast appointment booking.`,
+          `Learn about ${tenant.brandProfile?.businessName || tenant.name}, its services and ways to get in touch.`,
       },
     });
 
@@ -61,10 +63,9 @@ export async function POST(request: NextRequest) {
       const googleAccount = await prepareGoogleAccount(user.tenantId);
       if (googleAccount?.accessToken && googleAccount.metadata) {
         try {
-          const meta = googleAccount.metadata as Record<string, any>;
-          const locationId = meta.locationId || googleAccount.accountId;
-          if (locationId) {
-            const patchUrl = `https://mybusinessbusinessinformation.googleapis.com/v1/${locationId}?updateMask=websiteUri`;
+          const {locationId}=await extractLocationRef(googleAccount);
+          if(locationId){
+            const patchUrl=`https://mybusinessbusinessinformation.googleapis.com/v1/locations/${encodeURIComponent(locationId)}?updateMask=websiteUri`;
             const gRes = await fetch(patchUrl, {
               method: 'PATCH',
               headers: {
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
       url: websiteUrl,
       generatedAt: new Date().toISOString(),
       syncedToGoogle,
-      status: 'active',
+      status: 'published_unverified',
     };
 
     await db.tenant.update({
@@ -125,8 +126,8 @@ export async function POST(request: NextRequest) {
       syncedToGoogle,
       googleNotice,
       message: syncedToGoogle
-        ? `Website generated and synced to your Google Business Profile websiteUri!`
-        : `Website generated at ${websiteUrl}! (Google Business Profile sync notice: ${googleNotice || 'Connect Google to auto-sync'})`,
+        ? `Business website enabled and linked to your Google Business Profile websiteUri!`
+        : `Business website enabled at ${websiteUrl}! (Google Business Profile sync notice: ${googleNotice || 'Connect Google to auto-sync'})`,
     });
   } catch (error: any) {
     console.error('[api/gbp/website/generate] Error:', error);

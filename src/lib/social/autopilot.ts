@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+import { localPostingSlot } from './autopilot-schedule';
 import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
 import { publishPost } from '@/lib/social/publisher';
@@ -10,6 +12,7 @@ export interface AutopilotConfig {
   duration: '30_days' | '1_year';
   platforms: Array<'googlebusiness' | 'instagram' | 'facebook'>;
   postingTime: string;
+  timeZone: string;
   startDate: string;
   endDate: string;
   lastRunAt?: string | null;
@@ -56,6 +59,7 @@ export async function getTenantAutopilotConfig(tenantId: string): Promise<Autopi
     duration,
     platforms: Array.isArray(raw.platforms) && raw.platforms.length > 0 ? raw.platforms : DEFAULT_PLATFORMS,
     postingTime: raw.postingTime || '09:00',
+    timeZone: raw.timeZone || 'UTC',
     startDate,
     endDate,
     lastRunAt: raw.lastRunAt || null,
@@ -78,7 +82,7 @@ export async function saveTenantAutopilotConfig(
   let endDate = updates.endDate || current.endDate;
 
   // If enabling newly or resetting duration
-  if (updates.enabled && (!current.enabled || updates.duration !== current.duration)) {
+  if (updates.enabled && (!current.enabled || (updates.duration !== undefined && updates.duration !== current.duration))) {
     startDate = now.toISOString();
     endDate = new Date(now.getTime() + totalDays * 24 * 60 * 60 * 1000).toISOString();
   }
@@ -131,6 +135,7 @@ export async function generateDailyAutopilotPost(
   tenantId: string,
   userId?: string
 ): Promise<{ success: boolean; postId?: string; error?: string }> {
+  let claimedPostId: string | undefined;
   try {
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },
@@ -152,11 +157,20 @@ export async function generateDailyAutopilotPost(
       return { success: false, error: 'Autopilot is paused or completed' };
     }
 
+    const targetAccounts=tenant.socialAccounts.filter(acc=>config.platforms.includes(acc.platform as any));
+    if(!targetAccounts.length)return {success:false,error:'Connect a selected social channel before posting'};
+    const slot=localPostingSlot(new Date(),config.timeZone);
+    const postId='autopilot_'+createHash('sha256').update(`${tenantId}:${slot.date}`).digest('hex');
+    const prior=await db.socialPost.findUnique({where:{id:postId}});
+    if(prior)return {success:false,postId,error:`Today's autopilot post already exists (${prior.status}). Check its delivery status before retrying.`};
+    await db.socialPost.create({data:{id:postId,tenantId,content:'',status:'generating',mediaUrls:'[]',publishTargets:'[]',createdById:'system-autopilot'}});
+    claimedPostId=postId;
+
     const businessName = tenant.brandProfile?.businessName || tenant.name || 'Local Service Pro';
     const industry = tenant.brandProfile?.industry || tenant.industry || 'Professional Services';
     const city = tenant.brandProfile?.location || tenant.city || 'your area';
 
-    const dayIndex = new Date().getDay();
+    const dayIndex = (new Date(`${slot.date}T12:00:00Z`).getUTCDay()+6)%7;
     const todayTheme = THEMES[dayIndex] || THEMES[0];
 
     // 1. Generate SEO-optimized copy for the post
@@ -169,7 +183,8 @@ Requirements:
 3. Highlight prompt service, high standards, and verified local expertise.
 4. Call to action to call or book online today.
 5. Include 3-4 natural local hashtags (e.g. #${city.replace(/\s+/g, '')}Services #${industry.replace(/\s+/g, '')}).
-6. Do NOT include placeholder tokens like [Phone] or [Link].`;
+6. Do NOT include placeholder tokens like [Phone] or [Link].
+7. Never invent reviews, discounts, emergency availability, guarantees or customer stories. If these are not provided in the business context, use an educational post instead.`;
 
     let content = '';
     try {
@@ -183,12 +198,9 @@ Requirements:
       });
       content = typeof aiRes === 'string' ? aiRes : (aiRes as any)?.content || (aiRes as any)?.text || '';
     } catch {
-      content = `Trusted ${industry} in ${city}! ${businessName} is ready to deliver top-notch service with guaranteed satisfaction. Contact our friendly team today to book your consultation or service visit! #${city.replace(/\s+/g, '')} #${industry.replace(/\s+/g, '')}`;
+      throw new Error('AI copy generation failed. No fallback advertising claims were published.');
     }
-
-    if (!content.trim()) {
-      content = `Looking for trusted ${industry} in ${city}? ${businessName} provides fast, reliable, 5-star service. Call or message us today!`;
-    }
+    if(!content.trim())throw new Error('AI returned empty content');
 
     // 2. Generate Graphic with Cloudflare Workers AI Flux-1 Schnell
     const imagePrompt = `Clean professional advertisement poster for ${businessName}, ${industry} in ${city}. High quality commercial photography, sleek layout, warm lighting, high detail, modern style.`;
@@ -211,16 +223,12 @@ Requirements:
       }
     } catch (imgErr) {
       console.warn(`[social/autopilot] Flux-1 image generation fallback for tenant ${tenantId}:`, imgErr);
-      if (tenant.brandProfile?.logoUrl) {
-        mediaUrls.push(tenant.brandProfile.logoUrl);
+      if (tenant.logo) {
+        mediaUrls.push(tenant.logo);
       }
     }
 
     // 3. Match publish targets to enabled channels
-    const targetAccounts = tenant.socialAccounts.filter((acc) =>
-      config.platforms.includes(acc.platform as any)
-    );
-
     const publishTargets = targetAccounts.map((acc) => ({
       platform: acc.platform,
       socialAccountId: acc.id,
@@ -228,13 +236,17 @@ Requirements:
     }));
 
     // 4. Create SocialPost
-    const post = await db.socialPost.create({
+    if(config.platforms.includes('instagram')&&!mediaUrls.length)throw new Error('Instagram requires an image; generation failed');
+    const latest=await getTenantAutopilotConfig(tenantId);
+    if(!latest.enabled&&!userId)throw new Error('Autopilot paused during generation');
+    const post = await db.socialPost.update({
+      where:{id:postId},
       data: {
         tenantId,
         content: content.trim(),
         mediaUrls: JSON.stringify(mediaUrls),
         publishTargets: JSON.stringify(publishTargets),
-        status: publishTargets.length > 0 ? 'publishing' : 'draft',
+        status: 'scheduled',
         gbpPostType: 'whats_new',
         createdById: actorId,
         scheduledAt: new Date(),
@@ -243,9 +255,9 @@ Requirements:
 
     // 5. Trigger multi-platform publisher if targets exist
     if (publishTargets.length > 0) {
-      publishPost(post.id).catch((err) => {
-        console.error(`[social/autopilot] Background publish failed for ${post.id}:`, err);
-      });
+      await publishPost(post.id);
+      const delivery = await db.socialPost.findUnique({where:{id:post.id},select:{status:true}});
+      if (!delivery || delivery.status !== 'published') throw new Error(`Post saved; delivery status: ${delivery?.status || 'processing'}. Check channel results before retrying.`);
     }
 
     // 6. Update Autopilot counters
@@ -261,7 +273,7 @@ Requirements:
       action: 'autopilot_daily_post',
       entityType: 'social_post',
       entityId: post.id,
-      description: `Autopilot published daily post across ${publishTargets.length} platform(s).`,
+      description: `Autopilot submitted daily post across ${publishTargets.length} platform(s).`,
       severity: 'info',
     }).catch(() => {});
 
@@ -270,6 +282,7 @@ Requirements:
       postId: post.id,
     };
   } catch (error: any) {
+    if(claimedPostId)await db.socialPost.updateMany({where:{id:claimedPostId,status:'generating'},data:{status:'failed',failureReason:error?.message||'Generation failed'}}).catch(()=>{});
     console.error(`[social/autopilot] Error in generateDailyAutopilotPost for tenant ${tenantId}:`, error);
     return {
       success: false,

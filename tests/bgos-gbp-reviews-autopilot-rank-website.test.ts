@@ -37,6 +37,7 @@ vi.mock('@/lib/social/google-account-helper', () => ({
 vi.mock('@/lib/social/adapters/googlebusiness', () => ({
   replyToGoogleBusinessReview: vi.fn().mockResolvedValue({ success: true }),
   deleteGoogleBusinessReviewReply: vi.fn().mockResolvedValue({ success: true }),
+  extractLocationRef: vi.fn((acc: any) => 'locations/445566'),
 }));
 
 // In-memory data store for tests
@@ -125,6 +126,9 @@ vi.mock('@/lib/db', () => ({
     },
     trackedKeyword: {
       findMany: vi.fn(async () => mockTenant.trackedKeywords),
+    },
+    activityLog: {
+      create: vi.fn(async () => ({})),
     },
   },
 }));
@@ -253,7 +257,7 @@ describe('GBP Reviews, Autopilot 30d/1yr, Rankings, Page Creation & Website Buil
 
   // ── 3. Local Ranking Status with History ──
   describe('Local Ranking Status & History Tracker', () => {
-    it('returns baseline rank, current rank, improvement delta, and history timeline', async () => {
+    it('does not fabricate rankings when no measured scans exist', async () => {
       const { getAuthUser } = await import('@/lib/auth');
       vi.mocked(getAuthUser).mockResolvedValue({ id: 'user-1', email: 'owner@fieseros.com', tenantId: 'tenant-fieseros' } as any);
 
@@ -265,22 +269,21 @@ describe('GBP Reviews, Autopilot 30d/1yr, Rankings, Page Creation & Website Buil
       const json = await res.json();
 
       expect(json.success).toBe(true);
-      expect(json.currentAvgRank).toBeLessThan(json.initialAvgRank);
-      expect(json.totalImprovement).toBeGreaterThan(0);
-      expect(json.inTop3PackPct).toBeGreaterThanOrEqual(50);
-      expect(json.history.length).toBeGreaterThan(0);
-      expect(json.keywords.length).toBeGreaterThanOrEqual(3);
+      expect(json.currentAvgRank).toBeNull();
+      expect(json.totalImprovement).toBeNull();
+      expect(json.history).toEqual([]);
+      expect(json.keywords).toEqual([]);
 
       // Rescan POST
       const rescanReq = new NextRequest('http://localhost/api/gbp/rankings', { method: 'POST' });
       const rescanRes = await POST(rescanReq);
-      expect(rescanRes.status).toBe(200);
+      expect(rescanRes.status).toBe(503);
     });
   });
 
   // ── 4. Google Business Page Creation ──
   describe('Google Business Page Creation API', () => {
-    it('creates Google Business location and updates brand profile', async () => {
+    it('rejects profile creation without a valid parent Google account', async () => {
       const { getAuthUser } = await import('@/lib/auth');
       vi.mocked(getAuthUser).mockResolvedValue({ id: 'user-1', email: 'owner@fieseros.com', tenantId: 'tenant-fieseros' } as any);
 
@@ -299,10 +302,9 @@ describe('GBP Reviews, Autopilot 30d/1yr, Rankings, Page Creation & Website Buil
       });
 
       const res = await POST(req);
-      expect(res.status).toBe(200);
-      const json = await res.json();
-      expect(json.success).toBe(true);
-      expect(json.googleVerificationUrl).toContain('business.google.com/create');
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toContain('Reconnect Google');
+
     });
   });
 

@@ -1,3 +1,4 @@
+import { googleReplyState } from '@/lib/social/review-state';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
       where: {
         tenantId: user.tenantId,
         source: 'google',
+      status: { not: 'pending' },
       },
       select: { id: true, rating: true, responseJson: true },
     });
@@ -102,6 +104,7 @@ export async function POST(request: NextRequest) {
     const whereClause: Record<string, any> = {
       tenantId: user.tenantId,
       source: 'google',
+      status: { not: 'pending' },
     };
     if (targetReviewId) {
       whereClause.id = targetReviewId;
@@ -115,6 +118,7 @@ export async function POST(request: NextRequest) {
 
     // Filter to unreplied reviews matching the minimum rating
     const toReply = reviews.filter((r) => {
+      if (r.status === 'pending') return false;
       let hasReply = false;
       try {
         const parsed = JSON.parse(r.responseJson || '{}');
@@ -172,6 +176,7 @@ Write a warm, authentic, professional reply (2-3 sentences) thanking them by nam
         }
 
         let publishedToGoogle = false;
+        let moderationState: string | undefined;
         let googleError: string | null = null;
         let mapsUrl = review.reviewUrl || (review as any).externalUrl || null;
         if (googleAccount?.metadata) {
@@ -183,8 +188,9 @@ Write a warm, authentic, professional reply (2-3 sentences) thanking them by nam
 
         if (googleAccount && review.googleReviewId) {
           try {
-            await replyToGoogleBusinessReview(googleAccount, review.googleReviewId, replyText);
-            publishedToGoogle = true;
+            const result = await replyToGoogleBusinessReview(googleAccount, review.googleReviewId, replyText);
+            moderationState = result.reviewReplyState;
+            publishedToGoogle = googleReplyState(moderationState).publishedToGoogle;
           } catch (syncErr: unknown) {
             const msg = syncErr instanceof Error ? syncErr.message : String(syncErr);
             console.warn(`[reviews/auto-reply] Direct Google sync failed for review ${review.id}:`, msg);
@@ -199,6 +205,7 @@ Write a warm, authentic, professional reply (2-3 sentences) thanking them by nam
           repliedAt: new Date().toISOString(),
           repliedBy: 'BGOS AI Reputation Agent',
           publishedToGoogle,
+          moderationState,
           googleError,
           mapsUrl,
           keywords: defaultKeywords,
@@ -208,7 +215,7 @@ Write a warm, authentic, professional reply (2-3 sentences) thanking them by nam
           where: { id: review.id },
           data: {
             responseJson: JSON.stringify(replyPayload),
-            status: 'published',
+            status: googleReplyState(moderationState).status,
           },
         });
 

@@ -3911,7 +3911,7 @@ export function ReviewsView({
       {/* ═══════════════════════════════════════════════════════════════════════
           TAB: LOCAL RANKING STATUS & IMPROVEMENT HISTORY
          ═══════════════════════════════════════════════════════════════════════ */}
-      {activeSubTab === 'rankings' && <RankTracker />}
+
 
       {/* ═══════════════════════════════════════════════════════════════════════
           TAB 5: POSTS (GOOGLE BUSINESS POSTS MANAGER)
@@ -4876,7 +4876,7 @@ export function ReviewsView({
         open={createPageOpen}
         onOpenChange={setCreatePageOpen}
         defaultBusinessName={profileTitle || businessName}
-        defaultCity={profileCity || ''}
+        defaultCity={(auth as any)?.tenant?.city || ''}
         onSuccess={() => handleSyncGbp()}
       />
     </div>

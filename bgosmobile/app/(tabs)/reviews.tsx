@@ -4,6 +4,7 @@ import {
   Alert,
   Dimensions,
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   Share,
@@ -41,6 +42,7 @@ interface ParsedReply {
   text: string;
   repliedAt?: string;
   repliedBy?: string;
+  moderationState?: string;
   publishedToGoogle?: boolean;
   googleError?: string | null;
   mapsUrl?: string | null;
@@ -63,6 +65,7 @@ function parseReply(review: Review): ParsedReply | null {
         repliedAt: parsed.repliedAt,
         repliedBy: parsed.repliedBy || 'Owner',
         publishedToGoogle: Boolean(parsed.publishedToGoogle),
+        moderationState: parsed.moderationState,
         googleError: parsed.googleError || null,
         mapsUrl: parsed.mapsUrl || null,
         keywords: Array.isArray(parsed.keywords) && parsed.keywords.length > 0
@@ -314,7 +317,7 @@ export default function ReviewRepliesScreen() {
       setWebsiteBusy(true);
       const res = await apiRequest<{ success: boolean; websiteUrl: string; message: string }>('/api/gbp/website/generate', {
         method: 'POST',
-        body: JSON.stringify({ syncToGoogle: true }),
+        body: { syncToGoogle: true },
       });
       if (res?.websiteUrl) {
         Alert.alert(
@@ -339,7 +342,7 @@ export default function ReviewRepliesScreen() {
       if (res) {
         Alert.alert(
           'Google Maps Ranking Status',
-          `📍 City: ${res.cityName}\n🏆 Average Maps Rank: #${res.currentAvgRank} (was #${res.initialAvgRank})\n📈 Improvement: +${res.totalImprovement} positions gained!\n🔥 Top 3 Local Pack: ${res.inTop3PackPct}% domination\n\nTop tracked: ${res.keywords?.[0]?.keyword || 'Local service'} (#${res.keywords?.[0]?.currentRank || 1})`,
+          res.lastScannedAt ? `Latest scan: ${new Date(res.lastScannedAt).toLocaleString()}\nAverage found position: ${res.currentAvgRank ?? 'Not found'}\nMeasured change: ${res.totalImprovement ?? 'Two comparable scans required'}\n${res.keywords.map((k: any) => `${k.keyword}: ${k.currentRank ?? 'Not found'}`).join('\n')}` : 'No measured rankings yet. Configure a search location and run a DataForSEO scan from the web ranking dashboard.',
           [{ text: 'OK' }]
         );
       }
@@ -348,39 +351,18 @@ export default function ReviewRepliesScreen() {
     }
   }
 
-  function handleCreateGooglePage() {
-    Alert.prompt
-      ? Alert.prompt(
-          'Create Google Business Page',
-          'Enter your business name to create your Google Maps listing:',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Create',
-              onPress: async (name?: string) => {
-                if (!name?.trim()) return;
-                try {
-                  const res = await apiRequest<any>('/api/gbp/locations/create', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                      businessName: name.trim(),
-                      primaryCategory: 'Software company',
-                      locality: 'Patna',
-                      regionCode: 'IN',
-                    }),
-                  });
-                  Alert.alert('Google Business Page', res.message || 'Page created successfully!');
-                } catch (e: any) {
-                  Alert.alert('Error', e?.message || 'Failed to create page');
-                }
-              },
-            },
-          ]
-        )
-      : Linking.openURL('https://business.google.com/create');
+  const [createPageOpen, setCreatePageOpen] = useState(false);
+  const [createPageBusy, setCreatePageBusy] = useState(false);
+  const [pageFields, setPageFields] = useState({ businessName: '', primaryCategory: '', address: '', locality: '', administrativeArea: '', postalCode: '', regionCode: '' });
+  function handleCreateGooglePage() { setCreatePageOpen(true); }
+  async function createGooglePage() {
+    setCreatePageBusy(true);
+    try {
+      const result = await apiRequest<{message:string}>('/api/gbp/locations/create', {method:'POST',body:{...pageFields,addressLines:[pageFields.address],regionCode:pageFields.regionCode.toUpperCase()}});
+      setCreatePageOpen(false); Alert.alert('Google Business Profile',result.message);
+    } catch(e) { Alert.alert('Could not create profile',e instanceof Error?e.message:'Please retry'); }
+    finally {setCreatePageBusy(false);}
   }
-
-
 
   async function handleShareReply(text: string) {
     try {
@@ -431,13 +413,15 @@ export default function ReviewRepliesScreen() {
 
   async function publishReply(review: Review, text: string, kw?: KeywordUsage[]) {
     if (replyBusyId) return;
+    if (review.status === "pending" || parseReply(review)?.moderationState === "PENDING") { Alert.alert("Pending Google approval", "Updates are locked until Google finishes moderation. Sync reviews to refresh the status."); return; }
     setReplyBusyId(review.id);
     setLocalError(null);
     setNotice('');
     try {
       const res = await apiRequest<{
         message?: string;
-        publishedToGoogle?: boolean;
+        moderationState?: string;
+  publishedToGoogle?: boolean;
         googleError?: string | null;
         mapsUrl?: string | null;
       }>(`/api/reviews/${review.id}/reply`, {
@@ -456,7 +440,7 @@ export default function ReviewRepliesScreen() {
       if (res.publishedToGoogle) {
         setNotice(res.message || 'Reply published to Google Maps successfully!');
       } else {
-        setNotice('Reply saved in BGOS! Google sync pending (quota limit active). Use "Open Maps ↗" to paste it.');
+        setNotice(res.message || res.googleError || "Reply saved; Google publication is not yet confirmed.");
       }
       await reviews.refresh();
     } catch (e) {
@@ -1262,7 +1246,7 @@ export default function ReviewRepliesScreen() {
                               </Text>
                             ) : (
                               <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>
-                                🟡 Sync pending
+                                {reply.moderationState === "PENDING" ? "Pending Google approval · editing locked" : reply.moderationState === "REJECTED" ? "Rejected by Google" : "Publication unconfirmed"}
                               </Text>
                             )}
                           </View>
@@ -1274,7 +1258,7 @@ export default function ReviewRepliesScreen() {
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel="Delete reply"
-                          disabled={deleteBusyId === review.id}
+                          disabled={deleteBusyId === review.id || review.status === "pending" || reply.moderationState === "PENDING"}
                           onPress={() => confirmDeleteReply(review)}
                           hitSlop={8}
                         >
@@ -1288,6 +1272,7 @@ export default function ReviewRepliesScreen() {
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel="Edit reply"
+                          disabled={review.status === "pending" || reply.moderationState === "PENDING"}
                           onPress={() => {
                             setEditingId(review.id);
                             setEditingText(reply.text);
@@ -1522,6 +1507,15 @@ export default function ReviewRepliesScreen() {
           })
         )}
       </Screen>
+
+      <Modal visible={createPageOpen} animationType="slide" onRequestClose={()=>setCreatePageOpen(false)}>
+        <Screen title="Create Google Business Profile"><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:20,gap:12}}>
+          <Text>Enter your real business details. Google verification is required before public visibility is confirmed.</Text>
+          {Object.entries({businessName:'Business name',primaryCategory:'Exact Google category',address:'Street address',locality:'City',administrativeArea:'State / region',postalCode:'Postal code',regionCode:'Two-letter country code'}).map(([key,label])=><View key={key}><Text>{label}</Text><TextInput accessibilityLabel={label} value={pageFields[key as keyof typeof pageFields]} onChangeText={value=>setPageFields(prev=>({...prev,[key]:value}))} style={{borderWidth:1,borderColor:colors.line,borderRadius:8,padding:12}} /></View>)}
+          <Pressable disabled={createPageBusy} onPress={()=>void createGooglePage()}><Text>{createPageBusy?'Creating…':'Create profile'}</Text></Pressable>
+          <Pressable disabled={createPageBusy} onPress={()=>setCreatePageOpen(false)}><Text>Cancel</Text></Pressable>
+        </ScrollView></Screen>
+      </Modal>
 
       {/* Floating Microphone Button (Screenshots 08.55.28 & 08.55.29) */}
       <Pressable

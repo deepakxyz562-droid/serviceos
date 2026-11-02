@@ -87,6 +87,8 @@ export interface PublishRequest {
     startDate: string;
     endDate: string;
     couponCode?: string;
+    redeemUrl?: string;
+    termsConditions?: string;
   };
   pinterestBoard?: string;
   createdById: string;
@@ -148,6 +150,8 @@ export interface PublishParams {
     startDate: string;
     endDate: string;
     couponCode?: string;
+    redeemUrl?: string;
+    termsConditions?: string;
   };
   /** Pinterest-only: board ID to pin to. */
   pinterestBoard?: string;

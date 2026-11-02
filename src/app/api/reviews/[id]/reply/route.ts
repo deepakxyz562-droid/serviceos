@@ -1,3 +1,4 @@
+import { googleReplyState } from '@/lib/social/review-state';
 import { reviewLocationId } from '@/lib/social/google-review-scope';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
@@ -53,6 +54,8 @@ export async function POST(
       return NextResponse.json({ error: 'Sync this review from Google to verify its location before replying.' }, { status: 409 });
     }
     let publishedToGoogle = false;
+    let moderationState: string | undefined;
+    let policyViolation: string | undefined;
     let googleError: string | null = null;
 
     let mapsUrl = review.reviewUrl || review.externalUrl || null;
@@ -69,8 +72,9 @@ export async function POST(
     if (review.googleReviewId) {
       if (googleAccount) {
         try {
-          await replyToGoogleBusinessReview(googleAccount, review.googleReviewId, replyText);
-          publishedToGoogle = true;
+          const result=await replyToGoogleBusinessReview(googleAccount, review.googleReviewId, replyText);
+          moderationState=result.reviewReplyState;policyViolation=result.policyViolation;
+          publishedToGoogle=googleReplyState(moderationState).publishedToGoogle;
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : String(err);
           console.warn(`[reviews/reply] Google Business Profile reply sync warning for review ${id}:`, errMsg);
@@ -94,6 +98,8 @@ export async function POST(
       repliedAt: new Date().toISOString(),
       repliedBy: user.email || user.name || 'Owner',
       publishedToGoogle,
+      moderationState,
+      policyViolation,
       googleError,
       keywords,
       mapsUrl,
@@ -103,7 +109,7 @@ export async function POST(
       where: { id },
       data: {
         responseJson: JSON.stringify(replyPayload),
-        status: 'published',
+        status: review.googleReviewId ? googleReplyState(moderationState).status : 'published',
       },
     });
 
@@ -111,13 +117,15 @@ export async function POST(
       success: true,
       review: updatedReview,
       publishedToGoogle,
+      moderationState,
+      policyViolation,
       googleError,
       mapsUrl,
       message: publishedToGoogle
         ? 'Reply published successfully to Google Business Profile and saved locally.'
         : googleError
           ? `Reply saved locally. (Google sync notice: ${googleError})`
-          : 'Reply saved locally.',
+          : moderationState === 'PENDING' ? 'Reply submitted to Google and pending approval. Editing is locked until moderation completes.' : moderationState === 'REJECTED' ? 'Google rejected this reply. Review the policy feedback before editing.' : 'Reply saved; Google publication has not been confirmed.',
     });
   } catch (error: unknown) {
     console.error('Error posting review reply:', error);

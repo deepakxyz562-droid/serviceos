@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/auth-fetch';
+import { authFetch } from '@/lib/client-auth';
 import { Building2, MapPin, Phone, Globe, CheckCircle2, RefreshCw, ExternalLink } from 'lucide-react';
 
 interface GbpPageCreateModalProps {
@@ -31,11 +31,12 @@ export function GbpPageCreateModal({
   onSuccess,
 }: GbpPageCreateModalProps) {
   const [businessName, setBusinessName] = useState(defaultBusinessName);
-  const [primaryCategory, setPrimaryCategory] = useState('Software company');
+  const [primaryCategory, setPrimaryCategory] = useState('');
   const [addressLine, setAddressLine] = useState('');
-  const [locality, setLocality] = useState(defaultCity || 'Patna');
-  const [administrativeArea, setAdministrativeArea] = useState('Bihar');
-  const [postalCode, setPostalCode] = useState('800001');
+  const [locality, setLocality] = useState(defaultCity);
+  const [administrativeArea, setAdministrativeArea] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [regionCode, setRegionCode] = useState('');
   const [phone, setPhone] = useState('');
   const [websiteUri, setWebsiteUri] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -60,11 +61,11 @@ export function GbpPageCreateModal({
         body: JSON.stringify({
           businessName: businessName.trim(),
           primaryCategory: primaryCategory.trim(),
-          addressLines: addressLine ? [addressLine.trim()] : ['Main St'],
+          addressLines: addressLine ? [addressLine.trim()] : [],
           locality: locality.trim(),
           administrativeArea: administrativeArea.trim(),
           postalCode: postalCode.trim(),
-          regionCode: 'IN',
+          regionCode: regionCode.trim().toUpperCase(),
           phone: phone.trim() || undefined,
           websiteUri: websiteUri.trim() || undefined,
         }),
@@ -137,6 +138,7 @@ export function GbpPageCreateModal({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3.5 py-1">
+<label className="block text-sm">Country code<input required maxLength={2} value={regionCode} onChange={e=>setRegionCode(e.target.value.toUpperCase())} placeholder="AU, IN, US…" className="mt-1 w-full rounded border p-2" /></label>
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Business Name *</Label>
               <Input

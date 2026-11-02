@@ -1,3 +1,4 @@
+import { googleReplyState } from '@/lib/social/review-state';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
@@ -95,7 +96,9 @@ export async function POST(request: NextRequest) {
           initialResponseJson = JSON.stringify({
             text: gRev.reply.comment,
             repliedAt: gRev.reply.updateTime,
-            publishedToGoogle: true,
+            publishedToGoogle: googleReplyState(gRev.reply.reviewReplyState).publishedToGoogle,
+            moderationState:gRev.reply.reviewReplyState,
+            policyViolation:gRev.reply.policyViolation,
           });
         }
 
@@ -107,7 +110,7 @@ export async function POST(request: NextRequest) {
             authorName: gRev.authorName,
             rating: gRev.rating,
             comment: gRev.comment,
-            status: 'published',
+            status: googleReplyState(gRev.reply?.reviewReplyState).status,
             responseJson: initialResponseJson,
             createdAt: gRev.createTime ? new Date(gRev.createTime) : new Date(),
           },
@@ -119,15 +122,18 @@ export async function POST(request: NextRequest) {
         if (gRev.rating && existing.rating !== gRev.rating) updateData.rating = gRev.rating;
         if (gRev.comment && existing.comment !== gRev.comment) updateData.comment = gRev.comment;
         if (gRev.reply?.comment) {
+          updateData.status=googleReplyState(gRev.reply.reviewReplyState).status;
           let parsedExisting: any = {};
           try {
             parsedExisting = JSON.parse(existing.responseJson || '{}');
           } catch {}
-          if (!parsedExisting?.text || parsedExisting.text !== gRev.reply.comment) {
+          if (!parsedExisting?.text || parsedExisting.text !== gRev.reply.comment || parsedExisting.moderationState !== gRev.reply.reviewReplyState) {
             updateData.responseJson = JSON.stringify({
               text: gRev.reply.comment,
               repliedAt: gRev.reply.updateTime || new Date().toISOString(),
-              publishedToGoogle: true,
+              publishedToGoogle: googleReplyState(gRev.reply.reviewReplyState).publishedToGoogle,
+            moderationState:gRev.reply.reviewReplyState,
+            policyViolation:gRev.reply.policyViolation,
             });
           }
         }
@@ -167,9 +173,11 @@ Write a warm, authentic, professional reply (1-3 sentences) thanking them by nam
           if (replyText) {
             let publishedToGoogle = false;
             let googleError: string | null = null;
+            let moderationState: string | undefined;
             try {
-              await replyToGoogleBusinessReview(googleAccount, gRev.reviewId, replyText);
-              publishedToGoogle = true;
+              const submitted = await replyToGoogleBusinessReview(googleAccount, gRev.reviewId, replyText);
+              moderationState = submitted.reviewReplyState;
+              publishedToGoogle = googleReplyState(moderationState).publishedToGoogle;
             } catch (syncErr: unknown) {
               const msg = syncErr instanceof Error ? syncErr.message : String(syncErr);
               console.warn('[reviews/sync-google] Direct Google reply failed:', gRev.reviewId, msg);
@@ -185,8 +193,9 @@ Write a warm, authentic, professional reply (1-3 sentences) thanking them by nam
                   repliedBy: 'BGOS AI Reputation Agent',
                   publishedToGoogle,
                   googleError,
+                  moderationState,
                 }),
-                status: 'published',
+                status: googleReplyState(moderationState).status,
               },
             });
             if (publishedToGoogle) autoRepliesCount++;

@@ -702,7 +702,7 @@ export async function replyToGoogleBusinessReview(
   account: SocialAccountData,
   reviewId: string,
   comment: string,
-): Promise<{ comment: string; updateTime: string }> {
+): Promise<{ comment: string; updateTime: string; reviewReplyState?: string; policyViolation?: string }> {
   const { accountName, locationId } = await extractLocationRef(account);
   const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
   const cleanReviewId = reviewId.includes('/') ? reviewId.split('/').pop()! : reviewId;
@@ -727,10 +727,12 @@ export async function replyToGoogleBusinessReview(
   });
 
   await assertOk(res, 'reply to review');
-  const data = (await res.json().catch(() => ({}))) as { comment?: string; updateTime?: string };
+  const data = (await res.json().catch(() => ({}))) as { comment?: string; updateTime?: string; reviewReplyState?: string; policyViolation?: string };
   return {
     comment: data.comment || comment.trim(),
     updateTime: data.updateTime || new Date().toISOString(),
+    reviewReplyState:data.reviewReplyState,
+    policyViolation:data.policyViolation,
   };
 }
 
@@ -784,7 +786,7 @@ export async function fetchGoogleBusinessReviews(
     rating: number;
     comment: string;
     createTime: string;
-    reply?: { comment: string; updateTime: string };
+    reply?: { comment: string; updateTime: string; reviewReplyState?: string; policyViolation?: string };
   }>;
   averageRating: number;
   totalReviewCount: number;
@@ -814,7 +816,7 @@ export async function fetchGoogleBusinessReviews(
       starRating?: string;
       comment?: string;
       createTime?: string;
-      reviewReply?: { comment?: string; updateTime?: string };
+      reviewReply?: { comment?: string; updateTime?: string; reviewReplyState?: string; policyViolation?: string };
     }>;
     averageRating?: number;
     totalReviewCount?: number;
@@ -848,6 +850,8 @@ export async function fetchGoogleBusinessReviews(
       reply: r.reviewReply?.comment
         ? {
             comment: r.reviewReply.comment,
+            reviewReplyState:r.reviewReply.reviewReplyState,
+            policyViolation:r.reviewReply.policyViolation,
             updateTime: r.reviewReply.updateTime || new Date().toISOString(),
           }
         : undefined,

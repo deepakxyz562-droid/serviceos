@@ -1,3 +1,4 @@
+import { autopilotDue } from '@/lib/social/autopilot-schedule';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { generateDailyAutopilotPost, getTenantAutopilotConfig } from '@/lib/social/autopilot';
@@ -24,14 +25,7 @@ async function handleCronAutopilot(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
-    const { searchParams } = new URL(request.url);
-    const secretParam = searchParams.get('secret');
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}` && secretParam !== cronSecret) {
-      if (process.env.NODE_ENV === 'production') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    }
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) return NextResponse.json({error:'Unauthorized'},{status:401});
 
     // 1. Fetch tenants with social accounts
     const tenants = await db.tenant.findMany({
@@ -44,27 +38,18 @@ async function handleCronAutopilot(request: NextRequest) {
         id: true,
         name: true,
       },
-      take: 100,
+      take: 25,
+      orderBy:{id:'asc'},
+      ...(request.nextUrl.searchParams.get('cursor')?{cursor:{id:request.nextUrl.searchParams.get('cursor')!},skip:1}:{}),
     });
 
     let processedCount = 0;
     let publishedCount = 0;
     const now = new Date();
-    const twentyHoursAgo = new Date(now.getTime() - 20 * 60 * 60 * 1000);
 
     for (const tenant of tenants) {
       const config = await getTenantAutopilotConfig(tenant.id);
-      if (!config.enabled) continue;
-
-      // Check if end date passed
-      if (new Date(config.endDate).getTime() <= now.getTime()) {
-        continue;
-      }
-
-      // Check if posted within last 20 hours
-      if (config.lastRunAt && new Date(config.lastRunAt).getTime() > twentyHoursAgo.getTime()) {
-        continue;
-      }
+      if (!autopilotDue(config,now))continue;
 
       processedCount++;
       const result = await generateDailyAutopilotPost(tenant.id);
@@ -75,6 +60,7 @@ async function handleCronAutopilot(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      nextCursor:tenants.length===25?tenants[tenants.length-1].id:null,
       tenantsChecked: tenants.length,
       processedCount,
       publishedCount,
