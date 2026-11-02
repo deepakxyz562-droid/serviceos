@@ -13,6 +13,7 @@ export interface BgosWorkspace {
     seoDescription?: string;
     onlineBookingEnabled?: boolean;
   };
+  intakeForm?: { id: string; name: string; slug: string } | null;
   plan: { code: string; status: string };
   usage?: { contacts: number; forms: number; usedLeadCredits: number; leadCreditLimit: number };
 }

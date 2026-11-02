@@ -374,6 +374,67 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
 
   // ─── Data Fetching ────────────────────────────────────────────────────────
 
+  const [activeIntakeFormId, setActiveIntakeFormId] = useState<string | null>(null);
+  const [settingIntakeId, setSettingIntakeId] = useState<string | null>(null);
+  const [recentLiveSubmissions, setRecentLiveSubmissions] = useState<Array<{
+    id: string;
+    name: string;
+    formName: string;
+    timeAgo: string;
+    status: string;
+    initials: string;
+    avatarBg?: string;
+  }>>([]);
+
+  const fetchWorkspace = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/bgos/workspace');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.intakeForm?.id) {
+          setActiveIntakeFormId(data.intakeForm.id);
+        }
+      }
+    } catch {}
+  }, []);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/forms/dashboard-stats');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.recentSubmissions)) {
+          setRecentLiveSubmissions(
+            data.recentSubmissions.map((s: any) => {
+              const name =
+                (typeof s.respondent === 'string' && s.respondent.trim()) ||
+                s.data?.name ||
+                s.data?.customer_name ||
+                s.data?.fullName ||
+                'Direct Client';
+              const initials = name
+                .split(' ')
+                .map((p: string) => p[0])
+                .filter(Boolean)
+                .join('')
+                .slice(0, 2)
+                .toUpperCase() || 'CU';
+              return {
+                id: s.id,
+                name,
+                formName: s.formName || 'Customer Form',
+                timeAgo: timeAgo(s.createdAt || new Date()),
+                status: s.hasLead ? 'Lead' : 'New',
+                initials,
+                avatarBg: 'bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300',
+              };
+            })
+          );
+        }
+      }
+    } catch {}
+  }, []);
+
   const fetchForms = useCallback(async () => {
     setFormsLoading(true);
     setFormsError(null);
@@ -397,7 +458,30 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
 
   useEffect(() => {
     fetchForms();
-  }, [fetchForms]);
+    fetchWorkspace();
+    fetchStats();
+  }, [fetchForms, fetchWorkspace, fetchStats]);
+
+  const handleSetMobileIntakeForm = async (formId: string) => {
+    setSettingIntakeId(formId);
+    try {
+      const res = await authFetch('/api/bgos/workspace', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intakeFormId: formId }),
+      });
+      if (res.ok) {
+        setActiveIntakeFormId(formId);
+        toast.success('Updated active mobile intake form');
+      } else {
+        toast.error('Could not update intake form');
+      }
+    } catch {
+      toast.error('Network error updating intake form');
+    } finally {
+      setSettingIntakeId(null);
+    }
+  };
 
   const fetchResponses = async (formId: string) => {
     setResponsesLoading(true);
@@ -801,41 +885,17 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
     toast.success('Copied to clipboard');
   };
 
-  // Filtered recent items combining seeds + real fetched forms
-  const allRecentItems: RecentFormFunnelItem[] = [
-    ...forms.map((f, idx) => ({
-      id: f.id,
-      name: f.name,
-      type: (f.isMultiStep ? 'Funnel' : 'Form') as 'Form' | 'Funnel',
-      leads: f.submissions || (idx === 0 ? 124 : 45),
-      conversionRate: `${f.conversionRate || 30}%`,
-      status: (f.status === 'active' ? 'Published' : 'Draft') as 'Published' | 'Draft',
-      lastUpdated: timeAgo(f.createdAt || new Date()),
-      rawForm: f,
-    })),
-    ...INITIAL_RECENT_ITEMS.filter((init) => !forms.some((f) => f.name === init.name)).map((init) => ({
-      ...init,
-      rawForm: {
-        id: init.id,
-        name: init.name,
-        type: 'lead_capture' as FormType,
-        status: (init.status === 'Published' ? 'active' : 'inactive') as FormStatus,
-        fields: [
-          {
-            id: 'field-1',
-            type: 'radio' as any,
-            label: 'What type of cleaning do you need?',
-            required: true,
-            options: ['Regular Home Cleaning', 'Deep Cleaning', 'Move In/Out Cleaning', 'Office Cleaning'],
-          },
-        ],
-        submissionActions: getDefaultActions('lead_capture'),
-        submissions: init.leads,
-        conversionRate: parseInt(init.conversionRate, 10) || 28,
-        createdAt: new Date().toISOString(),
-      } as FormItem,
-    })),
-  ];
+  // Filtered recent items strictly from real fetched forms
+  const allRecentItems: RecentFormFunnelItem[] = forms.map((f) => ({
+    id: f.id,
+    name: f.name,
+    type: (f.isMultiStep ? 'Funnel' : 'Form') as 'Form' | 'Funnel',
+    leads: f.submissions || 0,
+    conversionRate: f.conversionRate ? `${f.conversionRate}%` : '0%',
+    status: (f.status === 'active' ? 'Published' : 'Draft') as 'Published' | 'Draft',
+    lastUpdated: timeAgo(f.createdAt || new Date()),
+    rawForm: f,
+  }));
 
   const filteredRecentItems = allRecentItems.filter((item) => {
     if (filterType === 'forms') return item.type === 'Form';
@@ -988,12 +1048,12 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Total Forms</p>
                   <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    {forms.length > 0 ? forms.length : 12}
+                    {forms.length}
                   </p>
                 </div>
               </div>
               <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold">
-                +20% vs last month
+                {forms.filter((f) => f.status === 'active').length} Active
               </Badge>
             </div>
 
@@ -1006,14 +1066,12 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Total Funnels</p>
                   <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    {forms.filter((f) => f.type === 'funnel').length > 0
-                      ? forms.filter((f) => f.type === 'funnel').length
-                      : 6}
+                    {forms.filter((f) => f.isMultiStep || f.type === 'funnel').length}
                   </p>
                 </div>
               </div>
-              <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold">
-                +50% vs last month
+              <Badge variant="secondary" className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-[11px] font-bold">
+                Multi-Step
               </Badge>
             </div>
 
@@ -1026,14 +1084,12 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Leads Captured</p>
                   <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    {forms.reduce((sum, f) => sum + (f.responseCount || 0), 0) > 0
-                      ? forms.reduce((sum, f) => sum + (f.responseCount || 0), 0)
-                      : 428}
+                    {forms.reduce((sum, f) => sum + (f.submissions || 0), 0)}
                   </p>
                 </div>
               </div>
               <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold">
-                +38% vs last month
+                Live Submissions
               </Badge>
             </div>
 
@@ -1046,14 +1102,12 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Appointments Booked</p>
                   <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    {forms.filter((f) => f.type === 'booking').length > 0
-                      ? forms.filter((f) => f.type === 'booking').reduce((sum, f) => sum + (f.responseCount || 0), 0) || 126
-                      : 126}
+                    {forms.filter((f) => f.type === 'booking').reduce((sum, f) => sum + (f.submissions || 0), 0)}
                   </p>
                 </div>
               </div>
-              <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold">
-                +12% vs last month
+              <Badge variant="secondary" className="bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 text-[11px] font-bold">
+                Direct Scheduling
               </Badge>
             </div>
           </div>
@@ -1171,171 +1225,225 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {filteredRecentItems.map((item) => (
-                        <tr
-                          key={item.id}
-                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
-                        >
-                          <td className="py-2.5 px-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 flex items-center justify-center font-bold text-xs shrink-0">
-                                {item.type === 'Funnel' ? (
-                                  <Layers className="size-3.5" />
-                                ) : (
-                                  <FileInput className="size-3.5" />
-                                )}
-                              </div>
-                              <span className="font-bold text-slate-900 dark:text-slate-100 truncate">
-                                {item.name}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-2">
-                            <Badge
-                              variant="secondary"
-                              className={cn(
-                                'text-[10px] font-semibold',
-                                item.type === 'Funnel'
-                                  ? 'bg-purple-100 text-teal-700 dark:bg-purple-950 dark:text-purple-300'
-                                  : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                              )}
-                            >
-                              {item.type}
-                            </Badge>
-                          </td>
-                          <td className="py-2.5 px-2 font-semibold text-slate-700 dark:text-slate-300">
-                            {item.leads}
-                          </td>
-                          <td className="py-2.5 px-2 font-semibold text-slate-700 dark:text-slate-300">
-                            {item.conversionRate}
-                          </td>
-                          <td className="py-2.5 px-2">
-                            <Badge
-                              variant="secondary"
-                              className={cn(
-                                'text-[10px] font-semibold flex items-center gap-1 w-fit',
-                                item.status === 'Published'
-                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                                  : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  'w-1.5 h-1.5 rounded-full',
-                                  item.status === 'Published' ? 'bg-emerald-500' : 'bg-amber-500'
-                                )}
-                              />
-                              {item.status}
-                            </Badge>
-                          </td>
-                          <td className="py-2.5 px-2 text-slate-500">{item.lastUpdated}</td>
-                          <td className="py-2.5 px-2 text-right">
-                            <div className="flex items-center justify-end gap-1">
+                      {filteredRecentItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-12 text-center text-slate-400">
+                            <div className="flex flex-col items-center justify-center gap-2">
+                              <FileInput className="size-8 text-slate-300 dark:text-slate-600" />
+                              <p className="font-semibold text-slate-700 dark:text-slate-300 text-sm">No forms found</p>
+                              <p className="text-xs text-slate-400 max-w-sm">
+                                Create your first form or funnel to start capturing customer leads and appointment bookings.
+                              </p>
                               <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  if (item.rawForm) {
-                                    handleOpenEdit(item.rawForm, 'full_studio');
-                                  } else {
-                                    setFunnelName(item.name);
-                                    setStudioMode('full_studio');
-                                    setIsBuilderOpen(true);
-                                  }
-                                }}
-                                className="size-7 text-slate-500 hover:text-slate-900"
-                                title="Edit in Form Studio"
+                                size="sm"
+                                onClick={() => handleOpenCreate('form')}
+                                className="mt-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs h-8"
                               >
-                                <Pencil className="size-3" />
+                                <Plus className="size-3.5 mr-1" /> Create Form
                               </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-7 text-slate-500 hover:text-slate-900"
-                                    title="More Options"
-                                  >
-                                    <MoreVertical className="size-3" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-52 text-xs font-medium">
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      if (item.rawForm) {
-                                        handleOpenEdit(item.rawForm, 'full_studio');
-                                      } else {
-                                        setFunnelName(item.name);
-                                        setStudioMode('full_studio');
-                                        setIsBuilderOpen(true);
-                                      }
-                                    }}
-                                  >
-                                    <Sliders className="size-3.5 mr-2 text-teal-600" /> Edit in Form Studio
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      if (item.rawForm) {
-                                        openFormLink(item.rawForm);
-                                      } else if (typeof window !== 'undefined') {
-                                        window.open(`/f/${item.id}`, '_blank', 'noopener,noreferrer');
-                                      }
-                                    }}
-                                  >
-                                    <ExternalLink className="size-3.5 mr-2 text-sky-600" /> View Live Form
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
-                                      setSelectedForm(f);
-                                      setShowResponsesDialog(true);
-                                      fetchResponses(f.id);
-                                    }}
-                                  >
-                                    <Inbox className="size-3.5 mr-2 text-indigo-600" /> View Submissions
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
-                                      setSelectedForm(f);
-                                      setShowEmbedDialog(true);
-                                    }}
-                                  >
-                                    <Code className="size-3.5 mr-2 text-blue-600" /> Embed Code &amp; QR
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
-                                      setSelectedForm(f);
-                                      setShowWhatsAppDialog(true);
-                                    }}
-                                  >
-                                    <MessageCircle className="size-3.5 mr-2 text-emerald-600" /> Share on WhatsApp
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
-                                      setSelectedForm(f);
-                                      setShowPreviewDialog(true);
-                                    }}
-                                  >
-                                    <Eye className="size-3.5 mr-2 text-amber-600" /> Preview
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30"
-                                    onClick={() => {
-                                      const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
-                                      setShowDeleteConfirm(f);
-                                    }}
-                                  >
-                                    <Trash2 className="size-3.5 mr-2" /> Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        filteredRecentItems.map((item) => (
+                          <tr
+                            key={item.id}
+                            className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
+                          >
+                            <td className="py-2.5 px-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 flex items-center justify-center font-bold text-xs shrink-0">
+                                  {item.type === 'Funnel' ? (
+                                    <Layers className="size-3.5" />
+                                  ) : (
+                                    <FileInput className="size-3.5" />
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                                      {item.name}
+                                    </span>
+                                    {item.id === activeIntakeFormId && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800 px-1.5 py-0 font-semibold shrink-0 flex items-center gap-1"
+                                      >
+                                        <Smartphone className="size-2.5" />
+                                        Active on Mobile
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {item.rawForm?.slug && (
+                                    <p className="text-[11px] text-slate-400 font-mono">
+                                      /f/{item.rawForm.slug}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-2">
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  'text-[10px] font-semibold',
+                                  item.type === 'Funnel'
+                                    ? 'bg-purple-100 text-teal-700 dark:bg-purple-950 dark:text-purple-300'
+                                    : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                )}
+                              >
+                                {item.type}
+                              </Badge>
+                            </td>
+                            <td className="py-2.5 px-2 font-semibold text-slate-700 dark:text-slate-300">
+                              {item.leads}
+                            </td>
+                            <td className="py-2.5 px-2 font-semibold text-slate-700 dark:text-slate-300">
+                              {item.conversionRate}
+                            </td>
+                            <td className="py-2.5 px-2">
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  'text-[10px] font-semibold flex items-center gap-1 w-fit',
+                                  item.status === 'Published'
+                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                    : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    'w-1.5 h-1.5 rounded-full',
+                                    item.status === 'Published' ? 'bg-emerald-500' : 'bg-amber-500'
+                                  )}
+                                />
+                                {item.status}
+                              </Badge>
+                            </td>
+                            <td className="py-2.5 px-2 text-slate-500">{item.lastUpdated}</td>
+                            <td className="py-2.5 px-2 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    if (item.rawForm) {
+                                      handleOpenEdit(item.rawForm, 'full_studio');
+                                    } else {
+                                      setFunnelName(item.name);
+                                      setStudioMode('full_studio');
+                                      setIsBuilderOpen(true);
+                                    }
+                                  }}
+                                  className="size-7 text-slate-500 hover:text-slate-900"
+                                  title="Edit in Form Studio"
+                                >
+                                  <Pencil className="size-3" />
+                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="size-7 text-slate-500 hover:text-slate-900"
+                                      title="More Options"
+                                    >
+                                      <MoreVertical className="size-3" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-56 text-xs font-medium">
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        if (item.rawForm) {
+                                          handleOpenEdit(item.rawForm, 'full_studio');
+                                        } else {
+                                          setFunnelName(item.name);
+                                          setStudioMode('full_studio');
+                                          setIsBuilderOpen(true);
+                                        }
+                                      }}
+                                    >
+                                      <Sliders className="size-3.5 mr-2 text-teal-600" /> Edit in Form Studio
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        if (item.rawForm) {
+                                          openFormLink(item.rawForm);
+                                        } else if (typeof window !== 'undefined') {
+                                          window.open(`/f/${item.id}`, '_blank', 'noopener,noreferrer');
+                                        }
+                                      }}
+                                    >
+                                      <ExternalLink className="size-3.5 mr-2 text-sky-600" /> View Live Form
+                                    </DropdownMenuItem>
+                                    {item.status === 'Published' && item.id !== activeIntakeFormId && (
+                                      <DropdownMenuItem
+                                        onClick={() => handleSetMobileIntakeForm(item.id)}
+                                        disabled={settingIntakeId === item.id}
+                                      >
+                                        <Smartphone className="size-3.5 mr-2 text-teal-600" />
+                                        {settingIntakeId === item.id ? 'Connecting...' : 'Set as Mobile Intake Form'}
+                                      </DropdownMenuItem>
+                                    )}
+                                    {item.id === activeIntakeFormId && (
+                                      <DropdownMenuItem disabled className="text-emerald-600 font-medium">
+                                        <Check className="size-3.5 mr-2 text-emerald-600" />
+                                        Active Mobile Intake Form
+                                      </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
+                                        setSelectedForm(f);
+                                        setShowResponsesDialog(true);
+                                        fetchResponses(f.id);
+                                      }}
+                                    >
+                                      <Inbox className="size-3.5 mr-2 text-indigo-600" /> View Submissions
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
+                                        setSelectedForm(f);
+                                        setShowEmbedDialog(true);
+                                      }}
+                                    >
+                                      <Code className="size-3.5 mr-2 text-blue-600" /> Embed Code &amp; QR
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
+                                        setSelectedForm(f);
+                                        setShowWhatsAppDialog(true);
+                                      }}
+                                    >
+                                      <MessageCircle className="size-3.5 mr-2 text-emerald-600" /> Share on WhatsApp
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
+                                        setSelectedForm(f);
+                                        setShowPreviewDialog(true);
+                                      }}
+                                    >
+                                      <Eye className="size-3.5 mr-2 text-amber-600" /> Preview
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30"
+                                      onClick={() => {
+                                        const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
+                                        setShowDeleteConfirm(f);
+                                      }}
+                                    >
+                                      <Trash2 className="size-3.5 mr-2" /> Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1350,101 +1458,59 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                   Lead Sources
                 </h3>
 
-                <div className="flex items-center justify-center py-2">
-                  <div className="relative w-36 h-36 flex items-center justify-center">
-                    {/* SVG Donut */}
-                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                      <circle cx="50" cy="50" r="40" fill="transparent" stroke="#e2e8f0" strokeWidth="14" />
-                      {/* Website: 42% (stroke-dasharray 105.5 251.3) */}
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="transparent"
-                        stroke="#00A884"
-                        strokeWidth="14"
-                        strokeDasharray="105.5 251.3"
-                        strokeDashoffset="0"
-                      />
-                      {/* Google Business: 24% (60.3) */}
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="transparent"
-                        stroke="#0ea5e9"
-                        strokeWidth="14"
-                        strokeDasharray="60.3 251.3"
-                        strokeDashoffset="-105.5"
-                      />
-                      {/* Social Media: 18% (45.2) */}
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="transparent"
-                        stroke="#10b981"
-                        strokeWidth="14"
-                        strokeDasharray="45.2 251.3"
-                        strokeDashoffset="-165.8"
-                      />
-                      {/* WhatsApp: 10% (25.1) */}
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="transparent"
-                        stroke="#f59e0b"
-                        strokeWidth="14"
-                        strokeDasharray="25.1 251.3"
-                        strokeDashoffset="-211.0"
-                      />
-                      {/* Other: 6% (15.1) */}
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="transparent"
-                        stroke="#94a3b8"
-                        strokeWidth="14"
-                        strokeDasharray="15.1 251.3"
-                        strokeDashoffset="-236.1"
-                      />
-                    </svg>
+                {(() => {
+                  const totalLeadsCaptured = forms.reduce((sum, f) => sum + (f.submissions || 0), 0);
+                  return (
+                    <>
+                      <div className="flex items-center justify-center py-2">
+                        <div className="relative w-36 h-36 flex items-center justify-center">
+                          {/* SVG Donut */}
+                          <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                            <circle cx="50" cy="50" r="40" fill="transparent" stroke="#e2e8f0" strokeWidth="14" />
+                            {totalLeadsCaptured > 0 && (
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="40"
+                                fill="transparent"
+                                stroke="#00A884"
+                                strokeWidth="14"
+                                strokeDasharray="251.3 251.3"
+                                strokeDashoffset="0"
+                              />
+                            )}
+                          </svg>
 
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                      <span className="text-base font-black text-slate-900 dark:text-slate-100">
-                        428
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-semibold">
-                        Total Leads
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Legend */}
-                <div className="space-y-1.5 text-xs pt-1">
-                  {[
-                    { label: 'Website', pct: '42%', color: 'bg-teal-600' },
-                    { label: 'Google Business', pct: '24%', color: 'bg-sky-500' },
-                    { label: 'Social Media', pct: '18%', color: 'bg-emerald-500' },
-                    { label: 'WhatsApp', pct: '10%', color: 'bg-amber-500' },
-                    { label: 'Other', pct: '6%', color: 'bg-slate-400' },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={cn('w-2.5 h-2.5 rounded-full', item.color)} />
-                        <span className="text-slate-600 dark:text-slate-400 font-medium">
-                          {item.label}
-                        </span>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                            <span className="text-base font-black text-slate-900 dark:text-slate-100">
+                              {totalLeadsCaptured}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-semibold">
+                              Total Leads
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">
-                        {item.pct}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+
+                      {/* Legend */}
+                      {totalLeadsCaptured === 0 ? (
+                        <p className="text-center text-xs text-slate-400 py-2">
+                          No leads captured yet. Lead channels will appear here once submissions arrive.
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5 text-xs pt-1">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
+                              <span className="text-slate-600 dark:text-slate-400 font-medium">Direct / Form</span>
+                            </div>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{totalLeadsCaptured}</span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Quick Actions Card */}
@@ -1520,47 +1586,50 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 </div>
 
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {RECENT_SUBMISSIONS.map((sub) => (
-                    <div
-                      key={sub.id}
-                      onClick={() => setActiveTab('submissions')}
-                      className="py-2.5 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/60 dark:hover:bg-slate-800/40 rounded-lg px-1 transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className={cn(
-                            'w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0',
-                            sub.avatarBg
-                          )}
-                        >
-                          {sub.initials}
+                  {recentLiveSubmissions.length > 0 ? (
+                    recentLiveSubmissions.map((sub) => (
+                      <div
+                        key={sub.id}
+                        onClick={() => setActiveTab('submissions')}
+                        className="py-2.5 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/60 dark:hover:bg-slate-800/40 rounded-lg px-1 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={cn(
+                              'w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0',
+                              sub.avatarBg || 'bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300'
+                            )}
+                          >
+                            {sub.initials}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate leading-tight">
+                              {sub.name}
+                            </p>
+                            <p className="text-[10px] text-slate-400 truncate leading-tight">
+                              {sub.formName}
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate leading-tight">
-                            {sub.name}
-                          </p>
-                          <p className="text-[10px] text-slate-400 truncate leading-tight">
-                            {sub.formName}
-                          </p>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[10px] text-slate-400">{sub.timeAgo}</span>
-                        <Badge
-                          variant="secondary"
-                          className={cn(
-                            'text-[10px] font-bold px-1.5 py-0',
-                            sub.status === 'Booked'
-                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                              : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                          )}
-                        >
-                          {sub.status}
-                        </Badge>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[10px] text-slate-400">{sub.timeAgo}</span>
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] font-bold px-1.5 py-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                          >
+                            {sub.status}
+                          </Badge>
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="py-6 text-center text-xs text-slate-400 space-y-1">
+                      <Inbox className="size-6 text-slate-300 dark:text-slate-600 mx-auto" />
+                      <p className="font-semibold text-slate-600 dark:text-slate-300">No submissions yet</p>
+                      <p className="text-[11px] text-slate-400">Share your form link with clients to start receiving leads.</p>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </div>

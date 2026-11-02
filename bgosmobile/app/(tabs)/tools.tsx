@@ -758,7 +758,7 @@ export default function ToolsScreen() {
                     Customer Intake Form
                   </Text>
                   <Text style={{ fontSize: 11, color: '#64748B' }}>
-                    Lead Qualification & Questions
+                    {data.intakeForm?.name ? `Connected: ${data.intakeForm.name}` : 'Lead Qualification & Questions'}
                   </Text>
                 </View>
               </View>
@@ -768,6 +768,15 @@ export default function ToolsScreen() {
             <Text style={{ fontSize: 12.5, color: '#64748B' }}>
               Collect client inquiry details, project requirements, and intake answers before starting work.
             </Text>
+
+            {data.intakeForm?.name && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FAF5FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#F3E8FF' }}>
+                <MaterialIcons name="link" size={14} color="#7C3AED" />
+                <Text style={{ fontSize: 11.5, color: '#6B21A8', fontWeight: '700' }}>
+                  Active Form: {data.intakeForm.name}
+                </Text>
+              </View>
+            )}
 
             {data.links.form ? (
               <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>

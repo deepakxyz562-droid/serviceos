@@ -24,6 +24,7 @@ const patch = z.object({
     seoDescription: z.string().optional(),
     onlineBookingEnabled: z.boolean().optional(),
   }).optional(),
+  intakeFormId: z.string().optional(),
 }).strict();
 function parse(value: string | null) { try { return JSON.parse(value || '{}'); } catch { return {}; } }
 
@@ -47,10 +48,23 @@ export async function GET() {
       },
     });
     if (!tenant) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
-    const form = await db.form.findFirst({ where: { tenantId: user.tenantId, ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}), status: 'active', slug: { not: null } }, select: { slug: true }, orderBy: { createdAt: 'desc' } });
     const settings = parse(tenant.settingsJson), features = settings;
+    // Resolve primary intake form: explicitly configured or most recently updated active form
+    let form: { id: string; name: string; slug: string | null } | null = null;
+    if (settings.intakeFormId) {
+      form = await db.form.findFirst({
+        where: { id: settings.intakeFormId, tenantId: user.tenantId, status: 'active', slug: { not: null } },
+        select: { id: true, name: true, slug: true },
+      });
+    }
+    if (!form) {
+      form = await db.form.findFirst({
+        where: { tenantId: user.tenantId, ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}), status: 'active', slug: { not: null } },
+        select: { id: true, name: true, slug: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+    }
     const profile = settings.creatorProfile;
-    const event = Array.isArray(features.schedulingEventTypes) ? features.schedulingEventTypes.find((item: { isActive?: boolean; slug?: string }) => item.isActive && item.slug) : null;
     const subscription = user.workspaceId ? await db.productSubscription.findUnique({ where: { workspaceId: user.workspaceId } }) : null;
     const bookingPageConfig = settings.bookingPageConfig || {};
     const data: BgosWorkspace = {
@@ -65,6 +79,7 @@ export async function GET() {
         seoDescription: bookingPageConfig.seoDescription || tenant.description || '',
         onlineBookingEnabled: bookingPageConfig.onlineBookingEnabled ?? true,
       },
+      intakeForm: form && form.slug ? { id: form.id, name: form.name, slug: form.slug } : null,
       links: {
         profile: profile?.isEnabled && profile.handle
           ? `/p/${encodeURIComponent(profile.handle)}`
@@ -108,6 +123,9 @@ export async function PATCH(request: NextRequest) {
     if (input.data.gbpAutomations) settings.gbpAutomations = { ...(settings.gbpAutomations || {}), ...input.data.gbpAutomations };
     if (input.data.bookingPageConfig) {
       settings.bookingPageConfig = { ...(settings.bookingPageConfig || {}), ...input.data.bookingPageConfig };
+    }
+    if (input.data.intakeFormId !== undefined) {
+      settings.intakeFormId = input.data.intakeFormId;
     }
     const updateData: Record<string, any> = { settingsJson: JSON.stringify(settings) };
     if (input.data.bookingPageConfig?.phone) updateData.phone = input.data.bookingPageConfig.phone;
