@@ -1,5 +1,18 @@
 import React, { useState } from 'react';
-import { Alert, Image, Linking, Share, Switch, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  Share,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
@@ -29,6 +42,59 @@ export default function ToolsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+
+  // Booking Page & Services Editor State
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [servicesList, setServicesList] = useState<
+    Array<{ id: string; name: string; duration: number; basePrice: number; isActive: boolean }>
+  >([]);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServicePrice, setNewServicePrice] = useState('');
+  const [newServiceDuration, setNewServiceDuration] = useState('60');
+  const [savingService, setSavingService] = useState(false);
+
+  async function openBookingManager() {
+    setBookingModalOpen(true);
+    setLoadingServices(true);
+    try {
+      const res = await apiRequest<{ services: any[] }>('/api/services?limit=50');
+      setServicesList(res?.services || []);
+    } catch {
+      setServicesList([]);
+    } finally {
+      setLoadingServices(false);
+    }
+  }
+
+  async function handleCreateService() {
+    if (!newServiceName.trim()) {
+      Alert.alert('Required', 'Please enter a service name.');
+      return;
+    }
+    setSavingService(true);
+    try {
+      await apiRequest('/api/services', {
+        method: 'POST',
+        body: {
+          name: newServiceName.trim(),
+          basePrice: parseFloat(newServicePrice) || 0,
+          duration: parseInt(newServiceDuration, 10) || 60,
+          isActive: true,
+        },
+      });
+      setNewServiceName('');
+      setNewServicePrice('');
+      setNewServiceDuration('60');
+      const res = await apiRequest<{ services: any[] }>('/api/services?limit=50');
+      setServicesList(res?.services || []);
+      Alert.alert('Service Added', 'Your new service is now live on your online booking page!');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Could not save service');
+    } finally {
+      setSavingService(false);
+    }
+  }
 
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
@@ -353,13 +419,32 @@ export default function ToolsScreen() {
                   {data.links[key] ? absolute(data.links[key]!) : 'Configure in BGOS web to activate link.'}
                 </Text>
                 {data.links[key] && (
-                  <Action
-                    secondary
-                    disabled={busy}
-                    label={`Share ${label}`}
-                    icon="share"
-                    onPress={() => run(() => Share.share({ message: absolute(data.links[key]!), url: absolute(data.links[key]!) }))}
-                  />
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                    <View style={{ flex: 1 }}>
+                      <Action
+                        secondary
+                        disabled={busy}
+                        label={`Share ${label}`}
+                        icon="share"
+                        onPress={() => run(() => Share.share({ message: absolute(data.links[key]!), url: absolute(data.links[key]!) }))}
+                      />
+                    </View>
+                    <Action
+                      secondary
+                      disabled={busy}
+                      label="Open"
+                      icon="open-in-new"
+                      onPress={() => void Linking.openURL(absolute(data.links[key]!))}
+                    />
+                    {key === 'booking' && (
+                      <Action
+                        disabled={busy}
+                        label="Modify"
+                        icon="tune"
+                        onPress={() => void openBookingManager()}
+                      />
+                    )}
+                  </View>
                 )}
               </View>
             )
@@ -524,6 +609,266 @@ export default function ToolsScreen() {
           />
         </View>
       </Card>
+
+      {/* ── Booking Page & Services Editor Sheet ── */}
+      <Modal
+        visible={bookingModalOpen}
+        animationType="slide"
+        onRequestClose={() => setBookingModalOpen(false)}
+      >
+        <Screen
+          title="Booking Page & Services"
+          subtitle="Manage your public booking URL and service menu"
+          showBack={true}
+          onBack={() => setBookingModalOpen(false)}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 60 }}
+          >
+            {/* Live URL Preview Card */}
+            <Card style={{ gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="link" size={20} color="#009F50" />
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                  Live Booking Page Link
+                </Text>
+              </View>
+
+              <View
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  borderRadius: 10,
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#2563EB' }}>
+                  {data?.links.booking ? absolute(data.links.booking) : 'Resolving booking link...'}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Pressable
+                  onPress={() => {
+                    if (data?.links.booking) {
+                      void Linking.openURL(absolute(data.links.booking));
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#0F172A',
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 6,
+                  }}
+                >
+                  <MaterialIcons name="open-in-new" size={16} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
+                    Open in Browser
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    if (data?.links.booking) {
+                      void Share.share({
+                        message: `Book services directly online: ${absolute(data.links.booking)}`,
+                        url: absolute(data.links.booking),
+                      });
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#EFF6FF',
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: '#BFDBFE',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 6,
+                  }}
+                >
+                  <MaterialIcons name="share" size={16} color="#2563EB" />
+                  <Text style={{ color: '#2563EB', fontSize: 12, fontWeight: '700' }}>
+                    Share Link
+                  </Text>
+                </Pressable>
+              </View>
+            </Card>
+
+            {/* Current Active Services */}
+            <Card style={{ gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="miscellaneous-services" size={18} color="#009F50" />
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                    Services on Booking Page
+                  </Text>
+                </View>
+                <Badge label={`${servicesList.length} Active`} accent />
+              </View>
+
+              {loadingServices ? (
+                <ActivityIndicator size="small" color="#009F50" style={{ paddingVertical: 16 }} />
+              ) : servicesList.length === 0 ? (
+                <Text style={{ fontSize: 13, color: '#64748B', fontStyle: 'italic', paddingVertical: 8 }}>
+                  No custom services added yet. Default consultation & service calls are shown.
+                </Text>
+              ) : (
+                servicesList.map((svc) => (
+                  <View
+                    key={svc.id}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingVertical: 10,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#F1F5F9',
+                    }}
+                  >
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>
+                        {svc.name}
+                      </Text>
+                      <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                        ⏱ {svc.duration || 60} mins
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#059669' }}>
+                      {svc.basePrice > 0 ? `₹${svc.basePrice}` : 'Free'}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </Card>
+
+            {/* Add New Service Form */}
+            <Card style={{ gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="add-circle-outline" size={18} color="#009F50" />
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                  Add Service to Booking Page
+                </Text>
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                  Service Name *
+                </Text>
+                <TextInput
+                  placeholder="e.g. Full Diagnostic Inspection"
+                  value={newServiceName}
+                  onChangeText={setNewServiceName}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 10,
+                    padding: 12,
+                    fontSize: 14,
+                    backgroundColor: '#FFFFFF',
+                    color: '#0F172A',
+                  }}
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                    Duration (Minutes)
+                  </Text>
+                  <TextInput
+                    placeholder="60"
+                    keyboardType="number-pad"
+                    value={newServiceDuration}
+                    onChangeText={setNewServiceDuration}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 10,
+                      padding: 12,
+                      fontSize: 14,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  />
+                </View>
+
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                    Price (₹ or $)
+                  </Text>
+                  <TextInput
+                    placeholder="499"
+                    keyboardType="number-pad"
+                    value={newServicePrice}
+                    onChangeText={setNewServicePrice}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 10,
+                      padding: 12,
+                      fontSize: 14,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  />
+                </View>
+              </View>
+
+              <Pressable
+                disabled={savingService}
+                onPress={() => void handleCreateService()}
+                style={({ pressed }) => ({
+                  backgroundColor: '#009F50',
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 6,
+                  marginTop: 6,
+                  opacity: savingService ? 0.7 : pressed ? 0.9 : 1,
+                })}
+              >
+                {savingService ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name="add" size={18} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                      Add to Booking Menu
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </Card>
+
+            <Pressable
+              onPress={() => setBookingModalOpen(false)}
+              style={({ pressed }) => ({
+                paddingVertical: 12,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#F1F5F9',
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Text style={{ color: '#475569', fontSize: 13, fontWeight: '700' }}>
+                Done
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </Screen>
+      </Modal>
     </Screen>
   );
 }

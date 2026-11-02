@@ -31,8 +31,12 @@ export async function GET() {
     const data: BgosWorkspace = {
       name: tenant.name, mode: settings.bgos?.mode === 'agency' ? 'agency' : 'local',
       links: {
-        profile: profile?.isEnabled && profile.handle ? `/p/${encodeURIComponent(profile.handle)}` : null,
-        booking: event ? `/book/${encodeURIComponent(tenant.slug)}/${encodeURIComponent(event.slug)}` : null,
+        profile: profile?.isEnabled && profile.handle
+          ? `/p/${encodeURIComponent(profile.handle)}`
+          : `/b/${encodeURIComponent(tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}`,
+        booking: event
+          ? `/book/${encodeURIComponent(tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}/${encodeURIComponent(event.slug)}`
+          : `/book/${encodeURIComponent(tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}`,
         form: form?.slug ? `/f/${encodeURIComponent(form.slug)}` : null,
         review: tenant.googlePlaceId ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(tenant.googlePlaceId)}` : null,
       },

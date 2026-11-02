@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
   Screen,
@@ -20,6 +21,7 @@ import { localDay, futureLocalTime } from '../../src/lib/dates';
 type Booking = { id: string; title: string; customerName?: string; scheduledAt?: string; status: string };
 
 export default function AppointmentsScreen() {
+  const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [weekOffset, setWeekOffset] = useState(0);
 
@@ -205,12 +207,36 @@ export default function AppointmentsScreen() {
       {resource.loading ? (
         <Loading />
       ) : !filtered.length ? (
-        <Empty
-          title="No bookings for this date"
-          detail="Time slots are open. Book an appointment or share your direct booking link."
-          actionLabel="＋ Book New Appointment"
-          onAction={() => setBookModal(true)}
-        />
+        <View>
+          <Empty
+            title="No bookings for this date"
+            detail="Time slots are open. Book an appointment or share your direct booking link."
+            actionLabel="＋ Book New Appointment"
+            onAction={() => setBookModal(true)}
+          />
+          <View style={{ alignItems: 'center', marginTop: 12 }}>
+            <Pressable
+              onPress={() => router.push('/(tabs)/tools')}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: '#EFF6FF',
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: '#BFDBFE',
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <MaterialIcons name="tune" size={16} color="#1D4ED8" />
+              <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#1D4ED8' }}>
+                Manage Booking Page & Services
+              </Text>
+            </Pressable>
+          </View>
+        </View>
       ) : (
         filtered.map((b) => (
           <Card key={b.id} style={{ gap: 10 }}>

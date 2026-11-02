@@ -34,6 +34,9 @@ import {
   Link2,
   Upload,
   Download,
+  Heart,
+  MessageCircle,
+  Bookmark,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1399,9 +1402,17 @@ export function MarketingCanvasStudio({
 
                 {/* Caption & Actions */}
                 <div className="p-3 space-y-2">
-                  <div className="flex items-center gap-3 text-muted-foreground">
-                    <span className="text-xs font-bold text-foreground">♡ 142 likes</span>
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <div className="flex items-center gap-3">
+                      <Heart className="size-4 hover:text-rose-500 transition-colors" />
+                      <MessageCircle className="size-4" />
+                      <Send className="size-4" />
+                    </div>
+                    <Bookmark className="size-4" />
                   </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Instagram Feed Preview
+                  </p>
                   <p className="text-xs leading-relaxed text-foreground">
                     <span className="font-bold mr-1.5">{businessName.toLowerCase().replace(/\s+/g, '')}</span>
                     {caption}

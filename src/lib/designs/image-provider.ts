@@ -51,7 +51,7 @@ async function callCloudflareImage(
       method: 'POST',
       signal,
       headers,
-      body: JSON.stringify({ prompt: text, steps: 4 }),
+      body: JSON.stringify({ prompt: text, steps: 8 }),
     }
   );
 
@@ -88,6 +88,17 @@ async function callCloudflareImage(
   return { bytes, model, cost: 0 };
 }
 
+export function buildHighQualityImagePrompt(rawPrompt: string, isPoster?: boolean): string {
+  const isPosterMode = isPoster || rawPrompt.startsWith('[POSTER]');
+  const cleanPrompt = rawPrompt.replace(/^\[POSTER\]\s*/, '').trim();
+
+  if (isPosterMode) {
+    return `Ultra-high quality modern commercial promotional poster design, 1080x1350 vertical format. Award-winning advertising agency aesthetic, bold visual hierarchy, striking contrast, premium corporate color harmony, clean sharp elements. Brief: ${cleanPrompt}. Highly detailed, pristine layout, elegant marketing composition.`;
+  }
+
+  return `Award-winning commercial promotional photography for a professional service business. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures, clean modern background. Authentic, trustworthy, and welcoming atmosphere. Brief: ${cleanPrompt}. High-end editorial photography style, perfectly exposed, vivid realistic colors, no text, no watermarks, no logos, no distorted features, no blurry artifacts.`;
+}
+
 export async function generateDesignImage(
   prompt: string,
   provider: ImageProvider,
@@ -95,10 +106,7 @@ export async function generateDesignImage(
   isPoster?: boolean
 ) {
   const isPosterMode = isPoster || prompt.startsWith('[POSTER]');
-  const cleanPrompt = prompt.replace(/^\[POSTER\]\s*/, '').trim();
-  const text = isPosterMode
-    ? `Create a premium, clean promotional poster graphic (1080x1350 portrait format) with professional visual typography, modern UI layout, and clear contrasting elements based on this brief: ${cleanPrompt}`
-    : `Create a professional marketing background photograph or illustration. Do not include any lettering, logos, watermarks, prices or text: those will be separate editable layers. Brief: ${cleanPrompt}`;
+  const text = buildHighQualityImagePrompt(prompt, isPosterMode);
 
   if (provider === 'cloudflare') {
     return await callCloudflareImage(text, signal);

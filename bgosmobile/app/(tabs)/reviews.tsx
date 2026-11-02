@@ -406,15 +406,54 @@ export default function ReviewRepliesScreen() {
 
   const [createPageOpen, setCreatePageOpen] = useState(false);
   const [createPageBusy, setCreatePageBusy] = useState(false);
-  const [pageFields, setPageFields] = useState({ businessName: '', primaryCategory: '', address: '', locality: '', administrativeArea: '', postalCode: '', regionCode: '' });
-  function handleCreateGooglePage() { setCreatePageOpen(true); }
+  const [pageFields, setPageFields] = useState({
+    businessName: '',
+    primaryCategory: '',
+    address: '',
+    locality: '',
+    administrativeArea: '',
+    postalCode: '',
+    regionCode: 'IN',
+  });
+  function handleCreateGooglePage() {
+    setCreatePageOpen(true);
+  }
   async function createGooglePage() {
+    if (!pageFields.businessName.trim()) {
+      Alert.alert('Required Field', 'Please enter your business name.');
+      return;
+    }
+    if (!pageFields.primaryCategory.trim()) {
+      Alert.alert('Required Field', 'Please choose or enter an exact Google category.');
+      return;
+    }
+    if (!pageFields.address.trim() || !pageFields.locality.trim() || !pageFields.postalCode.trim()) {
+      Alert.alert('Address Required', 'Please enter your street address, city, and postal code.');
+      return;
+    }
+    const region = (pageFields.regionCode || 'IN').trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(region)) {
+      Alert.alert('Country Code', 'Please enter a valid 2-letter country code (e.g. IN, US, GB).');
+      return;
+    }
+
     setCreatePageBusy(true);
     try {
-      const result = await apiRequest<{message:string}>('/api/gbp/locations/create', {method:'POST',body:{...pageFields,addressLines:[pageFields.address],regionCode:pageFields.regionCode.toUpperCase()}});
-      setCreatePageOpen(false); Alert.alert('Google Business Profile',result.message);
-    } catch(e) { Alert.alert('Could not create profile',e instanceof Error?e.message:'Please retry'); }
-    finally {setCreatePageBusy(false);}
+      const result = await apiRequest<{ message: string }>('/api/gbp/locations/create', {
+        method: 'POST',
+        body: {
+          ...pageFields,
+          addressLines: [pageFields.address.trim()],
+          regionCode: region,
+        },
+      });
+      setCreatePageOpen(false);
+      Alert.alert('Google Business Profile', result.message || 'Profile created successfully! Complete verification in Google.');
+    } catch (e) {
+      Alert.alert('Could not create profile', e instanceof Error ? e.message : 'Please check your connected Google account and retry.');
+    } finally {
+      setCreatePageBusy(false);
+    }
   }
 
   async function handleShareReply(text: string) {
@@ -1561,13 +1600,302 @@ export default function ReviewRepliesScreen() {
         )}
       </Screen>
 
-      <Modal visible={createPageOpen} animationType="slide" onRequestClose={()=>setCreatePageOpen(false)}>
-        <Screen title="Create Google Business Profile"><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:20,gap:12}}>
-          <Text>Enter your real business details. Google verification is required before public visibility is confirmed.</Text>
-          {Object.entries({businessName:'Business name',primaryCategory:'Exact Google category',address:'Street address',locality:'City',administrativeArea:'State / region',postalCode:'Postal code',regionCode:'Two-letter country code'}).map(([key,label])=><View key={key}><Text>{label}</Text><TextInput accessibilityLabel={label} value={pageFields[key as keyof typeof pageFields]} onChangeText={value=>setPageFields(prev=>({...prev,[key]:value}))} style={{borderWidth:1,borderColor:colors.line,borderRadius:8,padding:12}} /></View>)}
-          <Pressable disabled={createPageBusy} onPress={()=>void createGooglePage()}><Text>{createPageBusy?'Creating…':'Create profile'}</Text></Pressable>
-          <Pressable disabled={createPageBusy} onPress={()=>setCreatePageOpen(false)}><Text>Cancel</Text></Pressable>
-        </ScrollView></Screen>
+      <Modal
+        visible={createPageOpen}
+        animationType="slide"
+        onRequestClose={() => setCreatePageOpen(false)}
+      >
+        <Screen
+          title="Create Google Profile"
+          subtitle="Add your location to Google Maps"
+          showBack={true}
+          onBack={() => setCreatePageOpen(false)}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 60 }}
+          >
+            {/* Header Informational Card */}
+            <View
+              style={{
+                backgroundColor: '#EFF6FF',
+                borderRadius: 14,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: '#BFDBFE',
+                flexDirection: 'row',
+                gap: 12,
+                alignItems: 'center',
+              }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: '#DBEAFE',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <MaterialIcons name="storefront" size={22} color="#1D4ED8" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#1E40AF' }}>
+                  Official Google Business Profile
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#3B82F6', marginTop: 2, lineHeight: 16 }}>
+                  Enter real storefront details. After creation, Google will initiate standard ownership verification.
+                </Text>
+              </View>
+            </View>
+
+            {/* Section 1: Business Identity */}
+            <Card style={{ gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="badge" size={18} color="#009F50" />
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                  Business Identity
+                </Text>
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                  Business Name *
+                </Text>
+                <TextInput
+                  accessibilityLabel="Business name"
+                  placeholder="e.g. Apex Dental & Implant Clinic"
+                  value={pageFields.businessName}
+                  onChangeText={(value) => setPageFields((prev) => ({ ...prev, businessName: value }))}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 10,
+                    padding: 12,
+                    fontSize: 14,
+                    backgroundColor: '#FFFFFF',
+                    color: '#0F172A',
+                  }}
+                />
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                  Exact Primary Google Category *
+                </Text>
+                <TextInput
+                  accessibilityLabel="Exact Google category"
+                  placeholder="e.g. Dentist, Plumber, Electrician"
+                  value={pageFields.primaryCategory}
+                  onChangeText={(value) => setPageFields((prev) => ({ ...prev, primaryCategory: value }))}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 10,
+                    padding: 12,
+                    fontSize: 14,
+                    backgroundColor: '#FFFFFF',
+                    color: '#0F172A',
+                  }}
+                />
+
+                {/* Category Quick Chips */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  {['Dentist', 'Plumber', 'Electrician', 'HVAC Contractor', 'Cleaning Service', 'Beauty Salon', 'Restaurant'].map((cat) => (
+                    <Pressable
+                      key={cat}
+                      onPress={() => setPageFields((prev) => ({ ...prev, primaryCategory: cat }))}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: 16,
+                        backgroundColor: pageFields.primaryCategory.toLowerCase() === cat.toLowerCase() ? '#DCFCE7' : '#F1F5F9',
+                        borderWidth: 1,
+                        borderColor: pageFields.primaryCategory.toLowerCase() === cat.toLowerCase() ? '#86EFAC' : '#E2E8F0',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: '600',
+                          color: pageFields.primaryCategory.toLowerCase() === cat.toLowerCase() ? '#166534' : '#475569',
+                        }}
+                      >
+                        {cat}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </Card>
+
+            {/* Section 2: Storefront Location */}
+            <Card style={{ gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="place" size={18} color="#009F50" />
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                  Storefront Address
+                </Text>
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                  Street Address *
+                </Text>
+                <TextInput
+                  accessibilityLabel="Street address"
+                  placeholder="e.g. 102 MG Road, Suite 4B"
+                  value={pageFields.address}
+                  onChangeText={(value) => setPageFields((prev) => ({ ...prev, address: value }))}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 10,
+                    padding: 12,
+                    fontSize: 14,
+                    backgroundColor: '#FFFFFF',
+                    color: '#0F172A',
+                  }}
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>City *</Text>
+                  <TextInput
+                    accessibilityLabel="City"
+                    placeholder="e.g. Bengaluru"
+                    value={pageFields.locality}
+                    onChangeText={(value) => setPageFields((prev) => ({ ...prev, locality: value }))}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 10,
+                      padding: 12,
+                      fontSize: 14,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>State / Region</Text>
+                  <TextInput
+                    accessibilityLabel="State or region"
+                    placeholder="e.g. Karnataka"
+                    value={pageFields.administrativeArea}
+                    onChangeText={(value) => setPageFields((prev) => ({ ...prev, administrativeArea: value }))}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 10,
+                      padding: 12,
+                      fontSize: 14,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  />
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>Postal Code *</Text>
+                  <TextInput
+                    accessibilityLabel="Postal code"
+                    placeholder="e.g. 560001"
+                    keyboardType="number-pad"
+                    value={pageFields.postalCode}
+                    onChangeText={(value) => setPageFields((prev) => ({ ...prev, postalCode: value }))}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 10,
+                      padding: 12,
+                      fontSize: 14,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  />
+                </View>
+                <View style={{ width: 100, gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>Country Code *</Text>
+                  <TextInput
+                    accessibilityLabel="Country code"
+                    placeholder="IN"
+                    maxLength={2}
+                    autoCapitalize="characters"
+                    value={pageFields.regionCode}
+                    onChangeText={(value) => setPageFields((prev) => ({ ...prev, regionCode: value.toUpperCase() }))}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 10,
+                      padding: 12,
+                      fontSize: 14,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                      textAlign: 'center',
+                      fontWeight: '700',
+                    }}
+                  />
+                </View>
+              </View>
+            </Card>
+
+            {/* Action Buttons */}
+            <View style={{ gap: 10, marginTop: 8 }}>
+              <Pressable
+                disabled={createPageBusy}
+                onPress={() => void createGooglePage()}
+                style={({ pressed }) => ({
+                  backgroundColor: '#009F50',
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 8,
+                  opacity: createPageBusy ? 0.7 : pressed ? 0.9 : 1,
+                  shadowColor: '#009F50',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                  elevation: 2,
+                })}
+              >
+                {createPageBusy ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name="add-business" size={20} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>
+                      Create Profile on Google
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+
+              <Pressable
+                disabled={createPageBusy}
+                onPress={() => setCreatePageOpen(false)}
+                style={({ pressed }) => ({
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#F1F5F9',
+                  opacity: pressed ? 0.8 : 1,
+                })}
+              >
+                <Text style={{ color: '#475569', fontSize: 13, fontWeight: '700' }}>
+                  Cancel
+                </Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </Screen>
       </Modal>
 
       {/* Floating Microphone Button (Screenshots 08.55.28 & 08.55.29) */}
