@@ -300,7 +300,7 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                     subtitle="Customize booking portal & menu"
                     onPress={() => {
                       onClose();
-                      router.push('/(tabs)/tools?open=booking');
+                      router.push('/booking-page');
                     }}
                   />
                 )}

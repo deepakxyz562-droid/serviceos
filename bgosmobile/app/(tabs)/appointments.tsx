@@ -216,7 +216,7 @@ export default function AppointmentsScreen() {
           />
           <View style={{ alignItems: 'center', marginTop: 12 }}>
             <Pressable
-              onPress={() => router.push('/(tabs)/tools')}
+              onPress={() => router.push('/booking-page')}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',

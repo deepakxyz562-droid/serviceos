@@ -5,16 +5,18 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Share,
+  StatusBar as RNStatusBar,
   Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
   Screen,
@@ -38,7 +40,11 @@ import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 export default function ToolsScreen() {
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ open?: string }>();
+  const modalTopInset = Platform.OS === 'ios'
+    ? Math.max(insets.top, 54)
+    : Math.max(insets.top, (RNStatusBar.currentHeight || 24) + 10);
   const { logout, deleteAccount, user } = useAuthStore();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -543,7 +549,7 @@ export default function ToolsScreen() {
                         disabled={busy}
                         label="Modify"
                         icon="tune"
-                        onPress={() => void openBookingManager()}
+                        onPress={() => router.push('/booking-page')}
                       />
                     )}
                   </View>
@@ -718,66 +724,73 @@ export default function ToolsScreen() {
         animationType="slide"
         onRequestClose={() => setBookingModalOpen(false)}
       >
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top', 'left', 'right']}>
-          {/* Top Bar with Safe Insets (No clipping from notch or status bar) */}
+        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+          {/* Top Bar with Guaranteed Safe Status Bar Insets (No clipping from notch, dynamic island or status bar) */}
           <View
             style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingHorizontal: 16,
-              paddingVertical: 12,
+              paddingTop: modalTopInset,
               backgroundColor: '#FFFFFF',
               borderBottomWidth: 1,
               borderBottomColor: '#E2E8F0',
             }}
           >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              onPress={() => setBookingModalOpen(false)}
-              hitSlop={10}
+            <View
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: '#F1F5F9',
+                flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                minHeight: 56,
               }}
             >
-              <MaterialIcons name="arrow-back" size={20} color="#0F172A" />
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                onPress={() => setBookingModalOpen(false)}
+                hitSlop={12}
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  backgroundColor: '#F1F5F9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <MaterialIcons name="arrow-back" size={20} color="#0F172A" />
+              </Pressable>
 
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
-                Booking Page Customizer
-              </Text>
-              <Text style={{ fontSize: 11, color: '#64748B' }}>
-                Online portal, SEO & service menu
-              </Text>
-            </View>
-
-            <Pressable
-              disabled={savingBranding}
-              onPress={() => void handleSaveAllBranding()}
-              hitSlop={10}
-              style={{
-                backgroundColor: '#009F50',
-                paddingHorizontal: 14,
-                paddingVertical: 7,
-                borderRadius: 8,
-                opacity: savingBranding ? 0.7 : 1,
-              }}
-            >
-              {savingBranding ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
-                  Save
+              <View style={{ flex: 1, alignItems: 'center', marginHorizontal: 8 }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', textAlign: 'center' }}>
+                  Booking Page & Services
                 </Text>
-              )}
-            </Pressable>
+                <Text style={{ fontSize: 11, color: '#64748B', textAlign: 'center' }}>
+                  Online portal, SEO & service menu
+                </Text>
+              </View>
+
+              <Pressable
+                disabled={savingBranding}
+                onPress={() => void handleSaveAllBranding()}
+                hitSlop={12}
+                style={{
+                  backgroundColor: '#009F50',
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  opacity: savingBranding ? 0.7 : 1,
+                }}
+              >
+                {savingBranding ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
+                    Save
+                  </Text>
+                )}
+              </Pressable>
+            </View>
           </View>
 
           {/* Single ScrollView for entire customizer */}
@@ -1296,7 +1309,7 @@ export default function ToolsScreen() {
               </Text>
             </Pressable>
           </ScrollView>
-        </SafeAreaView>
+        </View>
       </Modal>
     </Screen>
   );

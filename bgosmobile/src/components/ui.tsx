@@ -109,14 +109,14 @@ export function Screen({
   }
 
   // Safe status bar top inset calculation (handles dynamic island, notch, modals, and Android status bar)
-  const topInset = Platform.OS === 'ios' ? Math.max(insets.top, 44) : Math.max(insets.top, RNStatusBar.currentHeight || 24);
+  const topInset = Platform.OS === 'ios' ? Math.max(insets.top, 54) : Math.max(insets.top, (RNStatusBar.currentHeight || 24) + 8);
   // Ensure content never gets hidden behind bottom tabs (62px bar + insets.bottom + clearance)
   // When floatingAction is passed, include extra clearance so content scrolls completely above the floating dock
   const floatingClearance = floatingAction ? 60 : 0;
   const bottomInset = Math.max(insets.bottom, 16) + 76 + extraBottomPadding + floatingClearance;
 
   return (
-    <SafeAreaView style={[ui.screen, { paddingTop: insets.top < 20 ? topInset : 0 }]} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[ui.screen, { paddingTop: insets.top < 44 ? topInset : 0 }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={{ flex: 1, position: 'relative' }}>
           <ScrollView
