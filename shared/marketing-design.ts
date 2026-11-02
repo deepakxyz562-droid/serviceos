@@ -47,6 +47,8 @@ export function createCommercialPosterDesign(input: {
   photo?: string;
   ratio?: string;
   theme?: 'emerald' | 'sand' | 'dark';
+  logoUrl?: string;
+  tagline?: string;
 }): MarketingDesign {
   const sizes: Record<string, [number, number]> = {
     '1:1': [1080, 1080],
@@ -80,13 +82,15 @@ export function createCommercialPosterDesign(input: {
     },
   }[input.theme || 'emerald'];
 
-  const brandText = (input.brand || 'Professional Service').trim();
+  const brandText = (input.brand || 'Professional Business').trim();
   const headlineText = (input.headline || 'Top-Rated Professional Services').trim();
   const badgeText = (input.badge || 'SPECIAL OFFER').trim().toUpperCase();
-  const subText = (input.subtitle || 'Fast turnaround & 100% satisfaction guaranteed.').trim();
-  const ctaLabel = (input.cta || 'BOOK NOW').trim().toUpperCase();
-  const phoneText = input.phone ? ` • ${input.phone.trim()}` : '';
-  const webText = input.website ? input.website.replace(/^https?:\/\//, '') : 'fieseros.com';
+  const subText = (input.subtitle || 'Premium quality & 100% satisfaction guaranteed.').trim();
+  const ctaLabel = (input.cta || 'VISIT STORE').trim().toUpperCase();
+  const taglineText = input.tagline ? ` • ${input.tagline.trim()}` : '';
+  const webText = input.website
+    ? input.website.replace(/^https?:\/\//, '').replace(/\/$/, '')
+    : 'visit website';
   const photoSrc = input.photo && input.photo.trim().length > 0
     ? input.photo.trim()
     : 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80';
@@ -151,6 +155,23 @@ export function createCommercialPosterDesign(input: {
       fontSize: 22,
       opacity: 1,
     },
+    ...(input.logoUrl && input.logoUrl.trim().length > 0
+      ? [
+          {
+            id: 'brand_logo',
+            type: 'image' as const,
+            x: width - 110,
+            y: 35,
+            width: 60,
+            height: 60,
+            src: input.logoUrl.trim(),
+            color: '#ffffff',
+            background: 'transparent',
+            fontSize: 16,
+            opacity: 1,
+          },
+        ]
+      : []),
     // 5. Bottom Dark Scrim (ensures headline & subtitle are 100% readable)
     {
       id: 'bottom_scrim',
@@ -205,18 +226,18 @@ export function createCommercialPosterDesign(input: {
       fontSize: 16,
       opacity: 0.98,
     },
-    // 9. Footer Business Details (Name + Phone)
+    // 9. Footer Business Details (Name + Tagline / Website)
     {
       id: 'footer_brand',
       type: 'text',
       x: 50,
-      y: height - footerH + 35,
+      y: height - footerH + 32,
       width: Math.max(200, width - 360),
-      height: 70,
-      text: `${brandText}${phoneText}\n${webText}`,
+      height: 76,
+      text: `${brandText}${taglineText}\n🌐 ${webText}${input.phone ? ` • 📞 ${input.phone.trim()}` : ''}`,
       color: '#ffffff',
       background: 'transparent',
-      fontSize: 24,
+      fontSize: 22,
       opacity: 1,
     },
     // 10. Call To Action Button

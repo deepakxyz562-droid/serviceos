@@ -287,10 +287,16 @@ export function MarketingCanvasStudio({
   );
 
   const [workspaceInfo, setWorkspaceInfo] = useState<{ name?: string; phone?: string; slug?: string; businessName?: string } | null>(null);
+  const [brandLogo, setBrandLogo] = useState<string | null>(null);
+  const [brandTagline, setBrandTagline] = useState<string>('');
+  const [brandWebsite, setBrandWebsite] = useState<string>('');
+  const [brandName, setBrandName] = useState<string>('');
+  const [brandSettingsOpen, setBrandSettingsOpen] = useState(false);
 
-  const effectiveBusinessName = workspaceInfo?.businessName || workspaceInfo?.name || businessName || 'Fieseros Pro';
+  const effectiveBusinessName = brandName || workspaceInfo?.businessName || (businessName !== 'Fieseros' ? businessName : '') || 'Commercial Brand';
   const effectivePhone = workspaceInfo?.phone;
-  const effectiveWebsite = workspaceInfo?.slug ? `fieseros.com/p/${workspaceInfo.slug}` : 'bgos.fieseros.com';
+  const effectiveWebsite = brandWebsite || (workspaceInfo?.slug ? `fieseros.com/p/${workspaceInfo.slug}` : 'visit website');
+  const effectiveTagline = brandTagline || '';
 
   const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(null);
   const design = useMemo(() => {
@@ -301,11 +307,13 @@ export function MarketingCanvasStudio({
       subtitle: subheadText,
       badge: badgeText,
       cta: ctaText,
-      phone: effectivePhone,
+      phone: undefined,
       website: effectiveWebsite,
       photo: activeVisualFormat === 'poster' ? (posterUrl || photoUrl) : photoUrl,
       ratio: aspectRatio,
       theme: theme === 'sand_olive' ? 'sand' : theme === 'emerald_gold' ? 'emerald' : 'dark',
+      logoUrl: brandLogo || undefined,
+      tagline: effectiveTagline || undefined,
     });
   }, [
     customDesign,
@@ -314,13 +322,14 @@ export function MarketingCanvasStudio({
     subheadText,
     badgeText,
     ctaText,
-    effectivePhone,
     effectiveWebsite,
     activeVisualFormat,
     posterUrl,
     photoUrl,
     aspectRatio,
     theme,
+    brandLogo,
+    effectiveTagline,
   ]);
 
   useEffect(() => {
@@ -335,6 +344,20 @@ export function MarketingCanvasStudio({
             businessName: data.businessName,
           });
         }
+      })
+      .catch(() => {});
+
+    authFetch('/api/brand-profile')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.profile) {
+          if (data.profile.businessName) setBrandName(data.profile.businessName);
+          if (data.profile.website) setBrandWebsite(data.profile.website);
+          if (data.profile.industry) setBrandTagline(data.profile.industry);
+        }
+        if (data?.logo) setBrandLogo(data.logo);
+        if (data?.brandDetails?.logoUrl) setBrandLogo(data.brandDetails.logoUrl);
+        if (data?.brandDetails?.tagline) setBrandTagline(data.brandDetails.tagline);
       })
       .catch(() => {});
   }, []);
@@ -365,7 +388,9 @@ export function MarketingCanvasStudio({
       const params = new URLSearchParams();
       if (refresh) params.set('refresh', '1');
       if (activeProfileId) params.set('profileId', activeProfileId);
-      if (businessName) params.set('businessName', businessName);
+      const effName = brandName || workspaceInfo?.businessName || (businessName !== 'Fieseros' ? businessName : '');
+      if (effName) params.set('businessName', effName);
+      if (brandTagline) params.set('category', brandTagline);
       const query = params.toString() ? `?${params.toString()}` : '';
       const res = await authFetch(`/api/social/prompts/suggestions${query}`);
       if (res.ok) {
@@ -379,7 +404,7 @@ export function MarketingCanvasStudio({
     } finally {
       setLoadingSuggestions(false);
     }
-  }, [activeProfileId, businessName]);
+  }, [activeProfileId, brandName, workspaceInfo?.businessName, businessName, brandTagline]);
 
   useEffect(() => {
     void fetchSuggestions(false);
@@ -1373,20 +1398,29 @@ export function MarketingCanvasStudio({
 
                     {/* Auto-Branded Footer Strip */}
                     <div className="absolute bottom-0 inset-x-0 h-14 bg-slate-950/95 backdrop-blur-md border-t border-white/10 px-4 flex items-center justify-between text-white">
-                      <div className="min-w-0 pr-3">
-                        <p className="font-extrabold text-xs text-white truncate">
-                          {workspaceInfo?.businessName || workspaceInfo?.name || businessName || 'Fieseros Pro'}
-                        </p>
-                        <p className="text-[10px] text-slate-400 font-medium truncate">
-                          {workspaceInfo?.phone ? `📞 ${workspaceInfo.phone}` : 'Verified Local Business'}
-                        </p>
+                      <div className="flex items-center gap-2.5 min-w-0 pr-3">
+                        {brandLogo ? (
+                          <img src={brandLogo} alt="Logo" className="size-8 rounded-lg object-cover bg-slate-900 border border-white/20 shrink-0" />
+                        ) : (
+                          <div className="size-8 rounded-lg bg-emerald-600 flex items-center justify-center font-black text-white text-xs shrink-0">
+                            {effectiveBusinessName.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-extrabold text-xs text-white truncate">
+                            {effectiveBusinessName}
+                          </p>
+                          <p className="text-[10px] text-emerald-400 font-medium truncate">
+                            {effectiveTagline || `🌐 ${effectiveWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '')}`}
+                          </p>
+                        </div>
                       </div>
                       <div className="text-right shrink-0">
                         <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-500 text-white px-2 py-0.5 rounded-md shadow-xs">
-                          {ctaText || 'BOOK ONLINE'}
+                          {ctaText || 'VISIT STORE'}
                         </span>
-                        <p className="text-[9px] text-slate-400 font-mono mt-0.5">
-                          {workspaceInfo?.slug ? `fieseros.com/p/${workspaceInfo.slug.slice(0, 16)}` : 'bgos.fieseros.com'}
+                        <p className="text-[9px] text-sky-400 font-mono mt-0.5 truncate max-w-[120px]">
+                          {effectiveWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                         </p>
                       </div>
                     </div>
@@ -1407,6 +1441,15 @@ export function MarketingCanvasStudio({
                   </label>
 
                   <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBrandSettingsOpen(true)}
+                      className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card"
+                    >
+                      <span>🏷️ Brand & Logo</span>
+                    </Button>
                     <a
                       href={posterUrl}
                       target="_blank"
@@ -1465,6 +1508,16 @@ export function MarketingCanvasStudio({
                   >
                     <Palette className="size-3.5 text-muted-foreground" />
                     <span>Brand colours</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBrandSettingsOpen(true)}
+                    className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card"
+                  >
+                    <span>🏷️ Brand & Logo</span>
                   </Button>
 
                   <Button
@@ -1534,12 +1587,23 @@ export function MarketingCanvasStudio({
                     </div>
                     {/* Auto-Branded Footer Strip */}
                     <div className="absolute bottom-0 inset-x-0 h-11 bg-slate-950/95 px-3 flex items-center justify-between text-white border-t border-white/10">
-                      <div className="min-w-0 pr-2">
-                        <p className="font-bold text-[10.5px] truncate">{effectiveBusinessName}</p>
-                        <p className="text-[9px] text-slate-400 truncate">{effectivePhone ? `📞 ${effectivePhone}` : 'Verified Pro'}</p>
+                      <div className="flex items-center gap-2 min-w-0 pr-2">
+                        {brandLogo ? (
+                          <img src={brandLogo} alt="Logo" className="size-6 rounded-md object-cover bg-slate-900 border border-white/20 shrink-0" />
+                        ) : (
+                          <div className="size-6 rounded-md bg-emerald-600 flex items-center justify-center font-black text-white text-[10px] shrink-0">
+                            {effectiveBusinessName.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-bold text-[10.5px] truncate">{effectiveBusinessName}</p>
+                          <p className="text-[9px] text-emerald-400 truncate">
+                            {effectiveTagline || `🌐 ${effectiveWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '')}`}
+                          </p>
+                        </div>
                       </div>
                       <span className="text-[9px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded shrink-0">
-                        {ctaText || 'BOOK ONLINE'}
+                        {ctaText || 'VISIT STORE'}
                       </span>
                     </div>
                   </div>
@@ -2044,6 +2108,105 @@ export function MarketingCanvasStudio({
               className="bg-primary text-primary-foreground font-bold text-xs"
             >
               Save Link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── MODAL: Brand & Logo Customization ─────────────────────────────── */}
+      <Dialog open={brandSettingsOpen} onOpenChange={setBrandSettingsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <span>🏷️ Brand, Logo & Website</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-foreground">Business Logo</label>
+              <div className="flex items-center gap-3">
+                {brandLogo ? (
+                  <img src={brandLogo} alt="Logo" className="size-12 rounded-xl object-cover border border-border shadow-xs" />
+                ) : (
+                  <div className="size-12 rounded-xl bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground border border-dashed border-border">
+                    No logo
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer h-8 px-3 text-xs font-semibold rounded-xl border border-border bg-card hover:bg-muted transition-all text-foreground">
+                    <Upload className="size-3.5 text-primary" />
+                    <span>{brandLogo ? 'Change Logo' : 'Upload Logo'}</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            if (ev.target?.result) setBrandLogo(ev.target.result as string);
+                          };
+                          reader.readAsDataURL(f);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                  {brandLogo && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setBrandLogo(null)}
+                      className="h-8 text-xs text-rose-500 hover:text-rose-600"
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground">Brand / Business Name</label>
+              <Input
+                value={brandName}
+                onChange={(e) => setBrandName(e.target.value)}
+                placeholder={effectiveBusinessName}
+                className="text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground">Brand Tagline / Specialty</label>
+              <Input
+                value={brandTagline}
+                onChange={(e) => setBrandTagline(e.target.value)}
+                placeholder="e.g. 100% Pure Desi Ghee Sweets & Mithai"
+                className="text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground">Official Website URL</label>
+              <Input
+                value={brandWebsite}
+                onChange={(e) => setBrandWebsite(e.target.value)}
+                placeholder={effectiveWebsite}
+                className="text-xs"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={() => {
+                setBrandSettingsOpen(false);
+                toast.success('Brand details updated');
+              }}
+              className="w-full text-xs font-bold"
+            >
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -56,8 +56,17 @@ type BrandProfileData = {
   profile?: {
     businessName?: string;
     industry?: string;
+    website?: string;
+    location?: string;
     services?: string[];
     products?: string[];
+    usps?: string;
+    currentOffers?: string;
+  };
+  logo?: string | null;
+  brandDetails?: {
+    logoUrl?: string;
+    tagline?: string;
   };
 };
 
@@ -101,6 +110,8 @@ function AutoBrandedPosterCard({
   businessName,
   phone,
   website,
+  logoUri,
+  tagline,
   height = 360,
   aspectRatio = 4 / 5,
   isGenerating = false,
@@ -114,12 +125,17 @@ function AutoBrandedPosterCard({
   businessName: string;
   phone?: string;
   website?: string;
+  logoUri?: string | null;
+  tagline?: string;
   height?: number;
   aspectRatio?: number;
   isGenerating?: boolean;
   generatingText?: string;
 }) {
   const isCompact = height < 260;
+  const cleanWeb = website ? website.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
+  const initial = (businessName || 'B').trim().charAt(0).toUpperCase();
+
   return (
     <View
       style={{
@@ -144,7 +160,7 @@ function AutoBrandedPosterCard({
         resizeMode="cover"
       />
 
-      {/* Top Header Scrim with Offer Badge */}
+      {/* Top Header Scrim with Offer Badge & Optional Logo */}
       <View
         style={{
           position: 'absolute',
@@ -181,15 +197,30 @@ function AutoBrandedPosterCard({
             {badge || 'SPECIAL OFFER'}
           </Text>
         </View>
-        <View
-          style={{
-            backgroundColor: 'rgba(0,0,0,0.65)',
-            paddingHorizontal: isCompact ? 5 : 8,
-            paddingVertical: isCompact ? 2 : 3.5,
-            borderRadius: 6,
-          }}
-        >
-          <Text style={{ color: '#FFFFFF', fontSize: isCompact ? 8 : 9.5, fontWeight: '700' }}>1080 × 1350</Text>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {logoUri ? (
+            <Image
+              source={{ uri: logoUri }}
+              style={{
+                width: isCompact ? 20 : 24,
+                height: isCompact ? 20 : 24,
+                borderRadius: 4,
+                backgroundColor: 'rgba(255,255,255,0.9)',
+              }}
+              resizeMode="cover"
+            />
+          ) : null}
+          <View
+            style={{
+              backgroundColor: 'rgba(0,0,0,0.65)',
+              paddingHorizontal: isCompact ? 5 : 8,
+              paddingVertical: isCompact ? 2 : 3.5,
+              borderRadius: 6,
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: isCompact ? 8 : 9.5, fontWeight: '700' }}>1080 × 1350</Text>
+          </View>
         </View>
       </View>
 
@@ -197,7 +228,7 @@ function AutoBrandedPosterCard({
       <View
         style={{
           position: 'absolute',
-          bottom: isCompact ? 38 : 48,
+          bottom: isCompact ? 38 : 50,
           left: 0,
           right: 0,
           paddingHorizontal: isCompact ? 10 : 14,
@@ -239,7 +270,7 @@ function AutoBrandedPosterCard({
           bottom: 0,
           left: 0,
           right: 0,
-          height: isCompact ? 38 : 48,
+          height: isCompact ? 38 : 50,
           backgroundColor: '#0F172A',
           flexDirection: 'row',
           alignItems: 'center',
@@ -249,20 +280,52 @@ function AutoBrandedPosterCard({
           borderTopColor: 'rgba(255,255,255,0.15)',
         }}
       >
-        <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
-          <Text
-            numberOfLines={1}
-            style={{ color: '#FFFFFF', fontSize: isCompact ? 9.5 : 11.5, fontWeight: '800' }}
-          >
-            {businessName || 'Fieseros Pro'}
-          </Text>
-          <Text
-            numberOfLines={1}
-            style={{ color: '#94A3B8', fontSize: isCompact ? 8 : 9.5, fontWeight: '600' }}
-          >
-            {phone ? `📞 ${phone}` : 'Verified Local Business'}
-          </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, paddingRight: 6 }}>
+          {logoUri ? (
+            <Image
+              source={{ uri: logoUri }}
+              style={{
+                width: isCompact ? 22 : 28,
+                height: isCompact ? 22 : 28,
+                borderRadius: isCompact ? 5 : 6,
+                marginRight: 6,
+                backgroundColor: '#1E293B',
+              }}
+              resizeMode="cover"
+            />
+          ) : (
+            <View
+              style={{
+                width: isCompact ? 22 : 28,
+                height: isCompact ? 22 : 28,
+                borderRadius: isCompact ? 5 : 6,
+                marginRight: 6,
+                backgroundColor: '#009F50',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: isCompact ? 10 : 13 }}>
+                {initial}
+              </Text>
+            </View>
+          )}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              numberOfLines={1}
+              style={{ color: '#FFFFFF', fontSize: isCompact ? 9.5 : 11.5, fontWeight: '800' }}
+            >
+              {businessName || 'Commercial Brand'}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={{ color: '#38BDF8', fontSize: isCompact ? 8 : 9.5, fontWeight: '600' }}
+            >
+              {tagline || (cleanWeb ? `🌐 ${cleanWeb}` : 'Verified Business')}
+            </Text>
+          </View>
         </View>
+
         <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
           <View
             style={{
@@ -273,12 +336,14 @@ function AutoBrandedPosterCard({
             }}
           >
             <Text style={{ color: '#FFFFFF', fontSize: isCompact ? 7.5 : 9, fontWeight: '800' }}>
-              {ctaText || 'BOOK ONLINE'}
+              {ctaText || 'VISIT STORE'}
             </Text>
           </View>
-          <Text style={{ color: '#94A3B8', fontSize: isCompact ? 7 : 8.5, marginTop: 1 }}>
-            {website ? website.replace(/^https?:\/\//, '').slice(0, 18) : 'bgos.fieseros.com'}
-          </Text>
+          {cleanWeb ? (
+            <Text numberOfLines={1} style={{ color: '#94A3B8', fontSize: isCompact ? 7 : 8.5, marginTop: 1, maxWidth: 120 }}>
+              {cleanWeb.slice(0, 20)}
+            </Text>
+          ) : null}
         </View>
       </View>
 
@@ -549,15 +614,84 @@ export default function MarketingScreen() {
     return list;
   }, [selectedPlatforms, gbpAccount, fbAccount, igAccount]);
 
+  const [brandLogoUri, setBrandLogoUri] = useState<string | null>(null);
+  const [brandTagline, setBrandTagline] = useState<string>('');
+  const [brandWebsite, setBrandWebsite] = useState<string>('');
+  const [brandName, setBrandName] = useState<string>('');
+  const [refreshingIdeas, setRefreshingIdeas] = useState<boolean>(false);
+
   const effectiveBusinessName =
-    workspace.data?.bookingPageConfig?.businessName ||
-    workspace.data?.name ||
+    brandName ||
     brandProfile.data?.profile?.businessName ||
     gbpPlace.data?.place?.title ||
+    workspace.data?.bookingPageConfig?.businessName ||
     discover.data?.activeProfile?.name ||
-    'Fieseros Pro';
+    'Commercial Brand';
   const effectiveBusinessPhone = workspace.data?.bookingPageConfig?.phone;
-  const effectiveBusinessWebsite = workspace.data?.links?.profile || 'bgos.fieseros.com';
+  const effectiveBusinessWebsite =
+    brandWebsite ||
+    brandProfile.data?.profile?.website ||
+    workspace.data?.links?.profile ||
+    'fieseros.com';
+  const effectiveBusinessTagline =
+    brandTagline ||
+    brandProfile.data?.brandDetails?.tagline ||
+    brandProfile.data?.profile?.industry ||
+    '';
+  const effectiveBusinessLogo =
+    brandLogoUri ||
+    brandProfile.data?.logo ||
+    brandProfile.data?.brandDetails?.logoUrl ||
+    null;
+
+  const handlePickLogo = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission Needed', 'Please allow photo gallery access to pick a business logo.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.9,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setBrandLogoUri(result.assets[0].uri);
+      }
+    } catch (err) {
+      console.warn('Failed to pick logo:', err);
+    }
+  };
+
+  const handleRefreshIdeas = async () => {
+    if (refreshingIdeas) return;
+    setRefreshingIdeas(true);
+    try {
+      const params = new URLSearchParams({ refresh: '1' });
+      const cat =
+        brandProfile.data?.profile?.industry ||
+        gbpPlace.data?.place?.category ||
+        '';
+      if (cat) params.set('category', cat);
+      if (effectiveBusinessName) params.set('businessName', effectiveBusinessName);
+
+      const fresh = await apiRequest<{
+        business?: { name?: string; category?: string };
+        suggestions: Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string }>;
+      }>(`/api/social/prompts/suggestions?${params.toString()}`);
+
+      if (fresh?.suggestions && fresh.suggestions.length > 0) {
+        promptSuggestions.setData(fresh);
+      }
+    } catch (err) {
+      console.warn('Failed to refresh ideas:', err);
+      promptSuggestions.refresh();
+    } finally {
+      setRefreshingIdeas(false);
+    }
+  };
 
   const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(null);
   const design = useMemo(() => {
@@ -568,11 +702,13 @@ export default function MarketingScreen() {
       subtitle,
       badge: discountBadge,
       cta: ctaText,
-      phone: effectiveBusinessPhone,
+      phone: undefined,
       website: effectiveBusinessWebsite,
       photo: customPosterUri || bgPhotoUrl,
       ratio: aspectRatio,
       theme: colorTheme,
+      logoUrl: effectiveBusinessLogo || undefined,
+      tagline: effectiveBusinessTagline || undefined,
     });
   }, [
     customDesign,
@@ -581,12 +717,13 @@ export default function MarketingScreen() {
     subtitle,
     discountBadge,
     ctaText,
-    effectiveBusinessPhone,
     effectiveBusinessWebsite,
     customPosterUri,
     bgPhotoUrl,
     aspectRatio,
     colorTheme,
+    effectiveBusinessLogo,
+    effectiveBusinessTagline,
   ]);
 
   function handleSelectHeadline(newHeadline: string) {
@@ -1435,7 +1572,8 @@ export default function MarketingScreen() {
                       badge={discountBadge}
                       ctaText={ctaText}
                       businessName={effectiveBusinessName}
-                      phone={effectiveBusinessPhone}
+                      logoUri={effectiveBusinessLogo}
+                      tagline={effectiveBusinessTagline}
                       website={effectiveBusinessWebsite}
                       height={230}
                       isGenerating={busy && generationMode === 'poster'}
@@ -1527,8 +1665,16 @@ export default function MarketingScreen() {
                       <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
                         💡 Suggested for your business:
                       </Text>
-                      <Pressable onPress={() => promptSuggestions.refresh()} hitSlop={8}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#009F50' }}>🎲 Refresh Ideas</Text>
+                      <Pressable
+                        onPress={handleRefreshIdeas}
+                        disabled={refreshingIdeas}
+                        hitSlop={8}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      >
+                        {refreshingIdeas && <ActivityIndicator size="small" color="#009F50" />}
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: refreshingIdeas ? '#94A3B8' : '#009F50' }}>
+                          {refreshingIdeas ? 'Generating...' : '🎲 Refresh Ideas'}
+                        </Text>
                       </Pressable>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 2 }}>
@@ -1741,7 +1887,8 @@ export default function MarketingScreen() {
                       badge={discountBadge}
                       ctaText={ctaText}
                       businessName={effectiveBusinessName}
-                      phone={effectiveBusinessPhone}
+                      logoUri={effectiveBusinessLogo}
+                      tagline={effectiveBusinessTagline}
                       website={effectiveBusinessWebsite}
                       height={Math.min(360, Math.round(Dimensions.get('window').height * 0.40))}
                       isGenerating={busy && generationMode === 'poster'}
@@ -1801,6 +1948,75 @@ export default function MarketingScreen() {
                             <Text style={{ fontSize: 11.5, fontWeight: '600', color: '#64748B' }}>Reset</Text>
                           </Pressable>
                         )}
+                      </View>
+
+                      {/* Brand, Logo & Website Customization */}
+                      <View style={{ borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 10, marginTop: 4, gap: 8 }}>
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0F172A' }}>🏷️ Brand, Logo & Website</Text>
+
+                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                          <Pressable
+                            onPress={handlePickLogo}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              paddingVertical: 7,
+                              paddingHorizontal: 10,
+                              borderRadius: 8,
+                              borderWidth: 1,
+                              borderColor: '#CBD5E1',
+                              backgroundColor: '#F8FAFC',
+                            }}
+                          >
+                            {effectiveBusinessLogo ? (
+                              <Image source={{ uri: effectiveBusinessLogo }} style={{ width: 20, height: 20, borderRadius: 4 }} resizeMode="cover" />
+                            ) : (
+                              <MaterialIcons name="add-photo-alternate" size={18} color="#009F50" />
+                            )}
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>
+                              {effectiveBusinessLogo ? 'Change Logo' : 'Upload Logo'}
+                            </Text>
+                          </Pressable>
+                          {brandLogoUri && (
+                            <Pressable onPress={() => setBrandLogoUri(null)} hitSlop={6}>
+                              <Text style={{ fontSize: 10.5, color: '#EF4444', fontWeight: '700' }}>Remove</Text>
+                            </Pressable>
+                          )}
+                        </View>
+
+                        <View style={{ gap: 4 }}>
+                          <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>Brand / Shop Name</Text>
+                          <TextInput
+                            value={brandName}
+                            onChangeText={setBrandName}
+                            placeholder={effectiveBusinessName}
+                            style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, fontSize: 11.5, color: '#0F172A' }}
+                          />
+                        </View>
+
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <View style={{ flex: 1, gap: 4 }}>
+                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>Tagline / Specialty</Text>
+                            <TextInput
+                              value={brandTagline}
+                              onChangeText={setBrandTagline}
+                              placeholder="e.g. Pure Desi Ghee"
+                              style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, fontSize: 11.5, color: '#0F172A' }}
+                            />
+                          </View>
+                          <View style={{ flex: 1, gap: 4 }}>
+                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>Official Website</Text>
+                            <TextInput
+                              value={brandWebsite}
+                              onChangeText={setBrandWebsite}
+                              placeholder={effectiveBusinessWebsite}
+                              autoCapitalize="none"
+                              keyboardType="url"
+                              style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, fontSize: 11.5, color: '#0F172A' }}
+                            />
+                          </View>
+                        </View>
                       </View>
                     </View>
                   </View>
@@ -1978,7 +2194,8 @@ export default function MarketingScreen() {
                         badge={discountBadge}
                         ctaText={ctaText}
                         businessName={effectiveBusinessName}
-                        phone={effectiveBusinessPhone}
+                        logoUri={effectiveBusinessLogo}
+                        tagline={effectiveBusinessTagline}
                         website={effectiveBusinessWebsite}
                         height={Math.min(320, Math.round(Dimensions.get('window').height * 0.36))}
                       />

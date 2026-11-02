@@ -91,12 +91,96 @@ async function callCloudflareImage(
 export function buildHighQualityImagePrompt(rawPrompt: string, isPoster?: boolean): string {
   const isPosterMode = isPoster || rawPrompt.startsWith('[POSTER]');
   const cleanPrompt = rawPrompt.replace(/^\[POSTER\]\s*/, '').trim();
+  const lower = cleanPrompt.toLowerCase();
 
-  if (isPosterMode) {
-    return `Ultra-high quality commercial promotional advertising photography for a professional service business. Subject: ${cleanPrompt}. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures. Perfectly composed with generous negative space for digital typography overlay. High-end editorial photography style, perfectly exposed, vivid realistic colors. Clean modern commercial background. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO FONTS, NO WATERMARKS, NO LOGOS, pure visual photography only.`;
+  let styleDescriptor = 'Award-winning commercial advertising photography';
+  let settingDescriptor = 'clean modern commercial setting with generous negative copy space for digital typography overlay';
+
+  if (
+    lower.includes('sweet') ||
+    lower.includes('mithai') ||
+    lower.includes('bakery') ||
+    lower.includes('cake') ||
+    lower.includes('dessert') ||
+    lower.includes('ladoo') ||
+    lower.includes('gulab jamun') ||
+    lower.includes('kaju katli') ||
+    lower.includes('food') ||
+    lower.includes('restaurant') ||
+    lower.includes('cafe')
+  ) {
+    styleDescriptor =
+      'Award-winning commercial gourmet food photography, mouthwatering artisanal confections, rich appetizing textures, pure desi ghee glazes, silver vark flakes, festive brass or marble platters';
+    settingDescriptor =
+      'warm gourmet food studio lighting, shallow depth of field, artful festive food styling with negative space';
+  } else if (
+    lower.includes('cloth') ||
+    lower.includes('saree') ||
+    lower.includes('fashion') ||
+    lower.includes('boutique') ||
+    lower.includes('apparel') ||
+    lower.includes('dress') ||
+    lower.includes('lehenga') ||
+    lower.includes('bridal') ||
+    lower.includes('suit') ||
+    lower.includes('kurti') ||
+    lower.includes('garment')
+  ) {
+    styleDescriptor =
+      'High-end editorial fashion photography, luxurious designer textiles, elegant showroom mannequins, rich embroidery and fabric drape';
+    settingDescriptor =
+      'designer boutique studio lighting, soft natural shadows, minimalist aesthetic background with negative copy space';
+  } else if (
+    lower.includes('jewel') ||
+    lower.includes('gold') ||
+    lower.includes('diamond') ||
+    lower.includes('necklace') ||
+    lower.includes('ring') ||
+    lower.includes('ornament') ||
+    lower.includes('gem') ||
+    lower.includes('silver')
+  ) {
+    styleDescriptor =
+      'Ultra-luxury commercial high-jewelry advertising photography, sparkling 22K hallmark gold and certified diamond solitaires, macro lens, glittering faceted light refractions';
+    settingDescriptor =
+      'black velvet pedestal display, dramatic jewelry spotlighting, pristine premium composition with generous negative space';
+  } else if (
+    lower.includes('software') ||
+    lower.includes('app') ||
+    lower.includes('tech') ||
+    lower.includes('it ') ||
+    lower.includes('code') ||
+    lower.includes('cloud') ||
+    lower.includes('saas') ||
+    lower.includes('digital') ||
+    lower.includes('developer') ||
+    lower.includes('agency')
+  ) {
+    styleDescriptor =
+      'High-tech modern corporate technology photography, sleek software agency setup, modern code workspace, clean glass office environment';
+    settingDescriptor =
+      'contemporary ambient lighting, sharp focus, elegant negative copy space';
+  } else if (
+    lower.includes('plumb') ||
+    lower.includes('hvac') ||
+    lower.includes('ac ') ||
+    lower.includes('cooling') ||
+    lower.includes('clean') ||
+    lower.includes('repair') ||
+    lower.includes('service') ||
+    lower.includes('trade')
+  ) {
+    styleDescriptor =
+      'Award-winning commercial trade & home service photography, professional certified technician, clean modern tools, welcoming atmosphere';
+    settingDescriptor =
+      'bright natural studio lighting, ultra-sharp focus, shallow depth of field with copy space';
   }
 
-  return `Award-winning commercial promotional photography for a professional service business. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures, clean modern background. Authentic, trustworthy, and welcoming atmosphere. Brief: ${cleanPrompt}. High-end editorial photography style, perfectly exposed, vivid realistic colors, no text, no watermarks, no logos, no distorted features, no blurry artifacts.`;
+  if (isPosterMode) {
+    return `${styleDescriptor}. Subject: ${cleanPrompt}. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures. Perfectly composed in ${settingDescriptor}. High-end commercial aesthetic, perfectly exposed, vivid realistic colors. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO FONTS, NO WATERMARKS, NO LOGOS, pure visual photography only.`;
+  }
+
+  return `${styleDescriptor}. Brief: ${cleanPrompt}. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures, clean modern background. Authentic, trustworthy, and welcoming atmosphere. Perfectly exposed, vivid realistic colors. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO FONTS, NO WATERMARKS, NO LOGOS, pure visual photography only.`;
 }
 
 export async function generateDesignImage(
