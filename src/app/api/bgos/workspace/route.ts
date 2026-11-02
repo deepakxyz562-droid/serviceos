@@ -69,9 +69,7 @@ export async function GET() {
         profile: profile?.isEnabled && profile.handle
           ? `/p/${encodeURIComponent(profile.handle)}`
           : `/b/${encodeURIComponent(tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}`,
-        booking: event
-          ? `/book/${encodeURIComponent(tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}/${encodeURIComponent(event.slug)}`
-          : `/book/${encodeURIComponent(tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}`,
+        booking: `/book/${encodeURIComponent(tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}`,
         form: form?.slug ? `/f/${encodeURIComponent(form.slug)}` : null,
         review: tenant.googlePlaceId ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(tenant.googlePlaceId)}` : null,
       },

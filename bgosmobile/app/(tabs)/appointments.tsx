@@ -17,7 +17,7 @@ import {
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { localDay, futureLocalTime } from '../../src/lib/dates';
-import { getBgosWebUrl } from '../../src/lib/bgos-urls';
+import { WEB_URL } from '../../src/lib/constants';
 import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 
 type Booking = { id: string; title: string; customerName?: string; scheduledAt?: string; status: string };
@@ -29,7 +29,9 @@ export default function AppointmentsScreen() {
   const [weekOffset, setWeekOffset] = useState(0);
 
   const liveBookingUrl = workspace.data?.links?.booking
-    ? `${getBgosWebUrl()}${workspace.data.links.booking}`
+    ? (workspace.data.links.booking.startsWith('http')
+        ? workspace.data.links.booking
+        : `${WEB_URL}${workspace.data.links.booking}`)
     : null;
 
   const days = Array.from({ length: 7 }, (_, i) => {

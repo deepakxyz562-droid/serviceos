@@ -22,7 +22,7 @@ import {
 } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
-import { getBgosWebUrl } from '../src/lib/bgos-urls';
+import { WEB_URL } from '../src/lib/constants';
 import type { BgosWorkspace } from '../src/types/bgos-contracts';
 
 export default function BookingPageScreen() {
@@ -178,7 +178,9 @@ export default function BookingPageScreen() {
   }
 
   const liveBookingUrl = workspace.data?.links?.booking
-    ? `${getBgosWebUrl()}${workspace.data.links.booking}`
+    ? (workspace.data.links.booking.startsWith('http')
+        ? workspace.data.links.booking
+        : `${WEB_URL}${workspace.data.links.booking}`)
     : null;
 
   return (

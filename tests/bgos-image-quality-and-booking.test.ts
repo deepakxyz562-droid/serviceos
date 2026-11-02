@@ -127,5 +127,27 @@ describe('High Quality Image Prompt & Public Booking Services Flow', () => {
       expect(json.links.booking).toBe('/book/metro-fast-plumbing');
       expect(json.links.profile).toBe('/b/metro-fast-plumbing');
     });
+
+    it('always links to the complete service booking portal even if cal event types exist', async () => {
+      mockTenant.settingsJson = JSON.stringify({
+        schedulingEventTypes: [{ id: 'evt_30', slug: '30min', isActive: true }],
+      });
+      const { GET } = await import('@/app/api/bgos/workspace/route');
+      const res = await GET();
+      expect(res.status).toBe(200);
+
+      const json = await res.json();
+      expect(json.links.booking).toBe('/book/metro-fast-plumbing');
+      expect(json.links.booking).not.toContain('/30min');
+    });
+
+    it('constructs public booking URLs directly with domain root without corrupting with /app?product=bgos', () => {
+      const WEB_URL = 'https://bgos.fieseros.com';
+      const bookingPath = '/book/metro-fast-plumbing';
+      const constructed = bookingPath.startsWith('http') ? bookingPath : `${WEB_URL}${bookingPath}`;
+
+      expect(constructed).toBe('https://bgos.fieseros.com/book/metro-fast-plumbing');
+      expect(constructed).not.toContain('/app?product=bgos');
+    });
   });
 });

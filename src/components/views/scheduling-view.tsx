@@ -24,6 +24,9 @@ import {
   CalendarPlus,
   Check,
   ExternalLink,
+  Copy,
+  MessageCircle,
+  Share2,
 } from 'lucide-react';
 import {
   Dialog,
@@ -397,6 +400,55 @@ export function SchedulingView({
   const [newLocation, setNewLocation] = useState('Green Park, Delhi');
   const [newTime, setNewTime] = useState('11:00 AM');
   const [newTeamMember, setNewTeamMember] = useState('Rakesh Kumar');
+
+  // Online Booking Page web workspace state
+  const [workspaceData, setWorkspaceData] = useState<{
+    name?: string;
+    links?: { booking?: string; profile?: string; form?: string };
+    bookingPageConfig?: {
+      businessName?: string;
+      phone?: string;
+      whatsapp?: string;
+      email?: string;
+      website?: string;
+      headline?: string;
+      seoDescription?: string;
+      onlineBookingEnabled?: boolean;
+    };
+  } | null>(null);
+  const [servicesMenu, setServicesMenu] = useState<
+    Array<{ id: string; name: string; duration: number; basePrice: number; description?: string; category?: string }>
+  >([]);
+
+  const loadWorkspaceData = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/bgos/workspace');
+      if (res.ok) {
+        const json = await res.json();
+        setWorkspaceData(json);
+        if (json.links?.booking) {
+          const slug = json.links.booking.replace(/^\/book\//, '').split('/')[0];
+          if (slug) {
+            const servRes = await fetch(`/api/public/business/${encodeURIComponent(slug)}/services`);
+            if (servRes.ok) {
+              const servData = await servRes.json();
+              if (Array.isArray(servData.services)) {
+                setServicesMenu(servData.services);
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Non-fatal fallback
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'online_booking') {
+      loadWorkspaceData();
+    }
+  }, [activeTab, loadWorkspaceData]);
 
   // Real-time synchronization with scheduling APIs
   const fetchBookings = useCallback(async () => {
@@ -968,7 +1020,159 @@ export function SchedulingView({
               </div>
             )}
 
-            {activeTab !== 'calendar' && (
+            {activeTab === 'online_booking' ? (
+              <div className="space-y-5">
+                {/* 1. Header Card */}
+                <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-[#009F50]">
+                        <Globe className="size-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-base font-bold text-slate-900">Online Booking Page</h2>
+                          {workspaceData?.bookingPageConfig?.onlineBookingEnabled !== false ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-[#009F50] border border-emerald-200">
+                              <span className="size-1.5 rounded-full bg-[#009F50] animate-pulse" />
+                              Accepting Bookings
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              Bookings Paused
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Your customer-facing portal where clients schedule appointments and view your service menu.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('calendar')}
+                      className="rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 self-start sm:self-auto"
+                    >
+                      Back to Calendar
+                    </button>
+                  </div>
+
+                  {/* Live Booking URL & Quick Share Actions */}
+                  <div className="mt-5 rounded-xl border border-emerald-100 bg-[#F0FDF4] p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                          Your Public Booking URL
+                        </p>
+                        <p className="mt-1 font-mono text-xs font-semibold text-emerald-950 truncate select-all">
+                          {typeof window !== 'undefined' ? `${window.location.origin}${workspaceData?.links?.booking || '/book'}` : `https://bgos.fieseros.com${workspaceData?.links?.booking || '/book'}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = `${typeof window !== 'undefined' ? window.location.origin : 'https://bgos.fieseros.com'}${workspaceData?.links?.booking || '/book'}`;
+                            if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                              navigator.clipboard.writeText(url);
+                              toast.success('Copied booking link to clipboard!');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800 shadow-2xs hover:bg-emerald-50 transition cursor-pointer"
+                        >
+                          <Copy className="size-3.5" />
+                          <span>Copy Link</span>
+                        </button>
+                        <a
+                          href={`${typeof window !== 'undefined' ? window.location.origin : 'https://bgos.fieseros.com'}${workspaceData?.links?.booking || '/book'}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#009F50] px-3.5 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-[#008A45] transition"
+                        >
+                          <ExternalLink className="size-3.5" />
+                          <span>Open Live Page</span>
+                        </a>
+                        <a
+                          href={`https://wa.me/?text=${encodeURIComponent(`Hello! You can view our services and book an appointment with us online here: ${typeof window !== 'undefined' ? window.location.origin : 'https://bgos.fieseros.com'}${workspaceData?.links?.booking || '/book'}`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3.5 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-[#20bd5a] transition"
+                        >
+                          <MessageCircle className="size-3.5" />
+                          <span>WhatsApp</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Business Branding & Bookable Services Preview */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Branding Card */}
+                  <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
+                    <h3 className="text-sm font-bold text-slate-900">Portal Branding & Contact</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Visible to customers when booking</p>
+                    <div className="mt-4 space-y-3 text-xs">
+                      <div className="flex justify-between py-1.5 border-b border-slate-100">
+                        <span className="text-slate-500 font-medium">Business Name</span>
+                        <span className="font-bold text-slate-800">{workspaceData?.bookingPageConfig?.businessName || workspaceData?.name || '—'}</span>
+                      </div>
+                      <div className="flex justify-between py-1.5 border-b border-slate-100">
+                        <span className="text-slate-500 font-medium">Headline</span>
+                        <span className="font-semibold text-slate-800">{workspaceData?.bookingPageConfig?.headline || 'Professional Services'}</span>
+                      </div>
+                      <div className="flex justify-between py-1.5 border-b border-slate-100">
+                        <span className="text-slate-500 font-medium">Contact Phone</span>
+                        <span className="font-semibold text-slate-800">{workspaceData?.bookingPageConfig?.phone || '—'}</span>
+                      </div>
+                      <div className="flex justify-between py-1.5 border-b border-slate-100">
+                        <span className="text-slate-500 font-medium">WhatsApp</span>
+                        <span className="font-semibold text-slate-800">{workspaceData?.bookingPageConfig?.whatsapp || workspaceData?.bookingPageConfig?.phone || '—'}</span>
+                      </div>
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-slate-500 font-medium">Online Bookings</span>
+                        <span className={`font-bold ${workspaceData?.bookingPageConfig?.onlineBookingEnabled !== false ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {workspaceData?.bookingPageConfig?.onlineBookingEnabled !== false ? 'Enabled' : 'Paused'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Active Services Menu Card */}
+                  <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">Bookable Services ({servicesMenu.length})</h3>
+                        <p className="text-xs text-slate-500 mt-0.5">Services clients can select on your page</p>
+                      </div>
+                      <span className="text-[11px] font-semibold text-[#009F50] bg-emerald-50 px-2 py-0.5 rounded-full">
+                        Live on Portal
+                      </span>
+                    </div>
+
+                    <div className="mt-4 space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                      {servicesMenu.length === 0 ? (
+                        <p className="text-xs text-slate-400 py-6 text-center">
+                          Loading active services...
+                        </p>
+                      ) : (
+                        servicesMenu.map((svc) => (
+                          <div key={svc.id} className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 bg-slate-50/70">
+                            <div className="min-w-0 flex-1 pr-2">
+                              <p className="font-bold text-xs text-slate-900 truncate">{svc.name}</p>
+                              <p className="text-[11px] text-slate-400">{svc.duration} mins • {svc.category || 'Standard'}</p>
+                            </div>
+                            <span className="font-bold text-xs text-slate-900">
+                              {svc.basePrice > 0 ? `₹${svc.basePrice}` : 'Free Quote'}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : activeTab !== 'calendar' ? (
               <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <div>
@@ -988,9 +1192,10 @@ export function SchedulingView({
                   </button>
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* ROW 3: APPOINTMENTS FOR WED, OCT 8, 2026 (5) TABLE CARD */}
+            {activeTab !== 'online_booking' && (
             <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-bold text-slate-900">
@@ -1102,6 +1307,7 @@ export function SchedulingView({
                 </table>
               </div>
             </div>
+            )}
           </div>
 
           {/* RIGHT 3-COLUMN SIDEBAR */}
