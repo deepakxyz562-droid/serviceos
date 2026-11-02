@@ -53,7 +53,8 @@ export async function GET(request: NextRequest) {
     let websiteClicks = 0;
     let isLiveGoogleApi = false;
 
-    const googleAccount = await prepareGoogleAccount(user.tenantId);
+    const requestedLocationId = request.nextUrl.searchParams.get('locationId') || undefined;
+    const googleAccount = await prepareGoogleAccount(user.tenantId, requestedLocationId);
     if (googleAccount) {
       try {
         const perf = await fetchGoogleBusinessPerformanceMetrics(googleAccount);

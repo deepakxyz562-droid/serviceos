@@ -340,14 +340,67 @@ export default function ReviewRepliesScreen() {
     try {
       const res = await apiRequest<any>('/api/gbp/rankings');
       if (res) {
-        Alert.alert(
-          'Google Maps Ranking Status',
-          res.lastScannedAt ? `Latest scan: ${new Date(res.lastScannedAt).toLocaleString()}\nAverage found position: ${res.currentAvgRank ?? 'Not found'}\nMeasured change: ${res.totalImprovement ?? 'Two comparable scans required'}\n${res.keywords.map((k: any) => `${k.keyword}: ${k.currentRank ?? 'Not found'}`).join('\n')}` : 'No measured rankings yet. Configure a search location and run a DataForSEO scan from the web ranking dashboard.',
-          [{ text: 'OK' }]
-        );
+        if (res.lastScannedAt) {
+          Alert.alert(
+            'Google Maps Ranking Status',
+            `Latest scan: ${new Date(res.lastScannedAt).toLocaleString()}\nAverage found position: ${res.currentAvgRank ?? 'Not found'}\nMeasured change: ${res.totalImprovement ?? 'Two comparable scans required'}\n${res.keywords.map((k: any) => `${k.keyword}: ${k.currentRank ?? 'Not found'}`).join('\n')}`,
+            [{ text: 'OK' }]
+          );
+        } else if (res.nativeDiscovery) {
+          const d = res.nativeDiscovery;
+          const kwStr = d.keywords?.length
+            ? `\n\nTop Search Queries on Google:\n${d.keywords.slice(0, 5).map((k: any) => `• ${k.keyword} (${k.count} views)`).join('\n')}`
+            : '';
+          Alert.alert(
+            'Google Maps Discovery & Visibility',
+            `Maps Views: ${d.mapsImpressions || 0}\nSearch Views: ${d.searchImpressions || 0}\nDirections & Calls: ${(d.directionRequests || 0) + (d.callClicks || 0)}${kwStr}`,
+            [
+              { text: 'Sync Live', onPress: () => void handleRefreshNativeRankings() },
+              { text: 'OK' },
+            ]
+          );
+        } else if (res.hasGoogleConnection) {
+          Alert.alert(
+            'Google Maps Visibility',
+            'Your Google Business Profile is connected. Tap "Sync Live" to retrieve your live Google Maps views and discovered search keywords.',
+            [
+              { text: 'Sync Live', onPress: () => void handleRefreshNativeRankings() },
+              { text: 'Cancel', style: 'cancel' },
+            ]
+          );
+        } else {
+          Alert.alert(
+            'Google Maps Rankings',
+            'Connect your Google Business Profile to track real customer discovery and search queries for free ($0), or configure DataForSEO for deep coordinate grid scans.',
+            [{ text: 'OK' }]
+          );
+        }
       }
     } catch {
       Alert.alert('Rankings', 'Could not fetch live ranking status');
+    }
+  }
+
+  async function handleRefreshNativeRankings() {
+    try {
+      const res = await apiRequest<any>('/api/gbp/rankings', {
+        method: 'POST',
+        body: { provider: 'google_native' },
+      });
+      if (res?.nativeDiscovery) {
+        const d = res.nativeDiscovery;
+        const kwStr = d.keywords?.length
+          ? `\n\nTop Search Queries on Google:\n${d.keywords.slice(0, 5).map((k: any) => `• ${k.keyword} (${k.count} views)`).join('\n')}`
+          : '';
+        Alert.alert(
+          'Google Maps Discovery Refreshed',
+          `Maps Views: ${d.mapsImpressions || 0}\nSearch Views: ${d.searchImpressions || 0}\nDirections & Calls: ${(d.directionRequests || 0) + (d.callClicks || 0)}${kwStr}`
+        );
+      } else {
+        Alert.alert('Google Maps Discovery', res?.message || 'Updated discovery metrics');
+      }
+    } catch (e: any) {
+      Alert.alert('Google Discovery', e?.message || 'Failed to refresh Google discovery');
     }
   }
 

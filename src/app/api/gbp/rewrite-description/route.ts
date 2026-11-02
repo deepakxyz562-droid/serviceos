@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
 import { getBrandContext } from '@/lib/brand-context';
 import { validateBrandSafety } from '@/lib/brand-safety-gate';
+import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
+import { updateGoogleBusinessProfile } from '@/lib/social/adapters/googlebusiness';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +54,24 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      let appliedToGoogle = false;
+      let googleError: string | null = null;
+
+      if (body.applyToGoogle !== false) {
+        try {
+          const googleAccount = await prepareGoogleAccount(user.tenantId, (body as any)?.locationId);
+          if (googleAccount) {
+            const googleRes = await updateGoogleBusinessProfile(googleAccount, {
+              description: sanitized,
+            });
+            appliedToGoogle = googleRes.descriptionApplied;
+          }
+        } catch (err: unknown) {
+          googleError = err instanceof Error ? err.message : String(err);
+          console.warn('[gbp/rewrite-description] Google Business Profile update notice:', googleError);
+        }
+      }
+
       await Promise.all([
         db.tenant.update({
           where: { id: user.tenantId },
@@ -67,8 +87,14 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: 'Business description updated successfully.',
+        message: appliedToGoogle
+          ? 'Business description updated and published to Google Business Profile successfully.'
+          : googleError
+            ? `Business description saved locally. (Google sync notice: ${googleError})`
+            : 'Business description updated successfully.',
         description: sanitized,
+        appliedToGoogle,
+        googleError,
       });
     }
 

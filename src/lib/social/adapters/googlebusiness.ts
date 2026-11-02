@@ -311,6 +311,23 @@ export const googleBusinessAdapter: PlatformAdapter = {
 
     // Build the request body based on post type.
     const postType = (params.gbpPostType || 'whats_new').toLowerCase();
+
+    // If scheduled as photo media gallery upload, route straight to Google Media API
+    if (postType === 'photo_media' || postType === 'media') {
+      const photoUrl = params.mediaUrls?.[0];
+      if (!photoUrl) throw new Error('Photo URL is required for Google Media upload');
+      const mediaResult = await uploadGoogleBusinessMedia(account, {
+        sourceUrl: photoUrl,
+        mediaFormat: 'PHOTO',
+        category: (params as any).gbpMediaCategory || 'ADDITIONAL',
+        description: params.content || undefined,
+      });
+      return {
+        externalPostId: mediaResult.name || `media_${Date.now()}`,
+        permalink: mediaResult.googleUrl,
+      };
+    }
+
     const body: Record<string, unknown> = {
       summary: params.content,
     };
@@ -1068,6 +1085,61 @@ export async function fetchGoogleBusinessPerformanceMetrics(
     bookings,
     conversations,
   };
+}
+
+/**
+ * Fetch top search keywords from Google Business Profile Performance API.
+ * Returns the exact search queries customers used on Google Search and Maps
+ * to discover this business location.
+ */
+export async function fetchGoogleBusinessSearchKeywords(
+  account: SocialAccountData,
+): Promise<Array<{ keyword: string; count: number }>> {
+  try {
+    const { locationId } = await extractLocationRef(account);
+    const now = new Date();
+    // Default to last 3 months
+    const endYear = now.getUTCFullYear();
+    const endMonth = now.getUTCMonth() + 1;
+    let startMonth = endMonth - 3;
+    let startYear = endYear;
+    if (startMonth <= 0) {
+      startMonth += 12;
+      startYear -= 1;
+    }
+
+    const url = `https://businessprofileperformance.googleapis.com/v1/locations/${locationId}/searchkeywords:fetchSearchKeywordsTimeSeries?monthlyRange.startMonth.year=${startYear}&monthlyRange.startMonth.month=${startMonth}&monthlyRange.endMonth.year=${endYear}&monthlyRange.endMonth.month=${endMonth}&pageSize=50`;
+
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${account.accessToken}`,
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = (await res.json().catch(() => ({}))) as {
+      searchKeywordsCounts?: Array<{
+        searchKeyword?: string;
+        insightsValue?: { value?: string };
+      }>;
+    };
+
+    const counts = data.searchKeywordsCounts || [];
+    return counts
+      .filter((k) => k.searchKeyword)
+      .map((k) => ({
+        keyword: String(k.searchKeyword),
+        count: parseInt(k.insightsValue?.value || '0', 10) || 1,
+      }));
+  } catch (err) {
+    console.warn('[googlebusiness] Search keywords fetch warning:', err instanceof Error ? err.message : err);
+    return [];
+  }
 }
 
 /**

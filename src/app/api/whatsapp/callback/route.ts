@@ -7,6 +7,8 @@ import { createInboundMessage } from '@/lib/inbox-message-service';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { getAppUrl } from '@/lib/brand';
 import { callAI, type ChatMessage } from '@/lib/ai-client';
+import { extractBookingIntent, tryExecuteChatBooking } from '@/lib/scheduling/chat-booking-helper';
+import { checkAvailability } from '@/lib/scheduling/ai-tools';
 import crypto from 'crypto';
 
 // Well-known dev fallback tokens — accepted ONLY outside production so local
@@ -699,10 +701,12 @@ async function handlePlainTextInbound(
           } catch {}
 
           const agentName = activeAgent.name || agentConfig.name || 'AI Assistant';
-          const systemPrompt =
+          let systemPrompt =
             agentConfig.knowledge?.systemPrompt ||
             agentConfig.systemPrompt ||
             `You are ${agentName}, an intelligent and friendly assistant for this business. Answer concisely and helpfully (1-3 sentences) in natural WhatsApp style. Assist the customer with information, bookings, and inquiries.`;
+
+          systemPrompt += `\n\nCRITICAL MULTILINGUAL INSTRUCTION: Automatically detect the customer's language (e.g. Hindi, Hinglish, Spanish, Arabic, French, English) and reply fluently in that exact same language. Keep responses natural, warm, and concise for WhatsApp.`;
 
           // Fetch recent conversation history for multi-turn context
           const recentMsgs = await db.inboxMessage.findMany({
@@ -718,6 +722,41 @@ async function handlePlainTextInbound(
               role: m.direction === 'inbound' ? ('user' as const) : ('assistant' as const),
               content: m.content,
             }));
+
+          // Check for natural language booking intent and live slot availability
+          try {
+            const bookingIntent = extractBookingIntent(textBody, conversationHistory);
+            if (bookingIntent.hasIntent) {
+              const autoBooking = await tryExecuteChatBooking({
+                tenantId,
+                agentId: activeAgent.id,
+                message: textBody,
+                history: conversationHistory,
+              }).catch(() => null);
+
+              if (autoBooking?.success && autoBooking.booking) {
+                const bookingTime = autoBooking.booking.scheduledAt
+                  ? new Date(autoBooking.booking.scheduledAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+                  : 'your scheduled time';
+                systemPrompt += `\n\nAPPOINTMENT CONFIRMED: Appointment ID ${autoBooking.booking.id} has been scheduled for ${bookingTime}. Provide an enthusiastic, concise confirmation with these details.`;
+              } else {
+                const checkDate = bookingIntent.dateStr || new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                const availability = await checkAvailability({
+                  tenantId,
+                  date: checkDate,
+                }).catch(() => null);
+
+                if (availability?.success && availability.slots.length > 0) {
+                  const slotSummary = availability.slots.slice(0, 5).map((s) => s.label).join(', ');
+                  systemPrompt += `\n\nLIVE AVAILABILITY ON ${checkDate}: Available slots: ${slotSummary}. Offer these exact slots to the customer and ask which time suits them best.`;
+                } else if (availability && !availability.success) {
+                  systemPrompt += `\n\nCALENDAR NOTICE: No available slots on ${checkDate} (${availability.message}). Suggest an alternate day or time.`;
+                }
+              }
+            }
+          } catch (bookingErr) {
+            console.warn('[WhatsApp Callback] Booking intent check notice:', bookingErr);
+          }
 
           const aiResult = await callAI({
             messages: [

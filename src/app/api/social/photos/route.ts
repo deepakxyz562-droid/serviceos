@@ -183,6 +183,7 @@ export async function POST(request: NextRequest) {
             mediaUrls: JSON.stringify([photoUrl]),
             publishTargets: JSON.stringify(publishTargets),
             scheduledAt: scheduledTime,
+            gbpPostType: 'photo_media',
             createdById: user.id || 'system',
           },
         });

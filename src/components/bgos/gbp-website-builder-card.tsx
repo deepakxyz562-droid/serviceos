@@ -5,7 +5,7 @@ import { Globe, Sparkles, ExternalLink, CheckCircle2, RefreshCw, MapPin } from '
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/auth-fetch';
+import { authFetch } from '@/lib/client-auth';
 
 interface GbpWebsiteBuilderCardProps {
   businessSlug?: string;

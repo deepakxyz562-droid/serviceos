@@ -49,7 +49,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { formatCurrency } from '@/lib/format-utils';
-import { authFetch } from '@/lib/auth-fetch';
+import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 import { ActivityLogsView } from './activity-logs-view';
 

@@ -15,6 +15,11 @@ while(!stopping){
    const result=await response.json();cursor=result.nextCursor;
    console.log(JSON.stringify({event:'autopilot_tick',processed:result.processedCount,submitted:result.publishedCount}));
   }while(cursor&&!stopping);
+  const waRes=await fetch(new URL('/api/cron/whatsapp-followup',origin),{method:'POST',headers:{Authorization:`Bearer ${secret}`},signal:AbortSignal.timeout(60000)}).catch(()=>null);
+  if(waRes?.ok){
+    const waJson=await waRes.json().catch(()=>({}));
+    if(waJson.nudgedCount>0)console.log(JSON.stringify({event:'whatsapp_inactivity_nudged',nudged:waJson.nudgedCount}));
+  }
  }catch(error){console.error(error.message);}
  for(let seconds=0;seconds<60&&!stopping;seconds++)await new Promise(resolve=>setTimeout(resolve,1000));
 }

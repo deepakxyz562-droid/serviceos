@@ -28,5 +28,12 @@ export async function register() {
     } catch (err) {
       console.warn('[Instrumentation] Failed to start disk janitor worker:', err);
     }
+
+    try {
+      const { startBgosAutopilotWorker } = await import('@/lib/social/autopilot-worker-daemon');
+      startBgosAutopilotWorker();
+    } catch (err) {
+      console.warn('[Instrumentation] Failed to start BGOS autopilot background worker:', err);
+    }
   }
 }
