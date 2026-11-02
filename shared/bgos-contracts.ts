@@ -3,6 +3,16 @@ export interface BgosWorkspace {
   mode: 'local' | 'agency';
   links: { profile: string | null; booking: string | null; form: string | null; review: string | null };
   automations: { profileAssistant: boolean; offlineReply: boolean; gbp?: Record<string, boolean> };
+  bookingPageConfig?: {
+    businessName?: string;
+    phone?: string;
+    whatsapp?: string;
+    email?: string;
+    website?: string;
+    headline?: string;
+    seoDescription?: string;
+    onlineBookingEnabled?: boolean;
+  };
   plan: { code: string; status: string };
 }
 export interface BgosConversation {

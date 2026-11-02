@@ -79,7 +79,7 @@ describe('BGOS Review Replies & Auto-Reply Pipeline', () => {
       rating: 5,
       comment: 'Excellent CRM system and responsive customer service!',
       responseJson: null,
-      status: 'pending',
+      status: 'published',
     });
   });
 

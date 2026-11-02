@@ -14,6 +14,16 @@ const patch = z.object({
     postingSchedule: z.boolean().optional(),
     mediaSchedule: z.boolean().optional(),
   }).optional(),
+  bookingPageConfig: z.object({
+    businessName: z.string().optional(),
+    phone: z.string().optional(),
+    whatsapp: z.string().optional(),
+    email: z.string().optional(),
+    website: z.string().optional(),
+    headline: z.string().optional(),
+    seoDescription: z.string().optional(),
+    onlineBookingEnabled: z.boolean().optional(),
+  }).optional(),
 }).strict();
 function parse(value: string | null) { try { return JSON.parse(value || '{}'); } catch { return {}; } }
 
@@ -21,15 +31,40 @@ export async function GET() {
   const user = await getAuthUser();
   if (!user?.tenantId || user.role === 'customer') return NextResponse.json({ error: 'Workspace authentication required' }, { status: 401 });
   try {
-    const tenant = await db.tenant.findUnique({ where: { id: user.tenantId }, select: { name: true, slug: true, settingsJson: true, plan: true, planStatus: true, googlePlaceId: true } });
+    const tenant = await db.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: {
+        name: true,
+        slug: true,
+        phone: true,
+        email: true,
+        website: true,
+        description: true,
+        settingsJson: true,
+        plan: true,
+        planStatus: true,
+        googlePlaceId: true,
+      },
+    });
     if (!tenant) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     const form = await db.form.findFirst({ where: { tenantId: user.tenantId, ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}), status: 'active', slug: { not: null } }, select: { slug: true }, orderBy: { createdAt: 'desc' } });
     const settings = parse(tenant.settingsJson), features = settings;
     const profile = settings.creatorProfile;
     const event = Array.isArray(features.schedulingEventTypes) ? features.schedulingEventTypes.find((item: { isActive?: boolean; slug?: string }) => item.isActive && item.slug) : null;
     const subscription = user.workspaceId ? await db.productSubscription.findUnique({ where: { workspaceId: user.workspaceId } }) : null;
+    const bookingPageConfig = settings.bookingPageConfig || {};
     const data: BgosWorkspace = {
       name: tenant.name, mode: settings.bgos?.mode === 'agency' ? 'agency' : 'local',
+      bookingPageConfig: {
+        businessName: bookingPageConfig.businessName || tenant.name,
+        phone: bookingPageConfig.phone || tenant.phone || '',
+        whatsapp: bookingPageConfig.whatsapp || '',
+        email: bookingPageConfig.email || tenant.email || '',
+        website: bookingPageConfig.website || tenant.website || '',
+        headline: bookingPageConfig.headline || '',
+        seoDescription: bookingPageConfig.seoDescription || tenant.description || '',
+        onlineBookingEnabled: bookingPageConfig.onlineBookingEnabled ?? true,
+      },
       links: {
         profile: profile?.isEnabled && profile.handle
           ? `/p/${encodeURIComponent(profile.handle)}`
@@ -73,7 +108,15 @@ export async function PATCH(request: NextRequest) {
     }
     if (input.data.offlineReply !== undefined) settings.autoReplyOffline = { ...settings.autoReplyOffline, enabled: input.data.offlineReply };
     if (input.data.gbpAutomations) settings.gbpAutomations = { ...(settings.gbpAutomations || {}), ...input.data.gbpAutomations };
-    const updated = await db.tenant.updateMany({ where: { id: user.tenantId, settingsJson: tenant.settingsJson }, data: { settingsJson: JSON.stringify(settings) } });
+    if (input.data.bookingPageConfig) {
+      settings.bookingPageConfig = { ...(settings.bookingPageConfig || {}), ...input.data.bookingPageConfig };
+    }
+    const updateData: Record<string, any> = { settingsJson: JSON.stringify(settings) };
+    if (input.data.bookingPageConfig?.phone) updateData.phone = input.data.bookingPageConfig.phone;
+    if (input.data.bookingPageConfig?.website) updateData.website = input.data.bookingPageConfig.website;
+    if (input.data.bookingPageConfig?.seoDescription) updateData.description = input.data.bookingPageConfig.seoDescription;
+
+    const updated = await db.tenant.updateMany({ where: { id: user.tenantId, settingsJson: tenant.settingsJson }, data: updateData });
     if (!updated.count) return NextResponse.json({ error: 'Settings changed in another session. Refresh and retry.' }, { status: 409 });
     return NextResponse.json({ success: true });
   } catch { return NextResponse.json({ error: 'Could not save workspace settings' }, { status: 503 }); }

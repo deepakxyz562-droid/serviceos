@@ -33,7 +33,10 @@ export async function GET(
         slug: true,
         phone: true,
         email: true,
+        website: true,
         city: true,
+        description: true,
+        settingsJson: true,
         brandProfile: {
           select: {
             businessName: true,
@@ -87,11 +90,25 @@ export async function GET(
       ];
     }
 
+    let settings: Record<string, any> = {};
+    try {
+      settings = JSON.parse(tenant.settingsJson || '{}');
+    } catch {}
+
+    const bookingPageConfig = settings.bookingPageConfig || {};
+
     return NextResponse.json({
       success: true,
       tenantId: tenant.id,
-      tenantName: tenant.brandProfile?.businessName || tenant.name,
+      tenantName: bookingPageConfig.businessName || tenant.brandProfile?.businessName || tenant.name,
       slug: tenant.slug,
+      phone: bookingPageConfig.phone || tenant.phone,
+      whatsapp: bookingPageConfig.whatsapp,
+      email: bookingPageConfig.email || tenant.email,
+      website: bookingPageConfig.website || tenant.website,
+      headline: bookingPageConfig.headline || tenant.brandProfile?.industry || 'Professional Services',
+      description: bookingPageConfig.seoDescription || tenant.description,
+      onlineBookingEnabled: bookingPageConfig.onlineBookingEnabled ?? true,
       services,
     });
   } catch (error) {

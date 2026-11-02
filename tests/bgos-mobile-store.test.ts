@@ -1,6 +1,17 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 const m = vi.hoisted(() => ({ request: vi.fn(), setTokens: vi.fn(), clear: vi.fn(), unregister: vi.fn(), google: vi.fn(), apple: vi.fn() }));
-vi.mock('../bgosmobile/src/lib/auth', () => ({ getToken: async () => 'access', getRefreshToken: async () => 'refresh', setTokens: m.setTokens, clearTokens: m.clear, onSessionEnded: vi.fn(), sessionRevision: () => 1 }));
+vi.mock('../bgosmobile/src/lib/auth', () => ({
+  getToken: async () => 'access',
+  getRefreshToken: async () => 'refresh',
+  setTokens: m.setTokens,
+  clearTokens: m.clear,
+  onSessionEnded: vi.fn(),
+  sessionRevision: () => 1,
+  isOnboardingDone: async () => true,
+  setOnboardingDone: async () => {},
+  saveUser: async () => {},
+  getSavedUser: async () => null,
+}));
 vi.mock('../bgosmobile/src/lib/api', () => ({ apiRequest: m.request, ApiError: class extends Error { constructor(message: string, public statusCode: number) { super(message); } } }));
 vi.mock('../bgosmobile/src/lib/push', () => ({ unregisterPush: m.unregister }));
 vi.mock('../bgosmobile/src/lib/google-auth', () => ({ googleSignIn: m.google }));
@@ -36,7 +47,7 @@ it('logs in with Apple and saves session for valid BGOS workspace', async () => 
   const success = await useAuthStore.getState().loginApple();
   expect(success).toBe(true);
   expect(useAuthStore.getState().isAuthenticated).toBe(true);
-  expect(m.setTokens).toHaveBeenCalledWith('apple-jwt', 'apple-refresh', expect.any(Number));
+  expect(m.setTokens).toHaveBeenCalledWith('apple-jwt', 'apple-refresh', expect.any(Number), expect.any(Object));
 });
 it('clears local credentials and calls deleteAccount endpoint upon in-app account deletion', async () => {
   m.request.mockResolvedValue({ success: true });

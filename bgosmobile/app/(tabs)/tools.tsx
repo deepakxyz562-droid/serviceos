@@ -13,7 +13,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
   Screen,
@@ -37,6 +38,7 @@ import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 export default function ToolsScreen() {
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const router = useRouter();
+  const params = useLocalSearchParams<{ open?: string }>();
   const { logout, deleteAccount, user } = useAuthStore();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,14 +51,41 @@ export default function ToolsScreen() {
     Array<{ id: string; name: string; duration: number; basePrice: number; isActive: boolean }>
   >([]);
   const [loadingServices, setLoadingServices] = useState(false);
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [newServiceName, setNewServiceName] = useState('');
   const [newServicePrice, setNewServicePrice] = useState('');
   const [newServiceDuration, setNewServiceDuration] = useState('60');
   const [savingService, setSavingService] = useState(false);
 
+  // Booking Page Branding & SEO Customization State
+  const [brandingFields, setBrandingFields] = useState({
+    businessName: '',
+    phone: '',
+    whatsapp: '',
+    email: '',
+    website: '',
+    headline: '',
+    seoDescription: '',
+    onlineBookingEnabled: true,
+  });
+  const [savingBranding, setSavingBranding] = useState(false);
+
   async function openBookingManager() {
     setBookingModalOpen(true);
     setLoadingServices(true);
+    if (workspace.data) {
+      const cfg = workspace.data.bookingPageConfig || {};
+      setBrandingFields({
+        businessName: cfg.businessName || workspace.data.name || '',
+        phone: cfg.phone || '',
+        whatsapp: cfg.whatsapp || '',
+        email: cfg.email || '',
+        website: cfg.website || '',
+        headline: cfg.headline || '',
+        seoDescription: cfg.seoDescription || '',
+        onlineBookingEnabled: cfg.onlineBookingEnabled ?? true,
+      });
+    }
     try {
       const res = await apiRequest<{ services: any[] }>('/api/services?limit=50');
       setServicesList(res?.services || []);
@@ -67,33 +96,106 @@ export default function ToolsScreen() {
     }
   }
 
-  async function handleCreateService() {
+  React.useEffect(() => {
+    if (params.open === 'booking') {
+      void openBookingManager();
+    }
+  }, [params.open]);
+
+  async function handleSaveAllBranding() {
+    setSavingBranding(true);
+    try {
+      await apiRequest('/api/bgos/workspace', {
+        method: 'PATCH',
+        body: {
+          bookingPageConfig: brandingFields,
+        },
+      });
+      await workspace.refresh();
+      Alert.alert('Saved', 'Your public booking page & SEO details have been updated!');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to save booking page details');
+    } finally {
+      setSavingBranding(false);
+    }
+  }
+
+  function startEditService(svc: any) {
+    setEditingServiceId(svc.id);
+    setNewServiceName(svc.name || '');
+    setNewServicePrice(String(svc.basePrice || 0));
+    setNewServiceDuration(String(svc.duration || 60));
+  }
+
+  function cancelEditService() {
+    setEditingServiceId(null);
+    setNewServiceName('');
+    setNewServicePrice('');
+    setNewServiceDuration('60');
+  }
+
+  async function handleSaveService() {
     if (!newServiceName.trim()) {
       Alert.alert('Required', 'Please enter a service name.');
       return;
     }
     setSavingService(true);
     try {
-      await apiRequest('/api/services', {
-        method: 'POST',
-        body: {
-          name: newServiceName.trim(),
-          basePrice: parseFloat(newServicePrice) || 0,
-          duration: parseInt(newServiceDuration, 10) || 60,
-          isActive: true,
-        },
-      });
-      setNewServiceName('');
-      setNewServicePrice('');
-      setNewServiceDuration('60');
+      if (editingServiceId) {
+        await apiRequest(`/api/services/${editingServiceId}`, {
+          method: 'PUT',
+          body: {
+            name: newServiceName.trim(),
+            basePrice: parseFloat(newServicePrice) || 0,
+            duration: parseInt(newServiceDuration, 10) || 60,
+          },
+        });
+        cancelEditService();
+        Alert.alert('Service Updated', 'Changes are now live on your booking page!');
+      } else {
+        await apiRequest('/api/services', {
+          method: 'POST',
+          body: {
+            name: newServiceName.trim(),
+            basePrice: parseFloat(newServicePrice) || 0,
+            duration: parseInt(newServiceDuration, 10) || 60,
+            isActive: true,
+          },
+        });
+        cancelEditService();
+        Alert.alert('Service Added', 'Your new service is now live on your booking page!');
+      }
       const res = await apiRequest<{ services: any[] }>('/api/services?limit=50');
       setServicesList(res?.services || []);
-      Alert.alert('Service Added', 'Your new service is now live on your online booking page!');
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Could not save service');
     } finally {
       setSavingService(false);
     }
+  }
+
+  function confirmDeleteService(svcId: string, svcName: string) {
+    Alert.alert(
+      'Delete Service',
+      `Are you sure you want to remove "${svcName}" from your booking menu?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiRequest(`/api/services/${svcId}`, { method: 'DELETE' });
+              if (editingServiceId === svcId) cancelEditService();
+              const res = await apiRequest<{ services: any[] }>('/api/services?limit=50');
+              setServicesList(res?.services || []);
+            } catch (e: any) {
+              Alert.alert('Error', e?.message || 'Failed to delete service');
+            }
+          },
+        },
+      ]
+    );
   }
 
   async function run(action: () => Promise<unknown>) {
@@ -610,28 +712,85 @@ export default function ToolsScreen() {
         </View>
       </Card>
 
-      {/* ── Booking Page & Services Editor Sheet ── */}
+      {/* ── Booking Page & Services Customizer Sheet ── */}
       <Modal
         visible={bookingModalOpen}
         animationType="slide"
         onRequestClose={() => setBookingModalOpen(false)}
       >
-        <Screen
-          title="Booking Page & Services"
-          subtitle="Manage your public booking URL and service menu"
-          showBack={true}
-          onBack={() => setBookingModalOpen(false)}
-        >
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top', 'left', 'right']}>
+          {/* Top Bar with Safe Insets (No clipping from notch or status bar) */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              backgroundColor: '#FFFFFF',
+              borderBottomWidth: 1,
+              borderBottomColor: '#E2E8F0',
+            }}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              onPress={() => setBookingModalOpen(false)}
+              hitSlop={10}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: '#F1F5F9',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <MaterialIcons name="arrow-back" size={20} color="#0F172A" />
+            </Pressable>
+
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
+                Booking Page Customizer
+              </Text>
+              <Text style={{ fontSize: 11, color: '#64748B' }}>
+                Online portal, SEO & service menu
+              </Text>
+            </View>
+
+            <Pressable
+              disabled={savingBranding}
+              onPress={() => void handleSaveAllBranding()}
+              hitSlop={10}
+              style={{
+                backgroundColor: '#009F50',
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 8,
+                opacity: savingBranding ? 0.7 : 1,
+              }}
+            >
+              {savingBranding ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
+                  Save
+                </Text>
+              )}
+            </Pressable>
+          </View>
+
+          {/* Single ScrollView for entire customizer */}
           <ScrollView
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 60 }}
+            contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 90 }}
           >
-            {/* Live URL Preview Card */}
+            {/* ── CARD 1: LIVE LINK PREVIEW & ACTIONS ── */}
             <Card style={{ gap: 12 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <MaterialIcons name="link" size={20} color="#009F50" />
                 <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
-                  Live Booking Page Link
+                  Live Booking Link
                 </Text>
               </View>
 
@@ -656,7 +815,7 @@ export default function ToolsScreen() {
                       void Linking.openURL(absolute(data.links.booking));
                     }
                   }}
-                  style={{
+                  style={({ pressed }) => ({
                     flex: 1,
                     backgroundColor: '#0F172A',
                     paddingVertical: 10,
@@ -665,7 +824,8 @@ export default function ToolsScreen() {
                     justifyContent: 'center',
                     flexDirection: 'row',
                     gap: 6,
-                  }}
+                    opacity: pressed ? 0.85 : 1,
+                  })}
                 >
                   <MaterialIcons name="open-in-new" size={16} color="#FFFFFF" />
                   <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
@@ -682,7 +842,7 @@ export default function ToolsScreen() {
                       });
                     }
                   }}
-                  style={{
+                  style={({ pressed }) => ({
                     flex: 1,
                     backgroundColor: '#EFF6FF',
                     paddingVertical: 10,
@@ -693,7 +853,8 @@ export default function ToolsScreen() {
                     justifyContent: 'center',
                     flexDirection: 'row',
                     gap: 6,
-                  }}
+                    opacity: pressed ? 0.85 : 1,
+                  })}
                 >
                   <MaterialIcons name="share" size={16} color="#2563EB" />
                   <Text style={{ color: '#2563EB', fontSize: 12, fontWeight: '700' }}>
@@ -703,7 +864,223 @@ export default function ToolsScreen() {
               </View>
             </Card>
 
-            {/* Current Active Services */}
+            {/* ── CARD 2: BOOKING PAGE BRANDING, CONTACT & SEO ── */}
+            <Card style={{ gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="tune" size={18} color="#009F50" />
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                  Page Identity, Contact & SEO
+                </Text>
+              </View>
+
+              {/* Online Booking Toggle */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 8,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#F1F5F9',
+                }}
+              >
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                    Accept Bookings Online
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                    When enabled, clients can schedule appointments directly from your booking page.
+                  </Text>
+                </View>
+                <Switch
+                  value={brandingFields.onlineBookingEnabled}
+                  onValueChange={(val) => setBrandingFields((prev) => ({ ...prev, onlineBookingEnabled: val }))}
+                  trackColor={{ false: '#E2E8F0', true: '#86EFAC' }}
+                  thumbColor={brandingFields.onlineBookingEnabled ? '#009F50' : '#94A3B8'}
+                />
+              </View>
+
+              {/* Business Name */}
+              <View style={{ gap: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                  Business Display Name
+                </Text>
+                <TextInput
+                  value={brandingFields.businessName}
+                  onChangeText={(val) => setBrandingFields((prev) => ({ ...prev, businessName: val }))}
+                  placeholder="e.g. Acme Plumbing Solutions"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 10,
+                    padding: 10,
+                    fontSize: 13.5,
+                    backgroundColor: '#FFFFFF',
+                    color: '#0F172A',
+                  }}
+                />
+              </View>
+
+              {/* Headline / Tagline */}
+              <View style={{ gap: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                  Public Tagline / Hero Headline
+                </Text>
+                <TextInput
+                  value={brandingFields.headline}
+                  onChangeText={(val) => setBrandingFields((prev) => ({ ...prev, headline: val }))}
+                  placeholder="e.g. 24/7 Licensed Emergency Plumbing & Leak Repair"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 10,
+                    padding: 10,
+                    fontSize: 13.5,
+                    backgroundColor: '#FFFFFF',
+                    color: '#0F172A',
+                  }}
+                />
+              </View>
+
+              {/* Phone & WhatsApp */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                    Contact Phone
+                  </Text>
+                  <TextInput
+                    value={brandingFields.phone}
+                    onChangeText={(val) => setBrandingFields((prev) => ({ ...prev, phone: val }))}
+                    placeholder="+91 98765 43210"
+                    keyboardType="phone-pad"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 10,
+                      padding: 10,
+                      fontSize: 13.5,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                    WhatsApp Number
+                  </Text>
+                  <TextInput
+                    value={brandingFields.whatsapp}
+                    onChangeText={(val) => setBrandingFields((prev) => ({ ...prev, whatsapp: val }))}
+                    placeholder="+91 98765 43210"
+                    keyboardType="phone-pad"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 10,
+                      padding: 10,
+                      fontSize: 13.5,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  />
+                </View>
+              </View>
+
+              {/* Email & Website */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                    Support Email
+                  </Text>
+                  <TextInput
+                    value={brandingFields.email}
+                    onChangeText={(val) => setBrandingFields((prev) => ({ ...prev, email: val }))}
+                    placeholder="contact@acme.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 10,
+                      padding: 10,
+                      fontSize: 13.5,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                    Main Website
+                  </Text>
+                  <TextInput
+                    value={brandingFields.website}
+                    onChangeText={(val) => setBrandingFields((prev) => ({ ...prev, website: val }))}
+                    placeholder="https://acme.com"
+                    keyboardType="url"
+                    autoCapitalize="none"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 10,
+                      padding: 10,
+                      fontSize: 13.5,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  />
+                </View>
+              </View>
+
+              {/* SEO Meta Description */}
+              <View style={{ gap: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                  SEO Meta Description & Bio
+                </Text>
+                <TextInput
+                  value={brandingFields.seoDescription}
+                  onChangeText={(val) => setBrandingFields((prev) => ({ ...prev, seoDescription: val }))}
+                  placeholder="Summary shown on Google Search & WhatsApp links..."
+                  multiline
+                  numberOfLines={3}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 10,
+                    padding: 10,
+                    fontSize: 13.5,
+                    backgroundColor: '#FFFFFF',
+                    color: '#0F172A',
+                    minHeight: 70,
+                    textAlignVertical: 'top',
+                  }}
+                />
+              </View>
+
+              <Pressable
+                disabled={savingBranding}
+                onPress={() => void handleSaveAllBranding()}
+                style={({ pressed }) => ({
+                  backgroundColor: '#009F50',
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginTop: 4,
+                  opacity: savingBranding ? 0.7 : pressed ? 0.9 : 1,
+                })}
+              >
+                {savingBranding ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                    Save Branding & SEO Details
+                  </Text>
+                )}
+              </Pressable>
+            </Card>
+
+            {/* ── CARD 3: SERVICES OFFERINGS WITH EDIT & DELETE ── */}
             <Card style={{ gap: 12 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -732,6 +1109,7 @@ export default function ToolsScreen() {
                       paddingVertical: 10,
                       borderBottomWidth: 1,
                       borderBottomColor: '#F1F5F9',
+                      gap: 8,
                     }}
                   >
                     <View style={{ flex: 1, gap: 2 }}>
@@ -739,27 +1117,74 @@ export default function ToolsScreen() {
                         {svc.name}
                       </Text>
                       <Text style={{ fontSize: 11.5, color: '#64748B' }}>
-                        ⏱ {svc.duration || 60} mins
+                        ⏱ {svc.duration || 60} mins • {svc.basePrice > 0 ? `₹${svc.basePrice}` : 'Free'}
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#059669' }}>
-                      {svc.basePrice > 0 ? `₹${svc.basePrice}` : 'Free'}
-                    </Text>
+
+                    {/* Action Icons: Edit ✏️ and Delete 🗑️ */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Pressable
+                        onPress={() => startEditService(svc)}
+                        hitSlop={8}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: editingServiceId === svc.id ? '#DCFCE7' : '#F1F5F9',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <MaterialIcons
+                          name="edit"
+                          size={16}
+                          color={editingServiceId === svc.id ? '#166534' : '#475569'}
+                        />
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => confirmDeleteService(svc.id, svc.name)}
+                        hitSlop={8}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: '#FEE2E2',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <MaterialIcons name="delete-outline" size={16} color="#DC2626" />
+                      </Pressable>
+                    </View>
                   </View>
                 ))
               )}
             </Card>
 
-            {/* Add New Service Form */}
+            {/* ── CARD 4: ADD / EDIT SERVICE FORM ── */}
             <Card style={{ gap: 12 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialIcons name="add-circle-outline" size={18} color="#009F50" />
-                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
-                  Add Service to Booking Page
-                </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons
+                    name={editingServiceId ? 'edit' : 'add-circle-outline'}
+                    size={18}
+                    color="#009F50"
+                  />
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                    {editingServiceId ? 'Edit Service' : 'Add Service to Booking Page'}
+                  </Text>
+                </View>
+                {editingServiceId && (
+                  <Pressable onPress={cancelEditService}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#DC2626' }}>
+                      Cancel Edit
+                    </Text>
+                  </Pressable>
+                )}
               </View>
 
-              <View style={{ gap: 6 }}>
+              <View style={{ gap: 4 }}>
                 <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
                   Service Name *
                 </Text>
@@ -771,8 +1196,8 @@ export default function ToolsScreen() {
                     borderWidth: 1,
                     borderColor: '#CBD5E1',
                     borderRadius: 10,
-                    padding: 12,
-                    fontSize: 14,
+                    padding: 10,
+                    fontSize: 13.5,
                     backgroundColor: '#FFFFFF',
                     color: '#0F172A',
                   }}
@@ -780,7 +1205,7 @@ export default function ToolsScreen() {
               </View>
 
               <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1, gap: 6 }}>
+                <View style={{ flex: 1, gap: 4 }}>
                   <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
                     Duration (Minutes)
                   </Text>
@@ -793,15 +1218,15 @@ export default function ToolsScreen() {
                       borderWidth: 1,
                       borderColor: '#CBD5E1',
                       borderRadius: 10,
-                      padding: 12,
-                      fontSize: 14,
+                      padding: 10,
+                      fontSize: 13.5,
                       backgroundColor: '#FFFFFF',
                       color: '#0F172A',
                     }}
                   />
                 </View>
 
-                <View style={{ flex: 1, gap: 6 }}>
+                <View style={{ flex: 1, gap: 4 }}>
                   <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
                     Price (₹ or $)
                   </Text>
@@ -814,8 +1239,8 @@ export default function ToolsScreen() {
                       borderWidth: 1,
                       borderColor: '#CBD5E1',
                       borderRadius: 10,
-                      padding: 12,
-                      fontSize: 14,
+                      padding: 10,
+                      fontSize: 13.5,
                       backgroundColor: '#FFFFFF',
                       color: '#0F172A',
                     }}
@@ -825,16 +1250,16 @@ export default function ToolsScreen() {
 
               <Pressable
                 disabled={savingService}
-                onPress={() => void handleCreateService()}
+                onPress={() => void handleSaveService()}
                 style={({ pressed }) => ({
-                  backgroundColor: '#009F50',
+                  backgroundColor: editingServiceId ? '#1E293B' : '#009F50',
                   paddingVertical: 12,
                   borderRadius: 10,
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexDirection: 'row',
                   gap: 6,
-                  marginTop: 6,
+                  marginTop: 4,
                   opacity: savingService ? 0.7 : pressed ? 0.9 : 1,
                 })}
               >
@@ -842,9 +1267,13 @@ export default function ToolsScreen() {
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <>
-                    <MaterialIcons name="add" size={18} color="#FFFFFF" />
+                    <MaterialIcons
+                      name={editingServiceId ? 'save' : 'add'}
+                      size={18}
+                      color="#FFFFFF"
+                    />
                     <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
-                      Add to Booking Menu
+                      {editingServiceId ? 'Update Service' : 'Add to Booking Menu'}
                     </Text>
                   </>
                 )}
@@ -867,7 +1296,7 @@ export default function ToolsScreen() {
               </Text>
             </Pressable>
           </ScrollView>
-        </Screen>
+        </SafeAreaView>
       </Modal>
     </Screen>
   );

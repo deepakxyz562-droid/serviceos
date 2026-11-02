@@ -286,21 +286,21 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                   <DrawerItem
                     icon="badge"
                     title="Digital Business Card"
-                    subtitle="Share online profile link"
+                    subtitle="View, QR & contactless card"
                     onPress={() => {
                       onClose();
-                      void Share.share({ message: absolute(data.links.profile!) });
+                      router.push('/qr-standee');
                     }}
                   />
                 )}
                 {data.links.booking && (
                   <DrawerItem
                     icon="event-available"
-                    title="Booking Page"
-                    subtitle="Share direct booking link"
+                    title="Booking Page & Services"
+                    subtitle="Customize booking portal & menu"
                     onPress={() => {
                       onClose();
-                      void Share.share({ message: absolute(data.links.booking!) });
+                      router.push('/(tabs)/tools?open=booking');
                     }}
                   />
                 )}
