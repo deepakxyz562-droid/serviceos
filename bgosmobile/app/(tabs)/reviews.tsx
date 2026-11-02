@@ -17,7 +17,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Card, Empty, ErrorNotice, Loading, Screen, colors, ui } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
-import { relativeDate } from '../../src/components/gbp/bits';
+import { relativeDate, formatReviewTime } from '../../src/components/gbp/bits';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import type { GbpPlaceResult, Review } from '../../src/components/gbp/types';
 
@@ -1240,13 +1240,8 @@ export default function ReviewRepliesScreen() {
             const rating = Math.max(1, Math.min(5, Math.round(review.rating || 0)));
             const initial = author.trim().charAt(0).toUpperCase() || 'U';
 
-            // Calculate relative time (e.g. 1y ago, 2m ago, or recent)
-            let timeLabel = 'Recent';
-            if (review.createdAt) {
-              const diffY = new Date().getFullYear() - new Date(review.createdAt).getFullYear();
-              if (diffY >= 1) timeLabel = `${diffY}y ago`;
-              else timeLabel = relativeDate(review.createdAt) || 'Recent';
-            }
+            // Calculate relative time (e.g. Just now, 2h ago, or Updated just now)
+            const timeLabel = formatReviewTime(review);
 
             const avatarColors = ['#2563EB', '#059669', '#7C3AED', '#D97706', '#DB2777', '#0891B2'];
             const avatarColor = avatarColors[initial.charCodeAt(0) % avatarColors.length];

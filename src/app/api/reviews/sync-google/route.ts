@@ -90,16 +90,21 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      const effectiveReviewTime = gRev.updateTime
+        ? new Date(gRev.updateTime)
+        : (gRev.createTime ? new Date(gRev.createTime) : new Date());
+
       if (!existing) {
-        let initialResponseJson = '{}';
+        const parsedInitial: Record<string, any> = {
+          googleCreateTime: gRev.createTime,
+          googleUpdateTime: gRev.updateTime,
+        };
         if (gRev.reply?.comment) {
-          initialResponseJson = JSON.stringify({
-            text: gRev.reply.comment,
-            repliedAt: gRev.reply.updateTime,
-            publishedToGoogle: googleReplyState(gRev.reply.reviewReplyState).publishedToGoogle,
-            moderationState:gRev.reply.reviewReplyState,
-            policyViolation:gRev.reply.policyViolation,
-          });
+          parsedInitial.text = gRev.reply.comment;
+          parsedInitial.repliedAt = gRev.reply.updateTime;
+          parsedInitial.publishedToGoogle = googleReplyState(gRev.reply.reviewReplyState).publishedToGoogle;
+          parsedInitial.moderationState = gRev.reply.reviewReplyState;
+          parsedInitial.policyViolation = gRev.reply.policyViolation;
         }
 
         existing = await db.review.create({
@@ -111,32 +116,50 @@ export async function POST(request: NextRequest) {
             rating: gRev.rating,
             comment: gRev.comment,
             status: googleReplyState(gRev.reply?.reviewReplyState).status,
-            responseJson: initialResponseJson,
-            createdAt: gRev.createTime ? new Date(gRev.createTime) : new Date(),
+            responseJson: JSON.stringify(parsedInitial),
+            createdAt: effectiveReviewTime,
           },
         });
         newReviewsCount++;
       } else {
-        // Update existing review with latest comment, rating, or owner reply from Google Maps
+        // Update existing review with latest comment, rating, effective date or owner reply from Google Maps
         const updateData: Record<string, any> = {};
         if (gRev.rating && existing.rating !== gRev.rating) updateData.rating = gRev.rating;
-        if (gRev.comment && existing.comment !== gRev.comment) updateData.comment = gRev.comment;
+        if (gRev.comment && existing.comment !== gRev.comment) {
+          updateData.comment = gRev.comment;
+          updateData.createdAt = effectiveReviewTime;
+        } else if (gRev.updateTime && new Date(gRev.updateTime).getTime() > existing.createdAt.getTime()) {
+          updateData.createdAt = effectiveReviewTime;
+        }
+
+        let parsedExisting: any = {};
+        try {
+          parsedExisting = JSON.parse(existing.responseJson || '{}');
+        } catch {}
+
+        let responseJsonChanged = false;
+        if (gRev.updateTime && parsedExisting.googleUpdateTime !== gRev.updateTime) {
+          parsedExisting.googleUpdateTime = gRev.updateTime;
+          parsedExisting.googleCreateTime = gRev.createTime;
+          responseJsonChanged = true;
+        }
+
         if (gRev.reply?.comment) {
-          updateData.status=googleReplyState(gRev.reply.reviewReplyState).status;
-          let parsedExisting: any = {};
-          try {
-            parsedExisting = JSON.parse(existing.responseJson || '{}');
-          } catch {}
+          updateData.status = googleReplyState(gRev.reply.reviewReplyState).status;
           if (!parsedExisting?.text || parsedExisting.text !== gRev.reply.comment || parsedExisting.moderationState !== gRev.reply.reviewReplyState) {
-            updateData.responseJson = JSON.stringify({
-              text: gRev.reply.comment,
-              repliedAt: gRev.reply.updateTime || new Date().toISOString(),
-              publishedToGoogle: googleReplyState(gRev.reply.reviewReplyState).publishedToGoogle,
-            moderationState:gRev.reply.reviewReplyState,
-            policyViolation:gRev.reply.policyViolation,
-            });
+            parsedExisting.text = gRev.reply.comment;
+            parsedExisting.repliedAt = gRev.reply.updateTime || new Date().toISOString();
+            parsedExisting.publishedToGoogle = googleReplyState(gRev.reply.reviewReplyState).publishedToGoogle;
+            parsedExisting.moderationState = gRev.reply.reviewReplyState;
+            parsedExisting.policyViolation = gRev.reply.policyViolation;
+            responseJsonChanged = true;
           }
         }
+
+        if (responseJsonChanged) {
+          updateData.responseJson = JSON.stringify(parsedExisting);
+        }
+
         if (Object.keys(updateData).length > 0) {
           existing = await db.review.update({
             where: { id: existing.id },

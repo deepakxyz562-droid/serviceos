@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   Calendar, Clock, MapPin, Star, ShieldCheck, ArrowRight,
   ArrowLeft, Loader2, Check, ChevronLeft, ChevronRight,
+  Phone, MessageCircle, AlertCircle, Share2, Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -42,6 +43,11 @@ export default function PublicBookingPage() {
   const [step, setStep] = useState<Step>('service');
   const [tenantId, setTenantId] = useState<string>('');
   const [tenantName, setTenantName] = useState<string>('');
+  const [headline, setHeadline] = useState<string>('');
+  const [phone, setPhone] = useState<string>('');
+  const [whatsapp, setWhatsapp] = useState<string>('');
+  const [onlineBookingEnabled, setOnlineBookingEnabled] = useState<boolean>(true);
+  const [currencySymbol, setCurrencySymbol] = useState<string>('₹');
   const [services, setServices] = useState<Service[]>([]);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -63,6 +69,17 @@ export default function PublicBookingPage() {
           setTenantId(data.tenantId || '');
           setTenantName(data.tenantName || data.tenant?.name || slug);
           setServices(data.services || []);
+          setHeadline(data.headline || '');
+          setPhone(data.phone || '');
+          setWhatsapp(data.whatsapp || data.phone || '');
+          if (data.onlineBookingEnabled !== undefined) {
+            setOnlineBookingEnabled(Boolean(data.onlineBookingEnabled));
+          }
+          if (data.phone?.startsWith('+1') || data.phone?.startsWith('1')) {
+            setCurrencySymbol('$');
+          } else {
+            setCurrencySymbol('₹');
+          }
         }
       })
       .catch(() => {
@@ -158,9 +175,29 @@ export default function PublicBookingPage() {
                 <p className="text-xs text-slate-500 flex items-center gap-1">
                   <Clock className="size-3" /> {selectedSlot?.label}
                 </p>
+                {selectedService.basePrice > 0 && (
+                  <p className="text-xs text-emerald-700 font-semibold flex items-center gap-1">
+                    <ShieldCheck className="size-3" /> {currencySymbol}{selectedService.basePrice}
+                  </p>
+                )}
               </div>
             )}
-            <Button className="mt-6 w-full" variant="outline" onClick={() => router.push('/')}>
+
+            {whatsapp && (
+              <a
+                href={`https://wa.me/${whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                  `Hello! I just booked an appointment for ${selectedService?.name || 'Service'} on ${selectedDate} at ${selectedSlot?.label}. (Customer: ${customer.name})`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-lg bg-[#25D366] text-white text-xs font-bold hover:bg-[#20bd5a] transition-all shadow-sm"
+              >
+                <MessageCircle className="size-4" />
+                Confirm on WhatsApp
+              </a>
+            )}
+
+            <Button className="mt-3 w-full" variant="outline" onClick={() => router.push('/')}>
               Done
             </Button>
           </CardContent>
@@ -171,23 +208,122 @@ export default function PublicBookingPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <header className="sticky top-0 z-20 bg-white border-b border-slate-200">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
-          {step !== 'service' && (
-            <button onClick={() => setStep(STEPS[STEPS.indexOf(step) - 1] || 'service')}>
-              <ArrowLeft className="size-5 text-slate-400" />
-            </button>
-          )}
-          <div className="flex-1">
-            <h1 className="text-sm font-bold text-slate-900">{tenantName}</h1>
-            <p className="text-[10px] text-slate-500">Book an appointment</p>
+      {/* Header with Brand & Quick Contact */}
+      <header className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm">
+        <div className="max-w-2xl mx-auto px-4 py-3">
+          <div className="flex items-center gap-3">
+            {step !== 'service' && (
+              <button
+                onClick={() => setStep(STEPS[STEPS.indexOf(step) - 1] || 'service')}
+                className="p-1 -ml-1 text-slate-500 hover:text-slate-800"
+              >
+                <ArrowLeft className="size-5" />
+              </button>
+            )}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-sm font-bold text-slate-900 truncate">{tenantName}</h1>
+              {headline ? (
+                <p className="text-[11px] text-emerald-700 font-medium truncate">{headline}</p>
+              ) : (
+                <p className="text-[10px] text-slate-500">Book an appointment online</p>
+              )}
+            </div>
+
+            {/* Quick Contact Buttons */}
+            <div className="flex items-center gap-1.5">
+              {whatsapp && (
+                <a
+                  href={`https://wa.me/${whatsapp.replace(/[^0-9]/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
+                  title="WhatsApp"
+                >
+                  <MessageCircle className="size-4" />
+                </a>
+              )}
+              {phone && (
+                <a
+                  href={`tel:${phone.replace(/[^0-9+]/g, '')}`}
+                  className="p-1.5 rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+                  title="Call"
+                >
+                  <Phone className="size-4" />
+                </a>
+              )}
+            </div>
           </div>
-          <Badge className="text-[10px] bg-emerald-100 text-emerald-700">{step} / {STEPS.indexOf(step) + 1} of 4</Badge>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6">
+        {/* Progress Stepper */}
+        <div className="mb-6 grid grid-cols-4 gap-2 text-center">
+          {[
+            { id: 'service', label: '1. Service' },
+            { id: 'datetime', label: '2. Date & Time' },
+            { id: 'details', label: '3. Your Info' },
+            { id: 'confirm', label: '4. Confirm' },
+          ].map((st, i) => {
+            const stepIdx = STEPS.indexOf(step);
+            const thisIdx = i;
+            const isDone = thisIdx < stepIdx;
+            const isCurrent = thisIdx === stepIdx;
+            return (
+              <div key={st.id} className="space-y-1.5">
+                <div
+                  className={`h-1.5 rounded-full transition-all ${
+                    isDone || isCurrent ? 'bg-emerald-600' : 'bg-slate-200'
+                  }`}
+                />
+                <span
+                  className={`text-[10.5px] block font-semibold ${
+                    isCurrent
+                      ? 'text-emerald-700 font-bold'
+                      : isDone
+                      ? 'text-slate-700'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  {st.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {!onlineBookingEnabled && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-center space-y-2">
+            <div className="inline-flex items-center gap-1.5 text-amber-900 font-bold text-sm">
+              <AlertCircle className="size-4 text-amber-600" />
+              Online Bookings Paused
+            </div>
+            <p className="text-xs text-amber-700">
+              We are temporarily not taking direct calendar appointments online. Please call or WhatsApp us to schedule your service.
+            </p>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              {phone && (
+                <a
+                  href={`tel:${phone.replace(/[^0-9+]/g, '')}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-xs font-bold text-amber-900 shadow-sm"
+                >
+                  <Phone className="size-3.5" /> Call {phone}
+                </a>
+              )}
+              {whatsapp && (
+                <a
+                  href={`https://wa.me/${whatsapp.replace(/[^0-9]/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#25D366] text-xs font-bold text-white shadow-sm"
+                >
+                  <MessageCircle className="size-3.5" /> WhatsApp
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Step 1: Service Selection */}
         {step === 'service' && (
           <div className="space-y-3">
@@ -204,7 +340,7 @@ export default function PublicBookingPage() {
                       {service.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{service.description}</p>}
                       <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-500">
                         <span className="flex items-center gap-0.5"><Clock className="size-3" /> {service.duration} min</span>
-                        {service.basePrice > 0 && <span className="flex items-center gap-0.5">${service.basePrice}</span>}
+                        {service.basePrice > 0 && <span className="flex items-center gap-0.5 font-semibold text-emerald-700">{currencySymbol}{service.basePrice}</span>}
                       </div>
                     </div>
                     <ArrowRight className="size-4 text-slate-300" />
@@ -352,7 +488,7 @@ export default function PublicBookingPage() {
                   <p className="flex items-center gap-2"><Clock className="size-3.5 text-slate-400" /> {selectedSlot.label} ({selectedService.duration} min)</p>
                   <p className="flex items-center gap-2"><Star className="size-3.5 text-slate-400" /> {tenantName}</p>
                   {selectedService.basePrice > 0 && (
-                    <p className="flex items-center gap-2"><ShieldCheck className="size-3.5 text-emerald-600" /> ${selectedService.basePrice} (may be collected at appointment)</p>
+                    <p className="flex items-center gap-2"><ShieldCheck className="size-3.5 text-emerald-600" /> {currencySymbol}{selectedService.basePrice} (may be collected at appointment)</p>
                   )}
                 </div>
                 <div className="pt-3 border-t border-slate-100">

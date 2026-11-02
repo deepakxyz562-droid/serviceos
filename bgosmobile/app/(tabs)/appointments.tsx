@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
@@ -17,13 +17,20 @@ import {
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { localDay, futureLocalTime } from '../../src/lib/dates';
+import { getBgosWebUrl } from '../../src/lib/bgos-urls';
+import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 
 type Booking = { id: string; title: string; customerName?: string; scheduledAt?: string; status: string };
 
 export default function AppointmentsScreen() {
   const router = useRouter();
+  const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [weekOffset, setWeekOffset] = useState(0);
+
+  const liveBookingUrl = workspace.data?.links?.booking
+    ? `${getBgosWebUrl()}${workspace.data.links.booking}`
+    : null;
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
@@ -129,6 +136,79 @@ export default function AppointmentsScreen() {
       }
     >
       <ErrorNotice message={error || resource.error} retry={resource.refresh} />
+
+      {/* Quick Share Online Booking Link Banner */}
+      {liveBookingUrl && (
+        <Card style={{ padding: 12, backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="event-available" size={18} color="#009F50" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                  Online Booking Page
+                </Text>
+                <Text numberOfLines={1} style={{ fontSize: 11, color: '#64748B' }}>
+                  {liveBookingUrl}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Pressable
+                onPress={() => {
+                  const waText = encodeURIComponent(`Hello! You can view our services and schedule an appointment online here: ${liveBookingUrl}`);
+                  void Linking.openURL(`https://wa.me/?text=${waText}`);
+                }}
+                hitSlop={8}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  backgroundColor: '#25D366',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 14,
+                }}
+              >
+                <MaterialIcons name="chat" size={13} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>WhatsApp</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  void Share.share({ message: liveBookingUrl, url: liveBookingUrl });
+                }}
+                hitSlop={8}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  padding: 6,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: '#CBD5E1',
+                }}
+              >
+                <MaterialIcons name="share" size={16} color="#0F172A" />
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.push('/booking-page')}
+                hitSlop={8}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  padding: 6,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: '#CBD5E1',
+                }}
+              >
+                <MaterialIcons name="tune" size={16} color="#0F172A" />
+              </Pressable>
+            </View>
+          </View>
+        </Card>
+      )}
 
       {/* Month Navigator (Screens 19 & 14 in mockups) */}
       <Card style={{ padding: 14 }}>

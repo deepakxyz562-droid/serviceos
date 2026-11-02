@@ -803,6 +803,7 @@ export async function fetchGoogleBusinessReviews(
     rating: number;
     comment: string;
     createTime: string;
+    updateTime?: string;
     reply?: { comment: string; updateTime: string; reviewReplyState?: string; policyViolation?: string };
   }>;
   averageRating: number;
@@ -833,6 +834,7 @@ export async function fetchGoogleBusinessReviews(
       starRating?: string;
       comment?: string;
       createTime?: string;
+      updateTime?: string;
       reviewReply?: { comment?: string; updateTime?: string; reviewReplyState?: string; policyViolation?: string };
     }>;
     averageRating?: number;
@@ -864,6 +866,7 @@ export async function fetchGoogleBusinessReviews(
       rating,
       comment: r.comment || '',
       createTime: r.createTime || new Date().toISOString(),
+      updateTime: r.updateTime || r.createTime || new Date().toISOString(),
       reply: r.reviewReply?.comment
         ? {
             comment: r.reviewReply.comment,

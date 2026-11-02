@@ -515,69 +515,354 @@ export default function ToolsScreen() {
         />
       </Card>
 
-      {/* Digital Identity & Scannable QR */}
+      {/* ── DIGITAL IDENTITY & PUBLIC ASSETS ── */}
       {data && (
-        <Card style={{ gap: 12 }}>
-          <Text style={ui.heading}>Digital Identity & Scannable QR</Text>
-          {([['profile', 'Digital Business Card'], ['booking', 'Online Booking Page'], ['form', 'Customer Intake Form']] as const).map(
-            ([key, label]) => (
-              <View key={key} style={{ gap: 6 }}>
-                <Text style={ui.label}>{label}</Text>
-                <Text style={ui.caption}>
-                  {data.links[key] ? absolute(data.links[key]!) : 'Configure in BGOS web to activate link.'}
-                </Text>
-                {data.links[key] && (
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                    <View style={{ flex: 1 }}>
-                      <Action
-                        secondary
-                        disabled={busy}
-                        label={`Share ${label}`}
-                        icon="share"
-                        onPress={() => run(() => Share.share({ message: absolute(data.links[key]!), url: absolute(data.links[key]!) }))}
-                      />
-                    </View>
-                    <Action
-                      secondary
-                      disabled={busy}
-                      label="Open"
-                      icon="open-in-new"
-                      onPress={() => void Linking.openURL(absolute(data.links[key]!))}
-                    />
-                    {key === 'booking' && (
-                      <Action
-                        disabled={busy}
-                        label="Modify"
-                        icon="tune"
-                        onPress={() => router.push('/booking-page')}
-                      />
-                    )}
-                  </View>
-                )}
-              </View>
-            )
-          )}
+        <View style={{ gap: 14 }}>
+          <Text style={[ui.heading, { fontSize: 16 }]}>Digital Identity & Public Portals</Text>
 
-          <Action
-            disabled={busy || !data.links.profile}
-            label="Show Scannable QR Code"
-            icon="qr-code"
-            onPress={() =>
-              run(async () => {
-                const result = await apiRequest<{ image: string }>('/api/bgos/qr');
-                setQr(result.image);
-              })
-            }
-          />
-          {qr && (
-            <Image
-              accessibilityLabel="QR code for your business"
-              alt="QR code for your business"
-              source={{ uri: qr }}
-              style={{ width: '100%', aspectRatio: 1, borderRadius: 12 }}
-            />
-          )}
-        </Card>
+          {/* CARD 1: DIGITAL BUSINESS CARD */}
+          <Card style={{ gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="credit-card" size={18} color="#2563EB" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#0F172A' }}>
+                    Digital Business Card
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>
+                    Contactless vCard & Standee
+                  </Text>
+                </View>
+              </View>
+              <Badge label="NFC Ready" accent />
+            </View>
+
+            <Text style={{ fontSize: 12.5, color: '#64748B' }}>
+              NFC & QR-ready card with 1-tap contact save (.vcf), WhatsApp, and direct calling.
+            </Text>
+
+            {data.links.profile && (
+              <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <Text numberOfLines={1} selectable style={{ fontSize: 11.5, fontFamily: 'monospace', color: '#334155' }}>
+                  {absolute(data.links.profile)}
+                </Text>
+              </View>
+            )}
+
+            <Pressable
+              onPress={() => router.push('/qr-standee')}
+              style={({ pressed }) => ({
+                backgroundColor: '#1E293B',
+                paddingVertical: 11,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 6,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <MaterialIcons name="qr-code" size={18} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                View Card & Standee QR
+              </Text>
+            </Pressable>
+
+            {data.links.profile && (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable
+                  onPress={() => {
+                    const profileUrl = absolute(data.links.profile!);
+                    const waText = encodeURIComponent(`Hello! Here is my digital business card: ${profileUrl}`);
+                    void Linking.openURL(`https://wa.me/?text=${waText}`);
+                  }}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    backgroundColor: '#25D366',
+                    paddingVertical: 9,
+                    borderRadius: 8,
+                  }}
+                >
+                  <MaterialIcons name="chat" size={14} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>WhatsApp</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    const profileUrl = absolute(data.links.profile!);
+                    void Share.share({ message: profileUrl, url: profileUrl });
+                  }}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    backgroundColor: '#F1F5F9',
+                    paddingVertical: 9,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                  }}
+                >
+                  <MaterialIcons name="share" size={14} color="#334155" />
+                  <Text style={{ color: '#334155', fontSize: 12, fontWeight: '700' }}>Share</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => void Linking.openURL(absolute(data.links.profile!))}
+                  style={{
+                    paddingHorizontal: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#F1F5F9',
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                  }}
+                >
+                  <MaterialIcons name="open-in-new" size={16} color="#334155" />
+                </Pressable>
+              </View>
+            )}
+          </Card>
+
+          {/* CARD 2: ONLINE BOOKING PAGE & SERVICES */}
+          <Card style={{ gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="event-available" size={18} color="#009F50" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#0F172A' }}>
+                    Online Booking Page
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>
+                    Public Portal & Services Menu
+                  </Text>
+                </View>
+              </View>
+              <Badge label="Live Portal" accent />
+            </View>
+
+            <Text style={{ fontSize: 12.5, color: '#64748B' }}>
+              Clients browse your service catalog, check real-time availability, and schedule appointments.
+            </Text>
+
+            {data.links.booking && (
+              <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <Text numberOfLines={1} selectable style={{ fontSize: 11.5, fontFamily: 'monospace', color: '#334155' }}>
+                  {absolute(data.links.booking)}
+                </Text>
+              </View>
+            )}
+
+            <Pressable
+              onPress={() => router.push('/booking-page')}
+              style={({ pressed }) => ({
+                backgroundColor: '#009F50',
+                paddingVertical: 11,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 6,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <MaterialIcons name="tune" size={18} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                Customize Page & Services
+              </Text>
+            </Pressable>
+
+            {data.links.booking && (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable
+                  onPress={() => {
+                    const bookingUrl = absolute(data.links.booking!);
+                    const waText = encodeURIComponent(`Hello! You can view our available time slots and book an appointment with us online here: ${bookingUrl}`);
+                    void Linking.openURL(`https://wa.me/?text=${waText}`);
+                  }}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    backgroundColor: '#25D366',
+                    paddingVertical: 9,
+                    borderRadius: 8,
+                  }}
+                >
+                  <MaterialIcons name="chat" size={14} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>WhatsApp</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    const bookingUrl = absolute(data.links.booking!);
+                    void Share.share({ message: bookingUrl, url: bookingUrl });
+                  }}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    backgroundColor: '#F1F5F9',
+                    paddingVertical: 9,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                  }}
+                >
+                  <MaterialIcons name="share" size={14} color="#334155" />
+                  <Text style={{ color: '#334155', fontSize: 12, fontWeight: '700' }}>Share</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => void Linking.openURL(absolute(data.links.booking!))}
+                  style={{
+                    paddingHorizontal: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#F1F5F9',
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                  }}
+                >
+                  <MaterialIcons name="open-in-new" size={16} color="#334155" />
+                </Pressable>
+              </View>
+            )}
+          </Card>
+
+          {/* CARD 3: CUSTOMER INTAKE FORM */}
+          <Card style={{ gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#FAF5FF', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="assignment" size={18} color="#9333EA" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#0F172A' }}>
+                    Customer Intake Form
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>
+                    Lead Qualification & Questions
+                  </Text>
+                </View>
+              </View>
+              <Badge label="Lead Capture" accent />
+            </View>
+
+            <Text style={{ fontSize: 12.5, color: '#64748B' }}>
+              Collect client inquiry details, project requirements, and intake answers before starting work.
+            </Text>
+
+            {data.links.form ? (
+              <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <Text numberOfLines={1} selectable style={{ fontSize: 11.5, fontFamily: 'monospace', color: '#334155' }}>
+                  {absolute(data.links.form)}
+                </Text>
+              </View>
+            ) : (
+              <Text style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>
+                Intake form not published yet. Publish a form in BGOS Web to activate.
+              </Text>
+            )}
+
+            <Pressable
+              onPress={() => router.push('/(tabs)/submissions')}
+              style={({ pressed }) => ({
+                backgroundColor: '#7C3AED',
+                paddingVertical: 11,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 6,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <MaterialIcons name="inbox" size={18} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                View Customer Submissions
+              </Text>
+            </Pressable>
+
+            {data.links.form && (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable
+                  onPress={() => {
+                    const formUrl = absolute(data.links.form!);
+                    const waText = encodeURIComponent(`Hello! Please fill out our brief inquiry form here: ${formUrl}`);
+                    void Linking.openURL(`https://wa.me/?text=${waText}`);
+                  }}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    backgroundColor: '#25D366',
+                    paddingVertical: 9,
+                    borderRadius: 8,
+                  }}
+                >
+                  <MaterialIcons name="chat" size={14} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>WhatsApp</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    const formUrl = absolute(data.links.form!);
+                    void Share.share({ message: formUrl, url: formUrl });
+                  }}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    backgroundColor: '#F1F5F9',
+                    paddingVertical: 9,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                  }}
+                >
+                  <MaterialIcons name="share" size={14} color="#334155" />
+                  <Text style={{ color: '#334155', fontSize: 12, fontWeight: '700' }}>Share</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => void Linking.openURL(absolute(data.links.form!))}
+                  style={{
+                    paddingHorizontal: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#F1F5F9',
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                  }}
+                >
+                  <MaterialIcons name="open-in-new" size={16} color="#334155" />
+                </Pressable>
+              </View>
+            )}
+          </Card>
+        </View>
       )}
 
       {/* ─────────────────────────────────────────────────────────────

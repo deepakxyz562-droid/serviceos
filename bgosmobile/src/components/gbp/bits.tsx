@@ -44,8 +44,33 @@ export function relativeDate(iso?: string | null): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   const weeks = Math.floor(days / 7);
-  if (weeks < 5) return `${weeks}w ago`;
-  return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  if (weeks < 4) return `${weeks}w ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  const years = Math.floor(days / 365);
+  return `${years}y ago`;
+}
+
+/** Accurately calculates relative review age, accounting for edited/re-submitted Google reviews. */
+export function formatReviewTime(review: {
+  createdAt?: string;
+  updatedAt?: string;
+  responseJson?: string | null;
+}): string {
+  let parsed: any = {};
+  try {
+    parsed = JSON.parse(review.responseJson || '{}');
+  } catch {}
+
+  const targetIso = parsed.googleUpdateTime || parsed.updateTime || review.createdAt;
+  const isEdited = Boolean(
+    parsed.googleUpdateTime &&
+    parsed.googleCreateTime &&
+    parsed.googleUpdateTime !== parsed.googleCreateTime
+  );
+
+  const rel = relativeDate(targetIso) || 'Recent';
+  return isEdited && targetIso !== review.createdAt ? `Updated ${rel}` : rel;
 }
 
 export function shortDate(iso?: string | null): string {
