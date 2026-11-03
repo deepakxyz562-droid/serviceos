@@ -277,5 +277,57 @@ describe('editable marketing source documents', () => {
 
       expect(headlineLayer?.fontWeight).toBe(900);
     });
+
+    it('renders tech_modern layout with HUD framing and specs row', () => {
+      const design = createCommercialPosterDesign({
+        brand: 'CloudTech Systems',
+        headline: 'Next-Gen Cloud Telephony',
+        badge: 'CYBER LAUNCH',
+        cta: 'START TRIAL',
+        layout: 'tech_modern',
+      });
+      expect(() => validateDesign(design)).not.toThrow();
+      const hudBar = design.layers.find((l) => l.id === 'hud_top_bar');
+      const specsRow = design.layers.find((l) => l.id === 'specs_row');
+      const ctaLayer = design.layers.find((l) => l.id === 'cta');
+      expect(hudBar).toBeDefined();
+      expect(specsRow?.text).toContain('FAST SETUP');
+      expect(ctaLayer?.background).toBe('#38bdf8');
+    });
+
+    it('renders minimal_luxury layout with delicate framing and centered typography', () => {
+      const design = createCommercialPosterDesign({
+        brand: 'Atelier Aurelia',
+        headline: 'Timeless Handcrafted Gold',
+        badge: 'EXCLUSIVE ATELIER',
+        cta: 'DISCOVER COLLECTION',
+        layout: 'minimal_luxury',
+      });
+      expect(() => validateDesign(design)).not.toThrow();
+      const luxuryBorder = design.layers.find((l) => l.id === 'luxury_border');
+      const headlineLayer = design.layers.find((l) => l.id === 'headline');
+      const ctaLayer = design.layers.find((l) => l.id === 'cta');
+      expect(luxuryBorder).toBeDefined();
+      expect(headlineLayer?.alignItems).toBe('center');
+      expect(ctaLayer?.background).toBe('#d4af37');
+    });
+
+    it('validates all 5 layout templates across all 4 supported aspect ratios without errors', () => {
+      const layouts = ['bold_offer', 'split_card', 'tech_modern', 'urgent_callout', 'minimal_luxury'] as const;
+      const ratios = ['1:1', '4:5', '9:16', '16:9'] as const;
+      for (const layout of layouts) {
+        for (const ratio of ratios) {
+          const doc = createCommercialPosterDesign({
+            brand: 'ServiceOS Pro',
+            headline: 'Omnichannel CRM & Invoicing',
+            badge: 'PRO SUITE',
+            cta: 'TRY FREE',
+            layout,
+            ratio,
+          });
+          expect(() => validateDesign(doc)).not.toThrow();
+        }
+      }
+    });
   });
 });

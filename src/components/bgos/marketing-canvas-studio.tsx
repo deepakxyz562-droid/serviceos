@@ -9,8 +9,10 @@ import {
   type MarketingDesign,
   type DesignLayer,
   type CommercialTheme,
+  type PosterTemplateLayout,
   COMMERCIAL_THEMES,
   COMMERCIAL_THEME_KEYS,
+  POSTER_TEMPLATES as FLYER_LAYOUT_TEMPLATES,
 } from '../../../shared/marketing-design';
 import { EditableMarketingDesign } from './editable-marketing-design';
 import { getTemplateById } from '../../../shared/poster-templates';
@@ -315,6 +317,7 @@ export function MarketingCanvasStudio({
   }, [effectiveBusinessName, workspaceInfo?.name]);
 
   const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(null);
+  const [posterLayout, setPosterLayout] = useState<PosterTemplateLayout>('bold_offer');
   const design = useMemo(() => {
     if (customDesign) return customDesign;
     return createCommercialPosterDesign({
@@ -330,6 +333,7 @@ export function MarketingCanvasStudio({
       theme: theme,
       logoUrl: brandLogo || undefined,
       tagline: effectiveTagline || undefined,
+      layout: posterLayout,
     });
   }, [
     customDesign,
@@ -347,6 +351,7 @@ export function MarketingCanvasStudio({
     theme,
     brandLogo,
     effectiveTagline,
+    posterLayout,
   ]);
 
   // ─── Template Gallery entry (Flyer-Maker-style one-tap posters) ───────────
@@ -360,6 +365,7 @@ export function MarketingCanvasStudio({
   const applyTemplate = (t: PosterTemplate) => {
     setActiveTemplateId(t.id);
     setCustomDesign(null);
+    setPosterLayout(t.layout);
     setHeadline(t.headline);
     setBadgeText(t.badge);
     setSubheadText(t.subtitle);
@@ -546,6 +552,7 @@ export function MarketingCanvasStudio({
       ctaText: string;
       photoUrl: string;
       theme: CommercialTheme;
+      posterLayout?: PosterTemplateLayout;
     }>
   >([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -553,10 +560,10 @@ export function MarketingCanvasStudio({
   const pushHistory = useCallback(() => {
     setHistory((prev) => [
       ...prev.slice(0, historyIndex + 1),
-      { headline, badgeText, subheadText, ctaText, photoUrl, theme },
+      { headline, badgeText, subheadText, ctaText, photoUrl, theme, posterLayout },
     ]);
     setHistoryIndex((prev) => prev + 1);
-  }, [headline, badgeText, subheadText, ctaText, photoUrl, theme, historyIndex]);
+  }, [headline, badgeText, subheadText, ctaText, photoUrl, theme, posterLayout, historyIndex]);
 
   const handleUndo = () => {
     if (historyIndex > 0) {
@@ -567,6 +574,8 @@ export function MarketingCanvasStudio({
       setCtaText(prev.ctaText);
       setPhotoUrl(prev.photoUrl);
       setTheme(prev.theme);
+      if (prev.posterLayout) setPosterLayout(prev.posterLayout);
+      setCustomDesign(null);
       setHistoryIndex(historyIndex - 1);
     }
   };
@@ -580,6 +589,8 @@ export function MarketingCanvasStudio({
       setCtaText(next.ctaText);
       setPhotoUrl(next.photoUrl);
       setTheme(next.theme);
+      if (next.posterLayout) setPosterLayout(next.posterLayout);
+      setCustomDesign(null);
       setHistoryIndex(historyIndex + 1);
     }
   };
@@ -918,7 +929,7 @@ export function MarketingCanvasStudio({
     try {
       const targets = getResolvedTargets();
       const isPosterMode = activeVisualFormat === 'poster';
-      const resolvedPosterUrl = toAbsoluteUrl(posterUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1');
+      const resolvedPosterUrl = toAbsoluteUrl(posterUrl || photoUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1');
       const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [toAbsoluteUrl(photoUrl)] : [];
 
       const res = await authFetch(editingDraftId ? `/api/social/posts/${editingDraftId}` : '/api/social/posts', {
@@ -967,7 +978,7 @@ export function MarketingCanvasStudio({
     try {
       const targets = getResolvedTargets();
       const isPosterMode = activeVisualFormat === 'poster';
-      const resolvedPosterUrl = toAbsoluteUrl(posterUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1');
+      const resolvedPosterUrl = toAbsoluteUrl(posterUrl || photoUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1');
       const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [toAbsoluteUrl(photoUrl)] : [];
 
       const res = await authFetch('/api/social/posts', {
@@ -1568,6 +1579,43 @@ export function MarketingCanvasStudio({
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Pro Flyer Layout Template Selector (Parity with Mobile) */}
+          <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider shrink-0 mr-1">
+              Flyer Style:
+            </span>
+            {FLYER_LAYOUT_TEMPLATES.map((tmpl) => {
+              const isSelected = posterLayout === tmpl.id;
+              return (
+                <button
+                  key={tmpl.id}
+                  type="button"
+                  onClick={() => {
+                    pushHistory();
+                    setPosterLayout(tmpl.id);
+                    setCustomDesign(null);
+                    toast.info(`Layout switched to ${tmpl.name}!`);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shrink-0 ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                      : 'bg-card text-foreground border-border hover:bg-muted/50'
+                  }`}
+                  title={tmpl.desc}
+                >
+                  <span>{tmpl.name}</span>
+                  <span
+                    className={`text-[10px] font-medium ${
+                      isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                    }`}
+                  >
+                    ({tmpl.badge.split('&')[0].trim()})
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {activeRightTab === 'design' ? (
@@ -2224,6 +2272,7 @@ export function MarketingCanvasStudio({
                           theme: themeKey,
                           logoUrl: brandLogo || undefined,
                           tagline: effectiveTagline || undefined,
+                          layout: posterLayout,
                         })
                       );
                     }

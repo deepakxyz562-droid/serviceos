@@ -100,10 +100,10 @@ describe('PosterTemplateGallery (Flyer-Maker-style entry)', () => {
 
   it('falls back to generic templates in For You when no industry matches', () => {
     renderGallery({ business: { ...business, category: 'Aerospace Component Manufacturer' } });
-    // 'any'-industry templates always apply → For You shows those (never empty)
+    // 'any'-industry templates always apply → For You shows those (never empty, capped at top 8)
     const cards = screen.getAllByRole('button', { name: /^Use .+ template$/ });
     expect(cards.length).toBe(
-      POSTER_TEMPLATES.filter((t) => t.industries?.includes('any')).length
+      Math.min(8, POSTER_TEMPLATES.filter((t) => t.industries?.includes('any')).length)
     );
   });
 

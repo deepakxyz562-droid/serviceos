@@ -31,9 +31,19 @@ describe('poster template registry', () => {
     }
   });
 
-  it('has unique template ids', () => {
+  it('has unique template ids and contains at least 60 curated templates', () => {
     const ids = POSTER_TEMPLATES.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
+    expect(POSTER_TEMPLATES.length).toBeGreaterThanOrEqual(60);
+    // Verifies new creative and standard templates are present
+    expect(ids).toContain('creative-neo-brutalist');
+    expect(ids).toContain('creative-gold-atelier');
+    expect(ids).toContain('creative-neon-midnight');
+    expect(ids).toContain('standard-amc-contract');
+    expect(ids).toContain('standard-price-guarantee');
+    expect(ids).toContain('festival-eid-crescent');
+    expect(ids).toContain('festival-christmas-carnival');
+    expect(ids).toContain('festival-rakhi-bond');
   });
 
   it('gives every template a non-empty AI background prompt without text requests', () => {

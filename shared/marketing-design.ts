@@ -343,7 +343,58 @@ export function createCommercialPosterDesign(input: {
     });
   }
 
-  // ─── DEFAULT & BOLD OFFER / TECH MODERN / MINIMAL LUXURY ───
+  // ─── LAYOUT VARIATION 3: Tech Modern (HUD Cyber Framing & Specs Row) ───
+  if (layout === 'tech_modern') {
+    const bottomContentH = 500;
+    const bottomStartY = height - bottomContentH;
+    return validateDesign({
+      version: 1,
+      width,
+      height,
+      background: '#040914',
+      layers: [
+        { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 0.9 },
+        { id: 'hud_top_bar', type: 'shape', x: 40, y: 36, width: width - 80, height: 60, color: 'transparent', background: '#020617', fontSize: 16, opacity: 0.85, borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(56, 189, 248, 0.4)' },
+        { id: 'badge', type: 'text', x: 55, y: 46, width: 220, height: 40, text: `● ${badgeText}`, color: '#38bdf8', background: '#0e243a', fontSize: 18, opacity: 1, borderRadius: 20, alignItems: 'center', justifyContent: 'center', fontWeight: 900, letterSpacing: 1.2 },
+        { id: 'brand', type: 'text', x: 290, y: 48, width: width - 420, height: 36, text: brandText.toUpperCase(), color: '#ffffff', background: 'transparent', fontSize: 20, opacity: 1, fontWeight: 800, letterSpacing: 1 },
+        ...(logoSrc ? [{ id: 'brand_logo', type: 'image' as const, x: width - 110, y: 44, width: 44, height: 44, src: logoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 1, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(56, 189, 248, 0.6)' }] : []),
+        { id: 'bottom_scrim', type: 'shape', x: 30, y: bottomStartY, width: width - 60, height: bottomContentH - 30, color: 'transparent', background: '#050b1a', fontSize: 16, opacity: 0.92, borderRadius: 32, borderWidth: 1.5, borderColor: 'rgba(56, 189, 248, 0.25)' },
+        { id: 'headline', type: 'text', x: 60, y: bottomStartY + 30, width: width - 120, height: 140, text: headlineText, color: '#ffffff', background: 'transparent', fontSize: width > 1080 ? 72 : 60, opacity: 1, fontWeight: 900, letterSpacing: -0.8 },
+        { id: 'subtitle', type: 'text', x: 60, y: bottomStartY + 180, width: width - 120, height: 70, text: subText, color: '#94a3b8', background: 'transparent', fontSize: 26, opacity: 1, fontWeight: 700, letterSpacing: 0.2 },
+        { id: 'specs_row', type: 'text', x: 60, y: bottomStartY + 260, width: width - 120, height: 44, text: '⚡ FAST SETUP  •  🛡️ ENTERPRISE READY  •  📱 LIVE SYNC', color: '#38bdf8', background: '#0e243a', fontSize: 16, opacity: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', fontWeight: 800, letterSpacing: 0.8 },
+        { id: 'footer_bg', type: 'shape', x: 0, y: height - footerH, width, height: footerH, color: 'transparent', background: '#020617', fontSize: 16, opacity: 0.98, borderTopWidth: 1, borderColor: 'rgba(56, 189, 248, 0.2)' },
+        { id: 'footer_brand', type: 'text', x: 50, y: height - footerH + 32, width: Math.max(200, width - 360), height: 76, text: `${brandText}${taglineText}\n🌐 ${webText}${input.phone ? ` • 📞 ${input.phone.trim()}` : ''}`, color: '#e2e8f0', background: 'transparent', fontSize: 22, opacity: 1, fontWeight: 600 },
+        { id: 'cta', type: 'text', x: width - 290, y: height - footerH + 42, width: 240, height: 56, text: `${ctaLabel} →`, color: '#020617', background: '#38bdf8', fontSize: 22, opacity: 1, borderRadius: 28, alignItems: 'center', justifyContent: 'center', padding: '0 28px', fontWeight: 900, letterSpacing: 0.8, borderWidth: 1.5, borderColor: '#ffffff' },
+      ],
+    });
+  }
+
+  // ─── LAYOUT VARIATION 4: Minimal Luxury (Refined Centered Layout & Delicate Framing) ───
+  if (layout === 'minimal_luxury') {
+    const bottomContentH = 500;
+    const bottomStartY = height - bottomContentH;
+    return validateDesign({
+      version: 1,
+      width,
+      height,
+      background: '#090807',
+      layers: [
+        { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 0.85 },
+        { id: 'luxury_border', type: 'shape', x: 30, y: 30, width: width - 60, height: height - 60, color: 'transparent', background: 'transparent', fontSize: 16, opacity: 1, borderWidth: 1.5, borderColor: 'rgba(217, 180, 114, 0.45)' },
+        { id: 'brand', type: 'text', x: 50, y: 60, width: width - 100, height: 46, text: brandText.toUpperCase(), color: '#d4af37', background: 'transparent', fontSize: 24, opacity: 1, alignItems: 'center', justifyContent: 'center', fontWeight: 800, letterSpacing: 4 },
+        ...(logoSrc ? [{ id: 'brand_logo', type: 'image' as const, x: Math.round(width / 2 - 25), y: 115, width: 50, height: 50, src: logoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 1, borderRadius: 25, borderWidth: 1.5, borderColor: 'rgba(212, 175, 55, 0.8)' }] : []),
+        { id: 'bottom_scrim', type: 'shape', x: 45, y: bottomStartY - 20, width: width - 90, height: bottomContentH - 20, color: 'transparent', background: '#0a0806', fontSize: 16, opacity: 0.88, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(217, 180, 114, 0.3)' },
+        { id: 'badge', type: 'text', x: 60, y: bottomStartY, width: width - 120, height: 38, text: `— ${badgeText} —`, color: '#d4af37', background: 'transparent', fontSize: 20, opacity: 1, alignItems: 'center', justifyContent: 'center', fontWeight: 900, letterSpacing: 2 },
+        { id: 'headline', type: 'text', x: 60, y: bottomStartY + 50, width: width - 120, height: 140, text: headlineText, color: '#ffffff', background: 'transparent', fontSize: width > 1080 ? 70 : 58, opacity: 1, alignItems: 'center', justifyContent: 'center', fontWeight: 900, letterSpacing: 0.5 },
+        { id: 'subtitle', type: 'text', x: 60, y: bottomStartY + 200, width: width - 120, height: 70, text: subText, color: '#e5d6b8', background: 'transparent', fontSize: 26, opacity: 1, alignItems: 'center', justifyContent: 'center', fontWeight: 600, letterSpacing: 0.5 },
+        { id: 'cta', type: 'text', x: Math.round(width / 2 - 140), y: bottomStartY + 285, width: 280, height: 56, text: `${ctaLabel}`, color: '#090807', background: '#d4af37', fontSize: 20, opacity: 1, borderRadius: 28, alignItems: 'center', justifyContent: 'center', fontWeight: 900, letterSpacing: 1.5, borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.4)' },
+        { id: 'footer_bg', type: 'shape', x: 0, y: height - footerH, width, height: footerH, color: 'transparent', background: '#050403', fontSize: 16, opacity: 0.98, borderTopWidth: 1, borderColor: 'rgba(217, 180, 114, 0.2)' },
+        { id: 'footer_brand', type: 'text', x: 50, y: height - footerH + 32, width: width - 100, height: 76, text: `🌐 ${webText}${input.phone ? ` • 📞 ${input.phone.trim()}` : ''}${taglineText}`, color: '#e5d6b8', background: 'transparent', fontSize: 20, opacity: 1, alignItems: 'center', justifyContent: 'center', fontWeight: 600, letterSpacing: 0.8 },
+      ],
+    });
+  }
+
+  // ─── DEFAULT & BOLD OFFER / PROMO ───
   const bottomContentH = 460;
   const bottomStartY = height - bottomContentH;
 

@@ -152,7 +152,14 @@ function AutoBrandedPosterCard({
         borderRadius: isCompact ? 14 : 20,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.12)',
+        borderColor:
+          layout === 'minimal_luxury'
+            ? 'rgba(217, 180, 114, 0.55)'
+            : layout === 'tech_modern'
+            ? 'rgba(56, 189, 248, 0.45)'
+            : layout === 'urgent_callout'
+            ? 'rgba(239, 68, 68, 0.4)'
+            : 'rgba(255,255,255,0.12)',
         backgroundColor: '#090D16',
         shadowColor: '#000',
         shadowOpacity: 0.25,
@@ -260,6 +267,50 @@ function AutoBrandedPosterCard({
                 {badge || '24/7 RAPID SERVICE'} • CALL NOW 📞
               </Text>
             </View>
+          ) : layout === 'minimal_luxury' ? (
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                paddingHorizontal: isCompact ? 12 : 16,
+                paddingVertical: isCompact ? 8 : 12,
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                zIndex: 3,
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: '#D4AF37',
+                  fontSize: isCompact ? 10 : 12,
+                  fontWeight: '900',
+                  letterSpacing: 2.2,
+                  textTransform: 'uppercase',
+                  flex: 1,
+                  textAlign: logoUri ? 'left' : 'center',
+                }}
+              >
+                {businessName || 'LUXURY ATELIER'}
+              </Text>
+              {logoUri ? (
+                <Image
+                  source={{ uri: logoUri }}
+                  style={{
+                    width: isCompact ? 22 : 28,
+                    height: isCompact ? 22 : 28,
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(212, 175, 55, 0.8)',
+                  }}
+                  resizeMode="cover"
+                />
+              ) : null}
+            </View>
           ) : (
             /* Floating Glassmorphic Top Ribbon (Badge & Logo) */
             <View
@@ -327,20 +378,51 @@ function AutoBrandedPosterCard({
               bottom: 0,
               left: 0,
               right: 0,
-              backgroundColor: layout === 'urgent_callout' ? 'rgba(15,3,3,0.85)' : 'rgba(7, 10, 19, 0.78)',
+              backgroundColor:
+                layout === 'urgent_callout'
+                  ? 'rgba(15,3,3,0.85)'
+                  : layout === 'tech_modern'
+                  ? 'rgba(5, 11, 26, 0.92)'
+                  : layout === 'minimal_luxury'
+                  ? 'rgba(9, 8, 7, 0.88)'
+                  : 'rgba(7, 10, 19, 0.78)',
               paddingHorizontal: isCompact ? 12 : 16,
               paddingTop: isCompact ? 10 : 14,
               paddingBottom: isCompact ? 10 : 14,
               borderTopLeftRadius: isCompact ? 14 : 18,
               borderTopRightRadius: isCompact ? 14 : 18,
               borderTopWidth: 1,
-              borderTopColor: layout === 'urgent_callout' ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.14)',
+              borderTopColor:
+                layout === 'urgent_callout'
+                  ? 'rgba(239,68,68,0.3)'
+                  : layout === 'tech_modern'
+                  ? 'rgba(56, 189, 248, 0.35)'
+                  : layout === 'minimal_luxury'
+                  ? 'rgba(217, 180, 114, 0.35)'
+                  : 'rgba(255,255,255,0.14)',
               shadowColor: '#000',
               shadowOpacity: 0.3,
               shadowRadius: 8,
               elevation: 5,
             }}
           >
+            {/* Minimal luxury subtle gold badge */}
+            {layout === 'minimal_luxury' ? (
+              <Text
+                style={{
+                  color: '#D4AF37',
+                  fontSize: isCompact ? 8.5 : 10.5,
+                  fontWeight: '900',
+                  letterSpacing: 2,
+                  textAlign: 'center',
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}
+              >
+                — {badge || 'EXCLUSIVE COLLECTION'} —
+              </Text>
+            ) : null}
+
             {/* Dynamic Marketing Headline */}
             <Text
               numberOfLines={2}
@@ -349,7 +431,8 @@ function AutoBrandedPosterCard({
                 fontSize: isCompact ? 13 : 17,
                 fontWeight: '900',
                 lineHeight: isCompact ? 17 : 23,
-                letterSpacing: -0.4,
+                letterSpacing: layout === 'minimal_luxury' ? 0.3 : -0.4,
+                textAlign: layout === 'minimal_luxury' ? 'center' : 'left',
                 textShadowColor: 'rgba(0,0,0,0.9)',
                 textShadowOffset: { width: 0, height: 1 },
                 textShadowRadius: 6,
@@ -362,16 +445,40 @@ function AutoBrandedPosterCard({
               <Text
                 numberOfLines={1}
                 style={{
-                  color: layout === 'urgent_callout' ? '#FCA5A5' : themeConfig.subColor || '#94A3B8',
+                  color:
+                    layout === 'urgent_callout'
+                      ? '#FCA5A5'
+                      : layout === 'minimal_luxury'
+                      ? '#E5D6B8'
+                      : layout === 'tech_modern'
+                      ? '#38BDF8'
+                      : themeConfig.subColor || '#94A3B8',
                   fontSize: isCompact ? 9 : 11.5,
                   fontWeight: '700',
                   marginTop: 3,
+                  textAlign: layout === 'minimal_luxury' ? 'center' : 'left',
                   textShadowColor: 'rgba(0,0,0,0.85)',
                   textShadowOffset: { width: 0, height: 1 },
                   textShadowRadius: 4,
                 }}
               >
                 {subtitle}
+              </Text>
+            ) : null}
+
+            {/* Tech Modern specs chip */}
+            {layout === 'tech_modern' ? (
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: '#38BDF8',
+                  fontSize: isCompact ? 7.5 : 9,
+                  fontWeight: '800',
+                  marginTop: 3,
+                  letterSpacing: 0.5,
+                }}
+              >
+                ⚡ FAST SETUP  •  🛡️ ENTERPRISE READY  •  📱 LIVE SYNC
               </Text>
             ) : null}
 
@@ -394,7 +501,14 @@ function AutoBrandedPosterCard({
                     width: isCompact ? 20 : 24,
                     height: isCompact ? 20 : 24,
                     borderRadius: 12,
-                    backgroundColor: layout === 'urgent_callout' ? '#DC2626' : themeConfig.accent,
+                    backgroundColor:
+                      layout === 'urgent_callout'
+                        ? '#DC2626'
+                        : layout === 'tech_modern'
+                        ? '#0284C7'
+                        : layout === 'minimal_luxury'
+                        ? '#D4AF37'
+                        : themeConfig.accent,
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginRight: 6,
@@ -425,11 +539,18 @@ function AutoBrandedPosterCard({
               {/* Floating High-Conversion CTA Button */}
               <View
                 style={{
-                  backgroundColor: layout === 'urgent_callout' ? '#DC2626' : themeConfig.ctaBg,
+                  backgroundColor:
+                    layout === 'urgent_callout'
+                      ? '#DC2626'
+                      : layout === 'tech_modern'
+                      ? '#38BDF8'
+                      : layout === 'minimal_luxury'
+                      ? '#D4AF37'
+                      : themeConfig.ctaBg,
                   paddingHorizontal: isCompact ? 8 : 12,
                   paddingVertical: isCompact ? 4 : 6,
                   borderRadius: 20,
-                  shadowColor: themeConfig.accent,
+                  shadowColor: layout === 'tech_modern' ? '#38BDF8' : themeConfig.accent,
                   shadowOpacity: 0.35,
                   shadowRadius: 4,
                   elevation: 2,
@@ -440,10 +561,13 @@ function AutoBrandedPosterCard({
               >
                 <Text
                   style={{
-                    color: themeConfig.ctaText,
+                    color:
+                      layout === 'tech_modern' || layout === 'minimal_luxury'
+                        ? '#090807'
+                        : themeConfig.ctaText,
                     fontSize: isCompact ? 8 : 10,
                     fontWeight: '900',
-                    letterSpacing: 0.3,
+                    letterSpacing: layout === 'minimal_luxury' ? 0.8 : 0.3,
                   }}
                 >
                   {ctaText ? `${ctaText} →` : (layout === 'urgent_callout' ? 'CALL NOW 📞' : 'VISIT STORE →')}
@@ -1024,6 +1148,7 @@ export default function MarketingScreen() {
 
   const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(null);
   const design = useMemo(() => {
+    if (customDesign) return customDesign;
     try {
       const isEligible = (u?: string | null) => typeof u === 'string' && /^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,)/i.test(u.trim());
       const safePhoto = isEligible(customPosterUri)
@@ -1064,6 +1189,7 @@ export default function MarketingScreen() {
       });
     }
   }, [
+    customDesign,
     effectiveBusinessName,
     headline,
     effectiveHeadline,
@@ -2129,6 +2255,7 @@ export default function MarketingScreen() {
                           website={effectiveBusinessWebsite}
                           height={280}
                           theme={colorTheme}
+                          layout={posterLayout}
                           isGenerating={isGeneratingImage || (busy && generationMode === 'poster')}
                         />
                       </View>
@@ -2434,7 +2561,10 @@ export default function MarketingScreen() {
                       return (
                         <Pressable
                           key={tmpl.id}
-                          onPress={() => setPosterLayout(tmpl.id)}
+                          onPress={() => {
+                            setPosterLayout(tmpl.id);
+                            setCustomDesign(null);
+                          }}
                           style={{
                             paddingHorizontal: 12,
                             paddingVertical: 8,
