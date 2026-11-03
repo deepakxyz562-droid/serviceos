@@ -289,7 +289,7 @@ export function createCommercialPosterDesign(input: {
           },
         ]
       : []),
-    // 5. Bottom Scrim (ensures headline & subtitle are 100% readable)
+    // 5. Bottom Scrim (ensures headline & subtitle are 100% readable while preserving photography)
     {
       id: 'bottom_scrim',
       type: 'shape',
@@ -300,7 +300,7 @@ export function createCommercialPosterDesign(input: {
       color: 'transparent',
       background: themeColors.scrimBg,
       fontSize: 16,
-      opacity: 0.88,
+      opacity: 0.75,
     },
     // 6. Headline (Main marketing hook)
     {

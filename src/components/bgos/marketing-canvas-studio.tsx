@@ -1513,37 +1513,37 @@ export function MarketingCanvasStudio({
                       </div>
                     )}
 
-                    {/* Top Scrim with Offer Badge & Dimensions */}
+                    {/* Top Scrim with Offer Badge & Download Action */}
                     <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
                       <div
                         style={{ backgroundColor: activeThemeConfig.badgeBg, color: activeThemeConfig.badgeText }}
-                        className="font-black text-[11px] px-2.5 py-1 rounded-lg uppercase tracking-wider shadow-sm pointer-events-auto"
+                        className="font-black text-[11px] px-3 py-1 rounded-full uppercase tracking-wider shadow-sm pointer-events-auto border border-white/20"
                       >
                         {badgeText || 'SPECIAL OFFER'}
                       </div>
-                      <div className="bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-white tracking-wide uppercase border border-white/20 shadow-xs pointer-events-auto flex items-center gap-1.5">
-                        <span>1080 × 1350</span>
+                      {posterUrl ? (
                         <a
                           href={posterUrl}
                           download="marketing-poster.jpg"
-                          className="hover:text-primary transition-colors ml-1"
+                          className="bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-white tracking-wide uppercase border border-white/20 shadow-xs pointer-events-auto flex items-center gap-1 hover:text-primary transition-colors"
                           title="Download image"
                         >
                           <Download className="size-3" />
+                          <span>Save Visual</span>
                         </a>
-                      </div>
+                      ) : null}
                     </div>
 
-                    {/* Headline Banner Scrim */}
+                    {/* Headline Banner Scrim with Smooth Vignette */}
                     <div
-                      style={{ backgroundColor: activeThemeConfig.scrimBg }}
-                      className="absolute bottom-14 inset-x-0 p-4 text-white"
+                      style={{ background: 'linear-gradient(to top, rgba(7, 10, 19, 0.95) 0%, rgba(7, 10, 19, 0.8) 60%, transparent 100%)' }}
+                      className="absolute bottom-14 inset-x-0 pt-12 pb-3 px-4 text-white"
                     >
                       <h3
                         style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95)' }}
-                        className="font-black text-lg sm:text-xl leading-tight"
+                        className="font-black text-lg sm:text-xl leading-tight tracking-tight"
                       >
-                        {headline || 'Professional Business Services'}
+                        {headline || effectiveHeadline}
                       </h3>
                       {subheadText && (
                         <p
