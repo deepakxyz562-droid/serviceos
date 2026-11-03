@@ -252,13 +252,33 @@ export function buildHighQualityImagePrompt(
     allContext.includes('agency') ||
     allContext.includes('web')
   ) {
-    styleDescriptor =
-      'High-tech modern corporate technology photography, sleek software agency setup, modern code workspace, clean glass office environment';
-    settingDescriptor =
-      'contemporary ambient lighting, sharp focus, elegant negative copy space';
-
-    domainSubject =
-      'High-tech modern software engineering workspace, sleek ultrawide monitors displaying clean code and futuristic analytics dashboards in a glass architectural office with ambient lighting';
+    if (
+      allContext.includes('employee track') ||
+      allContext.includes('user track') ||
+      allContext.includes('staff track') ||
+      allContext.includes('gps track') ||
+      allContext.includes('field track') ||
+      allContext.includes('tracking app') ||
+      allContext.includes('tracking') ||
+      allContext.includes('mobile app') ||
+      allContext.includes('attendance app') ||
+      allContext.includes('ios app') ||
+      allContext.includes('android app')
+    ) {
+      styleDescriptor =
+        'Award-winning commercial tech product advertising photography, sleek mobile software UI, futuristic GPS map visual, clean contemporary device mockup';
+      settingDescriptor =
+        'soft dramatic studio ambient rim lighting, minimalist tech pedestal, clean shallow depth of field with generous negative copy space for typography';
+      domainSubject =
+        'Premium modern sleek smartphone mockup floating elegantly, displaying an intuitive mobile application interface with live GPS map navigation, user tracking location pins, clean route telemetry lines, and minimal workforce status cards, floating in a minimalist high-tech studio environment with soft ambient lighting';
+    } else {
+      styleDescriptor =
+        'High-tech modern corporate technology photography, sleek software agency setup, modern code workspace, clean glass office environment';
+      settingDescriptor =
+        'contemporary ambient lighting, sharp focus, elegant negative copy space';
+      domainSubject =
+        'High-tech modern software engineering workspace, sleek ultrawide monitors displaying clean code and futuristic analytics dashboards in a glass architectural office with ambient lighting';
+    }
   }
   // 5. Home Services / Trades (HVAC, Plumbing, Cleaning, Repairs, Electrical)
   else if (

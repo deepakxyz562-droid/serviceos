@@ -86,22 +86,17 @@ interface CreativeLayout {
   photoUrl: string;
 }
 
-const DEFAULT_CAPTION = `Switching between customer calls, job diaries, quote calculators, and messaging apps eats away the hours you should be spending on the tools or growing your business.
-
-Meet the Fieseros AI Assistant—turning natural conversation into connected field service workflows.
-
-Just say: “Schedule a boiler repair for Sarah tomorrow, assign Mike, create a £350 quote, and prepare her confirmation.”
-
-In seconds, Fieseros maps the customer, books the job, drafts the quote, and queues her confirmation for your review. Less repetitive admin, zero lost paperwork, and more time to focus on your customers and high-value jobs.
-
-Discover what Fieseros can do for your business: https://fieseros.com
-
-#Fieseros #FieldServiceManagement #TradeBusiness #HVAC #Plumbing`;
+function buildDefaultCaption(businessName?: string, website?: string, industry?: string) {
+  const name = businessName || 'our business';
+  const web = website ? `\n\nVisit us: https://${website.replace(/^https?:\/\//, '')}` : '';
+  const indTag = industry ? ` #${industry.replace(/[^a-zA-Z0-9]/g, '')}` : '';
+  return `✨ Exciting updates from ${name}!\n\nWe take pride in providing exceptional quality and service you can count on. Whether you're looking for our latest offerings or customized solutions, we're here to help.${web}\n\n#${name.replace(/[^a-zA-Z0-9]/g, '')}${indTag} #QualityService #CustomerFirst`;
+}
 
 const DEFAULT_ALT_HEADLINES = [
-  'From one instruction to a connected workflow.',
-  'Run your field service business in plain English.',
-  'Stop juggling apps. Just tell your assistant.',
+  'Quality & Service You Can Trust.',
+  'Discover What We Have In Store.',
+  'Elevate Your Experience With Us.',
 ];
 
 function AutoBrandedPosterCard({
@@ -396,7 +391,9 @@ export default function MarketingScreen() {
   const brandProfile = useResource<BrandProfileData>('/api/brand-profile');
   const promptSuggestions = useResource<{
     business?: { name?: string; category?: string };
-    suggestions: Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string }>;
+    website?: string;
+    websiteTags?: string[];
+    suggestions: Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string; headline?: string; badge?: string }>;
   }>('/api/social/prompts/suggestions');
 
   // ── Mode Switch: Studio / Create vs Autopilot vs Posts & Approvals ──────────
@@ -479,10 +476,9 @@ export default function MarketingScreen() {
   const [studioSubTab, setStudioSubTab] = useState<'chat' | 'design'>('chat');
 
   // ── Content State ──────────────────────────────────────────────────────────
+  const [hasGenerated, setHasGenerated] = useState(false);
   const [promptInput, setPromptInput] = useState('');
-  const [activeUserPrompt, setActiveUserPrompt] = useState(
-    'Create a professional social media marketing post promoting the Fieseros AI Assistant.'
-  );
+  const [activeUserPrompt, setActiveUserPrompt] = useState('');
   const [generationMode, setGenerationMode] = useState<'poster' | 'graphic' | 'image_only'>('poster');
   const [activeVisualFormat, setActiveVisualFormat] = useState<'poster' | 'canvas'>('poster');
   const [customPosterUri, setCustomPosterUri] = useState<string | null>(null);
@@ -492,26 +488,36 @@ export default function MarketingScreen() {
   const [colorTheme, setColorTheme] = useState<CommercialTheme>('royal_gold');
   const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
 
-  // Graphic content elements — Fieseros campaign initialized
-  const [headline, setHeadline] = useState('Less admin. More jobs.');
-  const [discountBadge, setDiscountBadge] = useState('AI WORKFLOW');
-  const [subtitle, setSubtitle] = useState('Meet your Fieseros AI Assistant.');
-  const [ctaText, setCtaText] = useState('Explore Fieseros');
+  // Graphic content elements — dynamic business-aware defaults
+  const [headline, setHeadline] = useState('');
+  const [discountBadge, setDiscountBadge] = useState('SPECIAL OFFER');
+  const [subtitle, setSubtitle] = useState('Quality & Service You Can Trust.');
+  const [ctaText, setCtaText] = useState('Learn More');
   const [bgPhotoUrl, setBgPhotoUrl] = useState(
-    'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80'
+    'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1080&q=80'
   );
 
   // Caption & copy
-  const [caption, setCaption] = useState(DEFAULT_CAPTION);
+  const [caption, setCaption] = useState('');
   const [isEditingCaption, setIsEditingCaption] = useState(false);
-  const [captionDraft, setCaptionDraft] = useState(caption);
+  const [captionDraft, setCaptionDraft] = useState('');
   const [isEditingText, setIsEditingText] = useState(false);
+  const [isCampaignSheetOpen, setIsCampaignSheetOpen] = useState(false);
+  const [selectedIdeaModal, setSelectedIdeaModal] = useState<{
+    id: string;
+    title?: string;
+    chipLabel?: string;
+    icon?: string;
+    prompt: string;
+    headline?: string;
+    badge?: string;
+  } | null>(null);
 
   // Offer details & Review step
   const [reviewPlatform, setReviewPlatform] = useState<'instagram' | 'facebook' | 'googlebusiness'>('instagram');
   const [offerStartDate, setOfferStartDate] = useState('6 Nov');
   const [offerEndDate, setOfferEndDate] = useState('8 Nov');
-  const [bookingLink, setBookingLink] = useState('https://fieseros.com');
+  const [bookingLink, setBookingLink] = useState('');
   const [scheduleMode, setScheduleMode] = useState<'now' | 'schedule'>('now');
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
@@ -570,64 +576,6 @@ export default function MarketingScreen() {
     }
   }, [availableAccounts]);
 
-  const businessDisplayName =
-    discover.data?.activeProfile?.name ||
-    brandProfile.data?.profile?.businessName ||
-    gbpPlace.data?.place?.title ||
-    'Fieseros';
-
-  // 3 Creative Directions
-  const layouts: CreativeLayout[] = useMemo(
-    () => [
-      {
-        id: 'editorial',
-        name: 'Editorial',
-        headline: headline || 'Make more of your weekend.',
-        subtitle: subtitle || 'Selected services. Book your appointment today.',
-        badge: discountBadge || '20% OFF',
-        ctaText: ctaText || 'Book now',
-        theme: 'sand_olive',
-        photoUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80',
-      },
-      {
-        id: 'photo_led',
-        name: 'Photo-led',
-        headline: discountBadge || '20% OFF',
-        subtitle: 'Selected services',
-        badge: 'EXCLUSIVE',
-        ctaText: 'Book now',
-        theme: 'beige',
-        photoUrl: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1080&q=80',
-      },
-      {
-        id: 'bold',
-        name: 'Bold',
-        headline: 'WEEKEND OFFER',
-        subtitle: 'Selected services',
-        badge: discountBadge || '20% OFF',
-        ctaText: 'Claim offer',
-        theme: 'emerald_gold',
-        photoUrl: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1080&q=80',
-      },
-    ],
-    [headline, subtitle, discountBadge, ctaText]
-  );
-
-  // Targets for publishing
-  const targets = useMemo(() => {
-    const list: { platform: string; socialAccountId: string }[] = [];
-    if (selectedPlatforms.includes('googlebusiness') && gbpAccount) {
-      list.push({ platform: 'googlebusiness', socialAccountId: gbpAccount.id });
-    }
-    if (selectedPlatforms.includes('facebook') && fbAccount) {
-      list.push({ platform: 'facebook', socialAccountId: fbAccount.id });
-    }
-    if (selectedPlatforms.includes('instagram') && igAccount) {
-      list.push({ platform: 'instagram', socialAccountId: igAccount.id });
-    }
-    return list;
-  }, [selectedPlatforms, gbpAccount, fbAccount, igAccount]);
-
   const [brandLogoUri, setBrandLogoUri] = useState<string | null>(null);
   const [brandTagline, setBrandTagline] = useState<string>('');
   const [brandWebsite, setBrandWebsite] = useState<string>('');
@@ -658,6 +606,93 @@ export default function MarketingScreen() {
     brandProfile.data?.brandDetails?.logoUrl ||
     null;
 
+  const effectiveHeadline = useMemo(() => {
+    if (headline) return headline;
+    return effectiveBusinessName && effectiveBusinessName !== 'Commercial Brand'
+      ? `Welcome to ${effectiveBusinessName}`
+      : 'Special Offer';
+  }, [headline, effectiveBusinessName]);
+
+  const effectiveCaption = useMemo(() => {
+    if (caption) return caption;
+    return buildDefaultCaption(
+      effectiveBusinessName !== 'Commercial Brand' ? effectiveBusinessName : undefined,
+      effectiveBusinessWebsite,
+      brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category
+    );
+  }, [caption, effectiveBusinessName, effectiveBusinessWebsite, brandProfile.data?.profile?.industry, gbpPlace.data?.place?.category]);
+
+  const userInitials = useMemo(() => {
+    const raw =
+      workspace.data?.name ||
+      brandProfile.data?.profile?.businessName ||
+      effectiveBusinessName ||
+      'ME';
+    const parts = raw.trim().split(/\s+/);
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return raw.slice(0, 2).toUpperCase();
+  }, [workspace.data?.name, brandProfile.data?.profile?.businessName, effectiveBusinessName]);
+
+  const businessDisplayName =
+    discover.data?.activeProfile?.name ||
+    brandProfile.data?.profile?.businessName ||
+    gbpPlace.data?.place?.title ||
+    effectiveBusinessName;
+
+  // 3 Creative Directions
+  const layouts: CreativeLayout[] = useMemo(
+    () => [
+      {
+        id: 'editorial',
+        name: 'Editorial',
+        headline: headline || effectiveHeadline,
+        subtitle: subtitle || 'Quality & Service You Can Trust.',
+        badge: discountBadge || 'SPECIAL OFFER',
+        ctaText: ctaText || 'Learn More',
+        theme: 'sand_olive',
+        photoUrl: bgPhotoUrl,
+      },
+      {
+        id: 'photo_led',
+        name: 'Photo-led',
+        headline: discountBadge || 'EXCLUSIVE OFFER',
+        subtitle: subtitle || 'Selected offerings for you.',
+        badge: 'EXCLUSIVE',
+        ctaText: ctaText || 'Explore Now',
+        theme: 'beige',
+        photoUrl: bgPhotoUrl,
+      },
+      {
+        id: 'bold',
+        name: 'Bold',
+        headline: headline || 'FEATURED OFFER',
+        subtitle: subtitle || 'Quality & Service You Can Trust.',
+        badge: discountBadge || 'LIMITED TIME',
+        ctaText: ctaText || 'Claim Offer',
+        theme: 'emerald_gold',
+        photoUrl: bgPhotoUrl,
+      },
+    ],
+    [headline, effectiveHeadline, subtitle, discountBadge, ctaText, bgPhotoUrl]
+  );
+
+  // Targets for publishing
+  const targets = useMemo(() => {
+    const list: { platform: string; socialAccountId: string }[] = [];
+    if (selectedPlatforms.includes('googlebusiness') && gbpAccount) {
+      list.push({ platform: 'googlebusiness', socialAccountId: gbpAccount.id });
+    }
+    if (selectedPlatforms.includes('facebook') && fbAccount) {
+      list.push({ platform: 'facebook', socialAccountId: fbAccount.id });
+    }
+    if (selectedPlatforms.includes('instagram') && igAccount) {
+      list.push({ platform: 'instagram', socialAccountId: igAccount.id });
+    }
+    return list;
+  }, [selectedPlatforms, gbpAccount, fbAccount, igAccount]);
+
   const handlePickLogo = async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -679,6 +714,9 @@ export default function MarketingScreen() {
     }
   };
 
+  const [isScanningWebsite, setIsScanningWebsite] = useState(false);
+  const lastFetchedWebsiteRef = useRef<string | null>(null);
+
   const handleRefreshIdeas = async () => {
     if (refreshingIdeas) return;
     setRefreshingIdeas(true);
@@ -690,10 +728,13 @@ export default function MarketingScreen() {
         '';
       if (cat) params.set('category', cat);
       if (effectiveBusinessName) params.set('businessName', effectiveBusinessName);
+      if (effectiveBusinessWebsite) params.set('website', effectiveBusinessWebsite);
 
       const fresh = await apiRequest<{
         business?: { name?: string; category?: string };
-        suggestions: Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string }>;
+        website?: string;
+        websiteTags?: string[];
+        suggestions: Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string; headline?: string; badge?: string }>;
       }>(`/api/social/prompts/suggestions?${params.toString()}`);
 
       if (fresh?.suggestions && fresh.suggestions.length > 0) {
@@ -706,6 +747,45 @@ export default function MarketingScreen() {
       setRefreshingIdeas(false);
     }
   };
+
+  const handleScanWebsite = async (overrideWebsite?: string) => {
+    const targetWeb = overrideWebsite || effectiveBusinessWebsite;
+    if (!targetWeb || isScanningWebsite) return;
+    setIsScanningWebsite(true);
+    try {
+      const params = new URLSearchParams({ refresh: '1', scan: '1', website: targetWeb });
+      const cat =
+        brandProfile.data?.profile?.industry ||
+        gbpPlace.data?.place?.category ||
+        '';
+      if (cat) params.set('category', cat);
+      if (effectiveBusinessName) params.set('businessName', effectiveBusinessName);
+
+      const fresh = await apiRequest<{
+        business?: { name?: string; category?: string };
+        website?: string;
+        websiteTags?: string[];
+        suggestions: Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string; headline?: string; badge?: string }>;
+      }>(`/api/social/prompts/suggestions?${params.toString()}`);
+
+      if (fresh?.suggestions && fresh.suggestions.length > 0) {
+        promptSuggestions.setData(fresh);
+        Alert.alert('Website Scanned', `Extracted features from ${targetWeb}:\n${(fresh.websiteTags || []).slice(0, 4).join('\n') || 'Smart tags ready'}`);
+      }
+    } catch (err: any) {
+      console.warn('Failed to scan website:', err);
+      Alert.alert('Scan Result', 'Could not reach website directly, using smart industry tags.');
+    } finally {
+      setIsScanningWebsite(false);
+    }
+  };
+
+  useEffect(() => {
+    if (effectiveBusinessWebsite && lastFetchedWebsiteRef.current !== effectiveBusinessWebsite) {
+      lastFetchedWebsiteRef.current = effectiveBusinessWebsite;
+      handleRefreshIdeas();
+    }
+  }, [effectiveBusinessWebsite]);
 
   useEffect(() => {
     const combined = `${brandProfile.data?.profile?.industry || ''} ${gbpPlace.data?.place?.category || ''} ${effectiveBusinessName}`.toLowerCase();
@@ -812,7 +892,7 @@ export default function MarketingScreen() {
     if (customDesign) return customDesign;
     return createCommercialPosterDesign({
       brand: effectiveBusinessName,
-      headline,
+      headline: headline || effectiveHeadline,
       subtitle,
       badge: discountBadge,
       cta: ctaText,
@@ -828,6 +908,7 @@ export default function MarketingScreen() {
     customDesign,
     effectiveBusinessName,
     headline,
+    effectiveHeadline,
     subtitle,
     discountBadge,
     ctaText,
@@ -958,8 +1039,12 @@ export default function MarketingScreen() {
 
   // AI Generation Trigger
   async function generatePost(customTopic?: string) {
-    const topicToUse = (typeof customTopic === 'string' ? customTopic : promptInput).trim() || activeUserPrompt;
+    const topicToUse =
+      (typeof customTopic === 'string' ? customTopic : promptInput).trim() ||
+      activeUserPrompt ||
+      `Promote ${effectiveBusinessName}`;
     setBusy(true);
+    setHasGenerated(true);
     setError(null);
     setActiveUserPrompt(topicToUse);
     try {
@@ -967,7 +1052,7 @@ export default function MarketingScreen() {
       // 1. Generate campaign copy, headline, and alternative headlines
       const genPromise = apiRequest<{ design: MarketingDesign; caption: string; alternativeHeadlines?: string[] }>('/api/social/designs/generate', {
         method: 'POST',
-        body: { prompt: topicToUse, design, caption, mode: generationMode },
+        body: { prompt: topicToUse, design, caption: caption || effectiveCaption, mode: generationMode },
       });
 
       // 2. If in poster mode, trigger Cloudflare Flux AI image generation asynchronously
@@ -1081,9 +1166,10 @@ export default function MarketingScreen() {
     }
 
     const isPosterMode = activeVisualFormat === 'poster';
-    const resolvedPosterUrl = customPosterUri || `${WEB_URL}/images/fieseros-ai-assistant-poster.jpg?v=1`;
+    const resolvedPosterUrl = customPosterUri || bgPhotoUrl;
     const mediaList = isPosterMode ? [resolvedPosterUrl] : bgPhotoUrl ? [bgPhotoUrl] : [];
-    const contentCheck = validateSocialPost(caption.trim(), selectedPlatforms, mediaList);
+    const postCaption = (caption || effectiveCaption).trim();
+    const contentCheck = validateSocialPost(postCaption, selectedPlatforms, mediaList);
     if (contentCheck) {
       setError(contentCheck);
       return;
@@ -1093,7 +1179,7 @@ export default function MarketingScreen() {
     setBusy(true);
 
     const body: Record<string, unknown> = {
-      content: caption.trim(),
+      content: postCaption,
       targets: targets.length > 0 ? targets : undefined,
       platforms: selectedPlatforms,
       mediaUrls: mediaList,
@@ -1105,9 +1191,9 @@ export default function MarketingScreen() {
       gbpPostType: 'offer',
       ...(scheduledAt ? { scheduledAt } : {}),
       gbpOfferData: {
-        title: headline,
+        title: headline || effectiveHeadline,
         couponCode: discountBadge.replace(/[^A-Za-z0-9]/g, ''),
-        redeemUrl: bookingLink,
+        redeemUrl: bookingLink || (effectiveBusinessWebsite ? (effectiveBusinessWebsite.startsWith('http') ? effectiveBusinessWebsite : `https://${effectiveBusinessWebsite}`) : 'https://fieseros.com'),
       },
     };
 
@@ -1154,9 +1240,13 @@ export default function MarketingScreen() {
 
   // Quick caption modifiers
   function handleMakeShorter() {
-    const lines = caption.split('\n').filter(Boolean);
+    const cur = caption || effectiveCaption;
+    const lines = cur.split('\n').filter(Boolean);
+    const tag = effectiveBusinessName && effectiveBusinessName !== 'Commercial Brand'
+      ? effectiveBusinessName.replace(/[^a-zA-Z0-9]/g, '')
+      : 'SpecialOffer';
     if (lines.length > 2) {
-      setCaption(lines.slice(0, 2).join('\n\n') + '\n\n#SpecialOffer #Fieseros');
+      setCaption(lines.slice(0, 2).join('\n\n') + `\n\n#SpecialOffer #${tag}`);
     }
   }
 
@@ -1577,7 +1667,9 @@ export default function MarketingScreen() {
                   {studioStep === 1 ? 'Marketing Studio' : studioStep === 2 ? headline : 'Review Post'}
                 </Text>
                 <Pressable style={styles.brandPill}>
-                  <Text style={styles.brandPillText}>F {businessDisplayName} · #0949 ⌵</Text>
+                  <Text numberOfLines={1} style={styles.brandPillText}>
+                    {effectiveBusinessName} · {activeProfileId ? 'Active Profile' : 'Brand Studio'} ⌵
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -1638,100 +1730,202 @@ export default function MarketingScreen() {
                 contentContainerStyle={{ padding: 14, paddingBottom: 110 }}
                 keyboardShouldPersistTaps="handled"
               >
-                {/* User Prompt Bubble */}
-                <View style={styles.userBubbleContainer}>
-                  <View style={styles.userBubble}>
-                    <Text style={styles.userBubbleText}>{activeUserPrompt}</Text>
-                  </View>
-                  <View style={styles.userAvatar}>
-                    <Text style={styles.userAvatarText}>DC</Text>
-                  </View>
-                </View>
+                {!hasGenerated ? (
+                  /* ── Welcome Studio Launcher for Fresh / New Session ── */
+                  <View style={{ marginBottom: 14 }}>
+                    {/* Welcome Hero Card */}
+                    <View
+                      style={{
+                        backgroundColor: '#0F172A',
+                        borderRadius: 16,
+                        padding: 16,
+                        marginBottom: 14,
+                        borderWidth: 1,
+                        borderColor: '#1E293B',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#009F50', alignItems: 'center', justifyContent: 'center' }}>
+                          <MaterialIcons name="auto-awesome" size={20} color="#FFFFFF" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF' }}>
+                            {effectiveBusinessName}
+                          </Text>
+                          <Text numberOfLines={1} style={{ fontSize: 11.5, color: '#94A3B8' }}>
+                            {brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category || 'AI-Powered Social Marketing'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 12.5, color: '#CBD5E1', lineHeight: 18, marginBottom: 12 }}>
+                        Create commercial-grade posters and high-converting marketing copy in one tap. Pick any idea below or launch the smart campaign assistant.
+                      </Text>
 
-                {/* AI Reply Bubble */}
-                <View style={styles.aiBubbleContainer}>
-                  <View style={styles.aiAvatar}>
-                    <MaterialIcons name="auto-awesome" size={16} color="#FFFFFF" />
-                  </View>
-                  <View style={styles.aiBubble}>
-                    <Text style={styles.aiBubbleText}>
-                      Design & copy generated directly to your canvas.
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Live Creative Design Preview Card in Step 1 */}
-                <Pressable
-                  onPress={() => {
-                    setStudioStep(2);
-                    setStudioSubTab('design');
-                  }}
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: '#E2E8F0',
-                    overflow: 'hidden',
-                    marginBottom: 12,
-                    shadowColor: '#000',
-                    shadowOpacity: 0.06,
-                    shadowRadius: 5,
-                    elevation: 2,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons name="auto-awesome" size={14} color="#009F50" />
-                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Generated Creative Preview</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#009F50' }}>Tap to view/edit</Text>
-                      <MaterialIcons name="chevron-right" size={16} color="#009F50" />
-                    </View>
-                  </View>
-                  <View style={{ padding: 10, backgroundColor: '#0B0F19', alignItems: 'center', justifyContent: 'center' }}>
-                    <AutoBrandedPosterCard
-                      photoUri={customPosterUri}
-                      headline={headline}
-                      subtitle={subtitle}
-                      badge={discountBadge}
-                      ctaText={ctaText}
-                      businessName={effectiveBusinessName}
-                      logoUri={effectiveBusinessLogo}
-                      tagline={effectiveBusinessTagline}
-                      website={effectiveBusinessWebsite}
-                      height={230}
-                      theme={colorTheme}
-                      isGenerating={isGeneratingImage || (busy && generationMode === 'poster')}
-                    />
-                  </View>
-                </Pressable>
-
-                {/* Alternative Headlines Chips */}
-                <View style={styles.altHeadlinesBox}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons name="auto-awesome" size={14} color="#009F50" />
-                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Alternative Headlines</Text>
-                    </View>
-                    <Text style={{ fontSize: 10, color: '#64748B' }}>Tap to apply</Text>
-                  </View>
-                  {alternativeHeadlines.map((altHl, idx) => {
-                    const isSelected = headline === altHl;
-                    return (
                       <Pressable
-                        key={idx}
-                        onPress={() => handleSelectHeadline(altHl)}
-                        style={[styles.altHlItem, isSelected && styles.altHlItemSelected]}
+                        onPress={() => setIsCampaignSheetOpen(true)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          backgroundColor: '#009F50',
+                          paddingVertical: 10,
+                          paddingHorizontal: 14,
+                          borderRadius: 10,
+                        }}
                       >
-                        <Text style={[styles.altHlText, isSelected && styles.altHlTextSelected]}>
-                          "{altHl}"
+                        <MaterialIcons name="auto-fix-high" size={16} color="#FFFFFF" />
+                        <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
+                          Open Smart Campaign Creator
                         </Text>
-                        {isSelected && <MaterialIcons name="check" size={14} color="#009F50" />}
                       </Pressable>
-                    );
-                  })}
-                </View>
+                    </View>
+
+                    {/* Starter Visual Preview */}
+                    <Pressable
+                      onPress={() => setIsCampaignSheetOpen(true)}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        overflow: 'hidden',
+                        marginBottom: 12,
+                        shadowColor: '#000',
+                        shadowOpacity: 0.04,
+                        shadowRadius: 4,
+                        elevation: 2,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <MaterialIcons name="palette" size={14} color="#009F50" />
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Branded Starter Visual</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#009F50' }}>Tap to customize</Text>
+                          <MaterialIcons name="chevron-right" size={16} color="#009F50" />
+                        </View>
+                      </View>
+                      <View style={{ padding: 10, backgroundColor: '#0B0F19', alignItems: 'center', justifyContent: 'center' }}>
+                        <AutoBrandedPosterCard
+                          photoUri={customPosterUri || bgPhotoUrl}
+                          headline={headline || effectiveHeadline}
+                          subtitle={subtitle}
+                          badge={discountBadge}
+                          ctaText={ctaText}
+                          businessName={effectiveBusinessName}
+                          logoUri={effectiveBusinessLogo}
+                          tagline={effectiveBusinessTagline}
+                          website={effectiveBusinessWebsite}
+                          height={230}
+                          theme={colorTheme}
+                          isGenerating={isGeneratingImage || (busy && generationMode === 'poster')}
+                        />
+                      </View>
+                    </Pressable>
+                  </View>
+                ) : (
+                  /* ── Active Generated Campaign State ── */
+                  <>
+                    {/* User Prompt Bubble */}
+                    <View style={styles.userBubbleContainer}>
+                      <View style={styles.userBubble}>
+                        <Text style={styles.userBubbleText}>{activeUserPrompt}</Text>
+                      </View>
+                      <View style={styles.userAvatar}>
+                        <Text style={styles.userAvatarText}>{userInitials}</Text>
+                      </View>
+                    </View>
+
+                    {/* AI Reply Bubble */}
+                    <View style={styles.aiBubbleContainer}>
+                      <View style={styles.aiAvatar}>
+                        <MaterialIcons name="auto-awesome" size={16} color="#FFFFFF" />
+                      </View>
+                      <View style={styles.aiBubble}>
+                        <Text style={styles.aiBubbleText}>
+                          Design & copy generated directly to your canvas.
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Live Creative Design Preview Card */}
+                    <Pressable
+                      onPress={() => {
+                        setStudioStep(2);
+                        setStudioSubTab('design');
+                      }}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        overflow: 'hidden',
+                        marginBottom: 12,
+                        shadowColor: '#000',
+                        shadowOpacity: 0.06,
+                        shadowRadius: 5,
+                        elevation: 2,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <MaterialIcons name="auto-awesome" size={14} color="#009F50" />
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Generated Creative Preview</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#009F50' }}>Tap to view/edit</Text>
+                          <MaterialIcons name="chevron-right" size={16} color="#009F50" />
+                        </View>
+                      </View>
+                      <View style={{ padding: 10, backgroundColor: '#0B0F19', alignItems: 'center', justifyContent: 'center' }}>
+                        <AutoBrandedPosterCard
+                          photoUri={customPosterUri || bgPhotoUrl}
+                          headline={headline || effectiveHeadline}
+                          subtitle={subtitle}
+                          badge={discountBadge}
+                          ctaText={ctaText}
+                          businessName={effectiveBusinessName}
+                          logoUri={effectiveBusinessLogo}
+                          tagline={effectiveBusinessTagline}
+                          website={effectiveBusinessWebsite}
+                          height={230}
+                          theme={colorTheme}
+                          isGenerating={isGeneratingImage || (busy && generationMode === 'poster')}
+                        />
+                      </View>
+                    </Pressable>
+
+                    {/* Alternative Headlines Chips */}
+                    {alternativeHeadlines && alternativeHeadlines.length > 0 && (
+                      <View style={styles.altHeadlinesBox}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <MaterialIcons name="auto-awesome" size={14} color="#009F50" />
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Alternative Headlines</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: '#64748B' }}>Tap to apply</Text>
+                        </View>
+                        {alternativeHeadlines.map((altHl, idx) => {
+                          const isSelected = headline === altHl;
+                          return (
+                            <Pressable
+                              key={idx}
+                              onPress={() => handleSelectHeadline(altHl)}
+                              style={[styles.altHlItem, isSelected && styles.altHlItemSelected]}
+                            >
+                              <Text style={[styles.altHlText, isSelected && styles.altHlTextSelected]}>
+                                "{altHl}"
+                              </Text>
+                              {isSelected && <MaterialIcons name="check" size={14} color="#009F50" />}
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </>
+                )}
 
                 {/* Caption Card */}
                 <View style={styles.captionBox}>
@@ -1741,11 +1935,11 @@ export default function MarketingScreen() {
                       <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Caption</Text>
                     </View>
                     <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>
-                      {caption.trim().split(/\s+/).filter(Boolean).length} words · 5 hashtags
+                      {(caption || effectiveCaption).trim().split(/\s+/).filter(Boolean).length} words
                     </Text>
                   </View>
 
-                  <Text style={styles.captionText}>{caption}</Text>
+                  <Text style={styles.captionText}>{caption || effectiveCaption}</Text>
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 }}>
                     <Pressable onPress={() => setIsEditingCaption(true)}>
@@ -1826,7 +2020,7 @@ export default function MarketingScreen() {
                       {promptSuggestions.data.suggestions.map((s) => (
                         <Pressable
                           key={s.id}
-                          onPress={() => setPromptInput(s.prompt)}
+                          onPress={() => setSelectedIdeaModal(s)}
                           style={({ pressed }) => [
                             {
                               flexDirection: 'row',
@@ -1926,8 +2120,21 @@ export default function MarketingScreen() {
                 </View>
 
                 <View style={styles.promptInputRow}>
-                  <Pressable onPress={handleUseMyPhoto} style={{ padding: 6 }}>
-                    <MaterialIcons name="attach-file" size={20} color="#64748B" />
+                  {/* Smart Campaign Helper Button */}
+                  <Pressable
+                    onPress={() => setIsCampaignSheetOpen(true)}
+                    hitSlop={6}
+                    style={{
+                      padding: 6,
+                      backgroundColor: '#F0FDF4',
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: '#BBF7D0',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <MaterialIcons name="auto-fix-high" size={18} color="#009F50" />
                   </Pressable>
 
                   <TextInput
@@ -1936,15 +2143,17 @@ export default function MarketingScreen() {
                     placeholder={
                       generationMode === 'image_only'
                         ? 'Describe image to generate...'
-                        : 'Describe an idea or ask for a change...'
+                        : 'Describe campaign or feature idea...'
                     }
                     placeholderTextColor="#94A3B8"
-                    style={styles.promptInput}
-                    returnKeyType="send"
-                    onSubmitEditing={() => generatePost()}
+                    multiline
+                    numberOfLines={2}
+                    style={[styles.promptInput, { maxHeight: 68, fontSize: 12.5, minHeight: 32 }]}
+                    returnKeyType="default"
                   />
 
-                  <Pressable onPress={handleUseMyPhoto} style={{ padding: 6 }}>
+                  {/* Clean Single Image Picker Button */}
+                  <Pressable onPress={handleUseMyPhoto} hitSlop={6} style={{ padding: 6 }}>
                     <MaterialIcons name="image" size={20} color="#64748B" />
                   </Pressable>
 
@@ -1956,7 +2165,7 @@ export default function MarketingScreen() {
                     {busy ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <MaterialIcons name="arrow-forward" size={18} color="#FFFFFF" />
+                      <MaterialIcons name="arrow-upward" size={18} color="#FFFFFF" />
                     )}
                   </Pressable>
                 </View>
@@ -2321,7 +2530,7 @@ export default function MarketingScreen() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <View style={styles.mockupAvatar}>
-                        <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>F</Text>
+                        <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>{userInitials[0] || 'B'}</Text>
                       </View>
                       <View>
                         <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>{businessDisplayName}</Text>
@@ -2334,8 +2543,8 @@ export default function MarketingScreen() {
                   {activeVisualFormat === 'poster' ? (
                     <View style={{ backgroundColor: '#090D16', paddingVertical: 4 }}>
                       <AutoBrandedPosterCard
-                        photoUri={customPosterUri}
-                        headline={headline}
+                        photoUri={customPosterUri || bgPhotoUrl}
+                        headline={headline || effectiveHeadline}
                         subtitle={subtitle}
                         badge={discountBadge}
                         ctaText={ctaText}
@@ -2365,7 +2574,7 @@ export default function MarketingScreen() {
                   <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
                     <Text style={{ fontSize: 12, color: '#334155', lineHeight: 18 }}>
                       <Text style={{ fontWeight: '800', color: '#0F172A' }}>{businessDisplayName} </Text>
-                      {caption}
+                      {caption || effectiveCaption}
                     </Text>
                   </View>
                 </View>
@@ -2493,7 +2702,7 @@ export default function MarketingScreen() {
                 </View>
                 <TextInput
                   multiline
-                  value={captionDraft}
+                  value={captionDraft || caption || effectiveCaption}
                   onChangeText={setCaptionDraft}
                   style={styles.captionModalInput}
                 />
@@ -2536,6 +2745,287 @@ export default function MarketingScreen() {
                 <Pressable onPress={() => setIsEditingText(false)} style={styles.modalDoneBtn}>
                   <Text style={styles.modalDoneBtnText}>Apply to Design</Text>
                 </Pressable>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Modal: Suggested Idea Quick Action */}
+          <Modal
+            visible={!!selectedIdeaModal}
+            animationType="fade"
+            transparent
+            onRequestClose={() => setSelectedIdeaModal(null)}
+          >
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, paddingRight: 8 }}>
+                    <Text style={{ fontSize: 20 }}>{selectedIdeaModal?.icon || '💡'}</Text>
+                    <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', flex: 1 }}>
+                      {selectedIdeaModal?.title || selectedIdeaModal?.chipLabel || 'Marketing Idea'}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setSelectedIdeaModal(null)} hitSlop={8}>
+                    <MaterialIcons name="close" size={22} color="#64748B" />
+                  </Pressable>
+                </View>
+
+                <Text style={{ fontSize: 13, color: '#475569', lineHeight: 19, marginBottom: 14 }}>
+                  {selectedIdeaModal?.prompt}
+                </Text>
+
+                {selectedIdeaModal?.headline && (
+                  <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', marginBottom: 3, textTransform: 'uppercase' }}>Poster Preview</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>{selectedIdeaModal.headline}</Text>
+                    {selectedIdeaModal.badge && (
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50', marginTop: 2 }}>{selectedIdeaModal.badge}</Text>
+                    )}
+                  </View>
+                )}
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <Pressable
+                    onPress={() => {
+                      if (selectedIdeaModal) {
+                        setPromptInput(selectedIdeaModal.prompt);
+                        if (selectedIdeaModal.headline) setHeadline(selectedIdeaModal.headline);
+                        if (selectedIdeaModal.badge) setDiscountBadge(selectedIdeaModal.badge);
+                        setSelectedIdeaModal(null);
+                        setIsCampaignSheetOpen(true);
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: '#CBD5E1',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: '#FFFFFF',
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>✏️ Customize</Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      if (selectedIdeaModal) {
+                        const p = selectedIdeaModal.prompt;
+                        if (selectedIdeaModal.headline) setHeadline(selectedIdeaModal.headline);
+                        if (selectedIdeaModal.badge) setDiscountBadge(selectedIdeaModal.badge);
+                        setSelectedIdeaModal(null);
+                        generatePost(p);
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#009F50',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>⚡ Generate Now</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Modal: Smart Campaign Creator Sheet */}
+          <Modal
+            visible={isCampaignSheetOpen}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setIsCampaignSheetOpen(false)}
+          >
+            <View style={styles.modalBackdrop}>
+              <View style={[styles.modalCard, { maxHeight: '90%', paddingBottom: 20 }]}>
+                {/* Header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="auto-awesome" size={18} color="#009F50" />
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Smart Campaign Creator</Text>
+                      <Text style={{ fontSize: 11, color: '#64748B' }}>Tailored for {effectiveBusinessName}</Text>
+                    </View>
+                  </View>
+                  <Pressable onPress={() => setIsCampaignSheetOpen(false)} hitSlop={8}>
+                    <MaterialIcons name="close" size={22} color="#64748B" />
+                  </Pressable>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14 }}>
+                  {/* Website Feature Tags Section */}
+                  <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1, paddingRight: 6 }}>
+                        <MaterialIcons name="language" size={14} color="#009F50" />
+                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>
+                          Website Highlights ({effectiveBusinessWebsite || 'fieseros.com'})
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => handleScanWebsite()}
+                        disabled={isScanningWebsite}
+                        hitSlop={6}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1' }}
+                      >
+                        {isScanningWebsite ? (
+                          <ActivityIndicator size="small" color="#009F50" />
+                        ) : (
+                          <MaterialIcons name="sync" size={12} color="#475569" />
+                        )}
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#475569' }}>
+                          {isScanningWebsite ? 'Scanning...' : 'Scan Site'}
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    {/* Chips for tags */}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {(promptSuggestions.data?.websiteTags && promptSuggestions.data.websiteTags.length > 0
+                        ? promptSuggestions.data.websiteTags
+                        : ['📱 Live Employee Tracking', '⏱️ Geo Attendance', '🗺️ Field Dispatch', '🚗 Route Tracker', '📊 Live Dashboard']
+                      ).map((tag, idx) => (
+                        <Pressable
+                          key={idx}
+                          onPress={() => {
+                            const cleanText = tag.replace(/^[^\w\s]+/, '').trim();
+                            setPromptInput(cleanText);
+                            setHeadline(cleanText);
+                          }}
+                          style={{
+                            backgroundColor: '#FFFFFF',
+                            borderWidth: 1,
+                            borderColor: '#CBD5E1',
+                            borderRadius: 14,
+                            paddingHorizontal: 9,
+                            paddingVertical: 5,
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: '#1E293B' }}>{tag}</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  {/* Campaign Prompt / Goal */}
+                  <View>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 4 }}>
+                      Campaign Prompt / Business Focus
+                    </Text>
+                    <TextInput
+                      multiline
+                      numberOfLines={3}
+                      value={promptInput}
+                      onChangeText={setPromptInput}
+                      placeholder="e.g. Promote our live employee tracking mobile app with real-time GPS routes..."
+                      placeholderTextColor="#94A3B8"
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        borderRadius: 10,
+                        padding: 10,
+                        fontSize: 13,
+                        color: '#0F172A',
+                        minHeight: 72,
+                        textAlignVertical: 'top',
+                      }}
+                    />
+                  </View>
+
+                  {/* Headline & Badge Customization */}
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 4 }}>
+                        Poster Headline
+                      </Text>
+                      <TextInput
+                        value={headline}
+                        onChangeText={setHeadline}
+                        placeholder="e.g. Live Employee Tracking"
+                        placeholderTextColor="#94A3B8"
+                        style={styles.configInput}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 4 }}>
+                        Badge / Offer
+                      </Text>
+                      <TextInput
+                        value={discountBadge}
+                        onChangeText={setDiscountBadge}
+                        placeholder="e.g. GPS Telemetry"
+                        placeholderTextColor="#94A3B8"
+                        style={styles.configInput}
+                      />
+                    </View>
+                  </View>
+
+                  {/* CTA Text & Theme */}
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 4 }}>
+                        Call To Action
+                      </Text>
+                      <TextInput
+                        value={ctaText}
+                        onChangeText={setCtaText}
+                        placeholder="e.g. Try Live Demo"
+                        placeholderTextColor="#94A3B8"
+                        style={styles.configInput}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 4 }}>
+                        Design Theme
+                      </Text>
+                      <Pressable
+                        onPress={() => {
+                          const curIndex = COMMERCIAL_THEME_KEYS.indexOf(colorTheme);
+                          const nextTheme = COMMERCIAL_THEME_KEYS[(curIndex + 1) % COMMERCIAL_THEME_KEYS.length];
+                          cycleTheme(nextTheme);
+                        }}
+                        style={[styles.configInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10 }]}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>
+                          {COMMERCIAL_THEMES[colorTheme]?.name || 'Cyber Tech'}
+                        </Text>
+                        <MaterialIcons name="palette" size={16} color="#009F50" />
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* Generate Button */}
+                  <Pressable
+                    disabled={busy}
+                    onPress={() => {
+                      setIsCampaignSheetOpen(false);
+                      generatePost(promptInput || headline);
+                    }}
+                    style={[
+                      styles.modalDoneBtn,
+                      { marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+                      busy && { opacity: 0.6 }
+                    ]}
+                  >
+                    {busy ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <MaterialIcons name="auto-awesome" size={18} color="#FFFFFF" />
+                        <Text style={styles.modalDoneBtnText}>Generate Visual Campaign</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </ScrollView>
               </View>
             </View>
           </Modal>

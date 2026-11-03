@@ -146,6 +146,17 @@ describe('editable marketing source documents', () => {
       expect(prompt).toContain('ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS');
     });
 
+    it('generates sleek smartphone UI mockup for employee tracking & mobile app services', () => {
+      const prompt = buildHighQualityImagePrompt('Promote our custom live employee tracking mobile app', {
+        category: 'IT Services',
+        businessName: 'Fieseros',
+        services: 'Employee tracking app, field GPS, route navigation',
+        website: 'https://fieseros.com',
+      });
+      expect(prompt.toLowerCase()).toMatch(/smartphone|mockup|gps|tracking|telemetry|mobile application/);
+      expect(prompt).toContain('ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS');
+    });
+
     it('generates modern tech workspace photography for IT & Software company', () => {
       const prompt = buildHighQualityImagePrompt('Transform your business with custom software', {
         category: 'IT Services & Cloud Solutions',

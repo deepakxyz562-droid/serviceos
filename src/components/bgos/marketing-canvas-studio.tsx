@@ -177,22 +177,17 @@ interface MarketingCanvasStudioProps {
   onNavigateToPosts?: () => void;
 }
 
-const DEFAULT_CAPTION = `Switching between customer calls, job diaries, quote calculators, and messaging apps eats away the hours you should be spending on the tools or growing your business.
-
-Meet the Fieseros AI Assistant—turning natural conversation into connected field service workflows.
-
-Just say: “Schedule a boiler repair for Sarah tomorrow, assign Mike, create a £350 quote, and prepare her confirmation.”
-
-In seconds, Fieseros maps the customer, books the job, drafts the quote, and queues her confirmation for your review. Less repetitive admin, zero lost paperwork, and more time to focus on your customers and high-value jobs.
-
-Discover what Fieseros can do for your business: https://fieseros.com
-
-#Fieseros #FieldServiceManagement #TradeBusiness #HVAC #Plumbing`;
+function buildDefaultStudioCaption(businessName?: string, website?: string, category?: string) {
+  const name = businessName && businessName !== 'Commercial Brand' ? businessName : 'our business';
+  const web = website && website !== 'visit website' ? `\n\nVisit us: https://${website.replace(/^https?:\/\//, '')}` : '';
+  const catTag = category ? ` #${category.replace(/[^a-zA-Z0-9]/g, '')}` : '';
+  return `✨ Exciting updates from ${name}!\n\nWe take pride in providing exceptional quality and service you can count on. Whether you're looking for our latest offerings or customized solutions, we're here to help.${web}\n\n#${name.replace(/[^a-zA-Z0-9]/g, '')}${catTag} #QualityService #CustomerFirst`;
+}
 
 const DEFAULT_ALT_HEADLINES = [
-  'From one instruction to a connected workflow.',
-  'Run your field service business in plain English.',
-  'Stop juggling apps. Just tell your assistant.',
+  'Quality & Service You Can Trust.',
+  'Discover What We Have In Store.',
+  'Elevate Your Experience With Us.',
 ];
 
 export function MarketingCanvasStudio({
@@ -205,16 +200,16 @@ export function MarketingCanvasStudio({
 }: MarketingCanvasStudioProps) {
   // ─── Studio State ─────────────────────────────────────────────────────────
 
+  const [hasGenerated, setHasGenerated] = useState(false);
   const [promptInput, setPromptInput] = useState('');
-  const [activeUserPrompt, setActiveUserPrompt] = useState(
-    'Create a professional social media marketing post promoting the Fieseros AI Assistant for field service businesses (plumbing, HVAC, electrical, cleaning, landscaping).'
-  );
+  const [activeUserPrompt, setActiveUserPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingStage, setGeneratingStage] = useState<string>('');
   const [generationMode, setGenerationMode] = useState<'poster' | 'graphic' | 'image_only'>('poster');
   const [activeVisualFormat, setActiveVisualFormat] = useState<'poster' | 'canvas'>('poster');
-  const [posterUrl, setPosterUrl] = useState<string>('/images/fieseros-ai-assistant-poster.jpg?v=1');
+  const [posterUrl, setPosterUrl] = useState<string>('');
   const [suggestions, setSuggestions] = useState<Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string }>>([]);
+  const [websiteTags, setWebsiteTags] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [alternativeHeadlines, setAlternativeHeadlines] = useState<string[]>(DEFAULT_ALT_HEADLINES);
 
@@ -227,19 +222,19 @@ export function MarketingCanvasStudio({
     [directions, selectedDirectionId]
   );
 
-  // Canvas overrides — initialized for Fieseros AI Assistant campaign
-  const [headline, setHeadline] = useState('Less admin. More jobs.');
-  const [badgeText, setBadgeText] = useState('AI WORKFLOW');
-  const [subheadText, setSubheadText] = useState('Meet your Fieseros AI Assistant.');
-  const [ctaText, setCtaText] = useState('Explore Fieseros');
+  // Canvas overrides — dynamic business-aware defaults
+  const [headline, setHeadline] = useState('');
+  const [badgeText, setBadgeText] = useState('SPECIAL OFFER');
+  const [subheadText, setSubheadText] = useState('Quality & Service You Can Trust.');
+  const [ctaText, setCtaText] = useState('Learn More');
   const [photoUrl, setPhotoUrl] = useState(
-    'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1200&q=80'
+    'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80'
   );
   const [theme, setTheme] = useState<CommercialTheme>('royal_gold');
   const activeThemeConfig = COMMERCIAL_THEMES[theme] || COMMERCIAL_THEMES.royal_gold;
 
   // Caption state
-  const [caption, setCaption] = useState(DEFAULT_CAPTION);
+  const [caption, setCaption] = useState('');
   const [isEditingCaption, setIsEditingCaption] = useState(false);
 
   // Canvas Settings — 4:5 Portrait default
@@ -302,15 +297,27 @@ export function MarketingCanvasStudio({
   const effectiveWebsite = brandWebsite || (workspaceInfo?.slug ? `fieseros.com/p/${workspaceInfo.slug}` : 'visit website');
   const effectiveTagline = brandTagline || '';
 
+  const effectiveHeadline = headline || (effectiveBusinessName !== 'Commercial Brand' ? `Welcome to ${effectiveBusinessName}` : 'Special Offer');
+  const effectiveCaption = caption || buildDefaultStudioCaption(effectiveBusinessName, effectiveWebsite, brandTagline || category);
+
+  const userInitials = useMemo(() => {
+    const raw = effectiveBusinessName || workspaceInfo?.name || 'ME';
+    const parts = raw.trim().split(/\s+/);
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return raw.slice(0, 2).toUpperCase();
+  }, [effectiveBusinessName, workspaceInfo?.name]);
+
   const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(null);
   const design = useMemo(() => {
     if (customDesign) return customDesign;
     return createCommercialPosterDesign({
       brand: effectiveBusinessName,
-      headline,
-      subtitle: subheadText,
-      badge: badgeText,
-      cta: ctaText,
+      headline: headline || effectiveHeadline,
+      subtitle: subheadText || 'Quality & Service You Can Trust.',
+      badge: badgeText || 'SPECIAL OFFER',
+      cta: ctaText || 'Learn More',
       phone: undefined,
       website: effectiveWebsite,
       photo: activeVisualFormat === 'poster' ? (posterUrl || photoUrl) : photoUrl,
@@ -323,6 +330,7 @@ export function MarketingCanvasStudio({
     customDesign,
     effectiveBusinessName,
     headline,
+    effectiveHeadline,
     subheadText,
     badgeText,
     ctaText,
@@ -407,6 +415,8 @@ export function MarketingCanvasStudio({
       const effName = brandName || workspaceInfo?.businessName || (businessName !== 'Fieseros' ? businessName : '');
       if (effName) params.set('businessName', effName);
       if (brandTagline) params.set('category', brandTagline);
+      const effWeb = brandWebsite || (workspaceInfo?.slug ? `fieseros.com/p/${workspaceInfo.slug}` : 'fieseros.com');
+      if (effWeb) params.set('website', effWeb);
       const query = params.toString() ? `?${params.toString()}` : '';
       const res = await authFetch(`/api/social/prompts/suggestions${query}`);
       if (res.ok) {
@@ -414,13 +424,16 @@ export function MarketingCanvasStudio({
         if (Array.isArray(data.suggestions)) {
           setSuggestions(data.suggestions);
         }
+        if (Array.isArray(data.websiteTags)) {
+          setWebsiteTags(data.websiteTags);
+        }
       }
     } catch {
       // ignore
     } finally {
       setLoadingSuggestions(false);
     }
-  }, [activeProfileId, brandName, workspaceInfo?.businessName, businessName, brandTagline]);
+  }, [activeProfileId, brandName, workspaceInfo?.businessName, workspaceInfo?.slug, businessName, brandTagline, brandWebsite]);
 
   useEffect(() => {
     void fetchSuggestions(false);
@@ -545,6 +558,7 @@ export function MarketingCanvasStudio({
     if (!text) return;
 
     setIsGenerating(true);
+    setHasGenerated(true);
     setGeneratingStage('Synthesizing marketing message and headlines...');
     setActiveUserPrompt(text);
     setPromptInput('');
@@ -556,7 +570,7 @@ export function MarketingCanvasStudio({
           authFetch('/api/social/designs/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: text, design, caption, mode: 'graphic' }),
+            body: JSON.stringify({ prompt: text, design, caption: caption || effectiveCaption, mode: 'graphic' }),
           }),
           authFetch('/api/social/designs/image', {
             method: 'POST',
@@ -654,7 +668,7 @@ export function MarketingCanvasStudio({
       const res = await authFetch('/api/social/designs/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, design, caption, mode: generationMode }),
+        body: JSON.stringify({ prompt: text, design, caption: caption || effectiveCaption, mode: generationMode }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
@@ -759,7 +773,8 @@ export function MarketingCanvasStudio({
   };
 
   const handleMakeShorter = () => {
-    const sentences = caption.split('. ');
+    const cur = caption || effectiveCaption;
+    const sentences = cur.split('. ');
     if (sentences.length > 1) {
       setCaption(sentences.slice(0, 2).join('. ') + (sentences[1]?.endsWith('.') ? '' : '.'));
       toast.success('Caption shortened!');
@@ -1012,14 +1027,16 @@ export function MarketingCanvasStudio({
           {/* 2. Conversational Copilot Chat Thread */}
           <div className="bg-card border border-border/80 rounded-2xl p-4 space-y-4 shadow-2xs">
             {/* User message */}
-            <div className="flex items-start justify-end gap-2.5">
-              <div className="bg-muted/70 hover:bg-muted text-foreground text-xs leading-relaxed rounded-2xl rounded-tr-xs p-3.5 max-w-[85%] border border-border/50">
-                {activeUserPrompt}
+            {hasGenerated && activeUserPrompt ? (
+              <div className="flex items-start justify-end gap-2.5">
+                <div className="bg-muted/70 hover:bg-muted text-foreground text-xs leading-relaxed rounded-2xl rounded-tr-xs p-3.5 max-w-[85%] border border-border/50">
+                  {activeUserPrompt}
+                </div>
+                <div className="size-7 rounded-full bg-slate-800 text-white font-bold text-[10px] flex items-center justify-center shrink-0 mt-1">
+                  {userInitials}
+                </div>
               </div>
-              <div className="size-7 rounded-full bg-slate-800 text-white font-bold text-[10px] flex items-center justify-center shrink-0 mt-1">
-                DC
-              </div>
-            </div>
+            ) : null}
 
             {/* AI Assistant Direct Generation State */}
             <div className="flex items-start gap-2.5">
@@ -1031,7 +1048,9 @@ export function MarketingCanvasStudio({
                   <p className="text-xs font-semibold text-foreground">
                     {isGenerating
                       ? generatingStage || 'Synthesizing creative post...'
-                      : 'Content & design synthesized directly to canvas.'}
+                      : hasGenerated
+                      ? 'Content & design synthesized directly to canvas.'
+                      : `Welcome to ${effectiveBusinessName} Marketing Studio. Generate on-brand social posts in 1 tap.`}
                   </p>
                   <Badge variant="outline" className="text-[10px] font-semibold text-primary border-primary/20 bg-primary/5">
                     {generationMode === 'image_only' ? '🖼️ Image Only' : generationMode === 'poster' ? '🖼️ AI Poster' : '🎨 Graphic + Copy'}
@@ -1042,11 +1061,11 @@ export function MarketingCanvasStudio({
                 <div className="border border-border/80 rounded-xl p-2.5 bg-background/80 flex items-center gap-3 shadow-2xs">
                   <div className="size-14 rounded-lg overflow-hidden shrink-0 border border-border/60 bg-muted/30 relative">
                     <img
-                      src={activeVisualFormat === 'poster' ? posterUrl : photoUrl}
+                      src={activeVisualFormat === 'poster' ? (posterUrl || photoUrl) : photoUrl}
                       alt="Visual Preview"
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg?v=1';
+                        (e.target as HTMLImageElement).src = photoUrl;
                       }}
                     />
                     {isGenerating && (
@@ -1056,8 +1075,8 @@ export function MarketingCanvasStudio({
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-foreground truncate">{headline}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{subheadText || caption.slice(0, 50)}</p>
+                    <p className="text-xs font-bold text-foreground truncate">{headline || effectiveHeadline}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{subheadText || (caption || effectiveCaption).slice(0, 50)}</p>
                     <button
                       type="button"
                       onClick={() => {
@@ -1112,14 +1131,14 @@ export function MarketingCanvasStudio({
                   <FileText className="size-3.5 text-primary" />
                   <span>Marketing Caption</span>
                   <span className="text-[10px] text-muted-foreground font-normal ml-1">
-                    ({caption.trim().split(/\s+/).filter(Boolean).length} words · 5 hashtags)
+                    ({(caption || effectiveCaption).trim().split(/\s+/).filter(Boolean).length} words)
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(caption);
+                      navigator.clipboard.writeText(caption || effectiveCaption);
                       toast.success('Caption copied to clipboard!');
                     }}
                     className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1"
@@ -1146,14 +1165,14 @@ export function MarketingCanvasStudio({
 
               {isEditingCaption ? (
                 <Textarea
-                  value={caption}
+                  value={caption || effectiveCaption}
                   onChange={(e) => setCaption(e.target.value)}
                   rows={6}
                   className="text-xs bg-card resize-none"
                 />
               ) : (
                 <p className="text-xs text-muted-foreground leading-relaxed select-text whitespace-pre-line">
-                  {caption}
+                  {caption || effectiveCaption}
                 </p>
               )}
             </div>
@@ -1222,6 +1241,25 @@ export function MarketingCanvasStudio({
                     </button>
                   ))}
                 </div>
+                {websiteTags.length > 0 && (
+                  <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-thin pt-1 border-t border-border/40">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase shrink-0 mr-1">Website Features:</span>
+                    {websiteTags.map((tag, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          const cleanTag = tag.replace(/^[^\w\s]+/, '').trim();
+                          setPromptInput((prev) => (prev ? `${prev} - ${cleanTag}` : cleanTag));
+                          toast.info(`Added feature: ${tag}`);
+                        }}
+                        className="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-medium bg-muted/60 hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all cursor-pointer"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

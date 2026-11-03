@@ -314,11 +314,91 @@ function resolveCapabilities(businessName: string, category: string, location: s
     catLower.includes('digital agency') ||
     catLower.includes('tech company') ||
     catLower.includes('mobile app') ||
+    catLower.includes('tracking') ||
     catLower.includes('cloud') ||
     nameLower.includes('technologies') ||
     nameLower.includes('infotech') ||
     (nameLower.includes('software') && !nameLower.includes('fieser'))
   ) {
+    const hasAppOrTracking =
+      catLower.includes('mobile app') ||
+      catLower.includes('app development') ||
+      catLower.includes('tracking') ||
+      catLower.includes('attendance') ||
+      (Array.isArray(customServices) &&
+        customServices.some((s) => /app|track|attend|gps|fleet|dispatch|staff|field/i.test(s)));
+
+    if (hasAppOrTracking) {
+      const heroService = hasCustom && customServices.some((s) => /track|gps|attend|field|app/i.test(s))
+        ? customServices.find((s) => /track|gps|attend|field|app/i.test(s))!
+        : 'Live Employee & Field Staff Tracking Mobile App';
+      const secondService = hasCustom && customServices.length > 1
+        ? customServices[1]
+        : 'Geo-Fenced Mobile Attendance & Route Optimization';
+      const usps = uspsOverride || 'Real-time GPS tracking, 100% automated check-in, battery-efficient telemetry, instant manager dashboard';
+      const currentOffers = offerOverride || 'Free 14-Day Pilot Sprint & Custom App Demo';
+
+      const baseline: PromptSuggestion[] = [
+        {
+          id: 's_app_tracking_hero',
+          category: 'service',
+          chipLabel: '📱 Live Employee Tracking App',
+          icon: '📱',
+          title: 'Live Employee Tracking App',
+          badge: 'LIVE GPS TRACKING',
+          headline: 'Track Field Staff in Real-Time',
+          aspectRatio: '4:5',
+          prompt: `Create a sleek commercial mobile app poster promoting our real-time Employee Tracking & Field Staff Management App. Smartphone mockup showing live GPS map navigation, employee location pins, and daily route tracking from ${businessName}. Visit ${website}.`,
+        },
+        {
+          id: 's_app_geofence_offer',
+          category: 'offer',
+          chipLabel: '⏱️ Geo-Fenced Attendance App',
+          icon: '⏱️',
+          title: 'Geo-Fenced Attendance App',
+          badge: 'AUTO CHECK-IN',
+          headline: 'Automated Attendance on Phone',
+          aspectRatio: '4:5',
+          prompt: `Create a high-impact mobile app poster showcasing automated punch-in with GPS geo-fencing, zero proxy attendance, and real-time reports from ${businessName}. Learn more at ${website}.`,
+        },
+        {
+          id: 's_app_route_service',
+          category: 'service',
+          chipLabel: '🗺️ Field Force Route Tracker',
+          icon: '🗺️',
+          title: 'Field Force Route Tracker',
+          badge: 'ROUTE OPTIMIZER',
+          headline: 'Cut Travel Costs & Idle Time',
+          aspectRatio: '4:5',
+          prompt: `Create a sleek mobile app graphic highlighting real-time route optimization, task milestones, and live staff travel tracking for ${businessName}. Schedule a demo at ${website}.`,
+        },
+        {
+          id: 's_app_manager_dashboard',
+          category: 'review',
+          chipLabel: '📊 Manager Analytics Dashboard',
+          icon: '📊',
+          title: 'Manager Analytics Dashboard',
+          badge: 'MOBILE DASHBOARD',
+          headline: 'Instant Staff Reports in Pocket',
+          aspectRatio: '4:5',
+          prompt: `Create a modern mobile app promotional poster featuring manager analytics dashboard, live battery status, and instant job completion reports from ${businessName}. Explore at ${website}.`,
+        },
+        {
+          id: 's_app_custom_dev_urgency',
+          category: 'urgency',
+          chipLabel: '🚀 Custom App in 14 Days',
+          icon: '🚀',
+          title: 'Custom App in 14 Days',
+          badge: 'CUSTOM BRANDED',
+          headline: 'Launch Your Own Tracking App',
+          aspectRatio: '4:5',
+          prompt: `Create a compelling B2B social flyer inviting business owners to get their own custom-branded employee tracking and field force app built by ${businessName} in 14 days. Book a free consultation at ${website}.`,
+        },
+      ];
+
+      return { heroService, secondService, usps, currentOffers, baseline };
+    }
+
     const heroService = hasCustom ? customServices[0] : 'Custom Web & Mobile Application Development';
     const secondService = hasCustom && customServices[1] ? customServices[1] : 'Cloud Architecture & Enterprise Modernization';
     const usps = uspsOverride || 'Full-cycle engineering, modern tech stacks, agile delivery, 99.9% uptime';
@@ -909,10 +989,152 @@ function getRotatedSuggestions(capabilities: CapabilityProfile, businessName: st
     ];
   }
 
+  if (cat.includes('app') || cat.includes('tracking') || cat.includes('attendance') || cat.includes('mobile')) {
+    return [
+      {
+        id: `rot_app_1_${seed}`,
+        category: 'service',
+        chipLabel: '📍 Live GPS Staff Tracking',
+        icon: '📍',
+        title: 'Live GPS Staff Tracking',
+        badge: 'REAL-TIME TRACKING',
+        headline: 'See Field Team Locations Live',
+        aspectRatio: '4:5',
+        prompt: `Create a cutting-edge mobile app advertising poster showcasing live field employee GPS map tracking, staff route playback, and geofenced visit alerts for ${businessName}. Discover at ${website}.`,
+      },
+      {
+        id: `rot_app_2_${seed}`,
+        category: 'offer',
+        chipLabel: '⚡ 14-Day Free App Trial',
+        icon: '⚡',
+        title: '14-Day Free App Trial',
+        badge: 'NO COMMITMENT',
+        headline: 'Automate Field Staff in 5 Minutes',
+        aspectRatio: '4:5',
+        prompt: `Create a high-converting B2B mobile app promotion for 14-day free pilot of the employee tracking and attendance system from ${businessName}. Start now at ${website}.`,
+      },
+      {
+        id: `rot_app_3_${seed}`,
+        category: 'service',
+        chipLabel: '⏱️ Selfie & Geofence Attendance',
+        icon: '⏱️',
+        title: 'Selfie & Geofence Attendance',
+        badge: 'ZERO PROXY',
+        headline: 'Touchless Mobile Punch-In',
+        aspectRatio: '4:5',
+        prompt: `Create a high-impact promotional flyer for mobile attendance with facial recognition and GPS geofencing from ${businessName}. Explore at ${website}.`,
+      },
+      {
+        id: `rot_app_4_${seed}`,
+        category: 'review',
+        chipLabel: '⭐ 99.8% Tracking Accuracy',
+        icon: '⭐',
+        title: '99.8% Tracking Accuracy',
+        badge: 'PROVEN SYSTEM',
+        headline: 'Trusted by 500+ Distributed Teams',
+        aspectRatio: '4:5',
+        prompt: `Create a trust-building social post highlighting battery-friendly live tracking, 99.8% uptime, and 5-star customer reviews for ${businessName}. Visit ${website}.`,
+      },
+      {
+        id: `rot_app_5_${seed}`,
+        category: 'urgency',
+        chipLabel: '🚀 Custom Branded App',
+        icon: '🚀',
+        title: 'Custom Branded App',
+        badge: 'WHITE LABEL',
+        headline: 'Your Company Name On Play Store',
+        aspectRatio: '4:5',
+        prompt: `Create an urgency B2B promotional flyer inviting enterprise clients to deploy their custom-branded employee management and tracking app by ${businessName}. Book demo at ${website}.`,
+      },
+    ];
+  }
+
   return [
     ...base.slice(1),
     base[0],
   ];
+}
+
+async function extractWebsiteHighlights(rawUrl: string): Promise<{ tags: string[]; summary?: string }> {
+  try {
+    let target = (rawUrl || '').trim();
+    if (!target) return { tags: [] };
+    if (!target.startsWith('http://') && !target.startsWith('https://')) {
+      target = `https://${target}`;
+    }
+    if (target.includes('localhost') || target.includes('fieseros.com/p/')) {
+      return { tags: [] };
+    }
+
+    const res = await fetch(target, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; ServiceOSBot/1.0; +https://fieseros.com)',
+        Accept: 'text/html,application/xhtml+xml',
+      },
+      signal: AbortSignal.timeout(3500),
+    });
+    if (!res.ok) return { tags: [] };
+    const html = await res.text();
+
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const descMatch =
+      html.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i) ||
+      html.match(/<meta\s+property=["']og:description["']\s+content=["']([^"']+)["']/i);
+
+    const headings: string[] = [];
+    const headingMatches = html.matchAll(/<h[1-3][^>]*>([^<]+)<\/h[1-3]>/gi);
+    for (const m of headingMatches) {
+      const hText = m[1].replace(/\s+/g, ' ').replace(/<[^>]+>/g, '').trim();
+      if (hText.length >= 4 && hText.length <= 40 && !headings.includes(hText)) {
+        headings.push(hText);
+      }
+      if (headings.length >= 8) break;
+    }
+
+    const textToAnalyze = `${titleMatch ? titleMatch[1] : ''} ${descMatch ? descMatch[1] : ''} ${headings.join(' ')}`.toLowerCase();
+
+    const discoveredTags: string[] = [];
+    if (/employee track|staff track|worker track|user track/i.test(textToAnalyze)) {
+      discoveredTags.push('📍 Employee Tracking');
+    }
+    if (/gps|live location|real-time location|geo-fenc|geofenc/i.test(textToAnalyze)) {
+      discoveredTags.push('⏱️ GPS Attendance');
+    }
+    if (/attendance|check-in|punch|timesheet/i.test(textToAnalyze) && !discoveredTags.includes('⏱️ GPS Attendance')) {
+      discoveredTags.push('⏱️ Mobile Attendance');
+    }
+    if (/field force|field service|field staff|dispatch|technician/i.test(textToAnalyze)) {
+      discoveredTags.push('🗺️ Field Force Dispatch');
+    }
+    if (/mobile app|ios|android|react native|flutter/i.test(textToAnalyze)) {
+      discoveredTags.push('📱 Custom Mobile App');
+    }
+    if (/fleet|route|delivery|vehicle/i.test(textToAnalyze)) {
+      discoveredTags.push('🚗 Route Optimization');
+    }
+    if (/dashboard|analytics|reports/i.test(textToAnalyze)) {
+      discoveredTags.push('📊 Live Dashboard');
+    }
+
+    for (const h of headings) {
+      if (discoveredTags.length >= 6) break;
+      const cleanH = h.replace(/^[#\-_*]+\s*/, '').trim();
+      if (
+        cleanH.length >= 4 &&
+        cleanH.length <= 25 &&
+        !discoveredTags.some((d) => d.toLowerCase().includes(cleanH.toLowerCase()))
+      ) {
+        discoveredTags.push(cleanH);
+      }
+    }
+
+    return {
+      tags: discoveredTags.slice(0, 6),
+      summary: descMatch ? descMatch[1] : undefined,
+    };
+  } catch {
+    return { tags: [] };
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -926,6 +1148,9 @@ export async function GET(request: NextRequest) {
     const profileId = url.searchParams.get('profileId');
     const businessNameOverride = url.searchParams.get('businessName');
     const categoryOverride = url.searchParams.get('category') || url.searchParams.get('industry');
+    const websiteOverride = url.searchParams.get('website');
+    const scan = url.searchParams.get('scan') === '1';
+    const refresh = url.searchParams.get('refresh') === '1';
 
     const [tenant, googleAccounts, reviews] = await Promise.all([
       db.tenant.findUnique({
@@ -987,10 +1212,38 @@ export async function GET(request: NextRequest) {
       'Professional Services';
 
     const website =
+      (websiteOverride && websiteOverride.trim()) ||
       gbpMeta.website ||
       tenant?.brandProfile?.website ||
       tenant?.website ||
       (tenant?.slug ? `https://fieseros.com/p/${tenant.slug}` : 'https://fieseros.com');
+
+    // Extract website highlights & feature tags if website is provided
+    let extractedData = { tags: [] as string[], summary: undefined as string | undefined };
+    if (website && !website.includes('localhost') && !website.includes('fieseros.com/p/')) {
+      extractedData = await extractWebsiteHighlights(website);
+    }
+
+    const fallbackTags: Record<string, string[]> = {
+      app: ['📍 Employee Tracking', '⏱️ GPS Attendance', '🗺️ Live Route Map', '📊 Manager Dashboard', '⚡ 14-Day Free Trial'],
+      sweet: ['🍬 Kaju Katli', '🍯 Gulab Jamun', '🎁 Festive Gift Box', '✨ Pure Desi Ghee', '🚚 Same-Day Delivery'],
+      cloth: ['👗 Banarasi Silk Sarees', '👰 Bridal Lehengas', '✨ Festive Designer Suits', '🏷️ Flat 30% Off', '🚚 Fast Shipping'],
+      jewel: ['💎 Hallmark 22K Gold', '💍 Certified Diamonds', '👑 Royal Bridal Sets', '✨ 0% Making Charges', '📜 Gold Savings Plan'],
+      trade: ['🔧 Emergency Repair', '⚡ Same-Day Arrival', '🛡️ Licensed & Insured', '🏷️ 20% Off Service', '⭐ 5-Star Reviews'],
+    };
+
+    const domainKey =
+      industry.toLowerCase().includes('app') || industry.toLowerCase().includes('track') || industry.toLowerCase().includes('soft')
+        ? 'app'
+        : industry.toLowerCase().includes('sweet') || industry.toLowerCase().includes('mithai') || industry.toLowerCase().includes('bakery')
+        ? 'sweet'
+        : industry.toLowerCase().includes('cloth') || industry.toLowerCase().includes('fashion') || industry.toLowerCase().includes('saree')
+        ? 'cloth'
+        : industry.toLowerCase().includes('jewel') || industry.toLowerCase().includes('gold')
+        ? 'jewel'
+        : 'trade';
+
+    const websiteTags = Array.from(new Set([...extractedData.tags, ...fallbackTags[domainKey]])).slice(0, 6);
 
     const location =
       (gbpMeta.address ? gbpMeta.address.split(',').slice(-3).join(',').trim() : null) ||
@@ -1000,7 +1253,7 @@ export async function GET(request: NextRequest) {
 
     const services = parseJsonArray(tenant?.brandProfile?.services);
     const products = parseJsonArray(tenant?.brandProfile?.products);
-    const allOfferings = Array.from(new Set([...services, ...products]));
+    const allOfferings = Array.from(new Set([...services, ...products, ...extractedData.tags]));
     const uspsOverride = tenant?.brandProfile?.usps || undefined;
     const offerOverride = tenant?.brandProfile?.currentOffers || undefined;
 
@@ -1014,8 +1267,6 @@ export async function GET(request: NextRequest) {
       allOfferings
     );
 
-    const refresh = url.searchParams.get('refresh') === '1';
-
     if (refresh) {
       try {
         const aiPrompt = `
@@ -1024,12 +1275,13 @@ Business: ${businessName}
 Industry / Niche: ${industry}
 Location: ${location}
 Website: ${website}
+Discovered Website Features: ${websiteTags.join(', ')}
 Products/Services: ${allOfferings.length > 0 ? allOfferings.join(', ') : `${capabilities.heroService}, ${capabilities.secondService}`}
 USPs: ${capabilities.usps}
 Current Offer: ${capabilities.currentOffers}
 
 IMPORTANT:
-- Make suggestions specifically tailored to ${industry} (e.g. if sweets shop, mention fresh mithai, kaju katli, gulab jamun, gift hampers; if clothing, mention sarees, bridal wear, festive collection; if jewellery, mention hallmark gold, diamond rings; if IT, mention software, apps, tech; if trade, mention doorstep repairs).
+- Make suggestions specifically tailored to ${industry} (e.g. if custom mobile app, employee tracking, mention real-time GPS tracking, attendance punch, route playback, manager dashboard; if sweets shop, mention fresh mithai, kaju katli, gulab jamun, gift hampers; if clothing, mention sarees, bridal wear, festive collection; if jewellery, mention hallmark gold, diamond rings; if trade, mention doorstep repairs).
 - DO NOT suggest boiler repair or plumbing unless the business is explicitly a plumbing/HVAC company.
 
 Return a STRICT JSON array of 5 objects with keys:
@@ -1049,6 +1301,7 @@ id (string), category ("service" | "offer" | "review" | "ai_assistant" | "urgenc
               businessName,
               industry,
               website,
+              websiteTags,
               location,
               suggestions: parsed.slice(0, 5).map((p: any) => normalizeSuggestion(p)),
             });
@@ -1064,6 +1317,7 @@ id (string), category ("service" | "offer" | "review" | "ai_assistant" | "urgenc
         businessName,
         industry,
         website,
+        websiteTags,
         location,
         suggestions: rotated.map((b) => normalizeSuggestion(b)),
       });
@@ -1073,6 +1327,7 @@ id (string), category ("service" | "offer" | "review" | "ai_assistant" | "urgenc
       businessName,
       industry,
       website,
+      websiteTags,
       location,
       suggestions: capabilities.baseline.map((b) => normalizeSuggestion(b)),
     });
