@@ -798,13 +798,31 @@ export default function MarketingScreen() {
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.9,
+        base64: true,
       });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        setBrandLogoUri(result.assets[0].uri);
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        setBrandLogoUri(asset.uri);
+        if (asset.base64) {
+          const rawMime = asset.mimeType || 'image/png';
+          const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
+          apiRequest<{ url: string }>('/api/social/designs/assets', {
+            method: 'POST',
+            body: { data: `data:${mime};base64,${asset.base64}` },
+          })
+            .then((res) => {
+              if (res?.url) {
+                setBrandLogoUri(res.url);
+              }
+            })
+            .catch(() => {
+              setBrandLogoUri(`data:${mime};base64,${asset.base64}`);
+            });
+        }
       }
     } catch (err) {
       console.warn('Failed to pick logo:', err);
@@ -901,22 +919,6 @@ export default function MarketingScreen() {
 
   const cycleTheme = (nextTheme: CommercialTheme) => {
     setColorTheme(nextTheme);
-    setCustomDesign(
-      createCommercialPosterDesign({
-        brand: effectiveBusinessName,
-        headline,
-        subtitle,
-        badge: discountBadge,
-        cta: ctaText,
-        phone: undefined,
-        website: effectiveBusinessWebsite,
-        photo: customPosterUri || bgPhotoUrl,
-        ratio: aspectRatio,
-        theme: nextTheme,
-        logoUrl: effectiveBusinessLogo || undefined,
-        tagline: effectiveBusinessTagline || undefined,
-      })
-    );
   };
 
   async function handleRegenerateImage() {
@@ -986,21 +988,45 @@ export default function MarketingScreen() {
 
   const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(null);
   const design = useMemo(() => {
-    return createCommercialPosterDesign({
-      brand: effectiveBusinessName,
-      headline: headline || effectiveHeadline,
-      subtitle,
-      badge: discountBadge,
-      cta: ctaText,
-      phone: undefined,
-      website: effectiveBusinessWebsite,
-      photo: customPosterUri || bgPhotoUrl,
-      ratio: aspectRatio,
-      theme: colorTheme,
-      logoUrl: effectiveBusinessLogo || undefined,
-      tagline: effectiveBusinessTagline || undefined,
-      layout: posterLayout,
-    });
+    try {
+      const isEligible = (u?: string | null) => typeof u === 'string' && /^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,)/i.test(u.trim());
+      const safePhoto = isEligible(customPosterUri)
+        ? customPosterUri!
+        : isEligible(bgPhotoUrl)
+        ? bgPhotoUrl
+        : undefined;
+
+      const safeLogo = isEligible(effectiveBusinessLogo) ? effectiveBusinessLogo! : undefined;
+
+      return createCommercialPosterDesign({
+        brand: effectiveBusinessName,
+        headline: headline || effectiveHeadline,
+        subtitle,
+        badge: discountBadge,
+        cta: ctaText,
+        phone: undefined,
+        website: effectiveBusinessWebsite,
+        photo: safePhoto,
+        ratio: aspectRatio,
+        theme: colorTheme,
+        logoUrl: safeLogo,
+        tagline: effectiveBusinessTagline || undefined,
+        layout: posterLayout,
+      });
+    } catch (err) {
+      console.warn('[marketing.tsx] createCommercialPosterDesign fallback:', err);
+      return createCommercialPosterDesign({
+        brand: effectiveBusinessName,
+        headline: headline || effectiveHeadline,
+        subtitle,
+        badge: discountBadge,
+        cta: ctaText,
+        photo: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80',
+        ratio: aspectRatio,
+        theme: colorTheme,
+        layout: posterLayout,
+      });
+    }
   }, [
     effectiveBusinessName,
     headline,
@@ -1130,12 +1156,14 @@ export default function MarketingScreen() {
         setBusy(true);
         try {
           if (asset.base64) {
-            const mime = asset.mimeType || 'image/jpeg';
+            const rawMime = asset.mimeType || 'image/jpeg';
+            const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
+            const dataUrl = `data:${mime};base64,${asset.base64}`;
             const uploaded = await apiRequest<{ url: string; assetId?: string }>('/api/social/designs/assets', {
               method: 'POST',
-              body: { data: `data:${mime};base64,${asset.base64}` },
+              body: { data: dataUrl },
             });
-            setCustomPosterUri(uploaded.url);
+            setCustomPosterUri(uploaded?.url || dataUrl);
           } else {
             setCustomPosterUri(asset.uri);
           }
@@ -1143,7 +1171,13 @@ export default function MarketingScreen() {
           setSuccessNotice('Custom promotional graphic uploaded & saved!');
           setTimeout(() => setSuccessNotice(null), 3000);
         } catch {
-          setCustomPosterUri(asset.uri);
+          if (asset.base64) {
+            const rawMime = asset.mimeType || 'image/jpeg';
+            const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
+            setCustomPosterUri(`data:${mime};base64,${asset.base64}`);
+          } else {
+            setCustomPosterUri(asset.uri);
+          }
           setActiveVisualFormat('poster');
           setSuccessNotice('Custom promotional graphic loaded!');
           setTimeout(() => setSuccessNotice(null), 3000);
@@ -1400,12 +1434,18 @@ export default function MarketingScreen() {
         try {
           let remoteUrl = asset.uri;
           if (asset.base64) {
-            const mime = asset.mimeType || 'image/jpeg';
-            const uploaded = await apiRequest<{ url: string; assetId?: string }>('/api/social/designs/assets', {
-              method: 'POST',
-              body: { data: `data:${mime};base64,${asset.base64}` },
-            });
-            remoteUrl = uploaded.url;
+            const rawMime = asset.mimeType || 'image/jpeg';
+            const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
+            const dataUrl = `data:${mime};base64,${asset.base64}`;
+            try {
+              const uploaded = await apiRequest<{ url: string; assetId?: string }>('/api/social/designs/assets', {
+                method: 'POST',
+                body: { data: dataUrl },
+              });
+              remoteUrl = uploaded?.url || dataUrl;
+            } catch {
+              remoteUrl = dataUrl;
+            }
           }
           setBgPhotoUrl(remoteUrl);
           if (customDesign) {

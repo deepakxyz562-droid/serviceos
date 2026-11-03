@@ -228,5 +228,25 @@ describe('editable marketing source documents', () => {
       expect(badgeLayer?.text).toContain('24/7 RAPID RESPONSE');
       expect(ctaLayer?.text).toContain('CALL NOW');
     });
+
+    it('safely handles local device file:// photo URIs and logo URIs without throwing', () => {
+      const design = createCommercialPosterDesign({
+        brand: 'Fieseros',
+        headline: 'Field Force Management',
+        photo: 'file:///var/mobile/Containers/Data/Application/123/tmp/photo.jpg',
+        logoUrl: 'file:///var/mobile/Containers/Data/Application/123/tmp/logo.png',
+      });
+      expect(design).toBeDefined();
+      const photoLayer = design.layers.find((l) => l.id === 'bg_photo');
+      expect(photoLayer?.src).toMatch(/^https:\/\//);
+      const logoLayer = design.layers.find((l) => l.id === 'brand_logo');
+      expect(logoLayer).toBeUndefined();
+    });
+
+    it('accepts data:image/jpg;base64 URLs in validateDesign', () => {
+      const d = base();
+      d.layers[0].src = 'data:image/jpg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      expect(validateDesign(d)).toBeDefined();
+    });
   });
 });

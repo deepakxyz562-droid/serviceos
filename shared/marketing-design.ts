@@ -14,7 +14,7 @@ export function validateDesign(value: unknown): MarketingDesign {
   for (const l of d.layers) {
     if (!l || typeof l.id !== 'string' || !l.id || ids.has(l.id) || !['text','image','shape'].includes(l.type) || !color(l.color) || !color(l.background) || ![l.x,l.y,l.width,l.height,l.fontSize,l.opacity].every(Number.isFinite) || l.x < 0 || l.y < 0 || l.width <= 0 || l.height <= 0 || l.x + l.width > d.width || l.y + l.height > d.height || l.fontSize < 8 || l.fontSize > 200 || l.opacity < 0 || l.opacity > 1) throw new Error('Invalid design layer');
     if (l.type === 'text' && (typeof l.text !== 'string' || l.text.length > 1000)) throw new Error('Invalid design text');
-    if (l.type === 'image' && (typeof l.src !== 'string' || l.src.length > 6_000_000 || !/^(https:\/\/|data:image\/(png|jpeg|webp);base64,)/.test(l.src))) throw new Error('Use an HTTPS image or upload a PNG, JPEG or WebP');
+    if (l.type === 'image' && (typeof l.src !== 'string' || l.src.length > 6_000_000 || !/^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,)/i.test(l.src))) throw new Error('Use an HTTPS image or upload a PNG, JPEG or WebP');
     if(l.assetId !== undefined && (typeof l.assetId !== 'string' || l.assetId.length > 100)) throw new Error('Invalid asset reference');
     if(l.rotation !== undefined && (!Number.isFinite(l.rotation) || Math.abs(l.rotation)>180)) throw new Error('Invalid rotation');
     for(const crop of [l.cropX,l.cropY]) if(crop !== undefined && (!Number.isFinite(crop)||crop<0||crop>100)) throw new Error('Invalid crop position');
@@ -263,9 +263,16 @@ export function createCommercialPosterDesign(input: {
   const webText = input.website
     ? input.website.replace(/^https?:\/\//, '').replace(/\/$/, '')
     : 'visit website';
-  const photoSrc = input.photo && input.photo.trim().length > 0
-    ? input.photo.trim()
+  const isEligibleImage = (src?: string | null): boolean => {
+    if (!src || typeof src !== 'string') return false;
+    const trimmed = src.trim();
+    return trimmed.length > 0 && /^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,)/i.test(trimmed);
+  };
+
+  const photoSrc = isEligibleImage(input.photo)
+    ? input.photo!.trim()
     : 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80';
+  const logoSrc = isEligibleImage(input.logoUrl) ? input.logoUrl!.trim() : undefined;
 
   const footerH = 140;
 
@@ -374,7 +381,7 @@ export function createCommercialPosterDesign(input: {
       fontSize: 22,
       opacity: 1,
     },
-    ...(input.logoUrl && input.logoUrl.trim().length > 0
+    ...(logoSrc
       ? [
           {
             id: 'brand_logo',
@@ -383,7 +390,7 @@ export function createCommercialPosterDesign(input: {
             y: 35,
             width: 60,
             height: 60,
-            src: input.logoUrl.trim(),
+            src: logoSrc,
             color: '#ffffff',
             background: 'transparent',
             fontSize: 16,
