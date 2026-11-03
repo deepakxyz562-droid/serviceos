@@ -9,9 +9,11 @@ export async function runDesignJob(id:string){
  let reserved:string|undefined;let generated=false;
  try{
   const subscription=await db.subscription.findFirst({where:{tenantId:job.tenantId},orderBy:{createdAt:'desc'}});
+  if(!subscription||!['trial','active'].includes(subscription.status)|| (subscription.endDate&&subscription.endDate<=new Date()) || (subscription.status==='trial'&&subscription.trialEndsAt&&subscription.trialEndsAt<=new Date()))throw new Error('An active subscription with image-generation allowance is required.');
   if(subscription){
-    const taken=await db.subscription.updateMany({where:{id:subscription.id,aiUsageCount:{lt:subscription.aiQuota ?? 100}},data:{aiUsageCount:{increment:1}}});
-    if(taken.count) reserved=subscription.id;
+    const taken=await db.subscription.updateMany({where:{id:subscription.id,status:{in:['trial','active']},aiUsageCount:{lt:subscription.aiQuota ?? 100}},data:{aiUsageCount:{increment:1}}});
+    if(taken.count!==1)throw new Error('Your image-generation allowance is exhausted. Upgrade your plan or wait for renewal.');
+    reserved=subscription.id;
   }
   if(reserved) await db.designGenerationJob.update({where:{id},data:{subscriptionId:reserved}});
 

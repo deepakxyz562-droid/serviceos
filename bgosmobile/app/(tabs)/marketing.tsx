@@ -1,3 +1,6 @@
+import { PosterEditor } from '../../src/components/design/poster-editor';
+import { backgroundBrief } from '../../../shared/design-editor';
+import { PosterPreview } from '../../src/components/design/poster-preview';
 import '../../src/lib/runtime-polyfills';
 import {
   createDesign,
@@ -104,6 +107,7 @@ const DEFAULT_ALT_HEADLINES = [
 ];
 
 function AutoBrandedPosterCard({
+  document,
   photoUri,
   headline,
   subtitle,
@@ -121,6 +125,7 @@ function AutoBrandedPosterCard({
   theme = 'royal_gold',
   layout = 'bold_offer',
 }: {
+  document?: MarketingDesign;
   photoUri?: string | null;
   headline: string;
   subtitle?: string;
@@ -138,6 +143,12 @@ function AutoBrandedPosterCard({
   theme?: CommercialTheme | string;
   layout?: PosterTemplateLayout;
 }) {
+  if(document)return <View style={{height,aspectRatio:document.width/document.height,alignSelf:'center'}}><PosterPreview doc={document}/></View>;
+  if (layout.startsWith('studio_')) {
+    const ratio = aspectRatio === 1 ? '1:1' : aspectRatio < .6 ? '9:16' : aspectRatio > 1 ? '16:9' : '4:5';
+    const doc = createCommercialPosterDesign({brand:businessName,headline,subtitle,badge,cta:ctaText,photo:photoUri||undefined,logoUrl:logoUri||undefined,website,phone,ratio,theme,layout});
+    return <View style={{height,aspectRatio,alignSelf:'center'}}><PosterPreview doc={doc}/>{isGenerating && <ActivityIndicator style={{position:'absolute',top:12,right:12}}/>}</View>;
+  }
   const isCompact = height < 260;
   const cleanWeb = website ? website.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
   const initial = (businessName || 'B').trim().charAt(0).toUpperCase();
@@ -719,23 +730,61 @@ export default function MarketingScreen() {
     ? getTemplateById(activeTemplateId)?.bgPrompt
     : undefined;
 
+  const generationEpoch = useRef(0);
+  const [templatePickerOpen,setTemplatePickerOpen] = useState(false);
+  const [draftPickerOpen,setDraftPickerOpen]=useState(false);
+  const [detailsOpen,setDetailsOpen]=useState(false);
+  const [editSheet, setEditSheet] = useState<'none' | 'text' | 'photo' | 'style' | 'brand'>('none');
+  const [imageProvider,setImageProvider]=useState<'gemini'|'openrouter'|'cloudflare'>('gemini');
+  useEffect(()=>()=>{generationEpoch.current++;},[]);
+  const [autosaveFailed,setAutosaveFailed] = useState(false);
   const applyPosterTemplate = (t: PosterTemplate) => {
+    generationEpoch.current++;
+    setBusy(false);
+    setTemplatePickerOpen(false);
+    setIsGeneratingImage(false);
+    historyTravel.current = true;
     setActiveTemplateId(t.id);
-    setCustomDesign(null);
     setHeadline(t.headline);
     setDiscountBadge(t.badge);
     setSubtitle(t.subtitle);
     setCtaText(t.cta);
     setColorTheme(t.theme);
-    setAspectRatio(t.aspect === '16:9' ? '4:5' : t.aspect);
+    const targetAspect = t.aspect === '16:9' ? '4:5' : t.aspect;
+    setAspectRatio(targetAspect);
     setPosterLayout(t.layout);
     setBgPhotoUrl(t.photo);
     setCustomPosterUri(null);
-    setHasGenerated(false);
+    setHasGenerated(true);
     setActiveUserPrompt('');
     setStudioCreateTab('templates');
     setStudioStep(2);
     setStudioSubTab('design');
+
+    try {
+      const initialDoc = createCommercialPosterDesign({
+        brand: effectiveBusinessName,
+        headline: t.headline,
+        subtitle: t.subtitle,
+        badge: t.badge,
+        cta: t.cta,
+        phone: undefined,
+        website: effectiveBusinessWebsite,
+        photo: t.photo,
+        ratio: targetAspect,
+        theme: t.theme,
+        logoUrl: effectiveBusinessLogo || undefined,
+        tagline: effectiveBusinessTagline || undefined,
+        layout: t.layout,
+      });
+      setCustomDesign(initialDoc);
+      historyDocument.current = initialDoc;
+      setDesignPast([]);
+      setDesignFuture([]);
+    } catch (e) {
+      console.warn('[applyPosterTemplate] initialDoc fallback:', e);
+    }
+
     setSuccessNotice(`✨ ${t.name} template applied — customize & publish!`);
     setTimeout(() => setSuccessNotice(null), 3200);
   };
@@ -1080,13 +1129,14 @@ export default function MarketingScreen() {
     if (isGeneratingImage) return;
     setIsGeneratingImage(true);
     setError(null);
+    const epoch=++generationEpoch.current;
     try {
       const requestId = `mob-img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const res = await apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
         method: 'POST',
         body: {
-          prompt: activeUserPrompt || promptInput || activeTemplateBgPrompt || 'commercial product photography',
-          provider: 'cloudflare',
+          prompt: backgroundBrief({template:activeTemplateId?getTemplateById(activeTemplateId):undefined,headline,instruction:promptInput,ratio:aspectRatio}),
+          provider: imageProvider,
           requestId,
           isPoster: true,
           businessName: effectiveBusinessName,
@@ -1100,11 +1150,15 @@ export default function MarketingScreen() {
       if (res?.jobId) {
         const targetJobId = res.jobId;
         const pollStart = Date.now();
+        let checking=false;
         const pollInterval = setInterval(async () => {
+          if(checking)return;checking=true;
           try {
-            const check = await apiRequest<{ status: string; result?: { url?: string } }>(
+            if(epoch!==generationEpoch.current){clearInterval(pollInterval);return;}
+            const check = await apiRequest<{ status: string; result?: { url?: string;assetId?:string } }>(
               `/api/social/designs/image?id=${encodeURIComponent(targetJobId)}`
             );
+            if(epoch!==generationEpoch.current){clearInterval(pollInterval);return;}
             if (check?.status === 'completed' && check.result?.url) {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
@@ -1112,11 +1166,11 @@ export default function MarketingScreen() {
               setCustomPosterUri(generatedUrl);
               setBgPhotoUrl(generatedUrl);
               setCustomDesign((prev) => {
-                if (!prev) return null;
+                const base=prev||design;
                 return {
-                  ...prev,
-                  layers: prev.layers.map((l) =>
-                    l.id === 'bg_photo' || l.type === 'image' ? { ...l, src: generatedUrl } : l
+                  ...base,
+                  layers: base.layers.map((l) =>
+                    l.id === 'bg_photo' ? { ...l, src: generatedUrl,assetId:check.result?.assetId } : l
                   ),
                 };
               });
@@ -1125,12 +1179,12 @@ export default function MarketingScreen() {
             } else if (check?.status === 'failed' || check?.status === 'cancelled' || Date.now() - pollStart > 45000) {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
-              setError('Background image generation timed out. Please try again.');
+              setError('Image generation did not complete. Your existing design is unchanged; check generation status before retrying.');
             }
           } catch {
             clearInterval(pollInterval);
             setIsGeneratingImage(false);
-          }
+          } finally { checking=false; }
         }, 1500);
       } else {
         setIsGeneratingImage(false);
@@ -1139,7 +1193,7 @@ export default function MarketingScreen() {
       setIsGeneratingImage(false);
       const msg = (err as Error)?.message || '';
       if (/could not connect|fetch failed|network request failed|failed to connect/i.test(msg)) {
-        setError('Could not connect to backend server. Make sure Next.js is running on port 3000.');
+        setError('Could not connect to backend server. Check your connection and try again.');
       } else {
         setError(msg || 'Failed to regenerate image.');
       }
@@ -1270,6 +1324,164 @@ export default function MarketingScreen() {
     }
   }
 
+  function handleUpdateSubtitle(val: string) {
+    setSubtitle(val);
+    if (customDesign) {
+      setCustomDesign({
+        ...customDesign,
+        layers: customDesign.layers.map((l) => (l.id === 'subtitle' ? { ...l, text: val } : l)),
+      });
+    }
+  }
+
+  function handleApplyLayout(layout: PosterTemplateLayout) {
+    setPosterLayout(layout);
+    if (customDesign) {
+      const updated = createCommercialPosterDesign({
+        brand: brandName || effectiveBusinessName,
+        headline: headline || effectiveHeadline,
+        subtitle,
+        badge: discountBadge,
+        cta: ctaText,
+        phone: undefined,
+        website: brandWebsite || effectiveBusinessWebsite,
+        photo: customPosterUri || bgPhotoUrl || undefined,
+        ratio: aspectRatio,
+        theme: colorTheme,
+        logoUrl: effectiveBusinessLogo || undefined,
+        tagline: brandTagline || effectiveBusinessTagline || undefined,
+        layout,
+      });
+      setCustomDesign(updated);
+    }
+  }
+
+  function handleApplyTheme(theme: CommercialTheme) {
+    setColorTheme(theme);
+    if (customDesign) {
+      const updated = createCommercialPosterDesign({
+        brand: brandName || effectiveBusinessName,
+        headline: headline || effectiveHeadline,
+        subtitle,
+        badge: discountBadge,
+        cta: ctaText,
+        phone: undefined,
+        website: brandWebsite || effectiveBusinessWebsite,
+        photo: customPosterUri || bgPhotoUrl || undefined,
+        ratio: aspectRatio,
+        theme,
+        logoUrl: effectiveBusinessLogo || undefined,
+        tagline: brandTagline || effectiveBusinessTagline || undefined,
+        layout: posterLayout,
+      });
+      setCustomDesign(updated);
+    }
+  }
+
+  function handleApplyAspect(ratio: '1:1' | '4:5' | '9:16') {
+    setAspectRatio(ratio);
+    if (customDesign) {
+      const updated = createCommercialPosterDesign({
+        brand: brandName || effectiveBusinessName,
+        headline: headline || effectiveHeadline,
+        subtitle,
+        badge: discountBadge,
+        cta: ctaText,
+        phone: undefined,
+        website: brandWebsite || effectiveBusinessWebsite,
+        photo: customPosterUri || bgPhotoUrl || undefined,
+        ratio,
+        theme: colorTheme,
+        logoUrl: effectiveBusinessLogo || undefined,
+        tagline: brandTagline || effectiveBusinessTagline || undefined,
+        layout: posterLayout,
+      });
+      setCustomDesign(updated);
+    }
+  }
+
+  function handleApplyPhoto(photoUrl: string | null) {
+    setCustomPosterUri(photoUrl);
+    if (photoUrl) setBgPhotoUrl(photoUrl);
+    if (customDesign) {
+      const safePhoto = photoUrl || bgPhotoUrl || undefined;
+      const updated = createCommercialPosterDesign({
+        brand: brandName || effectiveBusinessName,
+        headline: headline || effectiveHeadline,
+        subtitle,
+        badge: discountBadge,
+        cta: ctaText,
+        phone: undefined,
+        website: brandWebsite || effectiveBusinessWebsite,
+        photo: safePhoto,
+        ratio: aspectRatio,
+        theme: colorTheme,
+        logoUrl: effectiveBusinessLogo || undefined,
+        tagline: brandTagline || effectiveBusinessTagline || undefined,
+        layout: posterLayout,
+      });
+      setCustomDesign(updated);
+    }
+  }
+
+  function handleRemoveLogo() {
+    setBrandLogoUri(null);
+    if (customDesign) {
+      setCustomDesign({
+        ...customDesign,
+        layers: customDesign.layers.filter((l) => l.id !== 'logo'),
+      });
+    }
+  }
+
+  function handleApplyBrandName(val: string) {
+    setBrandName(val);
+    if (customDesign) {
+      setCustomDesign({
+        ...customDesign,
+        layers: customDesign.layers.map((l) => (l.id === 'brand' ? { ...l, text: val.toUpperCase() } : l)),
+      });
+    }
+  }
+
+  function handleApplyBrandTagline(val: string) {
+    setBrandTagline(val);
+    if (customDesign) {
+      setCustomDesign({
+        ...customDesign,
+        layers: customDesign.layers.map((l) => (l.id === 'tagline' ? { ...l, text: val } : l)),
+      });
+    }
+  }
+
+  function handleApplyBrandWebsite(val: string) {
+    setBrandWebsite(val);
+    if (customDesign) {
+      setCustomDesign({
+        ...customDesign,
+        layers: customDesign.layers.map((l) => (l.id === 'website' ? { ...l, text: val } : l)),
+      });
+    }
+  }
+
+  const [designPast,setDesignPast]=useState<MarketingDesign[]>([]);
+  const [designFuture,setDesignFuture]=useState<MarketingDesign[]>([]);
+  const historyDocument=useRef<MarketingDesign|null>(null);
+  const historyTravel=useRef(false);
+  useEffect(()=>{
+    if(JSON.stringify(historyDocument.current)===JSON.stringify(design))return;
+    if(historyTravel.current)historyTravel.current=false;
+    else if(historyDocument.current){const previous=historyDocument.current;setDesignPast(p=>[...p.slice(-49),previous]);setDesignFuture([]);}
+    historyDocument.current=design;
+  },[design]);
+  function navigateHistory(direction:'undo'|'redo'){
+    const target=direction==='undo'?designPast.at(-1):designFuture[0];if(!target)return;
+    generationEpoch.current++;setBusy(false);setIsGeneratingImage(false);historyTravel.current=true;
+    if(direction==='undo'){setDesignPast(p=>p.slice(0,-1));setDesignFuture(p=>[design,...p]);}
+    else {setDesignPast(p=>[...p,design]);setDesignFuture(p=>p.slice(1));}
+    handleCustomDesignChange(target);
+  }
+
   function handleCustomDesignChange(updated: MarketingDesign) {
     setCustomDesign(updated);
     const hl = updated.layers.find((l) => l.id === 'headline');
@@ -1306,54 +1518,26 @@ export default function MarketingScreen() {
   }
 
   async function handlePickCustomPoster() {
+    const epoch=++generationEpoch.current;
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        quality: 0.85,
-        base64: true,
-      });
-      if (!result.canceled && result.assets?.[0]) {
-        const asset = result.assets[0];
-        setBusy(true);
-        try {
-          if (asset.base64) {
-            const rawMime = asset.mimeType || 'image/jpeg';
-            const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
-            const dataUrl = `data:${mime};base64,${asset.base64}`;
-            const uploaded = await apiRequest<{ url: string; assetId?: string }>('/api/social/designs/assets', {
-              method: 'POST',
-              body: { data: dataUrl },
-            });
-            setCustomPosterUri(uploaded?.url || dataUrl);
-          } else {
-            setCustomPosterUri(asset.uri);
-          }
-          setActiveVisualFormat('poster');
-          setSuccessNotice('Custom promotional graphic uploaded & saved!');
-          setTimeout(() => setSuccessNotice(null), 3000);
-        } catch {
-          if (asset.base64) {
-            const rawMime = asset.mimeType || 'image/jpeg';
-            const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
-            setCustomPosterUri(`data:${mime};base64,${asset.base64}`);
-          } else {
-            setCustomPosterUri(asset.uri);
-          }
-          setActiveVisualFormat('poster');
-          setSuccessNotice('Custom promotional graphic loaded!');
-          setTimeout(() => setSuccessNotice(null), 3000);
-        } finally {
-          setBusy(false);
-        }
-      }
-    } catch {
-      Alert.alert('Notice', 'Could not open photo library.');
-    }
+      const picked=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images'],allowsEditing:true,base64:true,quality:.85});
+      if(picked.canceled)return;
+      const asset=picked.assets[0];
+      if(!asset?.base64)throw new Error('Could not read this image. Choose another photo.');
+      if((asset.fileSize||0)>4_000_000)throw new Error('Choose an image smaller than 4 MB.');
+      setBusy(true);
+      const uploaded=await apiRequest<{url:string;assetId:string}>('/api/social/designs/assets',{method:'POST',body:{data:`data:${asset.mimeType||'image/jpeg'};base64,${asset.base64}`}});
+      if(epoch!==generationEpoch.current)return;
+      if(!uploaded.url)throw new Error('Upload was not confirmed. Please retry.');
+      handleCustomDesignChange({...design,layers:design.layers.map(l=>l.id==='bg_photo'?{...l,src:uploaded.url,assetId:uploaded.assetId}:l)});
+      setCustomPosterUri(uploaded.url);setBgPhotoUrl(uploaded.url);
+    }catch(e){if(epoch===generationEpoch.current)setError(e instanceof Error?e.message:'Upload failed. Your design is unchanged.');}
+    finally{if(epoch===generationEpoch.current)setBusy(false);}
   }
 
   // AI Generation Trigger
   async function generatePost(customTopic?: string) {
+    const epoch=++generationEpoch.current;
     const topicToUse =
       (typeof customTopic === 'string' ? customTopic : promptInput).trim() ||
       activeUserPrompt ||
@@ -1368,22 +1552,6 @@ export default function MarketingScreen() {
       const genPromise = apiRequest<{ design: MarketingDesign; caption: string; alternativeHeadlines?: string[] }>('/api/social/designs/generate', {
         method: 'POST',
         body: { prompt: topicToUse, design, caption: caption || effectiveCaption, mode: generationMode },
-      }).catch((genErr) => {
-        console.warn('[marketing.tsx] generate design fallback activated:', genErr);
-        const cleanTopic = topicToUse.replace(/^\[POSTER\]\s*/i, '').trim();
-        const firstLine = cleanTopic.split(/[.\n]/)[0].slice(0, 50) || headline || 'Smart Field Tracking';
-        return {
-          design: design || createCommercialPosterDesign({
-            brand: effectiveBusinessName,
-            headline: firstLine,
-            subtitle: 'Real-time telemetry & workflow automation',
-            badge: 'RECOMMENDED',
-            cta: 'Learn More',
-            photo: bgPhotoUrl,
-          }),
-          caption: `${firstLine}\n\nStreamline your operations and manage your field workforce effortlessly. Contact ${effectiveBusinessName} today for more details!`,
-          alternativeHeadlines: [firstLine, 'Boost Team Productivity', 'Automated Attendance App'],
-        };
       });
 
       // 2. If in poster mode, trigger Cloudflare Flux AI image generation asynchronously
@@ -1393,8 +1561,8 @@ export default function MarketingScreen() {
         imagePromise = apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
           method: 'POST',
           body: {
-            prompt: topicToUse,
-            provider: 'cloudflare',
+            prompt: backgroundBrief({template:activeTemplateId?getTemplateById(activeTemplateId):undefined,headline,instruction:topicToUse,ratio:aspectRatio}),
+            provider: imageProvider,
             requestId,
             isPoster: true,
             businessName: effectiveBusinessName,
@@ -1407,6 +1575,7 @@ export default function MarketingScreen() {
       }
 
       const [data, imageInit] = await Promise.all([genPromise, imagePromise]);
+      if(epoch!==generationEpoch.current)return;
 
       setCaption(data.caption);
       setCaptionDraft(data.caption);
@@ -1430,7 +1599,7 @@ export default function MarketingScreen() {
       setPromptInput('');
       setSuccessNotice(
         generationMode === 'poster'
-          ? 'Finished AI Poster campaign created with auto-branded layout!'
+          ? 'Design and copy are ready. The background image may still be generating.'
           : generationMode === 'image_only'
           ? 'AI generated background image without text overlays!'
           : 'AI generated fresh design and copy directly to canvas!'
@@ -1441,11 +1610,15 @@ export default function MarketingScreen() {
       if (imageInit?.jobId) {
         const targetJobId = imageInit.jobId;
         const pollStart = Date.now();
+        let checking=false;
         const pollInterval = setInterval(async () => {
+          if(checking)return;checking=true;
+          if(epoch!==generationEpoch.current){clearInterval(pollInterval);return;}
           try {
-            const check = await apiRequest<{ status: string; result?: { url?: string } }>(
+            const check = await apiRequest<{ status: string; result?: { url?: string;assetId?:string } }>(
               `/api/social/designs/image?id=${encodeURIComponent(targetJobId)}`
             );
+            if(epoch!==generationEpoch.current){clearInterval(pollInterval);return;}
             if (check?.status === 'completed' && check.result?.url) {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
@@ -1453,35 +1626,38 @@ export default function MarketingScreen() {
               setCustomPosterUri(generatedUrl);
               setBgPhotoUrl(generatedUrl);
               setCustomDesign((prev) => {
-                if (!prev) return null;
+                const base=prev||design;
                 return {
-                  ...prev,
-                  layers: prev.layers.map((l) =>
-                    l.id === 'bg_photo' || l.type === 'image' ? { ...l, src: generatedUrl } : l
+                  ...base,
+                  layers: base.layers.map((l) =>
+                    l.id === 'bg_photo' ? { ...l, src: generatedUrl,assetId:check.result?.assetId } : l
                   ),
                 };
               });
             } else if (check?.status === 'failed' || check?.status === 'cancelled' || Date.now() - pollStart > 45000) {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
+              setError('The image did not complete. Your editable design and copy are preserved.');
             }
           } catch {
             clearInterval(pollInterval);
             setIsGeneratingImage(false);
-          }
+          } finally { checking=false; }
         }, 1500);
       } else {
         setIsGeneratingImage(false);
       }
     } catch (err: unknown) {
+      if(epoch!==generationEpoch.current)return;
+      setIsGeneratingImage(false);
       const msg = (err as Error)?.message || '';
       if (/could not connect|fetch failed|network request failed|failed to connect/i.test(msg)) {
-        setError('Could not connect to backend server. Make sure Next.js is running on port 3000.');
+        setError('Could not connect to backend server. Check your connection and try again.');
       } else {
         setError(msg || 'AI generation failed. You can customize the fields manually below.');
       }
     } finally {
-      setBusy(false);
+      if(epoch===generationEpoch.current)setBusy(false);
     }
   }
 
@@ -1489,6 +1665,7 @@ export default function MarketingScreen() {
   async function submitPost(status: 'published' | 'scheduled' | 'draft', autosave=false) {
     if (busy || saving.current) return;
     setError(null);
+    if(!autosave)setAutosaveFailed(false);
 
     const scheduledAt = status === 'scheduled' ? futureLocalTime(scheduleDate, scheduleTime) : null;
     if (status === 'scheduled' && !scheduledAt) {
@@ -1545,7 +1722,9 @@ export default function MarketingScreen() {
         body,
         headers: { 'Idempotency-Key': pendingRequest.current!.key },
       });
+      if(status === 'draft' && (!saved.data?.id||!saved.data.updatedAt))throw new Error('The server did not confirm the draft. Retry saving.');
       if(status === 'draft' && saved.data?.id){setEditingDesignId(saved.data.id);setDesignRevision(saved.data.updatedAt);savedDesignSnapshot.current=JSON.stringify({design,caption});}
+      setAutosaveFailed(false);
       if(autosave)return;
       pendingRequest.current = null;
       setSuccessNotice(
@@ -1561,9 +1740,10 @@ export default function MarketingScreen() {
         setActiveMode('posts');
       }, 1200);
     } catch (err: unknown) {
+      if(autosave)setAutosaveFailed(true);
       const msg = (err as Error)?.message || '';
       if (/could not connect|fetch failed|network request failed|failed to connect/i.test(msg)) {
-        setError('Could not connect to backend server. Make sure Next.js is running on port 3000.');
+        setError('Could not connect to backend server. Check your connection and try again.');
       } else {
         setError(msg || 'Failed to save or publish post.');
       }
@@ -1575,10 +1755,10 @@ export default function MarketingScreen() {
 
   const designSnapshot=JSON.stringify({design,caption});
   useEffect(()=>{
-    if(!editingDesignId||busy||savedDesignSnapshot.current===designSnapshot)return;
-    const timer=setTimeout(()=>{savedDesignSnapshot.current=designSnapshot;void submitPost('draft',true);},1500);
+    if(!editingDesignId||busy||autosaveFailed||savedDesignSnapshot.current===designSnapshot)return;
+    const timer=setTimeout(()=>{void submitPost('draft',true);},1500);
     return ()=>clearTimeout(timer);
-  },[designSnapshot,editingDesignId,busy]);
+  },[designSnapshot,editingDesignId,busy,autosaveFailed]);
 
   // Quick caption modifiers
   function handleMakeShorter() {
@@ -1592,98 +1772,7 @@ export default function MarketingScreen() {
     }
   }
 
-  async function handleUseMyPhoto() {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        quality: 0.85,
-        base64: true,
-      });
-      if (!result.canceled && result.assets?.[0]) {
-        const asset = result.assets[0];
-        setBusy(true);
-        try {
-          let remoteUrl = asset.uri;
-          if (asset.base64) {
-            const rawMime = asset.mimeType || 'image/jpeg';
-            const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
-            const dataUrl = `data:${mime};base64,${asset.base64}`;
-            try {
-              const uploaded = await apiRequest<{ url: string; assetId?: string }>('/api/social/designs/assets', {
-                method: 'POST',
-                body: { data: dataUrl },
-              });
-              remoteUrl = uploaded?.url || dataUrl;
-            } catch {
-              remoteUrl = dataUrl;
-            }
-          }
-          setBgPhotoUrl(remoteUrl);
-          if (customDesign) {
-            setCustomDesign({
-              ...customDesign,
-              layers: customDesign.layers.map((l) =>
-                l.type === 'image' ? { ...l, url: remoteUrl, src: remoteUrl } : l
-              ),
-            });
-          }
-          setSuccessNotice('Photo uploaded to design canvas!');
-          setTimeout(() => setSuccessNotice(null), 3000);
-          return;
-        } catch {
-          setBgPhotoUrl(asset.uri);
-        } finally {
-          setBusy(false);
-        }
-      }
-    } catch {
-      // fallback to presets
-    }
-
-    Alert.alert(
-      'Replace Background Photo',
-      'Select a photo for this creative:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Modern Chair / Interior',
-          onPress: () =>
-            setBgPhotoUrl(
-              'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80'
-            ),
-        },
-        {
-          text: 'Salon & Spa Treatment',
-          onPress: () =>
-            setBgPhotoUrl(
-              'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1080&q=80'
-            ),
-        },
-        {
-          text: 'Artisanal Cafe & Food',
-          onPress: () =>
-            setBgPhotoUrl(
-              'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1080&q=80'
-            ),
-        },
-        {
-          text: 'Auto & Detailing',
-          onPress: () =>
-            setBgPhotoUrl(
-              'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=1080&q=80'
-            ),
-        },
-        {
-          text: 'Emerald Luxury Texture',
-          onPress: () =>
-            setBgPhotoUrl(
-              'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1080&q=80'
-            ),
-        },
-      ]
-    );
-  }
+  async function handleUseMyPhoto() { await handlePickCustomPoster(); }
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F8FAFC', paddingTop: Math.max(insets.top, 12) }}>
@@ -1994,6 +2083,20 @@ export default function MarketingScreen() {
       {/* ══════════════════════════════════════════════════════════════════════
           MODE 1: STUDIO / CREATE (3-Step Wizard from Screenshots)
           ══════════════════════════════════════════════════════════════════════ */}
+      <Modal visible={draftPickerOpen} animationType="slide" onRequestClose={()=>setDraftPickerOpen(false)}>
+        <View style={{flex:1,padding:24,paddingTop:50,gap:12}}>
+          <Pressable onPress={()=>setDraftPickerOpen(false)}><Text>Close drafts</Text></Pressable>
+          <Text style={{fontSize:24,fontWeight:'700'}}>Saved designs</Text>
+          <ScrollView>{designDrafts.map(draft=><Pressable key={draft.id} style={{paddingVertical:18,borderBottomWidth:1,borderColor:'#dbe4e1'}} onPress={()=>{
+            const open=()=>{try{const restored=validateDesign(JSON.parse(draft.designJson));generationEpoch.current++;setIsGeneratingImage(false);setBusy(false);historyTravel.current=true;setDesignPast([]);setDesignFuture([]);handleCustomDesignChange(restored);setCaption(draft.content);setEditingDesignId(draft.id);setDesignRevision(draft.updatedAt);savedDesignSnapshot.current=JSON.stringify({design:restored,caption:draft.content});setAutosaveFailed(false);setActiveTemplateId(null);setHasGenerated(true);setStudioStep(2);setDraftPickerOpen(false);}catch{setError('This draft could not be opened.');}};
+            if(savedDesignSnapshot.current!==designSnapshot)Alert.alert('Open saved design?','Unsaved changes in this canvas will be replaced.',[{text:'Keep editing',style:'cancel'},{text:'Open draft',onPress:open}]);else open();
+          }}><Text>{draft.content?.slice(0,80)||'Untitled design'}</Text><Text>{new Date(draft.updatedAt).toLocaleString()}</Text></Pressable>)}</ScrollView>
+          {moreDrafts&&<Pressable onPress={()=>void loadDesignDrafts(draftPage+1)}><Text>Load more</Text></Pressable>}
+        </View>
+      </Modal>
+      <Modal visible={templatePickerOpen} animationType="slide" onRequestClose={()=>setTemplatePickerOpen(false)}>
+        <View style={{flex:1,paddingTop:48}}><Pressable onPress={()=>setTemplatePickerOpen(false)} style={{padding:16}}><Text>Close templates</Text></Pressable><PosterTemplateGallery business={{businessName:effectiveBusinessName,category:brandProfile.data?.profile?.industry,website:effectiveBusinessWebsite}} onApply={applyPosterTemplate} onDescribeIdea={()=>{setTemplatePickerOpen(false);setStudioStep(1);setStudioCreateTab('ideas');setHasGenerated(false);}}/></View>
+      </Modal>
       {activeMode === 'studio' && (
         <View style={{ flex: 1 }}>
           {/* Sub-Tab Navigation Header (Chat | Design) */}
@@ -2227,6 +2330,23 @@ export default function MarketingScreen() {
                       </View>
                     </View>
 
+                    {/* Active Template & Switcher Bar */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingHorizontal: 2 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <MaterialIcons name="auto-awesome" size={15} color="#009F50" />
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>
+                          {activeTemplateId ? `${getTemplateById(activeTemplateId)?.name || 'Custom'} Template` : 'AI Branded Poster'}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => setTemplatePickerOpen(true)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 8, backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0' }}
+                      >
+                        <MaterialIcons name="grid-view" size={13} color="#009F50" />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#009F50' }}>Change Template</Text>
+                      </Pressable>
+                    </View>
+
                     {/* Live Creative Design Preview Card with Inline Action Bar */}
                     <View
                       style={{
@@ -2243,7 +2363,7 @@ export default function MarketingScreen() {
                       }}
                     >
                       <View style={{ padding: 12, backgroundColor: '#070A13', alignItems: 'center', justifyContent: 'center' }}>
-                        <AutoBrandedPosterCard
+                        <AutoBrandedPosterCard document={design}
                           photoUri={customPosterUri || bgPhotoUrl}
                           headline={headline || effectiveHeadline}
                           subtitle={subtitle}
@@ -2261,13 +2381,21 @@ export default function MarketingScreen() {
                       </View>
 
                       {/* Inline Quick Action Pills directly underneath the visual */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 10, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                        <Pressable
+                          onPress={() => setTemplatePickerOpen(true)}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 8, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}
+                        >
+                          <MaterialIcons name="grid-view" size={13} color="#0F172A" />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>Templates</Text>
+                        </Pressable>
+
                         <Pressable
                           onPress={() => setIsEditingText(true)}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 8, backgroundColor: '#F1F5F9' }}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 8, backgroundColor: '#F1F5F9' }}
                         >
                           <MaterialIcons name="edit" size={13} color="#334155" />
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Edit Text</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Text</Text>
                         </Pressable>
 
                         <Pressable
@@ -2276,7 +2404,7 @@ export default function MarketingScreen() {
                             const nextTheme = COMMERCIAL_THEME_KEYS[(curIndex + 1) % COMMERCIAL_THEME_KEYS.length];
                             cycleTheme(nextTheme);
                           }}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 8, backgroundColor: '#F1F5F9' }}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 8, backgroundColor: '#F1F5F9' }}
                         >
                           <MaterialIcons name="palette" size={13} color="#334155" />
                           <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>
@@ -2287,7 +2415,7 @@ export default function MarketingScreen() {
                         <Pressable
                           onPress={handleRegenerateImage}
                           disabled={isGeneratingImage}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 8, backgroundColor: '#F0FDF4' }}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 8, backgroundColor: '#F0FDF4' }}
                         >
                           {isGeneratingImage ? (
                             <ActivityIndicator size="small" color="#009F50" />
@@ -2301,7 +2429,7 @@ export default function MarketingScreen() {
 
                         <Pressable
                           onPress={() => setStudioStep(3)}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8, backgroundColor: '#009F50' }}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 8, backgroundColor: '#009F50' }}
                         >
                           <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>Publish →</Text>
                         </Pressable>
@@ -2531,270 +2659,89 @@ export default function MarketingScreen() {
               ────────────────────────────────────────────────────────────────── */}
           {studioStep === 2 && (
             <View style={{ flex: 1 }}>
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 110 }}>
-                {/* Ratio Selector & Undo */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              {/* Studio Step 2 Top Bar: Undo, Redo, Drafts, Save, Templates */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Pressable
-                    onPress={() => {
-                      setAspectRatio((prev) => (prev === '1:1' ? '4:5' : prev === '4:5' ? '9:16' : '1:1'));
-                    }}
-                    style={styles.ratioPill}
+                    accessibilityLabel="Undo"
+                    disabled={!designPast.length}
+                    onPress={() => navigateHistory('undo')}
+                    style={{ padding: 6, opacity: designPast.length ? 1 : 0.3 }}
                   >
-                    <MaterialIcons name="crop-square" size={14} color="#0F172A" />
-                    <Text style={styles.ratioPillText}>Square · {aspectRatio} ⌵</Text>
+                    <MaterialIcons name="undo" size={21} color="#0F172A" />
                   </Pressable>
-
-                  <Pressable onPress={() => generatePost()} style={{ padding: 6 }}>
-                    <MaterialIcons name="undo" size={20} color="#64748B" />
+                  <Pressable
+                    accessibilityLabel="Redo"
+                    disabled={!designFuture.length}
+                    onPress={() => navigateHistory('redo')}
+                    style={{ padding: 6, opacity: designFuture.length ? 1 : 0.3 }}
+                  >
+                    <MaterialIcons name="redo" size={21} color="#0F172A" />
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => { setDraftPickerOpen(true); void loadDesignDrafts(); }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 8, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}
+                  >
+                    <MaterialIcons name="folder-open" size={14} color="#475569" />
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#475569' }}>Drafts</Text>
                   </Pressable>
                 </View>
 
-                {/* Template Layout Carousel (NRA Flyer Maker Style) */}
-                <View style={{ marginBottom: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Flyer Layout Template</Text>
-                    <Text style={{ fontSize: 10.5, color: '#009F50', fontWeight: '700' }}>5 Pro Styles</Text>
-                  </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
-                    {POSTER_TEMPLATES.map((tmpl) => {
-                      const isSelected = posterLayout === tmpl.id;
-                      return (
-                        <Pressable
-                          key={tmpl.id}
-                          onPress={() => {
-                            setPosterLayout(tmpl.id);
-                            setCustomDesign(null);
-                          }}
-                          style={{
-                            paddingHorizontal: 12,
-                            paddingVertical: 8,
-                            borderRadius: 12,
-                            backgroundColor: isSelected ? '#009F50' : '#FFFFFF',
-                            borderWidth: 1,
-                            borderColor: isSelected ? '#009F50' : '#E2E8F0',
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            shadowColor: '#000',
-                            shadowOpacity: isSelected ? 0.15 : 0.03,
-                            shadowRadius: 3,
-                            elevation: isSelected ? 2 : 1,
-                          }}
-                        >
-                          <MaterialIcons name={tmpl.icon as any} size={15} color={isSelected ? '#FFFFFF' : '#475569'} />
-                          <View>
-                            <Text style={{ fontSize: 11.5, fontWeight: '800', color: isSelected ? '#FFFFFF' : '#0F172A' }}>
-                              {tmpl.name}
-                            </Text>
-                            <Text style={{ fontSize: 9.5, fontWeight: '600', color: isSelected ? '#E2E8F0' : '#64748B' }}>
-                              {tmpl.badge}
-                            </Text>
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => void submitPost('draft', true)}
+                    disabled={busy}
+                    style={{ paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>{busy ? 'Saving…' : 'Save'}</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setTemplatePickerOpen(true)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8, backgroundColor: '#009F50' }}
+                  >
+                    <MaterialIcons name="grid-view" size={13} color="#FFFFFF" />
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>Templates</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 110 }}>
+                {autosaveFailed && (
+                  <Pressable onPress={() => void submitPost('draft', true)} style={{ marginBottom: 10, padding: 8, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#FCA5A5' }}>
+                    <Text style={{ color: '#B91C1C', fontSize: 11.5, fontWeight: '700', textAlign: 'center' }}>Changes not saved. Tap to retry.</Text>
+                  </Pressable>
+                )}
+
+                {/* Live Full-Bleed Canvas Editor */}
+                <View style={{ marginBottom: 10 }}>
+                  <PosterEditor doc={design} onChange={handleCustomDesignChange} />
                 </View>
 
-                {/* Color Scheme Chips */}
-                <View style={{ marginBottom: 14 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 6 }}>Color Scheme</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {COMMERCIAL_THEME_KEYS.map((key) => {
-                      const cfg = COMMERCIAL_THEMES[key];
-                      const isSelected = colorTheme === key;
-                      return (
-                        <Pressable
-                          key={key}
-                          onPress={() => setColorTheme(key)}
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 5,
-                            paddingHorizontal: 10,
-                            paddingVertical: 5,
-                            borderRadius: 8,
-                            backgroundColor: isSelected ? '#F0FDF4' : '#FFFFFF',
-                            borderWidth: 1,
-                            borderColor: isSelected ? '#009F50' : '#CBD5E1',
-                          }}
-                        >
-                          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cfg.badgeBg }} />
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: isSelected ? '#009F50' : '#475569' }}>
-                            {cfg.name.split(' ')[0]}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-
-                {/* Live Auto-Branded Flyer Preview */}
-                <View style={{ marginBottom: 16 }}>
-                  <AutoBrandedPosterCard
-                    photoUri={customPosterUri || bgPhotoUrl}
-                    headline={headline}
-                    subtitle={subtitle}
-                    badge={discountBadge}
-                    ctaText={ctaText}
-                    businessName={effectiveBusinessName}
-                    logoUri={effectiveBusinessLogo}
-                    tagline={effectiveBusinessTagline}
-                    website={effectiveBusinessWebsite}
-                    height={Math.min(360, Math.round(Dimensions.get('window').height * 0.40))}
-                    theme={colorTheme}
-                    layout={posterLayout}
-                    isGenerating={isGeneratingImage || (busy && generationMode === 'poster')}
-                  />
-
-                  {/* Quick Poster Customization Controls: Headline, Offer, CTA, Photo, Brand */}
-                  <View style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, padding: 12, marginTop: 12, gap: 10 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Customize Poster Details</Text>
-                      <Text style={{ fontSize: 10.5, color: '#009F50', fontWeight: '700' }}>Live Auto-Branded</Text>
-                    </View>
-
-                    <View style={{ gap: 4 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Headline</Text>
-                        {/* One-Tap AI Rewrite Chips */}
-                        <View style={{ flexDirection: 'row', gap: 4 }}>
-                          <Pressable
-                            onPress={() => handleAiRewriteHeadline('punchier')}
-                            style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}
-                          >
-                            <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#475569' }}>⚡ Punchier</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleAiRewriteHeadline('benefits')}
-                            style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}
-                          >
-                            <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#009F50' }}>🎯 Benefits</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleAiRewriteHeadline('urgent')}
-                            style={{ backgroundColor: '#FEF2F2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}
-                          >
-                            <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#EF4444' }}>🔥 Urgent</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                      <TextInput
-                        value={headline}
-                        onChangeText={handleUpdateHeadline}
-                        placeholder="e.g. 50% Off First Service"
-                        style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12.5, color: '#0F172A' }}
-                      />
-                    </View>
-
-                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                      <View style={{ flex: 1, gap: 4 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Offer Tag</Text>
-                        <TextInput
-                          value={discountBadge}
-                          onChangeText={handleUpdateDiscountBadge}
-                          placeholder="e.g. 20% OFF"
-                          style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0F172A' }}
-                        />
-                      </View>
-                      <View style={{ flex: 1, gap: 4 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Button Text</Text>
-                        <TextInput
-                          value={ctaText}
-                          onChangeText={handleUpdateCtaText}
-                          placeholder="e.g. Book Now"
-                          style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0F172A' }}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 2 }}>
-                      <Pressable
-                        onPress={handlePickCustomPoster}
-                        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#009F50', backgroundColor: '#F0FDF4' }}
-                      >
-                        <MaterialIcons name="file-upload" size={16} color="#009F50" />
-                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#009F50' }}>Upload Photo</Text>
-                      </Pressable>
-                      {customPosterUri && (
-                        <Pressable
-                          onPress={() => setCustomPosterUri(null)}
-                          style={{ paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#F8FAFC' }}
-                        >
-                          <Text style={{ fontSize: 11.5, fontWeight: '600', color: '#64748B' }}>Reset</Text>
-                        </Pressable>
-                      )}
-                    </View>
-
-                    {/* Brand, Logo & Website Customization */}
-                    <View style={{ borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 10, marginTop: 4, gap: 8 }}>
-                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0F172A' }}>🏷️ Brand, Logo & Website</Text>
-
-                      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                        <Pressable
-                          onPress={handlePickLogo}
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            paddingVertical: 7,
-                            paddingHorizontal: 10,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: '#CBD5E1',
-                            backgroundColor: '#F8FAFC',
-                          }}
-                        >
-                          {effectiveBusinessLogo ? (
-                            <Image source={{ uri: effectiveBusinessLogo }} style={{ width: 20, height: 20, borderRadius: 4 }} resizeMode="cover" />
-                          ) : (
-                            <MaterialIcons name="add-photo-alternate" size={18} color="#009F50" />
-                          )}
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>
-                            {effectiveBusinessLogo ? 'Change Logo' : 'Upload Logo'}
-                          </Text>
-                        </Pressable>
-                        {brandLogoUri && (
-                          <Pressable onPress={() => setBrandLogoUri(null)} hitSlop={6}>
-                            <Text style={{ fontSize: 10.5, color: '#EF4444', fontWeight: '700' }}>Remove</Text>
-                          </Pressable>
-                        )}
-                      </View>
-
-                      <View style={{ gap: 4 }}>
-                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>Brand / Shop Name</Text>
-                        <TextInput
-                          value={brandName}
-                          onChangeText={setBrandName}
-                          placeholder={effectiveBusinessName}
-                          style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, fontSize: 11.5, color: '#0F172A' }}
-                        />
-                      </View>
-
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <View style={{ flex: 1, gap: 4 }}>
-                          <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>Tagline / Specialty</Text>
-                          <TextInput
-                            value={brandTagline}
-                            onChangeText={setBrandTagline}
-                            placeholder="e.g. Pure Desi Ghee"
-                            style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, fontSize: 11.5, color: '#0F172A' }}
-                          />
-                        </View>
-                        <View style={{ flex: 1, gap: 4 }}>
-                          <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>Official Website</Text>
-                          <TextInput
-                            value={brandWebsite}
-                            onChangeText={setBrandWebsite}
-                            placeholder={effectiveBusinessWebsite}
-                            autoCapitalize="none"
-                            keyboardType="url"
-                            style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, fontSize: 11.5, color: '#0F172A' }}
-                          />
-                        </View>
-                      </View>
-                    </View>
-                  </View>
+                {/* Contextual Bottom Action Toolbar (NRA / Canva style) */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', backgroundColor: '#FFFFFF', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 6, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 2, marginBottom: 16 }}>
+                  <Pressable onPress={() => setTemplatePickerOpen(true)} style={{ alignItems: 'center', gap: 3, flex: 1 }}>
+                    <MaterialIcons name="grid-view" size={20} color="#009F50" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>Templates</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setEditSheet('text')} style={{ alignItems: 'center', gap: 3, flex: 1 }}>
+                    <MaterialIcons name="title" size={20} color="#334155" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Text</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setEditSheet('photo')} style={{ alignItems: 'center', gap: 3, flex: 1 }}>
+                    <MaterialIcons name="image" size={20} color="#334155" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Photo & AI</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setEditSheet('style')} style={{ alignItems: 'center', gap: 3, flex: 1 }}>
+                    <MaterialIcons name="palette" size={20} color="#334155" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Style</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setEditSheet('brand')} style={{ alignItems: 'center', gap: 3, flex: 1 }}>
+                    <MaterialIcons name="storefront" size={20} color="#334155" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Brand</Text>
+                  </Pressable>
                 </View>
 
                 {/* Summary Row 1: Caption */}
@@ -2922,7 +2869,7 @@ export default function MarketingScreen() {
                   </View>
 
                   <View style={{ backgroundColor: '#090D16', paddingVertical: 4 }}>
-                    <AutoBrandedPosterCard
+                    <AutoBrandedPosterCard document={design}
                       photoUri={customPosterUri || bgPhotoUrl}
                       headline={headline || effectiveHeadline}
                       subtitle={subtitle}
@@ -3097,32 +3044,481 @@ export default function MarketingScreen() {
             </View>
           </Modal>
 
-          {/* Modal: Edit Canvas Text */}
-          <Modal visible={isEditingText} animationType="slide" transparent>
+          {/* Modal 1: Edit Poster Text */}
+          <Modal
+            visible={isEditingText || editSheet === 'text'}
+            animationType="slide"
+            transparent
+            onRequestClose={() => {
+              setIsEditingText(false);
+              setEditSheet('none');
+            }}
+          >
             <View style={styles.modalBackdrop}>
               <View style={styles.modalCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Edit Design Text</Text>
-                  <Pressable onPress={() => setIsEditingText(false)}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>✏️ Edit Poster Copy</Text>
+                  <Pressable
+                    onPress={() => {
+                      setIsEditingText(false);
+                      setEditSheet('none');
+                    }}
+                    hitSlop={8}
+                  >
                     <MaterialIcons name="close" size={22} color="#64748B" />
                   </Pressable>
                 </View>
 
-                <Text style={styles.modalInputLabel}>Headline</Text>
-                <TextInput value={headline} onChangeText={setHeadline} style={styles.configInput} />
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginBottom: 4 }}>
+                    <Text style={styles.modalInputLabel}>Main Headline</Text>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Pressable
+                        onPress={() => handleAiRewriteHeadline('punchier')}
+                        style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' }}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#334155' }}>⚡ Punchier</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleAiRewriteHeadline('benefits')}
+                        style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' }}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#334155' }}>💡 Benefit</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleAiRewriteHeadline('urgent')}
+                        style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' }}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#334155' }}>🔥 Urgent</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                  <TextInput
+                    value={headline || effectiveHeadline}
+                    onChangeText={handleUpdateHeadline}
+                    placeholder="Enter poster headline..."
+                    style={styles.configInput}
+                  />
 
-                <Text style={styles.modalInputLabel}>Discount / Offer Badge</Text>
-                <TextInput value={discountBadge} onChangeText={setDiscountBadge} style={styles.configInput} />
+                  <Text style={styles.modalInputLabel}>Offer Badge / Ribbon</Text>
+                  <TextInput
+                    value={discountBadge}
+                    onChangeText={handleUpdateDiscountBadge}
+                    placeholder="e.g. SPECIAL OFFER, 30% OFF"
+                    style={styles.configInput}
+                  />
 
-                <Text style={styles.modalInputLabel}>Subtitle</Text>
-                <TextInput value={subtitle} onChangeText={setSubtitle} style={styles.configInput} />
+                  <Text style={styles.modalInputLabel}>Subtitle / Description</Text>
+                  <TextInput
+                    value={subtitle}
+                    onChangeText={handleUpdateSubtitle}
+                    placeholder="Supporting offer detail..."
+                    style={styles.configInput}
+                  />
 
-                <Text style={styles.modalInputLabel}>Button Text</Text>
-                <TextInput value={ctaText} onChangeText={setCtaText} style={styles.configInput} />
+                  <Text style={styles.modalInputLabel}>Button / Call to Action</Text>
+                  <TextInput
+                    value={ctaText}
+                    onChangeText={handleUpdateCtaText}
+                    placeholder="e.g. Book Now, Claim Deal"
+                    style={styles.configInput}
+                  />
 
-                <Pressable onPress={() => setIsEditingText(false)} style={styles.modalDoneBtn}>
-                  <Text style={styles.modalDoneBtnText}>Apply to Design</Text>
-                </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setIsEditingText(false);
+                      setEditSheet('none');
+                    }}
+                    style={styles.modalDoneBtn}
+                  >
+                    <Text style={styles.modalDoneBtnText}>Apply & Close</Text>
+                  </Pressable>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Modal 2: Photo & AI Background */}
+          <Modal
+            visible={editSheet === 'photo'}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setEditSheet('none')}
+          >
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>🖼️ Photo & AI Background</Text>
+                  <Pressable onPress={() => setEditSheet('none')} hitSlop={8}>
+                    <MaterialIcons name="close" size={22} color="#64748B" />
+                  </Pressable>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+                  {/* Photo upload options */}
+                  <Text style={styles.modalInputLabel}>Upload or Replace Imagery</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 4, marginBottom: 14 }}>
+                    <Pressable
+                      onPress={async () => {
+                        await handlePickCustomPoster();
+                      }}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        paddingVertical: 10,
+                        backgroundColor: '#F8FAFC',
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: '#CBD5E1',
+                      }}
+                    >
+                      <MaterialIcons name="photo-library" size={18} color="#009F50" />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>Pick from Gallery</Text>
+                    </Pressable>
+
+                    {customPosterUri && (
+                      <Pressable
+                        onPress={() => handleApplyPhoto(null)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 10,
+                          backgroundColor: '#FEF2F2',
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: '#FCA5A5',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#B91C1C' }}>↺ Reset</Text>
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {/* AI Generation section */}
+                  <View style={{ backgroundColor: '#F1F5F9', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <MaterialIcons name="auto-awesome" size={16} color="#7C3AED" />
+                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#0F172A' }}>AI Background Generator</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 16, marginBottom: 10 }}>
+                      Synthesizes a brand-new high-resolution background tailored to your headline and festive occasion.
+                    </Text>
+
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>
+                      AI Model Provider
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+                      {(['gemini', 'openrouter', 'cloudflare'] as const).map((prov) => (
+                        <Pressable
+                          key={prov}
+                          onPress={() => setImageProvider(prov)}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            backgroundColor: imageProvider === prov ? '#009F50' : '#FFFFFF',
+                            borderWidth: 1,
+                            borderColor: imageProvider === prov ? '#009F50' : '#CBD5E1',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: '700',
+                              color: imageProvider === prov ? '#FFFFFF' : '#475569',
+                              textTransform: 'capitalize',
+                            }}
+                          >
+                            {prov === 'openrouter' ? 'Flux' : prov}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    <Pressable
+                      onPress={async () => {
+                        await handleRegenerateImage();
+                      }}
+                      disabled={isGeneratingImage}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        backgroundColor: '#7C3AED',
+                        borderRadius: 10,
+                        paddingVertical: 10,
+                        opacity: isGeneratingImage ? 0.7 : 1,
+                      }}
+                    >
+                      {isGeneratingImage ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <MaterialIcons name="auto-fix-high" size={16} color="#FFFFFF" />
+                      )}
+                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' }}>
+                        {isGeneratingImage ? 'Synthesizing Image...' : 'Generate New AI Image'}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <Pressable onPress={() => setEditSheet('none')} style={styles.modalDoneBtn}>
+                    <Text style={styles.modalDoneBtnText}>Done</Text>
+                  </Pressable>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Modal 3: Style, Layout & Format */}
+          <Modal
+            visible={editSheet === 'style'}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setEditSheet('none')}
+          >
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>🎨 Style, Layout & Format</Text>
+                  <Pressable onPress={() => setEditSheet('none')} hitSlop={8}>
+                    <MaterialIcons name="close" size={22} color="#64748B" />
+                  </Pressable>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+                  {/* Canvas Ratio Selector */}
+                  <Text style={styles.modalInputLabel}>Canvas Aspect Ratio</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 4, marginBottom: 14 }}>
+                    {(
+                      [
+                        { id: '1:1', label: '1:1 Square', sub: 'Instagram Feed' },
+                        { id: '4:5', label: '4:5 Portrait', sub: 'Social Posts' },
+                        { id: '9:16', label: '9:16 Story', sub: 'Stories & Reels' },
+                      ] as const
+                    ).map((r) => {
+                      const isActive = aspectRatio === r.id;
+                      return (
+                        <Pressable
+                          key={r.id}
+                          onPress={() => handleApplyAspect(r.id)}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 8,
+                            paddingHorizontal: 4,
+                            borderRadius: 10,
+                            backgroundColor: isActive ? '#009F50' : '#F8FAFC',
+                            borderWidth: 1.5,
+                            borderColor: isActive ? '#009F50' : '#E2E8F0',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Text style={{ fontSize: 11.5, fontWeight: '800', color: isActive ? '#FFFFFF' : '#0F172A' }}>
+                            {r.label}
+                          </Text>
+                          <Text style={{ fontSize: 9.5, fontWeight: '600', color: isActive ? '#E2FCEE' : '#64748B', marginTop: 2 }}>
+                            {r.sub}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {/* Flyer Layout Structures */}
+                  <Text style={styles.modalInputLabel}>Flyer Layout Structure</Text>
+                  <View style={{ gap: 6, marginTop: 4, marginBottom: 14 }}>
+                    {POSTER_TEMPLATES.map((tmpl) => {
+                      const isActive = posterLayout === tmpl.id;
+                      return (
+                        <Pressable
+                          key={tmpl.id}
+                          onPress={() => handleApplyLayout(tmpl.id as PosterTemplateLayout)}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            borderRadius: 10,
+                            backgroundColor: isActive ? '#F0FDF4' : '#F8FAFC',
+                            borderWidth: 1.5,
+                            borderColor: isActive ? '#009F50' : '#E2E8F0',
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                            <MaterialIcons name={tmpl.icon as any} size={20} color={isActive ? '#009F50' : '#64748B'} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 13, fontWeight: '800', color: isActive ? '#009F50' : '#0F172A' }}>
+                                {tmpl.name}
+                              </Text>
+                              <Text numberOfLines={1} style={{ fontSize: 10.5, color: '#64748B' }}>
+                                {tmpl.description}
+                              </Text>
+                            </View>
+                          </View>
+                          {isActive && <MaterialIcons name="check-circle" size={18} color="#009F50" />}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {/* Commercial Theme Colors */}
+                  <Text style={styles.modalInputLabel}>Brand Color Scheme</Text>
+                  <View style={{ gap: 6, marginTop: 4, marginBottom: 14 }}>
+                    {COMMERCIAL_THEME_KEYS.map((tKey) => {
+                      const cfg = COMMERCIAL_THEMES[tKey];
+                      const isActive = colorTheme === tKey;
+                      return (
+                        <Pressable
+                          key={tKey}
+                          onPress={() => handleApplyTheme(tKey)}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: 10,
+                            backgroundColor: isActive ? '#F0FDF4' : '#F8FAFC',
+                            borderWidth: 1.5,
+                            borderColor: isActive ? '#009F50' : '#E2E8F0',
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View
+                              style={{
+                                width: 22,
+                                height: 22,
+                                borderRadius: 11,
+                                backgroundColor: cfg.ctaBg,
+                                borderWidth: 2,
+                                borderColor: cfg.bg,
+                              }}
+                            />
+                            <Text style={{ fontSize: 12.5, fontWeight: '700', color: isActive ? '#009F50' : '#0F172A' }}>
+                              {cfg.name}
+                            </Text>
+                          </View>
+                          {isActive && <MaterialIcons name="check" size={18} color="#009F50" />}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  <Pressable onPress={() => setEditSheet('none')} style={styles.modalDoneBtn}>
+                    <Text style={styles.modalDoneBtnText}>Done</Text>
+                  </Pressable>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Modal 4: Brand & Business Info */}
+          <Modal
+            visible={editSheet === 'brand'}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setEditSheet('none')}
+          >
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>🏢 Brand & Business Identity</Text>
+                  <Pressable onPress={() => setEditSheet('none')} hitSlop={8}>
+                    <MaterialIcons name="close" size={22} color="#64748B" />
+                  </Pressable>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+                  {/* Logo Picker */}
+                  <Text style={styles.modalInputLabel}>Business Logo</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4, marginBottom: 14 }}>
+                    <View
+                      style={{
+                        width: 52,
+                        height: 52,
+                        borderRadius: 26,
+                        backgroundColor: '#F1F5F9',
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {effectiveBusinessLogo ? (
+                        <Image source={{ uri: effectiveBusinessLogo }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                      ) : (
+                        <MaterialIcons name="business" size={24} color="#94A3B8" />
+                      )}
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8, flex: 1 }}>
+                      <Pressable
+                        onPress={handlePickLogo}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 8,
+                          borderRadius: 8,
+                          backgroundColor: '#009F50',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>
+                          {effectiveBusinessLogo ? 'Change Logo' : 'Upload Logo'}
+                        </Text>
+                      </Pressable>
+                      {effectiveBusinessLogo && (
+                        <Pressable
+                          onPress={handleRemoveLogo}
+                          style={{
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                            borderRadius: 8,
+                            backgroundColor: '#FEF2F2',
+                            borderWidth: 1,
+                            borderColor: '#FCA5A5',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#B91C1C' }}>Remove</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  </View>
+
+                  <Text style={styles.modalInputLabel}>Business / Brand Name</Text>
+                  <TextInput
+                    value={brandName || effectiveBusinessName}
+                    onChangeText={handleApplyBrandName}
+                    placeholder="Enter business name..."
+                    style={styles.configInput}
+                  />
+
+                  <Text style={styles.modalInputLabel}>Tagline or Category</Text>
+                  <TextInput
+                    value={brandTagline || effectiveBusinessTagline}
+                    onChangeText={handleApplyBrandTagline}
+                    placeholder="e.g. Best in City, Certified Experts"
+                    style={styles.configInput}
+                  />
+
+                  <Text style={styles.modalInputLabel}>Website / Profile Link</Text>
+                  <TextInput
+                    value={brandWebsite || effectiveBusinessWebsite}
+                    onChangeText={handleApplyBrandWebsite}
+                    placeholder="e.g. yourbusiness.com"
+                    style={styles.configInput}
+                  />
+
+                  <Pressable onPress={() => setEditSheet('none')} style={styles.modalDoneBtn}>
+                    <Text style={styles.modalDoneBtnText}>Apply & Close</Text>
+                  </Pressable>
+                </ScrollView>
               </View>
             </View>
           </Modal>

@@ -144,3 +144,30 @@ describe('poster template registry', () => {
     expect(getTemplateById('does-not-exist')).toBeUndefined();
   });
 });
+
+
+describe('Studio poster collection', () => {
+ it('adds 60 authored posters with unique composition geometry and editable text', () => {
+  const templates = POSTER_TEMPLATES.filter(t => t.id.startsWith('studio-'));
+  expect(templates).toHaveLength(60);
+  expect(templates.filter(t => t.collection === 'creative')).toHaveLength(30);
+  expect(templates.filter(t => t.collection === 'standard')).toHaveLength(30);
+  const geometry = templates.map(t => JSON.stringify(buildTemplateDesignDoc(t, business).layers.map(l=>[l.id,l.x,l.y,l.width,l.height])));
+  expect(new Set(geometry).size).toBe(60);
+  for (const t of templates) {
+   const doc = buildTemplateDesignDoc(t, business);
+   expect(doc.layers.find(l=>l.id==='headline')?.type).toBe('text');
+   expect(doc.layers.find(l=>l.id==='bg_photo')?.type).toBe('image');
+   expect(t.headline+t.subtitle+t.badge).not.toMatch(/guarantee|\d+%|#1|zero wait/i);
+  }
+ });
+ it('fits long business names without losing the stored content', () => {
+  for(const t of POSTER_TEMPLATES){
+   const name='The Northside Family Business and Community Services Collective';
+   const doc=buildTemplateDesignDoc(t,{...business,businessName:name});
+   const brand=doc.layers.find(l=>l.id==='brand')!;
+   expect(brand.text).toBe(name);
+   expect(brand.fontSize).toBeLessThanOrEqual(28);
+  }
+ });
+});

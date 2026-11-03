@@ -1,5 +1,7 @@
+import { composeStudioPoster } from './poster-composition';
 /** Versioned, portable source document. Coordinates are in canvas pixels. */
 export type DesignLayer = {
+  locked?: boolean; hidden?: boolean; groupId?: string;
   id: string; type: 'text' | 'image' | 'shape'; x: number; y: number;
   width: number; height: number; text?: string; src?: string; assetId?: string; rotation?: number; cropX?: number; cropY?: number;
   color: string; background: string; fontSize: number; opacity: number;
@@ -15,6 +17,8 @@ export type DesignLayer = {
   padding?: string;
   alignItems?: 'flex-start' | 'center' | 'flex-end';
   justifyContent?: 'flex-start' | 'center' | 'flex-end' | 'space-between';
+  lineHeight?: number;
+  textAlign?: 'left' | 'center' | 'right';
   fontWeight?: number | string;
   letterSpacing?: number | string;
 };
@@ -40,6 +44,11 @@ export function validateDesign(value: unknown): MarketingDesign {
     if(l.justifyContent !== undefined && !['flex-start', 'center', 'flex-end', 'space-between'].includes(l.justifyContent)) throw new Error('Invalid justifyContent');
     if(l.fontWeight !== undefined && typeof l.fontWeight !== 'number' && typeof l.fontWeight !== 'string') throw new Error('Invalid fontWeight');
     if(l.letterSpacing !== undefined && typeof l.letterSpacing !== 'number' && typeof l.letterSpacing !== 'string') throw new Error('Invalid letterSpacing');
+    if(l.lineHeight !== undefined && (!Number.isFinite(l.lineHeight)||l.lineHeight<0.8||l.lineHeight>3))throw new Error('Invalid line spacing');
+    if(l.textAlign !== undefined && !['left','center','right'].includes(l.textAlign)) throw new Error('Invalid text alignment');
+    if(l.locked !== undefined && typeof l.locked !== 'boolean') throw new Error('Invalid lock state');
+    if(l.groupId !== undefined && (typeof l.groupId!=='string'||!l.groupId||l.groupId.length>100))throw new Error('Invalid layer group');
+    if(l.hidden !== undefined && typeof l.hidden !== 'boolean') throw new Error('Invalid visibility');
     ids.add(l.id);
   }
   return JSON.parse(JSON.stringify(d));
@@ -69,6 +78,7 @@ export type CommercialTheme =
   | 'dark';
 
 export type PosterTemplateLayout =
+  | `studio_${number}`
   | 'bold_offer'
   | 'split_card'
   | 'tech_modern'
@@ -273,6 +283,7 @@ export function createCommercialPosterDesign(input: {
   };
   const [width, height] = sizes[input.ratio || '4:5'] || sizes['4:5'];
 
+  if (input.layout?.startsWith('studio_')) return composeStudioPoster(input);
   const layout = input.layout || 'bold_offer';
   const themeColors = (COMMERCIAL_THEMES[input.theme as CommercialTheme] || COMMERCIAL_THEMES.emerald);
 

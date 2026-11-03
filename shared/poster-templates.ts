@@ -1,3 +1,4 @@
+import { STUDIO_POSTERS } from './poster-studio-catalog';
 /**
  * BGOS Poster Template Registry — Flyer-Maker-style professional template gallery.
  *
@@ -93,6 +94,7 @@ export type PosterAspect = '1:1' | '4:5' | '9:16' | '16:9';
 export interface PosterTemplate {
   id: string;
   name: string;
+  collection?: 'creative' | 'standard';
   category: PosterCategoryId;
   layout: PosterTemplateLayout;
   theme: CommercialTheme;
@@ -116,7 +118,7 @@ const U = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=cro
 const NO_TEXT =
   'ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO WATERMARKS, pure visual photography only.';
 
-export const POSTER_TEMPLATES: PosterTemplate[] = [
+const ORIGINAL_POSTER_TEMPLATES: PosterTemplate[] = [
   // ── Sale & Offers ──────────────────────────────────────────────────────────
   {
     id: 'mega-sale-bold',
@@ -1078,6 +1080,32 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     bgPrompt: `Digital tablet resting on clean boardroom table displaying green upward-trending performance graphs and business metrics, ${NO_TEXT}`,
     industries: ['agency', 'software', 'marketing', 'consulting', 'b2b'],
   },
+];
+
+// Preserve legacy IDs. Saved design documents remain untouched; new selections
+// use the revised composition system and clearly editable campaign copy.
+const neutralCopy: Record<PosterCategoryId, [string,string]> = {
+ sale_offer:['Explore something special.','Ask us about current offers and selected products.'],
+ festival:['Make the occasion your own.','Explore ideas for your celebration with our team.'],
+ new_arrival:['A fresh perspective.','Take a closer look at what’s new.'],
+ service_spotlight:['Details that make a difference.','Talk to our team about your needs and available services.'],
+ appointment:['Make time for what matters.','Contact us to discuss available appointments.'],
+ grand_opening:['You’re invited.','Contact us for the date, location and event details.'],
+ hiring:['Bring your next chapter to life.','Ask about current roles, requirements and how to apply.'],
+ quote:['A moment of inspiration.','A fresh thought for the day ahead.'],
+ testimonial:['Your experience matters.','Share genuine customer feedback with permission.'],
+};
+const unsupported = /\d+%|guarantee|zero |#1|5.star|verified|certified|24.?7|free |first \d|lifetime|lowest|OEM|hallmark/i;
+export const POSTER_TEMPLATES: PosterTemplate[] = [
+ ...STUDIO_POSTERS,
+ ...ORIGINAL_POSTER_TEMPLATES.map((t,index):PosterTemplate=>({
+  ...t, layout:`studio_${index%60}`, collection:index%2?'creative':'standard',
+  headline:unsupported.test(t.headline)?neutralCopy[t.category][0]:t.headline,
+  subtitle:neutralCopy[t.category][1],
+  badge:unsupported.test(t.badge)?POSTER_CATEGORIES.find(c=>c.id===t.category)!.name.toUpperCase():t.badge,
+  photo:t.photo.replace('w=1080&q=80','w=2160&q=90'),
+  bgPrompt:`${t.bgPrompt} Compose with a clear focal subject, natural textures and negative space for separately editable text.`,
+ })),
 ];
 
 // ─── Composition helpers ──────────────────────────────────────────────────────

@@ -2,18 +2,65 @@ import { leadUsage } from '@/lib/bgos-usage';
 import { NextRequest, NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
 import { getAuthUser } from '@/lib/auth';
-import { resolveProductAccess } from '@/lib/product-access';
+import { resolveProductAccess, activateProductWorkspace } from '@/lib/product-access';
 import { bgosStripe, bgosPrice, validateBgosPrice } from '@/lib/bgos-billing';
 import { BGOS_PLANS, isBgosPlan } from '../../../../../shared/bgos-plans';
 import { db } from '@/lib/db';
 import { isCreemConfigured, createCreemCheckoutSession } from '@/lib/creem';
 
+async function getOrProvisionBgosAccess(user: { id: string; tenantId: string; workspaceId?: string | null; role?: string }) {
+  try {
+    return await resolveProductAccess(user.id, 'bgos', user.workspaceId || undefined);
+  } catch (err: any) {
+    const tenant = await db.tenant.findUnique({ where: { id: user.tenantId } });
+    if (!tenant) throw err;
+
+    // Try auto-activating the workspace for this tenant
+    try {
+      const workspaceId = await activateProductWorkspace(user.id, 'bgos', tenant.name || 'BGOS Workspace');
+      return await resolveProductAccess(user.id, 'bgos', workspaceId);
+    } catch {
+      // Fallback: If RPC/activation is not present in DB, build tenant-backed effective access object
+      const tenantSub = await db.subscription.findFirst({
+        where: { tenantId: user.tenantId },
+        orderBy: { createdAt: 'desc' },
+      });
+      return {
+        workspace: {
+          workspaceId: user.workspaceId || `ws_${user.tenantId}`,
+          tenantId: user.tenantId,
+          product: 'bgos' as const,
+          status: 'active' as const,
+          onboardingCompleted: true,
+        },
+        membership: {
+          userId: user.id,
+          workspaceId: user.workspaceId || `ws_${user.tenantId}`,
+          role: user.role === 'customer' ? 'member' : 'owner',
+          status: 'active' as const,
+        },
+        subscription: {
+          plan: tenantSub?.plan || tenant.plan || 'free',
+          status: tenantSub?.status || tenant.planStatus || 'trial',
+          trialEndsAt: tenantSub?.trialEndsAt || tenant.trialEndsAt,
+          currentPeriodEnd: tenantSub?.endDate || tenant.planEndsAt,
+          billingSource: 'legacy' as const,
+          provider: 'razorpay',
+          providerSubscriptionId: null,
+        },
+        tenant,
+        allowed: true,
+      };
+    }
+  }
+}
+
 export async function GET() {
   const user = await getAuthUser();
   if (!user?.tenantId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   try {
-    const access = await resolveProductAccess(user.id, 'bgos', user.workspaceId || undefined);
-    const usedLeadCredits = await leadUsage(access.workspace.workspaceId);
+    const access = await getOrProvisionBgosAccess(user);
+    const usedLeadCredits = await leadUsage(access.workspace.workspaceId).catch(() => 0);
     const contacts = await db.contact.count({ where: { tenantId: user.tenantId } });
     const forms = await db.form.count({ where: { tenantId: user.tenantId, status: 'active' } });
 
@@ -47,7 +94,8 @@ export async function GET() {
       },
       portalEnabled: access.subscription.provider === 'stripe' && !!access.subscription.providerSubscriptionId,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
-  } catch {
+  } catch (err: any) {
+    console.error('[/api/bgos/billing GET] Error:', err);
     return NextResponse.json({ error: 'Billing requires an active BGOS workspace. Complete workspace setup or contact your administrator.' }, { status: 409 });
   }
 }
@@ -56,7 +104,7 @@ export async function POST(request: NextRequest) {
   const user = await getAuthUser();
   if (!user?.tenantId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   try {
-    const access = await resolveProductAccess(user.id, 'bgos', user.workspaceId || undefined);
+    const access = await getOrProvisionBgosAccess(user);
     if (!['owner','admin'].includes(access.membership.role)) return NextResponse.json({ error: 'Workspace owner access required' }, { status: 403 });
     const body = await request.json();
     const base = process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com';

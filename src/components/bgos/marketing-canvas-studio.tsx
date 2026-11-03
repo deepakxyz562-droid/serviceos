@@ -921,10 +921,13 @@ export function MarketingCanvasStudio({
 
   // Save Draft
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [draftSaveError,setDraftSaveError]=useState('');
+  const draftSaving=useRef(false);
+  const draftRequest=useRef<{body:string;key:string}|null>(null);
   const handleSaveDraft = async (silent=false) => {
-    if(isSavingDraft || isPublishing)return;
+    if(draftSaving.current || isPublishing)return;
+    draftSaving.current=true;setDraftSaveError('');
     const snapshot=JSON.stringify({design,caption});
-    savedDesignSnapshot.current=snapshot;
     setIsSavingDraft(true);
     try {
       const targets = getResolvedTargets();
@@ -932,10 +935,7 @@ export function MarketingCanvasStudio({
       const resolvedPosterUrl = toAbsoluteUrl(posterUrl || photoUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1');
       const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [toAbsoluteUrl(photoUrl)] : [];
 
-      const res = await authFetch(editingDraftId ? `/api/social/posts/${editingDraftId}` : '/api/social/posts', {
-        method: editingDraftId ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const requestBody=JSON.stringify({
           status: 'draft',
           expectedUpdatedAt: draftRevision,
           content: caption,
@@ -953,21 +953,30 @@ export function MarketingCanvasStudio({
             couponCode: badgeText.replace(/[^A-Za-z0-9]/g, ''),
             redeemUrl: linkUrl,
           },
-        }),
+        });
+      if(draftRequest.current?.body!==requestBody)draftRequest.current={body:requestBody,key:crypto.randomUUID()};
+      const res = await authFetch(editingDraftId ? `/api/social/posts/${editingDraftId}` : '/api/social/posts', {
+        method: editingDraftId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key':draftRequest.current.key },
+        body:requestBody,
       });
       if (res.ok) {
         const saved=await res.json();
+        if(!saved.data?.id||!saved.data.updatedAt)throw new Error('The server did not confirm the saved draft. Retry saving.');
+        draftRequest.current=null;
         if(saved.data?.id)setEditingDraftId(saved.data.id);
         if(saved.data?.updatedAt)setDraftRevision(saved.data.updatedAt);
         savedDesignSnapshot.current=snapshot;
         if(!silent)toast.success('Draft saved successfully!');
       } else {
-        toast.error('Draft could not be saved. Please retry.');
+        const result=await res.json().catch(()=>({}));
+        throw new Error(result.error||(res.status===409?'This draft changed elsewhere. Reopen the latest saved design before saving.':'Draft could not be saved. Please retry.'));
       }
-    } catch {
-      toast.error('Draft could not be saved. Check your connection and retry.');
+    } catch(error) {
+      const message=error instanceof Error?error.message:'Draft could not be saved. Check your connection and retry.';
+      setDraftSaveError(message);if(!silent)toast.error(message);
     } finally {
-      setIsSavingDraft(false);
+      draftSaving.current=false;setIsSavingDraft(false);
     }
   };
 
@@ -1033,10 +1042,10 @@ export function MarketingCanvasStudio({
 
   const currentDesignSnapshot=JSON.stringify({design,caption});
   useEffect(()=>{
-    if(!editingDraftId||isSavingDraft||isPublishing||savedDesignSnapshot.current===currentDesignSnapshot)return;
+    if(!editingDraftId||isSavingDraft||isPublishing||draftSaveError||savedDesignSnapshot.current===currentDesignSnapshot)return;
     const timer=setTimeout(()=>{void handleSaveDraft(true);},1500);
     return ()=>clearTimeout(timer);
-  },[currentDesignSnapshot,editingDraftId,isSavingDraft,isPublishing]);
+  },[currentDesignSnapshot,editingDraftId,isSavingDraft,isPublishing,draftSaveError]);
 
   // ─── Gallery-first entry: Flyer-Maker-style template picker ────────────────
   if (entryView === 'gallery') {
@@ -1061,11 +1070,12 @@ export function MarketingCanvasStudio({
   return (
     <div className="w-full space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" className="rounded border px-3 py-2" onClick={()=>loadDesignDrafts()}>Open saved design</button>
+        <button type="button" className="rounded border px-3 py-2" disabled={isSavingDraft||isPublishing} onClick={()=>loadDesignDrafts()}>Open saved design</button>
         {moreDrafts&&<button type="button" onClick={()=>loadDesignDrafts(draftPage+1)}>Load more drafts</button>}
-        {designDrafts.length>0&&<select aria-label="Saved designs" className="rounded-xl border border-border/80 bg-card text-xs p-2" value={editingDraftId||''} onChange={e=>{
+        {designDrafts.length>0&&<select disabled={isSavingDraft||isPublishing} aria-label="Saved designs" className="rounded-xl border border-border/80 bg-card text-xs p-2" value={editingDraftId||''} onChange={e=>{
           const draft=designDrafts.find(d=>d.id===e.target.value);
           if(!draft)return;
+          if(savedDesignSnapshot.current!==currentDesignSnapshot&&!window.confirm('Open this saved design and replace unsaved changes?'))return;
           try{
             if (Array.isArray(draft.mediaUrls) && draft.mediaUrls.length > 0 && typeof draft.mediaUrls[0] === 'string') {
               setPosterUrl(draft.mediaUrls[0]);
@@ -1076,14 +1086,14 @@ export function MarketingCanvasStudio({
                 setCustomDesign(validateDesign(JSON.parse(draft.designJson)));
                 savedDesignSnapshot.current=JSON.stringify({design:JSON.parse(draft.designJson),caption:draft.content});
               } catch {
-                // Ignore if pure poster
+                throw new Error('Invalid saved design');
               }
             } else {
               savedDesignSnapshot.current=JSON.stringify({design:null,caption:draft.content});
             }
             setCaption(draft.content || '');
             setEditingDraftId(draft.id);
-            setDraftRevision(draft.updatedAt);
+            setDraftRevision(draft.updatedAt);setDraftSaveError('');draftRequest.current=null;
             toast.success('Design draft loaded!');
           }catch{
             toast.error('This design could not be opened');
@@ -1092,6 +1102,7 @@ export function MarketingCanvasStudio({
           <option value="">Choose a draft</option>{designDrafts.map(d=><option key={d.id} value={d.id}>{d.content ? d.content.slice(0,70) : 'Saved draft'}</option>)}
         </select>}
       </div>
+      {draftSaveError&&<div role="alert" className="rounded-lg border border-red-300 p-3 text-sm"><p>{draftSaveError}</p><button type="button" disabled={isSavingDraft} onClick={()=>void handleSaveDraft()}>Retry save</button></div>}
       {/* ─── 2-Column Canvas Studio Layout ──────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* ─── LEFT COLUMN: Creative Copilot (5 cols) ───────────────────────── */}
@@ -1603,7 +1614,7 @@ export function MarketingCanvasStudio({
                       ? 'bg-primary text-primary-foreground border-primary shadow-xs'
                       : 'bg-card text-foreground border-border hover:bg-muted/50'
                   }`}
-                  title={tmpl.desc}
+                  title={tmpl.description}
                 >
                   <span>{tmpl.name}</span>
                   <span

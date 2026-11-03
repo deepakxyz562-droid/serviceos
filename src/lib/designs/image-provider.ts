@@ -125,6 +125,11 @@ export function buildHighQualityImagePrompt(
       : contextArg;
   const isPosterMode = isPoster || rawPrompt.startsWith('[POSTER]');
   const cleanPrompt = cleanMarketingTopic(rawPrompt);
+  // The editor already supplies explicit composition, occasion and style. A generic
+  // business-domain fallback must not replace that art direction when copy AI fails.
+  if (cleanPrompt.includes('Art direction:') && cleanPrompt.includes('Canvas ratio:')) {
+    return `${cleanPrompt} Preserve the specified occasion, visual subject, art style and canvas composition. Clean high-resolution commercial artwork with clear space for editable overlays. No rendered text, logos or watermarks.`;
+  }
 
   const productsList = Array.isArray(context?.products)
     ? context.products
@@ -140,11 +145,19 @@ export function buildHighQualityImagePrompt(
   const category = (context?.category || '').trim();
   const businessName = (context?.businessName || '').trim();
   const offerings = [...productsList, ...servicesList].filter(Boolean).join(', ');
+  const pLower = cleanPrompt.toLowerCase();
+
+  // Festive & Occasion Detection (High priority signal that overrides generic industry archetypes)
+  const isDiwali = hasWord(pLower, ['diwali', 'deepavali', 'diya', 'diyas', 'rangoli', 'festival of lights', 'pataka', 'mithai']);
+  const isEid = hasWord(pLower, ['eid', 'ramadan', 'crescent', 'iftar', 'eid mubarak']);
+  const isChristmas = hasWord(pLower, ['christmas', 'xmas', 'holiday sale', 'santa', 'winter carnival', 'new year', 'year end']);
+  const isRakhi = hasWord(pLower, ['rakhi', 'raksha bandhan', 'sibling']);
+  const isHoli = hasWord(pLower, ['holi', 'gulal', 'colors festival', 'festival of colors']);
+  const isFestive = isDiwali || isEid || isChristmas || isRakhi || isHoli || hasWord(pLower, ['festival', 'festive', 'celebration']);
 
   // Compute dynamic domain scores based on category (weight 10), offerings (weight 4), and prompt (weight 2)
   const catLower = category.toLowerCase();
   const offLower = offerings.toLowerCase();
-  const pLower = cleanPrompt.toLowerCase();
 
   const scores = { tech: 0, food: 0, fashion: 0, jewellery: 0, trades: 0 };
 
@@ -183,7 +196,34 @@ export function buildHighQualityImagePrompt(
   let settingDescriptor =
     'clean modern commercial setting with generous negative copy space for digital typography overlay';
 
-  if (winningArchetype === 'tech') {
+  // Festive art direction takes precedence over generic category archetypes
+  if (isDiwali) {
+    styleDescriptor =
+      'Award-winning commercial festive advertising photography, warm golden ambient glow, Diwali celebration aesthetic';
+    settingDescriptor =
+      'warm cinematic festive atmosphere, glowing traditional clay diya oil lamps, delicate marigold flower garlands, golden bokeh sparkles, elegant brass tableware, generous negative space for typography overlay';
+    domainSubject =
+      'Warm glowing traditional clay diya oil lamps arranged artfully with fresh orange and yellow marigold flower garlands, subtle golden fairy light bokeh, celebratory festive warmth, pristine commercial presentation';
+    if (winningArchetype === 'jewellery') {
+      domainSubject += ', accompanied by luxurious sparkling gold ornament reflections';
+    } else if (winningArchetype === 'food') {
+      domainSubject += ', artfully styled with fresh festive Kaju Katli and sweets on royal brass';
+    }
+  } else if (isEid) {
+    styleDescriptor =
+      'Award-winning royal festive celebration advertising photography, Eid Mubarak aesthetic, emerald and gold elegance';
+    settingDescriptor =
+      'royal emerald and gold ornate lanterns, glowing crescent moon motif, opulent ambient celebration lighting, clean negative copy space';
+    domainSubject =
+      'Ornate golden and brass Moroccan lanterns with soft warm candle glow, delicate date palm and dry fruit arrangement on a silver platter, elegant celebratory Eid atmosphere';
+  } else if (isChristmas) {
+    styleDescriptor =
+      'Award-winning winter holiday commercial advertising photography, Christmas celebration aesthetic';
+    settingDescriptor =
+      'cozy holiday ambient lighting, pine needles, subtle golden baubles, warm fairy lights, soft snow dust texture, generous negative copy space';
+    domainSubject =
+      'Festive winter holiday celebration scene with natural pine cones, frosted evergreen branches, warm golden fairy lights, red ribbon accents, welcoming festive glow';
+  } else if (winningArchetype === 'tech') {
     styleDescriptor =
       'Award-winning commercial tech product advertising photography, sleek mobile software UI, futuristic GPS map visual, clean contemporary device mockup';
     settingDescriptor =
@@ -253,10 +293,10 @@ export async function synthesizeDynamicVisualPrompt(
   try {
     const { callAI } = await import('@/lib/ai-client');
     const systemPrompt = `You are an expert commercial advertising art director and photorealistic visual prompt engineer.
-Given a business profile and a marketing brief, write a 60–80 word photorealistic commercial visual prompt for an image diffusion generator (Flux.1).
+Given a business profile and a marketing brief, write a 60–80 word art-directed commercial visual prompt for an image diffusion generator (Flux.1).
 Rules:
 - Deeply understand the visual domain of the specific business from its actual category, products, services, and brief.
-- Describe authentic, premium commercial photography: realistic physical subjects, professional studio/ambient lighting, authentic setting, shallow depth of field.
+- Preserve the named occasion and requested style (including illustration, collage or festive artwork). Do not replace a festival brief with generic business imagery. When photography is requested, describe authentic, premium commercial photography: realistic physical subjects, professional studio/ambient lighting, authentic setting, shallow depth of field.
 - If it is a digital product, software, or SaaS: describe a sleek floating smartphone or modern device mockup showcasing a clean interface with relevant map pins, route telemetry, or minimal status cards in a minimalist high-tech studio environment.
 - If it is a trade or physical service: describe certified professionals with modern diagnostic gear or tools in an authentic, spotless setting.
 - If it is a product, retail, food, or luxury business: describe an authentic high-end commercial showcase with rich textures and dramatic studio lighting.

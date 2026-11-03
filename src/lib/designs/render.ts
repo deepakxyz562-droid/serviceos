@@ -51,9 +51,9 @@ async function imageData(src: string): Promise<ArrayBuffer | null> {
   const isAllowedDomain =
     allowed.has(url.hostname) ||
     url.hostname.endsWith('.amazonaws.com') ||
-    url.hostname.endsWith('imagedelivery.net') ||
-    url.hostname.endsWith('unsplash.com') ||
-    url.hostname.endsWith('fieseros.com') ||
+    url.hostname.endsWith('.imagedelivery.net') ||
+    url.hostname.endsWith('.unsplash.com') ||
+    url.hostname.endsWith('.fieseros.com') ||
     url.hostname.endsWith('.supabase.co');
 
   if (!isAllowedProto || url.username || url.password || (url.port && !isLocalDev) || !isAllowedDomain) {
@@ -71,11 +71,12 @@ async function imageData(src: string): Promise<ArrayBuffer | null> {
 
   return ab;
 }
-export async function renderDesign(value: unknown, tenantId: string) {
+export async function renderDesign(value: unknown, tenantId: string, options: {format?:'png'|'jpeg';transparent?:boolean} = {}) {
   const design = validateDesign(value);
   if (process.env.NODE_ENV === 'production' && !isS3Configured() && !isSupabaseStorageConfigured()) throw new Error('Persistent asset storage must be configured before publishing designs');
   const children: React.ReactElement[] = [];
   for (const l of design.layers) {
+    if(l.hidden)continue;
     if(l.type==='image'&&l.assetId){
       const asset=await db.imageLibrary.findFirst({where:{id:l.assetId,tenantId,folder:'bgos-design'}});
       if(!asset)throw new Error('Image is unavailable in this workspace');
@@ -94,8 +95,9 @@ export async function renderDesign(value: unknown, tenantId: string) {
       display: 'flex',
       overflow: 'hidden',
       whiteSpace: 'pre-wrap',
-      lineHeight: 1.15,
+      lineHeight: l.lineHeight??1.15,
       fontFamily: 'BgosDesign',
+      textAlign: l.textAlign || 'left',
       transform: `rotate(${l.rotation || 0}deg)`,
       ...(l.borderRadius !== undefined ? { borderRadius: l.borderRadius } : {}),
       ...(l.borderTopLeftRadius !== undefined ? { borderTopLeftRadius: l.borderTopLeftRadius } : {}),
@@ -145,10 +147,13 @@ export async function renderDesign(value: unknown, tenantId: string) {
     );
   }
 
-  const response = new ImageResponse(React.createElement('div', { style:{ width:design.width,height:design.height,display:'flex',position:'relative',backgroundColor:design.background } }, ...children), {width:design.width,height:design.height,fonts:fontDescriptors});
-  const buffer = Buffer.from(await response.arrayBuffer());
+  const response = new ImageResponse(React.createElement('div', { style:{ width:design.width,height:design.height,display:'flex',position:'relative',backgroundColor:options.transparent&&options.format!=='jpeg'?'transparent':design.background } }, ...children), {width:design.width,height:design.height,fonts:fontDescriptors});
+  let buffer:Buffer = Buffer.from(await response.arrayBuffer());
+  const format=options.format || 'png';
+  if(format==='jpeg'){const sharp=(await import('sharp')).default;buffer=await sharp(buffer).flatten({background:design.background==='transparent'?'#ffffff':design.background}).jpeg({quality:95}).toBuffer();}
+  const contentType=format==='jpeg'?'image/jpeg':'image/png';
   const digest = createHash('sha256').update(JSON.stringify(design)+randomUUID()).digest('hex');
-  const uploaded = await uploadFile({bucket:'campaign-assets',companyId:tenantId,folder:'designs',fileName:`${digest}.png`,file:buffer,contentType:'image/png'});
-  await db.imageLibrary.upsert({where:{id:`${tenantId}:render:${digest}`},create:{id:`${tenantId}:render:${digest}`,tenantId,name:digest,folder:'bgos-design-export',url:uploaded.url,mediaType:'image/png',size:buffer.length,width:design.width,height:design.height},update:{folder:'bgos-design-export',createdAt:new Date()}});
-  return { design, imageUrl:uploaded.url };
+  const uploaded = await uploadFile({bucket:'campaign-assets',companyId:tenantId,folder:'designs',fileName:`${digest}.${format}`,file:buffer,contentType});
+  await db.imageLibrary.upsert({where:{id:`${tenantId}:render:${digest}`},create:{id:`${tenantId}:render:${digest}`,tenantId,name:digest,folder:'bgos-design-export',url:uploaded.url,mediaType:contentType,size:buffer.length,width:design.width,height:design.height},update:{folder:'bgos-design-export',createdAt:new Date()}});
+  return { design, imageUrl:uploaded.url, format };
 }

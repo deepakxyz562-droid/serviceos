@@ -53,3 +53,18 @@ it('detects [POSTER] prefix in prompt text automatically',async()=>{
  expect(sentBody.contents[0].parts[0].text).toContain('Plumbing Seasonal Offer');
  expect(sentBody.contents[0].parts[0].text).not.toContain('[POSTER]');
 });
+it('prioritizes festive occasion over business category archetype', async () => {
+ m.fetch.mockResolvedValue(new Response(JSON.stringify({candidates:[{content:{parts:[{inlineData:{mimeType:'image/png',data:Buffer.from('diwali-poster').toString('base64')}}]}}]})));
+ await generateDesignImage(
+   '[POSTER] Diwali Glow Special 20% OFF',
+   'gemini',
+   new AbortController().signal,
+   true,
+   { category: 'Software & IT Solutions', businessName: 'CloudTech Systems' }
+ );
+ const sentBody = JSON.parse(m.fetch.mock.calls[0][1].body);
+ const promptText = sentBody.contents[0].parts[0].text;
+ expect(promptText).toContain('diya');
+ expect(promptText).toContain('marigold');
+ expect(promptText).not.toContain('smartphone mockup');
+});

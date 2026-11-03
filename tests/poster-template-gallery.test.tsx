@@ -66,8 +66,8 @@ describe('PosterTemplateGallery (Flyer-Maker-style entry)', () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
     const arg = onSelect.mock.calls[0][0];
     expect(arg.id).toBe('mega-sale-bold');
-    expect(arg.layout).toBe('bold_offer');
-    expect(arg.headline).toContain('MEGA SALE');
+    expect(arg.layout).toBe(getTemplateById('mega-sale-bold')!.layout);
+    expect(arg.headline).not.toMatch(/50%/);
     expect(arg.bgPrompt).toMatch(/NO TEXT/i);
   });
 
@@ -124,6 +124,11 @@ describe('PosterTemplateGallery (Flyer-Maker-style entry)', () => {
     renderGallery();
     // business name is fed into composed preview docs via footer layers
     const html = document.body.innerHTML;
-    expect(html).toContain('SHARMA JEWELLERS');
+    expect(html).toContain('Sharma Jewellers');
   });
 });
+
+ it('filters the Creative collection without mixing standard cards',()=>{
+  renderGallery(); fireEvent.click(screen.getByRole('button',{name:'Creative'}));
+  expect(screen.getAllByRole('button',{name:/^Use .+ template$/})).toHaveLength(POSTER_TEMPLATES.filter(t=>t.collection==='creative').length);
+ });

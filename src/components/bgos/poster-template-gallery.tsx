@@ -48,6 +48,13 @@ const ASPECT_CSS: Record<PosterAspect, string> = {
   '16:9': '16 / 9',
 };
 
+function PosterPhoto({layer}:{layer:DesignLayer}) {
+  const [failed,setFailed] = useState(false);
+  if(failed)return <div className="flex h-full items-center justify-center bg-muted p-2 text-center text-[10px] text-muted-foreground">Image unavailable — replace photo</div>;
+  const thumbnail = layer.src?.startsWith('https://images.unsplash.com/') ? layer.src.replace(/w=\d+/, 'w=720') : layer.src;
+  return <img src={thumbnail} alt="" draggable={false} loading="lazy" onError={()=>setFailed(true)} style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:`${layer.cropX??50}% ${layer.cropY??50}%`}}/>;
+}
+
 /** Static, scaled rendering of a design document (no edit chrome). */
 function DesignThumb({ doc, className }: { doc: MarketingDesign; className?: string }) {
   return (
@@ -61,6 +68,7 @@ function DesignThumb({ doc, className }: { doc: MarketingDesign; className?: str
       }}
       aria-hidden="true"
     >
+      <style>{`@font-face{font-family:BgosDesign;src:url(/fonts/BgosDesign-Regular.ttf);font-weight:400}@font-face{font-family:BgosDesign;src:url(/fonts/BgosDesign-Bold.ttf);font-weight:700}`}</style>
       {doc.layers.map((l: DesignLayer) => (
         <div
           key={l.id}
@@ -86,32 +94,19 @@ function DesignThumb({ doc, className }: { doc: MarketingDesign; className?: str
             justifyContent:
               (l as DesignLayer & { justifyContent?: string }).justifyContent || 'flex-start',
             borderRadius: (l as DesignLayer & { borderRadius?: number }).borderRadius
-              ? `${(l as DesignLayer & { borderRadius?: number }).borderRadius}px`
+              ? `${((l.borderRadius || 0) / doc.width) * 100}cqw`
               : undefined,
             borderWidth: (l as DesignLayer & { borderWidth?: number }).borderWidth || undefined,
             borderColor: (l as DesignLayer & { borderColor?: string }).borderColor,
             borderStyle:
               (l as DesignLayer & { borderWidth?: number }).borderWidth ? 'solid' : undefined,
             transform: `rotate(${l.rotation ?? 0}deg)`,
-            fontFamily: 'var(--font-bgos-design, system-ui)',
+            fontFamily: 'BgosDesign, system-ui',
+            textAlign: l.textAlign || 'left',
           }}
         >
           {l.type === 'image' && l.src ? (
-            <img
-              src={l.src}
-              alt=""
-              draggable={false}
-              loading="lazy"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = 'none';
-              }}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                objectPosition: `${l.cropX ?? 50}% ${l.cropY ?? 50}%`,
-              }}
-            />
+            <PosterPhoto key={l.src} layer={l} />
           ) : l.type === 'text' ? (
             <span style={{ width: '100%' }}>{l.text}</span>
           ) : null}
@@ -235,14 +230,16 @@ export function PosterTemplateGallery({
         ? forYouTemplates
         : activeCategory === 'all'
         ? orderedTemplates
-        : orderedTemplates.filter((t) => t.category === activeCategory);
+        : activeOccasionIds.has(activeCategory)
+        ? orderedTemplates.filter((t) => t.occasionId === activeCategory)
+        : orderedTemplates.filter((t) => t.category === activeCategory || t.collection === activeCategory);
     if (!search.trim()) return base;
     const q = search.trim().toLowerCase();
     return base.filter(
       (t) =>
         t.name.toLowerCase().includes(q) ||
         t.headline.toLowerCase().includes(q) ||
-        t.category.includes(q)
+        t.category.includes(q) || (t.industries || []).some(industry => industry.includes(q))
     );
   }, [activeCategory, forYouTemplates, orderedTemplates, search]);
 
@@ -274,6 +271,8 @@ export function PosterTemplateGallery({
   const categoryChips: Array<{ id: string; label: string; emoji?: string }> = [
     { id: 'for_you', label: 'For you', emoji: '✨' },
     { id: 'all', label: 'All templates', emoji: '🗂️' },
+    { id: 'creative', label: 'Creative' },
+    { id: 'standard', label: 'Standard' },
     ...POSTER_CATEGORIES.map(
       (c: PosterCategoryMeta) => ({ id: c.id as string, label: c.name, emoji: c.emoji })
     ),
@@ -334,15 +333,22 @@ export function PosterTemplateGallery({
           {activeOccasions.map((o) => {
             const count = orderedTemplates.filter((t) => t.occasionId === o.id).length;
             if (count === 0) return null;
+            const isSelected = activeCategory === o.id;
             return (
-              <Badge
+              <button
                 key={o.id}
-                variant="outline"
-                className="shrink-0 border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs font-semibold py-1.5 px-3"
+                type="button"
+                onClick={() => setActiveCategory(isSelected ? 'all' : o.id)}
+                className={`inline-flex items-center gap-1.5 shrink-0 rounded-full border text-xs font-semibold py-1.5 px-3 transition-all cursor-pointer ${
+                  isSelected
+                    ? 'border-amber-500 bg-amber-500 text-white shadow-xs'
+                    : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20'
+                }`}
               >
-                <span aria-hidden="true" className="mr-1">{o.emoji}</span>
-                {o.name} · {count} designs
-              </Badge>
+                <span aria-hidden="true">{o.emoji}</span>
+                <span>{o.name}</span>
+                <span className="text-[10px] opacity-80">({count})</span>
+              </button>
             );
           })}
         </div>

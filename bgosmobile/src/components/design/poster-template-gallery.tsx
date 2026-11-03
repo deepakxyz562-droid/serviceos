@@ -1,3 +1,4 @@
+import { PosterPreview } from './poster-preview';
 'use client';
 
 /**
@@ -55,108 +56,7 @@ const CATEGORY_ICON: Record<string, string> = {
   testimonial: 'star',
 };
 
-function TemplateThumb({ doc }: { doc: MarketingDesign }) {
-  const scale = 170 / doc.width;
-  return (
-    <View
-      style={{
-        width: '100%',
-        aspectRatio: doc.width / doc.height,
-        backgroundColor: doc.background,
-        overflow: 'hidden',
-        borderTopLeftRadius: 14,
-        borderTopRightRadius: 14,
-      }}
-    >
-      {doc.layers.map((l: DesignLayer) => {
-        const extended = l as DesignLayer & {
-          fontWeight?: number;
-          borderRadius?: number;
-          borderWidth?: number;
-          borderColor?: string;
-          alignItems?: string;
-          justifyContent?: string;
-        };
-        if (l.type === 'image' && l.src) {
-          return (
-            <Image
-              key={l.id}
-              source={{ uri: l.src }}
-              style={{
-                position: 'absolute',
-                left: (l.x / doc.width) * 170,
-                top: (l.y / doc.height) * ((170 * doc.height) / doc.width),
-                width: (l.width / doc.width) * 170,
-                height: (l.height / doc.height) * ((170 * doc.height) / doc.width),
-                opacity: l.opacity ?? 1,
-                resizeMode: 'cover',
-                transform: [{ rotate: `${l.rotation ?? 0}deg` }],
-              }}
-            />
-          );
-        }
-        if (l.type === 'text' && l.text) {
-          return (
-            <View
-              key={l.id}
-              style={{
-                position: 'absolute',
-                left: (l.x / doc.width) * 170,
-                top: (l.y / doc.height) * ((170 * doc.height) / doc.width),
-                width: (l.width / doc.width) * 170,
-                height: (l.height / doc.height) * ((170 * doc.height) / doc.width),
-                backgroundColor: l.background && l.background !== 'transparent' ? l.background : 'transparent',
-                borderRadius: extended.borderRadius ?? 0,
-                borderWidth: extended.borderWidth ?? 0,
-                borderColor: extended.borderColor ?? 'transparent',
-                opacity: l.opacity ?? 1,
-                alignItems: (extended.alignItems as 'center' | 'flex-start' | 'flex-end') || 'flex-start',
-                justifyContent: (extended.justifyContent as 'center' | 'flex-start' | 'flex-end') || 'flex-start',
-                paddingHorizontal: 4,
-                transform: [{ rotate: `${l.rotation ?? 0}deg` }],
-                overflow: 'hidden',
-              }}
-            >
-              <Text
-                style={{
-                  color: l.color,
-                  fontSize: Math.max(5, l.fontSize * scale),
-                  fontWeight: (extended.fontWeight ?? 400) as 400,
-                  lineHeight: Math.max(6, l.fontSize * scale * 1.15),
-                  letterSpacing: 0,
-                  textAlign: 'left',
-                  width: '100%',
-                }}
-                numberOfLines={6}
-              >
-                {l.text}
-              </Text>
-            </View>
-          );
-        }
-        // shape
-        return (
-          <View
-            key={l.id}
-            style={{
-              position: 'absolute',
-              left: (l.x / doc.width) * 170,
-              top: (l.y / doc.height) * ((170 * doc.height) / doc.width),
-              width: (l.width / doc.width) * 170,
-              height: (l.height / doc.height) * ((170 * doc.height) / doc.width),
-              backgroundColor: l.background && l.background !== 'transparent' ? l.background : 'transparent',
-              borderRadius: extended.borderRadius ?? 0,
-              borderWidth: extended.borderWidth ?? 0,
-              borderColor: extended.borderColor ?? 'transparent',
-              opacity: l.opacity ?? 1,
-              transform: [{ rotate: `${l.rotation ?? 0}deg` }],
-            }}
-          />
-        );
-      })}
-    </View>
-  );
-}
+const TemplateThumb = PosterPreview;
 
 export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: PosterTemplateGalleryProps) {
   const [search, setSearch] = useState('');
@@ -182,14 +82,16 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: Pos
         ? forYouTemplates
         : activeCategory === 'all'
           ? orderedTemplates
-          : orderedTemplates.filter((t) => t.category === activeCategory);
+          : activeOccasionIds.has(activeCategory)
+            ? orderedTemplates.filter((t) => t.occasionId === activeCategory)
+            : orderedTemplates.filter((t) => t.category === activeCategory || t.collection === activeCategory);
     if (!search.trim()) return base;
     const q = search.trim().toLowerCase();
     return base.filter(
       (t) =>
         t.name.toLowerCase().includes(q) ||
         t.headline.toLowerCase().includes(q) ||
-        t.category.includes(q)
+        t.category.includes(q) || (t.industries || []).some(industry => industry.includes(q))
     );
   }, [activeCategory, forYouTemplates, orderedTemplates, search]);
 
@@ -220,7 +122,14 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: Pos
 
   const chips: Array<{ id: string; label: string; icon?: string }> = [
     { id: 'for_you', label: 'For you', icon: 'auto-awesome' },
+    ...activeOccasions.map((o) => ({
+      id: o.id,
+      label: `${o.emoji} ${o.name}`,
+      icon: 'celebration',
+    })),
     { id: 'all', label: 'All', icon: 'apps' },
+    { id: 'creative', label: 'Creative' },
+    { id: 'standard', label: 'Standard' },
     ...POSTER_CATEGORIES.map((c: PosterCategoryMeta) => ({
       id: c.id as string,
       label: c.name,
@@ -233,78 +142,37 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: Pos
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Hero actions */}
-      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 14, paddingTop: 12 }}>
+      {/* Search & AI Brief Bar */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, marginBottom: 8, marginTop: 4 }}>
+        <View style={[styles.searchWrap, { flex: 1 }]}>
+          <MaterialIcons name="search" size={16} color="#94A3B8" />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search templates & occasions…"
+            placeholderTextColor="#94A3B8"
+            accessibilityLabel="Search templates"
+            style={styles.searchInput}
+          />
+        </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Surprise me — one-tap AI poster"
-          onPress={surpriseMe}
-          style={({ pressed }) => [
-            styles.heroCard,
-            styles.heroCardPrimary,
-            pressed && { opacity: 0.85 },
-          ]}
-        >
-          <View style={styles.heroIconWrap}>
-            <MaterialIcons name="auto-awesome" size={18} color="#009F50" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.heroTitle}>Surprise me</Text>
-            <Text style={styles.heroSubtitle} numberOfLines={2}>
-              One-tap AI poster
-              {activeOccasions.length > 0 ? ` · ${activeOccasions[0].name}` : ''}
-            </Text>
-          </View>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Describe your own idea"
           onPress={onDescribeIdea}
-          style={({ pressed }) => [styles.heroCard, pressed && { opacity: 0.85 }]}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            paddingVertical: 9,
+            paddingHorizontal: 12,
+            borderRadius: 12,
+            backgroundColor: '#F0FDF4',
+            borderWidth: 1,
+            borderColor: '#BBF7D0',
+          }}
         >
-          <View style={styles.heroIconWrapNeutral}>
-            <MaterialIcons name="edit" size={18} color="#1E293B" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.heroTitle}>Your idea</Text>
-            <Text style={styles.heroSubtitle} numberOfLines={2}>
-              Describe it with AI
-            </Text>
-          </View>
+          <MaterialIcons name="auto-awesome" size={14} color="#009F50" />
+          <Text style={{ color: '#009F50', fontWeight: '800', fontSize: 11.5 }}>AI Brief</Text>
         </Pressable>
-      </View>
-
-      {/* Occasion ribbon */}
-      {activeOccasions.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginTop: 10 }}
-          contentContainerStyle={{ paddingHorizontal: 14, gap: 8 }}
-        >
-          {activeOccasions.map((o) => {
-            const count = orderedTemplates.filter((t) => t.occasionId === o.id).length;
-            if (count === 0) return null;
-            return (
-              <View key={o.id} style={styles.occasionBadge}>
-                <Text style={styles.occasionText}>{`${o.emoji} ${o.name} · ${count}`}</Text>
-              </View>
-            );
-          })}
-        </ScrollView>
-      )}
-
-      {/* Search */}
-      <View style={styles.searchWrap}>
-        <MaterialIcons name="search" size={16} color="#94A3B8" />
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search designs…"
-          placeholderTextColor="#94A3B8"
-          accessibilityLabel="Search templates"
-          style={styles.searchInput}
-        />
       </View>
 
       {/* Category chips */}
