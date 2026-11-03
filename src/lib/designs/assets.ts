@@ -3,32 +3,36 @@ import { db } from '@/lib/db';
 import { uploadFile, deleteFile, isS3Configured, isSupabaseStorageConfigured } from '@/lib/supabase-storage';
 import { validateDesign } from '../../../shared/marketing-design';
 
-async function processImageBuffer(bytes: Buffer): Promise<{ data: Buffer; width: number; height: number }> {
+async function processImageBuffer(bytes: Buffer): Promise<{ data: Buffer; width: number; height: number; format: 'webp' | 'jpeg' | 'png' }> {
   try {
     const sharpModule = await import('sharp');
     const sharp = sharpModule.default || sharpModule;
+    // Instagram & Facebook specs: max width 1080px, max height 1350px (portrait 4:5), 85% WebP
     const normalized = await sharp(bytes, { limitInputPixels: 24_000_000 })
       .rotate()
-      .resize({ width: 2160, height: 2160, fit: 'inside', withoutEnlargement: true })
-      .png()
+      .resize({ width: 1080, height: 1350, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 85, effort: 4 })
       .toBuffer({ resolveWithObject: true });
-    return { data: normalized.data, width: normalized.info.width, height: normalized.info.height };
+    return { data: normalized.data, width: normalized.info.width, height: normalized.info.height, format: 'webp' };
   } catch (err) {
     console.warn('[designs/assets] sharp processing unavailable, using raw buffer:', err instanceof Error ? err.message : err);
-    return { data: bytes, width: 1080, height: 1080 };
+    return { data: bytes, width: 1080, height: 1080, format: 'png' };
   }
 }
 
 export async function saveDesignAsset(bytes:Buffer,tenantId:string,userId:string) {
-  if(bytes.length>8_000_000)throw new Error('Images must be smaller than 8 MB');
+  if(bytes.length>12_000_000)throw new Error('Images must be smaller than 12 MB');
   if(!isS3Configured()&&!isSupabaseStorageConfigured())throw new Error('Persistent image storage is not configured');
   const normalized = await processImageBuffer(bytes);
   const id=randomUUID();
-  const stored=await uploadFile({bucket:'campaign-assets',companyId:tenantId,folder:'design-assets',fileName:`${id}.png`,file:normalized.data,contentType:'image/png'});
+  const fileExt = normalized.format === 'webp' ? 'webp' : 'png';
+  const contentType = normalized.format === 'webp' ? 'image/webp' : 'image/png';
+  const fileName = `${id}.${fileExt}`;
+  const stored=await uploadFile({bucket:'campaign-assets',companyId:tenantId,folder:'design-assets',fileName,file:normalized.data,contentType});
   try {
-    const asset=await db.imageLibrary.create({data:{id,tenantId,uploadedBy:userId,name:'Design image',folder:'bgos-design',url:stored.url,mediaType:'image/png',size:normalized.data.length,width:normalized.width,height:normalized.height}});
+    const asset=await db.imageLibrary.create({data:{id,tenantId,uploadedBy:userId,name:'Design image',folder:'bgos-design',url:stored.url,mediaType:contentType,size:normalized.data.length,width:normalized.width,height:normalized.height}});
     return {assetId:asset.id,url:asset.url};
-  }catch(error){await deleteFile('campaign-assets',`${tenantId}/design-assets/${id}.png`).catch(()=>false);throw error;}
+  }catch(error){await deleteFile('campaign-assets',`${tenantId}/design-assets/${fileName}`).catch(()=>false);throw error;}
 }
 export async function persistDesignAssets(value:unknown,tenantId:string,userId:string){
   const design=validateDesign(value);

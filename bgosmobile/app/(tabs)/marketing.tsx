@@ -54,6 +54,7 @@ import { apiRequest } from '../../src/lib/api';
 import { WEB_URL } from '../../src/lib/constants';
 import { validateSocialPost } from '../../src/lib/social-validation';
 import { futureLocalTime } from '../../src/lib/dates';
+import { loadJson, saveJson } from '../../src/lib/device-storage';
 import { PostsBoard } from '../../src/components/gbp/posts-list';
 import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
 import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
@@ -638,7 +639,9 @@ export default function MarketingScreen() {
   // ── Autopilot State ────────────────────────────────────────────────────────
   const [apConfig, setApConfig] = useState<{
     enabled: boolean;
-    duration: '30_days' | '1_year';
+    duration: '7_days' | '30_days' | '1_year' | 'custom';
+    customDays?: number;
+    contentSource?: 'ai_generated' | 'my_templates' | 'hybrid';
     platforms: string[];
     postingTime: string;
     totalPostsCreated: number;
@@ -650,6 +653,7 @@ export default function MarketingScreen() {
     postingTime: '09:00',
     totalPostsCreated: 0,
     daysRemaining: 30,
+    contentSource: 'ai_generated',
   });
   const [apLoading, setApLoading] = useState(false);
   const [apTriggering, setApTriggering] = useState(false);
@@ -662,6 +666,8 @@ export default function MarketingScreen() {
         setApConfig({
           enabled: res.config.enabled,
           duration: res.config.duration || '30_days',
+          customDays: res.config.customDays,
+          contentSource: res.config.contentSource || 'ai_generated',
           platforms: res.config.platforms || ['googlebusiness', 'instagram', 'facebook'],
           postingTime: res.config.postingTime || '09:00',
           totalPostsCreated: res.config.totalPostsCreated || 0,
@@ -681,9 +687,11 @@ export default function MarketingScreen() {
         body: {
           enabled: updates.enabled !== undefined ? updates.enabled : apConfig.enabled,
           duration: updates.duration || apConfig.duration,
+          customDays: updates.customDays !== undefined ? updates.customDays : apConfig.customDays,
+          contentSource: updates.contentSource || apConfig.contentSource,
           platforms: updates.platforms || apConfig.platforms,
           postingTime: updates.postingTime || apConfig.postingTime,
-          timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
           triggerPostNow: updates.triggerPostNow || false,
         },
       });
@@ -691,6 +699,8 @@ export default function MarketingScreen() {
         setApConfig({
           enabled: res.config.enabled,
           duration: res.config.duration,
+          customDays: res.config.customDays,
+          contentSource: res.config.contentSource || 'ai_generated',
           platforms: res.config.platforms,
           postingTime: res.config.postingTime,
           totalPostsCreated: res.config.totalPostsCreated,
@@ -819,9 +829,44 @@ export default function MarketingScreen() {
   const [offerStartDate, setOfferStartDate] = useState('6 Nov');
   const [offerEndDate, setOfferEndDate] = useState('8 Nov');
   const [bookingLink, setBookingLink] = useState('');
-  const [scheduleMode, setScheduleMode] = useState<'now' | 'schedule'>('now');
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'schedule' | 'multi_day'>('now');
+  const [multiDayCount, setMultiDayCount] = useState<number>(7);
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
+
+  async function handleSaveAsMyTemplate() {
+    try {
+      setBusy(true);
+      const savedTemplates = (await loadJson<PosterTemplate[]>('bgos_custom_templates')) || [];
+      const newTemplate: PosterTemplate = {
+        id: `custom_${Date.now()}`,
+        name: headline || `My Design ${savedTemplates.length + 1}`,
+        collection: 'creative',
+        category: 'sale_offer',
+        layout: 'bold_offer',
+        theme: 'royal_gold',
+        aspect: aspectRatio === '1:1' ? '1:1' : aspectRatio === '9:16' ? '9:16' : '4:5',
+        badge: discountBadge || 'SPECIAL',
+        headline: headline || 'Special Promotion',
+        subtitle: subtitle || 'Exclusive offer for our customers',
+        cta: ctaText || 'Contact Us',
+        photo: bgPhotoUrl || customPosterUri || '',
+        bgPrompt: activeUserPrompt || 'Custom template',
+        industries: [],
+      };
+      const updated = [newTemplate, ...savedTemplates];
+      await saveJson('bgos_custom_templates', updated);
+      setSuccessNotice('Design saved to "⭐ My Templates"!');
+      Alert.alert(
+        'Template Saved!',
+        'This design has been saved to "⭐ My Templates". You can now reuse or schedule it anytime from the template gallery.'
+      );
+    } catch {
+      Alert.alert('Save Failed', 'Could not save template. Please retry.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   // Status & loading
   const [busy, setBusy] = useState(false);
@@ -1672,9 +1717,55 @@ export default function MarketingScreen() {
     setError(null);
     if(!autosave)setAutosaveFailed(false);
 
-    const scheduledAt = status === 'scheduled' ? futureLocalTime(scheduleDate, scheduleTime) : null;
-    if (status === 'scheduled' && !scheduledAt) {
+    const scheduledAt = status === 'scheduled' && scheduleMode !== 'multi_day' ? futureLocalTime(scheduleDate, scheduleTime) : null;
+    if (status === 'scheduled' && scheduleMode !== 'multi_day' && !scheduledAt) {
       setError('Please choose a valid future date and time to schedule.');
+      return;
+    }
+
+    if (status === 'scheduled' && scheduleMode === 'multi_day') {
+      saving.current = true;
+      setBusy(true);
+      try {
+        const daysToSchedule = multiDayCount || 7;
+        const baseDate = new Date();
+        baseDate.setDate(baseDate.getDate() + 1);
+        const resolvedPosterUrl = customPosterUri || bgPhotoUrl;
+        const mediaList = resolvedPosterUrl ? [resolvedPosterUrl] : [];
+        const postCaption = (caption || effectiveCaption).trim();
+
+        for (let i = 0; i < daysToSchedule; i++) {
+          const postDate = new Date(baseDate);
+          postDate.setDate(postDate.getDate() + i);
+          const [hours, mins] = (scheduleTime || '10:00').split(':').map(Number);
+          postDate.setHours(hours || 10, mins || 0, 0, 0);
+
+          await apiRequest('/api/social/posts', {
+            method: 'POST',
+            body: {
+              content: `${postCaption}\n\n(Day ${i + 1} of ${daysToSchedule})`,
+              platforms: selectedPlatforms,
+              mediaUrls: mediaList,
+              isPoster: true,
+              isPreRendered: false,
+              design: design,
+              status: 'scheduled',
+              scheduledAt: postDate.toISOString(),
+            },
+          });
+        }
+        setSuccessNotice(`${daysToSchedule}-day campaign scheduled successfully!`);
+        Alert.alert(
+          'Campaign Scheduled',
+          `Successfully scheduled ${daysToSchedule} daily posts across your selected channels!`
+        );
+        setActiveMode('posts');
+      } catch (err: any) {
+        setError(err?.message || 'Failed to schedule multi-day campaign');
+      } finally {
+        saving.current = false;
+        setBusy(false);
+      }
       return;
     }
 
@@ -1814,7 +1905,7 @@ export default function MarketingScreen() {
             color={activeMode === 'autopilot' ? '#009F50' : '#64748B'}
           />
           <Text style={[styles.modeTabText, activeMode === 'autopilot' && styles.modeTabTextActive]}>
-            Autopilot (30d/1yr)
+            Autopilot
           </Text>
         </Pressable>
 
@@ -1825,12 +1916,12 @@ export default function MarketingScreen() {
           style={[styles.modeTab, activeMode === 'posts' && styles.modeTabActive]}
         >
           <MaterialIcons
-            name="list-alt"
-            size={16}
+            name="calendar-today"
+            size={15}
             color={activeMode === 'posts' ? '#009F50' : '#64748B'}
           />
           <Text style={[styles.modeTabText, activeMode === 'posts' && styles.modeTabTextActive]}>
-            Posts
+            Posts & Calendar
           </Text>
         </Pressable>
       </View>
@@ -1950,38 +2041,116 @@ export default function MarketingScreen() {
           {/* Duration Selector */}
           <Card style={{ marginBottom: 14, gap: 12 }}>
             <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Campaign Duration</Text>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <Pressable
+                onPress={() => saveAutopilot({ duration: '7_days' })}
+                style={{
+                  flexBasis: '48%',
+                  flexGrow: 1,
+                  padding: 12,
+                  borderRadius: 12,
+                  borderWidth: 2,
+                  borderColor: apConfig.duration === '7_days' ? '#009F50' : '#E2E8F0',
+                  backgroundColor: apConfig.duration === '7_days' ? '#F0FDF4' : '#FFFFFF',
+                  gap: 3,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>7 Days</Text>
+                  <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#009F50', backgroundColor: '#DCFCE7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>SPRINT</Text>
+                </View>
+                <Text style={{ fontSize: 10.5, color: '#64748B' }}>1 post daily for 7 days (trial friendly)</Text>
+              </Pressable>
+
               <Pressable
                 onPress={() => saveAutopilot({ duration: '30_days' })}
                 style={{
-                  flex: 1,
+                  flexBasis: '48%',
+                  flexGrow: 1,
                   padding: 12,
                   borderRadius: 12,
                   borderWidth: 2,
                   borderColor: apConfig.duration === '30_days' ? '#009F50' : '#E2E8F0',
                   backgroundColor: apConfig.duration === '30_days' ? '#F0FDF4' : '#FFFFFF',
-                  gap: 4,
+                  gap: 3,
                 }}
               >
                 <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>30 Days</Text>
-                <Text style={{ fontSize: 11, color: '#64748B' }}>1 post daily for 1 month (30 posts)</Text>
+                <Text style={{ fontSize: 10.5, color: '#64748B' }}>1 post daily for 1 month (30 posts)</Text>
               </Pressable>
 
               <Pressable
                 onPress={() => saveAutopilot({ duration: '1_year' })}
                 style={{
-                  flex: 1,
+                  flexBasis: '48%',
+                  flexGrow: 1,
                   padding: 12,
                   borderRadius: 12,
                   borderWidth: 2,
                   borderColor: apConfig.duration === '1_year' ? '#009F50' : '#E2E8F0',
                   backgroundColor: apConfig.duration === '1_year' ? '#F0FDF4' : '#FFFFFF',
-                  gap: 4,
+                  gap: 3,
                 }}
               >
                 <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>1 Full Year</Text>
-                <Text style={{ fontSize: 11, color: '#64748B' }}>365 daily posts with theme rotation</Text>
+                <Text style={{ fontSize: 10.5, color: '#64748B' }}>365 daily posts with theme rotation</Text>
               </Pressable>
+
+              <Pressable
+                onPress={() => saveAutopilot({ duration: 'custom', customDays: 14 })}
+                style={{
+                  flexBasis: '48%',
+                  flexGrow: 1,
+                  padding: 12,
+                  borderRadius: 12,
+                  borderWidth: 2,
+                  borderColor: apConfig.duration === 'custom' ? '#009F50' : '#E2E8F0',
+                  backgroundColor: apConfig.duration === 'custom' ? '#F0FDF4' : '#FFFFFF',
+                  gap: 3,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Custom Range</Text>
+                <Text style={{ fontSize: 10.5, color: '#64748B' }}>Custom campaign date window</Text>
+              </Pressable>
+            </View>
+          </Card>
+
+          {/* Content Source Selector */}
+          <Card style={{ marginBottom: 14, gap: 12 }}>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Post Content Source</Text>
+            <View style={{ gap: 8 }}>
+              {[
+                { id: 'ai_generated', title: '✨ AI & Festival Posters (Default)', desc: 'Generates daily designs based on your industry and festivals' },
+                { id: 'my_templates', title: '📁 My Uploaded Templates', desc: 'Rotates through your custom uploaded flyer designs' },
+                { id: 'hybrid', title: '🔀 Hybrid (AI + My Templates)', desc: 'Mixes user-uploaded creatives with seasonal AI designs' },
+              ].map((src) => {
+                const isSelected = (apConfig.contentSource || 'ai_generated') === src.id;
+                return (
+                  <Pressable
+                    key={src.id}
+                    onPress={() => saveAutopilot({ contentSource: src.id as any })}
+                    style={{
+                      padding: 11,
+                      borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? '#009F50' : '#E2E8F0',
+                      backgroundColor: isSelected ? '#F0FDF4' : '#FFFFFF',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: isSelected ? '#009F50' : '#0F172A' }}>
+                        {src.title}
+                      </Text>
+                      <MaterialIcons
+                        name={isSelected ? 'radio-button-checked' : 'radio-button-unchecked'}
+                        size={18}
+                        color={isSelected ? '#009F50' : '#94A3B8'}
+                      />
+                    </View>
+                    <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 3 }}>{src.desc}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </Card>
 
@@ -2804,8 +2973,17 @@ export default function MarketingScreen() {
                 </Pressable>
               </ScrollView>
 
-              {/* Step 2 Sticky Footer: Save Draft & Review CTA */}
+              {/* Step 2 Sticky Footer: Save Template, Save Draft & Review CTA */}
               <View style={styles.dualStickyFooter}>
+                <Pressable
+                  disabled={busy}
+                  onPress={handleSaveAsMyTemplate}
+                  style={[styles.secondaryButton, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                >
+                  <MaterialIcons name="star" size={14} color="#009F50" />
+                  <Text style={[styles.secondaryButtonText, { color: '#009F50', fontWeight: '800' }]}>Save Template</Text>
+                </Pressable>
+
                 <Pressable
                   disabled={busy}
                   onPress={() => submitPost('draft')}
@@ -2977,6 +3155,14 @@ export default function MarketingScreen() {
                           Schedule
                         </Text>
                       </Pressable>
+                      <Pressable
+                        onPress={() => setScheduleMode('multi_day')}
+                        style={[styles.scheduleBtn, scheduleMode === 'multi_day' && styles.scheduleBtnActive]}
+                      >
+                        <Text style={[styles.scheduleBtnText, scheduleMode === 'multi_day' && styles.scheduleBtnTextActive]}>
+                          7d Sprint
+                        </Text>
+                      </Pressable>
                     </View>
                   </View>
 
@@ -2996,6 +3182,44 @@ export default function MarketingScreen() {
                       />
                     </View>
                   )}
+
+                  {scheduleMode === 'multi_day' && (
+                    <View style={{ marginTop: 8, gap: 10 }}>
+                      <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                        Distribute this promotion daily across consecutive days:
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {[3, 7, 14].map((cnt) => (
+                          <Pressable
+                            key={cnt}
+                            onPress={() => setMultiDayCount(cnt)}
+                            style={{
+                              flex: 1,
+                              paddingVertical: 8,
+                              borderRadius: 8,
+                              borderWidth: 1.5,
+                              borderColor: multiDayCount === cnt ? '#009F50' : '#E2E8F0',
+                              backgroundColor: multiDayCount === cnt ? '#F0FDF4' : '#FFFFFF',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: multiDayCount === cnt ? '#009F50' : '#0F172A' }}>
+                              {cnt} Days {cnt === 7 ? '⚡ Sprint' : ''}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontSize: 11.5, color: '#64748B' }}>Daily Time:</Text>
+                        <TextInput
+                          placeholder="10:00"
+                          value={scheduleTime}
+                          onChangeText={setScheduleTime}
+                          style={[styles.configInput, { width: 90, paddingVertical: 4 }]}
+                        />
+                      </View>
+                    </View>
+                  )}
                 </View>
               </ScrollView>
 
@@ -3012,6 +3236,8 @@ export default function MarketingScreen() {
                     <Text style={styles.primaryActionText}>
                       {scheduleMode === 'now'
                         ? `Publish to ${selectedPlatforms.length} accounts`
+                        : scheduleMode === 'multi_day'
+                        ? `Schedule ${multiDayCount}-Day Campaign`
                         : 'Schedule post'}
                     </Text>
                   )}
@@ -3847,27 +4073,29 @@ const styles = StyleSheet.create({
   },
   modeBar: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
+    backgroundColor: '#EEF2F6',
+    borderRadius: 14,
+    marginHorizontal: 12,
+    marginVertical: 8,
+    padding: 3,
+    gap: 4,
   },
   modeTab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 5,
     paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    borderRadius: 11,
   },
   modeTabActive: {
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   modeTabText: {
     fontSize: 12,
@@ -3875,7 +4103,8 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   modeTabTextActive: {
-    color: '#009F50',
+    color: '#043B26',
+    fontWeight: '800',
   },
   successNotice: {
     flexDirection: 'row',

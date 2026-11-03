@@ -164,7 +164,7 @@ function RazorpayCheckoutContent() {
       const keyId =
         orderData.key_id ||
         process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
-        'rzp_test_TuLATkapPzzHZc';
+        'rzp_live_Tvlk7fEiubLEkh';
 
       const options = {
         key: keyId,
@@ -337,32 +337,9 @@ function RazorpayCheckoutContent() {
                     variant="outline"
                     className="w-full bg-white border-[#009F50] text-[#009F50] hover:bg-emerald-50 font-bold h-10 text-xs rounded-lg mt-1"
                     disabled={busy}
-                    onClick={async () => {
-                      setBusy(true);
-                      setError(null);
-                      try {
-                        const res = await fetch('/api/bgos/billing', {
-                          method: 'POST',
-                          headers: authHeaders,
-                          body: JSON.stringify({ action: 'activate', plan: planCode }),
-                        });
-                        const data = await res.json();
-                        if (res.ok && data.success) {
-                          setPaymentSuccess({
-                            razorpay_order_id: `act_${Date.now()}`,
-                            razorpay_payment_id: `instant_${planCode}`,
-                          });
-                        } else {
-                          setError(data.error || 'Instant activation failed');
-                        }
-                      } catch (e: any) {
-                        setError(e.message || 'Activation failed');
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
+                    onClick={startCheckout}
                   >
-                    ⚡ Instant 1-Tap Plan Activation
+                    <RefreshCw className="size-4 mr-2" /> Retry Payment
                   </Button>
                 </div>
               )}

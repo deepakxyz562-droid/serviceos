@@ -7,9 +7,12 @@ import { generateDesignImage } from '@/lib/designs/image-provider';
 import { saveDesignAsset } from '@/lib/designs/assets';
 import { logActivity } from '@/lib/activity-log';
 
+export type AutopilotDuration = '7_days' | '30_days' | '1_year' | 'custom';
+
 export interface AutopilotConfig {
   enabled: boolean;
-  duration: '30_days' | '1_year';
+  duration: AutopilotDuration;
+  customDays?: number;
   platforms: Array<'googlebusiness' | 'instagram' | 'facebook'>;
   postingTime: string;
   timeZone: string;
@@ -18,6 +21,7 @@ export interface AutopilotConfig {
   lastRunAt?: string | null;
   totalPostsCreated: number;
   status: 'active' | 'paused' | 'completed';
+  contentSource?: 'ai_generated' | 'my_templates' | 'hybrid';
 }
 
 const DEFAULT_PLATFORMS: Array<'googlebusiness' | 'instagram' | 'facebook'> = [
@@ -26,8 +30,11 @@ const DEFAULT_PLATFORMS: Array<'googlebusiness' | 'instagram' | 'facebook'> = [
   'facebook',
 ];
 
-export function getAutopilotDays(duration: '30_days' | '1_year'): number {
-  return duration === '1_year' ? 365 : 30;
+export function getAutopilotDays(duration: AutopilotDuration, customDays?: number): number {
+  if (duration === '7_days') return 7;
+  if (duration === '1_year') return 365;
+  if (duration === 'custom') return Math.max(1, Math.min(365, customDays || 7));
+  return 30;
 }
 
 export async function getTenantAutopilotConfig(tenantId: string): Promise<AutopilotConfig> {
@@ -42,8 +49,16 @@ export async function getTenantAutopilotConfig(tenantId: string): Promise<Autopi
   } catch {}
 
   const raw = settings.socialAutopilot || {};
-  const duration = raw.duration === '1_year' ? '1_year' : '30_days';
-  const totalDays = getAutopilotDays(duration);
+  const duration: AutopilotDuration =
+    raw.duration === '7_days'
+      ? '7_days'
+      : raw.duration === '1_year'
+      ? '1_year'
+      : raw.duration === 'custom'
+      ? 'custom'
+      : '30_days';
+  const customDays = typeof raw.customDays === 'number' ? raw.customDays : undefined;
+  const totalDays = getAutopilotDays(duration, customDays);
   const now = new Date();
 
   const startDate = raw.startDate || now.toISOString();
@@ -57,6 +72,7 @@ export async function getTenantAutopilotConfig(tenantId: string): Promise<Autopi
   return {
     enabled,
     duration,
+    customDays,
     platforms: Array.isArray(raw.platforms) && raw.platforms.length > 0 ? raw.platforms : DEFAULT_PLATFORMS,
     postingTime: raw.postingTime || '09:00',
     timeZone: raw.timeZone || 'UTC',
@@ -65,6 +81,7 @@ export async function getTenantAutopilotConfig(tenantId: string): Promise<Autopi
     lastRunAt: raw.lastRunAt || null,
     totalPostsCreated: Number(raw.totalPostsCreated) || 0,
     status: isExpired ? 'completed' : enabled ? 'active' : 'paused',
+    contentSource: raw.contentSource || 'ai_generated',
   };
 }
 
@@ -75,7 +92,8 @@ export async function saveTenantAutopilotConfig(
   const current = await getTenantAutopilotConfig(tenantId);
 
   const duration = updates.duration || current.duration;
-  const totalDays = getAutopilotDays(duration);
+  const customDays = updates.customDays ?? current.customDays;
+  const totalDays = getAutopilotDays(duration, customDays);
   const now = new Date();
 
   let startDate = updates.startDate || current.startDate;
@@ -83,14 +101,15 @@ export async function saveTenantAutopilotConfig(
 
   // If enabling newly or resetting duration
   if (updates.enabled && (!current.enabled || (updates.duration !== undefined && updates.duration !== current.duration))) {
-    startDate = now.toISOString();
-    endDate = new Date(now.getTime() + totalDays * 24 * 60 * 60 * 1000).toISOString();
+    startDate = updates.startDate || now.toISOString();
+    endDate = updates.endDate || new Date(new Date(startDate).getTime() + totalDays * 24 * 60 * 60 * 1000).toISOString();
   }
 
   const merged: AutopilotConfig = {
     ...current,
     ...updates,
     duration,
+    customDays,
     startDate,
     endDate,
     status:

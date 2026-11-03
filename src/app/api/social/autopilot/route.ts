@@ -84,16 +84,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
 
     if(!body||typeof body!=='object'||Array.isArray(body))return NextResponse.json({error:'Send a JSON object'},{status:400});
-    const { enabled, duration, platforms, postingTime, timeZone, triggerPostNow } = body;
+    const { enabled, duration, customDays, startDate, endDate, platforms, postingTime, timeZone, contentSource, triggerPostNow } = body;
     if(platforms!==undefined&&(!Array.isArray(platforms)||!platforms.length||platforms.some((p:unknown)=>!['googlebusiness','instagram','facebook'].includes(String(p)))))return NextResponse.json({error:'Select valid publishing channels'},{status:400});
     if(postingTime!==undefined&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(postingTime))return NextResponse.json({error:'Use HH:mm posting time'},{status:400});
     if(timeZone!==undefined){try{new Intl.DateTimeFormat('en',{timeZone}).format();}catch{return NextResponse.json({error:'Invalid timezone'},{status:400});}}
-    if (duration !== undefined && !['30_days','1_year'].includes(duration)) return NextResponse.json({error:'Invalid duration'},{status:400});
+    if (duration !== undefined && !['7_days','30_days','1_year','custom'].includes(duration)) return NextResponse.json({error:'Invalid duration. Choose 7_days, 30_days, 1_year, or custom'},{status:400});
     if (enabled !== undefined && typeof enabled !== 'boolean') return NextResponse.json({error:'Invalid enabled value'},{status:400});
     const updates: Record<string, any> = {};
-    if (typeof timeZone === 'string')updates.timeZone=timeZone;
+    if (typeof timeZone === 'string') updates.timeZone = timeZone;
     if (typeof enabled === 'boolean') updates.enabled = enabled;
-    if (duration === '30_days' || duration === '1_year') updates.duration = duration;
+    if (duration) updates.duration = duration;
+    if (typeof customDays === 'number' && customDays > 0) updates.customDays = customDays;
+    if (typeof startDate === 'string') updates.startDate = startDate;
+    if (typeof endDate === 'string') updates.endDate = endDate;
+    if (contentSource && ['ai_generated', 'my_templates', 'hybrid'].includes(contentSource)) updates.contentSource = contentSource;
     if (Array.isArray(platforms)) updates.platforms = platforms;
     if (typeof postingTime === 'string') updates.postingTime = postingTime;
 
@@ -108,13 +112,22 @@ export async function POST(request: NextRequest) {
     const endMs = new Date(updatedConfig.endDate).getTime();
     const daysRemaining = Math.max(0, Math.ceil((endMs - now) / (24 * 60 * 60 * 1000)));
 
+    const durationLabel =
+      updatedConfig.duration === '7_days'
+        ? '7 Days (Sprint)'
+        : updatedConfig.duration === '1_year'
+        ? '1 Year (365 Days)'
+        : updatedConfig.duration === 'custom'
+        ? `${daysRemaining} Days (Custom Range)`
+        : '30 Days';
+
     return NextResponse.json({
       success: true,
       config: updatedConfig,
       daysRemaining,
       triggerResult,
       message: updatedConfig.enabled
-        ? `Autopilot active for ${updatedConfig.duration === '1_year' ? '1 Year (365 Days)' : '30 Days'}. Daily posts will publish automatically.`
+        ? `Autopilot active for ${durationLabel}. Daily posts will publish automatically.`
         : 'Autopilot is paused.',
     });
   } catch (error: any) {

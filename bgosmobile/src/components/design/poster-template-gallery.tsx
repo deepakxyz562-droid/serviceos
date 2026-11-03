@@ -5,10 +5,13 @@ import { PosterPreview } from './poster-preview';
  * Mobile Poster Template Gallery — Flyer-Maker-style visual entry for the
  * BGOS Marketing Studio (Expo). Renders live thumbnails straight from the
  * shared design model so previews match the canvas editor and server export.
+ * Includes user custom template uploads, batch imports, and "⭐ My Templates".
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -18,6 +21,9 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { apiRequest } from '../../lib/api';
+import { loadJson, saveJson } from '../../lib/device-storage';
 import type { DesignLayer, MarketingDesign } from '../../../../shared/marketing-design';
 import {
   POSTER_CATEGORIES,
@@ -60,7 +66,17 @@ const TemplateThumb = PosterPreview;
 
 export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: PosterTemplateGalleryProps) {
   const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState<'for_you' | 'all' | string>('for_you');
+  const [activeCategory, setActiveCategory] = useState<'for_you' | 'my_templates' | 'all' | string>('for_you');
+  const [customTemplates, setCustomTemplates] = useState<PosterTemplate[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    loadJson<PosterTemplate[]>('bgos_custom_templates').then((saved) => {
+      if (Array.isArray(saved) && saved.length > 0) {
+        setCustomTemplates(saved);
+      }
+    });
+  }, []);
 
   const activeOccasions = useMemo(() => getActivePosterOccasions(), []);
   const activeOccasionIds = useMemo(() => new Set(activeOccasions.map((o) => o.id)), [activeOccasions]);
@@ -78,7 +94,9 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: Pos
 
   const filteredTemplates = useMemo(() => {
     const base =
-      activeCategory === 'for_you'
+      activeCategory === 'my_templates'
+        ? customTemplates
+        : activeCategory === 'for_you'
         ? forYouTemplates
         : activeCategory === 'all'
           ? orderedTemplates
@@ -93,7 +111,7 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: Pos
         t.headline.toLowerCase().includes(q) ||
         t.category.includes(q) || (t.industries || []).some(industry => industry.includes(q))
     );
-  }, [activeCategory, forYouTemplates, orderedTemplates, search]);
+  }, [activeCategory, customTemplates, forYouTemplates, orderedTemplates, search]);
 
   const docs = useMemo(() => {
     const map = new Map<string, MarketingDesign>();
@@ -112,16 +130,85 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: Pos
     return map;
   }, [filteredTemplates, business]);
 
-  const surpriseMe = () => {
-    const pool = orderedTemplates.filter(
-      (t) => !t.occasionId || activeOccasionIds.has(t.occasionId)
-    );
-    const pick = pool[Math.floor(Math.random() * pool.length)] || orderedTemplates[0];
-    if (pick) onApply(pick);
-  };
+  async function handleUploadTemplates() {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission Needed', 'Please allow photo gallery access to upload poster designs.');
+        return;
+      }
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        base64: true,
+      });
+      if (picked.canceled || !picked.assets?.length) return;
+
+      setUploading(true);
+      const newTemplates: PosterTemplate[] = [];
+
+      for (let i = 0; i < picked.assets.length; i++) {
+        const asset = picked.assets[i];
+        if (!asset.base64 && !asset.uri) continue;
+        const mime = asset.mimeType || 'image/jpeg';
+        let imageUrl = asset.uri;
+
+        if (asset.base64) {
+          try {
+            const res = await apiRequest<{ url: string }>('/api/social/designs/assets', {
+              method: 'POST',
+              body: { data: `data:${mime};base64,${asset.base64}` },
+            });
+            if (res?.url) imageUrl = res.url;
+          } catch {}
+        }
+
+        const customT: PosterTemplate = {
+          id: `custom_${Date.now()}_${i}`,
+          name: `Custom Design ${customTemplates.length + i + 1}`,
+          collection: 'creative',
+          category: 'sale_offer',
+          layout: 'bold_offer',
+          theme: 'royal_gold',
+          aspect: '4:5',
+          badge: 'CUSTOM',
+          headline: business.businessName ? `Exclusive from ${business.businessName}` : 'Special Promotion',
+          subtitle: 'Visit us today or call to learn more',
+          cta: 'Contact Now',
+          photo: imageUrl,
+          bgPrompt: 'Custom uploaded flyer creative',
+          industries: [],
+        };
+        newTemplates.push(customT);
+      }
+
+      if (newTemplates.length > 0) {
+        const updated = [...newTemplates, ...customTemplates];
+        setCustomTemplates(updated);
+        void saveJson('bgos_custom_templates', updated);
+        setActiveCategory('my_templates');
+
+        if (newTemplates.length === 1) {
+          onApply(newTemplates[0]);
+        } else {
+          Alert.alert(
+            'Batch Upload Complete',
+            `${newTemplates.length} custom templates have been added to "⭐ My Templates". Tap any template to edit or schedule.`,
+            [{ text: 'View My Templates', onPress: () => setActiveCategory('my_templates') }]
+          );
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Upload Notice', err?.message || 'Could not upload selected images. Please retry.');
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const chips: Array<{ id: string; label: string; icon?: string }> = [
     { id: 'for_you', label: 'For you', icon: 'auto-awesome' },
+    { id: 'my_templates', label: `⭐ My Templates (${customTemplates.length})`, icon: 'folder-special' },
     ...activeOccasions.map((o) => ({
       id: o.id,
       label: `${o.emoji} ${o.name}`,
@@ -137,12 +224,9 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: Pos
     })),
   ];
 
-  const categoryName = (id: string) =>
-    POSTER_CATEGORIES.find((c) => c.id === id)?.name ?? '';
-
   return (
     <View style={{ flex: 1 }}>
-      {/* Search & AI Brief Bar */}
+      {/* Search, Upload & AI Brief Bar */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, marginBottom: 8, marginTop: 4 }}>
         <View style={[styles.searchWrap, { flex: 1 }]}>
           <MaterialIcons name="search" size={16} color="#94A3B8" />
@@ -155,20 +239,27 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: Pos
             style={styles.searchInput}
           />
         </View>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={handleUploadTemplates}
+          disabled={uploading}
+          style={styles.topUploadBtn}
+        >
+          {uploading ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <>
+              <MaterialIcons name="file-upload" size={15} color="#FFFFFF" />
+              <Text style={styles.topUploadBtnText}>Upload</Text>
+            </>
+          )}
+        </Pressable>
+
         <Pressable
           accessibilityRole="button"
           onPress={onDescribeIdea}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 4,
-            paddingVertical: 9,
-            paddingHorizontal: 12,
-            borderRadius: 12,
-            backgroundColor: '#F0FDF4',
-            borderWidth: 1,
-            borderColor: '#BBF7D0',
-          }}
+          style={styles.aiBriefBtn}
         >
           <MaterialIcons name="auto-awesome" size={14} color="#009F50" />
           <Text style={{ color: '#009F50', fontWeight: '800', fontSize: 11.5 }}>AI Brief</Text>
@@ -207,40 +298,64 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: Pos
         contentContainerStyle={{ padding: 14, paddingTop: 10, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
-        {filteredTemplates.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyTitle}>No designs match your search</Text>
-            <Text style={styles.emptySubtitle}>Try a different keyword or category.</Text>
-          </View>
-        ) : (
-          <View style={styles.grid}>
-            {filteredTemplates.map((t) => (
-              <Pressable
-                key={t.id}
-                accessibilityRole="button"
-                accessibilityLabel={`Use ${t.name} template`}
-                onPress={() => onApply(t)}
-                style={({ pressed }) => [
-                  styles.card,
-                  pressed && { opacity: 0.88, transform: [{ scale: 0.985 }] },
-                ]}
-              >
-                <TemplateThumb doc={docs.get(t.id)!} />
-                <View style={styles.cardFooter}>
-                  <Text style={styles.cardName} numberOfLines={1}>
-                    {t.name}
-                  </Text>
-                  <Text style={styles.cardMeta} numberOfLines={1}>
-                    {categoryName(t.category)}
-                  </Text>
-                </View>
-                {!!(t.occasionId && activeOccasionIds.has(t.occasionId)) && (
-                  <View style={styles.liveBadge}>
-                    <Text style={styles.liveBadgeText}>LIVE</Text>
-                  </View>
+        <View style={styles.grid}>
+          {/* Tile 1: Always Present Upload Card */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Upload custom poster or template"
+            onPress={handleUploadTemplates}
+            disabled={uploading}
+            style={[styles.card, styles.uploadCard]}
+          >
+            <View style={styles.uploadCardInner}>
+              <View style={styles.uploadIconCircle}>
+                {uploading ? (
+                  <ActivityIndicator size="small" color="#009F50" />
+                ) : (
+                  <MaterialIcons name="cloud-upload" size={24} color="#009F50" />
                 )}
-              </Pressable>
-            ))}
+              </View>
+              <Text style={styles.uploadCardTitle}>
+                {uploading ? 'Uploading…' : 'Upload Design'}
+              </Text>
+              <Text style={styles.uploadCardSubtitle}>
+                Single or batch import from Canva / Photos
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* Render Filtered Templates */}
+          {filteredTemplates.map((t) => (
+            <Pressable
+              key={t.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Use ${t.name} template`}
+              onPress={() => onApply(t)}
+              style={({ pressed }) => [
+                styles.card,
+                pressed && { opacity: 0.88, transform: [{ scale: 0.985 }] },
+              ]}
+            >
+              <TemplateThumb doc={docs.get(t.id)!} />
+              <View style={styles.cardFooter}>
+                <Text style={styles.cardName} numberOfLines={1}>
+                  {t.name}
+                </Text>
+                <Text style={styles.cardMeta} numberOfLines={1}>
+                  {t.aspect} · {t.category.replace(/_/g, ' ')}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+
+        {filteredTemplates.length === 0 && activeCategory === 'my_templates' && (
+          <View style={styles.emptyWrap}>
+            <MaterialIcons name="folder-open" size={36} color="#94A3B8" />
+            <Text style={styles.emptyTitle}>No saved templates yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Tap "Upload Design" to import your own flyers and graphics from Canva, Photoshop, or your gallery.
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -249,54 +364,10 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: Pos
 }
 
 const styles = StyleSheet.create({
-  heroCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  heroCardPrimary: {
-    borderColor: '#BBF7D0',
-    backgroundColor: '#F0FDF4',
-  },
-  heroIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroIconWrapNeutral: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroTitle: { fontSize: 13, fontWeight: '800', color: '#0F172A' },
-  heroSubtitle: { fontSize: 10.5, color: '#64748B', marginTop: 2 },
-  occasionBadge: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  occasionText: { fontSize: 11, fontWeight: '700', color: '#92400E' },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginHorizontal: 14,
-    marginTop: 10,
     paddingHorizontal: 12,
     height: 38,
     borderRadius: 12,
@@ -305,6 +376,31 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   searchInput: { flex: 1, fontSize: 13, color: '#0F172A', paddingVertical: 0 },
+  topUploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#009F50',
+  },
+  topUploadBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 11.5,
+  },
+  aiBriefBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -330,20 +426,45 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
+  uploadCard: {
+    borderColor: '#BBF7D0',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    backgroundColor: '#F0FDF4',
+    minHeight: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadCardInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    gap: 8,
+  },
+  uploadIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#065F46',
+    textAlign: 'center',
+  },
+  uploadCardSubtitle: {
+    fontSize: 10,
+    color: '#047857',
+    textAlign: 'center',
+    lineHeight: 14,
+  },
   cardFooter: { padding: 9 },
   cardName: { fontSize: 12, fontWeight: '800', color: '#0F172A' },
   cardMeta: { fontSize: 10, color: '#64748B', marginTop: 2 },
-  liveBadge: {
-    position: 'absolute',
-    top: 7,
-    left: 7,
-    backgroundColor: 'rgba(245, 158, 11, 0.95)',
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  liveBadgeText: { fontSize: 8.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5 },
-  emptyWrap: { alignItems: 'center', paddingVertical: 40, gap: 4 },
-  emptyTitle: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
-  emptySubtitle: { fontSize: 11.5, color: '#64748B' },
+  emptyWrap: { alignItems: 'center', paddingVertical: 40, gap: 6 },
+  emptyTitle: { fontSize: 14, fontWeight: '800', color: '#0F172A' },
+  emptySubtitle: { fontSize: 12, color: '#64748B', textAlign: 'center', maxWidth: 280, lineHeight: 17 },
 });

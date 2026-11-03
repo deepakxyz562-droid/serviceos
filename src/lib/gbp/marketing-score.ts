@@ -45,8 +45,19 @@ function bandLabel(score: number): string {
  * When Google Business is not connected the score is `null` — the UI must
  * render the honest "Not available / NOT_CONNECTED" state.
  */
-export async function computeMarketingScore(tenantId: string): Promise<MarketingScoreResult> {
-  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+const SCORE_CACHE = new Map<string, { data: MarketingScoreResult; expires: number }>();
+let scoreSnapshotTableAvailable: boolean | null = null;
+
+export async function computeMarketingScore(tenantId: string, bypassCache = false): Promise<MarketingScoreResult> {
+  const now = Date.now();
+  if (!bypassCache) {
+    const cached = SCORE_CACHE.get(tenantId);
+    if (cached && cached.expires > now) {
+      return cached.data;
+    }
+  }
+
+  const since30d = new Date(now - 30 * 24 * 60 * 60 * 1000);
 
   const [audit, googleAccount] = await Promise.all([
     computeGbpAudit(tenantId),
@@ -132,7 +143,7 @@ export async function computeMarketingScore(tenantId: string): Promise<Marketing
       )
     : null;
 
-  return {
+  const finalResult: MarketingScoreResult = {
     isConnected,
     score,
     label: score != null ? bandLabel(score) : null,
@@ -149,6 +160,9 @@ export async function computeMarketingScore(tenantId: string): Promise<Marketing
     photosLast30Days: photos30d,
     computedAt: new Date().toISOString(),
   };
+
+  SCORE_CACHE.set(tenantId, { data: finalResult, expires: Date.now() + 5 * 60 * 1000 });
+  return finalResult;
 }
 
 function dayBucket(d: Date): Date {
@@ -161,8 +175,15 @@ function dayBucket(d: Date): Date {
  * Upsert today's GbpScoreSnapshot (one row per tenant per day) and return the
  * trailing history used by the swipeable score carousel / growth chart.
  */
-export async function snapshotMarketingScore(tenantId: string): Promise<{ history: { date: string; score: number }[] }> {
-  const result = await computeMarketingScore(tenantId);
+export async function snapshotMarketingScore(
+  tenantId: string,
+  existingResult?: MarketingScoreResult
+): Promise<{ history: { date: string; score: number }[] }> {
+  if (scoreSnapshotTableAvailable === false) {
+    return { history: [] };
+  }
+
+  const result = existingResult || (await computeMarketingScore(tenantId));
   if (!result.isConnected || result.score == null) {
     return { history: await readHistory(tenantId) };
   }
@@ -203,16 +224,22 @@ export async function snapshotMarketingScore(tenantId: string): Promise<{ histor
         },
       });
     }
+    scoreSnapshotTableAvailable = true;
   } catch (err: any) {
-    // Missing table (migration not yet applied on this database) must never
-    // break the score API — history simply stays empty.
-    if (!isMissingTableError(err)) console.error('[marketing-score] snapshot failed:', err?.message?.slice(0, 200));
+    if (isMissingTableError(err)) {
+      scoreSnapshotTableAvailable = false;
+    } else {
+      console.error('[marketing-score] snapshot failed:', err?.message?.slice(0, 200));
+    }
   }
 
   return { history: await readHistory(tenantId) };
 }
 
 export async function readHistory(tenantId: string, days = 30): Promise<{ date: string; score: number }[]> {
+  if (scoreSnapshotTableAvailable === false) {
+    return [];
+  }
   try {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const rows = await db.gbpScoreSnapshot.findMany({
@@ -221,9 +248,14 @@ export async function readHistory(tenantId: string, days = 30): Promise<{ date: 
       select: { snapshotDate: true, overallScore: true },
       take: days,
     });
+    scoreSnapshotTableAvailable = true;
     return rows.map((r) => ({ date: r.snapshotDate.toISOString().slice(0, 10), score: r.overallScore }));
   } catch (err: any) {
-    if (!isMissingTableError(err)) console.error('[marketing-score] history read failed:', err?.message?.slice(0, 200));
+    if (isMissingTableError(err)) {
+      scoreSnapshotTableAvailable = false;
+    } else {
+      console.error('[marketing-score] history read failed:', err?.message?.slice(0, 200));
+    }
     return [];
   }
 }

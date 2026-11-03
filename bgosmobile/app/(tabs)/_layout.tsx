@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/components/ui';
 import { usePendingReplies } from '../../src/hooks/use-pending-replies';
 import { useAuthStore } from '../../src/stores/auth-store';
+import { PaywallGate } from '../../src/components/billing/paywall-gate';
 
 /**
  * Bottom Navigation — BGOS Growth Employee bar:
@@ -57,8 +58,9 @@ export default function TabLayout() {
   const tabPaddingBottom = insets.bottom > 0 ? insets.bottom : 8;
 
   return (
-    <Tabs
-      screenOptions={{
+    <PaywallGate>
+      <Tabs
+        screenOptions={{
         headerShown: false,
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
@@ -116,6 +118,7 @@ export default function TabLayout() {
         <Tabs.Screen key={name} name={name} options={{ href: null }} />
       ))}
     </Tabs>
+    </PaywallGate>
   );
 }
 

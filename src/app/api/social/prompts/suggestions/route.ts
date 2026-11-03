@@ -1137,6 +1137,8 @@ async function extractWebsiteHighlights(rawUrl: string): Promise<{ tags: string[
   }
 }
 
+const PROMPT_SUGGESTIONS_CACHE = new Map<string, { data: any; expires: number }>();
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
@@ -1151,6 +1153,14 @@ export async function GET(request: NextRequest) {
     const websiteOverride = url.searchParams.get('website');
     const scan = url.searchParams.get('scan') === '1';
     const refresh = url.searchParams.get('refresh') === '1';
+
+    const cacheKey = `${user.tenantId}:${profileId || ''}:${businessNameOverride || ''}:${categoryOverride || ''}`;
+    if (!refresh && !scan) {
+      const cached = PROMPT_SUGGESTIONS_CACHE.get(cacheKey);
+      if (cached && cached.expires > Date.now()) {
+        return NextResponse.json(cached.data);
+      }
+    }
 
     const [tenant, googleAccounts, reviews] = await Promise.all([
       db.tenant.findUnique({
@@ -1313,24 +1323,28 @@ id (string), category ("service" | "offer" | "review" | "ai_assistant" | "urgenc
 
       // Fresh rotated suggestions guaranteed on refresh
       const rotated = getRotatedSuggestions(capabilities, businessName, location, website, industry);
-      return NextResponse.json({
+      const resPayload = {
         businessName,
         industry,
         website,
         websiteTags,
         location,
         suggestions: rotated.map((b) => normalizeSuggestion(b)),
-      });
+      };
+      PROMPT_SUGGESTIONS_CACHE.set(cacheKey, { data: resPayload, expires: Date.now() + 10 * 60 * 1000 });
+      return NextResponse.json(resPayload);
     }
 
-    return NextResponse.json({
+    const baselinePayload = {
       businessName,
       industry,
       website,
       websiteTags,
       location,
       suggestions: capabilities.baseline.map((b) => normalizeSuggestion(b)),
-    });
+    };
+    PROMPT_SUGGESTIONS_CACHE.set(cacheKey, { data: baselinePayload, expires: Date.now() + 10 * 60 * 1000 });
+    return NextResponse.json(baselinePayload);
   } catch (err: unknown) {
     console.error('[/api/social/prompts/suggestions]', err);
     return NextResponse.json(

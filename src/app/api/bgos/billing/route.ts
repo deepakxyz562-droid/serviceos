@@ -190,8 +190,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── 3. Direct in-app activation mode or fallback ──
-    if (body.action === 'activate' || (!process.env.BGOS_STRIPE_WEBHOOK_SECRET && !keyId)) {
+    // ── 3. Direct in-app activation mode (only permitted in local test sandbox when no keys configured) ──
+    if ((body.action === 'activate' && !keyId && !process.env.BGOS_STRIPE_WEBHOOK_SECRET) || (!process.env.BGOS_STRIPE_WEBHOOK_SECRET && !keyId)) {
       if (chosenPlan) {
         const now = new Date();
         const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);

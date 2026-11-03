@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     const result = await computeMarketingScore(user.tenantId);
     const { history } = refreshHistory
-      ? await snapshotMarketingScore(user.tenantId)
+      ? await snapshotMarketingScore(user.tenantId, result)
       : { history: [] };
 
     return NextResponse.json({
