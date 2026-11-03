@@ -11,12 +11,38 @@ import {
 
 export const maxDuration = 60;
 
-const ALLOWED_IMAGE_DOMAINS = ['images.unsplash.com', 'serviceos-uploads.s3.us-east-1.amazonaws.com'];
+const ALLOWED_IMAGE_DOMAINS = [
+  'images.unsplash.com',
+  'serviceos-uploads.s3.us-east-1.amazonaws.com',
+  'serviceos-uploads.s3.amazonaws.com',
+  'imagedelivery.net',
+  'api.fieseros.com',
+  'bgos.fieseros.com',
+  'fieseros.com',
+];
 
 function isAllowedHost(url: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  if (url.startsWith('/') || url.startsWith('data:image/')) return true;
   try {
     const parsed = new URL(url);
-    return ALLOWED_IMAGE_DOMAINS.includes(parsed.hostname);
+    if (ALLOWED_IMAGE_DOMAINS.includes(parsed.hostname)) return true;
+    for (const envCandidate of [
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.AWS_S3_PUBLIC_URL,
+      process.env.DESIGN_ASSET_ORIGIN,
+      process.env.NEXT_PUBLIC_APP_URL,
+    ]) {
+      if (envCandidate) {
+        try {
+          if (new URL(envCandidate).hostname === parsed.hostname) return true;
+        } catch {}
+      }
+    }
+    if (process.env.AWS_S3_BUCKET && parsed.hostname.startsWith(`${process.env.AWS_S3_BUCKET}.s3`)) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }

@@ -40,6 +40,20 @@ function isValidPlatform(p: string): p is SocialPlatform {
   return (VALID_PLATFORMS as string[]).includes(p);
 }
 
+function toIsoUtc(val: unknown): string | null {
+  if (!val) return null;
+  if (val instanceof Date) return val.toISOString();
+  if (typeof val === 'string') {
+    const s = val.trim();
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s) && !s.endsWith('Z') && !/[+-]\d{2}(:\d{2})?$/.test(s)) {
+      return s.replace(' ', 'T') + 'Z';
+    }
+    return s;
+  }
+  return null;
+}
+
 // ─── GET — list ────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -139,6 +153,10 @@ export async function GET(request: NextRequest) {
       }
       return {
         ...p,
+        scheduledAt: toIsoUtc(p.scheduledAt),
+        publishedAt: toIsoUtc(p.publishedAt),
+        createdAt: toIsoUtc(p.createdAt),
+        updatedAt: toIsoUtc(p.updatedAt),
         approvalStatus: resolvedApproval,
         mediaUrls: safeJsonArray(p.mediaUrls),
         publishTargets: safeJsonArray(p.publishTargets),
@@ -505,6 +523,10 @@ export async function POST(request: NextRequest) {
       {
         data: {
           ...post,
+          scheduledAt: toIsoUtc(post.scheduledAt),
+          publishedAt: toIsoUtc(post.publishedAt),
+          createdAt: toIsoUtc(post.createdAt),
+          updatedAt: toIsoUtc(post.updatedAt),
           mediaUrls: safeJsonArray(post.mediaUrls),
           publishTargets: safeJsonArray(post.publishTargets),
         },

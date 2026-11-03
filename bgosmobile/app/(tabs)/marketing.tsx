@@ -1046,10 +1046,26 @@ export default function MarketingScreen() {
     setActiveUserPrompt(topicToUse);
     try {
       const requestId = `mob-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      // 1. Generate campaign copy, headline, and alternative headlines
+      // 1. Generate campaign copy, headline, and alternative headlines with resilient fallback
       const genPromise = apiRequest<{ design: MarketingDesign; caption: string; alternativeHeadlines?: string[] }>('/api/social/designs/generate', {
         method: 'POST',
         body: { prompt: topicToUse, design, caption: caption || effectiveCaption, mode: generationMode },
+      }).catch((genErr) => {
+        console.warn('[marketing.tsx] generate design fallback activated:', genErr);
+        const cleanTopic = topicToUse.replace(/^\[POSTER\]\s*/i, '').trim();
+        const firstLine = cleanTopic.split(/[.\n]/)[0].slice(0, 50) || headline || 'Smart Field Tracking';
+        return {
+          design: design || createCommercialPosterDesign({
+            brand: effectiveBusinessName,
+            headline: firstLine,
+            subtitle: 'Real-time telemetry & workflow automation',
+            badge: 'RECOMMENDED',
+            cta: 'Learn More',
+            photo: bgPhotoUrl,
+          }),
+          caption: `${firstLine}\n\nStreamline your operations and manage your field workforce effortlessly. Contact ${effectiveBusinessName} today for more details!`,
+          alternativeHeadlines: [firstLine, 'Boost Team Productivity', 'Automated Attendance App'],
+        };
       });
 
       // 2. If in poster mode, trigger Cloudflare Flux AI image generation asynchronously

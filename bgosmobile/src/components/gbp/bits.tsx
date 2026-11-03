@@ -25,7 +25,12 @@ export const gbpColors = {
 /** "2h ago"-style relative date. Returns '' when date unknown — never fabricates. */
 export function relativeDate(iso?: string | null): string {
   if (!iso) return '';
-  const t = Date.parse(iso);
+  let normalized = iso.trim();
+  // Ensure UTC interpretation if time is provided without timezone suffix ('Z' or +HH:MM)
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(normalized) && !normalized.endsWith('Z') && !/[+-]\d{2}(:\d{2})?$/.test(normalized)) {
+    normalized = normalized.replace(' ', 'T') + 'Z';
+  }
+  const t = Date.parse(normalized);
   if (!Number.isFinite(t)) return '';
   const diff = Date.now() - t;
   if (diff < 0) {

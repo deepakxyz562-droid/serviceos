@@ -27,6 +27,7 @@ export type SocialPostRow = {
   gbpPostType?: string | null;
   publishTargets?: { platform: string; status: string; error?: string }[];
   createdAt?: string;
+  updatedAt?: string;
 };
 
 export const PILL_ROWS: { key: PostPill; label: string }[][] = [
@@ -217,13 +218,11 @@ export function PostCard({
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
               <MaterialIcons name="event" size={12} color="#6B7280" />
               <Text style={{ fontSize: 10.5, color: '#6B7280', fontWeight: '600' }}>
-                {post.scheduledAt
-                  ? relativeDate(post.scheduledAt)
-                  : post.publishedAt
-                    ? relativeDate(post.publishedAt)
-                    : post.createdAt
-                      ? relativeDate(post.createdAt)
-                      : 'Recently'}
+                {post.status === 'published'
+                  ? relativeDate(post.publishedAt || post.scheduledAt || post.createdAt) || 'Published'
+                  : post.status === 'scheduled'
+                    ? relativeDate(post.scheduledAt || post.createdAt) || 'Scheduled'
+                    : relativeDate(post.createdAt || post.updatedAt) || 'Draft'}
               </Text>
             </View>
 

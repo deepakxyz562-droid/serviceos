@@ -204,40 +204,60 @@ const instagramAdapter: PlatformAdapter = {
     }
     const containerId = createRes.id;
 
-    // ─── Step 2: for videos, poll container until FINISHED ───
-    if (isVideo) {
-      let attempts = 0;
-      while (attempts < 8) {
-        await new Promise((r) => setTimeout(r, 2000));
-        try {
-          const statusRes = await graphFetch<{ status_code?: string; status?: string }>(
-            `${GRAPH_API_BASE}/${containerId}?fields=status_code,status&access_token=${account.accessToken}`,
+    // ─── Step 2: Poll container until FINISHED (required by Meta for both images and videos) ───
+    let attempts = 0;
+    const maxAttempts = isVideo ? 12 : 8;
+    while (attempts < maxAttempts) {
+      await new Promise((r) => setTimeout(r, attempts === 0 && !isVideo ? 1000 : 1500));
+      try {
+        const statusRes = await graphFetch<{ status_code?: string; status?: string }>(
+          `${GRAPH_API_BASE}/${containerId}?fields=status_code,status&access_token=${account.accessToken}`,
+        );
+        if (statusRes.status_code === 'FINISHED') break;
+        if (statusRes.status_code === 'ERROR') {
+          throw new Error(
+            `[instagram adapter] ${isVideo ? 'Video' : 'Image'} container processing failed: ${statusRes.status || 'unknown'}`
           );
-          if (statusRes.status_code === 'FINISHED') break;
-          if (statusRes.status_code === 'ERROR') {
-            throw new Error(`[instagram adapter] Video container processing failed: ${statusRes.status || 'unknown'}`);
-          }
-        } catch (pollErr) {
-          console.warn('[instagram adapter] status polling warning:', pollErr);
         }
-        attempts++;
+      } catch (pollErr) {
+        if (pollErr instanceof Error && pollErr.message.includes('container processing failed')) {
+          throw pollErr;
+        }
+        console.warn('[instagram adapter] status polling warning:', pollErr);
       }
+      attempts++;
     }
 
-    // ─── Step 3: publish the container ───
+    // ─── Step 3: publish the container with retry for transient code 9007 ───
     const publishBody = new URLSearchParams();
     publishBody.set('creation_id', containerId);
     publishBody.set('access_token', account.accessToken);
 
-    const publishRes = await graphFetch<{ id: string }>(
-      `${GRAPH_API_BASE}/${igBusinessId}/media_publish`,
-      {
-        method: 'POST',
-        body: publishBody,
-      },
-    );
+    let publishRes: { id: string } | null = null;
+    let publishAttempts = 0;
+    while (publishAttempts < 3) {
+      try {
+        publishRes = await graphFetch<{ id: string }>(
+          `${GRAPH_API_BASE}/${igBusinessId}/media_publish`,
+          {
+            method: 'POST',
+            body: publishBody,
+          },
+        );
+        if (publishRes?.id) break;
+      } catch (pubErr) {
+        publishAttempts++;
+        const errMsg = pubErr instanceof Error ? pubErr.message : String(pubErr);
+        if (errMsg.includes('9007') && publishAttempts < 3) {
+          // Media ID still becoming available — back off and retry
+          await new Promise((r) => setTimeout(r, 2000));
+          continue;
+        }
+        throw pubErr;
+      }
+    }
 
-    if (!publishRes.id) {
+    if (!publishRes?.id) {
       throw new Error('[instagram adapter] media_publish returned no ID');
     }
 
