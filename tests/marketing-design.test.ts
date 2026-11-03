@@ -6,6 +6,7 @@ import {
   createCommercialPosterDesign,
   COMMERCIAL_THEMES,
   COMMERCIAL_THEME_KEYS,
+  POSTER_TEMPLATES,
   type CommercialTheme,
 } from '../shared/marketing-design';
 import { buildHighQualityImagePrompt } from '../src/lib/designs/image-provider';
@@ -189,6 +190,43 @@ describe('editable marketing source documents', () => {
       expect(prompt).not.toContain('9876543210');
       expect(prompt).not.toContain('Call now');
       expect(prompt).toContain('ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS');
+    });
+  });
+
+  describe('NRA Flyer Maker Layout Templates', () => {
+    it('defines 5 professional flyer templates', () => {
+      expect(POSTER_TEMPLATES.length).toBe(5);
+      const ids = POSTER_TEMPLATES.map((t) => t.id);
+      expect(ids).toEqual(['bold_offer', 'split_card', 'tech_modern', 'urgent_callout', 'minimal_luxury']);
+    });
+
+    it('renders split_card layout with top photo and bottom solid card', () => {
+      const design = createCommercialPosterDesign({
+        brand: 'Fieseros',
+        headline: 'Field Force GPS Automation',
+        layout: 'split_card',
+      });
+      const photoLayer = design.layers.find((l) => l.id === 'bg_photo');
+      const cardLayer = design.layers.find((l) => l.id === 'card_bg');
+      expect(photoLayer).toBeDefined();
+      expect(cardLayer).toBeDefined();
+      expect(photoLayer?.height).toBeLessThan(design.height);
+      expect(cardLayer?.height).toBeGreaterThan(0);
+    });
+
+    it('renders urgent_callout layout with emergency banner and prominent callout', () => {
+      const design = createCommercialPosterDesign({
+        brand: 'Fieseros',
+        headline: '24/7 Emergency Support',
+        layout: 'urgent_callout',
+      });
+      const bannerLayer = design.layers.find((l) => l.id === 'urgent_banner');
+      const badgeLayer = design.layers.find((l) => l.id === 'badge');
+      const ctaLayer = design.layers.find((l) => l.id === 'cta');
+      expect(bannerLayer).toBeDefined();
+      expect(bannerLayer?.background).toBe('#DC2626');
+      expect(badgeLayer?.text).toContain('24/7 RAPID RESPONSE');
+      expect(ctaLayer?.text).toContain('CALL NOW');
     });
   });
 });

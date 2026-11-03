@@ -7,18 +7,22 @@ import { createHash, randomUUID } from 'crypto';
 import { uploadFile, isS3Configured, isSupabaseStorageConfigured } from '@/lib/supabase-storage';
 import { validateDesign } from '../../../shared/marketing-design';
 
-async function imageData(src: string): Promise<string> {
-  if (!src || !src.trim()) return '';
-  if (src.startsWith('data:image/')) return src;
+async function imageData(src: string): Promise<ArrayBuffer | null> {
+  if (!src || !src.trim()) return null;
+
+  if (src.startsWith('data:image/')) {
+    const base64Data = src.split(',')[1];
+    if (!base64Data) return null;
+    const buf = Buffer.from(base64Data, 'base64');
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+  }
 
   // Local filesystem fallback for relative paths (/uploads/..., /images/...)
   if (src.startsWith('/')) {
     try {
       const localFilePath = path.join(process.cwd(), 'public', src.replace(/^\/+/, ''));
-      const buffer = await readFile(localFilePath);
-      const ext = path.extname(src).toLowerCase().replace('.', '');
-      const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png';
-      return `data:${mime};base64,${buffer.toString('base64')}`;
+      const buf = await readFile(localFilePath);
+      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
     } catch {
       const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://bgos.fieseros.com';
       src = `${origin.replace(/\/+$/, '')}/${src.replace(/^\/+/, '')}`;
@@ -44,25 +48,28 @@ async function imageData(src: string): Promise<string> {
 
   const isLocalDev = process.env.NODE_ENV === 'development' && url.hostname === 'localhost';
   const isAllowedProto = url.protocol === 'https:' || (isLocalDev && url.protocol === 'http:');
-  if (!isAllowedProto || url.username || url.password || (url.port && !isLocalDev) || !allowed.has(url.hostname)) {
+  const isAllowedDomain =
+    allowed.has(url.hostname) ||
+    url.hostname.endsWith('.amazonaws.com') ||
+    url.hostname.endsWith('imagedelivery.net') ||
+    url.hostname.endsWith('unsplash.com') ||
+    url.hostname.endsWith('fieseros.com') ||
+    url.hostname.endsWith('.supabase.co');
+
+  if (!isAllowedProto || url.username || url.password || (url.port && !isLocalDev) || !isAllowedDomain) {
     throw new Error('Upload this image before using it in an export. Its host is not an approved asset source.');
   }
 
   const response = await fetch(url, { redirect:'error', signal: AbortSignal.timeout(15000) });
-  const type = response.headers.get('content-type')?.split(';')[0];
-  if (!response.ok || !['image/png','image/jpeg','image/webp'].includes(type || '')) throw new Error('Unable to load the design image');
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('Empty design image');
-  const chunks: Uint8Array[] = []; let size = 0;
-  try {
-    while (true) {
-      const {done,value} = await reader.read(); if (done) break;
-      size += value.byteLength;
-      if (size > 4_000_000) throw new Error('Design images must be smaller than 4 MB');
-      chunks.push(value);
-    }
-  } finally { await reader.cancel(); }
-  return `data:${type};base64,${Buffer.concat(chunks).toString('base64')}`;
+  const rawType = response.headers.get('content-type')?.split(';')[0]?.trim()?.toLowerCase() || '';
+  const type = rawType === 'image/jpg' ? 'image/jpeg' : rawType;
+  if (!response.ok || !['image/png','image/jpeg','image/webp'].includes(type)) throw new Error('Unable to load the design image');
+
+  const ab = await response.arrayBuffer();
+  if (ab.byteLength === 0) throw new Error('Empty design image');
+  if (ab.byteLength > 8_000_000) throw new Error('Design images must be smaller than 8 MB');
+
+  return ab;
 }
 export async function renderDesign(value: unknown, tenantId: string) {
   const design = validateDesign(value);
@@ -77,9 +84,9 @@ export async function renderDesign(value: unknown, tenantId: string) {
     const style: React.CSSProperties = { position:'absolute' as const, left:l.x, top:l.y, width:l.width, height:l.height, color:l.color, backgroundColor:l.background, fontSize:l.fontSize, opacity:l.opacity, display:'flex', overflow:'hidden', whiteSpace:'pre-wrap', lineHeight:1.15, fontFamily:'BgosDesign',transform:`rotate(${l.rotation||0}deg)` };
     if (l.type === 'image') {
       if (l.src && l.src.trim()) {
-        const b64 = await imageData(l.src);
-        if (b64) {
-          children.push(React.createElement('img', { key:l.id, src:b64, width:l.width, height:l.height, style:{...style,objectFit:'cover',objectPosition:`${l.cropX??50}% ${l.cropY??50}%`} }));
+        const ab = await imageData(l.src);
+        if (ab) {
+          children.push(React.createElement('img', { key:l.id, src: ab as unknown as string, width:l.width, height:l.height, style:{...style,objectFit:'cover',objectPosition:`${l.cropX??50}% ${l.cropY??50}%`} }));
         }
       }
     } else {

@@ -424,8 +424,8 @@ export const googleBusinessAdapter: PlatformAdapter = {
     if (!res.ok && postType === 'offer') {
       const errClone = res.clone();
       const errText = await errClone.text().catch(() => '');
-      if (errText.includes('INVALID_ARGUMENT') || res.status === 400) {
-        console.warn('[googlebusiness] OFFER payload not accepted, falling back to STANDARD post:', errText);
+      if (errText.includes('INVALID_ARGUMENT') || res.status === 400 || res.status === 500) {
+        console.warn('[googlebusiness] OFFER payload not accepted (status ' + res.status + '), falling back to STANDARD post:', errText);
         const fallbackBody: Record<string, unknown> = {
           summary: params.content,
           topicType: 'STANDARD',

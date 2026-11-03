@@ -6,10 +6,11 @@ import {
   createCommercialPosterDesign,
   type MarketingDesign,
   type CommercialTheme,
+  type PosterTemplateLayout,
   COMMERCIAL_THEMES,
   COMMERCIAL_THEME_KEYS,
+  POSTER_TEMPLATES,
 } from '../../../shared/marketing-design';
-import { EditableDesign } from '../../src/components/design/editable-design';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
@@ -115,6 +116,7 @@ function AutoBrandedPosterCard({
   isGenerating = false,
   generatingText,
   theme = 'royal_gold',
+  layout = 'bold_offer',
 }: {
   photoUri?: string | null;
   headline: string;
@@ -131,6 +133,7 @@ function AutoBrandedPosterCard({
   isGenerating?: boolean;
   generatingText?: string;
   theme?: CommercialTheme | string;
+  layout?: PosterTemplateLayout;
 }) {
   const isCompact = height < 260;
   const cleanWeb = website ? website.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
@@ -155,202 +158,298 @@ function AutoBrandedPosterCard({
         position: 'relative',
       }}
     >
-      {/* Background Photography */}
-      <Image
-        source={photoUri ? { uri: photoUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
-        style={{ width: '100%', height: '100%' }}
-        resizeMode="cover"
-      />
-
-      {/* Floating Glassmorphic Top Ribbon (Badge & Logo) */}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          paddingHorizontal: isCompact ? 10 : 14,
-          paddingVertical: isCompact ? 8 : 12,
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          backgroundColor: 'rgba(0,0,0,0.18)',
-        }}
-      >
-        <View
-          style={{
-            backgroundColor: themeConfig.badgeBg,
-            paddingHorizontal: isCompact ? 8 : 12,
-            paddingVertical: isCompact ? 3.5 : 5,
-            borderRadius: 20,
-            shadowColor: '#000',
-            shadowOpacity: 0.35,
-            shadowRadius: 5,
-            elevation: 3,
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.25)',
-          }}
-        >
-          <Text
-            style={{
-              color: themeConfig.badgeText,
-              fontSize: isCompact ? 8.5 : 10.5,
-              fontWeight: '900',
-              letterSpacing: 0.8,
-              textTransform: 'uppercase',
-            }}
-          >
-            {badge || 'SPECIAL OFFER'}
-          </Text>
-        </View>
-
-        {logoUri ? (
-          <Image
-            source={{ uri: logoUri }}
-            style={{
-              width: isCompact ? 22 : 28,
-              height: isCompact ? 22 : 28,
-              borderRadius: 6,
-              backgroundColor: 'rgba(255,255,255,0.95)',
-              borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.4)',
-            }}
-            resizeMode="cover"
-          />
-        ) : null}
-      </View>
-
-      {/* Modern Cinematic Vignette Overlay at Bottom */}
-      <View
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: 'rgba(7, 10, 19, 0.78)',
-          paddingHorizontal: isCompact ? 12 : 16,
-          paddingTop: isCompact ? 10 : 14,
-          paddingBottom: isCompact ? 10 : 14,
-          borderTopLeftRadius: isCompact ? 14 : 18,
-          borderTopRightRadius: isCompact ? 14 : 18,
-          borderTopWidth: 1,
-          borderTopColor: 'rgba(255,255,255,0.14)',
-          shadowColor: '#000',
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 5,
-        }}
-      >
-        {/* Dynamic Marketing Headline */}
-        <Text
-          numberOfLines={2}
-          style={{
-            color: '#FFFFFF',
-            fontSize: isCompact ? 13 : 17,
-            fontWeight: '900',
-            lineHeight: isCompact ? 17 : 23,
-            letterSpacing: -0.4,
-            textShadowColor: 'rgba(0,0,0,0.9)',
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: 6,
-          }}
-        >
-          {headline || 'Professional Business Services'}
-        </Text>
-
-        {subtitle ? (
-          <Text
-            numberOfLines={1}
-            style={{
-              color: themeConfig.subColor || '#94A3B8',
-              fontSize: isCompact ? 9 : 11.5,
-              fontWeight: '700',
-              marginTop: 3,
-              textShadowColor: 'rgba(0,0,0,0.85)',
-              textShadowOffset: { width: 0, height: 1 },
-              textShadowRadius: 4,
-            }}
-          >
-            {subtitle}
-          </Text>
-        ) : null}
-
-        {/* Action Row: Brand Info + Floating CTA Pill */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginTop: isCompact ? 8 : 12,
-            paddingTop: isCompact ? 6 : 8,
-            borderTopWidth: 1,
-            borderTopColor: 'rgba(255,255,255,0.1)',
-          }}
-        >
-          {/* Brand Signature */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, paddingRight: 8 }}>
-            <View
-              style={{
-                width: isCompact ? 20 : 24,
-                height: isCompact ? 20 : 24,
-                borderRadius: 12,
-                backgroundColor: themeConfig.accent,
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginRight: 6,
-              }}
-            >
-              <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: isCompact ? 9.5 : 12 }}>
-                {initial}
-              </Text>
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                numberOfLines={1}
-                style={{ color: '#FFFFFF', fontSize: isCompact ? 9.5 : 11.5, fontWeight: '800' }}
-              >
-                {businessName || 'Commercial Brand'}
-              </Text>
-              {cleanWeb ? (
-                <Text
-                  numberOfLines={1}
-                  style={{ color: '#94A3B8', fontSize: isCompact ? 7.5 : 9, fontWeight: '600' }}
-                >
-                  {cleanWeb}
-                </Text>
-              ) : null}
-            </View>
+      {/* Background Photography & Layout Structure */}
+      {layout === 'split_card' ? (
+        <View style={{ flex: 1 }}>
+          <View style={{ height: '52%', width: '100%', overflow: 'hidden' }}>
+            <Image
+              source={photoUri ? { uri: photoUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
+            />
           </View>
-
-          {/* Floating High-Conversion CTA Button */}
           <View
             style={{
-              backgroundColor: themeConfig.ctaBg,
-              paddingHorizontal: isCompact ? 8 : 12,
-              paddingVertical: isCompact ? 4 : 6,
-              borderRadius: 20,
-              shadowColor: themeConfig.accent,
-              shadowOpacity: 0.35,
-              shadowRadius: 4,
-              elevation: 2,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 3,
+              flex: 1,
+              backgroundColor: themeConfig.scrimBg,
+              paddingHorizontal: isCompact ? 10 : 14,
+              paddingTop: isCompact ? 8 : 10,
+              paddingBottom: isCompact ? 8 : 10,
+              justifyContent: 'space-between',
             }}
           >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View
+                style={{
+                  backgroundColor: themeConfig.badgeBg,
+                  paddingHorizontal: isCompact ? 8 : 10,
+                  paddingVertical: isCompact ? 3 : 4,
+                  borderRadius: 16,
+                }}
+              >
+                <Text style={{ color: themeConfig.badgeText, fontSize: isCompact ? 8 : 9.5, fontWeight: '900', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                  {badge || 'SPECIAL OFFER'}
+                </Text>
+              </View>
+              <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: isCompact ? 9 : 11, fontWeight: '800' }}>
+                {businessName || 'Brand'}
+              </Text>
+            </View>
+
             <Text
+              numberOfLines={2}
               style={{
-                color: themeConfig.ctaText,
-                fontSize: isCompact ? 8 : 10,
+                color: '#FFFFFF',
+                fontSize: isCompact ? 12 : 15,
                 fontWeight: '900',
-                letterSpacing: 0.3,
+                lineHeight: isCompact ? 16 : 20,
               }}
             >
-              {ctaText ? `${ctaText} →` : 'VISIT STORE →'}
+              {headline || 'Professional Business Services'}
             </Text>
+
+            {subtitle ? (
+              <Text numberOfLines={1} style={{ color: themeConfig.subColor || '#94A3B8', fontSize: isCompact ? 8.5 : 10.5, fontWeight: '700' }}>
+                {subtitle}
+              </Text>
+            ) : null}
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 6 }}>
+              <Text numberOfLines={1} style={{ color: '#94A3B8', fontSize: isCompact ? 7.5 : 9, fontWeight: '600', flex: 1, marginRight: 8 }}>
+                {cleanWeb || businessName}
+              </Text>
+              <View style={{ backgroundColor: themeConfig.ctaBg, paddingHorizontal: isCompact ? 8 : 12, paddingVertical: isCompact ? 3.5 : 5, borderRadius: 16 }}>
+                <Text style={{ color: themeConfig.ctaText, fontSize: isCompact ? 8 : 10, fontWeight: '900' }}>
+                  {ctaText ? `${ctaText} →` : 'VISIT STORE →'}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
-      </View>
+      ) : (
+        <>
+          <Image
+            source={photoUri ? { uri: photoUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+          />
+
+          {/* If Urgent 24/7 Layout: Top Red Banner */}
+          {layout === 'urgent_callout' ? (
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                backgroundColor: '#DC2626',
+                paddingVertical: isCompact ? 4 : 7,
+                paddingHorizontal: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                zIndex: 3,
+              }}
+            >
+              <MaterialIcons name="bolt" size={isCompact ? 12 : 15} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: isCompact ? 8.5 : 11, fontWeight: '900', letterSpacing: 0.6, textTransform: 'uppercase' }}>
+                {badge || '24/7 RAPID SERVICE'} • CALL NOW 📞
+              </Text>
+            </View>
+          ) : (
+            /* Floating Glassmorphic Top Ribbon (Badge & Logo) */
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                paddingHorizontal: isCompact ? 10 : 14,
+                paddingVertical: isCompact ? 8 : 12,
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: layout === 'tech_modern' ? 'rgba(11,15,25,0.45)' : 'rgba(0,0,0,0.18)',
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: themeConfig.badgeBg,
+                  paddingHorizontal: isCompact ? 8 : 12,
+                  paddingVertical: isCompact ? 3.5 : 5,
+                  borderRadius: 20,
+                  shadowColor: '#000',
+                  shadowOpacity: 0.35,
+                  shadowRadius: 5,
+                  elevation: 3,
+                  borderWidth: 1,
+                  borderColor: layout === 'tech_modern' ? '#38BDF8' : 'rgba(255,255,255,0.25)',
+                }}
+              >
+                <Text
+                  style={{
+                    color: themeConfig.badgeText,
+                    fontSize: isCompact ? 8.5 : 10.5,
+                    fontWeight: '900',
+                    letterSpacing: 0.8,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {badge || 'SPECIAL OFFER'}
+                </Text>
+              </View>
+
+              {logoUri ? (
+                <Image
+                  source={{ uri: logoUri }}
+                  style={{
+                    width: isCompact ? 22 : 28,
+                    height: isCompact ? 22 : 28,
+                    borderRadius: 6,
+                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.4)',
+                  }}
+                  resizeMode="cover"
+                />
+              ) : null}
+            </View>
+          )}
+
+          {/* Modern Cinematic Vignette Overlay at Bottom */}
+          <View
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              backgroundColor: layout === 'urgent_callout' ? 'rgba(15,3,3,0.85)' : 'rgba(7, 10, 19, 0.78)',
+              paddingHorizontal: isCompact ? 12 : 16,
+              paddingTop: isCompact ? 10 : 14,
+              paddingBottom: isCompact ? 10 : 14,
+              borderTopLeftRadius: isCompact ? 14 : 18,
+              borderTopRightRadius: isCompact ? 14 : 18,
+              borderTopWidth: 1,
+              borderTopColor: layout === 'urgent_callout' ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.14)',
+              shadowColor: '#000',
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 5,
+            }}
+          >
+            {/* Dynamic Marketing Headline */}
+            <Text
+              numberOfLines={2}
+              style={{
+                color: '#FFFFFF',
+                fontSize: isCompact ? 13 : 17,
+                fontWeight: '900',
+                lineHeight: isCompact ? 17 : 23,
+                letterSpacing: -0.4,
+                textShadowColor: 'rgba(0,0,0,0.9)',
+                textShadowOffset: { width: 0, height: 1 },
+                textShadowRadius: 6,
+              }}
+            >
+              {headline || 'Professional Business Services'}
+            </Text>
+
+            {subtitle ? (
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: layout === 'urgent_callout' ? '#FCA5A5' : themeConfig.subColor || '#94A3B8',
+                  fontSize: isCompact ? 9 : 11.5,
+                  fontWeight: '700',
+                  marginTop: 3,
+                  textShadowColor: 'rgba(0,0,0,0.85)',
+                  textShadowOffset: { width: 0, height: 1 },
+                  textShadowRadius: 4,
+                }}
+              >
+                {subtitle}
+              </Text>
+            ) : null}
+
+            {/* Action Row: Brand Info + Floating CTA Pill */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginTop: isCompact ? 8 : 12,
+                paddingTop: isCompact ? 6 : 8,
+                borderTopWidth: 1,
+                borderTopColor: 'rgba(255,255,255,0.1)',
+              }}
+            >
+              {/* Brand Signature */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, paddingRight: 8 }}>
+                <View
+                  style={{
+                    width: isCompact ? 20 : 24,
+                    height: isCompact ? 20 : 24,
+                    borderRadius: 12,
+                    backgroundColor: layout === 'urgent_callout' ? '#DC2626' : themeConfig.accent,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 6,
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: isCompact ? 9.5 : 12 }}>
+                    {initial}
+                  </Text>
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: '#FFFFFF', fontSize: isCompact ? 9.5 : 11.5, fontWeight: '800' }}
+                  >
+                    {businessName || 'Commercial Brand'}
+                  </Text>
+                  {cleanWeb ? (
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: '#94A3B8', fontSize: isCompact ? 7.5 : 9, fontWeight: '600' }}
+                    >
+                      {cleanWeb}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+
+              {/* Floating High-Conversion CTA Button */}
+              <View
+                style={{
+                  backgroundColor: layout === 'urgent_callout' ? '#DC2626' : themeConfig.ctaBg,
+                  paddingHorizontal: isCompact ? 8 : 12,
+                  paddingVertical: isCompact ? 4 : 6,
+                  borderRadius: 20,
+                  shadowColor: themeConfig.accent,
+                  shadowOpacity: 0.35,
+                  shadowRadius: 4,
+                  elevation: 2,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
+              >
+                <Text
+                  style={{
+                    color: themeConfig.ctaText,
+                    fontSize: isCompact ? 8 : 10,
+                    fontWeight: '900',
+                    letterSpacing: 0.3,
+                  }}
+                >
+                  {ctaText ? `${ctaText} →` : (layout === 'urgent_callout' ? 'CALL NOW 📞' : 'VISIT STORE →')}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </>
+      )}
 
       {/* Loading Overlay if generating */}
       {isGenerating && (
@@ -478,6 +577,7 @@ export default function MarketingScreen() {
   const [activeUserPrompt, setActiveUserPrompt] = useState('');
   const [generationMode, setGenerationMode] = useState<'poster' | 'graphic' | 'image_only'>('poster');
   const [activeVisualFormat, setActiveVisualFormat] = useState<'poster' | 'canvas'>('poster');
+  const [posterLayout, setPosterLayout] = useState<PosterTemplateLayout>('bold_offer');
   const [customPosterUri, setCustomPosterUri] = useState<string | null>(null);
   const [alternativeHeadlines, setAlternativeHeadlines] = useState<string[]>(DEFAULT_ALT_HEADLINES);
   const [selectedLayout, setSelectedLayout] = useState<LayoutId>('editorial');
@@ -886,7 +986,6 @@ export default function MarketingScreen() {
 
   const [customDesign, setCustomDesign] = useState<MarketingDesign | null>(null);
   const design = useMemo(() => {
-    if (customDesign) return customDesign;
     return createCommercialPosterDesign({
       brand: effectiveBusinessName,
       headline: headline || effectiveHeadline,
@@ -900,9 +999,9 @@ export default function MarketingScreen() {
       theme: colorTheme,
       logoUrl: effectiveBusinessLogo || undefined,
       tagline: effectiveBusinessTagline || undefined,
+      layout: posterLayout,
     });
   }, [
-    customDesign,
     effectiveBusinessName,
     headline,
     effectiveHeadline,
@@ -916,7 +1015,30 @@ export default function MarketingScreen() {
     colorTheme,
     effectiveBusinessLogo,
     effectiveBusinessTagline,
+    posterLayout,
   ]);
+
+  function handleAiRewriteHeadline(mode: 'punchier' | 'benefits' | 'urgent') {
+    const current = (headline || effectiveHeadline || '').trim();
+    if (!current) return;
+    if (mode === 'punchier') {
+      const words = current.split(/\s+/);
+      const shortened = words.slice(0, Math.min(5, words.length)).join(' ');
+      handleUpdateHeadline(shortened);
+    } else if (mode === 'benefits') {
+      if (/save|boost|grow|streamline/i.test(current)) {
+        handleUpdateHeadline(`Boost Results with ${effectiveBusinessName}`);
+      } else {
+        handleUpdateHeadline(`Save Time & Grow with ${current}`);
+      }
+    } else if (mode === 'urgent') {
+      if (!/limited|today|now|fast/i.test(current)) {
+        handleUpdateHeadline(`⚡ Limited Time: ${current}`);
+      } else {
+        handleUpdateHeadline(`🔥 Today Only: ${current}`);
+      }
+    }
+  }
 
   function handleSelectHeadline(newHeadline: string) {
     setHeadline(newHeadline);
@@ -1178,9 +1300,9 @@ export default function MarketingScreen() {
       return;
     }
 
-    const isPosterMode = activeVisualFormat === 'poster';
+    const isPosterMode = true;
     const resolvedPosterUrl = customPosterUri || bgPhotoUrl;
-    const mediaList = isPosterMode ? [resolvedPosterUrl] : bgPhotoUrl ? [bgPhotoUrl] : [];
+    const mediaList = resolvedPosterUrl ? [resolvedPosterUrl] : [];
     const postCaption = (caption || effectiveCaption).trim();
     const contentCheck = validateSocialPost(postCaption, selectedPlatforms, mediaList);
     if (contentCheck) {
@@ -2163,215 +2285,250 @@ export default function MarketingScreen() {
                   </Pressable>
                 </View>
 
-                {/* Visual Format Toggle: AI Creative Poster vs Editable Canvas */}
-                <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 12, padding: 3, marginBottom: 12 }}>
-                  <Pressable
-                    onPress={() => setActiveVisualFormat('poster')}
-                    style={[
-                      { flex: 1, paddingVertical: 7, alignItems: 'center', borderRadius: 10 },
-                      activeVisualFormat === 'poster' && { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, elevation: 1 }
-                    ]}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: activeVisualFormat === 'poster' ? '#009F50' : '#64748B' }}>
-                      🖼️ Finished AI Poster
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setActiveVisualFormat('canvas')}
-                    style={[
-                      { flex: 1, paddingVertical: 7, alignItems: 'center', borderRadius: 10 },
-                      activeVisualFormat === 'canvas' && { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, elevation: 1 }
-                    ]}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: activeVisualFormat === 'canvas' ? '#009F50' : '#64748B' }}>
-                      ✏️ Editable Canvas
-                    </Text>
-                  </Pressable>
+                {/* Template Layout Carousel (NRA Flyer Maker Style) */}
+                <View style={{ marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Flyer Layout Template</Text>
+                    <Text style={{ fontSize: 10.5, color: '#009F50', fontWeight: '700' }}>5 Pro Styles</Text>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                    {POSTER_TEMPLATES.map((tmpl) => {
+                      const isSelected = posterLayout === tmpl.id;
+                      return (
+                        <Pressable
+                          key={tmpl.id}
+                          onPress={() => setPosterLayout(tmpl.id)}
+                          style={{
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                            borderRadius: 12,
+                            backgroundColor: isSelected ? '#009F50' : '#FFFFFF',
+                            borderWidth: 1,
+                            borderColor: isSelected ? '#009F50' : '#E2E8F0',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            shadowColor: '#000',
+                            shadowOpacity: isSelected ? 0.15 : 0.03,
+                            shadowRadius: 3,
+                            elevation: isSelected ? 2 : 1,
+                          }}
+                        >
+                          <MaterialIcons name={tmpl.icon as any} size={15} color={isSelected ? '#FFFFFF' : '#475569'} />
+                          <View>
+                            <Text style={{ fontSize: 11.5, fontWeight: '800', color: isSelected ? '#FFFFFF' : '#0F172A' }}>
+                              {tmpl.name}
+                            </Text>
+                            <Text style={{ fontSize: 9.5, fontWeight: '600', color: isSelected ? '#E2E8F0' : '#64748B' }}>
+                              {tmpl.badge}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
                 </View>
 
-                {activeVisualFormat === 'poster' ? (
-                  <View style={{ marginBottom: 16 }}>
-                    <AutoBrandedPosterCard
-                      photoUri={customPosterUri}
-                      headline={headline}
-                      subtitle={subtitle}
-                      badge={discountBadge}
-                      ctaText={ctaText}
-                      businessName={effectiveBusinessName}
-                      logoUri={effectiveBusinessLogo}
-                      tagline={effectiveBusinessTagline}
-                      website={effectiveBusinessWebsite}
-                      height={Math.min(360, Math.round(Dimensions.get('window').height * 0.40))}
-                      theme={colorTheme}
-                      isGenerating={isGeneratingImage || (busy && generationMode === 'poster')}
-                    />
+                {/* Color Scheme Chips */}
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 6 }}>Color Scheme</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {COMMERCIAL_THEME_KEYS.map((key) => {
+                      const cfg = COMMERCIAL_THEMES[key];
+                      const isSelected = colorTheme === key;
+                      return (
+                        <Pressable
+                          key={key}
+                          onPress={() => setColorTheme(key)}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5,
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 8,
+                            backgroundColor: isSelected ? '#F0FDF4' : '#FFFFFF',
+                            borderWidth: 1,
+                            borderColor: isSelected ? '#009F50' : '#CBD5E1',
+                          }}
+                        >
+                          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cfg.badgeBg }} />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: isSelected ? '#009F50' : '#475569' }}>
+                            {cfg.name.split(' ')[0]}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
 
-                    {/* Quick Poster Customization Controls: Headline & Offer Inputs */}
-                    <View style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, padding: 12, marginTop: 12, gap: 10 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Customize Poster Details</Text>
-                        <Text style={{ fontSize: 10.5, color: '#009F50', fontWeight: '700' }}>Live Auto-Branded</Text>
-                      </View>
+                {/* Live Auto-Branded Flyer Preview */}
+                <View style={{ marginBottom: 16 }}>
+                  <AutoBrandedPosterCard
+                    photoUri={customPosterUri}
+                    headline={headline}
+                    subtitle={subtitle}
+                    badge={discountBadge}
+                    ctaText={ctaText}
+                    businessName={effectiveBusinessName}
+                    logoUri={effectiveBusinessLogo}
+                    tagline={effectiveBusinessTagline}
+                    website={effectiveBusinessWebsite}
+                    height={Math.min(360, Math.round(Dimensions.get('window').height * 0.40))}
+                    theme={colorTheme}
+                    layout={posterLayout}
+                    isGenerating={isGeneratingImage || (busy && generationMode === 'poster')}
+                  />
 
-                      <View style={{ gap: 4 }}>
+                  {/* Quick Poster Customization Controls: Headline, Offer, CTA, Photo, Brand */}
+                  <View style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, padding: 12, marginTop: 12, gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>Customize Poster Details</Text>
+                      <Text style={{ fontSize: 10.5, color: '#009F50', fontWeight: '700' }}>Live Auto-Branded</Text>
+                    </View>
+
+                    <View style={{ gap: 4 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Headline</Text>
+                        {/* One-Tap AI Rewrite Chips */}
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                          <Pressable
+                            onPress={() => handleAiRewriteHeadline('punchier')}
+                            style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}
+                          >
+                            <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#475569' }}>⚡ Punchier</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleAiRewriteHeadline('benefits')}
+                            style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}
+                          >
+                            <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#009F50' }}>🎯 Benefits</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleAiRewriteHeadline('urgent')}
+                            style={{ backgroundColor: '#FEF2F2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}
+                          >
+                            <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#EF4444' }}>🔥 Urgent</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                      <TextInput
+                        value={headline}
+                        onChangeText={handleUpdateHeadline}
+                        placeholder="e.g. 50% Off First Service"
+                        style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12.5, color: '#0F172A' }}
+                      />
+                    </View>
+
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Offer Tag</Text>
                         <TextInput
-                          value={headline}
-                          onChangeText={handleUpdateHeadline}
-                          placeholder="e.g. 50% Off First Service"
-                          style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12.5, color: '#0F172A' }}
+                          value={discountBadge}
+                          onChangeText={handleUpdateDiscountBadge}
+                          placeholder="e.g. 20% OFF"
+                          style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0F172A' }}
                         />
                       </View>
-
-                      <View style={{ flexDirection: 'row', gap: 10 }}>
-                        <View style={{ flex: 1, gap: 4 }}>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Offer Tag</Text>
-                          <TextInput
-                            value={discountBadge}
-                            onChangeText={handleUpdateDiscountBadge}
-                            placeholder="e.g. 20% OFF"
-                            style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0F172A' }}
-                          />
-                        </View>
-                        <View style={{ flex: 1, gap: 4 }}>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Button Text</Text>
-                          <TextInput
-                            value={ctaText}
-                            onChangeText={handleUpdateCtaText}
-                            placeholder="e.g. Book Now"
-                            style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0F172A' }}
-                          />
-                        </View>
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Button Text</Text>
+                        <TextInput
+                          value={ctaText}
+                          onChangeText={handleUpdateCtaText}
+                          placeholder="e.g. Book Now"
+                          style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0F172A' }}
+                        />
                       </View>
+                    </View>
 
-                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 2 }}>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 2 }}>
+                      <Pressable
+                        onPress={handlePickCustomPoster}
+                        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#009F50', backgroundColor: '#F0FDF4' }}
+                      >
+                        <MaterialIcons name="file-upload" size={16} color="#009F50" />
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#009F50' }}>Upload Photo</Text>
+                      </Pressable>
+                      {customPosterUri && (
                         <Pressable
-                          onPress={handlePickCustomPoster}
-                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#009F50', backgroundColor: '#F0FDF4' }}
+                          onPress={() => setCustomPosterUri(null)}
+                          style={{ paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#F8FAFC' }}
                         >
-                          <MaterialIcons name="file-upload" size={16} color="#009F50" />
-                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#009F50' }}>Upload Photo</Text>
+                          <Text style={{ fontSize: 11.5, fontWeight: '600', color: '#64748B' }}>Reset</Text>
                         </Pressable>
-                        {customPosterUri && (
-                          <Pressable
-                            onPress={() => setCustomPosterUri(null)}
-                            style={{ paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#F8FAFC' }}
-                          >
-                            <Text style={{ fontSize: 11.5, fontWeight: '600', color: '#64748B' }}>Reset</Text>
+                      )}
+                    </View>
+
+                    {/* Brand, Logo & Website Customization */}
+                    <View style={{ borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 10, marginTop: 4, gap: 8 }}>
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0F172A' }}>🏷️ Brand, Logo & Website</Text>
+
+                      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                        <Pressable
+                          onPress={handlePickLogo}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            paddingVertical: 7,
+                            paddingHorizontal: 10,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: '#CBD5E1',
+                            backgroundColor: '#F8FAFC',
+                          }}
+                        >
+                          {effectiveBusinessLogo ? (
+                            <Image source={{ uri: effectiveBusinessLogo }} style={{ width: 20, height: 20, borderRadius: 4 }} resizeMode="cover" />
+                          ) : (
+                            <MaterialIcons name="add-photo-alternate" size={18} color="#009F50" />
+                          )}
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>
+                            {effectiveBusinessLogo ? 'Change Logo' : 'Upload Logo'}
+                          </Text>
+                        </Pressable>
+                        {brandLogoUri && (
+                          <Pressable onPress={() => setBrandLogoUri(null)} hitSlop={6}>
+                            <Text style={{ fontSize: 10.5, color: '#EF4444', fontWeight: '700' }}>Remove</Text>
                           </Pressable>
                         )}
                       </View>
 
-                      {/* Brand, Logo & Website Customization */}
-                      <View style={{ borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 10, marginTop: 4, gap: 8 }}>
-                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0F172A' }}>🏷️ Brand, Logo & Website</Text>
+                      <View style={{ gap: 4 }}>
+                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>Brand / Shop Name</Text>
+                        <TextInput
+                          value={brandName}
+                          onChangeText={setBrandName}
+                          placeholder={effectiveBusinessName}
+                          style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, fontSize: 11.5, color: '#0F172A' }}
+                        />
+                      </View>
 
-                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                          <Pressable
-                            onPress={handlePickLogo}
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 6,
-                              paddingVertical: 7,
-                              paddingHorizontal: 10,
-                              borderRadius: 8,
-                              borderWidth: 1,
-                              borderColor: '#CBD5E1',
-                              backgroundColor: '#F8FAFC',
-                            }}
-                          >
-                            {effectiveBusinessLogo ? (
-                              <Image source={{ uri: effectiveBusinessLogo }} style={{ width: 20, height: 20, borderRadius: 4 }} resizeMode="cover" />
-                            ) : (
-                              <MaterialIcons name="add-photo-alternate" size={18} color="#009F50" />
-                            )}
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>
-                              {effectiveBusinessLogo ? 'Change Logo' : 'Upload Logo'}
-                            </Text>
-                          </Pressable>
-                          {brandLogoUri && (
-                            <Pressable onPress={() => setBrandLogoUri(null)} hitSlop={6}>
-                              <Text style={{ fontSize: 10.5, color: '#EF4444', fontWeight: '700' }}>Remove</Text>
-                            </Pressable>
-                          )}
-                        </View>
-
-                        <View style={{ gap: 4 }}>
-                          <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>Brand / Shop Name</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>Tagline / Specialty</Text>
                           <TextInput
-                            value={brandName}
-                            onChangeText={setBrandName}
-                            placeholder={effectiveBusinessName}
+                            value={brandTagline}
+                            onChangeText={setBrandTagline}
+                            placeholder="e.g. Pure Desi Ghee"
                             style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, fontSize: 11.5, color: '#0F172A' }}
                           />
                         </View>
-
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <View style={{ flex: 1, gap: 4 }}>
-                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>Tagline / Specialty</Text>
-                            <TextInput
-                              value={brandTagline}
-                              onChangeText={setBrandTagline}
-                              placeholder="e.g. Pure Desi Ghee"
-                              style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, fontSize: 11.5, color: '#0F172A' }}
-                            />
-                          </View>
-                          <View style={{ flex: 1, gap: 4 }}>
-                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>Official Website</Text>
-                            <TextInput
-                              value={brandWebsite}
-                              onChangeText={setBrandWebsite}
-                              placeholder={effectiveBusinessWebsite}
-                              autoCapitalize="none"
-                              keyboardType="url"
-                              style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, fontSize: 11.5, color: '#0F172A' }}
-                            />
-                          </View>
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>Official Website</Text>
+                          <TextInput
+                            value={brandWebsite}
+                            onChangeText={setBrandWebsite}
+                            placeholder={effectiveBusinessWebsite}
+                            autoCapitalize="none"
+                            keyboardType="url"
+                            style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, fontSize: 11.5, color: '#0F172A' }}
+                          />
                         </View>
                       </View>
                     </View>
                   </View>
-                ) : (
-                  <>
-                    <Pressable onPress={()=>loadDesignDrafts()} style={{padding:12}}><Text>Open saved design</Text></Pressable>
-                    {moreDrafts&&<Pressable onPress={()=>loadDesignDrafts(draftPage+1)}><Text>Load more drafts</Text></Pressable>}
-                    {designDrafts.map(d=><Pressable key={d.id} style={{padding:12}} onPress={()=>{try{setCustomDesign(validateDesign(JSON.parse(d.designJson)));setCaption(d.content);setEditingDesignId(d.id);setDesignRevision(d.updatedAt);savedDesignSnapshot.current=JSON.stringify({design:JSON.parse(d.designJson),caption:d.content});setDesignDrafts([]);}catch{setError('This design could not be opened.');}}}><Text>{d.content.slice(0,70)}</Text></Pressable>)}
-                    <EditableDesign design={design} onChange={handleCustomDesignChange} />
-
-                    <View style={styles.canvasToolbar}>
-                      <Pressable onPress={() => setIsEditingText(true)} style={styles.toolItem}>
-                        <MaterialIcons name="text-fields" size={20} color="#0F172A" />
-                        <Text style={styles.toolLabel}>Text</Text>
-                      </Pressable>
-
-                      <Pressable onPress={handleUseMyPhoto} style={styles.toolItem}>
-                        <MaterialIcons name="insert-photo" size={20} color="#0F172A" />
-                        <Text style={styles.toolLabel}>Photo</Text>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={() => {
-                          setColorTheme((prev) => (prev === 'emerald' ? 'sand' : prev === 'sand' ? 'dark' : 'emerald'));
-                        }}
-                        style={styles.toolItem}
-                      >
-                        <MaterialIcons name="palette" size={20} color="#009F50" />
-                        <Text style={styles.toolLabel}>Colours</Text>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={() => {
-                          setAspectRatio((prev) => (prev === '1:1' ? '4:5' : prev === '4:5' ? '9:16' : '1:1'));
-                        }}
-                        style={styles.toolItem}
-                      >
-                        <MaterialIcons name="aspect-ratio" size={20} color="#0F172A" />
-                        <Text style={styles.toolLabel}>Resize</Text>
-                      </Pressable>
-                    </View>
-                  </>
-                )}
+                </View>
 
                 {/* Summary Row 1: Caption */}
                 <Pressable onPress={() => setIsEditingCaption(true)} style={styles.summaryRow}>
@@ -2497,25 +2654,22 @@ export default function MarketingScreen() {
                     <MaterialIcons name="more-horiz" size={20} color="#64748B" />
                   </View>
 
-                  {activeVisualFormat === 'poster' ? (
-                    <View style={{ backgroundColor: '#090D16', paddingVertical: 4 }}>
-                      <AutoBrandedPosterCard
-                        photoUri={customPosterUri || bgPhotoUrl}
-                        headline={headline || effectiveHeadline}
-                        subtitle={subtitle}
-                        badge={discountBadge}
-                        ctaText={ctaText}
-                        businessName={effectiveBusinessName}
-                        logoUri={effectiveBusinessLogo}
-                        tagline={effectiveBusinessTagline}
-                        website={effectiveBusinessWebsite}
-                        height={Math.min(320, Math.round(Dimensions.get('window').height * 0.36))}
-                        theme={colorTheme}
-                      />
-                    </View>
-                  ) : (
-                    <EditableDesign design={design} onChange={handleCustomDesignChange} />
-                  )}
+                  <View style={{ backgroundColor: '#090D16', paddingVertical: 4 }}>
+                    <AutoBrandedPosterCard
+                      photoUri={customPosterUri || bgPhotoUrl}
+                      headline={headline || effectiveHeadline}
+                      subtitle={subtitle}
+                      badge={discountBadge}
+                      ctaText={ctaText}
+                      businessName={effectiveBusinessName}
+                      logoUri={effectiveBusinessLogo}
+                      tagline={effectiveBusinessTagline}
+                      website={effectiveBusinessWebsite}
+                      height={Math.min(320, Math.round(Dimensions.get('window').height * 0.36))}
+                      theme={colorTheme}
+                      layout={posterLayout}
+                    />
+                  </View>
 
                   {/* Social Action Icons */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10 }}>

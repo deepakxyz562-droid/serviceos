@@ -46,6 +46,59 @@ export type CommercialTheme =
   | 'sand'
   | 'dark';
 
+export type PosterTemplateLayout =
+  | 'bold_offer'
+  | 'split_card'
+  | 'tech_modern'
+  | 'urgent_callout'
+  | 'minimal_luxury';
+
+export interface PosterTemplateMeta {
+  id: PosterTemplateLayout;
+  name: string;
+  badge: string;
+  icon: string;
+  description: string;
+}
+
+export const POSTER_TEMPLATES: PosterTemplateMeta[] = [
+  {
+    id: 'bold_offer',
+    name: 'Bold Promo',
+    badge: 'PROMO',
+    icon: 'local-offer',
+    description: 'High-contrast commercial offer with bold badge and dark scrim',
+  },
+  {
+    id: 'split_card',
+    name: 'Split Card',
+    badge: 'POPULAR',
+    icon: 'view-agenda',
+    description: '50/50 photo on top with high-readability solid card below',
+  },
+  {
+    id: 'tech_modern',
+    name: 'Tech Modern',
+    badge: 'SAAS',
+    icon: 'memory',
+    description: 'Sleek dark UI aesthetic with cyan/emerald telemetry accents',
+  },
+  {
+    id: 'urgent_callout',
+    name: 'Urgent 24/7',
+    badge: 'RAPID',
+    icon: 'bolt',
+    description: 'Top emergency banner and instant phone callout for services',
+  },
+  {
+    id: 'minimal_luxury',
+    name: 'Minimal Luxury',
+    badge: 'ELEGANT',
+    icon: 'auto-awesome',
+    description: 'Clean luxury layout with generous negative space and refined typography',
+  },
+];
+
 export interface CommercialThemeConfig {
   id: CommercialTheme;
   name: string;
@@ -188,6 +241,7 @@ export function createCommercialPosterDesign(input: {
   theme?: CommercialTheme | string;
   logoUrl?: string;
   tagline?: string;
+  layout?: PosterTemplateLayout;
 }): MarketingDesign {
   const sizes: Record<string, [number, number]> = {
     '1:1': [1080, 1080],
@@ -197,13 +251,14 @@ export function createCommercialPosterDesign(input: {
   };
   const [width, height] = sizes[input.ratio || '4:5'] || sizes['4:5'];
 
+  const layout = input.layout || 'bold_offer';
   const themeColors = (COMMERCIAL_THEMES[input.theme as CommercialTheme] || COMMERCIAL_THEMES.emerald);
 
   const brandText = (input.brand || 'Professional Business').trim();
   const headlineText = (input.headline || 'Top-Rated Professional Services').trim();
   const badgeText = (input.badge || 'SPECIAL OFFER').trim().toUpperCase();
   const subText = (input.subtitle || 'Premium quality & 100% satisfaction guaranteed.').trim();
-  const ctaLabel = (input.cta || 'VISIT STORE').trim().toUpperCase();
+  const ctaLabel = (input.cta || (layout === 'urgent_callout' ? 'CALL NOW 📞' : 'VISIT STORE')).trim().toUpperCase();
   const taglineText = input.tagline ? ` • ${input.tagline.trim()}` : '';
   const webText = input.website
     ? input.website.replace(/^https?:\/\//, '').replace(/\/$/, '')
@@ -213,6 +268,53 @@ export function createCommercialPosterDesign(input: {
     : 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80';
 
   const footerH = 140;
+
+  // ─── LAYOUT VARIATION 1: Split Card (50/50 Photo on Top, Solid Card Below) ───
+  if (layout === 'split_card') {
+    const splitY = Math.round(height * 0.52);
+    return validateDesign({
+      version: 1,
+      width,
+      height,
+      background: themeColors.bg,
+      layers: [
+        { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height: splitY, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 1 },
+        { id: 'card_bg', type: 'shape', x: 0, y: splitY, width, height: height - splitY, color: 'transparent', background: themeColors.scrimBg, fontSize: 16, opacity: 1 },
+        { id: 'badge', type: 'text', x: 50, y: splitY + 24, width: Math.min(320, width - 100), height: 44, text: badgeText, color: themeColors.badgeText, background: themeColors.badgeBg, fontSize: 20, opacity: 1 },
+        { id: 'brand', type: 'text', x: Math.min(400, width - 260), y: splitY + 26, width: Math.max(200, width - 450), height: 40, text: brandText.toUpperCase(), color: '#ffffff', background: 'transparent', fontSize: 20, opacity: 1 },
+        { id: 'headline', type: 'text', x: 50, y: splitY + 84, width: width - 100, height: 140, text: headlineText, color: '#ffffff', background: 'transparent', fontSize: width > 1080 ? 68 : 56, opacity: 1 },
+        { id: 'subtitle', type: 'text', x: 50, y: splitY + 230, width: width - 100, height: 70, text: subText, color: themeColors.subColor, background: 'transparent', fontSize: 28, opacity: 1 },
+        { id: 'footer_bg', type: 'shape', x: 0, y: height - footerH, width, height: footerH, color: 'transparent', background: themeColors.footerBg, fontSize: 16, opacity: 0.98 },
+        { id: 'footer_brand', type: 'text', x: 50, y: height - footerH + 32, width: Math.max(200, width - 360), height: 76, text: `${brandText}${taglineText}\n🌐 ${webText}${input.phone ? ` • 📞 ${input.phone.trim()}` : ''}`, color: '#ffffff', background: 'transparent', fontSize: 22, opacity: 1 },
+        { id: 'cta', type: 'text', x: width - 290, y: height - footerH + 42, width: 240, height: 56, text: `${ctaLabel} →`, color: themeColors.ctaText, background: themeColors.ctaBg, fontSize: 22, opacity: 1 },
+      ],
+    });
+  }
+
+  // ─── LAYOUT VARIATION 2: Urgent 24/7 Callout (Emergency Header Banner & Prominent Phone CTA) ───
+  if (layout === 'urgent_callout') {
+    const bottomContentH = 460;
+    const bottomStartY = height - bottomContentH;
+    return validateDesign({
+      version: 1,
+      width,
+      height,
+      background: '#180404',
+      layers: [
+        { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 1 },
+        { id: 'urgent_banner', type: 'shape', x: 0, y: 0, width, height: 90, color: 'transparent', background: '#DC2626', fontSize: 16, opacity: 0.95 },
+        { id: 'badge', type: 'text', x: 30, y: 24, width: width - 60, height: 46, text: `🚨 ${badgeText} • 24/7 RAPID RESPONSE`, color: '#FFFFFF', background: 'transparent', fontSize: 24, opacity: 1 },
+        { id: 'bottom_scrim', type: 'shape', x: 0, y: bottomStartY, width, height: bottomContentH, color: 'transparent', background: '#0F0303', fontSize: 16, opacity: 0.85 },
+        { id: 'headline', type: 'text', x: 50, y: bottomStartY + 30, width: width - 100, height: 150, text: headlineText, color: '#FFFFFF', background: 'transparent', fontSize: width > 1080 ? 76 : 64, opacity: 1 },
+        { id: 'subtitle', type: 'text', x: 50, y: bottomStartY + 190, width: width - 100, height: 80, text: subText, color: '#FCA5A5', background: 'transparent', fontSize: 32, opacity: 1 },
+        { id: 'footer_bg', type: 'shape', x: 0, y: height - footerH, width, height: footerH, color: 'transparent', background: '#050101', fontSize: 16, opacity: 0.98 },
+        { id: 'footer_brand', type: 'text', x: 50, y: height - footerH + 32, width: Math.max(200, width - 360), height: 76, text: `${brandText}${taglineText}\n🌐 ${webText}${input.phone ? ` • 📞 ${input.phone.trim()}` : ''}`, color: '#ffffff', background: 'transparent', fontSize: 22, opacity: 1 },
+        { id: 'cta', type: 'text', x: width - 290, y: height - footerH + 42, width: 240, height: 56, text: `${ctaLabel}`, color: '#FFFFFF', background: '#DC2626', fontSize: 22, opacity: 1 },
+      ],
+    });
+  }
+
+  // ─── DEFAULT & BOLD OFFER / TECH MODERN / MINIMAL LUXURY ───
   const bottomContentH = 460;
   const bottomStartY = height - bottomContentH;
 
