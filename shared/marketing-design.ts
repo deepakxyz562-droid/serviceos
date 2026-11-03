@@ -3,6 +3,20 @@ export type DesignLayer = {
   id: string; type: 'text' | 'image' | 'shape'; x: number; y: number;
   width: number; height: number; text?: string; src?: string; assetId?: string; rotation?: number; cropX?: number; cropY?: number;
   color: string; background: string; fontSize: number; opacity: number;
+  borderRadius?: number;
+  borderTopLeftRadius?: number;
+  borderTopRightRadius?: number;
+  borderBottomLeftRadius?: number;
+  borderBottomRightRadius?: number;
+  borderWidth?: number;
+  borderTopWidth?: number;
+  borderBottomWidth?: number;
+  borderColor?: string;
+  padding?: string;
+  alignItems?: 'flex-start' | 'center' | 'flex-end';
+  justifyContent?: 'flex-start' | 'center' | 'flex-end' | 'space-between';
+  fontWeight?: number | string;
+  letterSpacing?: number | string;
 };
 export type MarketingDesign = { version: 1; width: number; height: number; background: string; layers: DesignLayer[] };
 export function validateDesign(value: unknown): MarketingDesign {
@@ -18,6 +32,14 @@ export function validateDesign(value: unknown): MarketingDesign {
     if(l.assetId !== undefined && (typeof l.assetId !== 'string' || l.assetId.length > 100)) throw new Error('Invalid asset reference');
     if(l.rotation !== undefined && (!Number.isFinite(l.rotation) || Math.abs(l.rotation)>180)) throw new Error('Invalid rotation');
     for(const crop of [l.cropX,l.cropY]) if(crop !== undefined && (!Number.isFinite(crop)||crop<0||crop>100)) throw new Error('Invalid crop position');
+    for(const r of [l.borderRadius, l.borderTopLeftRadius, l.borderTopRightRadius, l.borderBottomLeftRadius, l.borderBottomRightRadius]) if(r !== undefined && (!Number.isFinite(r) || r < 0 || r > 500)) throw new Error('Invalid border radius');
+    for(const bw of [l.borderWidth, l.borderTopWidth, l.borderBottomWidth]) if(bw !== undefined && (!Number.isFinite(bw) || bw < 0 || bw > 50)) throw new Error('Invalid border width');
+    if(l.borderColor !== undefined && (typeof l.borderColor !== 'string' || l.borderColor.length > 50)) throw new Error('Invalid border color');
+    if(l.padding !== undefined && (typeof l.padding !== 'string' || l.padding.length > 50)) throw new Error('Invalid padding');
+    if(l.alignItems !== undefined && !['flex-start', 'center', 'flex-end'].includes(l.alignItems)) throw new Error('Invalid alignItems');
+    if(l.justifyContent !== undefined && !['flex-start', 'center', 'flex-end', 'space-between'].includes(l.justifyContent)) throw new Error('Invalid justifyContent');
+    if(l.fontWeight !== undefined && typeof l.fontWeight !== 'number' && typeof l.fontWeight !== 'string') throw new Error('Invalid fontWeight');
+    if(l.letterSpacing !== undefined && typeof l.letterSpacing !== 'number' && typeof l.letterSpacing !== 'string') throw new Error('Invalid letterSpacing');
     ids.add(l.id);
   }
   return JSON.parse(JSON.stringify(d));
@@ -286,14 +308,14 @@ export function createCommercialPosterDesign(input: {
       background: themeColors.bg,
       layers: [
         { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height: splitY, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 1 },
-        { id: 'card_bg', type: 'shape', x: 0, y: splitY, width, height: height - splitY, color: 'transparent', background: themeColors.scrimBg, fontSize: 16, opacity: 1 },
-        { id: 'badge', type: 'text', x: 50, y: splitY + 24, width: Math.min(320, width - 100), height: 44, text: badgeText, color: themeColors.badgeText, background: themeColors.badgeBg, fontSize: 20, opacity: 1 },
-        { id: 'brand', type: 'text', x: Math.min(400, width - 260), y: splitY + 26, width: Math.max(200, width - 450), height: 40, text: brandText.toUpperCase(), color: '#ffffff', background: 'transparent', fontSize: 20, opacity: 1 },
-        { id: 'headline', type: 'text', x: 50, y: splitY + 84, width: width - 100, height: 140, text: headlineText, color: '#ffffff', background: 'transparent', fontSize: width > 1080 ? 68 : 56, opacity: 1 },
-        { id: 'subtitle', type: 'text', x: 50, y: splitY + 230, width: width - 100, height: 70, text: subText, color: themeColors.subColor, background: 'transparent', fontSize: 28, opacity: 1 },
-        { id: 'footer_bg', type: 'shape', x: 0, y: height - footerH, width, height: footerH, color: 'transparent', background: themeColors.footerBg, fontSize: 16, opacity: 0.98 },
-        { id: 'footer_brand', type: 'text', x: 50, y: height - footerH + 32, width: Math.max(200, width - 360), height: 76, text: `${brandText}${taglineText}\n🌐 ${webText}${input.phone ? ` • 📞 ${input.phone.trim()}` : ''}`, color: '#ffffff', background: 'transparent', fontSize: 22, opacity: 1 },
-        { id: 'cta', type: 'text', x: width - 290, y: height - footerH + 42, width: 240, height: 56, text: `${ctaLabel} →`, color: themeColors.ctaText, background: themeColors.ctaBg, fontSize: 22, opacity: 1 },
+        { id: 'card_bg', type: 'shape', x: 0, y: splitY, width, height: height - splitY, color: 'transparent', background: themeColors.scrimBg, fontSize: 16, opacity: 1, borderTopLeftRadius: 36, borderTopRightRadius: 36, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.18)' },
+        { id: 'badge', type: 'text', x: 50, y: splitY + 28, width: Math.min(320, width - 100), height: 48, text: badgeText, color: themeColors.badgeText, background: themeColors.badgeBg, fontSize: 20, opacity: 1, borderRadius: 24, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)', alignItems: 'center', justifyContent: 'center', padding: '0 24px', fontWeight: 900, letterSpacing: 1 },
+        { id: 'brand', type: 'text', x: Math.min(400, width - 260), y: splitY + 32, width: Math.max(200, width - 450), height: 40, text: brandText.toUpperCase(), color: '#ffffff', background: 'transparent', fontSize: 22, opacity: 1, fontWeight: 800, letterSpacing: 0.8 },
+        { id: 'headline', type: 'text', x: 50, y: splitY + 96, width: width - 100, height: 140, text: headlineText, color: '#ffffff', background: 'transparent', fontSize: width > 1080 ? 68 : 56, opacity: 1, fontWeight: 900, letterSpacing: -0.8 },
+        { id: 'subtitle', type: 'text', x: 50, y: splitY + 242, width: width - 100, height: 70, text: subText, color: themeColors.subColor, background: 'transparent', fontSize: 28, opacity: 1, fontWeight: 700 },
+        { id: 'footer_bg', type: 'shape', x: 0, y: height - footerH, width, height: footerH, color: 'transparent', background: themeColors.footerBg, fontSize: 16, opacity: 0.98, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+        { id: 'footer_brand', type: 'text', x: 50, y: height - footerH + 32, width: Math.max(200, width - 360), height: 76, text: `${brandText}${taglineText}\n🌐 ${webText}${input.phone ? ` • 📞 ${input.phone.trim()}` : ''}`, color: '#ffffff', background: 'transparent', fontSize: 22, opacity: 1, fontWeight: 600 },
+        { id: 'cta', type: 'text', x: width - 290, y: height - footerH + 42, width: 240, height: 56, text: `${ctaLabel} →`, color: themeColors.ctaText, background: themeColors.ctaBg, fontSize: 22, opacity: 1, borderRadius: 28, alignItems: 'center', justifyContent: 'center', padding: '0 28px', fontWeight: 900, letterSpacing: 0.8, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)' },
       ],
     });
   }
@@ -310,13 +332,13 @@ export function createCommercialPosterDesign(input: {
       layers: [
         { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 1 },
         { id: 'urgent_banner', type: 'shape', x: 0, y: 0, width, height: 90, color: 'transparent', background: '#DC2626', fontSize: 16, opacity: 0.95 },
-        { id: 'badge', type: 'text', x: 30, y: 24, width: width - 60, height: 46, text: `🚨 ${badgeText} • 24/7 RAPID RESPONSE`, color: '#FFFFFF', background: 'transparent', fontSize: 24, opacity: 1 },
-        { id: 'bottom_scrim', type: 'shape', x: 0, y: bottomStartY, width, height: bottomContentH, color: 'transparent', background: '#0F0303', fontSize: 16, opacity: 0.85 },
-        { id: 'headline', type: 'text', x: 50, y: bottomStartY + 30, width: width - 100, height: 150, text: headlineText, color: '#FFFFFF', background: 'transparent', fontSize: width > 1080 ? 76 : 64, opacity: 1 },
-        { id: 'subtitle', type: 'text', x: 50, y: bottomStartY + 190, width: width - 100, height: 80, text: subText, color: '#FCA5A5', background: 'transparent', fontSize: 32, opacity: 1 },
-        { id: 'footer_bg', type: 'shape', x: 0, y: height - footerH, width, height: footerH, color: 'transparent', background: '#050101', fontSize: 16, opacity: 0.98 },
-        { id: 'footer_brand', type: 'text', x: 50, y: height - footerH + 32, width: Math.max(200, width - 360), height: 76, text: `${brandText}${taglineText}\n🌐 ${webText}${input.phone ? ` • 📞 ${input.phone.trim()}` : ''}`, color: '#ffffff', background: 'transparent', fontSize: 22, opacity: 1 },
-        { id: 'cta', type: 'text', x: width - 290, y: height - footerH + 42, width: 240, height: 56, text: `${ctaLabel}`, color: '#FFFFFF', background: '#DC2626', fontSize: 22, opacity: 1 },
+        { id: 'badge', type: 'text', x: 30, y: 22, width: width - 60, height: 46, text: `🚨 ${badgeText} • 24/7 RAPID RESPONSE`, color: '#FFFFFF', background: 'transparent', fontSize: 24, opacity: 1, alignItems: 'center', justifyContent: 'center', fontWeight: 900, letterSpacing: 1 },
+        { id: 'bottom_scrim', type: 'shape', x: 0, y: bottomStartY, width, height: bottomContentH, color: 'transparent', background: '#0F0303', fontSize: 16, opacity: 0.85, borderTopLeftRadius: 36, borderTopRightRadius: 36, borderWidth: 1.5, borderColor: 'rgba(239,68,68,0.3)' },
+        { id: 'headline', type: 'text', x: 50, y: bottomStartY + 30, width: width - 100, height: 150, text: headlineText, color: '#FFFFFF', background: 'transparent', fontSize: width > 1080 ? 76 : 64, opacity: 1, fontWeight: 900, letterSpacing: -1 },
+        { id: 'subtitle', type: 'text', x: 50, y: bottomStartY + 190, width: width - 100, height: 80, text: subText, color: '#FCA5A5', background: 'transparent', fontSize: 32, opacity: 1, fontWeight: 700 },
+        { id: 'footer_bg', type: 'shape', x: 0, y: height - footerH, width, height: footerH, color: 'transparent', background: '#050101', fontSize: 16, opacity: 0.98, borderTopWidth: 1, borderColor: 'rgba(239,68,68,0.2)' },
+        { id: 'footer_brand', type: 'text', x: 50, y: height - footerH + 32, width: Math.max(200, width - 360), height: 76, text: `${brandText}${taglineText}\n🌐 ${webText}${input.phone ? ` • 📞 ${input.phone.trim()}` : ''}`, color: '#ffffff', background: 'transparent', fontSize: 22, opacity: 1, fontWeight: 600 },
+        { id: 'cta', type: 'text', x: width - 290, y: height - footerH + 42, width: 240, height: 56, text: `${ctaLabel}`, color: '#FFFFFF', background: '#DC2626', fontSize: 22, opacity: 1, borderRadius: 28, alignItems: 'center', justifyContent: 'center', padding: '0 28px', fontWeight: 900, letterSpacing: 0.8, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)' },
       ],
     });
   }
@@ -366,6 +388,14 @@ export function createCommercialPosterDesign(input: {
       background: themeColors.badgeBg,
       fontSize: 22,
       opacity: 1,
+      borderRadius: 24,
+      borderWidth: 1.5,
+      borderColor: 'rgba(255, 255, 255, 0.35)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0 24px',
+      fontWeight: 900,
+      letterSpacing: 1.2,
     },
     // 4. Top Brand
     {
@@ -380,6 +410,8 @@ export function createCommercialPosterDesign(input: {
       background: 'transparent',
       fontSize: 22,
       opacity: 1,
+      fontWeight: 800,
+      letterSpacing: 0.8,
     },
     ...(logoSrc
       ? [
@@ -395,6 +427,9 @@ export function createCommercialPosterDesign(input: {
             background: 'transparent',
             fontSize: 16,
             opacity: 1,
+            borderRadius: 16,
+            borderWidth: 2,
+            borderColor: 'rgba(255, 255, 255, 0.4)',
           },
         ]
       : []),
@@ -410,6 +445,10 @@ export function createCommercialPosterDesign(input: {
       background: themeColors.scrimBg,
       fontSize: 16,
       opacity: 0.75,
+      borderTopLeftRadius: 36,
+      borderTopRightRadius: 36,
+      borderWidth: 1.5,
+      borderColor: 'rgba(255, 255, 255, 0.15)',
     },
     // 6. Headline (Main marketing hook)
     {
@@ -424,6 +463,8 @@ export function createCommercialPosterDesign(input: {
       background: 'transparent',
       fontSize: width > 1080 ? 76 : 64,
       opacity: 1,
+      fontWeight: 900,
+      letterSpacing: -1,
     },
     // 7. Subtitle (Offer details / supporting text)
     {
@@ -438,6 +479,8 @@ export function createCommercialPosterDesign(input: {
       background: 'transparent',
       fontSize: 32,
       opacity: 1,
+      fontWeight: 700,
+      letterSpacing: 0.2,
     },
     // 8. Auto-Branded Footer Background
     {
@@ -451,6 +494,8 @@ export function createCommercialPosterDesign(input: {
       background: themeColors.footerBg,
       fontSize: 16,
       opacity: 0.98,
+      borderTopWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     // 9. Footer Business Details (Name + Tagline / Website)
     {
@@ -465,6 +510,7 @@ export function createCommercialPosterDesign(input: {
       background: 'transparent',
       fontSize: 22,
       opacity: 1,
+      fontWeight: 600,
     },
     // 10. Call To Action Button
     {
@@ -479,6 +525,14 @@ export function createCommercialPosterDesign(input: {
       background: themeColors.ctaBg,
       fontSize: 22,
       opacity: 1,
+      borderRadius: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0 28px',
+      fontWeight: 900,
+      letterSpacing: 0.8,
+      borderWidth: 1.5,
+      borderColor: 'rgba(255, 255, 255, 0.25)',
     },
   ];
 

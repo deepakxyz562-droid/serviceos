@@ -248,5 +248,34 @@ describe('editable marketing source documents', () => {
       d.layers[0].src = 'data:image/jpg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
       expect(validateDesign(d)).toBeDefined();
     });
+
+    it('applies border-radius, flex centering, and bold weights to commercial poster elements', () => {
+      const design = createCommercialPosterDesign({
+        brand: 'Fieseros',
+        headline: 'Field Force GPS Automation',
+        badge: 'SPECIAL PROMO',
+        cta: 'BOOK DEMO',
+      });
+      const badgeLayer = design.layers.find((l) => l.id === 'badge');
+      const ctaLayer = design.layers.find((l) => l.id === 'cta');
+      const scrimLayer = design.layers.find((l) => l.id === 'bottom_scrim');
+      const headlineLayer = design.layers.find((l) => l.id === 'headline');
+
+      expect(badgeLayer?.borderRadius).toBe(24);
+      expect(badgeLayer?.alignItems).toBe('center');
+      expect(badgeLayer?.justifyContent).toBe('center');
+      expect(badgeLayer?.fontWeight).toBe(900);
+      expect(badgeLayer?.borderColor).toBeDefined();
+
+      expect(ctaLayer?.borderRadius).toBe(28);
+      expect(ctaLayer?.alignItems).toBe('center');
+      expect(ctaLayer?.justifyContent).toBe('center');
+      expect(ctaLayer?.fontWeight).toBe(900);
+
+      expect(scrimLayer?.borderTopLeftRadius).toBe(36);
+      expect(scrimLayer?.borderTopRightRadius).toBe(36);
+
+      expect(headlineLayer?.fontWeight).toBe(900);
+    });
   });
 });

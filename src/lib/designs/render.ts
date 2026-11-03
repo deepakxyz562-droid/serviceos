@@ -81,7 +81,37 @@ export async function renderDesign(value: unknown, tenantId: string) {
       if(!asset)throw new Error('Image is unavailable in this workspace');
       l.src=asset.url;
     }
-    const style: React.CSSProperties = { position:'absolute' as const, left:l.x, top:l.y, width:l.width, height:l.height, color:l.color, backgroundColor:l.background, fontSize:l.fontSize, opacity:l.opacity, display:'flex', overflow:'hidden', whiteSpace:'pre-wrap', lineHeight:1.15, fontFamily:'BgosDesign',transform:`rotate(${l.rotation||0}deg)` };
+    const style: React.CSSProperties = {
+      position: 'absolute' as const,
+      left: l.x,
+      top: l.y,
+      width: l.width,
+      height: l.height,
+      color: l.color,
+      backgroundColor: l.background,
+      fontSize: l.fontSize,
+      opacity: l.opacity,
+      display: 'flex',
+      overflow: 'hidden',
+      whiteSpace: 'pre-wrap',
+      lineHeight: 1.15,
+      fontFamily: 'BgosDesign',
+      transform: `rotate(${l.rotation || 0}deg)`,
+      ...(l.borderRadius !== undefined ? { borderRadius: l.borderRadius } : {}),
+      ...(l.borderTopLeftRadius !== undefined ? { borderTopLeftRadius: l.borderTopLeftRadius } : {}),
+      ...(l.borderTopRightRadius !== undefined ? { borderTopRightRadius: l.borderTopRightRadius } : {}),
+      ...(l.borderBottomLeftRadius !== undefined ? { borderBottomLeftRadius: l.borderBottomLeftRadius } : {}),
+      ...(l.borderBottomRightRadius !== undefined ? { borderBottomRightRadius: l.borderBottomRightRadius } : {}),
+      ...(l.borderWidth !== undefined ? { borderWidth: l.borderWidth, borderStyle: 'solid' } : {}),
+      ...(l.borderTopWidth !== undefined ? { borderTopWidth: l.borderTopWidth, borderStyle: 'solid' } : {}),
+      ...(l.borderBottomWidth !== undefined ? { borderBottomWidth: l.borderBottomWidth, borderStyle: 'solid' } : {}),
+      ...(l.borderColor ? { borderColor: l.borderColor } : {}),
+      ...(l.padding ? { padding: l.padding } : {}),
+      ...(l.alignItems ? { alignItems: l.alignItems as any } : {}),
+      ...(l.justifyContent ? { justifyContent: l.justifyContent as any } : {}),
+      ...(l.letterSpacing !== undefined ? { letterSpacing: l.letterSpacing } : {}),
+      ...(l.fontWeight ? { fontWeight: l.fontWeight as any } : {}),
+    };
     if (l.type === 'image') {
       if (l.src && l.src.trim()) {
         const ab = await imageData(l.src);
@@ -93,7 +123,29 @@ export async function renderDesign(value: unknown, tenantId: string) {
       children.push(React.createElement('div', { key:l.id, style }, l.type === 'text' ? l.text : undefined));
     }
   }
-  const response = new ImageResponse(React.createElement('div', { style:{ width:design.width,height:design.height,display:'flex',position:'relative',backgroundColor:design.background } }, ...children), {width:design.width,height:design.height,fonts:[{name:'BgosDesign',data:await readFile(path.join(process.cwd(),'public/fonts/BgosDesign-Regular.ttf')),weight:400,style:'normal'}]});
+
+  const [regularFont, boldFont] = await Promise.all([
+    readFile(path.join(process.cwd(), 'public/fonts/BgosDesign-Regular.ttf')),
+    readFile(path.join(process.cwd(), 'public/fonts/BgosDesign-Bold.ttf')).catch(() => null),
+  ]);
+
+  const fontDescriptors: Array<{ name: string; data: Buffer; weight: 400 | 600 | 700 | 800 | 900; style: 'normal' }> = [
+    { name: 'BgosDesign', data: regularFont, weight: 400, style: 'normal' },
+  ];
+  if (boldFont) {
+    fontDescriptors.push(
+      { name: 'BgosDesign', data: boldFont, weight: 700, style: 'normal' },
+      { name: 'BgosDesign', data: boldFont, weight: 800, style: 'normal' },
+      { name: 'BgosDesign', data: boldFont, weight: 900, style: 'normal' },
+    );
+  } else {
+    fontDescriptors.push(
+      { name: 'BgosDesign', data: regularFont, weight: 700, style: 'normal' },
+      { name: 'BgosDesign', data: regularFont, weight: 900, style: 'normal' },
+    );
+  }
+
+  const response = new ImageResponse(React.createElement('div', { style:{ width:design.width,height:design.height,display:'flex',position:'relative',backgroundColor:design.background } }, ...children), {width:design.width,height:design.height,fonts:fontDescriptors});
   const buffer = Buffer.from(await response.arrayBuffer());
   const digest = createHash('sha256').update(JSON.stringify(design)+randomUUID()).digest('hex');
   const uploaded = await uploadFile({bucket:'campaign-assets',companyId:tenantId,folder:'designs',fileName:`${digest}.png`,file:buffer,contentType:'image/png'});
