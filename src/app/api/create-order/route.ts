@@ -15,6 +15,9 @@ export async function POST(request: NextRequest) {
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
+    const body = await request.json().catch(() => ({}));
+    let amount = Number(body.amount);
+
     if (!keyId || !keySecret) {
       if (process.env.NODE_ENV !== 'production' || body?.sandbox) {
         return NextResponse.json({
@@ -24,6 +27,7 @@ export async function POST(request: NextRequest) {
           key_id: 'rzp_test_sandbox',
           receipt: `rcpt_${Date.now()}`,
           isSandbox: true,
+          payment_link_url: null,
           notice: 'Razorpay Sandbox Mode: test checkout active',
         });
       }
@@ -32,9 +36,6 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-
-    const body = await request.json().catch(() => ({}));
-    let amount = Number(body.amount);
 
     // If amount is not provided or NaN, validate
     if (isNaN(amount) || amount < 100) {
@@ -89,12 +90,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: errDescription }, { status: orderRes.status });
     }
 
+    // Generate a Razorpay Hosted Payment Link for 100% reliable mobile failover (works without JS / iframes)
+    let paymentLinkUrl: string | null = null;
+    try {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com';
+      const plinkRes = await fetch('https://api.razorpay.com/v1/payment_links', {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${auth}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount,
+          currency,
+          description: `BGOS ${notes.planCode ? String(notes.planCode).toUpperCase() : 'Subscription'} Plan`,
+          notes,
+          callback_url: `${appUrl}/checkout/razorpay?plan=${encodeURIComponent(notes.planCode || 'starter')}&status=success`,
+          callback_method: 'get',
+        }),
+      });
+      if (plinkRes.ok) {
+        const plinkData = await plinkRes.json().catch(() => ({}));
+        paymentLinkUrl = plinkData?.short_url || null;
+      }
+    } catch (plinkErr) {
+      console.warn('[create-order] Payment link generation non-fatal error:', plinkErr);
+    }
+
     return NextResponse.json({
       order_id: order.id,
       amount: order.amount,
       currency: order.currency,
       key_id: keyId,
       receipt: order.receipt,
+      payment_link_url: paymentLinkUrl,
     });
   } catch (error: any) {
     console.error('[create-order] Error creating Razorpay order:', error);

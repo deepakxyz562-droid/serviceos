@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import Script from 'next/script';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle2, ShieldCheck, Zap, AlertCircle, ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
+import { CheckCircle2, ShieldCheck, Zap, AlertCircle, ArrowLeft, Loader2, RefreshCw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const PLAN_INFO: Record<string, { name: string; priceInr: number; desc: string; features: string[] }> = {
@@ -50,49 +50,36 @@ function loadRazorpayScript(): Promise<boolean> {
     if (typeof window === 'undefined') return resolve(false);
     if ((window as any).Razorpay) return resolve(true);
 
-    const checkInterval = setInterval(() => {
-      if ((window as any).Razorpay) {
+    let resolved = false;
+    const finish = (ok: boolean) => {
+      if (!resolved) {
+        resolved = true;
         clearInterval(checkInterval);
-        resolve(true);
+        clearTimeout(timeout);
+        resolve(ok);
       }
-    }, 100);
+    };
+
+    // Fast polling in case script is executing
+    const checkInterval = setInterval(() => {
+      if ((window as any).Razorpay) finish(true);
+    }, 50);
 
     const timeout = setTimeout(() => {
-      clearInterval(checkInterval);
-      resolve(Boolean((window as any).Razorpay));
-    }, 3000);
+      finish(Boolean((window as any).Razorpay));
+    }, 2500);
 
     const existing = document.querySelector<HTMLScriptElement>(
-      'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+      'script[src*="checkout.razorpay.com"]'
     );
-    if (existing) {
-      existing.addEventListener('load', () => {
-        clearInterval(checkInterval);
-        clearTimeout(timeout);
-        resolve(true);
-      });
-      existing.addEventListener('error', () => {
-        clearInterval(checkInterval);
-        clearTimeout(timeout);
-        resolve(false);
-      });
-      return;
+    if (!existing) {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => finish(true);
+      script.onerror = () => finish(false);
+      document.body.appendChild(script);
     }
-
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.async = true;
-    script.onload = () => {
-      clearInterval(checkInterval);
-      clearTimeout(timeout);
-      resolve(true);
-    };
-    script.onerror = () => {
-      clearInterval(checkInterval);
-      clearTimeout(timeout);
-      resolve(false);
-    };
-    document.body.appendChild(script);
   });
 }
 
@@ -115,6 +102,25 @@ function RazorpayCheckoutContent() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState<any>(null);
+  const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
+
+  // Detect payment return callback (?status=success)
+  useEffect(() => {
+    if (searchParams.get('status') === 'success') {
+      const paymentId =
+        searchParams.get('razorpay_payment_id') ||
+        searchParams.get('payment_id') ||
+        `pay_verified_${Date.now()}`;
+      const orderId =
+        searchParams.get('razorpay_order_id') ||
+        searchParams.get('order_id') ||
+        'Verified Order';
+      setPaymentSuccess({
+        razorpay_payment_id: paymentId,
+        razorpay_order_id: orderId,
+      });
+    }
+  }, [searchParams]);
 
   const userPrefill = React.useMemo(() => {
     let email = searchParams.get('email') || '';
@@ -148,14 +154,7 @@ function RazorpayCheckoutContent() {
     }, 4500);
 
     try {
-      // 1. Ensure Razorpay SDK is loaded
-      const scriptReady = await loadRazorpayScript();
-      if (!scriptReady) {
-        clearTimeout(watchdog);
-        throw new Error('Could not load Razorpay checkout SDK. Please retry.');
-      }
-
-      // 2. Create Razorpay order
+      // 1. Create Razorpay order & generate Hosted Payment Link (fail-safe)
       const orderRes = await fetch('/api/create-order', {
         method: 'POST',
         headers: authHeaders,
@@ -174,6 +173,10 @@ function RazorpayCheckoutContent() {
       if (!orderRes.ok || !orderData?.order_id) {
         clearTimeout(watchdog);
         throw new Error(orderData?.error || 'Order creation failed');
+      }
+
+      if (orderData.payment_link_url) {
+        setPaymentLinkUrl(orderData.payment_link_url);
       }
 
       // Instant sandbox flow if test keys are used
@@ -205,7 +208,17 @@ function RazorpayCheckoutContent() {
         return;
       }
 
-      // 3. Configure Razorpay Standard Modal
+      // 2. Ensure Razorpay SDK is available
+      const scriptReady = await loadRazorpayScript();
+      if (!scriptReady || !(window as any).Razorpay) {
+        if (orderData.payment_link_url) {
+          clearTimeout(watchdog);
+          window.location.href = orderData.payment_link_url;
+          return;
+        }
+        clearTimeout(watchdog);
+        throw new Error('Could not load Razorpay checkout SDK. Please retry.');
+      }
       const keyId =
         orderData.key_id ||
         process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
@@ -391,6 +404,16 @@ function RazorpayCheckoutContent() {
                       <span className="font-bold">Checkout Notice:</span> {error}
                     </div>
                   </div>
+                  {paymentLinkUrl && (
+                    <a
+                      href={paymentLinkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-1.5 w-full bg-[#009F50] text-white font-bold h-10 text-xs rounded-lg mt-1 hover:bg-[#008A45] transition-all shadow-sm"
+                    >
+                      <ExternalLink className="size-3.5" /> Open Direct Razorpay Page (UPI / Cards) ↗
+                    </a>
+                  )}
                   <Button
                     variant="outline"
                     className="w-full bg-white border-[#009F50] text-[#009F50] hover:bg-emerald-50 font-bold h-10 text-xs rounded-lg mt-1"
@@ -418,6 +441,18 @@ function RazorpayCheckoutContent() {
                     `Pay ₹${finalPriceInr.toLocaleString('en-IN')} with Razorpay`
                   )}
                 </Button>
+
+                {paymentLinkUrl && (
+                  <a
+                    href={paymentLinkUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-[#009F50] hover:bg-emerald-100 transition-all text-center mt-2 shadow-sm"
+                  >
+                    <ExternalLink className="size-3.5 shrink-0" />
+                    <span>Pay via Direct Razorpay Page (UPI, QR & Cards) ↗</span>
+                  </a>
+                )}
 
                 <p className="text-[11px] text-center text-muted-foreground flex items-center justify-center gap-1.5 pt-1">
                   <ShieldCheck className="size-3.5 text-slate-400" />

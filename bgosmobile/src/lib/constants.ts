@@ -28,9 +28,12 @@ function resolveDefaultHost(): string {
   return 'https://bgos.fieseros.com';
 }
 
-// Default backend API base URL for BGOS
+// Default backend API base URL for BGOS (API endpoints can use local LAN dev IP during development)
 export const API_BASE_URL = resolveDefaultHost();
-export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || resolveDefaultHost()).replace(/\/$/, '');
+
+// Web URL for browser checkout, payment gateways, legal pages & OAuth:
+// Always use live HTTPS domain (https://fieseros.com) so Razorpay, UPI & OAuth work seamlessly
+export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://fieseros.com').replace(/\/$/, '');
 
 // BGOS Support details (Meta Verified WhatsApp Business)
 export const BGOS_SUPPORT_WHATSAPP_DIGITS = '916127967087';

@@ -747,7 +747,7 @@ export default function MarketingScreen() {
   const [draftPickerOpen,setDraftPickerOpen]=useState(false);
   const [detailsOpen,setDetailsOpen]=useState(false);
   const [editSheet, setEditSheet] = useState<'none' | 'text' | 'photo' | 'style' | 'brand'>('none');
-  const [imageProvider,setImageProvider]=useState<'gemini'|'openrouter'|'cloudflare'>('gemini');
+  const [imageProvider, setImageProvider] = useState<'cloudflare' | 'gemini' | 'openrouter'>('cloudflare');
   useEffect(()=>()=>{generationEpoch.current++;},[]);
   const [autosaveFailed,setAutosaveFailed] = useState(false);
   const applyPosterTemplate = (t: PosterTemplate) => {
@@ -930,13 +930,20 @@ export default function MarketingScreen() {
   const [brandName, setBrandName] = useState<string>('');
   const [refreshingIdeas, setRefreshingIdeas] = useState<boolean>(false);
 
-  const effectiveBusinessName =
-    brandName ||
-    brandProfile.data?.profile?.businessName ||
-    gbpPlace.data?.place?.title ||
-    workspace.data?.bookingPageConfig?.businessName ||
-    discover.data?.activeProfile?.name ||
-    'Commercial Brand';
+  const effectiveBusinessName = useMemo(() => {
+    if (brandName && brandName.trim()) return brandName.trim();
+    if (workspace.data?.name && workspace.data.name !== 'Commercial Brand' && !workspace.data.name.toLowerCase().includes('deepak')) {
+      return workspace.data.name;
+    }
+    if (brandProfile.data?.profile?.businessName) return brandProfile.data.profile.businessName;
+    if (workspace.data?.bookingPageConfig?.businessName) return workspace.data.bookingPageConfig.businessName;
+    if (gbpPlace.data?.place?.title) return gbpPlace.data.place.title;
+    const activeName = discover.data?.activeProfile?.name;
+    if (activeName && !activeName.toLowerCase().includes('deepak') && activeName.toLowerCase() !== 'google business profile') {
+      return activeName;
+    }
+    return workspace.data?.name || 'FieserOS';
+  }, [brandName, workspace.data?.name, brandProfile.data?.profile?.businessName, workspace.data?.bookingPageConfig?.businessName, gbpPlace.data?.place?.title, discover.data?.activeProfile?.name]);
   const effectiveBusinessPhone = workspace.data?.bookingPageConfig?.phone;
   const effectiveBusinessWebsite =
     brandWebsite ||
@@ -975,7 +982,7 @@ export default function MarketingScreen() {
       workspace.data?.name ||
       brandProfile.data?.profile?.businessName ||
       effectiveBusinessName ||
-      'ME';
+      'FO';
     const parts = raw.trim().split(/\s+/);
     if (parts.length >= 2 && parts[0] && parts[1]) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
@@ -984,10 +991,10 @@ export default function MarketingScreen() {
   }, [workspace.data?.name, brandProfile.data?.profile?.businessName, effectiveBusinessName]);
 
   const businessDisplayName =
-    discover.data?.activeProfile?.name ||
+    (effectiveBusinessName && effectiveBusinessName !== 'Commercial Brand' ? effectiveBusinessName : null) ||
     brandProfile.data?.profile?.businessName ||
-    gbpPlace.data?.place?.title ||
-    effectiveBusinessName;
+    workspace.data?.name ||
+    'FieserOS';
 
   // 3 Creative Directions
   const layouts: CreativeLayout[] = useMemo(
@@ -1237,7 +1244,7 @@ export default function MarketingScreen() {
             clearInterval(pollInterval);
             setIsGeneratingImage(false);
           } finally { checking=false; }
-        }, 1500);
+        }, 600);
       } else {
         setIsGeneratingImage(false);
       }
@@ -1695,7 +1702,7 @@ export default function MarketingScreen() {
             clearInterval(pollInterval);
             setIsGeneratingImage(false);
           } finally { checking=false; }
-        }, 1500);
+        }, 600);
       } else {
         setIsGeneratingImage(false);
       }
@@ -2308,77 +2315,75 @@ export default function MarketingScreen() {
       </Modal>
       {activeMode === 'studio' && (
         <View style={{ flex: 1 }}>
-          {/* Sub-Tab Navigation Header (Chat | Design) */}
-          <View style={styles.subTabBar}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              {studioStep > 1 && (
+          {/* Sub-Tab Navigation Header for Step 2 (Editor) & Step 3 (Review) */}
+          {studioStep > 1 && (
+            <View style={styles.subTabBar}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                 <Pressable
                   onPress={() => {
                     if (studioStep === 3) setStudioStep(2);
                     else if (studioStep === 2) setStudioStep(1);
                   }}
-                  style={{ padding: 4 }}
+                  style={{ padding: 6, borderRadius: 8, backgroundColor: '#F1F5F9' }}
                 >
-                  <MaterialIcons name="arrow-back" size={20} color="#0F172A" />
+                  <MaterialIcons name="arrow-back" size={18} color="#0F172A" />
                 </Pressable>
+                <View style={{ flex: 1 }}>
+                  <Text numberOfLines={1} style={styles.studioHeaderTitle}>
+                    {studioStep === 2 ? (headline || 'Customize Poster') : 'Review & Schedule'}
+                  </Text>
+                  <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: '#009F50' }}>
+                    {effectiveBusinessName}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Chat vs Design toggle */}
+              {studioStep === 2 && (
+                <View style={styles.segmentedToggle}>
+                  <Pressable
+                    onPress={() => {
+                      setStudioStep(1);
+                      setStudioSubTab('chat');
+                    }}
+                    style={[styles.segBtn, studioSubTab === 'chat' && styles.segBtnActive]}
+                  >
+                    <MaterialIcons
+                      name="chat-bubble-outline"
+                      size={14}
+                      color={studioSubTab === 'chat' ? '#009F50' : '#64748B'}
+                    />
+                    <Text style={[styles.segBtnText, studioSubTab === 'chat' && styles.segBtnTextActive]}>
+                      Chat
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      setStudioStep(2);
+                      setStudioSubTab('design');
+                    }}
+                    style={[styles.segBtn, studioSubTab === 'design' && styles.segBtnActive]}
+                  >
+                    <MaterialIcons
+                      name="image"
+                      size={14}
+                      color={studioSubTab === 'design' ? '#009F50' : '#64748B'}
+                    />
+                    <Text style={[styles.segBtnText, studioSubTab === 'design' && styles.segBtnTextActive]}>
+                      Design
+                    </Text>
+                  </Pressable>
+                </View>
               )}
-              <View>
-                <Text style={styles.studioHeaderTitle}>
-                  {studioStep === 1 ? 'Marketing Studio' : studioStep === 2 ? headline : 'Review Post'}
-                </Text>
-                <Pressable style={styles.brandPill}>
-                  <Text numberOfLines={1} style={styles.brandPillText}>
-                    {effectiveBusinessName} · {activeProfileId ? 'Active Profile' : 'Brand Studio'} ⌵
-                  </Text>
-                </Pressable>
-              </View>
+
+              {studioStep === 3 && (
+                <View style={styles.draftBadge}>
+                  <Text style={styles.draftBadgeText}>● Draft</Text>
+                </View>
+              )}
             </View>
-
-            {/* Chat vs Design toggle */}
-            {studioStep === 2 && (
-              <View style={styles.segmentedToggle}>
-                <Pressable
-                  onPress={() => {
-                    setStudioStep(1);
-                    setStudioSubTab('chat');
-                  }}
-                  style={[styles.segBtn, studioSubTab === 'chat' && styles.segBtnActive]}
-                >
-                  <MaterialIcons
-                    name="chat-bubble-outline"
-                    size={14}
-                    color={studioSubTab === 'chat' ? '#009F50' : '#64748B'}
-                  />
-                  <Text style={[styles.segBtnText, studioSubTab === 'chat' && styles.segBtnTextActive]}>
-                    Chat
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => {
-                    setStudioStep(2);
-                    setStudioSubTab('design');
-                  }}
-                  style={[styles.segBtn, studioSubTab === 'design' && styles.segBtnActive]}
-                >
-                  <MaterialIcons
-                    name="image"
-                    size={14}
-                    color={studioSubTab === 'design' ? '#009F50' : '#64748B'}
-                  />
-                  <Text style={[styles.segBtnText, studioSubTab === 'design' && styles.segBtnTextActive]}>
-                    Design
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-
-            {studioStep === 3 && (
-              <View style={styles.draftBadge}>
-                <Text style={styles.draftBadgeText}>● Draft</Text>
-              </View>
-            )}
-          </View>
+          )}
 
           {/* ──────────────────────────────────────────────────────────────────
               STEP 1: 01 · Create (Conversational Copilot & Layouts)
@@ -2629,21 +2634,21 @@ export default function MarketingScreen() {
                         />
                       </View>
 
-                      {/* Inline Quick Action Pills directly underneath the visual */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 10, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                      {/* Canva/Instagram Story Style 4-Tool Edit Bar */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#F1F5F9', gap: 6 }}>
                         <Pressable
                           onPress={() => setTemplatePickerOpen(true)}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 8, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}
+                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}
                         >
-                          <MaterialIcons name="grid-view" size={13} color="#0F172A" />
+                          <MaterialIcons name="grid-view" size={14} color="#0F172A" />
                           <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>Templates</Text>
                         </Pressable>
 
                         <Pressable
                           onPress={() => setIsEditingText(true)}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 8, backgroundColor: '#F1F5F9' }}
+                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}
                         >
-                          <MaterialIcons name="edit" size={13} color="#334155" />
+                          <MaterialIcons name="edit" size={14} color="#334155" />
                           <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Text</Text>
                         </Pressable>
 
@@ -2653,34 +2658,59 @@ export default function MarketingScreen() {
                             const nextTheme = COMMERCIAL_THEME_KEYS[(curIndex + 1) % COMMERCIAL_THEME_KEYS.length];
                             cycleTheme(nextTheme);
                           }}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 8, backgroundColor: '#F1F5F9' }}
+                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}
                         >
-                          <MaterialIcons name="palette" size={13} color="#334155" />
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>
-                            {COMMERCIAL_THEMES[colorTheme]?.name?.split(' ')[0] || 'Theme'}
-                          </Text>
+                          <View
+                            style={{
+                              width: 11,
+                              height: 11,
+                              borderRadius: 6,
+                              backgroundColor: COMMERCIAL_THEMES[colorTheme]?.badgeBg || '#009F50',
+                              borderWidth: 1,
+                              borderColor: '#CBD5E1',
+                            }}
+                          />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Style</Text>
                         </Pressable>
 
                         <Pressable
                           onPress={handleRegenerateImage}
                           disabled={isGeneratingImage}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 8, backgroundColor: '#F0FDF4' }}
+                          style={{ flex: 1.1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 10, backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0' }}
                         >
                           {isGeneratingImage ? (
                             <ActivityIndicator size="small" color="#009F50" />
                           ) : (
-                            <MaterialIcons name="auto-awesome" size={13} color="#009F50" />
+                            <MaterialIcons name="auto-awesome" size={14} color="#009F50" />
                           )}
                           <Text style={{ fontSize: 11, fontWeight: '700', color: '#009F50' }}>
-                            {isGeneratingImage ? 'Rendering...' : 'New Image'}
+                            {isGeneratingImage ? 'Rendering…' : 'New Photo'}
                           </Text>
                         </Pressable>
+                      </View>
 
+                      {/* Dedicated Full-Width Primary Action Button */}
+                      <View style={{ paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6, backgroundColor: '#FFFFFF' }}>
                         <Pressable
                           onPress={() => setStudioStep(3)}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 8, backgroundColor: '#009F50' }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8,
+                            paddingVertical: 13,
+                            borderRadius: 12,
+                            backgroundColor: '#009F50',
+                            shadowColor: '#009F50',
+                            shadowOffset: { width: 0, height: 3 },
+                            shadowOpacity: 0.25,
+                            shadowRadius: 6,
+                            elevation: 4,
+                          }}
                         >
-                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>Publish →</Text>
+                          <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.2 }}>
+                            Continue to Publish →
+                          </Text>
                         </Pressable>
                       </View>
                     </View>

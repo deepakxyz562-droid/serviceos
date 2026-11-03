@@ -346,7 +346,8 @@ export async function generateDesignImage(
   context?: BusinessVisualContext
 ) {
   const isPosterMode = isPoster || prompt.startsWith('[POSTER]');
-  const text = await synthesizeDynamicVisualPrompt(prompt, isPosterMode, context, signal);
+  // Use instant deterministic prompt composition (0ms latency, zero failing LLM stall)
+  const text = buildHighQualityImagePrompt(prompt, isPosterMode, context);
 
   if (provider === 'cloudflare') {
     return await callCloudflareImage(text, signal);
@@ -383,9 +384,8 @@ export async function generateDesignImage(
     }
   );
 
-  // Auto-failover on rate-limiting (429) or unpaid balance (402)
-  if (!response.ok && (response.status === 429 || response.status === 402)) {
-    // Attempt Cloudflare Workers AI failover (free 10k daily neurons)
+  // Auto-failover on any provider failure (400, 401, 402, 429, 500) directly to Cloudflare Flux.1
+  if (!response.ok) {
     try {
       return await callCloudflareImage(text, signal);
     } catch {
