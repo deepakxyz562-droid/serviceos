@@ -113,6 +113,7 @@
         "zustand": "^5.0.6",
       },
       "devDependencies": {
+        "@adobe/css-tools": "^4.5.0",
         "@babel/plugin-transform-react-display-name": "^7.24.7",
         "@babel/plugin-transform-react-jsx": "^7.28.6",
         "@babel/plugin-transform-react-jsx-development": "^7.27.1",

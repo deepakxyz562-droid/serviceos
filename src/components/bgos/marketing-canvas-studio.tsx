@@ -13,6 +13,9 @@ import {
   COMMERCIAL_THEME_KEYS,
 } from '../../../shared/marketing-design';
 import { EditableMarketingDesign } from './editable-marketing-design';
+import { getTemplateById } from '../../../shared/poster-templates';
+import type { PosterTemplate } from '../../../shared/poster-templates';
+import { PosterTemplateGallery } from './poster-template-gallery';
 import {
   Sparkles,
   Send,
@@ -47,6 +50,8 @@ import {
   Heart,
   MessageCircle,
   Bookmark,
+  LayoutGrid,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -343,6 +348,59 @@ export function MarketingCanvasStudio({
     brandLogo,
     effectiveTagline,
   ]);
+
+  // ─── Template Gallery entry (Flyer-Maker-style one-tap posters) ───────────
+  const [entryView, setEntryView] = useState<'gallery' | 'studio'>('gallery');
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [isExportingHd, setIsExportingHd] = useState(false);
+  const activeTemplateBgPrompt = activeTemplateId
+    ? getTemplateById(activeTemplateId)?.bgPrompt
+    : undefined;
+
+  const applyTemplate = (t: PosterTemplate) => {
+    setActiveTemplateId(t.id);
+    setCustomDesign(null);
+    setHeadline(t.headline);
+    setBadgeText(t.badge);
+    setSubheadText(t.subtitle);
+    setCtaText(t.cta);
+    setTheme(t.theme);
+    setAspectRatio(t.aspect);
+    setActiveVisualFormat('poster');
+    setGenerationMode('poster');
+    setPhotoUrl(t.photo);
+    setPosterUrl('');
+    setActiveUserPrompt('');
+    setActiveRightTab('design');
+    setEntryView('studio');
+  };
+
+  const handleExportHd = async () => {
+    if (isExportingHd) return;
+    setIsExportingHd(true);
+    try {
+      const res = await authFetch('/api/social/designs/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ design }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.imageUrl) throw new Error(json.error || 'Export failed. Please retry.');
+      const link = document.createElement('a');
+      link.href = json.imageUrl as string;
+      link.download = `${effectiveBusinessName.replace(/\W+/g, '-').toLowerCase() || 'poster'}-hd.png`;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('HD poster exported — check your downloads!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setIsExportingHd(false);
+    }
+  };
 
   useEffect(() => {
     authFetch('/api/bgos/workspace')
@@ -706,7 +764,7 @@ export function MarketingCanvasStudio({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: activeUserPrompt || promptInput || 'commercial product photography',
+          prompt: activeUserPrompt || promptInput || activeTemplateBgPrompt || 'commercial product photography',
           provider: 'cloudflare',
           requestId,
           isPoster: true,
@@ -969,6 +1027,26 @@ export function MarketingCanvasStudio({
     return ()=>clearTimeout(timer);
   },[currentDesignSnapshot,editingDraftId,isSavingDraft,isPublishing]);
 
+  // ─── Gallery-first entry: Flyer-Maker-style template picker ────────────────
+  if (entryView === 'gallery') {
+    return (
+      <div className="w-full space-y-4">
+        <PosterTemplateGallery
+          business={{
+            businessName: effectiveBusinessName,
+            category,
+            phone: effectivePhone,
+            website: effectiveWebsite,
+            logoUrl: brandLogo,
+            tagline: effectiveTagline,
+          }}
+          onSelect={applyTemplate}
+          onStartFromPrompt={() => setEntryView('studio')}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="w-full space-y-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -1024,6 +1102,14 @@ export function MarketingCanvasStudio({
             <Badge variant="outline" className="text-[10px] font-semibold text-primary border-primary/20 bg-primary/5">
               Active
             </Badge>
+            <button
+              type="button"
+              onClick={() => setEntryView('gallery')}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border border-border bg-card text-xs font-semibold text-foreground hover:bg-muted/50 transition-all"
+            >
+              <LayoutGrid className="size-3.5 text-primary" />
+              Templates{activeTemplateId && getTemplateById(activeTemplateId) ? `: ${getTemplateById(activeTemplateId)!.name}` : ''}
+            </button>
           </div>
 
           {/* 2. Conversational Copilot Chat Thread */}
@@ -1440,7 +1526,8 @@ export function MarketingCanvasStudio({
                   const ratios: AspectRatio[] = ['4:5', '1:1', '9:16', '16:9'];
                   const nextRatio = ratios[(ratios.indexOf(aspectRatio) + 1) % ratios.length];
                   setAspectRatio(nextRatio);
-                  toast.info(`Aspect ratio changed to ${nextRatio}`);
+                  setCustomDesign(null);
+                  toast.info(`Aspect ratio changed to ${nextRatio} — design re-laid out`);
                 }}
                 className="flex items-center gap-1 bg-card hover:bg-muted/50 border border-border rounded-xl px-2.5 py-1 text-xs font-semibold text-foreground transition-all cursor-pointer"
               >
@@ -1625,6 +1712,22 @@ export function MarketingCanvasStudio({
                       <Sparkles className="size-3.5 text-emerald-500" />
                       <span>New AI photo</span>
                     </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportHd}
+                      disabled={isExportingHd}
+                      className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card text-foreground"
+                    >
+                      {isExportingHd ? (
+                        <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Download className="size-3.5 text-emerald-600" />
+                      )}
+                      <span>{isExportingHd ? 'Exporting…' : 'Export HD'}</span>
+                    </Button>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -1725,7 +1828,8 @@ export function MarketingCanvasStudio({
                       const ratios: AspectRatio[] = ['1:1', '4:5', '16:9', '9:16'];
                       const nextRatio = ratios[(ratios.indexOf(aspectRatio) + 1) % ratios.length];
                       setAspectRatio(nextRatio);
-                      toast.info(`Aspect ratio changed to ${nextRatio}`);
+                      setCustomDesign(null);
+                      toast.info(`Resized to ${nextRatio} — text preserved, layout rebuilt`);
                     }}
                     className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card"
                   >

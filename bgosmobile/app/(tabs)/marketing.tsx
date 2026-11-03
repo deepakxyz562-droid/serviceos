@@ -11,6 +11,9 @@ import {
   COMMERCIAL_THEME_KEYS,
   POSTER_TEMPLATES,
 } from '../../../shared/marketing-design';
+import { getTemplateById } from '../../../shared/poster-templates';
+import type { PosterTemplate } from '../../../shared/poster-templates';
+import { PosterTemplateGallery } from '../../src/components/design/poster-template-gallery';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
@@ -585,6 +588,34 @@ export default function MarketingScreen() {
   const [colorTheme, setColorTheme] = useState<CommercialTheme>('royal_gold');
   const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
 
+  // ─── Flyer-Maker-style template gallery entry ──────────────────────────
+  const [studioCreateTab, setStudioCreateTab] = useState<'templates' | 'ideas'>('templates');
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const activeTemplateBgPrompt = activeTemplateId
+    ? getTemplateById(activeTemplateId)?.bgPrompt
+    : undefined;
+
+  const applyPosterTemplate = (t: PosterTemplate) => {
+    setActiveTemplateId(t.id);
+    setCustomDesign(null);
+    setHeadline(t.headline);
+    setDiscountBadge(t.badge);
+    setSubtitle(t.subtitle);
+    setCtaText(t.cta);
+    setColorTheme(t.theme);
+    setAspectRatio(t.aspect === '16:9' ? '4:5' : t.aspect);
+    setPosterLayout(t.layout);
+    setBgPhotoUrl(t.photo);
+    setCustomPosterUri(null);
+    setHasGenerated(false);
+    setActiveUserPrompt('');
+    setStudioCreateTab('templates');
+    setStudioStep(2);
+    setStudioSubTab('design');
+    setSuccessNotice(`✨ ${t.name} template applied — customize & publish!`);
+    setTimeout(() => setSuccessNotice(null), 3200);
+  };
+
   // Graphic content elements — dynamic business-aware defaults
   const [headline, setHeadline] = useState('');
   const [discountBadge, setDiscountBadge] = useState('SPECIAL OFFER');
@@ -930,7 +961,7 @@ export default function MarketingScreen() {
       const res = await apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
         method: 'POST',
         body: {
-          prompt: activeUserPrompt || promptInput || 'commercial product photography',
+          prompt: activeUserPrompt || promptInput || activeTemplateBgPrompt || 'commercial product photography',
           provider: 'cloudflare',
           requestId,
           isPoster: true,
@@ -982,7 +1013,12 @@ export default function MarketingScreen() {
       }
     } catch (err: unknown) {
       setIsGeneratingImage(false);
-      setError((err as Error).message || 'Failed to regenerate image.');
+      const msg = (err as Error)?.message || '';
+      if (/could not connect|fetch failed|network request failed|failed to connect/i.test(msg)) {
+        setError('Could not connect to backend server. Make sure Next.js is running on port 3000.');
+      } else {
+        setError(msg || 'Failed to regenerate image.');
+      }
     }
   }
 
@@ -1312,7 +1348,12 @@ export default function MarketingScreen() {
         setIsGeneratingImage(false);
       }
     } catch (err: unknown) {
-      setError((err as Error).message || 'AI generation failed. You can customize the fields manually below.');
+      const msg = (err as Error)?.message || '';
+      if (/could not connect|fetch failed|network request failed|failed to connect/i.test(msg)) {
+        setError('Could not connect to backend server. Make sure Next.js is running on port 3000.');
+      } else {
+        setError(msg || 'AI generation failed. You can customize the fields manually below.');
+      }
     } finally {
       setBusy(false);
     }
@@ -1394,7 +1435,12 @@ export default function MarketingScreen() {
         setActiveMode('posts');
       }, 1200);
     } catch (err: unknown) {
-      setError((err as Error).message || 'Failed to save or publish post.');
+      const msg = (err as Error)?.message || '';
+      if (/could not connect|fetch failed|network request failed|failed to connect/i.test(msg)) {
+        setError('Could not connect to backend server. Make sure Next.js is running on port 3000.');
+      } else {
+        setError(msg || 'Failed to save or publish post.');
+      }
     } finally {
       saving.current = false;
       setBusy(false);
@@ -1907,8 +1953,57 @@ export default function MarketingScreen() {
                 keyboardShouldPersistTaps="handled"
               >
                 {!hasGenerated ? (
-                  /* ── ChatGPT / Gemini Style Breathable Stage ── */
-                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 24, paddingHorizontal: 8 }}>
+                  /* ── Flyer-Maker-style entry: Templates / AI Ideas ── */
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.createSegmentWrap}>
+                      <Pressable
+                        onPress={() => setStudioCreateTab('templates')}
+                        style={[styles.createSegmentBtn, studioCreateTab === 'templates' && styles.createSegmentBtnActive]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: studioCreateTab === 'templates' }}
+                        accessibilityLabel="Browse poster templates"
+                      >
+                        <MaterialIcons name="grid-view" size={13} color={studioCreateTab === 'templates' ? '#FFFFFF' : '#64748B'} />
+                        <Text style={[styles.createSegmentText, studioCreateTab === 'templates' && styles.createSegmentTextActive]}>
+                          Templates
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setStudioCreateTab('ideas')}
+                        style={[styles.createSegmentBtn, studioCreateTab === 'ideas' && styles.createSegmentBtnActive]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: studioCreateTab === 'ideas' }}
+                        accessibilityLabel="Describe with AI ideas"
+                      >
+                        <MaterialIcons name="auto-awesome" size={13} color={studioCreateTab === 'ideas' ? '#FFFFFF' : '#64748B'} />
+                        <Text style={[styles.createSegmentText, studioCreateTab === 'ideas' && styles.createSegmentTextActive]}>
+                          AI Ideas
+                        </Text>
+                      </Pressable>
+                    </View>
+                    {studioCreateTab === 'templates' ? (
+                      <View style={{ flex: 1 }}>
+                        <PosterTemplateGallery
+                          business={{
+                            businessName: effectiveBusinessName,
+                            category: brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category || '',
+                            phone: effectiveBusinessPhone,
+                            website: effectiveBusinessWebsite,
+                            logoUri: effectiveBusinessLogo,
+                            tagline: effectiveBusinessTagline,
+                          }}
+                          onApply={applyPosterTemplate}
+                          onDescribeIdea={() => setStudioCreateTab('ideas')}
+                        />
+                      </View>
+                    ) : (
+                      /* ── ChatGPT / Gemini Style Breathable Stage ── */
+                      <ScrollView
+                        style={{ flex: 1 }}
+                        contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 8 }}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
+                      >
                     <View
                       style={{
                         width: 52,
@@ -1978,6 +2073,8 @@ export default function MarketingScreen() {
                         </Pressable>
                       ))}
                     </View>
+                      </ScrollView>
+                    )}
                   </View>
                 ) : (
                   /* ── Active Generated Campaign State ── */
@@ -2405,7 +2502,7 @@ export default function MarketingScreen() {
                 {/* Live Auto-Branded Flyer Preview */}
                 <View style={{ marginBottom: 16 }}>
                   <AutoBrandedPosterCard
-                    photoUri={customPosterUri}
+                    photoUri={customPosterUri || bgPhotoUrl}
                     headline={headline}
                     subtitle={subtitle}
                     badge={discountBadge}
@@ -3187,6 +3284,36 @@ export default function MarketingScreen() {
 }
 
 const styles = StyleSheet.create({
+  createSegmentWrap: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+  },
+  createSegmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  createSegmentBtnActive: {
+    backgroundColor: '#009F50',
+    borderColor: '#009F50',
+  },
+  createSegmentText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  createSegmentTextActive: {
+    color: '#FFFFFF',
+  },
   modeBar: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
