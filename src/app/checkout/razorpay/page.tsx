@@ -50,27 +50,48 @@ function loadRazorpayScript(): Promise<boolean> {
     if (typeof window === 'undefined') return resolve(false);
     if ((window as any).Razorpay) return resolve(true);
 
+    const checkInterval = setInterval(() => {
+      if ((window as any).Razorpay) {
+        clearInterval(checkInterval);
+        resolve(true);
+      }
+    }, 100);
+
+    const timeout = setTimeout(() => {
+      clearInterval(checkInterval);
+      resolve(Boolean((window as any).Razorpay));
+    }, 3000);
+
     const existing = document.querySelector<HTMLScriptElement>(
       'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
     );
     if (existing) {
-      if ((window as any).Razorpay) return resolve(true);
-      // Remove stale/failed script to allow a fresh load attempt
-      existing.remove();
+      existing.addEventListener('load', () => {
+        clearInterval(checkInterval);
+        clearTimeout(timeout);
+        resolve(true);
+      });
+      existing.addEventListener('error', () => {
+        clearInterval(checkInterval);
+        clearTimeout(timeout);
+        resolve(false);
+      });
+      return;
     }
 
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     script.async = true;
-    script.crossOrigin = 'anonymous';
     script.onload = () => {
-      if ((window as any).Razorpay) {
-        resolve(true);
-      } else {
-        setTimeout(() => resolve(Boolean((window as any).Razorpay)), 150);
-      }
+      clearInterval(checkInterval);
+      clearTimeout(timeout);
+      resolve(true);
     };
-    script.onerror = () => resolve(false);
+    script.onerror = () => {
+      clearInterval(checkInterval);
+      clearTimeout(timeout);
+      resolve(false);
+    };
     document.body.appendChild(script);
   });
 }
@@ -94,7 +115,23 @@ function RazorpayCheckoutContent() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState<any>(null);
-  const [autoOpened, setAutoOpened] = useState(false);
+
+  const userPrefill = React.useMemo(() => {
+    let email = searchParams.get('email') || '';
+    let name = searchParams.get('name') || '';
+    let phone = searchParams.get('phone') || '';
+    if (token) {
+      try {
+        const parts = token.split('.');
+        if (parts.length >= 2) {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload.email && !email) email = payload.email;
+          if (payload.name && !name) name = payload.name;
+        }
+      } catch {}
+    }
+    return { name, email, phone };
+  }, [token, searchParams]);
 
   const authHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -105,11 +142,17 @@ function RazorpayCheckoutContent() {
     setBusy(true);
     setError(null);
 
+    // Watchdog safety net: reset busy if mobile browser drops modal event
+    const watchdog = setTimeout(() => {
+      setBusy(false);
+    }, 4500);
+
     try {
       // 1. Ensure Razorpay SDK is loaded
       const scriptReady = await loadRazorpayScript();
       if (!scriptReady) {
-        throw new Error('Could not load Razorpay checkout SDK. Check your internet connection.');
+        clearTimeout(watchdog);
+        throw new Error('Could not load Razorpay checkout SDK. Please retry.');
       }
 
       // 2. Create Razorpay order
@@ -129,11 +172,13 @@ function RazorpayCheckoutContent() {
 
       const orderData = await orderRes.json();
       if (!orderRes.ok || !orderData?.order_id) {
+        clearTimeout(watchdog);
         throw new Error(orderData?.error || 'Order creation failed');
       }
 
       // Instant sandbox flow if test keys are used
       if (orderData.isSandbox) {
+        clearTimeout(watchdog);
         setBusy(true);
         const simPaymentId = `pay_sandbox_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
         const verifyRes = await fetch('/api/verify-payment', {
@@ -174,12 +219,19 @@ function RazorpayCheckoutContent() {
         description: `${plan.name} Subscription · ₹${finalPriceInr.toLocaleString('en-IN')}`,
         order_id: orderData.order_id,
         theme: { color: '#009F50' },
+        prefill: {
+          name: userPrefill.name || '',
+          email: userPrefill.email || '',
+          contact: userPrefill.phone || '',
+        },
         modal: {
           ondismiss: () => {
+            clearTimeout(watchdog);
             setBusy(false);
           },
         },
         handler: async (resp: any) => {
+          clearTimeout(watchdog);
           setBusy(true);
           try {
             const verifyRes = await fetch('/api/verify-payment', {
@@ -208,23 +260,19 @@ function RazorpayCheckoutContent() {
       };
 
       const rzpInstance = new (window as any).Razorpay(options);
+      rzpInstance.on('payment.failed', (resp: any) => {
+        clearTimeout(watchdog);
+        setBusy(false);
+        const desc = resp?.error?.description || resp?.error?.reason || 'Payment was unsuccessful. Please retry or choose another method.';
+        setError(desc);
+      });
       rzpInstance.open();
     } catch (err: any) {
+      clearTimeout(watchdog);
       setError(err?.message || 'Checkout failed');
       setBusy(false);
     }
   }
-
-  // Automatically trigger checkout once SDK is ready
-  useEffect(() => {
-    if (!autoOpened && !paymentSuccess) {
-      setAutoOpened(true);
-      const timer = setTimeout(() => {
-        void startCheckout();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [autoOpened, paymentSuccess]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -270,19 +318,29 @@ function RazorpayCheckoutContent() {
                 <Button
                   className="w-full bg-[#009F50] hover:bg-[#008A45] text-white font-bold h-12 text-base rounded-xl"
                   onClick={() => {
-                    if (window.opener) {
-                      window.close();
-                    } else {
-                      window.location.assign('/app?product=bgos&view=billing');
-                    }
+                    try {
+                      window.location.href = 'bgos://billing?status=success';
+                    } catch {}
+                    setTimeout(() => {
+                      if (window.opener) {
+                        window.close();
+                      } else {
+                        window.location.assign('/app?product=bgos&view=billing');
+                      }
+                    }, 400);
                   }}
                 >
-                  Return to BGOS
+                  Return to BGOS App
                 </Button>
               </div>
             </div>
           ) : (
             <>
+              {finalPriceInr === 1 && (
+                <div className="rounded-xl bg-emerald-100 border border-emerald-300 p-2.5 text-center text-xs font-bold text-emerald-900">
+                  ⚡ Live Gateway Verification Mode (₹1 Micro-Payment)
+                </div>
+              )}
               {/* Plan Card */}
               <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
                 <div className="flex justify-between items-baseline">

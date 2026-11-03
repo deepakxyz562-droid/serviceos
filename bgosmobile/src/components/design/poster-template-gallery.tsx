@@ -47,7 +47,8 @@ export interface MobileGalleryBusiness {
 interface PosterTemplateGalleryProps {
   business: MobileGalleryBusiness;
   onApply: (template: PosterTemplate) => void;
-  onDescribeIdea: () => void;
+  onDescribeIdea?: () => void;
+  searchQuery?: string;
 }
 
 const CATEGORY_ICON: Record<string, string> = {
@@ -64,8 +65,10 @@ const CATEGORY_ICON: Record<string, string> = {
 
 const TemplateThumb = PosterPreview;
 
-export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: PosterTemplateGalleryProps) {
-  const [search, setSearch] = useState('');
+export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searchQuery }: PosterTemplateGalleryProps) {
+  const [localSearch, setLocalSearch] = useState('');
+  const [isStandaloneSearchOpen, setIsStandaloneSearchOpen] = useState(false);
+  const activeSearch = searchQuery !== undefined ? searchQuery : localSearch;
   const [activeCategory, setActiveCategory] = useState<'for_you' | 'my_templates' | 'all' | string>('for_you');
   const [customTemplates, setCustomTemplates] = useState<PosterTemplate[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -103,15 +106,15 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: Pos
           : activeOccasionIds.has(activeCategory)
             ? orderedTemplates.filter((t) => t.occasionId === activeCategory)
             : orderedTemplates.filter((t) => t.category === activeCategory || t.collection === activeCategory);
-    if (!search.trim()) return base;
-    const q = search.trim().toLowerCase();
+    if (!activeSearch.trim()) return base;
+    const q = activeSearch.trim().toLowerCase();
     return base.filter(
       (t) =>
         t.name.toLowerCase().includes(q) ||
         t.headline.toLowerCase().includes(q) ||
         t.category.includes(q) || (t.industries || []).some(industry => industry.includes(q))
     );
-  }, [activeCategory, customTemplates, forYouTemplates, orderedTemplates, search]);
+  }, [activeCategory, customTemplates, forYouTemplates, orderedTemplates, activeSearch]);
 
   const docs = useMemo(() => {
     const map = new Map<string, MarketingDesign>();
@@ -226,52 +229,57 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea }: Pos
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Search, Upload & AI Brief Bar */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, marginBottom: 8, marginTop: 4 }}>
-        <View style={[styles.searchWrap, { flex: 1 }]}>
-          <MaterialIcons name="search" size={16} color="#94A3B8" />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search templates & occasions…"
-            placeholderTextColor="#94A3B8"
-            accessibilityLabel="Search templates"
-            style={styles.searchInput}
-          />
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={handleUploadTemplates}
-          disabled={uploading}
-          style={styles.topUploadBtn}
-        >
-          {uploading ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <>
-              <MaterialIcons name="file-upload" size={15} color="#FFFFFF" />
-              <Text style={styles.topUploadBtnText}>Upload</Text>
-            </>
-          )}
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={onDescribeIdea}
-          style={styles.aiBriefBtn}
-        >
-          <MaterialIcons name="auto-awesome" size={14} color="#009F50" />
-          <Text style={{ color: '#009F50', fontWeight: '800', fontSize: 11.5 }}>AI Brief</Text>
-        </Pressable>
-      </View>
+      {searchQuery === undefined && (
+        isStandaloneSearchOpen ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, marginBottom: 8, marginTop: 4, gap: 8 }}>
+            <View style={[styles.searchWrap, { flex: 1 }]}>
+              <MaterialIcons name="search" size={16} color="#009F50" />
+              <TextInput
+                value={localSearch}
+                onChangeText={setLocalSearch}
+                placeholder="Search templates & occasions…"
+                placeholderTextColor="#94A3B8"
+                autoFocus
+                accessibilityLabel="Search templates"
+                style={styles.searchInput}
+              />
+              {localSearch.length > 0 && (
+                <Pressable onPress={() => setLocalSearch('')} hitSlop={6}>
+                  <MaterialIcons name="cancel" size={16} color="#94A3B8" />
+                </Pressable>
+              )}
+            </View>
+            <Pressable
+              onPress={() => {
+                setLocalSearch('');
+                setIsStandaloneSearchOpen(false);
+              }}
+              style={{ padding: 6 }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>Cancel</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 14, marginBottom: 6 }}>
+            <Pressable
+              onPress={() => setIsStandaloneSearchOpen(true)}
+              style={styles.standaloneSearchTrigger}
+              accessibilityRole="button"
+              accessibilityLabel="Search templates"
+            >
+              <MaterialIcons name="search" size={16} color="#64748B" />
+              <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '600' }}>Search templates…</Text>
+            </Pressable>
+          </View>
+        )
+      )}
 
       {/* Category chips */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={{ flexGrow: 0 }}
-        contentContainerStyle={{ paddingHorizontal: 14, gap: 8, paddingBottom: 4 }}
+        contentContainerStyle={{ paddingHorizontal: 14, gap: 8, paddingTop: 8, paddingBottom: 4 }}
       >
         {chips.map((c) => {
           const active = activeCategory === c.id;
@@ -376,30 +384,14 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   searchInput: { flex: 1, fontSize: 13, color: '#0F172A', paddingVertical: 0 },
-  topUploadBtn: {
+  standaloneSearchTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 9,
+    gap: 6,
     paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: '#009F50',
-  },
-  topUploadBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 11.5,
-  },
-  aiBriefBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
   },
   chip: {
     flexDirection: 'row',

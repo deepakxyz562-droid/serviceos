@@ -735,6 +735,8 @@ export default function MarketingScreen() {
 
   // ─── Flyer-Maker-style template gallery entry ──────────────────────────
   const [studioCreateTab, setStudioCreateTab] = useState<'templates' | 'ideas'>('templates');
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const [templateSearchQuery, setTemplateSearchQuery] = useState('');
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const activeTemplateBgPrompt = activeTemplateId
     ? getTemplateById(activeTemplateId)?.bgPrompt
@@ -2268,8 +2270,41 @@ export default function MarketingScreen() {
           {moreDrafts&&<Pressable onPress={()=>void loadDesignDrafts(draftPage+1)}><Text>Load more</Text></Pressable>}
         </View>
       </Modal>
-      <Modal visible={templatePickerOpen} animationType="slide" onRequestClose={()=>setTemplatePickerOpen(false)}>
-        <View style={{flex:1,paddingTop:48}}><Pressable onPress={()=>setTemplatePickerOpen(false)} style={{padding:16}}><Text>Close templates</Text></Pressable><PosterTemplateGallery business={{businessName:effectiveBusinessName,category:brandProfile.data?.profile?.industry,website:effectiveBusinessWebsite}} onApply={applyPosterTemplate} onDescribeIdea={()=>{setTemplatePickerOpen(false);setStudioStep(1);setStudioCreateTab('ideas');setHasGenerated(false);}}/></View>
+      <Modal visible={templatePickerOpen} animationType="slide" onRequestClose={() => setTemplatePickerOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: insets.top }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalHeaderTitle}>Choose a Poster Template</Text>
+            <Pressable
+              onPress={() => setTemplatePickerOpen(false)}
+              hitSlop={10}
+              style={styles.modalCloseBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <MaterialIcons name="close" size={20} color="#0F172A" />
+            </Pressable>
+          </View>
+          <PosterTemplateGallery
+            business={{
+              businessName: effectiveBusinessName,
+              category: brandProfile.data?.profile?.industry,
+              phone: effectiveBusinessPhone,
+              website: effectiveBusinessWebsite,
+              logoUri: effectiveBusinessLogo,
+              tagline: effectiveBusinessTagline,
+            }}
+            onApply={(t) => {
+              applyPosterTemplate(t);
+              setTemplatePickerOpen(false);
+            }}
+            onDescribeIdea={() => {
+              setTemplatePickerOpen(false);
+              setStudioStep(1);
+              setStudioCreateTab('ideas');
+              setHasGenerated(false);
+            }}
+          />
+        </View>
       </Modal>
       {activeMode === 'studio' && (
         <View style={{ flex: 1 }}>
@@ -2300,7 +2335,7 @@ export default function MarketingScreen() {
             </View>
 
             {/* Chat vs Design toggle */}
-            {studioStep <= 2 && (
+            {studioStep === 2 && (
               <View style={styles.segmentedToggle}>
                 <Pressable
                   onPress={() => {
@@ -2349,41 +2384,76 @@ export default function MarketingScreen() {
               STEP 1: 01 · Create (Conversational Copilot & Layouts)
               ────────────────────────────────────────────────────────────────── */}
           {studioStep === 1 && (
-            <View style={{ flex: 1 }}>
-              <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={{ padding: 14, paddingBottom: 110 }}
-                keyboardShouldPersistTaps="handled"
-              >
-                {!hasGenerated ? (
-                  /* ── Flyer-Maker-style entry: Templates / AI Ideas ── */
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.createSegmentWrap}>
-                      <Pressable
-                        onPress={() => setStudioCreateTab('templates')}
-                        style={[styles.createSegmentBtn, studioCreateTab === 'templates' && styles.createSegmentBtnActive]}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: studioCreateTab === 'templates' }}
-                        accessibilityLabel="Browse poster templates"
-                      >
-                        <MaterialIcons name="grid-view" size={13} color={studioCreateTab === 'templates' ? '#FFFFFF' : '#64748B'} />
-                        <Text style={[styles.createSegmentText, studioCreateTab === 'templates' && styles.createSegmentTextActive]}>
-                          Templates
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => setStudioCreateTab('ideas')}
-                        style={[styles.createSegmentBtn, studioCreateTab === 'ideas' && styles.createSegmentBtnActive]}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: studioCreateTab === 'ideas' }}
-                        accessibilityLabel="Describe with AI ideas"
-                      >
-                        <MaterialIcons name="auto-awesome" size={13} color={studioCreateTab === 'ideas' ? '#FFFFFF' : '#64748B'} />
-                        <Text style={[styles.createSegmentText, studioCreateTab === 'ideas' && styles.createSegmentTextActive]}>
-                          AI Ideas
-                        </Text>
-                      </Pressable>
-                    </View>
+            <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+              {!hasGenerated ? (
+                /* ── Flyer-Maker-style entry: Templates / AI Ideas ── */
+                <View style={{ flex: 1 }}>
+                    {isSearchExpanded && studioCreateTab === 'templates' ? (
+                      <View style={styles.searchExpandedWrap}>
+                        <MaterialIcons name="search" size={18} color="#009F50" style={{ marginLeft: 6 }} />
+                        <TextInput
+                          value={templateSearchQuery}
+                          onChangeText={setTemplateSearchQuery}
+                          placeholder="Search 120+ templates, occasions…"
+                          placeholderTextColor="#94A3B8"
+                          autoFocus
+                          style={styles.searchExpandedInput}
+                          accessibilityLabel="Search templates and occasions"
+                        />
+                        <Pressable
+                          onPress={() => {
+                            setTemplateSearchQuery('');
+                            setIsSearchExpanded(false);
+                          }}
+                          hitSlop={8}
+                          style={styles.searchExpandedCloseBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel="Close search"
+                        >
+                          <MaterialIcons name="close" size={18} color="#64748B" />
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View style={styles.createSegmentWrap}>
+                        <Pressable
+                          onPress={() => setStudioCreateTab('templates')}
+                          style={[styles.createSegmentBtn, studioCreateTab === 'templates' && styles.createSegmentBtnActive]}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: studioCreateTab === 'templates' }}
+                          accessibilityLabel="Browse poster templates"
+                        >
+                          <MaterialIcons name="grid-view" size={14} color={studioCreateTab === 'templates' ? '#FFFFFF' : '#64748B'} />
+                          <Text style={[styles.createSegmentText, studioCreateTab === 'templates' && styles.createSegmentTextActive]}>
+                            Templates
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => {
+                            setStudioCreateTab('ideas');
+                            setIsSearchExpanded(false);
+                          }}
+                          style={[styles.createSegmentBtn, studioCreateTab === 'ideas' && styles.createSegmentBtnActive]}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: studioCreateTab === 'ideas' }}
+                          accessibilityLabel="Describe with AI ideas"
+                        >
+                          <MaterialIcons name="auto-awesome" size={14} color={studioCreateTab === 'ideas' ? '#FFFFFF' : '#64748B'} />
+                          <Text style={[styles.createSegmentText, studioCreateTab === 'ideas' && styles.createSegmentTextActive]}>
+                            AI Chat
+                          </Text>
+                        </Pressable>
+                        {studioCreateTab === 'templates' && (
+                          <Pressable
+                            onPress={() => setIsSearchExpanded(true)}
+                            style={styles.searchIconBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel="Search templates"
+                          >
+                            <MaterialIcons name="search" size={18} color="#475569" />
+                          </Pressable>
+                        )}
+                      </View>
+                    )}
                     {studioCreateTab === 'templates' ? (
                       <View style={{ flex: 1 }}>
                         <PosterTemplateGallery
@@ -2395,6 +2465,7 @@ export default function MarketingScreen() {
                             logoUri: effectiveBusinessLogo,
                             tagline: effectiveBusinessTagline,
                           }}
+                          searchQuery={templateSearchQuery}
                           onApply={applyPosterTemplate}
                           onDescribeIdea={() => setStudioCreateTab('ideas')}
                         />
@@ -2481,7 +2552,11 @@ export default function MarketingScreen() {
                   </View>
                 ) : (
                   /* ── Active Generated Campaign State ── */
-                  <>
+                  <ScrollView
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ padding: 14, paddingBottom: 110 }}
+                    keyboardShouldPersistTaps="handled"
+                  >
                     {/* User Prompt Bubble */}
                     <View style={styles.userBubbleContainer}>
                       <View style={styles.userBubble}>
@@ -2661,9 +2736,8 @@ export default function MarketingScreen() {
                         </Pressable>
                       </View>
                     </View>
-                  </>
+                  </ScrollView>
                 )}
-              </ScrollView>
 
               {/* Bottom Sticky Action Bar: Suggestions (if generated) + Mode Selector + Floating Composer */}
               <View style={styles.promptInputContainer}>
@@ -4043,9 +4117,71 @@ export default function MarketingScreen() {
 const styles = StyleSheet.create({
   createSegmentWrap: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
     paddingHorizontal: 14,
-    paddingTop: 12,
+    paddingTop: 8,
+    paddingBottom: 0,
+    backgroundColor: '#FFFFFF',
+  },
+  searchIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchExpandedWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 38,
+    marginHorizontal: 14,
+    marginTop: 8,
+    marginBottom: 0,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#009F50',
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  searchExpandedInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    paddingVertical: 0,
+    fontWeight: '600',
+  },
+  searchExpandedCloseBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  modalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   createSegmentBtn: {
     flex: 1,
