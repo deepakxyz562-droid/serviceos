@@ -95,32 +95,77 @@ export default function MyPlanScreen() {
     ? Math.max(0, Math.ceil((new Date(sub.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 7;
 
-  async function handleActivatePlan(planCode: string) {
+  async function handleDirectInAppActivate(planCode: string) {
     const selected = BGOS_DEFAULT_PLANS.find((p) => p.code === planCode);
     const planName = selected?.name || planCode.toUpperCase();
     setActivatingPlan(planCode);
-
     try {
-      const token = await getToken();
-      const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-      const checkoutUrl = `${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos${tokenParam}`;
-
-      // Open Razorpay Standard Checkout in-app sheet directly
-      await WebBrowser.openBrowserAsync(checkoutUrl, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-        controlsColor: colors.brand,
+      const res = await apiRequest<{ success: boolean; message?: string }>('/api/bgos/billing', {
+        method: 'POST',
+        body: { action: 'activate', plan: planCode },
       });
-
-      await billingRes.refresh();
-    } catch (err) {
-      try {
-        await Linking.openURL(`${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos`);
-      } catch {
-        Alert.alert('Checkout Notice', (err as Error)?.message || 'Could not launch payment checkout.');
+      if (res?.success) {
+        Alert.alert('Plan Activated!', `✨ ${planName} plan has been activated successfully.`);
+        await billingRes.refresh();
+      } else {
+        Alert.alert('Activation Notice', 'Could not activate plan directly.');
       }
+    } catch (err: any) {
+      Alert.alert('Activation Notice', err?.message || 'Could not complete plan activation.');
     } finally {
       setActivatingPlan(null);
     }
+  }
+
+  async function handleActivatePlan(planCode: string) {
+    const selected = BGOS_DEFAULT_PLANS.find((p) => p.code === planCode);
+    const planName = selected?.name || planCode.toUpperCase();
+
+    Alert.alert(
+      `Activate ${planName}`,
+      'Choose payment or activation method:',
+      [
+        {
+          text: '💳 Pay with Razorpay',
+          onPress: async () => {
+            setActivatingPlan(planCode);
+            try {
+              const token = await getToken();
+              const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+              const checkoutUrl = `${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos${tokenParam}`;
+
+              // Open Razorpay Standard Checkout in-app sheet directly
+              await WebBrowser.openBrowserAsync(checkoutUrl, {
+                presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+                controlsColor: colors.brand,
+              });
+
+              await billingRes.refresh();
+            } catch (err) {
+              try {
+                await Linking.openURL(`${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos`);
+              } catch {
+                Alert.alert(
+                  'Checkout Notice',
+                  'Could not launch payment checkout browser. Would you like to activate directly?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: '⚡ Activate Directly', onPress: () => void handleDirectInAppActivate(planCode) },
+                  ]
+                );
+              }
+            } finally {
+              setActivatingPlan(null);
+            }
+          },
+        },
+        {
+          text: '⚡ Instant 1-Tap Activate',
+          onPress: () => void handleDirectInAppActivate(planCode),
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   }
 
   async function handleManageSubscription() {

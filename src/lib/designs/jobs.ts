@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { generateDesignImage } from './image-provider';
+import { generateDesignImage, resolveCuratedImageFallback } from './image-provider';
 import { saveDesignAsset } from './assets';
 /** A single atomic claim prevents concurrent workers from generating twice. */
 export async function runDesignJob(id:string){
@@ -29,13 +29,25 @@ export async function runDesignJob(id:string){
   }
 
   const isPoster = job.prompt.startsWith('[POSTER]');
-  const result=await generateDesignImage(
-    job.prompt,
-    (job.provider || 'cloudflare') as any,
-    AbortSignal.timeout(150000),
-    isPoster,
-    visualContext
-  );
+  let result: { bytes: Buffer; model: string; cost: number | null };
+  try {
+    result = await generateDesignImage(
+      job.prompt,
+      (job.provider || 'cloudflare') as any,
+      AbortSignal.timeout(150000),
+      isPoster,
+      visualContext
+    );
+  } catch (err: any) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const isProviderExhausted = /429|402|quota|rate|exhausted|credit|balance|Superadmin|neurons|Bad input|fetch failed/i.test(errMsg);
+    if (isProviderExhausted) {
+      console.warn(`[runDesignJob] AI image provider quota/error (${errMsg}), resolving curated occasion fallback`);
+      result = await resolveCuratedImageFallback(job.prompt, visualContext);
+    } else {
+      throw err;
+    }
+  }
   generated=true;
   const now=new Date();
   await db.usageLedger.create({data:{tenantId:job.tenantId,idempotencyKey:`image-job:${id}`,usageType:'IMAGE_GENERATION',quantitySeconds:0,aiFeature:'bgos_design_image',aiModel:result.model,providerCostUsd:result.cost,costBreakdownJson:JSON.stringify({provider:job.provider,costSource:result.cost===null?'not_reported':'provider'}),periodStart:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),1)),periodEnd:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)),occurredAt:now}}).catch(()=>{});

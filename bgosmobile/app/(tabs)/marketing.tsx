@@ -1155,7 +1155,7 @@ export default function MarketingScreen() {
           if(checking)return;checking=true;
           try {
             if(epoch!==generationEpoch.current){clearInterval(pollInterval);return;}
-            const check = await apiRequest<{ status: string; result?: { url?: string;assetId?:string } }>(
+            const check = await apiRequest<{ status: string; error?: string; result?: { url?: string; assetId?: string } }>(
               `/api/social/designs/image?id=${encodeURIComponent(targetJobId)}`
             );
             if(epoch!==generationEpoch.current){clearInterval(pollInterval);return;}
@@ -1176,10 +1176,15 @@ export default function MarketingScreen() {
               });
               setSuccessNotice('✨ Fresh commercial photo background generated!');
               setTimeout(() => setSuccessNotice(null), 3500);
-            } else if (check?.status === 'failed' || check?.status === 'cancelled' || Date.now() - pollStart > 45000) {
+            } else if (check?.status === 'failed' || check?.status === 'cancelled') {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
-              setError('Image generation did not complete. Your existing design is unchanged; check generation status before retrying.');
+              const reason = check?.error || 'Image generation could not be completed.';
+              setError(`${reason} You can retry with another provider or select a template photo.`);
+            } else if (Date.now() - pollStart > 45000) {
+              clearInterval(pollInterval);
+              setIsGeneratingImage(false);
+              setError('Image generation timed out after 45s. Your existing design is unchanged.');
             }
           } catch {
             clearInterval(pollInterval);

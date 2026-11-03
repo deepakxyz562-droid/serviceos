@@ -459,3 +459,63 @@ export async function generateDesignImage(
     cost: typeof data.usage?.cost === 'number' ? data.usage.cost : null,
   };
 }
+
+export async function resolveCuratedImageFallback(
+  prompt: string,
+  context?: BusinessVisualContext
+): Promise<{ bytes: Buffer; model: string; cost: number | null }> {
+  const cleanPrompt = prompt.replace(/^\[POSTER\]\s*/i, '').trim();
+  const pLower = cleanPrompt.toLowerCase();
+  const category = (context?.category || '').toLowerCase();
+  const offerings = [
+    ...(context?.products || []),
+    ...(context?.services || []),
+  ].join(' ').toLowerCase();
+
+  const isDiwali = hasWord(pLower, ['diwali', 'deepavali', 'diya', 'diyas', 'rangoli', 'festival of lights', 'pataka', 'mithai']);
+  const isEid = hasWord(pLower, ['eid', 'ramadan', 'crescent', 'iftar', 'eid mubarak']);
+  const isChristmas = hasWord(pLower, ['christmas', 'xmas', 'holiday sale', 'santa', 'winter carnival', 'new year', 'year end']);
+  const isFood = hasWord(category + ' ' + offerings + ' ' + pLower, ['food', 'restaurant', 'cafe', 'bakery', 'sweet', 'mithai', 'dining', 'culinary', 'coffee']);
+  const isJewellery = hasWord(category + ' ' + offerings + ' ' + pLower, ['jewellery', 'jewelry', 'gold', 'diamond', 'silver', 'ornament']);
+  const isTech = hasWord(category + ' ' + offerings + ' ' + pLower, ['software', 'tech', 'saas', 'app', 'digital', 'cloud', 'developer', 'it ']);
+
+  let stockUrl = 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1400&q=85';
+
+  if (isDiwali) {
+    stockUrl = 'https://images.unsplash.com/photo-1605379399642-870262d3d051?auto=format&fit=crop&w=1400&q=85';
+  } else if (isEid) {
+    stockUrl = 'https://images.unsplash.com/photo-1564769625905-50e93615e769?auto=format&fit=crop&w=1400&q=85';
+  } else if (isChristmas) {
+    stockUrl = 'https://images.unsplash.com/photo-1543258103-a62bdc069871?auto=format&fit=crop&w=1400&q=85';
+  } else if (isFood) {
+    stockUrl = 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1400&q=85';
+  } else if (isJewellery) {
+    stockUrl = 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=1400&q=85';
+  } else if (isTech) {
+    stockUrl = 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=85';
+  }
+
+  try {
+    const res = await fetch(stockUrl, { signal: AbortSignal.timeout(10000) });
+    if (res.ok) {
+      const arrayBuf = await res.arrayBuffer();
+      const bytes = Buffer.from(arrayBuf);
+      if (bytes.length > 0) {
+        return {
+          bytes,
+          model: 'curated-occasion-stock',
+          cost: 0,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[resolveCuratedImageFallback] fetch failed, falling back to minimal buffer:', err);
+  }
+
+  const fallbackPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+  return {
+    bytes: fallbackPng,
+    model: 'curated-occasion-stock',
+    cost: 0,
+  };
+}

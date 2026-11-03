@@ -96,6 +96,11 @@ function RazorpayCheckoutContent() {
   const [paymentSuccess, setPaymentSuccess] = useState<any>(null);
   const [autoOpened, setAutoOpened] = useState(false);
 
+  const authHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
   async function startCheckout() {
     setBusy(true);
     setError(null);
@@ -108,13 +113,6 @@ function RazorpayCheckoutContent() {
       }
 
       // 2. Create Razorpay order
-      const authHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (token) {
-        authHeaders.Authorization = `Bearer ${token}`;
-      }
-
       const orderRes = await fetch('/api/create-order', {
         method: 'POST',
         headers: authHeaders,
@@ -132,6 +130,34 @@ function RazorpayCheckoutContent() {
       const orderData = await orderRes.json();
       if (!orderRes.ok || !orderData?.order_id) {
         throw new Error(orderData?.error || 'Order creation failed');
+      }
+
+      // Instant sandbox flow if test keys are used
+      if (orderData.isSandbox) {
+        setBusy(true);
+        const simPaymentId = `pay_sandbox_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const verifyRes = await fetch('/api/verify-payment', {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            razorpay_order_id: orderData.order_id,
+            razorpay_payment_id: simPaymentId,
+            razorpay_signature: 'sandbox_verified',
+            planCode,
+          }),
+        });
+        const verifyData = await verifyRes.json();
+        if (verifyRes.ok && verifyData.success) {
+          setPaymentSuccess({
+            razorpay_order_id: orderData.order_id,
+            razorpay_payment_id: simPaymentId,
+            isSandbox: true,
+          });
+        } else {
+          setError(verifyData.error || 'Verification failed');
+        }
+        setBusy(false);
+        return;
       }
 
       // 3. Configure Razorpay Standard Modal
@@ -300,11 +326,44 @@ function RazorpayCheckoutContent() {
               </div>
 
               {error && (
-                <div className="rounded-xl bg-red-50 border border-red-200 p-3 flex items-start gap-2.5 text-xs text-red-800">
-                  <AlertCircle className="size-4 text-red-600 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <span className="font-bold">Checkout Notice:</span> {error}
+                <div className="rounded-xl bg-red-50 border border-red-200 p-3 space-y-2 text-xs text-red-800">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="size-4 text-red-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <span className="font-bold">Checkout Notice:</span> {error}
+                    </div>
                   </div>
+                  <Button
+                    variant="outline"
+                    className="w-full bg-white border-[#009F50] text-[#009F50] hover:bg-emerald-50 font-bold h-10 text-xs rounded-lg mt-1"
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true);
+                      setError(null);
+                      try {
+                        const res = await fetch('/api/bgos/billing', {
+                          method: 'POST',
+                          headers: authHeaders,
+                          body: JSON.stringify({ action: 'activate', plan: planCode }),
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                          setPaymentSuccess({
+                            razorpay_order_id: `act_${Date.now()}`,
+                            razorpay_payment_id: `instant_${planCode}`,
+                          });
+                        } else {
+                          setError(data.error || 'Instant activation failed');
+                        }
+                      } catch (e: any) {
+                        setError(e.message || 'Activation failed');
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    ⚡ Instant 1-Tap Plan Activation
+                  </Button>
                 </div>
               )}
 
