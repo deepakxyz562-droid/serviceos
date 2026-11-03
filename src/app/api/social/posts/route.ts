@@ -190,6 +190,7 @@ interface CreatePostBody {
   expectedUpdatedAt?: string;
   design?: unknown;
   isPoster?: boolean;
+  isPreRendered?: boolean;
   content: string;
   mediaUrls?: string[];
   linkUrl?: string;
@@ -389,9 +390,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Render the exact source revision before queuing publication.
-    // If body.isPoster or if mediaUrls already has a valid finished image, use it directly.
+    // If the image is ALREADY a pre-rendered composite export (e.g. from bgos-design-export or explicitly marked isPreRendered), skip re-rendering.
+    // Otherwise, any post with a structured design must be rendered to composite the headline, badge, and text overlays onto the photo.
     const hasPreRenderedMedia = Array.isArray(body.mediaUrls) && body.mediaUrls.length > 0 && typeof body.mediaUrls[0] === 'string' && body.mediaUrls[0].trim().length > 0;
-    if (design && !isDraft && !(body.isPoster && hasPreRenderedMedia)) {
+    const isAlreadyRendered = hasPreRenderedMedia && (
+      body.mediaUrls[0].includes('bgos-design-export') ||
+      body.mediaUrls[0].includes('/designs/') ||
+      Boolean(body.isPreRendered)
+    );
+
+    if (design && !isDraft && !isAlreadyRendered) {
       try {
         const { renderDesign } = await import('@/lib/designs/render');
         const rendered = await renderDesign(design, tenantId);

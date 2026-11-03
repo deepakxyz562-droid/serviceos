@@ -184,6 +184,7 @@ export async function publishPost(postId: string): Promise<void> {
         status: true,
         content: true,
         mediaUrls: true,
+        designJson: true,
         linkUrl: true,
         gbpPostType: true,
         gbpOfferData: true,
@@ -241,6 +242,38 @@ export async function publishPost(postId: string): Promise<void> {
   // Lazy-load adapters (skips platforms whose adapter modules haven't
   // been built yet without crashing).
   await ensureAdaptersLoaded();
+
+  // Safety net: If post has a structured design that has not yet been exported to a composite PNG,
+  // render it now before dispatching to external networks (so overlays/text are never stripped).
+  if (post.designJson) {
+    try {
+      let currentMedia: string[] = [];
+      try {
+        const parsed = JSON.parse(post.mediaUrls);
+        if (Array.isArray(parsed)) currentMedia = parsed;
+      } catch {}
+
+      const isAlreadyRendered = currentMedia.length > 0 && typeof currentMedia[0] === 'string' && (
+        currentMedia[0].includes('bgos-design-export') ||
+        currentMedia[0].includes('/designs/')
+      );
+
+      if (!isAlreadyRendered) {
+        const parsedDesign = JSON.parse(post.designJson);
+        const { renderDesign } = await import('@/lib/designs/render');
+        const rendered = await renderDesign(parsedDesign, post.tenantId);
+        if (rendered?.imageUrl) {
+          post.mediaUrls = JSON.stringify([rendered.imageUrl]);
+          await db.socialPost.update({
+            where: { id: postId },
+            data: { mediaUrls: post.mediaUrls },
+          }).catch((e) => console.warn('[social/publisher] Failed to persist rendered mediaUrls:', e));
+        }
+      }
+    } catch (renderErr) {
+      console.warn(`[social/publisher] Auto-render fallback warning for post ${postId}:`, renderErr instanceof Error ? renderErr.message : renderErr);
+    }
+  }
 
   // Publish each target in parallel. Each target is isolated so a failure
   // on one doesn't block the others.

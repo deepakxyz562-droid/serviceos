@@ -1181,6 +1181,7 @@ export default function MarketingScreen() {
       platforms: selectedPlatforms,
       mediaUrls: mediaList,
       isPoster: isPosterMode,
+      isPreRendered: false,
       design: design,
       expectedUpdatedAt: designRevision,
       ...(status !== 'draft' && editingDesignId ? { draftId: editingDesignId } : {}),

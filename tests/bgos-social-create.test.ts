@@ -35,12 +35,20 @@ it('rejects a past schedule and account/platform mismatch', async () => {
   expect((await POST(request({ targets: [{ socialAccountId: 'a', platform: 'instagram' }] }))).status).toBe(400);
   expect(m.create).not.toHaveBeenCalled();
 });
-it('bypasses renderDesign when isPoster is true with finished mediaUrls', async () => {
+it('renders design into a composite PNG when publishing a poster', async () => {
+  m.renderDesign.mockResolvedValue({ imageUrl: 'https://assets.example.com/designs/rendered.png' });
   const dummyDesign = { version: 1, width: 1080, height: 1080, background: '#000000', layers: [] };
-  const res = await POST(request({ isPoster: true, mediaUrls: ['https://example.com/poster.jpg'], design: dummyDesign }, 'key-poster-12345678'));
+  const res = await POST(request({ isPoster: true, mediaUrls: ['https://images.unsplash.com/raw-photo.jpg'], design: dummyDesign }, 'key-poster-12345678'));
+  expect(res.status).toBe(201);
+  expect(m.renderDesign).toHaveBeenCalled();
+  expect(m.create.mock.calls[0][0].data.mediaUrls).toBe(JSON.stringify(['https://assets.example.com/designs/rendered.png']));
+});
+it('bypasses renderDesign when mediaUrl is already an exported design graphic', async () => {
+  const dummyDesign = { version: 1, width: 1080, height: 1080, background: '#000000', layers: [] };
+  const res = await POST(request({ isPoster: true, mediaUrls: ['https://assets.example.com/designs/already-rendered.png'], design: dummyDesign }, 'key-poster-already-123'));
   expect(res.status).toBe(201);
   expect(m.renderDesign).not.toHaveBeenCalled();
-  expect(m.create.mock.calls[0][0].data.mediaUrls).toBe(JSON.stringify(['https://example.com/poster.jpg']));
+  expect(m.create.mock.calls[0][0].data.mediaUrls).toBe(JSON.stringify(['https://assets.example.com/designs/already-rendered.png']));
 });
 it('falls back to mediaUrls gracefully if renderDesign fails without throwing 500', async () => {
   m.renderDesign.mockRejectedValue(new Error('Font download timeout'));

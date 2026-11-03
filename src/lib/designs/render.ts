@@ -8,14 +8,46 @@ import { uploadFile, isS3Configured, isSupabaseStorageConfigured } from '@/lib/s
 import { validateDesign } from '../../../shared/marketing-design';
 
 async function imageData(src: string): Promise<string> {
+  if (!src || !src.trim()) return '';
   if (src.startsWith('data:image/')) return src;
-  const url = new URL(src);
-  const allowed = new Set(['images.unsplash.com']);
-  for (const candidate of [process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.AWS_S3_PUBLIC_URL, process.env.DESIGN_ASSET_ORIGIN]) {
-    if (candidate) allowed.add(new URL(candidate).hostname);
+
+  // Local filesystem fallback for relative paths (/uploads/..., /images/...)
+  if (src.startsWith('/')) {
+    try {
+      const localFilePath = path.join(process.cwd(), 'public', src.replace(/^\/+/, ''));
+      const buffer = await readFile(localFilePath);
+      const ext = path.extname(src).toLowerCase().replace('.', '');
+      const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png';
+      return `data:${mime};base64,${buffer.toString('base64')}`;
+    } catch {
+      const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://bgos.fieseros.com';
+      src = `${origin.replace(/\/+$/, '')}/${src.replace(/^\/+/, '')}`;
+    }
   }
-  if (process.env.AWS_S3_BUCKET) allowed.add(`${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com`);
-  if (url.protocol !== 'https:' || url.username || url.password || url.port || !allowed.has(url.hostname)) throw new Error('Upload this image before using it in an export. Its host is not an approved asset source.');
+
+  const url = new URL(src);
+  const allowed = new Set(['images.unsplash.com', 'imagedelivery.net', 'bgos.fieseros.com', 'fieseros.com']);
+  for (const candidate of [process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.AWS_S3_PUBLIC_URL, process.env.DESIGN_ASSET_ORIGIN, process.env.NEXT_PUBLIC_APP_URL]) {
+    if (candidate) {
+      try {
+        allowed.add(new URL(candidate).hostname);
+      } catch {}
+    }
+  }
+  if (process.env.AWS_S3_BUCKET) {
+    allowed.add(`${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com`);
+    allowed.add(`${process.env.AWS_S3_BUCKET}.s3.amazonaws.com`);
+  }
+  if (process.env.NODE_ENV === 'development') {
+    allowed.add('localhost');
+  }
+
+  const isLocalDev = process.env.NODE_ENV === 'development' && url.hostname === 'localhost';
+  const isAllowedProto = url.protocol === 'https:' || (isLocalDev && url.protocol === 'http:');
+  if (!isAllowedProto || url.username || url.password || (url.port && !isLocalDev) || !allowed.has(url.hostname)) {
+    throw new Error('Upload this image before using it in an export. Its host is not an approved asset source.');
+  }
+
   const response = await fetch(url, { redirect:'error', signal: AbortSignal.timeout(15000) });
   const type = response.headers.get('content-type')?.split(';')[0];
   if (!response.ok || !['image/png','image/jpeg','image/webp'].includes(type || '')) throw new Error('Unable to load the design image');
@@ -43,9 +75,16 @@ export async function renderDesign(value: unknown, tenantId: string) {
       l.src=asset.url;
     }
     const style: React.CSSProperties = { position:'absolute' as const, left:l.x, top:l.y, width:l.width, height:l.height, color:l.color, backgroundColor:l.background, fontSize:l.fontSize, opacity:l.opacity, display:'flex', overflow:'hidden', whiteSpace:'pre-wrap', lineHeight:1.15, fontFamily:'BgosDesign',transform:`rotate(${l.rotation||0}deg)` };
-    children.push(l.type === 'image'
-      ? React.createElement('img', { key:l.id, src:await imageData(l.src!), width:l.width, height:l.height, style:{...style,objectFit:'cover',objectPosition:`${l.cropX??50}% ${l.cropY??50}%`} })
-      : React.createElement('div', { key:l.id, style }, l.type === 'text' ? l.text : undefined));
+    if (l.type === 'image') {
+      if (l.src && l.src.trim()) {
+        const b64 = await imageData(l.src);
+        if (b64) {
+          children.push(React.createElement('img', { key:l.id, src:b64, width:l.width, height:l.height, style:{...style,objectFit:'cover',objectPosition:`${l.cropX??50}% ${l.cropY??50}%`} }));
+        }
+      }
+    } else {
+      children.push(React.createElement('div', { key:l.id, style }, l.type === 'text' ? l.text : undefined));
+    }
   }
   const response = new ImageResponse(React.createElement('div', { style:{ width:design.width,height:design.height,display:'flex',position:'relative',backgroundColor:design.background } }, ...children), {width:design.width,height:design.height,fonts:[{name:'BgosDesign',data:await readFile(path.join(process.cwd(),'public/fonts/BgosDesign-Regular.ttf')),weight:400,style:'normal'}]});
   const buffer = Buffer.from(await response.arrayBuffer());
