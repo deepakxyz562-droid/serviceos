@@ -72,7 +72,14 @@ export async function sendFirebaseOtp(phoneNumber: string): Promise<SendOtpResul
         return {
           success: false,
           error:
-            'Firebase carrier SMS requires the Blaze pay-as-you-go plan. For instant testing without carrier SMS, enter registered test number +91 99999 99999 (code: 123456).',
+            'Firebase carrier SMS requires the Blaze pay-as-you-go plan. If you just upgraded, Google takes 15–30 minutes to propagate billing. For instant testing, add your phone number under Firebase Console > Authentication > Phone numbers for testing, or use test number +91 99999 99999 (code: 123456).',
+        };
+      }
+      if (msg.includes('MISSING_CLIENT_IDENTIFIER')) {
+        return {
+          success: false,
+          error:
+            'Firebase requires phone anti-abuse verification for carrier SMS. For instant testing, add your phone number to Firebase Console (Authentication > Sign-in method > Phone > Phone numbers for testing), or use test number +91 99999 99999 (code: 123456).',
         };
       }
       if (msg.includes('TOO_MANY_ATTEMPTS')) {

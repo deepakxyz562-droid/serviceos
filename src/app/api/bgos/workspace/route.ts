@@ -67,10 +67,14 @@ export async function GET() {
     const profile = settings.creatorProfile;
     const subscription = user.workspaceId ? await db.productSubscription.findUnique({ where: { workspaceId: user.workspaceId } }) : null;
     const bookingPageConfig = settings.bookingPageConfig || {};
+    const effectiveBusinessName =
+      (typeof settings.activeGbpTitle === 'string' && settings.activeGbpTitle.trim()) ||
+      bookingPageConfig.businessName ||
+      tenant.name;
     const data: BgosWorkspace = {
-      name: tenant.name, mode: settings.bgos?.mode === 'agency' ? 'agency' : 'local',
+      name: effectiveBusinessName, mode: settings.bgos?.mode === 'agency' ? 'agency' : 'local',
       bookingPageConfig: {
-        businessName: bookingPageConfig.businessName || tenant.name,
+        businessName: effectiveBusinessName,
         phone: bookingPageConfig.phone || tenant.phone || '',
         whatsapp: bookingPageConfig.whatsapp || '',
         email: bookingPageConfig.email || tenant.email || '',

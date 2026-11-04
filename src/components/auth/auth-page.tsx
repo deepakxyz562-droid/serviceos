@@ -48,6 +48,7 @@ import {
 } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -137,8 +138,20 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
 
   // Business Login state
   const [businessTab, setBusinessTab] = useState<BusinessTab>(initialTab === 'register' ? 'register' : 'login');
+  const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginPhone, setLoginPhone] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [sessionInfo, setSessionInfo] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setInterval(() => setCountdown(c => c > 0 ? c - 1 : 0), 1000);
+    return () => clearInterval(t);
+  }, [countdown]);
 
   // Business Register state
   const [regName, setRegName] = useState('');
@@ -198,6 +211,84 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
       onAuthSuccess(data.user, data.tenant, data.workspace);
     } catch {
       toast.error('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ─── Business Phone OTP Handlers ───
+  const handleSendWebOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanDigits = loginPhone.replace(/\D/g, '');
+    if (cleanDigits.length < 10) {
+      toast.error('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDLMfL0psz7RPx_V9BC0q9nLSV5bj5V930';
+      const cleanPhone = loginPhone.startsWith('+') ? loginPhone : `+91${cleanDigits.slice(-10)}`;
+      const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendVerificationCode?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: cleanPhone }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.sessionInfo) {
+        const msg = data.error?.message || '';
+        if (msg.includes('BILLING_NOT_ENABLED') || msg.includes('MISSING_CLIENT_IDENTIFIER')) {
+          toast.error('Carrier SMS requires registered test numbers (e.g. +91 99999 99999 / code: 123456).');
+        } else {
+          toast.error(msg || 'Failed to send OTP code.');
+        }
+        return;
+      }
+      setSessionInfo(data.sessionInfo);
+      setOtpSent(true);
+      setCountdown(30);
+      toast.success(`Verification code sent to ${cleanPhone}`);
+    } catch {
+      toast.error('Failed to contact verification service.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyWebOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sessionInfo || otpCode.trim().length < 4) {
+      toast.error('Please enter the 6-digit verification code.');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDLMfL0psz7RPx_V9BC0q9nLSV5bj5V930';
+      const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionInfo, code: otpCode.trim() }),
+      });
+      const verifyData = await verifyRes.json().catch(() => ({}));
+      if (!verifyRes.ok || !verifyData.idToken) {
+        toast.error('Invalid OTP verification code.');
+        return;
+      }
+
+      const res = await fetch('/api/bgos/mobile-auth/phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: verifyData.idToken, phoneNumber: loginPhone, product: 'bgos' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to sign in with phone.');
+        return;
+      }
+      setToken(data.token);
+      toast.success('Signed in successfully!');
+      onAuthSuccess(data.user, data.workspace?.tenant || { id: data.user.tenantId, name: data.workspace?.name }, data.workspace);
+    } catch {
+      toast.error('Sign-in failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -301,55 +392,172 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
             animate="center"
             exit="exit"
           >
-            <form onSubmit={handleBusinessLogin} className="space-y-4">
-              <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
-                <Label htmlFor="login-email" className="text-slate-700">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    id="login-email"
-                    type="email"
-                    placeholder="you@company.com"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-                    autoComplete="email"
-                  />
-                </div>
-              </motion.div>
+            {/* Login Method Sub-Toggle */}
+            <div className="flex items-center justify-center p-1 bg-slate-100 rounded-lg mb-4">
+              <button
+                type="button"
+                onClick={() => setLoginMethod('email')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                  loginMethod === 'email' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Email & Password
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoginMethod('phone')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                  loginMethod === 'phone' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Mobile OTP
+              </button>
+            </div>
 
-              <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="login-password" className="text-slate-700">Password</Label>
-                  <button type="button" className="text-xs text-emerald-600 hover:text-emerald-700 font-medium hover:underline transition-colors">
-                    Forgot Password?
-                  </button>
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    id="login-password"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-                    autoComplete="current-password"
-                  />
-                </div>
-              </motion.div>
+            <form onSubmit={loginMethod === 'phone' ? (otpSent ? handleVerifyWebOtp : handleSendWebOtp) : handleBusinessLogin} className="space-y-4">
+              {loginMethod === 'email' ? (
+                <>
+                  <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+                    <Label htmlFor="login-email" className="text-slate-700">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input
+                        id="login-email"
+                        type="email"
+                        placeholder="you@company.com"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+                        autoComplete="email"
+                      />
+                    </div>
+                  </motion.div>
 
-              <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible">
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer"
-                >
-                  {isLoading ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</>
-                  ) : 'Sign In'}
-                </Button>
-              </motion.div>
+                  <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="login-password" className="text-slate-700">Password</Label>
+                      <button type="button" className="text-xs text-emerald-600 hover:text-emerald-700 font-medium hover:underline transition-colors">
+                        Forgot Password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input
+                        id="login-password"
+                        type="password"
+                        placeholder="Enter your password"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+                        autoComplete="current-password"
+                      />
+                    </div>
+                  </motion.div>
+
+                  <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible">
+                    <Button
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer"
+                    >
+                      {isLoading ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</>
+                      ) : 'Sign In'}
+                    </Button>
+                  </motion.div>
+                </>
+              ) : (
+                <>
+                  <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="login-phone" className="text-slate-700">Mobile Number</Label>
+                      <span className="text-[11px] font-mono text-slate-500">10 digits required</span>
+                    </div>
+                    <PhoneInput
+                      id="login-phone"
+                      value={loginPhone}
+                      onChange={(val) => {
+                        setLoginPhone(val);
+                        if (otpSent) {
+                          setOtpSent(false);
+                          setSessionInfo(null);
+                          setOtpCode('');
+                        }
+                      }}
+                      defaultCountry="IN"
+                      placeholder="98765 43210"
+                      className="bg-white border-slate-200"
+                      disabled={isLoading || otpSent}
+                    />
+                  </motion.div>
+
+                  {otpSent ? (
+                    <>
+                      <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="login-otp" className="text-slate-700">Enter 6-Digit Code</Label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOtpSent(false);
+                              setSessionInfo(null);
+                              setOtpCode('');
+                            }}
+                            className="text-xs text-emerald-600 hover:underline font-semibold cursor-pointer"
+                          >
+                            Change number
+                          </button>
+                        </div>
+                        <Input
+                          id="login-otp"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="123456"
+                          maxLength={6}
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          className="h-10 text-center tracking-widest text-lg font-mono bg-white border-slate-200 focus-visible:border-emerald-500"
+                          autoFocus
+                        />
+                      </motion.div>
+
+                      <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+                        <Button
+                          type="submit"
+                          disabled={isLoading || otpCode.trim().length < 4}
+                          className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer"
+                        >
+                          {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</> : 'Verify & Continue'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={isLoading || countdown > 0}
+                          onClick={handleSendWebOtp}
+                          className="w-full h-9 text-xs border-slate-200 cursor-pointer"
+                        >
+                          {countdown > 0 ? `Resend Code (${countdown}s)` : 'Resend Code'}
+                        </Button>
+                      </motion.div>
+                    </>
+                  ) : (
+                    <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-3">
+                      <Button
+                        type="submit"
+                        disabled={isLoading || loginPhone.replace(/\D/g, '').length < 10}
+                        className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer"
+                      >
+                        {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending Code...</> : 'Send Verification Code'}
+                      </Button>
+                      <div className="p-2.5 bg-emerald-50 rounded-md border border-emerald-100 text-center">
+                        <p className="text-xs text-emerald-800 font-medium">
+                          💡 Test login available: +91 99999 99999 (Code: 123456)
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </>
+              )}
 
               <motion.div custom={3} variants={fadeUp} initial="hidden" animate="visible" className="relative">
                 <div className="absolute inset-0 flex items-center"><Separator className="w-full" /></div>
@@ -447,10 +655,14 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
 
               <motion.div custom={5} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
                 <Label htmlFor="reg-phone" className="text-slate-700">Phone Number</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input id="reg-phone" type="tel" placeholder="+1 (555) 000-0000" value={regPhone} onChange={(e) => setRegPhone(e.target.value)} className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20" autoComplete="tel" />
-                </div>
+                <PhoneInput
+                  id="reg-phone"
+                  value={regPhone}
+                  onChange={(val) => setRegPhone(val)}
+                  defaultCountry="IN"
+                  placeholder="98765 43210"
+                  className="bg-white border-slate-200"
+                />
               </motion.div>
 
               <motion.div custom={6} variants={fadeUp} initial="hidden" animate="visible" className="pt-1">

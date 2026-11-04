@@ -1,18 +1,21 @@
 import { Redirect, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Linking, Platform, Pressable, Text, View } from 'react-native';
+import { Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuthStore } from '../src/stores/auth-store';
 import { isAppleAuthAvailable } from '../src/lib/apple-auth';
 import { sendFirebaseOtp, verifyFirebaseOtp, formatPhoneNumber } from '../src/lib/firebase-auth';
+import { COUNTRIES, DEFAULT_COUNTRY, type CountryItem, formatNationalDisplay, buildE164 } from '../src/lib/country-codes';
 import { WEB_URL } from '../src/lib/constants';
 import { Action, Brand, Card, Chip, ErrorNotice, Field, Screen, colors, ui } from '../src/components/ui';
 
 export default function LoginScreen() {
   const router = useRouter();
   const [method, setMethod] = useState<'email' | 'phone'>('email');
-  const [phone, setPhone] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState<CountryItem>(DEFAULT_COUNTRY);
+  const [countryModalVisible, setCountryModalVisible] = useState(false);
+  const [phoneDigits, setPhoneDigits] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<string | null>(null);
   const [otp, setOtp] = useState('');
@@ -66,15 +69,16 @@ export default function LoginScreen() {
   }
 
   async function handleSendOtp() {
-    const clean = phone.replace(/\D/g, '');
-    if (clean.length < 10) {
-      setLocalError('Please enter a valid 10-digit mobile number.');
+    const clean = phoneDigits.replace(/\D/g, '');
+    if (clean.length !== selectedCountry.digits) {
+      setLocalError(`Please enter a valid ${selectedCountry.digits}-digit mobile number for ${selectedCountry.name}.`);
       return;
     }
+    const fullE164 = buildE164(clean, selectedCountry);
     setBusy(true);
     setLocalError(null);
     try {
-      const res = await sendFirebaseOtp(phone);
+      const res = await sendFirebaseOtp(fullE164);
       if (!res.success || !res.sessionInfo) {
         setLocalError(res.error || 'Failed to send verification code.');
         return;
@@ -107,7 +111,8 @@ export default function LoginScreen() {
         setLocalError(res.error || 'Verification failed. Please check the code.');
         return;
       }
-      const success = await loginPhone(res.idToken, res.phoneNumber || phone);
+      const fullE164 = buildE164(phoneDigits, selectedCountry);
+      const success = await loginPhone(res.idToken, res.phoneNumber || fullE164);
       if (!success) {
         // useAuthStore sets error
       }
@@ -154,27 +159,86 @@ export default function LoginScreen() {
 
         {method === 'phone' ? (
           <>
-            <Field
-              label="Mobile Number"
-              value={phone}
-              onChangeText={(val) => {
-                setPhone(val);
-                if (otpSent) {
-                  setOtpSent(false);
-                  setSessionInfo(null);
-                  setOtp('');
-                }
-              }}
-              keyboardType="phone-pad"
-              placeholder="+91 98765 43210"
-              maxLength={16}
-            />
+            <View style={{ marginBottom: 14 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={ui.label}>Mobile Number</Text>
+                <Text
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: '700',
+                    color: phoneDigits.length === selectedCountry.digits ? '#16A34A' : colors.muted,
+                  }}
+                >
+                  {phoneDigits.length}/{selectedCountry.digits} digits
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {/* Country Selector Pill */}
+                <Pressable
+                  onPress={() => setCountryModalVisible(true)}
+                  disabled={busy || otpSent}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select Country Code"
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    height: 48,
+                    paddingHorizontal: 12,
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 12,
+                    borderWidth: 1.5,
+                    borderColor: colors.line,
+                  }}
+                >
+                  <Text style={{ fontSize: 18 }}>{selectedCountry.flag}</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink }}>
+                    +{selectedCountry.callingCode}
+                  </Text>
+                  <MaterialIcons name="arrow-drop-down" size={18} color={colors.muted} />
+                </Pressable>
+
+                {/* Strict Digit Input */}
+                <View style={{ flex: 1 }}>
+                  <TextInput
+                    value={formatNationalDisplay(phoneDigits, selectedCountry)}
+                    onChangeText={(val) => {
+                      const rawDigits = val.replace(/\D/g, '').slice(0, selectedCountry.digits);
+                      setPhoneDigits(rawDigits);
+                      if (otpSent) {
+                        setOtpSent(false);
+                        setSessionInfo(null);
+                        setOtp('');
+                      }
+                    }}
+                    keyboardType="number-pad"
+                    placeholder={selectedCountry.placeholder}
+                    placeholderTextColor="#94A3B8"
+                    maxLength={selectedCountry.digits + 2}
+                    editable={!busy && !otpSent}
+                    style={{
+                      height: 48,
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 12,
+                      borderWidth: 1.5,
+                      borderColor: phoneDigits.length === selectedCountry.digits ? colors.brand : colors.line,
+                      paddingHorizontal: 14,
+                      fontSize: 16,
+                      fontWeight: '700',
+                      color: colors.ink,
+                      letterSpacing: 0.5,
+                    }}
+                  />
+                </View>
+              </View>
+            </View>
 
             {otpSent ? (
               <>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <Text style={[ui.caption, { color: colors.muted }]}>
-                    Code sent to {phone}
+                    Code sent to +{selectedCountry.callingCode} {formatNationalDisplay(phoneDigits, selectedCountry)}
                   </Text>
                   <Pressable
                     hitSlop={8}
@@ -226,7 +290,7 @@ export default function LoginScreen() {
 
                 <Action
                   label={busy ? 'Sending OTP…' : 'Send OTP'}
-                  disabled={busy || phone.replace(/\D/g, '').length < 10}
+                  disabled={busy || phoneDigits.length !== selectedCountry.digits}
                   onPress={handleSendOtp}
                 />
 
@@ -338,6 +402,66 @@ export default function LoginScreen() {
           Terms of Service
         </Text>
       </View>
+
+      {/* Country Selection Modal */}
+      <Modal
+        visible={countryModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCountryModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(7, 11, 45, 0.45)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '72%', paddingBottom: 28 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Select Country</Text>
+              <Pressable hitSlop={8} onPress={() => setCountryModalVisible(false)}>
+                <MaterialIcons name="close" size={22} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10 }}>
+              {COUNTRIES.map((c) => {
+                const isSelected = c.code === selectedCountry.code;
+                return (
+                  <Pressable
+                    key={c.code}
+                    onPress={() => {
+                      setSelectedCountry(c);
+                      setPhoneDigits((prev) => prev.slice(0, c.digits));
+                      setCountryModalVisible(false);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      backgroundColor: isSelected ? '#F0FDF4' : 'transparent',
+                      marginBottom: 2,
+                    }}
+                  >
+                    <Text style={{ fontSize: 22, marginRight: 12 }}>{c.flag}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: isSelected ? '800' : '600', color: isSelected ? colors.brand : '#0F172A' }}>
+                        {c.name}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#64748B' }}>
+                        {c.digits} digits • {c.format}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>
+                      +{c.callingCode}
+                    </Text>
+                    {isSelected && (
+                      <MaterialIcons name="check" size={18} color={colors.brand} style={{ marginLeft: 8 }} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }

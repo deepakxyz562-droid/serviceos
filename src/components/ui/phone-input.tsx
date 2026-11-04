@@ -48,7 +48,7 @@ export function PhoneInput({
   autoFocus = false,
 }: PhoneInputProps) {
   const { country: companyCountry } = useCompanyCountry();
-  const effectiveDefaultCountry = explicitDefaultCountry || companyCountry || "US";
+  const effectiveDefaultCountry = explicitDefaultCountry || companyCountry || "IN";
 
   // 1. Selected Country State
   const initialCountry = React.useMemo(() => {
@@ -100,8 +100,8 @@ export function PhoneInput({
       }
     }
 
-    // Normal national typing
-    const digitsOnly = rawInput.replace(/\D/g, "");
+    // Normal national typing - strictly clamp to country max length
+    const digitsOnly = rawInput.replace(/\D/g, "").slice(0, selectedCountry.maxLength);
     if (!digitsOnly) {
       onChange?.("");
       return;
@@ -172,6 +172,7 @@ export function PhoneInput({
         disabled={disabled}
         required={required}
         autoFocus={autoFocus}
+        maxLength={selectedCountry.maxLength + 4}
         className="h-9 sm:h-10 border-0 bg-transparent px-3 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none flex-1 font-mono tracking-wide"
       />
     </div>

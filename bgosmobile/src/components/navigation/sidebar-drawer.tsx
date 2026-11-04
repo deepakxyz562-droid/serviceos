@@ -29,24 +29,37 @@ interface SidebarDrawerProps {
   onClose: () => void;
 }
 
+interface DiscoverResponse {
+  email: string;
+  phone: string;
+  version: string;
+  activeProfile?: { id: string; name: string; shortId: string; initial: string };
+  profiles?: Array<{ id: string; name: string; shortId: string; initial: string }>;
+}
+
 export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { logout, deleteAccount, user } = useAuthStore();
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
+  const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushChecking, setPushChecking] = useState(false);
 
   React.useEffect(() => {
     if (visible) {
       void isPushPermissionGranted().then(setPushEnabled);
+      void discover.refresh();
+      void workspace.refresh();
     }
   }, [visible]);
 
+  const activeProfile = discover.data?.activeProfile;
   const data = workspace.data;
-  const businessName = data?.name || user?.name || 'My Business';
-  const email = user?.email || '';
-  const initial = businessName.charAt(0).toUpperCase() || 'M';
+  const businessName = activeProfile?.name || data?.name || user?.name || 'My Business';
+  const shortId = activeProfile?.shortId || '';
+  const email = discover.data?.email || user?.email || '';
+  const initial = activeProfile?.initial || businessName.charAt(0).toUpperCase() || 'M';
 
   function navigate(route: string) {
     onClose();
@@ -145,9 +158,16 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                 <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '800' }}>{initial}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
-                  {businessName}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', flexShrink: 1 }} numberOfLines={1}>
+                    {businessName}
+                  </Text>
+                  {shortId ? (
+                    <View style={{ paddingHorizontal: 6, paddingVertical: 1, backgroundColor: '#EEF2FF', borderRadius: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: '#4F46E5' }}>{shortId}</Text>
+                    </View>
+                  ) : null}
+                </View>
                 <Text style={{ fontSize: 11, color: '#64748B' }} numberOfLines={1}>
                   {email}
                 </Text>
