@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-const m = vi.hoisted(() => ({ findUnique: vi.fn(), resolve: vi.fn() }));
-vi.mock('@/lib/db', () => ({ db: { user: { findUnique: m.findUnique } } }));
+const m = vi.hoisted(() => ({ findUnique: vi.fn(), resolve: vi.fn(), count: vi.fn().mockResolvedValue(0) }));
+vi.mock('@/lib/db', () => ({ db: { user: { findUnique: m.findUnique }, socialAccount: { count: m.count } } }));
 vi.mock('@/lib/product-access', () => ({ resolveProductAccess: m.resolve, ProductAccessError: class extends Error { constructor(public code: string, public status = 403) { super(code); } } }));
 import { resolveBgosMobileAccount } from '@/lib/bgos-mobile-account';
 beforeEach(() => {
@@ -22,7 +22,8 @@ it('does not use legacy fallback when product membership validation fails', asyn
   m.resolve.mockRejectedValue(new Error('membership suspended'));
   await expect(resolveBgosMobileAccount('u')).rejects.toThrow('membership suspended');
 });
-it('rejects BOS identity in legacy mode', async () => {
+it('allows BOS business identity in legacy mode', async () => {
   vi.stubEnv('PRODUCT_WORKSPACES_ENABLED', 'false');
-  await expect(resolveBgosMobileAccount('u')).rejects.toMatchObject({ code: 'BGOS_REQUIRED' });
+  const account = await resolveBgosMobileAccount('u');
+  expect(account.workspace.productType).toBe('bos');
 });

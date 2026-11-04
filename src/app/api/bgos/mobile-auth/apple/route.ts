@@ -4,8 +4,8 @@ import { db } from '@/lib/db';
 import { issueAuthTokens, getRefreshSessionMetadata } from '@/lib/auth';
 import { applyRateLimit, oauthLimiter, rateLimitResponse, getClientIp } from '@/lib/rate-limit';
 import { decodeAppleIdentityToken } from '@/lib/bgos-apple-auth';
-import { resolveBgosMobileAccount } from '@/lib/bgos-mobile-account';
-import { activateProductWorkspace, ProductAccessError } from '@/lib/product-access';
+import { ensureBgosTenantAndWorkspace, resolveBgosMobileAccount } from '@/lib/bgos-mobile-account';
+import { ProductAccessError } from '@/lib/product-access';
 
 const appleInputSchema = z.object({
   identityToken: z.string().min(10),
@@ -52,13 +52,6 @@ export async function POST(request: NextRequest) {
 
     // 2. If user doesn't exist, create account
     if (!user) {
-      if (process.env.PRODUCT_WORKSPACES_ENABLED !== 'true') {
-        return NextResponse.json(
-          { error: 'Workspace signup is not configured. Contact your administrator.' },
-          { status: 503 },
-        );
-      }
-
       const displayName = fullName || email.split('@')[0] || 'Apple User';
 
       try {
@@ -107,10 +100,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 3. Ensure BGOS workspace exists
-    if (!user.workspaceId && process.env.PRODUCT_WORKSPACES_ENABLED === 'true') {
-      await activateProductWorkspace(user.id, 'bgos', `${user.name || 'My'} Business`);
-    }
+    // 3. Ensure BGOS workspace exists seamlessly
+    await ensureBgosTenantAndWorkspace(user.id);
 
     // 4. Resolve BGOS account
     const account = await resolveBgosMobileAccount(user.id);

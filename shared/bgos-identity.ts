@@ -1,4 +1,7 @@
-// Only BGOS and its legacy aliases are valid BGOS identities.
+// Valid business workspace types for BGOS mobile.
+// Business owners using BGOS, Chatbotly, Forms, CRM, BOS, or ServiceOS are all valid BGOS identities.
+const VALID_BGOS_PRODUCT_TYPES = ['bgos', 'chatbotly', 'forms', 'crm', 'bos', 'serviceos', 'business', 'marketing', ''];
+
 export function isBgosIdentity(identity: {
   user?: { role?: string | null; isSuperAdmin?: boolean } | null;
   workspace?: { productType?: string | null } | null;
@@ -8,5 +11,5 @@ export function isBgosIdentity(identity: {
     return false;
   }
   const pt = identity.workspace?.productType?.toLowerCase() || '';
-  return ['bgos', 'chatbotly', 'forms'].includes(pt);
+  return VALID_BGOS_PRODUCT_TYPES.includes(pt);
 }

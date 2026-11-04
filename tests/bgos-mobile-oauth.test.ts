@@ -20,10 +20,12 @@ it('requires configured encryption and Google credentials', () => {
   expect(readMobileState('anything')).toBeNull();
   expect(() => sealMobileState({ nonce: '', challenge: '', verifier: '', expires: 0 })).toThrow('not configured');
 });
-it('allows BGOS aliases but rejects BOS, customer and administrator identities', () => {
-  for (const productType of ['bgos', 'chatbotly', 'forms']) expect(isBgosIdentity({ user: { role: 'owner' }, workspace: { productType } })).toBe(true);
-  for (const productType of ['bos', 'crm', 'quoteflow', '']) expect(isBgosIdentity({ user: { role: 'owner' }, workspace: { productType } })).toBe(false);
+it('allows BGOS aliases and business workspaces, but rejects customer and administrator identities', () => {
+  for (const productType of ['bgos', 'chatbotly', 'forms', 'bos', 'crm', 'serviceos', 'business', '']) {
+    expect(isBgosIdentity({ user: { role: 'owner' }, workspace: { productType } })).toBe(true);
+  }
   expect(isBgosIdentity({ user: { role: 'customer' }, workspace: { productType: 'bgos' } })).toBe(false);
+  expect(isBgosIdentity({ user: { role: 'superadmin', isSuperAdmin: true }, workspace: { productType: 'bgos' } })).toBe(false);
 });
 it('routes notification taps only to supported BGOS screens', () => {
   expect(notificationDestination({ url: '/?view=messages&conversation=123' })).toBe('/(tabs)/inbox');
