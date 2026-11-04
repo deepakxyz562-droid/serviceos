@@ -166,7 +166,7 @@ function AutoBrandedPosterCard({
   layout?: PosterTemplateLayout;
 }) {
   if(document)return <View style={{height,aspectRatio:document.width/document.height,alignSelf:'center'}}><PosterPreview doc={document}/></View>;
-  if (layout.startsWith('studio_')) {
+  if (layout.startsWith('studio_') || layout.startsWith('professional_')) {
     const ratio = aspectRatio === 1 ? '1:1' : aspectRatio < .6 ? '9:16' : aspectRatio > 1 ? '16:9' : '4:5';
     const doc = createCommercialPosterDesign({brand:businessName,headline,subtitle,badge,cta:ctaText,photo:photoUri||undefined,logoUrl:logoUri||undefined,website,phone,ratio,theme,layout});
     return <View style={{height,aspectRatio,alignSelf:'center'}}><PosterPreview doc={doc}/>{isGenerating && <ActivityIndicator style={{position:'absolute',top:12,right:12}}/>}</View>;
@@ -2723,14 +2723,20 @@ export default function MarketingScreen() {
       </Modal>
       {activeMode === 'studio' && (
         <View style={{ flex: 1 }}>
-          {/* Sub-Tab Navigation Header for Step 2 (Editor) & Step 3 (Review) */}
-          {studioStep > 1 && (
+          {/* Sub-Tab Navigation Header for Step 1 (when design exists), Step 2 (Editor) & Step 3 (Review) */}
+          {(studioStep > 1 || hasGenerated || Boolean(customPosterUri) || Boolean(design)) && (
             <View style={styles.subTabBar}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                 <Pressable
                   onPress={() => {
                     if (studioStep === 3) setStudioStep(2);
-                    else if (studioStep === 2) setStudioStep(1);
+                    else if (studioStep === 2) {
+                      setStudioStep(1);
+                      setStudioSubTab('chat');
+                    } else if (studioStep === 1) {
+                      setHasGenerated(false);
+                      setCustomPosterUri(null);
+                    }
                   }}
                   style={{ padding: 6, borderRadius: 8, backgroundColor: '#F1F5F9' }}
                 >
@@ -2738,7 +2744,7 @@ export default function MarketingScreen() {
                 </Pressable>
                 <View style={{ flex: 1 }}>
                   <Text numberOfLines={1} style={styles.studioHeaderTitle}>
-                    {studioStep === 2 ? (headline || 'Customize Poster') : 'Review & Schedule'}
+                    {studioStep === 3 ? 'Review & Schedule' : studioStep === 2 ? (headline || 'Design Editor') : (headline || 'Campaign Studio')}
                   </Text>
                   <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '600', color: '#009F50' }}>
                     {effectiveBusinessName}
@@ -2746,22 +2752,22 @@ export default function MarketingScreen() {
                 </View>
               </View>
 
-              {/* Chat vs Design toggle */}
-              {studioStep === 2 && (
+              {/* Chat vs Design toggle - visible whenever design exists in step 1 or 2 */}
+              {studioStep <= 2 && (hasGenerated || Boolean(customPosterUri) || Boolean(design)) && (
                 <View style={styles.segmentedToggle}>
                   <Pressable
                     onPress={() => {
                       setStudioStep(1);
                       setStudioSubTab('chat');
                     }}
-                    style={[styles.segBtn, studioSubTab === 'chat' && styles.segBtnActive]}
+                    style={[styles.segBtn, (studioStep === 1 || studioSubTab === 'chat') && styles.segBtnActive]}
                   >
                     <MaterialIcons
                       name="chat-bubble-outline"
                       size={14}
-                      color={studioSubTab === 'chat' ? '#009F50' : '#64748B'}
+                      color={(studioStep === 1 || studioSubTab === 'chat') ? '#009F50' : '#64748B'}
                     />
-                    <Text style={[styles.segBtnText, studioSubTab === 'chat' && styles.segBtnTextActive]}>
+                    <Text style={[styles.segBtnText, (studioStep === 1 || studioSubTab === 'chat') && styles.segBtnTextActive]}>
                       Chat
                     </Text>
                   </Pressable>
@@ -2771,14 +2777,14 @@ export default function MarketingScreen() {
                       setStudioStep(2);
                       setStudioSubTab('design');
                     }}
-                    style={[styles.segBtn, studioSubTab === 'design' && styles.segBtnActive]}
+                    style={[styles.segBtn, (studioStep === 2 && studioSubTab === 'design') && styles.segBtnActive]}
                   >
                     <MaterialIcons
                       name="image"
                       size={14}
-                      color={studioSubTab === 'design' ? '#009F50' : '#64748B'}
+                      color={(studioStep === 2 && studioSubTab === 'design') ? '#009F50' : '#64748B'}
                     />
-                    <Text style={[styles.segBtnText, studioSubTab === 'design' && styles.segBtnTextActive]}>
+                    <Text style={[styles.segBtnText, (studioStep === 2 && studioSubTab === 'design') && styles.segBtnTextActive]}>
                       Design
                     </Text>
                   </Pressable>
@@ -3097,8 +3103,31 @@ export default function MarketingScreen() {
                         </Pressable>
                       </View>
 
-                      {/* Dedicated Full-Width Primary Action Button */}
-                      <View style={{ paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6, backgroundColor: '#FFFFFF' }}>
+                      {/* Primary Actions: Open Design Editor & Continue to Publish */}
+                      <View style={{ paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6, backgroundColor: '#FFFFFF', gap: 8 }}>
+                        <Pressable
+                          onPress={() => {
+                            setStudioStep(2);
+                            setStudioSubTab('design');
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            paddingVertical: 12,
+                            borderRadius: 12,
+                            backgroundColor: '#F0FDF4',
+                            borderWidth: 1.5,
+                            borderColor: '#009F50',
+                          }}
+                        >
+                          <MaterialIcons name="tune" size={16} color="#009F50" />
+                          <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#009F50' }}>
+                            Open Design Editor & Canvas →
+                          </Text>
+                        </Pressable>
+
                         <Pressable
                           onPress={() => setStudioStep(3)}
                           style={{
@@ -3401,70 +3430,14 @@ export default function MarketingScreen() {
                   </Pressable>
                 )}
 
-                {/* ── 1-Tap Template Content Customization Toolbar ── */}
-                <View style={{ marginBottom: 12, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons name="tune" size={16} color="#009F50" />
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Customize Design Content</Text>
-                    </View>
-                    <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>Tap to edit</Text>
-                  </View>
-
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                    <Pressable
-                      onPress={() => setEditSheet('brand')}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
-                    >
-                      <MaterialIcons name="business" size={15} color="#0F172A" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Header Brand</Text>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => setEditSheet('brand')}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
-                    >
-                      <MaterialIcons name="image" size={15} color="#009F50" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Logo</Text>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => setEditSheet('brand')}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
-                    >
-                      <MaterialIcons name="link" size={15} color="#2563EB" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Footer Link & Phone</Text>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => setEditSheet('text')}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
-                    >
-                      <MaterialIcons name="title" size={15} color="#D97706" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Headlines & Copy</Text>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => setEditSheet('photo')}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
-                    >
-                      <MaterialIcons name="photo-camera" size={15} color="#9333EA" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Background Photo</Text>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => setEditSheet('style')}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
-                    >
-                      <MaterialIcons name="palette" size={15} color="#0D9488" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Themes & Ratio</Text>
-                    </Pressable>
-                  </ScrollView>
-                </View>
-
-                {/* Live Full-Bleed Canvas Editor */}
+                {/* Live Full-Bleed Canvas Editor with Direct Tap Selection & Contextual Tools */}
                 <View style={{ marginBottom: 14 }}>
-                  <PosterEditor doc={design} onChange={handleCustomDesignChange} />
+                  <PosterEditor
+                    doc={design}
+                    onChange={handleCustomDesignChange}
+                    onOpenTemplates={() => setTemplatePickerOpen(true)}
+                    onOpenRatio={() => setEditSheet('style')}
+                  />
                 </View>
 
                 {/* Summary Row 1: Caption */}

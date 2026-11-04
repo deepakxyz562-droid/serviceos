@@ -1,3 +1,4 @@
+import {designFontFamily} from '../../../shared/design-fonts';
 import { db } from '@/lib/db';
 import { readFile } from 'fs/promises';
 import path from 'path';
@@ -96,8 +97,10 @@ export async function renderDesign(value: unknown, tenantId: string, options: {f
       overflow: 'hidden',
       whiteSpace: 'pre-wrap',
       lineHeight: l.lineHeight??1.15,
-      fontFamily: 'BgosDesign',
+      fontFamily: designFontFamily(l),
       textAlign: l.textAlign || 'left',
+      ...(l.type==='text'&&l.textAlign==='center'?{justifyContent:'center'}:{}),
+      ...(l.type==='text'&&l.textAlign==='right'?{justifyContent:'flex-end'}:{}),
       transform: `rotate(${l.rotation || 0}deg)`,
       ...(l.borderRadius !== undefined ? { borderRadius: l.borderRadius } : {}),
       ...(l.borderTopLeftRadius !== undefined ? { borderTopLeftRadius: l.borderTopLeftRadius } : {}),
@@ -116,13 +119,17 @@ export async function renderDesign(value: unknown, tenantId: string, options: {f
     };
     if (l.type === 'image') {
       if (l.src && l.src.trim()) {
-        const ab = await imageData(l.src);
+        let ab = await imageData(l.src);
         if (ab) {
+          // Satori cannot decode WebP; normalize all approved image inputs first.
+          const sharp=(await import('sharp')).default;
+          const normalized=await sharp(Buffer.from(ab),{limitInputPixels:24_000_000}).rotate().png().toBuffer();
+          ab=normalized.buffer.slice(normalized.byteOffset,normalized.byteOffset+normalized.byteLength) as ArrayBuffer;
           children.push(React.createElement('img', { key:l.id, src: ab as unknown as string, width:l.width, height:l.height, style:{...style,objectFit:'cover',objectPosition:`${l.cropX??50}% ${l.cropY??50}%`} }));
         }
       }
     } else {
-      children.push(React.createElement('div', { key:l.id, style }, l.type === 'text' ? l.text : undefined));
+      children.push(React.createElement('div', { key:l.id, style }, l.type === 'text' ? React.createElement('span',{style:{textAlign:l.textAlign||'left'}},l.text) : undefined));
     }
   }
 
@@ -147,6 +154,7 @@ export async function renderDesign(value: unknown, tenantId: string, options: {f
     );
   }
 
+  for(const [name,file] of [['BgosEditorial','BgosEditorial.ttf'],['BgosDisplay','BgosDisplay.ttf']]){if(design.layers.some(l=>designFontFamily(l)===name))fontDescriptors.push({name,data:await readFile(path.join(process.cwd(),'public/fonts',file)),weight:400,style:'normal'});}
   const response = new ImageResponse(React.createElement('div', { style:{ width:design.width,height:design.height,display:'flex',position:'relative',backgroundColor:options.transparent&&options.format!=='jpeg'?'transparent':design.background } }, ...children), {width:design.width,height:design.height,fonts:fontDescriptors});
   let buffer:Buffer = Buffer.from(await response.arrayBuffer());
   const format=options.format || 'png';

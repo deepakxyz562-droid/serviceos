@@ -132,3 +132,10 @@ describe('PosterTemplateGallery (Flyer-Maker-style entry)', () => {
   renderGallery(); fireEvent.click(screen.getByRole('button',{name:'Creative'}));
   expect(screen.getAllByRole('button',{name:/^Use .+ template$/})).toHaveLength(POSTER_TEMPLATES.filter(t=>t.collection==='creative').length);
  });
+
+it('offers the professional collection and applies a layered industry template',()=>{
+ renderGallery();fireEvent.click(screen.getByRole('button',{name:'Professional collection'}));
+ expect(screen.getAllByRole('button',{name:/^Use .+ template$/})).toHaveLength(12);
+ fireEvent.click(screen.getByRole('button',{name:'Use Plumbing • Ready to help template'}));
+ expect(onSelect.mock.calls.at(-1)?.[0].id).toBe('professional-plumbing');
+});

@@ -1,20 +1,24 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  PanResponder,
-  Pressable,
-  ScrollView,
   StyleSheet,
+  View,
   Text,
   TextInput,
-  View,
+  Pressable,
+  ActivityIndicator,
+  PanResponder,
+  ScrollView,
+  Linking,
+  Keyboard,
+  Modal,
+  Image,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Crypto from 'expo-crypto';
-import { MaterialIcons } from '@expo/vector-icons';
 import { apiRequest } from '../../lib/api';
+import { layersAtPoint, toolForLayer } from '../../../../shared/design-selection';
+import { PROFESSIONAL_ASSETS } from './professional-assets';
 import { PosterPreview } from './poster-preview';
 import { gestureLayer } from '../../../../shared/design-gestures';
 import {
@@ -25,6 +29,8 @@ import {
   collageImages,
 } from '../../../../shared/design-editor';
 import type { MarketingDesign, DesignLayer } from '../../../../shared/marketing-design';
+import { friendlyLayerName } from '../../lib/calendar-utils';
+export { friendlyLayerName };
 
 const COLOR_PALETTE = [
   { hex: '#0F172A', name: 'Dark Slate' },
@@ -37,19 +43,51 @@ const COLOR_PALETTE = [
   { hex: '#FFFFFF', name: 'White', darkBorder: true },
 ];
 
-import { friendlyLayerName } from '../../lib/calendar-utils';
-export { friendlyLayerName };
+export function getFriendlyName(id: string): string {
+  if (id === 'headline') return 'Main Headline';
+  if (id === 'brand') return 'Brand Name';
+  if (id === 'badge') return 'Offer / Category Badge';
+  if (id === 'cta') return 'Call To Action (CTA)';
+  if (id === 'footer') return 'Contact & Website Footer';
+  if (id === 'bg_photo') return 'Background Photo';
+  if (id === 'logo') return 'Brand Logo';
+  if (id.startsWith('service_')) return `Service Line ${id.replace('service_', '')}`;
+  if (id === 'copy_scrim') return 'Readability Scrim';
+  if (id.startsWith('copy_fade_')) return 'Fade Gradient';
+  if (id.startsWith('service_mark_')) return 'Service Bullet Mark';
+  if (id === 'cta_background') return 'CTA Button Background';
+  if (id === 'services_panel') return 'Services Container';
+  return friendlyLayerName(id);
+}
 
 export function PosterEditor({
   doc,
   onChange,
+  selectedLayerId,
+  onSelectLayer,
+  onOpenTemplates,
+  onOpenRatio,
 }: {
+  selectedLayerId?: string;
+  onSelectLayer?: (id: string) => void;
   doc: MarketingDesign;
   onChange: (doc: MarketingDesign) => void;
+  onOpenTemplates?: () => void;
+  onOpenRatio?: () => void;
 }) {
-  const [selected, setSelected] = useState('headline');
+  const [localSelected, setLocalSelected] = useState('');
+  const selected = selectedLayerId ?? localSelected;
+
+  function setSelected(id: string) {
+    setLocalSelected(id);
+    onSelectLayer?.(id);
+  }
+
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [decorationsOpen, setDecorationsOpen] = useState(false);
+  const [overlapIds, setOverlapIds] = useState<string[]>([]);
   const [canvasWidth, setCanvasWidth] = useState(1);
-  const [activeTool, setActiveTool] = useState<'text' | 'color' | 'photo' | 'layers'>('text');
+  const [activeTool, setActiveTool] = useState<'text' | 'color' | 'photo'>('text');
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [preview, setPreview] = useState<MarketingDesign | null>(null);
@@ -59,6 +97,23 @@ export function PosterEditor({
   }, [doc]);
 
   const visibleDoc = preview || doc;
+  const layer = visibleDoc.layers.find((l) => l.id === selected);
+
+  function selectLayer(id: string) {
+    setSelected(id);
+    const targetLayer = doc.layers.find((l) => l.id === id);
+    if (targetLayer) {
+      setActiveTool(toolForLayer(targetLayer));
+    }
+    setLayersOpen(false);
+  }
+
+  function done() {
+    Keyboard.dismiss();
+    setSelected('');
+    setOverlapIds([]);
+  }
+
   const current = useRef({ doc, onChange, width: canvasWidth, selected });
   current.current = { doc, onChange, width: canvasWidth, selected };
 
@@ -66,7 +121,6 @@ export function PosterEditor({
   const drag = useRef<{ layer: DesignLayer; doc: MarketingDesign; distance: number; angle: number } | null>(
     null
   );
-  const layer = visibleDoc.layers.find((l) => l.id === selected);
 
   function patch(values: Partial<DesignLayer>) {
     try {
@@ -198,9 +252,9 @@ export function PosterEditor({
             },
           ],
         });
-        setSelected(id);
+        selectLayer(id);
       } else {
-        latest.onChange(patchDesignLayer(latest.doc, targetId, { src: result.url, assetId: result.assetId }));
+        latest.onChange(patchDesignLayer(latest.doc, targetId || 'bg_photo', { src: result.url, assetId: result.assetId }));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Photo upload failed.');
@@ -223,40 +277,68 @@ export function PosterEditor({
     }
   }
 
+  function handleAddText() {
+    const id = Crypto.randomUUID();
+    onChange({
+      ...doc,
+      layers: [
+        ...doc.layers,
+        {
+          id,
+          type: 'text',
+          x: 60,
+          y: doc.height * 0.4,
+          width: doc.width - 120,
+          height: 110,
+          text: 'New Headline',
+          color: '#0F172A',
+          background: 'transparent',
+          fontSize: 44,
+          fontFamily: 'sans',
+          fontWeight: 700,
+          textAlign: 'left',
+          opacity: 1,
+        },
+      ],
+    });
+    selectLayer(id);
+  }
+
+  // Filter content layers vs background shapes for clean list in Layers Sheet
+  const contentLayers = [...doc.layers].reverse().filter((l) => l.type !== 'shape' || l.id === 'cta_background');
+  const decorativeLayers = [...doc.layers].reverse().filter((l) => l.type === 'shape' && l.id !== 'cta_background');
+
   return (
     <View style={styles.container}>
-      {/* ── Visual Canvas Preview with Direct Touch Drag ── */}
+      {/* ── Visual Canvas Stage with Direct Touch Selection ── */}
       <View
         onLayout={(e) => setCanvasWidth(e.nativeEvent.layout.width)}
         style={styles.canvasContainer}
       >
         <PosterPreview doc={visibleDoc} />
 
-        {/* Unselected layer touch targets */}
-        {visibleDoc.layers
-          .filter((l) => !l.hidden && l.id !== selected)
-          .map((l) => (
-            <Pressable
-              key={l.id}
-              accessibilityRole="button"
-              accessibilityLabel={`Select ${l.id}`}
-              onPress={() => setSelected(l.id)}
-              style={{
-                position: 'absolute',
-                left: (l.x / doc.width) * canvasWidth,
-                top: (l.y / doc.width) * canvasWidth,
-                width: (l.width / doc.width) * canvasWidth,
-                height: (l.height / doc.width) * canvasWidth,
-                transform: [{ rotate: `${l.rotation || 0}deg` }],
-              }}
-            />
-          ))}
+        {/* Canvas Touch Overlay - Direct Tap to Select */}
+        <Pressable
+          accessibilityLabel="Select an object on the design"
+          style={StyleSheet.absoluteFill}
+          onPress={(e) => {
+            const x = (e.nativeEvent.locationX * doc.width) / canvasWidth;
+            const y = (e.nativeEvent.locationY * doc.width) / canvasWidth;
+            const hits = layersAtPoint(doc, x, y);
+            setOverlapIds(hits.map((l) => l.id));
+            if (hits[0]) {
+              selectLayer(hits[0].id);
+            } else {
+              done();
+            }
+          }}
+        />
 
         {/* Selected Layer Boundary Ring */}
         {layer && !layer.hidden && (
           <View
-            {...responder.panHandlers}
-            accessibilityLabel={`Move ${layer.id}`}
+            pointerEvents="none"
+            accessibilityLabel={`Selected ${getFriendlyName(layer.id)}`}
             style={{
               position: 'absolute',
               left: (layer.x / doc.width) * canvasWidth,
@@ -272,403 +354,508 @@ export function PosterEditor({
             }}
           />
         )}
+
+        {/* Dedicated Pan / Drag Handle */}
+        {layer && !layer.hidden && !layer.locked && (
+          <View
+            {...responder.panHandlers}
+            accessible
+            accessibilityLabel="Drag selected object"
+            style={{
+              position: 'absolute',
+              left: Math.max(0, Math.min(canvasWidth - 38, ((layer.x + layer.width) / doc.width) * canvasWidth - 19)),
+              top: Math.max(0, Math.min((doc.height / doc.width) * canvasWidth - 38, ((layer.y + layer.height) / doc.width) * canvasWidth - 19)),
+              width: 38,
+              height: 38,
+              zIndex: 20,
+              borderRadius: 19,
+              backgroundColor: '#009F50',
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 3,
+              elevation: 4,
+            }}
+          >
+            <MaterialIcons name="open-with" size={20} color="#FFFFFF" />
+          </View>
+        )}
       </View>
 
-      {/* ── Active Layer Quick Pill ── */}
-      <View style={styles.layerStatusBar}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-          <MaterialIcons
-            name={layer?.type === 'image' ? 'image' : layer?.type === 'text' ? 'title' : 'category'}
-            size={16}
-            color="#009F50"
-          />
-          <Text numberOfLines={1} style={styles.layerStatusText}>
-            Editing: <Text style={{ fontWeight: '800', color: '#0F172A' }}>{friendlyLayerName(selected)}</Text>
-          </Text>
-        </View>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          {layer && (
-            <>
+      {/* ──────────────────────────────────────────────────────────────────
+          STATE A: NO OBJECT SELECTED (CANVAS OVERVIEW DOCK)
+          ────────────────────────────────────────────────────────────────── */}
+      {!selected && (
+        <View style={styles.overviewDock}>
+          <View style={styles.overviewActionsRow}>
+            {onOpenTemplates && (
               <Pressable
+                onPress={onOpenTemplates}
+                style={styles.overviewBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Choose Template"
+              >
+                <MaterialIcons name="grid-view" size={17} color="#009F50" />
+                <Text style={styles.overviewBtnText}>Templates</Text>
+              </Pressable>
+            )}
+
+            {onOpenRatio && (
+              <Pressable
+                onPress={onOpenRatio}
+                style={styles.overviewBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Change Aspect Ratio"
+              >
+                <MaterialIcons name="aspect-ratio" size={17} color="#0F172A" />
+                <Text style={styles.overviewBtnText}>Ratio</Text>
+              </Pressable>
+            )}
+
+            <Pressable
+              onPress={handleAddText}
+              style={styles.overviewBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Add New Text Layer"
+            >
+              <MaterialIcons name="title" size={17} color="#0F172A" />
+              <Text style={styles.overviewBtnText}>+ Text</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => void replacePhoto(true)}
+              style={styles.overviewBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Add Photo"
+            >
+              <MaterialIcons name="add-photo-alternate" size={17} color="#0F172A" />
+              <Text style={styles.overviewBtnText}>+ Photo</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setLayersOpen(true)}
+              style={styles.overviewBtn}
+              accessibilityRole="button"
+              accessibilityLabel="View All Layers"
+            >
+              <MaterialIcons name="layers" size={17} color="#0F172A" />
+              <Text style={styles.overviewBtnText}>Layers ({doc.layers.length})</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.overviewFooterRow}>
+            <Text style={styles.helperTipText}>
+              💡 Tap any text or photo on canvas to edit.
+            </Text>
+            <Pressable
+              onPress={() => void exportImage('png')}
+              disabled={exporting}
+              style={styles.exportPill}
+            >
+              {exporting ? (
+                <ActivityIndicator size="small" color="#009F50" />
+              ) : (
+                <>
+                  <MaterialIcons name="download" size={13} color="#009F50" />
+                  <Text style={styles.exportPillText}>Download</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────
+          STATE B: OBJECT SELECTED (CONTEXTUAL TOOL DOCK)
+          ────────────────────────────────────────────────────────────────── */}
+      {selected && layer && (
+        <View style={styles.contextualDock}>
+          {/* Active Layer Header Bar */}
+          <View style={styles.contextualHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+              <MaterialIcons
+                name={layer.type === 'image' ? 'image' : layer.type === 'text' ? 'title' : 'category'}
+                size={16}
+                color="#009F50"
+              />
+              <Text numberOfLines={1} style={styles.contextualTitle}>
+                {getFriendlyName(layer.id)}
+              </Text>
+              {layer.locked && (
+                <View style={styles.lockBadge}>
+                  <Text style={styles.lockBadgeText}>Locked</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {overlapIds.length > 1 && (
+                <Pressable
+                  accessibilityLabel="Choose overlapping layer"
+                  onPress={() => setLayersOpen(true)}
+                  style={styles.iconActionBtn}
+                >
+                  <MaterialIcons name="filter-none" size={16} color="#475569" />
+                </Pressable>
+              )}
+
+              <Pressable
+                accessibilityLabel={layer.locked ? 'Unlock Layer' : 'Lock Layer'}
                 onPress={() =>
                   onChange({
                     ...doc,
                     layers: doc.layers.map((l) => (l.id === selected ? { ...l, locked: !l.locked } : l)),
                   })
                 }
-                style={styles.layerActionPill}
+                style={styles.iconActionBtn}
               >
                 <MaterialIcons
                   name={layer.locked ? 'lock' : 'lock-open'}
-                  size={14}
+                  size={16}
                   color={layer.locked ? '#DC2626' : '#64748B'}
                 />
               </Pressable>
 
               <Pressable
+                accessibilityLabel={layer.hidden ? 'Show Layer' : 'Hide Layer'}
                 onPress={() =>
                   onChange({
                     ...doc,
                     layers: doc.layers.map((l) => (l.id === selected ? { ...l, hidden: !l.hidden } : l)),
                   })
                 }
-                style={styles.layerActionPill}
+                style={styles.iconActionBtn}
               >
                 <MaterialIcons
                   name={layer.hidden ? 'visibility-off' : 'visibility'}
-                  size={14}
+                  size={16}
                   color="#64748B"
                 />
               </Pressable>
-            </>
-          )}
-        </View>
-      </View>
 
-      {/* ── Tool Category Switcher Tabs ── */}
-      <View style={styles.toolTabsRow}>
-        <Pressable
-          onPress={() => setActiveTool('text')}
-          style={[styles.toolTab, activeTool === 'text' && styles.toolTabActive]}
-        >
-          <MaterialIcons name="title" size={16} color={activeTool === 'text' ? '#009F50' : '#64748B'} />
-          <Text style={[styles.toolTabText, activeTool === 'text' && styles.toolTabTextActive]}>
-            Text & Font
-          </Text>
-        </Pressable>
+              {/* Done Button */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Done Editing"
+                onPress={done}
+                style={styles.doneBtn}
+              >
+                <MaterialIcons name="check" size={14} color="#FFFFFF" />
+                <Text style={styles.doneBtnText}>Done</Text>
+              </Pressable>
+            </View>
+          </View>
 
-        <Pressable
-          onPress={() => setActiveTool('color')}
-          style={[styles.toolTab, activeTool === 'color' && styles.toolTabActive]}
-        >
-          <MaterialIcons
-            name="palette"
-            size={16}
-            color={activeTool === 'color' ? '#009F50' : '#64748B'}
-          />
-          <Text style={[styles.toolTabText, activeTool === 'color' && styles.toolTabTextActive]}>
-            Colors
-          </Text>
-        </Pressable>
+          {/* Contextual Body: TEXT TOOLS */}
+          {layer.type === 'text' && (
+            <View style={styles.toolBody}>
+              {/* Multiline text input for instant copy adjustment */}
+              <TextInput
+                value={layer.text}
+                onChangeText={(text) => patch({ text: text.slice(0, 1000) })}
+                editable={!layer.locked}
+                multiline
+                style={styles.textInput}
+                placeholder="Enter text..."
+                placeholderTextColor="#94A3B8"
+              />
 
-        <Pressable
-          onPress={() => setActiveTool('photo')}
-          style={[styles.toolTab, activeTool === 'photo' && styles.toolTabActive]}
-        >
-          <MaterialIcons name="image" size={16} color={activeTool === 'photo' ? '#009F50' : '#64748B'} />
-          <Text style={[styles.toolTabText, activeTool === 'photo' && styles.toolTabTextActive]}>
-            Photo & Frame
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => setActiveTool('layers')}
-          style={[styles.toolTab, activeTool === 'layers' && styles.toolTabActive]}
-        >
-          <MaterialIcons
-            name="layers"
-            size={16}
-            color={activeTool === 'layers' ? '#009F50' : '#64748B'}
-          />
-          <Text style={[styles.toolTabText, activeTool === 'layers' && styles.toolTabTextActive]}>
-            Layers
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* ── Dynamic Tool Panel ── */}
-      <View style={styles.toolPanel}>
-        {/* TAB 1: TEXT & FONT */}
-        {activeTool === 'text' && (
-          <View style={{ gap: 12 }}>
-            {layer && layer.type === 'text' ? (
-              <>
-                <TextInput
-                  value={layer.text}
-                  onChangeText={(text) => patch({ text: text.slice(0, 1000) })}
-                  editable={!layer.locked}
-                  multiline
-                  style={styles.textInput}
-                  placeholder="Enter text..."
-                  placeholderTextColor="#94A3B8"
-                />
-
-                {/* Font Size & Alignment Steppers */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                    <Text style={styles.controlLabel}>Size</Text>
-                    <Pressable
-                      disabled={layer.locked}
-                      onPress={() => patch({ fontSize: Math.max(10, layer.fontSize - 4) })}
-                      style={styles.stepperBtn}
-                    >
-                      <MaterialIcons name="remove" size={16} color="#0F172A" />
-                    </Pressable>
-                    <Text style={styles.stepperVal}>{Math.round(layer.fontSize)}</Text>
-                    <Pressable
-                      disabled={layer.locked}
-                      onPress={() => patch({ fontSize: Math.min(180, layer.fontSize + 4) })}
-                      style={styles.stepperBtn}
-                    >
-                      <MaterialIcons name="add" size={16} color="#0F172A" />
-                    </Pressable>
-                  </View>
-
-                  {/* Alignment & Bold */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    {(['left', 'center', 'right'] as const).map((align) => (
+              {/* Font Family Switcher */}
+              <View style={styles.fontFamilyRow}>
+                {([['sans', 'Modern'], ['editorial', 'Editorial'], ['display', 'Bold Display']] as const).map(
+                  ([font, label]) => {
+                    const isSelected = (layer.fontFamily || 'sans') === font;
+                    return (
                       <Pressable
-                        key={align}
+                        key={font}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
                         disabled={layer.locked}
-                        onPress={() => patch({ textAlign: align })}
+                        onPress={() => patch({ fontFamily: font })}
+                        style={[styles.fontBtn, isSelected && styles.fontBtnActive]}
+                      >
+                        <Text style={[styles.fontBtnText, isSelected && styles.fontBtnTextActive]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  }
+                )}
+              </View>
+
+              {/* Size Steppers & Alignment Row */}
+              <View style={styles.typoControlsRow}>
+                <View style={styles.stepperGroup}>
+                  <Text style={styles.controlLabel}>Size</Text>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => patch({ fontSize: Math.max(10, layer.fontSize - 4) })}
+                    style={styles.stepperBtn}
+                  >
+                    <MaterialIcons name="remove" size={15} color="#0F172A" />
+                  </Pressable>
+                  <Text style={styles.stepperVal}>{Math.round(layer.fontSize)}</Text>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => patch({ fontSize: Math.min(180, layer.fontSize + 4) })}
+                    style={styles.stepperBtn}
+                  >
+                    <MaterialIcons name="add" size={15} color="#0F172A" />
+                  </Pressable>
+                </View>
+
+                {/* Alignment */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  {(['left', 'center', 'right'] as const).map((align) => (
+                    <Pressable
+                      key={align}
+                      disabled={layer.locked}
+                      onPress={() => patch({ textAlign: align })}
+                      style={[styles.formatBtn, layer.textAlign === align && styles.formatBtnActive]}
+                    >
+                      <MaterialIcons
+                        name={`format-align-${align}` as any}
+                        size={15}
+                        color={layer.textAlign === align ? '#009F50' : '#64748B'}
+                      />
+                    </Pressable>
+                  ))}
+
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => patch({ fontWeight: layer.fontWeight === 700 ? 400 : 700 })}
+                    style={[styles.formatBtn, layer.fontWeight === 700 && styles.formatBtnActive]}
+                  >
+                    <MaterialIcons
+                      name="format-bold"
+                      size={15}
+                      color={layer.fontWeight === 700 ? '#009F50' : '#64748B'}
+                    />
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Text Color Swatches */}
+              <View style={styles.colorPaletteSection}>
+                <Text style={styles.controlLabel}>Color</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  {COLOR_PALETTE.map((c) => {
+                    const isSelected = layer.color?.toLowerCase() === c.hex.toLowerCase();
+                    return (
+                      <Pressable
+                        key={c.hex}
+                        disabled={layer.locked}
+                        onPress={() => patch({ color: c.hex })}
                         style={[
-                          styles.formatBtn,
-                          layer.textAlign === align && styles.formatBtnActive,
+                          styles.colorSwatch,
+                          { backgroundColor: c.hex },
+                          c.darkBorder && { borderWidth: 1.5, borderColor: '#CBD5E1' },
+                          isSelected && styles.colorSwatchSelected,
                         ]}
                       >
-                        <MaterialIcons
-                          name={`format-align-${align}` as any}
-                          size={16}
-                          color={layer.textAlign === align ? '#009F50' : '#64748B'}
-                        />
+                        {isSelected && (
+                          <MaterialIcons
+                            name="check"
+                            size={14}
+                            color={c.hex === '#FFFFFF' ? '#0F172A' : '#FFFFFF'}
+                          />
+                        )}
                       </Pressable>
-                    ))}
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+          )}
 
-                    <Pressable
-                      disabled={layer.locked}
-                      onPress={() => patch({ fontWeight: layer.fontWeight === 700 ? 400 : 700 })}
-                      style={[
-                        styles.formatBtn,
-                        layer.fontWeight === 700 && styles.formatBtnActive,
-                      ]}
-                    >
-                      <MaterialIcons
-                        name="format-bold"
-                        size={16}
-                        color={layer.fontWeight === 700 ? '#009F50' : '#64748B'}
-                      />
-                    </Pressable>
-                  </View>
-                </View>
-              </>
-            ) : (
-              <View style={styles.hintBox}>
-                <Text style={styles.hintText}>Select a text layer on the canvas or from the Layers tab to customize typography.</Text>
+          {/* Contextual Body: PHOTO TOOLS */}
+          {layer.type === 'image' && (
+            <View style={styles.toolBody}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Pressable
-                  onPress={() => {
-                    const id = Crypto.randomUUID();
-                    onChange({
-                      ...doc,
-                      layers: [
-                        ...doc.layers,
-                        {
-                          id,
-                          type: 'text',
-                          x: 40,
-                          y: 40,
-                          width: doc.width - 80,
-                          height: 100,
-                          text: 'New Headline',
-                          color: '#0F172A',
-                          background: 'transparent',
-                          fontSize: 42,
-                          opacity: 1,
-                        },
-                      ],
-                    });
-                    setSelected(id);
-                  }}
-                  style={styles.addLayerBtn}
+                  onPress={() => void replacePhoto(false)}
+                  style={styles.photoActionBtn}
                 >
-                  <MaterialIcons name="add" size={16} color="#FFFFFF" />
-                  <Text style={styles.addLayerBtnText}>Add New Text</Text>
+                  <MaterialIcons name="image" size={17} color="#009F50" />
+                  <Text style={styles.photoActionBtnText}>Replace Photo</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => void replacePhoto(true)}
+                  style={[styles.photoActionBtn, { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' }]}
+                >
+                  <MaterialIcons name="add-photo-alternate" size={17} color="#0284C7" />
+                  <Text style={[styles.photoActionBtnText, { color: '#0284C7' }]}>Add New Photo</Text>
                 </Pressable>
               </View>
-            )}
-          </View>
-        )}
 
-        {/* TAB 2: COLOR PALETTE */}
-        {activeTool === 'color' && (
-          <View style={{ gap: 10 }}>
-            <Text style={styles.controlLabel}>Select Brand Color Palette</Text>
-            <View style={styles.swatchesRow}>
-              {COLOR_PALETTE.map((c) => {
-                const currentColor = layer?.type === 'shape' ? layer.background : layer?.color;
-                const isSelected = currentColor?.toLowerCase() === c.hex.toLowerCase();
-
-                return (
-                  <Pressable
-                    key={c.hex}
-                    disabled={layer?.locked}
-                    onPress={() =>
-                      patch(layer?.type === 'shape' ? { background: c.hex } : { color: c.hex })
-                    }
-                    style={[
-                      styles.colorSwatch,
-                      { backgroundColor: c.hex },
-                      c.darkBorder && { borderWidth: 1.5, borderColor: '#CBD5E1' },
-                      isSelected && styles.colorSwatchSelected,
-                    ]}
-                  >
-                    {isSelected && (
-                      <MaterialIcons
-                        name="check"
-                        size={16}
-                        color={c.hex === '#FFFFFF' ? '#0F172A' : '#FFFFFF'}
-                      />
-                    )}
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {/* TAB 3: PHOTO & FRAME */}
-        {activeTool === 'photo' && (
-          <View style={{ gap: 12 }}>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Pressable
-                onPress={() => void replacePhoto(false)}
-                style={styles.photoActionBtn}
-              >
-                <MaterialIcons name="image" size={18} color="#009F50" />
-                <Text style={styles.photoActionBtnText}>Replace Photo</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => void replacePhoto(true)}
-                style={styles.photoActionBtn}
-              >
-                <MaterialIcons name="add-photo-alternate" size={18} color="#2563EB" />
-                <Text style={styles.photoActionBtnText}>Add New Photo</Text>
-              </Pressable>
-            </View>
-
-            {layer && layer.type === 'image' && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6 }}>
+              {/* Crop / Position Directional Controls */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
                 <Text style={styles.controlLabel}>Adjust Photo Position</Text>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
+                <View style={{ flexDirection: 'row', gap: 5 }}>
                   <Pressable
                     onPress={() => patch({ cropX: Math.max(0, (layer.cropX ?? 50) - 10) })}
                     style={styles.stepperBtn}
                   >
-                    <MaterialIcons name="arrow-back" size={16} color="#0F172A" />
+                    <MaterialIcons name="arrow-back" size={15} color="#0F172A" />
                   </Pressable>
                   <Pressable
                     onPress={() => patch({ cropX: Math.min(100, (layer.cropX ?? 50) + 10) })}
                     style={styles.stepperBtn}
                   >
-                    <MaterialIcons name="arrow-forward" size={16} color="#0F172A" />
+                    <MaterialIcons name="arrow-forward" size={15} color="#0F172A" />
                   </Pressable>
                   <Pressable
                     onPress={() => patch({ cropY: Math.max(0, (layer.cropY ?? 50) - 10) })}
                     style={styles.stepperBtn}
                   >
-                    <MaterialIcons name="arrow-upward" size={16} color="#0F172A" />
+                    <MaterialIcons name="arrow-upward" size={15} color="#0F172A" />
                   </Pressable>
                   <Pressable
                     onPress={() => patch({ cropY: Math.min(100, (layer.cropY ?? 50) + 10) })}
                     style={styles.stepperBtn}
                   >
-                    <MaterialIcons name="arrow-downward" size={16} color="#0F172A" />
+                    <MaterialIcons name="arrow-downward" size={15} color="#0F172A" />
                   </Pressable>
                 </View>
               </View>
-            )}
-          </View>
-        )}
+            </View>
+          )}
 
-        {/* TAB 4: LAYERS */}
-        {activeTool === 'layers' && (
-          <View style={{ gap: 10 }}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              {doc.layers.map((l) => {
+          {/* Contextual Body: SHAPE TOOLS */}
+          {layer.type === 'shape' && (
+            <View style={styles.toolBody}>
+              <Text style={styles.controlLabel}>Shape Color</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {COLOR_PALETTE.map((c) => {
+                  const isSelected = layer.background?.toLowerCase() === c.hex.toLowerCase();
+                  return (
+                    <Pressable
+                      key={c.hex}
+                      disabled={layer.locked}
+                      onPress={() => patch({ background: c.hex })}
+                      style={[
+                        styles.colorSwatch,
+                        { backgroundColor: c.hex },
+                        c.darkBorder && { borderWidth: 1.5, borderColor: '#CBD5E1' },
+                        isSelected && styles.colorSwatchSelected,
+                      ]}
+                    >
+                      {isSelected && (
+                        <MaterialIcons
+                          name="check"
+                          size={14}
+                          color={c.hex === '#FFFFFF' ? '#0F172A' : '#FFFFFF'}
+                        />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────
+          VERTICAL LAYERS SHEET MODAL
+          ────────────────────────────────────────────────────────────────── */}
+      <Modal visible={layersOpen} transparent animationType="slide" onRequestClose={() => setLayersOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <Pressable accessibilityLabel="Close layers" style={{ flex: 1 }} onPress={() => setLayersOpen(false)} />
+          <View style={styles.modalSheetContent}>
+            <View style={styles.modalSheetHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="layers" size={20} color="#009F50" />
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Canvas Layers</Text>
+              </View>
+              <Pressable
+                onPress={() => setLayersOpen(false)}
+                style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#F1F5F9' }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>Done</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              {/* Content Layers Section */}
+              <Text style={styles.layerSectionTitle}>CONTENT LAYERS</Text>
+              {contentLayers.map((l) => {
                 const isSelected = l.id === selected;
                 return (
                   <Pressable
                     key={l.id}
-                    onPress={() => setSelected(l.id)}
-                    style={[styles.layerChip, isSelected && styles.layerChipActive]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    onPress={() => selectLayer(l.id)}
+                    style={[styles.layerRowCard, isSelected && styles.layerRowCardActive]}
                   >
-                    <MaterialIcons
-                      name={l.locked ? 'lock' : l.type === 'image' ? 'image' : 'title'}
-                      size={14}
-                      color={isSelected ? '#009F50' : '#64748B'}
-                    />
-                    <Text style={[styles.layerChipText, isSelected && styles.layerChipTextActive]}>
-                      {friendlyLayerName(l.id)}
-                    </Text>
+                    {l.type === 'image' ? (
+                      <Image
+                        source={PROFESSIONAL_ASSETS[l.src || ''] || { uri: l.src }}
+                        style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#E2E8F0' }}
+                      />
+                    ) : (
+                      <View style={[styles.layerIconBox, isSelected && { backgroundColor: '#DCFCE7' }]}>
+                        <MaterialIcons
+                          name={l.type === 'text' ? 'title' : 'category'}
+                          size={18}
+                          color={isSelected ? '#009F50' : '#475569'}
+                        />
+                      </View>
+                    )}
+
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                        {l.type === 'text' ? l.text || 'Empty text' : getFriendlyName(l.id)}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#64748B' }}>
+                        {getFriendlyName(l.id)}
+                        {l.locked ? ' · Locked' : ''}
+                        {l.hidden ? ' · Hidden' : ''}
+                      </Text>
+                    </View>
+
+                    {isSelected && <MaterialIcons name="check-circle" size={20} color="#009F50" />}
                   </Pressable>
                 );
               })}
+
+              {/* Collapsible Background & Decorations Section */}
+              <Pressable
+                onPress={() => setDecorationsOpen(!decorationsOpen)}
+                style={styles.decorationsToggleBtn}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>
+                  {decorationsOpen ? '▲ Hide' : '▼ Show'} Background Accents & Decorations ({decorativeLayers.length})
+                </Text>
+              </Pressable>
+
+              {decorationsOpen &&
+                decorativeLayers.map((l) => {
+                  const isSelected = l.id === selected;
+                  return (
+                    <Pressable
+                      key={l.id}
+                      onPress={() => selectLayer(l.id)}
+                      style={[styles.layerRowCard, { opacity: 0.8 }, isSelected && styles.layerRowCardActive]}
+                    >
+                      <View style={{ width: 34, height: 34, borderRadius: 6, backgroundColor: l.background || '#E2E8F0' }} />
+                      <View style={{ flex: 1 }}>
+                        <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>
+                          {getFriendlyName(l.id)}
+                        </Text>
+                      </View>
+                      {isSelected && <MaterialIcons name="check-circle" size={18} color="#009F50" />}
+                    </Pressable>
+                  );
+                })}
             </ScrollView>
-
-            {layer && (
-              <View style={{ flexDirection: 'row', gap: 8, paddingTop: 4 }}>
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={() =>
-                    onChange({
-                      ...doc,
-                      layers: [...doc.layers.filter((l) => l.id !== selected), layer],
-                    })
-                  }
-                  style={styles.layerOrderBtn}
-                >
-                  <Text style={styles.layerOrderBtnText}>Bring Forward</Text>
-                </Pressable>
-
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={() =>
-                    onChange({
-                      ...doc,
-                      layers: [layer, ...doc.layers.filter((l) => l.id !== selected)],
-                    })
-                  }
-                  style={styles.layerOrderBtn}
-                >
-                  <Text style={styles.layerOrderBtnText}>Send Back</Text>
-                </Pressable>
-
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={() =>
-                    onChange({
-                      ...doc,
-                      layers: doc.layers.filter((l) => l.id !== selected),
-                    })
-                  }
-                  style={[styles.layerOrderBtn, { borderColor: '#FECACA', backgroundColor: '#FEF2F2' }]}
-                >
-                  <Text style={[styles.layerOrderBtnText, { color: '#DC2626' }]}>Delete</Text>
-                </Pressable>
-              </View>
-            )}
           </View>
-        )}
-      </View>
-
-      {/* Export Quick Bar */}
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, paddingHorizontal: 4 }}>
-        <Pressable
-          onPress={() => void exportImage('png')}
-          disabled={exporting}
-          style={styles.exportPill}
-        >
-          {exporting ? (
-            <ActivityIndicator size="small" color="#009F50" />
-          ) : (
-            <>
-              <MaterialIcons name="download" size={14} color="#009F50" />
-              <Text style={styles.exportPillText}>Download Image</Text>
-            </>
-          )}
-        </Pressable>
-      </View>
+        </View>
+      </Modal>
 
       {!!error && <Text style={styles.errorText}>{error}</Text>}
     </View>
@@ -677,7 +864,7 @@ export function PosterEditor({
 
 const styles = StyleSheet.create({
   container: {
-    gap: 12,
+    gap: 10,
   },
   canvasContainer: {
     borderRadius: 16,
@@ -686,68 +873,111 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  layerStatusBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  overviewDock: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    borderRadius: 14,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-  },
-  layerStatusText: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  layerActionPill: {
-    padding: 6,
-    borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-  },
-  toolTabsRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 3,
-    gap: 4,
-  },
-  toolTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 7,
-    borderRadius: 9,
-    gap: 4,
-  },
-  toolTabActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  toolTabText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  toolTabTextActive: {
-    color: '#009F50',
-    fontWeight: '800',
-  },
-  toolPanel: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    gap: 10,
     shadowColor: '#000',
     shadowOpacity: 0.03,
     shadowRadius: 3,
     elevation: 1,
+  },
+  overviewActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  overviewBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 3,
+  },
+  overviewBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  overviewFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+  },
+  helperTipText: {
+    fontSize: 11,
+    color: '#64748B',
+    flex: 1,
+  },
+  contextualDock: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: '#BBF7D0',
+    gap: 10,
+    shadowColor: '#009F50',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  contextualHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  contextualTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  lockBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#FEE2E2',
+  },
+  lockBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  iconActionBtn: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  doneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#009F50',
+  },
+  doneBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  toolBody: {
+    gap: 10,
   },
   textInput: {
     backgroundColor: '#F8FAFC',
@@ -757,54 +987,93 @@ const styles = StyleSheet.create({
     padding: 10,
     fontSize: 13,
     color: '#0F172A',
-    minHeight: 44,
+    minHeight: 48,
   },
-  controlLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
+  fontFamilyRow: {
+    flexDirection: 'row',
+    gap: 6,
   },
-  stepperBtn: {
-    padding: 6,
+  fontBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
     borderRadius: 8,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
+  fontBtnActive: {
+    backgroundColor: '#009F50',
+    borderColor: '#009F50',
+  },
+  fontBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  fontBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  typoControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  stepperGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  controlLabel: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  stepperBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
   stepperVal: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#0F172A',
     minWidth: 26,
     textAlign: 'center',
   },
   formatBtn: {
-    padding: 7,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    width: 30,
+    height: 30,
+    borderRadius: 7,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   formatBtnActive: {
     backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
+    borderColor: '#009F50',
   },
-  swatchesRow: {
+  colorPaletteSection: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    paddingVertical: 4,
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 2,
   },
   colorSwatch: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
   },
   colorSwatchSelected: {
     borderWidth: 2.5,
@@ -816,88 +1085,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F0FDF4',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 6,
+    borderColor: '#BBF7D0',
   },
   photoActionBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0F172A',
-  },
-  layerChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  layerChipActive: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#86EFAC',
-  },
-  layerChipText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  layerChipTextActive: {
     color: '#009F50',
-    fontWeight: '800',
-  },
-  layerOrderBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  layerOrderBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  hintBox: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    gap: 8,
-  },
-  hintText: {
-    fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
-  },
-  addLayerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#009F50',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  addLayerBtnText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
   exportPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 20,
+    paddingHorizontal: 9,
+    borderRadius: 7,
     backgroundColor: '#F0FDF4',
     borderWidth: 1,
     borderColor: '#BBF7D0',
@@ -908,8 +1114,64 @@ const styles = StyleSheet.create({
     color: '#009F50',
   },
   errorText: {
+    fontSize: 12,
     color: '#DC2626',
-    fontSize: 11.5,
     textAlign: 'center',
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  modalSheetContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    padding: 18,
+    paddingBottom: 36,
+    maxHeight: '75%',
+  },
+  modalSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  layerSectionTitle: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+  },
+  layerRowCard: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    padding: 10,
+    marginVertical: 3,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  layerRowCardActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#009F50',
+  },
+  layerIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  decorationsToggleBtn: {
+    paddingVertical: 12,
+    alignItems: 'center',
   },
 });

@@ -1,3 +1,4 @@
+import { PROFESSIONAL_POSTERS } from './professional-posters';
 import { STUDIO_POSTERS } from './poster-studio-catalog';
 /**
  * BGOS Poster Template Registry — Flyer-Maker-style professional template gallery.
@@ -1097,6 +1098,7 @@ const neutralCopy: Record<PosterCategoryId, [string,string]> = {
 };
 const unsupported = /\d+%|guarantee|zero |#1|5.star|verified|certified|24.?7|free |first \d|lifetime|lowest|OEM|hallmark/i;
 export const POSTER_TEMPLATES: PosterTemplate[] = [
+ ...PROFESSIONAL_POSTERS,
  ...STUDIO_POSTERS,
  ...ORIGINAL_POSTER_TEMPLATES.map((t,index):PosterTemplate=>({
   ...t, layout:`studio_${index%60}`, collection:index%2?'creative':'standard',
@@ -1135,17 +1137,17 @@ export function templateToDesignInput(
 ): Parameters<typeof createCommercialPosterDesign>[0] {
   return {
     brand: business.businessName || 'Your Business',
-    headline: overrides.headline || template.headline,
-    subtitle: overrides.subtitle || template.subtitle,
-    badge: overrides.badge || template.badge,
-    cta: overrides.cta || template.cta,
+    headline: overrides.headline ?? template.headline,
+    subtitle: overrides.subtitle ?? template.subtitle,
+    badge: overrides.badge ?? template.badge,
+    cta: overrides.cta ?? template.cta,
     phone: business.phone,
     website: business.website,
     logoUrl: business.logoUrl,
     tagline: business.tagline,
-    photo: overrides.photo || template.photo,
-    ratio: overrides.ratio || template.aspect,
-    theme: overrides.theme || template.theme,
+    photo: overrides.photo ?? template.photo,
+    ratio: overrides.ratio ?? template.aspect,
+    theme: overrides.theme ?? template.theme,
     layout: template.layout,
   };
 }

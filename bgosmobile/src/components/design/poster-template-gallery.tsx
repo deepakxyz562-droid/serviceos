@@ -105,7 +105,7 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
           ? orderedTemplates
           : activeOccasionIds.has(activeCategory)
             ? orderedTemplates.filter((t) => t.occasionId === activeCategory)
-            : orderedTemplates.filter((t) => t.category === activeCategory || t.collection === activeCategory);
+            : orderedTemplates.filter((t) => t.category === activeCategory || t.collection === activeCategory || (activeCategory==='professional'&&t.id.startsWith('professional-')));
     if (!activeSearch.trim()) return base;
     const q = activeSearch.trim().toLowerCase();
     return base.filter(
@@ -218,6 +218,7 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
       icon: 'celebration',
     })),
     { id: 'all', label: 'All', icon: 'apps' },
+    { id: 'professional', label: 'Professional collection' },
     { id: 'creative', label: 'Creative' },
     { id: 'standard', label: 'Standard' },
     ...POSTER_CATEGORIES.map((c: PosterCategoryMeta) => ({

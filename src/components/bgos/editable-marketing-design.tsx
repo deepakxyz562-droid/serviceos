@@ -1,4 +1,5 @@
 'use client';
+import {DESIGN_FONT_CSS,designFontFamily} from '../../../shared/design-fonts';
 import { resizeDesign, patchDesignLayer, groupLayers, ungroupLayers, collageImages } from '../../../shared/design-editor';
 import { startDesignJob, awaitDesignJob } from '../../../shared/design-job-client';
 import React, { useState, useRef, useEffect } from 'react';
@@ -77,7 +78,7 @@ export function EditableMarketingDesign({design,onChange}:{design:MarketingDesig
     finally{setImageBusy(false);imageAbort.current=null;}
   }
   return <div className="space-y-3">
-    <style>{`@font-face{font-family:BgosDesign;src:url(/fonts/BgosDesign-Regular.ttf) format('truetype');font-weight:400;font-display:block;}@font-face{font-family:BgosDesign;src:url(/fonts/BgosDesign-Bold.ttf);font-weight:700;}`}</style>
+    <style>{DESIGN_FONT_CSS}</style>
     <div className="space-y-2 rounded-lg border p-3">
       <label className="block">Generate an image<textarea aria-label="Image prompt" className="block w-full rounded border p-2" value={imagePrompt} maxLength={4000} onChange={e=>setImagePrompt(e.target.value)} placeholder="Describe the background or illustration. Text remains editable separately."/></label>
       <select aria-label="Image provider" value={provider} onChange={e=>setProvider(e.target.value)}><option value="gemini">Gemini</option><option value="openrouter">OpenRouter</option></select>
@@ -101,7 +102,7 @@ export function EditableMarketingDesign({design,onChange}:{design:MarketingDesig
     <details className="rounded-lg border p-3"><summary>Canvas size</summary><div className="flex flex-wrap gap-3 py-2">{(['width','height'] as const).map(key=><label key={key}>{key}<input type="number" min={320} max={2160} value={canvasSize[key]} onChange={e=>setCanvasSize(p=>({...p,[key]:e.target.value}))}/></label>)}<button type="button" onClick={()=>{try{commit(resizeDesign(design,Number(canvasSize.width),Number(canvasSize.height)));}catch{setImageError('Enter whole dimensions between 320 and 2160 pixels.');}}}>Resize canvas</button></div></details>
     <div style={{containerType:'inline-size'}}>
       <div data-design-canvas className="relative overflow-hidden rounded-xl border" style={{aspectRatio:`${design.width}/${design.height}`,background:design.background}}>
-        {design.layers.filter(l=>!l.hidden).map(l=><div key={l.id} onClick={()=>setSelected(l.id)} style={{position:'absolute',left:`${l.x/design.width*100}%`,top:`${l.y/design.height*100}%`,width:`${l.width/design.width*100}%`,height:`${l.height/design.height*100}%`,color:l.color,background:l.background,opacity:l.opacity,fontSize:`${l.fontSize/design.width*100}cqw`,fontFamily:'BgosDesign',fontWeight:l.fontWeight as any,textAlign:l.textAlign||'left',borderRadius:l.borderRadius?`${l.borderRadius/design.width*100}cqw`:undefined,transform:`rotate(${l.rotation||0}deg)`,lineHeight:l.lineHeight??1.15,letterSpacing:`${Number(l.letterSpacing||0)/design.width*100}cqw`,whiteSpace:'pre-wrap',overflow:'hidden',outline:selected===l.id?'2px solid #00b89c':undefined}}>
+        {design.layers.filter(l=>!l.hidden).map(l=><div key={l.id} onClick={()=>setSelected(l.id)} style={{position:'absolute',left:`${l.x/design.width*100}%`,top:`${l.y/design.height*100}%`,width:`${l.width/design.width*100}%`,height:`${l.height/design.height*100}%`,color:l.color,background:l.background,opacity:l.opacity,fontSize:`${l.fontSize/design.width*100}cqw`,fontFamily:designFontFamily(l),fontWeight:l.fontWeight as any,textAlign:l.textAlign||'left',borderRadius:l.borderRadius?`${l.borderRadius/design.width*100}cqw`:undefined,transform:`rotate(${l.rotation||0}deg)`,lineHeight:l.lineHeight??1.15,letterSpacing:`${Number(l.letterSpacing||0)/design.width*100}cqw`,whiteSpace:'pre-wrap',overflow:'hidden',outline:selected===l.id?'2px solid #00b89c':undefined}}>
           {selected===l.id&&!l.locked&&(['move','resize'] as const).map(mode=><button key={mode} type="button" aria-label={`${mode} layer`} onPointerDown={e=>{e.preventDefault();e.stopPropagation();drag.current={x:e.clientX,y:e.clientY,mode,layer:l};e.currentTarget.setPointerCapture(e.pointerId);}} onPointerUp={finishGesture} onPointerCancel={()=>{drag.current=null;}} style={{position:'absolute',zIndex:10,right:0,top:mode==='move'?0:undefined,bottom:mode==='resize'?0:undefined,fontSize:12,background:'#ffffff',color:'#063d35',touchAction:'none',padding:3}}>{mode==='move'?'↔':'↘'}</button>)}
           {l.type==='image'?<img src={l.src} alt="Design layer" draggable={false} style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:`${l.cropX??50}% ${l.cropY??50}%`}}/>:l.type==='text'?<div role="textbox" aria-label={`Edit ${l.id}`} contentEditable={!l.locked} suppressContentEditableWarning onBlur={e=>{const text=e.currentTarget.textContent||'';if(text!==l.text)commit({...design,layers:design.layers.map(item=>item.id===l.id?{...item,text:text.slice(0,1000)}:item)});}}>{l.text}</div>:null}
         </div>)}
@@ -119,6 +120,7 @@ export function EditableMarketingDesign({design,onChange}:{design:MarketingDesig
       <label>Line spacing<input type="range" min={.8} max={3} step={.05} value={layer.lineHeight??1.15} onChange={e=>patch({lineHeight:Number(e.target.value)})}/></label>
       <label>Letter spacing<input type="range" min={-5} max={20} step={.5} value={Number(layer.letterSpacing||0)} onChange={e=>patch({letterSpacing:Number(e.target.value)})}/></label>
       {layer.type==='image'&&<button type="button" onClick={()=>patch({borderRadius:layer.borderRadius?0:Math.min(500,layer.width/2,layer.height/2)})}>Toggle rounded frame</button>}
+      <label>Font<select value={layer.fontFamily||'sans'} onChange={e=>patch({fontFamily:e.target.value as DesignLayer['fontFamily']})}><option value="sans">Modern sans</option><option value="editorial">Editorial serif</option><option value="display">Bold display</option></select></label>
       <label>Alignment<select value={layer.textAlign||'left'} onChange={e=>patch({textAlign:e.target.value as 'left'|'center'|'right'})}><option>left</option><option>center</option><option>right</option></select></label>
       <button onClick={()=>patch({fontWeight:layer.fontWeight===700?400:700})}>Bold</button>
       <button onClick={()=>commit({...design,layers:design.layers.map(l=>l.id===selected?{...l,locked:!l.locked}:l)})}>{layer.locked?'Unlock':'Lock'}</button>

@@ -1,4 +1,5 @@
 'use client';
+import {DESIGN_FONT_CSS,designFontFamily} from '../../../shared/design-fonts';
 
 /**
  * Poster Template Gallery — Flyer-Maker-style visual entry for the marketing studio.
@@ -68,7 +69,7 @@ function DesignThumb({ doc, className }: { doc: MarketingDesign; className?: str
       }}
       aria-hidden="true"
     >
-      <style>{`@font-face{font-family:BgosDesign;src:url(/fonts/BgosDesign-Regular.ttf);font-weight:400}@font-face{font-family:BgosDesign;src:url(/fonts/BgosDesign-Bold.ttf);font-weight:700}`}</style>
+      <style>{DESIGN_FONT_CSS}</style>
       {doc.layers.map((l: DesignLayer) => (
         <div
           key={l.id}
@@ -86,7 +87,7 @@ function DesignThumb({ doc, className }: { doc: MarketingDesign; className?: str
             letterSpacing: (l as DesignLayer & { letterSpacing?: number }).letterSpacing
               ? `${(l as DesignLayer & { letterSpacing?: number }).letterSpacing}px`
               : undefined,
-            lineHeight: 1.15,
+            lineHeight: l.lineHeight??1.15,
             whiteSpace: 'pre-wrap',
             overflow: 'hidden',
             display: 'flex',
@@ -101,7 +102,7 @@ function DesignThumb({ doc, className }: { doc: MarketingDesign; className?: str
             borderStyle:
               (l as DesignLayer & { borderWidth?: number }).borderWidth ? 'solid' : undefined,
             transform: `rotate(${l.rotation ?? 0}deg)`,
-            fontFamily: 'BgosDesign, system-ui',
+            fontFamily: designFontFamily(l),
             textAlign: l.textAlign || 'left',
           }}
         >
@@ -232,7 +233,7 @@ export function PosterTemplateGallery({
         ? orderedTemplates
         : activeOccasionIds.has(activeCategory)
         ? orderedTemplates.filter((t) => t.occasionId === activeCategory)
-        : orderedTemplates.filter((t) => t.category === activeCategory || t.collection === activeCategory);
+        : orderedTemplates.filter((t) => t.category === activeCategory || t.collection === activeCategory || (activeCategory==='professional'&&t.id.startsWith('professional-')));
     if (!search.trim()) return base;
     const q = search.trim().toLowerCase();
     return base.filter(
@@ -271,6 +272,7 @@ export function PosterTemplateGallery({
   const categoryChips: Array<{ id: string; label: string; emoji?: string }> = [
     { id: 'for_you', label: 'For you', emoji: '✨' },
     { id: 'all', label: 'All templates', emoji: '🗂️' },
+    { id: 'professional', label: 'Professional collection' },
     { id: 'creative', label: 'Creative' },
     { id: 'standard', label: 'Standard' },
     ...POSTER_CATEGORIES.map(

@@ -1,0 +1,3 @@
+import type {DesignLayer} from './marketing-design';
+export const DESIGN_FONT_CSS=`@font-face{font-family:BgosDesign;src:url(/fonts/BgosDesign-Regular.ttf);font-weight:400}@font-face{font-family:BgosDesign;src:url(/fonts/BgosDesign-Bold.ttf);font-weight:700}@font-face{font-family:BgosEditorial;src:url(/fonts/BgosEditorial.ttf);font-weight:400 900}@font-face{font-family:BgosDisplay;src:url(/fonts/BgosDisplay.ttf);font-weight:400 900}`;
+export function designFontFamily(layer:Pick<DesignLayer,'fontFamily'>){return layer.fontFamily==='editorial'?'BgosEditorial':layer.fontFamily==='display'?'BgosDisplay':'BgosDesign';}
