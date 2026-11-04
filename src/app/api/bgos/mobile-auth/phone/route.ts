@@ -122,6 +122,10 @@ export async function POST(request: NextRequest) {
   const tenDigits = cleanDigits.slice(-10);
   const countryCodeDigits = cleanDigits.length > 10 ? cleanDigits : `91${tenDigits}`;
   const e164 = `+${countryCodeDigits}`;
+  const spacedNational =
+    tenDigits.length === 10
+      ? `+91 ${tenDigits.slice(0, 5)} ${tenDigits.slice(5)}`
+      : `+${countryCodeDigits}`;
 
   try {
     // 1. Look up existing User by Firebase sub OR any phone format variant
@@ -133,12 +137,107 @@ export async function POST(request: NextRequest) {
           { phone: e164 },
           { phone: tenDigits },
           { phone: countryCodeDigits },
+          { phone: spacedNational },
+          { phone: { contains: tenDigits } },
         ],
       },
-      include: { workspace: true },
+      include: { workspace: true, tenant: true },
     });
 
-    // 2. If user doesn't exist, auto-create business owner account
+    // 2. If user not found OR user belongs to an empty/uncompleted tenant,
+    // look for an established Tenant that has this phone number saved from
+    // onboarding, business profile settings, WhatsApp, or Google Business Profile.
+    const isEstablishedUser = Boolean(user && user.tenant?.onboardingCompleted);
+
+    if (!isEstablishedUser) {
+      // Find candidate tenants matching any phone representation
+      const candidateTenants = await db.tenant.findMany({
+        where: {
+          OR: [
+            { phone: phoneNumber },
+            { phone: e164 },
+            { phone: tenDigits },
+            { phone: countryCodeDigits },
+            { phone: spacedNational },
+            { phone: { contains: tenDigits } },
+            { whatsappPhone: phoneNumber },
+            { whatsappPhone: e164 },
+            { whatsappPhone: tenDigits },
+            { whatsappPhone: countryCodeDigits },
+            { whatsappPhone: { contains: tenDigits } },
+            { settingsJson: { contains: tenDigits } },
+          ],
+        },
+        orderBy: [
+          { onboardingCompleted: 'desc' },
+          { createdAt: 'desc' },
+        ],
+        include: {
+          users: true,
+          socialAccounts: {
+            where: { platform: 'googlebusiness', isActive: true },
+          },
+        },
+      });
+
+      let matchedTenant = candidateTenants[0] || null;
+
+      // If still not matched, check SocialAccounts directly
+      if (!matchedTenant) {
+        const sa = await db.socialAccount.findFirst({
+          where: {
+            platform: 'googlebusiness',
+            metadata: { contains: tenDigits },
+          },
+          include: {
+            tenant: {
+              include: {
+                users: true,
+                socialAccounts: {
+                  where: { platform: 'googlebusiness', isActive: true },
+                },
+              },
+            },
+          },
+        });
+        if (sa?.tenant) {
+          matchedTenant = sa.tenant;
+        }
+      }
+
+      // If an established business tenant was found, link the verified phone & Firebase UID
+      // directly to this tenant's primary owner
+      if (matchedTenant) {
+        const establishedOwner =
+          matchedTenant.users.find((u) => u.role === 'owner' && u.isActive) ||
+          matchedTenant.users.find((u) => u.isActive) ||
+          matchedTenant.users[0];
+
+        if (establishedOwner) {
+          user = await db.user.update({
+            where: { id: establishedOwner.id },
+            data: {
+              phone: establishedOwner.phone || e164,
+              authProviderId: establishedOwner.authProviderId || uid,
+              emailVerified: true,
+              emailVerifiedAt: establishedOwner.emailVerifiedAt || new Date(),
+              lastLoginAt: new Date(),
+            },
+            include: { workspace: true, tenant: true },
+          });
+
+          // Ensure tenant has standard phone saved
+          if (!matchedTenant.phone) {
+            await db.tenant.update({
+              where: { id: matchedTenant.id },
+              data: { phone: e164 },
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    // 3. If user doesn't exist, auto-create business owner account
     if (!user) {
       const displayName = fullName || `Owner ${tenDigits.slice(-4)}`;
       // Deterministic synthetic email to satisfy unique constraint
@@ -157,7 +256,7 @@ export async function POST(request: NextRequest) {
             emailVerified: true,
             emailVerifiedAt: new Date(),
           },
-          include: { workspace: true },
+          include: { workspace: true, tenant: true },
         });
       } catch (err) {
         // Handle race condition where user was created concurrently
@@ -169,7 +268,7 @@ export async function POST(request: NextRequest) {
               { email: syntheticEmail },
             ],
           },
-          include: { workspace: true },
+          include: { workspace: true, tenant: true },
         });
         if (!user) throw err;
       }

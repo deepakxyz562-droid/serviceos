@@ -340,6 +340,16 @@ export async function PATCH(request: NextRequest) {
         data: updateData,
       });
 
+      // Synchronize phone to owner user record so Phone OTP login automatically recognizes the business owner
+      if (updateData.phone) {
+        await db.user.updateMany({
+          where: { tenantId: user.tenantId, role: 'owner' },
+          data: { phone: String(updateData.phone).trim() },
+        }).catch((err) => {
+          console.warn('[PATCH /api/gbp/place] User phone sync notice:', err);
+        });
+      }
+
       // Sync to brandProfile if it exists
       const brandProfile = await db.brandProfile.findUnique({
         where: { tenantId: user.tenantId },

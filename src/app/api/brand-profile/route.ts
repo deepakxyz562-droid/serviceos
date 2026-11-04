@@ -434,6 +434,15 @@ export async function PUT(request: NextRequest) {
           ...(settingsJson !== undefined ? { settingsJson } : {}),
         },
       });
+
+      if (body.phoneNumber && String(body.phoneNumber).trim()) {
+        await db.user.updateMany({
+          where: { tenantId, role: 'owner' },
+          data: { phone: String(body.phoneNumber).trim() },
+        }).catch((err) => {
+          console.warn('[/api/brand-profile PUT] User phone sync notice:', err);
+        });
+      }
     }
 
     return NextResponse.json({ profile });

@@ -82,6 +82,7 @@ export async function GET(request: NextRequest) {
           address: tenantSettings.locationAddress || baseLocation.address || tenant.address || '',
           category: tenantSettings.locationCategory || baseLocation.category || tenant.industry || '',
           website: effectiveWebsite,
+          phone: tenantSettings.locationPhone || tenant.phone || user.phone || baseLocation.phone || '',
         }
       : null;
 
@@ -112,6 +113,12 @@ export async function GET(request: NextRequest) {
     const hasConnectedGbp = discoveredLocations.length > 0;
     const onboardingCompleted = Boolean(tenant.onboardingCompleted) && hasConnectedGbp;
     const step = tenant.onboardingStep || (hasConnectedGbp ? 2 : 1);
+    const effectivePhone =
+      tenantSettings.locationPhone ||
+      tenant.phone ||
+      user.phone ||
+      activeLocation?.phone ||
+      '';
 
     return NextResponse.json({
       onboardingCompleted,
@@ -131,6 +138,7 @@ export async function GET(request: NextRequest) {
         ...automations,
       },
       website: effectiveWebsite,
+      phone: effectivePhone,
       businessName: activeLocation?.name || tenant.brandProfile?.businessName || '',
       industry: activeLocation?.category || tenant.industry || 'Field Services',
     });
@@ -156,6 +164,8 @@ export async function POST(request: NextRequest) {
       locationCategory,
       locationPinCode,
       locationWebsite,
+      locationPhone,
+      phone,
       website,
       offerings,
       aboutText,
@@ -258,6 +268,16 @@ export async function POST(request: NextRequest) {
       tenantSettings.website = effectiveWebsite;
     }
 
+    const effectiveSubmittedPhone = typeof locationPhone === 'string'
+      ? locationPhone.trim()
+      : typeof phone === 'string'
+      ? phone.trim()
+      : undefined;
+    if (effectiveSubmittedPhone !== undefined && effectiveSubmittedPhone) {
+      tenantSettings.locationPhone = effectiveSubmittedPhone;
+      tenantSettings.phone = effectiveSubmittedPhone;
+    }
+
     const nextStep = typeof step === 'number' ? Math.min(Math.max(step, 1), 5) : tenant.onboardingStep;
     const shouldComplete = complete === true || step === 5;
 
@@ -269,10 +289,20 @@ export async function POST(request: NextRequest) {
         ...(locationAddress ? { address: String(locationAddress).trim() } : {}),
         ...(locationCategory ? { industry: String(locationCategory).trim() } : {}),
         ...(effectiveWebsite !== undefined ? { website: effectiveWebsite } : {}),
+        ...(effectiveSubmittedPhone ? { phone: effectiveSubmittedPhone } : {}),
         onboardingStep: shouldComplete ? 5 : nextStep,
         ...(shouldComplete ? { onboardingCompleted: true } : {}),
       },
     });
+
+    if (effectiveSubmittedPhone) {
+      await db.user.updateMany({
+        where: { tenantId: user.tenantId, role: 'owner' },
+        data: { phone: effectiveSubmittedPhone },
+      }).catch((err) => {
+        console.warn('[api/bgos/onboarding] User phone sync warning:', err);
+      });
+    }
 
     // 7. Background AI Chatbot Training (Dual-Brain: Profile, Services, Hours + Website Crawl if available)
     void trainBgosChatbotKnowledge({

@@ -134,6 +134,7 @@ export default function SetupScreen() {
   const [locationCategory, setLocationCategory] = useState('');
   const [locationPinCode, setLocationPinCode] = useState('');
   const [locationWebsite, setLocationWebsite] = useState('');
+  const [locationPhone, setLocationPhone] = useState('');
 
   // Step 3 PDF upload
   const [uploadedPdfName, setUploadedPdfName] = useState<string | null>(null);
@@ -216,10 +217,12 @@ export default function SetupScreen() {
         setLocationCategory(res.activeLocation.category || res.industry || 'Local Store / Service');
         setLocationPinCode(res.activeLocation.address?.match(/\b\d{6}\b/)?.[0] || '');
         setLocationWebsite(res.activeLocation.website || res.website || '');
+        setLocationPhone(res.activeLocation.phone || (res as any).phone || '');
       } else if (res.businessName) {
         setLocationName(res.businessName);
         setLocationCategory(res.industry || 'Local Store / Service');
         if (res.website) setLocationWebsite(res.website);
+        if ((res as any).phone) setLocationPhone((res as any).phone);
       }
 
       // If already has connected GBP, step can start at 2 (Location) or saved step
@@ -288,9 +291,11 @@ export default function SetupScreen() {
           setLocationAddress(fallbackLocation.address || '');
           setLocationCategory(fallbackLocation.category || 'Field Service');
           setLocationPinCode(fallbackLocation.address?.match(/\b\d{6}\b/)?.[0] || '400703');
+          setLocationPhone(fallbackLocation.phone || disc?.phone || '');
         } else {
           setLocationName(defaultName);
           setLocationCategory('Field Service');
+          if (disc?.phone) setLocationPhone(disc.phone);
         }
         setOfferingsList(fallbackState.offerings!);
         setAboutText(fallbackState.aboutText!);
@@ -411,6 +416,8 @@ export default function SetupScreen() {
           locationCategory: locationCategory || data?.activeLocation?.category,
           locationPinCode: locationPinCode,
           locationWebsite: locationWebsite || data?.activeLocation?.website,
+          locationPhone: locationPhone || data?.activeLocation?.phone,
+          phone: locationPhone || data?.activeLocation?.phone,
           website: locationWebsite || data?.activeLocation?.website,
           offerings: offeringsList,
           aboutText,
@@ -827,6 +834,14 @@ export default function SetupScreen() {
               placeholder="e.g. 123 Main St, City, State"
             />
 
+            <Field
+              label="Business Phone Number"
+              value={locationPhone}
+              onChangeText={setLocationPhone}
+              placeholder="e.g. +91 99999 99999"
+              keyboardType="phone-pad"
+            />
+
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
                 <Field
@@ -870,6 +885,7 @@ export default function SetupScreen() {
                   data.activeLocation.address = locationAddress;
                   data.activeLocation.category = locationCategory;
                   data.activeLocation.website = locationWebsite;
+                  data.activeLocation.phone = locationPhone;
                 }
                 saveProgress(3);
               }}

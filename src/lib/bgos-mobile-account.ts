@@ -35,6 +35,7 @@ export async function ensureBgosTenantAndWorkspace(userId: string) {
         name: businessName,
         slug,
         email: user.email,
+        phone: user.phone || null,
         plan: 'starter',
         planStatus: 'trial',
         trialEndsAt,
@@ -194,7 +195,7 @@ export async function resolveBgosMobileAccount(userId: string, workspaceId?: str
       isActive: true,
     },
   });
-  const onboardingRequired = !user.tenant?.onboardingCompleted || gbpCount === 0;
+  const onboardingRequired = !user.tenant?.onboardingCompleted && gbpCount === 0;
   return {
     user: { ...user, workspaceId: workspace?.id || user.workspaceId },
     workspace: { id: workspace?.id || 'default_bgos', productType: effectiveProduct, name: workspace?.name || 'BGOS' },
