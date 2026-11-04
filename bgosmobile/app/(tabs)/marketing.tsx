@@ -814,8 +814,8 @@ export default function MarketingScreen() {
         subtitle: t.subtitle,
         badge: t.badge,
         cta: t.cta,
-        phone: undefined,
-        website: effectiveBusinessWebsite,
+        phone: brandPhone || effectiveBusinessPhone || undefined,
+        website: brandWebsite || effectiveBusinessWebsite,
         photo: t.photo,
         ratio: targetAspect,
         theme: t.theme,
@@ -966,8 +966,16 @@ export default function MarketingScreen() {
   const [brandLogoUri, setBrandLogoUri] = useState<string | null>(null);
   const [brandTagline, setBrandTagline] = useState<string>('');
   const [brandWebsite, setBrandWebsite] = useState<string>('');
+  const [brandPhone, setBrandPhone] = useState<string>('');
   const [brandName, setBrandName] = useState<string>('');
   const [refreshingIdeas, setRefreshingIdeas] = useState<boolean>(false);
+
+  function buildFooterText(brand: string, web: string, phone?: string, tag?: string) {
+    const cleanWeb = (web || 'visit website').replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const tagPart = tag && tag.trim() ? ` • ${tag.trim()}` : '';
+    const phonePart = phone && phone.trim() ? ` • 📞 ${phone.trim()}` : '';
+    return `${brand.trim()}${tagPart}\n🌐 ${cleanWeb}${phonePart}`;
+  }
 
   const effectiveBusinessName = useMemo(() => {
     if (brandName && brandName.trim()) return brandName.trim();
@@ -985,7 +993,7 @@ export default function MarketingScreen() {
     }
     return workspace.data?.name || 'FieserOS';
   }, [brandName, discover.data?.activeProfile?.name, gbpAccount?.accountName, gbpPlace.data?.place?.title, brandProfile.data?.profile?.businessName, workspace.data?.bookingPageConfig?.businessName, workspace.data?.name]);
-  const effectiveBusinessPhone = workspace.data?.bookingPageConfig?.phone;
+  const effectiveBusinessPhone = brandPhone || workspace.data?.bookingPageConfig?.phone || '';
   const effectiveBusinessWebsite =
     brandWebsite ||
     brandProfile.data?.profile?.website ||
@@ -1105,7 +1113,45 @@ export default function MarketingScreen() {
       });
       if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
-        setBrandLogoUri(asset.uri);
+        const applyLogoToDoc = (logoUrl: string) => {
+          setBrandLogoUri(logoUrl);
+          if (customDesign) {
+            const hasLogo = customDesign.layers.some((l) => l.id === 'brand_logo' || l.id === 'logo');
+            if (hasLogo) {
+              setCustomDesign({
+                ...customDesign,
+                layers: customDesign.layers.map((l) =>
+                  l.id === 'brand_logo' || l.id === 'logo' ? { ...l, src: logoUrl, hidden: false } : l
+                ),
+              });
+            } else {
+              setCustomDesign({
+                ...customDesign,
+                layers: [
+                  ...customDesign.layers,
+                  {
+                    id: 'brand_logo',
+                    type: 'image' as const,
+                    x: Math.round(customDesign.width - 110),
+                    y: 35,
+                    width: 60,
+                    height: 60,
+                    src: logoUrl,
+                    color: '#ffffff',
+                    background: 'transparent',
+                    fontSize: 16,
+                    opacity: 1,
+                    borderRadius: 16,
+                    borderWidth: 2,
+                    borderColor: 'rgba(255, 255, 255, 0.4)',
+                  },
+                ],
+              });
+            }
+          }
+        };
+
+        applyLogoToDoc(asset.uri);
         if (asset.base64) {
           const rawMime = asset.mimeType || 'image/png';
           const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
@@ -1115,11 +1161,11 @@ export default function MarketingScreen() {
           })
             .then((res) => {
               if (res?.url) {
-                setBrandLogoUri(res.url);
+                applyLogoToDoc(res.url);
               }
             })
             .catch(() => {
-              setBrandLogoUri(`data:${mime};base64,${asset.base64}`);
+              applyLogoToDoc(`data:${mime};base64,${asset.base64}`);
             });
         }
       }
@@ -1319,8 +1365,8 @@ export default function MarketingScreen() {
         subtitle,
         badge: discountBadge,
         cta: ctaText,
-        phone: undefined,
-        website: effectiveBusinessWebsite,
+        phone: brandPhone || effectiveBusinessPhone || undefined,
+        website: brandWebsite || effectiveBusinessWebsite,
         photo: safePhoto,
         ratio: aspectRatio,
         theme: colorTheme,
@@ -1443,7 +1489,7 @@ export default function MarketingScreen() {
         subtitle,
         badge: discountBadge,
         cta: ctaText,
-        phone: undefined,
+        phone: brandPhone || effectiveBusinessPhone || undefined,
         website: brandWebsite || effectiveBusinessWebsite,
         photo: customPosterUri || bgPhotoUrl || undefined,
         ratio: aspectRatio,
@@ -1465,7 +1511,7 @@ export default function MarketingScreen() {
         subtitle,
         badge: discountBadge,
         cta: ctaText,
-        phone: undefined,
+        phone: brandPhone || effectiveBusinessPhone || undefined,
         website: brandWebsite || effectiveBusinessWebsite,
         photo: customPosterUri || bgPhotoUrl || undefined,
         ratio: aspectRatio,
@@ -1487,7 +1533,7 @@ export default function MarketingScreen() {
         subtitle,
         badge: discountBadge,
         cta: ctaText,
-        phone: undefined,
+        phone: brandPhone || effectiveBusinessPhone || undefined,
         website: brandWebsite || effectiveBusinessWebsite,
         photo: customPosterUri || bgPhotoUrl || undefined,
         ratio,
@@ -1511,7 +1557,7 @@ export default function MarketingScreen() {
         subtitle,
         badge: discountBadge,
         cta: ctaText,
-        phone: undefined,
+        phone: brandPhone || effectiveBusinessPhone || undefined,
         website: brandWebsite || effectiveBusinessWebsite,
         photo: safePhoto,
         ratio: aspectRatio,
@@ -1529,7 +1575,7 @@ export default function MarketingScreen() {
     if (customDesign) {
       setCustomDesign({
         ...customDesign,
-        layers: customDesign.layers.filter((l) => l.id !== 'logo'),
+        layers: customDesign.layers.filter((l) => l.id !== 'logo' && l.id !== 'brand_logo'),
       });
     }
   }
@@ -1539,7 +1585,21 @@ export default function MarketingScreen() {
     if (customDesign) {
       setCustomDesign({
         ...customDesign,
-        layers: customDesign.layers.map((l) => (l.id === 'brand' ? { ...l, text: val.toUpperCase() } : l)),
+        layers: customDesign.layers.map((l) => {
+          if (l.id === 'brand') return { ...l, text: val.toUpperCase() };
+          if (l.id === 'footer_brand' || l.id === 'footer') {
+            return {
+              ...l,
+              text: buildFooterText(
+                val,
+                brandWebsite || effectiveBusinessWebsite,
+                brandPhone || effectiveBusinessPhone,
+                brandTagline || effectiveBusinessTagline
+              ),
+            };
+          }
+          return l;
+        }),
       });
     }
   }
@@ -1549,17 +1609,69 @@ export default function MarketingScreen() {
     if (customDesign) {
       setCustomDesign({
         ...customDesign,
-        layers: customDesign.layers.map((l) => (l.id === 'tagline' ? { ...l, text: val } : l)),
+        layers: customDesign.layers.map((l) => {
+          if (l.id === 'tagline') return { ...l, text: val };
+          if (l.id === 'footer_brand' || l.id === 'footer') {
+            return {
+              ...l,
+              text: buildFooterText(
+                brandName || effectiveBusinessName,
+                brandWebsite || effectiveBusinessWebsite,
+                brandPhone || effectiveBusinessPhone,
+                val
+              ),
+            };
+          }
+          return l;
+        }),
       });
     }
   }
 
   function handleApplyBrandWebsite(val: string) {
     setBrandWebsite(val);
+    const cleanVal = val.replace(/^https?:\/\//, '').replace(/\/$/, '');
     if (customDesign) {
       setCustomDesign({
         ...customDesign,
-        layers: customDesign.layers.map((l) => (l.id === 'website' ? { ...l, text: val } : l)),
+        layers: customDesign.layers.map((l) => {
+          if (l.id === 'footer_brand' || l.id === 'footer') {
+            return {
+              ...l,
+              text: buildFooterText(
+                brandName || effectiveBusinessName,
+                val,
+                brandPhone || effectiveBusinessPhone,
+                brandTagline || effectiveBusinessTagline
+              ),
+            };
+          }
+          if (l.id === 'website') return { ...l, text: cleanVal };
+          return l;
+        }),
+      });
+    }
+  }
+
+  function handleApplyBrandPhone(val: string) {
+    setBrandPhone(val);
+    if (customDesign) {
+      setCustomDesign({
+        ...customDesign,
+        layers: customDesign.layers.map((l) => {
+          if (l.id === 'footer_brand' || l.id === 'footer') {
+            return {
+              ...l,
+              text: buildFooterText(
+                brandName || effectiveBusinessName,
+                brandWebsite || effectiveBusinessWebsite,
+                val,
+                brandTagline || effectiveBusinessTagline
+              ),
+            };
+          }
+          return l;
+        }),
       });
     }
   }
@@ -1592,6 +1704,10 @@ export default function MarketingScreen() {
     if (sub?.text && sub.text !== subtitle) setSubtitle(sub.text);
     const ct = updated.layers.find((l) => l.id === 'cta');
     if (ct?.text && ct.text !== ctaText) setCtaText(ct.text.replace(/→$/, '').trim());
+    const br = updated.layers.find((l) => l.id === 'brand');
+    if (br?.text && br.text !== brandName) setBrandName(br.text);
+    const lg = updated.layers.find((l) => l.id === 'brand_logo' || l.id === 'logo');
+    if (lg?.src && lg.src !== brandLogoUri) setBrandLogoUri(lg.src);
     const ph = updated.layers.find((l) => l.id === 'bg_photo');
     if (ph?.src && ph.src !== customPosterUri) {
       setCustomPosterUri(ph.src);
@@ -3285,6 +3401,67 @@ export default function MarketingScreen() {
                   </Pressable>
                 )}
 
+                {/* ── 1-Tap Template Content Customization Toolbar ── */}
+                <View style={{ marginBottom: 12, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="tune" size={16} color="#009F50" />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Customize Design Content</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>Tap to edit</Text>
+                  </View>
+
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                    <Pressable
+                      onPress={() => setEditSheet('brand')}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
+                    >
+                      <MaterialIcons name="business" size={15} color="#0F172A" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Header Brand</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setEditSheet('brand')}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
+                    >
+                      <MaterialIcons name="image" size={15} color="#009F50" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Logo</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setEditSheet('brand')}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
+                    >
+                      <MaterialIcons name="link" size={15} color="#2563EB" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Footer Link & Phone</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setEditSheet('text')}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
+                    >
+                      <MaterialIcons name="title" size={15} color="#D97706" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Headlines & Copy</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setEditSheet('photo')}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
+                    >
+                      <MaterialIcons name="photo-camera" size={15} color="#9333EA" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Background Photo</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setEditSheet('style')}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
+                    >
+                      <MaterialIcons name="palette" size={15} color="#0D9488" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Themes & Ratio</Text>
+                    </Pressable>
+                  </ScrollView>
+                </View>
+
                 {/* Live Full-Bleed Canvas Editor */}
                 <View style={{ marginBottom: 14 }}>
                   <PosterEditor doc={design} onChange={handleCustomDesignChange} />
@@ -3647,7 +3824,7 @@ export default function MarketingScreen() {
             </View>
           </Modal>
 
-          {/* Modal 1: Edit Poster Text */}
+          {/* Modal 1: Edit Poster Text & Content */}
           <Modal
             visible={isEditingText || editSheet === 'text'}
             animationType="slide"
@@ -3660,7 +3837,7 @@ export default function MarketingScreen() {
             <View style={styles.modalBackdrop}>
               <View style={styles.modalCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>✏️ Edit Poster Copy</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>✏️ Edit Poster Content</Text>
                   <Pressable
                     onPress={() => {
                       setIsEditingText(false);
@@ -3673,6 +3850,75 @@ export default function MarketingScreen() {
                 </View>
 
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+                  {/* ── Section: Header Branding & Logo ── */}
+                  <View style={{ marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                    <Text style={[styles.modalInputLabel, { color: '#009F50', fontWeight: '800' }]}>🏢 HEADER BRAND & LOGO</Text>
+                    <Text style={styles.modalInputLabel}>Brand / Business Name</Text>
+                    <TextInput
+                      value={brandName || effectiveBusinessName}
+                      onChangeText={handleApplyBrandName}
+                      placeholder="Enter brand name..."
+                      style={styles.configInput}
+                    />
+
+                    <Text style={styles.modalInputLabel}>Brand Logo</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                      <View
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 22,
+                          backgroundColor: '#F1F5F9',
+                          borderWidth: 1,
+                          borderColor: '#CBD5E1',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {effectiveBusinessLogo ? (
+                          <Image source={{ uri: effectiveBusinessLogo }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                        ) : (
+                          <MaterialIcons name="business" size={20} color="#94A3B8" />
+                        )}
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 6, flex: 1 }}>
+                        <Pressable
+                          onPress={handlePickLogo}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 7,
+                            borderRadius: 8,
+                            backgroundColor: '#009F50',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
+                            {effectiveBusinessLogo ? 'Change Logo' : 'Upload Logo'}
+                          </Text>
+                        </Pressable>
+                        {effectiveBusinessLogo && (
+                          <Pressable
+                            onPress={handleRemoveLogo}
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                              borderRadius: 8,
+                              backgroundColor: '#FEF2F2',
+                              borderWidth: 1,
+                              borderColor: '#FCA5A5',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#B91C1C' }}>Remove</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* ── Section: Headlines & Offer Copy ── */}
+                  <Text style={[styles.modalInputLabel, { color: '#009F50', fontWeight: '800' }]}>📝 HEADLINE & COPY</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginBottom: 4 }}>
                     <Text style={styles.modalInputLabel}>Main Headline</Text>
                     <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -3726,6 +3972,28 @@ export default function MarketingScreen() {
                     placeholder="e.g. Book Now, Claim Deal"
                     style={styles.configInput}
                   />
+
+                  {/* ── Section: Footer Link & Contact ── */}
+                  <View style={{ marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                    <Text style={[styles.modalInputLabel, { color: '#009F50', fontWeight: '800' }]}>🌐 FOOTER LINK & CONTACT</Text>
+                    <Text style={styles.modalInputLabel}>Website / Profile Link</Text>
+                    <TextInput
+                      value={brandWebsite || effectiveBusinessWebsite}
+                      onChangeText={handleApplyBrandWebsite}
+                      placeholder="e.g. yourbusiness.com"
+                      autoCapitalize="none"
+                      style={styles.configInput}
+                    />
+
+                    <Text style={styles.modalInputLabel}>Contact Phone Number</Text>
+                    <TextInput
+                      value={brandPhone || effectiveBusinessPhone}
+                      onChangeText={handleApplyBrandPhone}
+                      placeholder="e.g. +91 98765 43210"
+                      keyboardType="phone-pad"
+                      style={styles.configInput}
+                    />
+                  </View>
 
                   <Pressable
                     onPress={() => {
@@ -4115,6 +4383,16 @@ export default function MarketingScreen() {
                     value={brandWebsite || effectiveBusinessWebsite}
                     onChangeText={handleApplyBrandWebsite}
                     placeholder="e.g. yourbusiness.com"
+                    autoCapitalize="none"
+                    style={styles.configInput}
+                  />
+
+                  <Text style={styles.modalInputLabel}>Contact Phone Number</Text>
+                  <TextInput
+                    value={brandPhone || effectiveBusinessPhone}
+                    onChangeText={handleApplyBrandPhone}
+                    placeholder="e.g. +91 98765 43210"
+                    keyboardType="phone-pad"
                     style={styles.configInput}
                   />
 

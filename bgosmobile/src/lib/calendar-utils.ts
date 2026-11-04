@@ -78,11 +78,14 @@ export function getWeekDays(centerDate: Date): Date[] {
 
 export function friendlyLayerName(id: string): string {
   if (id.includes('headline')) return 'Headline';
-  if (id.includes('badge')) return 'Offer Badge';
+  if (id.includes('badge')) return 'Offer Ribbon';
   if (id.includes('sub')) return 'Subtitle';
   if (id.includes('cta')) return 'Action Button';
+  if (id.includes('logo')) return 'Brand Logo';
+  if (id.includes('footer')) return 'Footer Link & Contact';
+  if (id.includes('brand')) return 'Header Brand Name';
   if (id.includes('photo') || id.includes('image')) return 'Photo';
-  if (id.includes('logo')) return 'Logo';
-  if (id.includes('shape')) return 'Shape';
-  return id.length > 12 ? `${id.slice(0, 10)}…` : id;
+  if (id.includes('specs') || id.includes('bullet')) return 'Feature Bullet';
+  if (id.includes('shape') || id.includes('banner') || id.includes('scrim')) return 'Design Shape';
+  return id.length > 14 ? `${id.slice(0, 12)}…` : id;
 }
