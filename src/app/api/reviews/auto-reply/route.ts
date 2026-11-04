@@ -99,7 +99,14 @@ export async function POST(request: NextRequest) {
         : 4;
 
     const replyLanguage = body.language || settings.replySettings?.replyLanguage || 'English';
-    const businessName = tenant?.name || 'our business';
+    const googleAccount = await prepareGoogleAccount(user.tenantId);
+    let gbpMeta: Record<string, any> = {};
+    if (googleAccount?.metadata) {
+      try {
+        gbpMeta = typeof googleAccount.metadata === 'string' ? JSON.parse(googleAccount.metadata) : googleAccount.metadata;
+      } catch {}
+    }
+    const businessName = settings.activeGbpTitle || gbpMeta.locationTitle || googleAccount?.accountName || tenant?.name || 'our business';
 
     const whereClause: Record<string, any> = {
       tenantId: user.tenantId,
@@ -138,8 +145,6 @@ export async function POST(request: NextRequest) {
         message: 'No pending reviews met the auto-reply criteria.',
       });
     }
-
-    const googleAccount = await prepareGoogleAccount(user.tenantId);
 
     const defaultKeywords = [
       { keyword: `${businessName.toLowerCase()} service`, volume: '500 ↗' },

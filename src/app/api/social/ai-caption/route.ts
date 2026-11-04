@@ -178,11 +178,13 @@ export async function POST(request: NextRequest) {
       const isNegative = /1★|2★|disappoint|poor|bad|problem|unhappy/i.test(body.topic);
       const authorMatch = body.topic.match(/from ([^:.]+)/i);
       const authorName = authorMatch ? authorMatch[1].trim() : 'valued customer';
+      const businessMatch = body.topic.match(/behalf of ([^.]+)/i);
+      const bTitle = businessMatch ? businessMatch[1].trim() : 'local service';
 
       const keywords = [
-        { keyword: 'best crm software for small businesses', volume: '500 ↗' },
-        { keyword: 'software development company', volume: '500 ↗' },
-        { keyword: 'software development company in Patna', volume: '100 ↗' },
+        { keyword: `${bTitle.toLowerCase()} service`, volume: '500 ↗' },
+        { keyword: 'top rated local service', volume: '350 ↗' },
+        { keyword: 'verified customer satisfaction', volume: '250 ↗' },
       ];
 
       if (!caption) {

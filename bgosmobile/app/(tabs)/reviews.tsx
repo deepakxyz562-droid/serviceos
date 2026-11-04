@@ -279,10 +279,14 @@ export default function ReviewRepliesScreen() {
         method: 'POST',
         body: { minRating: 1 },
       });
-      setNotice(res.message || `Processed ${res.processedCount} auto-replies.`);
+      const msg = res.message || `Processed ${res.processedCount} auto-replies.`;
+      setNotice(msg);
+      Alert.alert('AI Auto-Reply', msg);
       await reviews.refresh();
     } catch (err: unknown) {
-      setLocalError((err as Error).message || 'AI Auto-reply failed.');
+      const errMsg = (err as Error).message || 'AI Auto-reply failed.';
+      setLocalError(errMsg);
+      Alert.alert('Auto-Reply Error', errMsg);
     } finally {
       setAutoReplyBusy(false);
     }
@@ -300,10 +304,14 @@ export default function ReviewRepliesScreen() {
       const res = await apiRequest<{ success: boolean; newReviewsCount: number; totalFetched: number; message: string }>('/api/reviews/sync-google', {
         method: 'POST',
       });
-      setNotice(res.message || `Synced ${res.totalFetched || 0} reviews from Google Maps.`);
+      const syncMsg = res.message || `Synced ${res.totalFetched || 0} reviews from Google Maps.`;
+      setNotice(syncMsg);
+      Alert.alert('Google Sync Completed', syncMsg);
       await reviews.refresh();
     } catch (err: unknown) {
-      setLocalError((err as Error).message || 'Failed to sync Google reviews.');
+      const syncErr = (err as Error).message || 'Failed to sync Google reviews.';
+      setLocalError(syncErr);
+      Alert.alert('Sync Error', syncErr);
     } finally {
       setSyncBusy(false);
     }
@@ -384,12 +392,20 @@ export default function ReviewRepliesScreen() {
       setEditingId(null);
       if (res.publishedToGoogle) {
         setNotice(res.message || 'Reply published to Google Maps successfully!');
+        Alert.alert('Reply Published', 'Your reply has been published directly to Google Maps.');
       } else {
-        setNotice(res.message || res.googleError || "Reply saved; Google publication is not yet confirmed.");
+        const errorDetail = res.googleError || res.message || 'Reply saved; Google publication is not yet confirmed.';
+        setNotice(errorDetail);
+        Alert.alert(
+          'Reply Saved in BGOS',
+          `${errorDetail}\n\nNote: Google reviews from connected or personal accounts typically take 24–72 hours to clear Google Maps moderation before replies can be synced to Google.`
+        );
       }
       await reviews.refresh();
     } catch (e) {
-      setLocalError((e as Error).message || 'Could not publish reply.');
+      const msg = (e as Error).message || 'Could not publish reply.';
+      setLocalError(msg);
+      Alert.alert('Reply Error', msg);
     } finally {
       setReplyBusyId(null);
     }
@@ -409,6 +425,7 @@ export default function ReviewRepliesScreen() {
             try {
               await apiRequest(`/api/reviews/${review.id}/reply`, { method: 'DELETE' });
               setNotice('Reply removed.');
+              Alert.alert('Reply Deleted', 'Your review reply has been removed.');
               await reviews.refresh();
             } catch (e) {
               Alert.alert('Error', (e as Error).message || 'Failed to delete reply.');

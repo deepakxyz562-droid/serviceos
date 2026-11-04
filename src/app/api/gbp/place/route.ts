@@ -10,6 +10,21 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+const PLACE_PAYLOAD_CACHE = new Map<string, { data: any; expiresAt: number }>();
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+
+export function invalidatePlacePayloadCache(tenantId?: string) {
+  if (!tenantId) {
+    PLACE_PAYLOAD_CACHE.clear();
+    return;
+  }
+  for (const key of PLACE_PAYLOAD_CACHE.keys()) {
+    if (key.startsWith(`${tenantId}:`)) {
+      PLACE_PAYLOAD_CACHE.delete(key);
+    }
+  }
+}
+
 /**
  * GET /api/gbp/place
  * Returns the genuine connected Google Place details, location metadata,
@@ -20,6 +35,21 @@ export async function GET(request: NextRequest) {
     const user = await getAuthUser(request);
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const requestedLocationId = request.nextUrl.searchParams.get('locationId') || undefined;
+    const forceRefresh = request.nextUrl.searchParams.get('refresh') === 'true';
+    const cacheKey = `${user.tenantId}:${requestedLocationId || 'active'}`;
+
+    if (!forceRefresh) {
+      const cached = PLACE_PAYLOAD_CACHE.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        return NextResponse.json(cached.data, {
+          headers: {
+            'Cache-Control': 'private, max-age=60, stale-while-revalidate=180',
+          },
+        });
+      }
     }
 
     const tenant = await db.tenant.findUnique({
@@ -92,7 +122,7 @@ export async function GET(request: NextRequest) {
       return { score: Math.max(score, 20), missing };
     };
 
-    const googleAccount = await prepareGoogleAccount(user.tenantId);
+    const googleAccount = await prepareGoogleAccount(user.tenantId, requestedLocationId);
 
     if (!googleAccount) {
       const { score, missing } = computeCompleteness(
@@ -103,7 +133,7 @@ export async function GET(request: NextRequest) {
         fallbackWebsite,
       );
 
-      return NextResponse.json({
+      const disconnectedPayload = {
         isConnected: false,
         place: null,
         tenantFallback: {
@@ -132,6 +162,14 @@ export async function GET(request: NextRequest) {
           avgRating,
           responseRate,
           sourceBreakdown,
+        },
+      };
+
+      PLACE_PAYLOAD_CACHE.set(cacheKey, { data: disconnectedPayload, expiresAt: Date.now() + CACHE_TTL_MS });
+
+      return NextResponse.json(disconnectedPayload, {
+        headers: {
+          'Cache-Control': 'private, max-age=60, stale-while-revalidate=180',
         },
       });
     }
@@ -200,7 +238,7 @@ export async function GET(request: NextRequest) {
             )}`
           : null);
 
-    return NextResponse.json({
+    const connectedPayload = {
       isConnected: true,
       isPendingApproval,
       googleEmail,
@@ -241,6 +279,14 @@ export async function GET(request: NextRequest) {
         avgRating,
         responseRate,
         sourceBreakdown,
+      },
+    };
+
+    PLACE_PAYLOAD_CACHE.set(cacheKey, { data: connectedPayload, expiresAt: Date.now() + CACHE_TTL_MS });
+
+    return NextResponse.json(connectedPayload, {
+      headers: {
+        'Cache-Control': 'private, max-age=60, stale-while-revalidate=180',
       },
     });
   } catch (error: unknown) {
@@ -311,6 +357,8 @@ export async function PATCH(request: NextRequest) {
         });
       }
     }
+
+    invalidatePlacePayloadCache(user.tenantId);
 
     return NextResponse.json({
       success: true,

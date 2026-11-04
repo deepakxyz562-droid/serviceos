@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { invalidatePlacePayloadCache } from '@/app/api/gbp/place/route';
 
 export const dynamic = 'force-dynamic';
 
@@ -179,6 +180,8 @@ export async function POST(request: NextRequest) {
         settingsJson: JSON.stringify(tenantSettings),
       },
     });
+
+    invalidatePlacePayloadCache(user.tenantId);
 
     const targetShortId = `#${profileId.slice(-4)}`;
     const targetProfile: GbpDiscoveredProfile = {

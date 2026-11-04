@@ -78,7 +78,11 @@ export async function POST(
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : String(err);
           console.warn(`[reviews/reply] Google Business Profile reply sync warning for review ${id}:`, errMsg);
-          googleError = errMsg;
+          if (errMsg.includes('NOT_FOUND') || errMsg.includes('404')) {
+            googleError = 'Google has not yet publicly published this review on Google Maps (reviews from connected or personal accounts typically take 24–72 hours to clear Google Maps moderation before replies can be synced). Your reply is safely saved in BGOS.';
+          } else {
+            googleError = errMsg;
+          }
         }
       } else {
         googleError = 'No active Google Business Profile account connected';

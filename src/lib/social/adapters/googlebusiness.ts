@@ -748,8 +748,8 @@ export async function replyToGoogleBusinessReview(
   return {
     comment: data.comment || comment.trim(),
     updateTime: data.updateTime || new Date().toISOString(),
-    reviewReplyState:data.reviewReplyState,
-    policyViolation:data.policyViolation,
+    reviewReplyState: data.reviewReplyState || 'APPROVED',
+    policyViolation: data.policyViolation,
   };
 }
 
@@ -1025,6 +1025,12 @@ export async function fetchGoogleBusinessPerformanceMetrics(
   const start = startDate || new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const end = endDate || now.toISOString().slice(0, 10);
 
+  const cacheKey = `${locationId}:${start}:${end}`;
+  const cached = PERF_METRICS_CACHE.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
+
   const [sYear, sMonth, sDay] = start.split('-').map(Number);
   const [eYear, eMonth, eDay] = end.split('-').map(Number);
 
@@ -1079,7 +1085,7 @@ export async function fetchGoogleBusinessPerformanceMetrics(
     }
   }
 
-  return {
+  const perfResult = {
     searchImpressions,
     mapsImpressions,
     callClicks,
@@ -1088,6 +1094,8 @@ export async function fetchGoogleBusinessPerformanceMetrics(
     bookings,
     conversations,
   };
+  PERF_METRICS_CACHE.set(cacheKey, { data: perfResult, expiresAt: Date.now() + CACHE_TTL_MS });
+  return perfResult;
 }
 
 /**
@@ -1145,6 +1153,25 @@ export async function fetchGoogleBusinessSearchKeywords(
   }
 }
 
+// Caches to avoid hammering external Google APIs and speed up mobile/web load times
+const PLACE_DETAILS_CACHE = new Map<string, { data: any; expiresAt: number }>();
+const PERF_METRICS_CACHE = new Map<string, { data: any; expiresAt: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+export function invalidateGooglePlaceCache(locationIdOrResource?: string) {
+  if (!locationIdOrResource) {
+    PLACE_DETAILS_CACHE.clear();
+    PERF_METRICS_CACHE.clear();
+    return;
+  }
+  for (const key of PLACE_DETAILS_CACHE.keys()) {
+    if (key.includes(locationIdOrResource)) PLACE_DETAILS_CACHE.delete(key);
+  }
+  for (const key of PERF_METRICS_CACHE.keys()) {
+    if (key.includes(locationIdOrResource)) PERF_METRICS_CACHE.delete(key);
+  }
+}
+
 /**
  * Fetch detailed place metadata from Google Business Profile Information API.
  * Returns title, real Google category (e.g. Steel Fabricator), storefront address,
@@ -1168,6 +1195,12 @@ export async function fetchGoogleBusinessPlaceDetails(
     (accountName.startsWith('accounts/')
       ? `${accountName}/locations/${locationId}`
       : `accounts/${accountName}/locations/${locationId}`);
+
+  const cacheKey = locationResourceName;
+  const cached = PLACE_DETAILS_CACHE.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
 
   let title = account.accountName || meta.locationTitle || '';
   let category = meta.category || undefined;
@@ -1233,7 +1266,9 @@ export async function fetchGoogleBusinessPlaceDetails(
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(title || 'Google Business')}`;
   }
 
-  return { title, category, address, phone, website, placeId, mapsUri };
+  const placeResult = { title, category, address, phone, website, placeId, mapsUri };
+  PLACE_DETAILS_CACHE.set(cacheKey, { data: placeResult, expiresAt: Date.now() + CACHE_TTL_MS });
+  return placeResult;
 }
 
 /**
@@ -1281,6 +1316,7 @@ export async function updateGoogleBusinessProfile(
   });
 
   await assertOk(res, 'update Google Business Profile description');
+  invalidateGooglePlaceCache(locationId);
   return { descriptionApplied: true };
 }
 

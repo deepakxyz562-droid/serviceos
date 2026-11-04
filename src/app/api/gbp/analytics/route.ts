@@ -83,25 +83,32 @@ export async function GET(request: NextRequest) {
         }
       : null;
 
-    return NextResponse.json({
-      isConnected: Boolean(googleAccount),
-      isLiveGoogleApi,
-      metrics: {
-        totalViews,
-        searchImpressions,
-        mapsImpressions,
-        callClicks,
-        directionRequests,
-        websiteClicks,
-        totalReviews,
-        avgRating,
-        responseRate,
-        postsPublished: posts.filter((p) => p.status === 'published').length,
+    return NextResponse.json(
+      {
+        isConnected: Boolean(googleAccount),
+        isLiveGoogleApi,
+        metrics: {
+          totalViews,
+          searchImpressions,
+          mapsImpressions,
+          callClicks,
+          directionRequests,
+          websiteClicks,
+          totalReviews,
+          avgRating,
+          responseRate,
+          postsPublished: posts.filter((p) => p.status === 'published').length,
+        },
+        weeklyTrends,
+        trendsAvailable: isLiveGoogleApi,
+        lastUpdated: new Date().toISOString(),
       },
-      weeklyTrends,
-      trendsAvailable: isLiveGoogleApi,
-      lastUpdated: new Date().toISOString(),
-    });
+      {
+        headers: {
+          'Cache-Control': 'private, max-age=60, stale-while-revalidate=180',
+        },
+      },
+    );
   } catch (error: unknown) {
     console.error('Error fetching GBP analytics:', error);
     return NextResponse.json(

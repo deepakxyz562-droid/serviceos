@@ -19,7 +19,7 @@ import type { PosterTemplate } from '../../../shared/poster-templates';
 import { PosterTemplateGallery } from '../../src/components/design/poster-template-gallery';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -35,7 +35,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Screen,
@@ -656,6 +656,15 @@ export default function MarketingScreen() {
     suggestions: Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string; headline?: string; badge?: string }>;
   }>('/api/social/prompts/suggestions');
 
+  useFocusEffect(
+    useCallback(() => {
+      void discover.refresh();
+      void gbpPlace.refresh();
+      void accounts.refresh();
+      void workspace.refresh();
+    }, [discover.refresh, gbpPlace.refresh, accounts.refresh, workspace.refresh])
+  );
+
   // ── Mode Switch: Studio / Create vs Autopilot vs Posts & Approvals ──────────
   const [activeMode, setActiveMode] = useState<'studio' | 'autopilot' | 'posts'>(
     params.mode === 'posts' ? 'posts' : params.mode === 'autopilot' ? 'autopilot' : 'studio'
@@ -962,18 +971,20 @@ export default function MarketingScreen() {
 
   const effectiveBusinessName = useMemo(() => {
     if (brandName && brandName.trim()) return brandName.trim();
-    if (workspace.data?.name && workspace.data.name !== 'Commercial Brand' && !workspace.data.name.toLowerCase().includes('deepak')) {
-      return workspace.data.name;
+    const activeName = discover.data?.activeProfile?.name || gbpAccount?.accountName;
+    if (activeName && activeName.toLowerCase() !== 'google business profile' && !activeName.toLowerCase().includes('google business')) {
+      return activeName;
+    }
+    if (gbpPlace.data?.place?.title && gbpPlace.data.place.title.toLowerCase() !== 'google business profile' && !gbpPlace.data.place.title.toLowerCase().includes('google business')) {
+      return gbpPlace.data.place.title;
     }
     if (brandProfile.data?.profile?.businessName) return brandProfile.data.profile.businessName;
     if (workspace.data?.bookingPageConfig?.businessName) return workspace.data.bookingPageConfig.businessName;
-    if (gbpPlace.data?.place?.title) return gbpPlace.data.place.title;
-    const activeName = discover.data?.activeProfile?.name;
-    if (activeName && !activeName.toLowerCase().includes('deepak') && activeName.toLowerCase() !== 'google business profile') {
-      return activeName;
+    if (workspace.data?.name && workspace.data.name !== 'Commercial Brand' && !workspace.data.name.toLowerCase().includes('deepak')) {
+      return workspace.data.name;
     }
     return workspace.data?.name || 'FieserOS';
-  }, [brandName, workspace.data?.name, brandProfile.data?.profile?.businessName, workspace.data?.bookingPageConfig?.businessName, gbpPlace.data?.place?.title, discover.data?.activeProfile?.name]);
+  }, [brandName, discover.data?.activeProfile?.name, gbpAccount?.accountName, gbpPlace.data?.place?.title, brandProfile.data?.profile?.businessName, workspace.data?.bookingPageConfig?.businessName, workspace.data?.name]);
   const effectiveBusinessPhone = workspace.data?.bookingPageConfig?.phone;
   const effectiveBusinessWebsite =
     brandWebsite ||
