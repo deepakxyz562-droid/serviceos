@@ -83,6 +83,21 @@ export async function GET(request: NextRequest) {
 
   // ── 1. Handle Google-side error (user denied consent, etc.) ────────────
   if (errorParam) {
+    let mobileUri: string | null = null;
+    let fromMobile = false;
+    if (stateParam) {
+      try {
+        const s = JSON.parse(Buffer.from(stateParam, 'base64url').toString());
+        fromMobile = Boolean(s.isMobile);
+        mobileUri = s.mobileReturnUri || (fromMobile ? 'bgos://gbp-callback' : null);
+      } catch {}
+    }
+    if (fromMobile) {
+      const res = NextResponse.redirect(`${mobileUri || 'bgos://gbp-callback'}?error=${encodeURIComponent(errorParam)}`);
+      res.cookies.delete('gbp_oauth_csrf');
+      res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return res;
+    }
     return renderErrorPage(`Google denied authorization: ${errorParam}`);
   }
   if (!code || !stateParam) {
@@ -99,21 +114,31 @@ export async function GET(request: NextRequest) {
     originHost?: string;
     returnProduct?: string | null;
     returnView?: string | null;
+    isMobile?: boolean;
+    mobileReturnUri?: string | null;
     context?: string; // 'SETTINGS_VERIFICATION' | 'CLAIM_BUSINESS'
     claimTenantId?: string | null;
     userTenantId?: string;
   };
+  let isMobile = false;
+  let mobileReturnUri: string | null = null;
   try {
     state = JSON.parse(Buffer.from(stateParam, 'base64url').toString());
+    isMobile = Boolean(state.isMobile);
+    mobileReturnUri = state.mobileReturnUri || (isMobile ? 'bgos://gbp-callback' : null);
   } catch {
     return renderErrorPage('Invalid state parameter — could not decode.');
   }
   if (!state.tenantId || !state.userId || !state.csrf || !state.expires) {
-    return renderErrorPage('Invalid state — missing required fields.');
+    return renderErrorPage('Invalid state — missing required fields.', null, null, isMobile, mobileReturnUri);
   }
   if (Date.now() > state.expires) {
     return renderErrorPage(
       'Authorization timed out — please reconnect from the dashboard.',
+      null,
+      null,
+      isMobile,
+      mobileReturnUri,
     );
   }
 
@@ -137,8 +162,10 @@ export async function GET(request: NextRequest) {
     state.returnView ||
     (originBase.includes('bgos.') ? 'socialMedia' : 'verification');
 
-  const backUrl = `${originBase}/?view=${viewParam}${productParam}`;
-  const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect?originHost=${encodeURIComponent(originBase)}&returnView=${viewParam}${productParam}`;
+  const backUrl = isMobile
+    ? (mobileReturnUri || 'bgos://setup')
+    : `${originBase}/?view=${viewParam}${productParam}`;
+  const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect?originHost=${encodeURIComponent(originBase)}&returnView=${viewParam}${productParam}${isMobile ? `&client=mobile&redirectUri=${encodeURIComponent(mobileReturnUri || 'bgos://gbp-callback')}` : ''}`;
 
   // CSRF validation:
   // 1. Primary defense: Cookie match against state.csrf
@@ -166,7 +193,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (!cookieMatches && !sigMatches) {
-    return renderErrorPage('CSRF validation failed — please reconnect.', retryUrl, backUrl);
+    return renderErrorPage('CSRF validation failed — please reconnect.', retryUrl, backUrl, isMobile, mobileReturnUri);
   }
 
   // NOTE: The code-lock (isCodeAlreadyProcessed / markCodeAsProcessed) was
@@ -197,6 +224,8 @@ export async function GET(request: NextRequest) {
       'Platform credentials for Google Business Profile are not configured in DB or environment variables.',
       null,
       backUrl,
+      isMobile,
+      mobileReturnUri,
     );
   }
 
@@ -283,8 +312,15 @@ export async function GET(request: NextRequest) {
           });
           if (existingAccount) {
             // The first exchange worked — this is just a duplicate retry.
-            // Redirect to the dashboard with success on the originating domain.
+            // Redirect to the dashboard with success on the originating domain or mobile app.
             console.log('[oauth/googlebusiness/callback] Code already used but SocialAccount exists — redirecting to success');
+            if (isMobile) {
+              const mobileTarget = `${mobileReturnUri || 'bgos://gbp-callback'}?google=connected`;
+              const res = NextResponse.redirect(mobileTarget);
+              res.cookies.delete('gbp_oauth_csrf');
+              res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+              return res;
+            }
             const redirectUrl = new URL(
               `/?view=${viewParam}&google=connected${productParam}`,
               originBase,
@@ -323,7 +359,7 @@ export async function GET(request: NextRequest) {
           `Google rejected the authorization (HTTP ${tokenReq.status}): ${googleError}.\n\n` +
           `Click "Try again" below to start a fresh connection.`;
       }
-      return renderErrorPage(helpfulMessage, retryUrl, backUrl);
+      return renderErrorPage(helpfulMessage, retryUrl, backUrl, isMobile, mobileReturnUri);
     }
     tokenResponse = (await tokenReq.json()) as typeof tokenResponse;
   } catch (err) {
@@ -332,10 +368,12 @@ export async function GET(request: NextRequest) {
       'Network error while exchanging the authorization code. Click "Try again" below.',
       retryUrl,
       backUrl,
+      isMobile,
+      mobileReturnUri,
     );
   }
   if (!tokenResponse.access_token) {
-    return renderErrorPage('Google did not return an access token.', retryUrl, backUrl);
+    return renderErrorPage('Google did not return an access token.', retryUrl, backUrl, isMobile, mobileReturnUri);
   }
   // `refresh_token` is only returned the FIRST time the user consents
   // (or when prompt=consent forces re-issue). If it's missing, the user
@@ -435,11 +473,20 @@ export async function GET(request: NextRequest) {
         `Click "Try again" to reconnect, or contact support if the problem persists.`,
         retryUrl,
         backUrl,
+        isMobile,
+        mobileReturnUri,
       );
     }
   }
 
   if (createdAccounts.length === 0 && accounts.length === 0) {
+    if (isMobile) {
+      const mobileTarget = `${mobileReturnUri || 'bgos://gbp-callback'}?error=no_gbp_accounts`;
+      const res = NextResponse.redirect(mobileTarget);
+      res.cookies.delete('gbp_oauth_csrf');
+      res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return res;
+    }
     return renderErrorPage(
       `Your Google account doesn't own any Google Business Profile accounts.\n\n` +
       `To use Fieseros marketplace verification, you need to:\n` +
@@ -449,6 +496,8 @@ export async function GET(request: NextRequest) {
       `Make sure you sign in with the Google account that OWNS the Business Profile for your business.`,
       retryUrl,
       backUrl,
+      isMobile,
+      mobileReturnUri,
     );
   }
 
@@ -522,7 +571,16 @@ export async function GET(request: NextRequest) {
         `Click "Try again" below. If the problem persists, contact support.`,
         retryUrl,
         backUrl,
+        isMobile,
+        mobileReturnUri,
       );
+    }
+    if (isMobile) {
+      const mobileTarget = `${mobileReturnUri || 'bgos://gbp-callback'}?error=no_gbp_accounts`;
+      const res = NextResponse.redirect(mobileTarget);
+      res.cookies.delete('gbp_oauth_csrf');
+      res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return res;
     }
     // The user owns GBP accounts but none have locations yet.
     const foundAccountsList = accounts
@@ -539,10 +597,20 @@ export async function GET(request: NextRequest) {
       `4. Come back here and click "Try again" to connect it.`,
       retryUrl,
       backUrl,
+      isMobile,
+      mobileReturnUri,
     );
   }
 
-  // ── 7. Clear the CSRF cookie + redirect to dashboard ───────────────────
+  // ── 7. Clear the CSRF cookie + redirect to dashboard or mobile app ─────
+  if (isMobile) {
+    const mobileTarget = `${mobileReturnUri || 'bgos://gbp-callback'}?google=connected${quotaPendingApproval ? '&gbpPending=1' : ''}`;
+    const res = NextResponse.redirect(mobileTarget);
+    res.cookies.delete('gbp_oauth_csrf');
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
+  }
+
   // Redirect back to the originating host (e.g. https://bgos.fieseros.com)
   // so the user stays on their specific product workspace (BGOS, BOS, etc.)
   const claimContext = state.context === 'CLAIM_BUSINESS' && state.claimTenantId
@@ -610,11 +678,17 @@ export async function GET(request: NextRequest) {
       getAppUrlFromRequest(request);
     let catchBackUrl: string | null = null;
     let catchRetryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
+    let isMob = false;
+    let mobUri: string | null = null;
     try {
       const sp = request.nextUrl.searchParams.get('state');
       if (sp) {
         const parsed = JSON.parse(Buffer.from(sp, 'base64url').toString());
-        if (parsed.originHost && isAllowedOriginHost(parsed.originHost)) {
+        isMob = Boolean(parsed.isMobile);
+        mobUri = parsed.mobileReturnUri || (isMob ? 'bgos://gbp-callback' : null);
+        if (isMob) {
+          catchBackUrl = mobUri || 'bgos://setup';
+        } else if (parsed.originHost && isAllowedOriginHost(parsed.originHost)) {
           const origin = parsed.originHost.replace(/\/+$/, '');
           const view = parsed.returnView || (origin.includes('bgos.') ? 'socialMedia' : 'verification');
           const prod = parsed.returnProduct ? `&product=${encodeURIComponent(parsed.returnProduct)}` : '';
@@ -629,6 +703,8 @@ export async function GET(request: NextRequest) {
       `Click "Try again" to start a fresh connection.`,
       catchRetryUrl,
       catchBackUrl,
+      isMob,
+      mobUri,
     );
   }
 }
@@ -1056,6 +1132,8 @@ function renderErrorPage(
   message: string,
   retryUrl: string | null = null,
   backUrl: string | null = null,
+  isMobile: boolean = false,
+  mobileReturnUri: string | null = null,
 ): NextResponse {
   const safe = message
     .replace(/&/g, '&amp;')
@@ -1063,28 +1141,31 @@ function renderErrorPage(
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
   const retryButton = retryUrl
-    ? `<a href="${retryUrl}" style="background: #4f46e5; margin-right: 0.75rem;">Try again</a>`
+    ? `<a href="${retryUrl}" style="background: #009F50; margin-right: 0.75rem;">Try again</a>`
     : '';
-  const returnLink = backUrl || '/?view=verification';
+  const returnLink = isMobile
+    ? (mobileReturnUri || 'bgos://setup')
+    : (backUrl || '/?view=verification');
+  const returnLabel = isMobile ? 'Return to BGOS App' : 'Back to Dashboard';
   return new NextResponse(
     `<!html>
 <html><head><title>Connection Failed</title><style>
 body { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #fef2f2; }
-.card { text-align: center; padding: 3rem; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 540px; }
+.card { text-align: center; padding: 2.5rem 1.5rem; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 540px; margin: 16px; }
 .icon { width: 64px; height: 64px; margin: 0 auto 1rem; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; }
 h1 { color: #991b1b; margin: 0 0 0.5rem; font-size: 1.5rem; }
-p { color: #4b5563; margin: 0 0 1.5rem; line-height: 1.5; text-align: left; }
-a, button { background: #dc2626; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+p { color: #4b5563; margin: 0 0 1.5rem; line-height: 1.5; text-align: left; white-space: pre-line; }
+a, button { background: #009F50; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
 .hint { margin-top: 1.5rem; padding: 0.75rem; background: #f3f4f6; border-radius: 6px; font-size: 0.85rem; color: #6b7280; text-align: left; }
 </style></head>
 <body>
 <div class="card">
   <div class="icon">✗</div>
-  <h1>Google Business Profile Connection Failed</h1>
+  <h1>Google Business Profile Connection</h1>
   <p>${safe}</p>
   <div style="margin-top: 1.5rem;">
     ${retryButton}
-    <a href="${returnLink}">Back to Dashboard</a>
+    <a href="${returnLink}">${returnLabel}</a>
   </div>
   <script>
     if (window.opener) {

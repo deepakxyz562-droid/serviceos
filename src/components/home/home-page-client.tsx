@@ -1,6 +1,6 @@
 'use client';
 import { isViewType } from '@/types/workflow';
-import { isGptFormWorkspace, isChatbotlyWorkspace, isBosWorkspace, productForHostname } from '../../../shared/product-context';
+import { isGptFormWorkspace, isChatbotlyWorkspace, isBosWorkspace, getAppProduct, productForHostname } from '../../../shared/product-context';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
@@ -409,7 +409,10 @@ export default function HomePageClient() {
           const sm = (data.tenant as any)?.signupMode as string | null | undefined;
           const isStandalone = !isPlatformAdmin(data.user) && urlView !== 'superadmin' && isGptFormWorkspace(data);
 
-          const isCompleted = isProductOnboardingCompleted(data, hostProduct);
+          const queryProduct = params?.get('product');
+          const isBgos = queryProduct === 'bgos' || hostProduct === 'bgos' || getAppProduct(data) === 'bgos' || (data.workspace as any)?.productType === 'bgos' || (data.tenant as any)?.productType === 'bgos' || (typeof tenantPlan === 'string' && tenantPlan.startsWith('bgos'));
+
+          const isCompleted = isProductOnboardingCompleted(data, isBgos ? 'bgos' : hostProduct);
           const needsOnboarding =
             data.tenant &&
             !isCompleted &&
@@ -418,7 +421,7 @@ export default function HomePageClient() {
             data.user.role !== 'employee';
 
           if (needsOnboarding) {
-            if (hostProduct === 'bgos') {
+            if (isBgos) {
               setOnboardingView('bgos');
             } else if (hostProduct === 'chatbotly') {
               setOnboardingView('standalone');
@@ -576,7 +579,7 @@ export default function HomePageClient() {
                 parsed.user.role !== 'customer' &&
                 parsed.user.role !== 'employee';
 
-              const isBgos = getAppProduct(parsed) === 'bgos' || parsed.workspace?.productType === 'bgos';
+              const isBgos = getAppProduct(parsed) === 'bgos' || parsed.workspace?.productType === 'bgos' || (parsed.tenant as any)?.productType === 'bgos' || (typeof tenantPlan === 'string' && tenantPlan.startsWith('bgos'));
 
               if (needsOnboarding) {
                 if (isBgos) {

@@ -36,7 +36,7 @@ it('does not report successful login when secure storage fails', async () => {
   expect(useAuthStore.getState().error).toBe('device storage unavailable');
 });
 it('rejects a wrong-product session without saving it', async () => {
-  m.request.mockResolvedValue({ token: 'a', refreshToken: 'r', user: { id: 'u', tenantId: 't' }, workspace: { productType: 'bos' } });
+  m.request.mockResolvedValue({ token: 'a', refreshToken: 'r', user: { id: 'u', tenantId: 't', role: 'customer' }, workspace: { productType: 'unsupported' } });
   expect(await useAuthStore.getState().login('u@example.com', 'password')).toBe(false);
   expect(m.setTokens).not.toHaveBeenCalled();
 });

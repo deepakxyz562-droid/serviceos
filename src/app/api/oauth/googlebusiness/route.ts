@@ -198,6 +198,11 @@ export async function GET(request: NextRequest) {
     queryView ||
     (returnProduct === 'bgos' || originHost.includes('bgos.') ? 'socialMedia' : 'verification');
 
+  const clientParam = searchParams.get('client');
+  const redirectUriParam = searchParams.get('redirectUri');
+  const isMobile = clientParam === 'mobile' || Boolean(redirectUriParam && redirectUriParam.startsWith('bgos://'));
+  const mobileReturnUri = redirectUriParam || (isMobile ? 'bgos://gbp-callback' : null);
+
   const state = Buffer.from(
     JSON.stringify({
       tenantId: targetTenantId, // the target tenant (user's own OR claim target)
@@ -208,6 +213,8 @@ export async function GET(request: NextRequest) {
       originHost,
       returnProduct,
       returnView,
+      isMobile: Boolean(isMobile),
+      mobileReturnUri: mobileReturnUri || null,
       // Claim context: if this OAuth flow was started from the claim modal,
       // include the claimTenantId + a flag so the callback knows the context.
       context: claimTenantId ? 'CLAIM_BUSINESS' : 'SETTINGS_VERIFICATION',

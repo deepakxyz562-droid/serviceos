@@ -66,7 +66,15 @@ export async function GET(request: NextRequest) {
       tenantSettings.activeGbpLocationId ||
       discoveredLocations[0]?.id || ''
     );
-    const activeLocation = discoveredLocations.find((loc) => loc.id === activeLocationId) || discoveredLocations[0] || null;
+    const baseLocation = discoveredLocations.find((loc) => loc.id === activeLocationId) || discoveredLocations[0] || null;
+    const activeLocation = baseLocation
+      ? {
+          ...baseLocation,
+          name: tenantSettings.locationName || baseLocation.name || tenant.name,
+          address: tenantSettings.locationAddress || baseLocation.address || tenant.address || '',
+          category: tenantSettings.locationCategory || baseLocation.category || tenant.industry || '',
+        }
+      : null;
 
     let offerings: string[] = [];
     if (tenant.brandProfile?.services) {
@@ -126,6 +134,10 @@ export async function POST(request: NextRequest) {
     const {
       step,
       activeLocationId,
+      locationName,
+      locationAddress,
+      locationCategory,
+      locationPinCode,
       offerings,
       aboutText,
       keywords,
@@ -212,6 +224,12 @@ export async function POST(request: NextRequest) {
       };
     }
 
+    // 6. Location customization from Step 2
+    if (locationName) tenantSettings.locationName = String(locationName).trim();
+    if (locationAddress) tenantSettings.locationAddress = String(locationAddress).trim();
+    if (locationCategory) tenantSettings.locationCategory = String(locationCategory).trim();
+    if (locationPinCode) tenantSettings.locationPinCode = String(locationPinCode).trim();
+
     const nextStep = typeof step === 'number' ? Math.min(Math.max(step, 1), 5) : tenant.onboardingStep;
     const shouldComplete = complete === true || step === 5;
 
@@ -219,6 +237,9 @@ export async function POST(request: NextRequest) {
       where: { id: user.tenantId },
       data: {
         settingsJson: JSON.stringify(tenantSettings),
+        ...(locationName ? { name: String(locationName).trim() } : {}),
+        ...(locationAddress ? { address: String(locationAddress).trim() } : {}),
+        ...(locationCategory ? { industry: String(locationCategory).trim() } : {}),
         onboardingStep: shouldComplete ? 5 : nextStep,
         ...(shouldComplete ? { onboardingCompleted: true } : {}),
       },

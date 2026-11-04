@@ -5,7 +5,13 @@ vi.mock('@/lib/auth', () => ({ getAppUrl: () => 'https://fieseros.com', issueAut
 vi.mock('@/lib/db', () => ({ db: { user: { findUnique: m.find, update: m.update } } }));
 vi.mock('@/lib/rate-limit', () => ({ applyRateLimit: () => null, authLimiter: {}, oauthLimiter: { reset: vi.fn() }, getClientIp: () => '127.0.0.1', rateLimitResponse: vi.fn() }));
 vi.mock('@/lib/quote-flow-google-auth', () => ({ verifyGoogleToken: m.verify }));
-vi.mock('@/lib/bgos-mobile-account', () => ({ resolveBgosMobileAccount: m.resolve }));
+vi.mock('@/lib/bgos-mobile-account', () => ({
+  resolveBgosMobileAccount: m.resolve,
+  ensureBgosTenantAndWorkspace: vi.fn().mockImplementation(async ({ user }) => ({
+    user: { ...user, tenantId: user.tenantId || 'tenant' },
+    workspace: { id: 'bgos', productType: 'bgos' },
+  })),
+}));
 vi.mock('@/lib/product-access', () => ({ activateProductWorkspace: vi.fn(), ProductAccessError: class extends Error {} }));
 import { GET as start } from '@/app/api/bgos/mobile-auth/google/route';
 import { GET as callback } from '@/app/api/bgos/mobile-auth/callback/route';

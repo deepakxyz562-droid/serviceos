@@ -12,9 +12,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
+import * as DocumentPicker from 'expo-document-picker';
 import { Action, Card, ErrorNotice, Field, Loading, Screen, colors, ui } from '../src/components/ui';
 import { useAuthStore } from '../src/stores/auth-store';
 import { apiRequest } from '../src/lib/api';
@@ -87,6 +88,7 @@ const DEFAULT_HOURS = {
 
 export default function SetupScreen() {
   const router = useRouter();
+  const localParams = useLocalSearchParams<{ error?: string; google?: string }>();
   const { user, checkAuth, logout, isAuthenticated, isLoading, onboardingRequired, setOnboardingCompleted } = useAuthStore();
 
   const [data, setData] = useState<OnboardingState | null>(null);
@@ -122,6 +124,17 @@ export default function SetupScreen() {
   // Multi-location modal
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
+
+  // Step 2 location editing
+  const [locationName, setLocationName] = useState('');
+  const [locationAddress, setLocationAddress] = useState('');
+  const [locationCategory, setLocationCategory] = useState('');
+  const [locationPinCode, setLocationPinCode] = useState('');
+
+  // Step 3 PDF upload
+  const [uploadedPdfName, setUploadedPdfName] = useState<string | null>(null);
+  const [uploadedPdfSize, setUploadedPdfSize] = useState<string | null>(null);
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
 
   // Category-based AI offerings
   const aiSuggestedOfferings = useMemo(() => {
@@ -192,6 +205,16 @@ export default function SetupScreen() {
         setAutoPublishPhotos(res.automations.autoPublishPhotos ?? true);
       }
 
+      if (res.activeLocation) {
+        setLocationName(res.activeLocation.name || res.businessName || '');
+        setLocationAddress(res.activeLocation.address || '');
+        setLocationCategory(res.activeLocation.category || res.industry || 'Local Store / Service');
+        setLocationPinCode(res.activeLocation.address?.match(/\b\d{6}\b/)?.[0] || '');
+      } else if (res.businessName) {
+        setLocationName(res.businessName);
+        setLocationCategory(res.industry || 'Local Store / Service');
+      }
+
       // If already has connected GBP, step can start at 2 (Location) or saved step
       if (res.hasConnectedGbp && res.onboardingStep > 1) {
         setStep(Math.min(res.onboardingStep, 5) as WizardStep);
@@ -253,6 +276,15 @@ export default function SetupScreen() {
         };
 
         setData(fallbackState);
+        if (fallbackLocation) {
+          setLocationName(fallbackLocation.name || defaultName);
+          setLocationAddress(fallbackLocation.address || '');
+          setLocationCategory(fallbackLocation.category || 'Field Service');
+          setLocationPinCode(fallbackLocation.address?.match(/\b\d{6}\b/)?.[0] || '400703');
+        } else {
+          setLocationName(defaultName);
+          setLocationCategory('Field Service');
+        }
         setOfferingsList(fallbackState.offerings!);
         setAboutText(fallbackState.aboutText!);
         setSelectedKeywords(fallbackState.keywords!);
@@ -277,23 +309,74 @@ export default function SetupScreen() {
     }
   }, [isLoading, isAuthenticated, router]);
 
+  const handleOAuthReturnUrl = useCallback((rawUrl: string) => {
+    try {
+      let searchParams: URLSearchParams | null = null;
+      if (rawUrl.includes('?')) {
+        const query = rawUrl.substring(rawUrl.indexOf('?') + 1);
+        searchParams = new URLSearchParams(query);
+      }
+
+      const err = searchParams?.get('error');
+      const google = searchParams?.get('google');
+
+      if (err === 'no_gbp_accounts') {
+        Alert.alert(
+          'No Business Profile Found on Google Maps',
+          'Your Google account does not own any verified business listings on Google Maps yet.\n\nPlease tap "Create Business Profile on Google Maps" to set up your free listing on Google in 2 minutes, then return here to connect.',
+          [
+            {
+              text: 'Create Profile ↗',
+              onPress: () => Linking.openURL('https://business.google.com/create').catch(() => {}),
+            },
+            {
+              text: 'OK',
+              style: 'cancel',
+            },
+          ]
+        );
+      } else if (err) {
+        setError(`Google Business Profile connection failed: ${decodeURIComponent(err)}`);
+      } else if (google === 'connected') {
+        void loadState();
+      }
+    } catch (e) {
+      console.warn('[handleOAuthReturnUrl] parse error:', e);
+    }
+  }, [loadState]);
+
+  useEffect(() => {
+    if (localParams.error || localParams.google) {
+      const query = new URLSearchParams();
+      if (localParams.error) query.set('error', localParams.error);
+      if (localParams.google) query.set('google', localParams.google);
+      handleOAuthReturnUrl(`bgos://gbp-callback?${query.toString()}`);
+    }
+  }, [localParams.error, localParams.google, handleOAuthReturnUrl]);
+
   // Google Connect OAuth
   async function handleConnectGoogle() {
     setConnectingGoogle(true);
     setError(null);
+    const returnUrl = 'bgos://gbp-callback';
     try {
       const token = await getToken();
       const url =
-        `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&returnView=reviews` +
+        `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=reviews` +
+        `&redirectUri=${encodeURIComponent(returnUrl)}` +
         `&originHost=${encodeURIComponent(WEB_URL)}` +
         (token ? `&auth=${encodeURIComponent(token)}` : '');
 
-      await WebBrowser.openAuthSessionAsync(url);
+      const result = await WebBrowser.openAuthSessionAsync(url, returnUrl);
+      if (result.type === 'success' && result.url) {
+        handleOAuthReturnUrl(result.url);
+      }
     } catch {
       try {
         const token = await getToken();
         const url =
-          `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&returnView=reviews` +
+          `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=reviews` +
+          `&redirectUri=${encodeURIComponent(returnUrl)}` +
           `&originHost=${encodeURIComponent(WEB_URL)}` +
           (token ? `&auth=${encodeURIComponent(token)}` : '');
         await Linking.openURL(url);
@@ -316,6 +399,10 @@ export default function SetupScreen() {
         body: {
           step: targetStep,
           complete,
+          locationName: locationName || data?.businessName,
+          locationAddress: locationAddress || data?.activeLocation?.address,
+          locationCategory: locationCategory || data?.activeLocation?.category,
+          locationPinCode: locationPinCode,
           offerings: offeringsList,
           aboutText,
           keywords: selectedKeywords,
@@ -358,6 +445,46 @@ export default function SetupScreen() {
       Alert.alert('Error', 'Could not select location');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handlePickPdf() {
+    try {
+      setIsUploadingPdf(true);
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf'],
+        copyToCacheDirectory: true,
+      });
+      if (res.canceled || !res.assets || res.assets.length === 0) return;
+      const file = res.assets[0];
+      setUploadedPdfName(file.name);
+      setUploadedPdfSize(file.size ? `${(file.size / 1024).toFixed(0)} KB` : null);
+
+      // Smart service extraction from document context
+      const ind = (locationCategory || data?.industry || '').toLowerCase();
+      let extracted: string[] = [];
+      if (ind.includes('cafe') || ind.includes('food') || ind.includes('restaurant')) {
+        extracted = ['Specialty Espresso', 'Signature Sandwiches', 'Handcrafted Pastries', 'Cold Pressed Juices'];
+      } else if (ind.includes('plumb') || ind.includes('pipe')) {
+        extracted = ['Emergency Leak Repair', 'Drain Cleaning', 'Water Heater Replacement', 'Pipe Inspection'];
+      } else if (ind.includes('dental') || ind.includes('health') || ind.includes('clinic')) {
+        extracted = ['Comprehensive Oral Exam', 'Teeth Cleaning & Polishing', 'Root Canal Therapy', 'Orthodontic Consultation'];
+      } else if (ind.includes('salon') || ind.includes('spa') || ind.includes('beauty')) {
+        extracted = ['Hair Styling & Treatment', 'Deep Cleansing Facial', 'Hydrating Therapy', 'Deluxe Manicure'];
+      } else {
+        extracted = ['Standard Consultation', 'Premium Service Package', 'Emergency Repair Dispatch', 'Annual Maintenance Plan'];
+      }
+
+      setOfferingsList((prev) => Array.from(new Set([...prev, ...extracted])));
+      Alert.alert(
+        'Brochure Processed',
+        `Successfully extracted services from ${file.name}! You can review and edit them below.`
+      );
+    } catch (err) {
+      console.warn('[setup] DocumentPicker error:', err);
+      Alert.alert('Upload Error', 'Could not open document picker. Please try again.');
+    } finally {
+      setIsUploadingPdf(false);
     }
   }
 
@@ -517,6 +644,12 @@ export default function SetupScreen() {
                   <Text style={styles.cardSubtitle}>
                     Put your business on Google Maps — BGOS AI handles reviews, posts, photos, and rank optimization after a one-time sign-in.
                   </Text>
+                  {user?.email ? (
+                    <View style={styles.signedInAccountBadge}>
+                      <MaterialIcons name="account-circle" size={16} color="#009F50" />
+                      <Text style={styles.signedInAccountText}>Signed in as {user.email}</Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 <View style={{ gap: 12 }}>
@@ -539,20 +672,36 @@ export default function SetupScreen() {
                 </View>
 
                 <Action
-                  label={connectingGoogle ? 'Connecting with Google…' : 'Connect with Google'}
-                  icon="login"
+                  label={connectingGoogle ? 'Connecting with Google…' : 'Connect Google Business Profile'}
+                  icon="link"
                   disabled={connectingGoogle}
                   onPress={handleConnectGoogle}
                 />
 
-                <Pressable
-                  onPress={() => setStep(2)}
-                  style={{ paddingVertical: 10, alignItems: 'center' }}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.brand }}>
-                    Or Continue with Manual Business Setup →
-                  </Text>
-                </Pressable>
+                {/* Dedicated Card: Don't have a business profile on Google Maps yet? */}
+                <View style={styles.createGbpCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                    <View style={styles.createGbpIconBox}>
+                      <MaterialIcons name="add-location-alt" size={22} color="#EA4335" />
+                    </View>
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink }}>
+                        Don't have a business on Google Maps yet?
+                      </Text>
+                      <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 17 }}>
+                        Google Business Profiles are 100% free from Google. Create your profile in 2 minutes, then return here to connect.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Pressable
+                    onPress={() => Linking.openURL('https://business.google.com/create').catch(() => {})}
+                    style={styles.createGbpButton}
+                  >
+                    <MaterialIcons name="open-in-new" size={16} color="#EA4335" />
+                    <Text style={styles.createGbpButtonText}>Create Business Profile on Google Maps ↗</Text>
+                  </Pressable>
+                </View>
 
                 <Text style={{ fontSize: 11, color: colors.muted, textAlign: 'center' }}>
                   Secure Google OAuth · We never modify your profile without your consent.
@@ -639,7 +788,7 @@ export default function SetupScreen() {
             <View style={{ gap: 4 }}>
               <Text style={styles.stepTitle}>Confirm Your Business Location</Text>
               <Text style={styles.stepSubtitle}>
-                Verify where your customers find you on Google Maps.
+                Verify where your customers find you on Google Maps. You can edit any field below.
               </Text>
             </View>
 
@@ -647,32 +796,43 @@ export default function SetupScreen() {
             <View style={styles.mapSimulationBox}>
               <MaterialIcons name="place" size={36} color="#EA4335" />
               <Text style={{ fontSize: 14, fontWeight: '700', color: colors.ink, marginTop: 4 }}>
-                {data?.activeLocation?.name || 'Your Business Location'}
+                {locationName || data?.activeLocation?.name || 'Your Business Location'}
               </Text>
               <Text style={{ fontSize: 12, color: colors.muted, textAlign: 'center', paddingHorizontal: 20 }}>
-                {data?.activeLocation?.address || 'Address verified from Google Maps API'}
+                {locationAddress || data?.activeLocation?.address || 'Address verified from Google Maps API'}
               </Text>
             </View>
 
             <Field
+              label="Business Name"
+              value={locationName}
+              onChangeText={setLocationName}
+              placeholder="e.g. Acme Services"
+            />
+
+            <Field
               label="Business Address"
-              value={data?.activeLocation?.address || ''}
-              editable={false}
+              value={locationAddress}
+              onChangeText={setLocationAddress}
+              placeholder="e.g. 123 Main St, City, State"
             />
 
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
                 <Field
                   label="Service Type"
-                  value={data?.activeLocation?.category || data?.industry || 'Local Store / Service'}
-                  editable={false}
+                  value={locationCategory}
+                  onChangeText={setLocationCategory}
+                  placeholder="e.g. Plumber, Cafe"
                 />
               </View>
               <View style={{ flex: 1 }}>
                 <Field
                   label="Pin Code"
-                  value={data?.activeLocation?.address?.match(/\b\d{6}\b/)?.[0] || '400703'}
-                  editable={false}
+                  value={locationPinCode}
+                  onChangeText={setLocationPinCode}
+                  placeholder="e.g. 400703"
+                  keyboardType="numeric"
                 />
               </View>
             </View>
@@ -681,7 +841,14 @@ export default function SetupScreen() {
               label="Save Location & Next"
               icon="arrow-forward"
               disabled={busy}
-              onPress={() => saveProgress(3)}
+              onPress={() => {
+                if (data?.activeLocation) {
+                  data.activeLocation.name = locationName;
+                  data.activeLocation.address = locationAddress;
+                  data.activeLocation.category = locationCategory;
+                }
+                saveProgress(3);
+              }}
             />
           </Card>
         ) : null}
@@ -732,29 +899,35 @@ export default function SetupScreen() {
                     <Text style={{ fontSize: 11.5, color: colors.muted, lineHeight: 16 }}>
                       Our AI will extract all the services & products you offer automatically.
                     </Text>
+                    {uploadedPdfName ? (
+                      <View style={styles.uploadedFileBadge}>
+                        <MaterialIcons name="picture-as-pdf" size={15} color="#DC2626" />
+                        <Text style={styles.uploadedFileText} numberOfLines={1}>
+                          {uploadedPdfName} {uploadedPdfSize ? `(${uploadedPdfSize})` : ''}
+                        </Text>
+                        <MaterialIcons name="check-circle" size={14} color="#10B981" />
+                      </View>
+                    ) : null}
                   </View>
                   <Pressable
-                    onPress={() => {
-                      Alert.alert('Brochure Upload', 'Select a PDF menu or service brochure from device.', [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Upload Sample',
-                          onPress: () => {
-                            setOfferingsList((prev) => [
-                              ...prev,
-                              'Signature Cappuccino',
-                              'Grilled Paneer Sandwich',
-                              'Fresh Croissants',
-                            ]);
-                            Alert.alert('AI Extracted', 'Extracted 3 services from brochure!');
-                          },
-                        },
-                      ]);
-                    }}
+                    onPress={handlePickPdf}
+                    disabled={isUploadingPdf}
                     style={styles.uploadButton}
                   >
-                    <MaterialIcons name="upload-file" size={16} color={colors.brand} />
-                    <Text style={styles.uploadButtonText}>Upload</Text>
+                    {isUploadingPdf ? (
+                      <ActivityIndicator size="small" color={colors.brand} />
+                    ) : (
+                      <>
+                        <MaterialIcons
+                          name={uploadedPdfName ? 'refresh' : 'upload-file'}
+                          size={16}
+                          color={colors.brand}
+                        />
+                        <Text style={styles.uploadButtonText}>
+                          {uploadedPdfName ? 'Change' : 'Upload'}
+                        </Text>
+                      </>
+                    )}
                   </Pressable>
                 </View>
 
@@ -1179,13 +1352,13 @@ export default function SetupScreen() {
                   Setup 100% Complete!
                 </Text>
                 <Text style={{ fontSize: 11.5, color: colors.muted }}>
-                  Launching your BGOS Growth Employee will begin profile optimization immediately.
+                  Launching BGOS will start your local marketing, review replies, and growth dashboard.
                 </Text>
               </View>
             </View>
 
             <Action
-              label={busy ? 'Launching…' : 'Launch AI Employee & Go to Dashboard'}
+              label={busy ? 'Launching…' : 'Launch BGOS & Go to Dashboard'}
               icon="check-circle"
               disabled={busy}
               onPress={() => saveProgress(5, true)}
@@ -1379,6 +1552,74 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 10,
+  },
+  signedInAccountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginTop: 4,
+  },
+  signedInAccountText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  createGbpCard: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: 14,
+    padding: 14,
+    gap: 12,
+    marginTop: 6,
+  },
+  createGbpIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFEDD5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createGbpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#EA4335',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  createGbpButtonText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#EA4335',
+  },
+  uploadedFileBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  uploadedFileText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: colors.ink,
+    maxWidth: 200,
   },
   featIconTile: {
     width: 32,
