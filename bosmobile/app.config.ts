@@ -9,6 +9,7 @@ export default ({ config }: ConfigContext): any => ({
   name: APP_NAME,
   description: 'BOS — Business Operating System. One system to run the entire business: Point of Sale, inventory, orders, khata, and GST invoicing.',
   slug: 'bos',
+  owner: 'rishi076',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -54,5 +55,11 @@ export default ({ config }: ConfigContext): any => ({
   ],
   experiments: {
     typedRoutes: true,
+  },
+  extra: {
+    ...config.extra,
+    eas: {
+      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID || '3eb094f9-4b96-4b53-861c-8de4612633ce',
+    },
   },
 });
