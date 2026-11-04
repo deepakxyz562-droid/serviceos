@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Pressable, Text, TextInput, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import {
@@ -143,6 +144,7 @@ export default function GrowthScreen() {
   const [busyPostId, setBusyPostId] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
+  const localParams = useLocalSearchParams<{ error?: string; google?: string }>();
 
   const isConnected = Boolean(gbpPlace.data?.isConnected);
   const isPendingApproval = Boolean(
@@ -259,24 +261,84 @@ export default function GrowthScreen() {
   const wizardActive = Boolean(wizard.state && !wizard.state.completedAt);
   const showWizard = !isConnected || wizardActive;
 
+  const handleOAuthReturn = useCallback(
+    (rawUrl?: string | null) => {
+      if (!rawUrl) return;
+      try {
+        let searchParams: URLSearchParams | null = null;
+        if (rawUrl.includes('?')) {
+          const query = rawUrl.substring(rawUrl.indexOf('?') + 1);
+          searchParams = new URLSearchParams(query);
+        }
+        const err = searchParams?.get('error');
+        const google = searchParams?.get('google');
+        if (err === 'no_gbp_accounts') {
+          Alert.alert(
+            'No Business Profile Found on Google Maps',
+            'Your Google account does not own any verified business listings on Google Maps yet.\n\nPlease tap "Create Business Profile on Google Maps" to set up your free listing on Google in 2 minutes, then return here to connect.',
+            [
+              {
+                text: 'Create Profile ↗',
+                onPress: () => Linking.openURL('https://business.google.com/create').catch(() => {}),
+              },
+              {
+                text: 'OK',
+                style: 'cancel',
+              },
+            ],
+          );
+        } else if (err) {
+          setError(`Google Business Profile connection failed: ${decodeURIComponent(err)}`);
+        } else if (google === 'connected') {
+          void Promise.all([
+            gbpPlace.refresh(),
+            audit.refresh(),
+            analytics.refresh(),
+            gbpAccounts.refresh(),
+          ]).catch(() => {});
+        }
+      } catch (e) {
+        console.warn('[growth.handleOAuthReturn] parse error:', e);
+      }
+    },
+    [gbpPlace, audit, analytics, gbpAccounts],
+  );
+
+  useEffect(() => {
+    if (localParams.error || localParams.google) {
+      const query = new URLSearchParams();
+      if (localParams.error) query.set('error', localParams.error);
+      if (localParams.google) query.set('google', localParams.google);
+      handleOAuthReturn(`bgos://gbp-callback?${query.toString()}`);
+    }
+  }, [localParams.error, localParams.google, handleOAuthReturn]);
+
   // ─── Actions ─────────────────────────────────────────────────────────────
 
   async function openConnect() {
-    const token = await getToken();
-    // Same OAuth entry the web app uses (`/api/oauth/googlebusiness/connect`
-    // accepts `auth`/`token`, `product`, `returnView`, `originHost`).
-    const url =
-      `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&returnView=reviews` +
-      `&originHost=${encodeURIComponent(WEB_URL)}` +
-      (token ? `&auth=${encodeURIComponent(token)}` : '');
     setConnecting(true);
     setError(null);
+    const returnUrl = 'bgos://gbp-callback';
     try {
-      // In-app auth session (CustomTab / ASWebAuthenticationSession); the
-      // server redirects into the web portal, the user returns and we resync.
-      await WebBrowser.openAuthSessionAsync(url);
+      const token = await getToken();
+      const url =
+        `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=growth` +
+        `&redirectUri=${encodeURIComponent(returnUrl)}` +
+        `&originHost=${encodeURIComponent(WEB_URL)}` +
+        (token ? `&auth=${encodeURIComponent(token)}` : '');
+
+      const result = await WebBrowser.openAuthSessionAsync(url, returnUrl);
+      if (result.type === 'success' && result.url) {
+        handleOAuthReturn(result.url);
+      }
     } catch {
       try {
+        const token = await getToken();
+        const url =
+          `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=growth` +
+          `&redirectUri=${encodeURIComponent(returnUrl)}` +
+          `&originHost=${encodeURIComponent(WEB_URL)}` +
+          (token ? `&auth=${encodeURIComponent(token)}` : '');
         await Linking.openURL(url);
       } catch {
         setError('Could not open Google connect. Please connect from BGOS Web.');
@@ -284,10 +346,10 @@ export default function GrowthScreen() {
       }
     } finally {
       setConnecting(false);
+      await Promise.all([gbpPlace.refresh(), audit.refresh(), analytics.refresh(), gbpAccounts.refresh()]).catch(
+        () => {},
+      );
     }
-    await Promise.all([gbpPlace.refresh(), audit.refresh(), analytics.refresh(), gbpAccounts.refresh()]).catch(
-      () => {},
-    );
   }
 
   async function runSeoOptimizer() {

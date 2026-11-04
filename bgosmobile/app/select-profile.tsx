@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Screen, colors } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
+import { getToken } from '../src/lib/auth';
+import { WEB_URL } from '../src/lib/constants';
 
 interface GbpProfile {
   id: string;
@@ -39,6 +42,9 @@ export default function SelectProfileScreen() {
   const router = useRouter();
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
   const [switchingId, setSwitchingId] = useState<string | null>(null);
+  const localParams = useLocalSearchParams<{ error?: string; google?: string }>();
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const [statusNotice, setStatusNotice] = useState<string | null>(null);
 
   const profiles = discover.data?.profiles || [];
   const activeId = discover.data?.activeProfileId || profiles[0]?.id || '';
@@ -68,6 +74,88 @@ export default function SelectProfileScreen() {
       Alert.alert('Switch Failed', (err as Error).message || 'Could not switch profile.');
     } finally {
       setSwitchingId(null);
+    }
+  }
+
+  const handleOAuthReturn = useCallback(
+    async (rawUrl?: string | null) => {
+      if (!rawUrl) return;
+      try {
+        let searchParams: URLSearchParams | null = null;
+        if (rawUrl.includes('?')) {
+          const query = rawUrl.substring(rawUrl.indexOf('?') + 1);
+          searchParams = new URLSearchParams(query);
+        }
+        const err = searchParams?.get('error');
+        const google = searchParams?.get('google');
+        if (err === 'no_gbp_accounts') {
+          Alert.alert(
+            'No Business Profile Found on Google Maps',
+            'Your Google account does not own any verified business listings on Google Maps yet.\n\nPlease tap "Create Business Profile on Google Maps" to set up your free listing on Google in 2 minutes, then return here to connect.',
+            [
+              {
+                text: 'Create Profile ↗',
+                onPress: () => Linking.openURL('https://business.google.com/create').catch(() => {}),
+              },
+              {
+                text: 'OK',
+                style: 'cancel',
+              },
+            ],
+          );
+        } else if (err) {
+          Alert.alert('Connection Failed', `Google Business Profile connection failed: ${decodeURIComponent(err)}`);
+        } else if (google === 'connected') {
+          await discover.refresh();
+          setStatusNotice('✓ Google account connected! Business profiles updated.');
+          setTimeout(() => setStatusNotice(null), 4000);
+        }
+      } catch (e) {
+        console.warn('[select-profile.handleOAuthReturn] parse error:', e);
+      }
+    },
+    [discover],
+  );
+
+  useEffect(() => {
+    if (localParams.error || localParams.google) {
+      const query = new URLSearchParams();
+      if (localParams.error) query.set('error', localParams.error);
+      if (localParams.google) query.set('google', localParams.google);
+      void handleOAuthReturn(`bgos://select-profile?${query.toString()}`);
+    }
+  }, [localParams.error, localParams.google, handleOAuthReturn]);
+
+  async function handleConnectGoogle() {
+    setConnectingGoogle(true);
+    const returnUrl = 'bgos://select-profile';
+    try {
+      const token = await getToken();
+      const url =
+        `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=select-profile` +
+        `&redirectUri=${encodeURIComponent(returnUrl)}` +
+        `&originHost=${encodeURIComponent(WEB_URL)}` +
+        (token ? `&auth=${encodeURIComponent(token)}` : '');
+
+      const result = await WebBrowser.openAuthSessionAsync(url, returnUrl);
+      if (result.type === 'success' && result.url) {
+        await handleOAuthReturn(result.url);
+      }
+    } catch {
+      try {
+        const token = await getToken();
+        const url =
+          `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=select-profile` +
+          `&redirectUri=${encodeURIComponent(returnUrl)}` +
+          `&originHost=${encodeURIComponent(WEB_URL)}` +
+          (token ? `&auth=${encodeURIComponent(token)}` : '');
+        await Linking.openURL(url);
+      } catch {
+        Alert.alert('Error', 'Could not open Google connect. Please connect from BGOS Web.');
+      }
+    } finally {
+      setConnectingGoogle(false);
+      await discover.refresh();
     }
   }
 
@@ -113,98 +201,103 @@ export default function SelectProfileScreen() {
             overflow: 'hidden',
           }}
         >
-          {profiles.map((p, idx) => {
-            const isSelected = p.id === activeId;
-            const isSwitching = switchingId === p.id;
-            const colorScheme = AVATAR_COLORS[p.initial] || { bg: '#F1F5F9', text: '#0F172A' };
+          {profiles.length === 0 ? (
+            <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <MaterialIcons name="storefront" size={36} color="#94A3B8" />
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#1E293B' }}>
+                No Google Business Profiles connected yet
+              </Text>
+              <Text style={{ fontSize: 12.5, color: '#64748B', textAlign: 'center', lineHeight: 18 }}>
+                Connect your Google account below to discover all verified business locations on Google Maps.
+              </Text>
+            </View>
+          ) : (
+            profiles.map((p, idx) => {
+              const isSelected = p.id === activeId;
+              const isSwitching = switchingId === p.id;
+              const colorScheme = AVATAR_COLORS[p.initial] || { bg: '#F1F5F9', text: '#0F172A' };
 
-            return (
-              <Pressable
-                key={p.id}
-                accessibilityRole="button"
-                onPress={() => handleSelectProfile(p)}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                  gap: 14,
-                  backgroundColor: pressed ? '#F8FAFC' : isSelected ? '#F0FDF4' : '#FFFFFF',
-                  borderBottomWidth: idx < profiles.length - 1 ? 1 : 0,
-                  borderBottomColor: '#F1F5F9',
-                })}
-              >
-                {/* Avatar */}
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    backgroundColor: colorScheme.bg,
+              return (
+                <Pressable
+                  key={p.id}
+                  accessibilityRole="button"
+                  onPress={() => handleSelectProfile(p)}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    gap: 14,
+                    backgroundColor: pressed ? '#F8FAFC' : isSelected ? '#F0FDF4' : '#FFFFFF',
+                    borderBottomWidth: idx < profiles.length - 1 ? 1 : 0,
+                    borderBottomColor: '#F1F5F9',
+                  })}
                 >
-                  <Text style={{ fontSize: 18, fontWeight: '800', color: colorScheme.text }}>
-                    {p.initial}
-                  </Text>
-                </View>
-
-                {/* Profile info */}
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A' }}>
-                    {p.name}
-                  </Text>
-                  <Text style={{ fontSize: 12.5, color: '#64748B', marginTop: 2, fontWeight: '500' }}>
-                    {p.shortId}
-                  </Text>
-                </View>
-
-                {/* Indicator / Spinner / Chevron */}
-                {isSwitching ? (
-                  <ActivityIndicator size="small" color="#2563EB" />
-                ) : isSelected ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View
-                      style={{
-                        backgroundColor: '#DCFCE7',
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 10,
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#16A34A' }}>Active</Text>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
+                  {/* Avatar */}
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      backgroundColor: colorScheme.bg,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: colorScheme.text }}>
+                      {p.initial}
+                    </Text>
                   </View>
-                ) : (
-                  <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
-                )}
-              </Pressable>
-            );
-          })}
+
+                  {/* Profile info */}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A' }}>
+                      {p.name}
+                    </Text>
+                    <Text style={{ fontSize: 12.5, color: '#64748B', marginTop: 2, fontWeight: '500' }}>
+                      {p.shortId}
+                    </Text>
+                  </View>
+
+                  {/* Indicator / Spinner / Chevron */}
+                  {isSwitching ? (
+                    <ActivityIndicator size="small" color="#2563EB" />
+                  ) : isSelected ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View
+                        style={{
+                          backgroundColor: '#DCFCE7',
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 10,
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#16A34A' }}>Active</Text>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
+                    </View>
+                  ) : (
+                    <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
+                  )}
+                </Pressable>
+              );
+            })
+          )}
         </View>
 
-        {/* Connect with Google Button (Screenshot 6) */}
+        {/* Connect with Google Button */}
         <View style={{ gap: 8 }}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => {
-              Alert.alert(
-                'Add Google Account',
-                'Connecting an additional Google account will discover all Business Profiles linked to that email.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Connect', onPress: () => router.push('/(tabs)/growth') },
-                ]
-              );
-            }}
+            accessibilityLabel="Connect with Google"
+            disabled={connectingGoogle}
+            onPress={() => void handleConnectGoogle()}
             style={({ pressed }) => ({
               width: '100%',
               height: 50,
               borderRadius: 14,
               overflow: 'hidden',
-              opacity: pressed ? 0.9 : 1,
+              opacity: pressed || connectingGoogle ? 0.85 : 1,
             })}
           >
             <View
@@ -229,26 +322,59 @@ export default function SelectProfileScreen() {
                 gap: 10,
               }}
             >
-              <View
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 13,
-                  backgroundColor: '#FFFFFF',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: '900', color: '#2563EB' }}>G</Text>
-              </View>
-              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
-                Connect with Google
-              </Text>
+              {connectingGoogle ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>
+                    Connecting Google…
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <View
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 13,
+                      backgroundColor: '#FFFFFF',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: '900', color: '#2563EB' }}>G</Text>
+                  </View>
+                  <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+                    Connect with Google
+                  </Text>
+                </>
+              )}
             </View>
           </Pressable>
-          <Text style={{ fontSize: 12.5, color: '#64748B', textAlign: 'center' }}>
-            Use Google to add more emails
-          </Text>
+          {statusNotice ? (
+            <View
+              style={{
+                backgroundColor: '#DCFCE7',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#86EFAC',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+              }}
+            >
+              <MaterialIcons name="check-circle" size={16} color="#16A34A" />
+              <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#16A34A' }}>
+                {statusNotice}
+              </Text>
+            </View>
+          ) : (
+            <Text style={{ fontSize: 12.5, color: '#64748B', textAlign: 'center' }}>
+              Use Google to add more emails
+            </Text>
+          )}
         </View>
 
         {/* Security Reassurance Card (Screenshot 6) */}

@@ -158,9 +158,11 @@ export async function GET(request: NextRequest) {
     ? '&product=bgos'
     : '';
 
+  const rawView = state.returnView;
   const viewParam =
-    state.returnView ||
-    (originBase.includes('bgos.') ? 'socialMedia' : 'verification');
+    rawView === 'reviews'
+      ? (isMobile ? 'growth' : 'dashboard')
+      : rawView || (originBase.includes('bgos.') ? 'socialMedia' : 'verification');
 
   const backUrl = isMobile
     ? (mobileReturnUri || 'bgos://setup')
@@ -690,7 +692,11 @@ export async function GET(request: NextRequest) {
           catchBackUrl = mobUri || 'bgos://setup';
         } else if (parsed.originHost && isAllowedOriginHost(parsed.originHost)) {
           const origin = parsed.originHost.replace(/\/+$/, '');
-          const view = parsed.returnView || (origin.includes('bgos.') ? 'socialMedia' : 'verification');
+          const rawView = parsed.returnView;
+          const view =
+            rawView === 'reviews'
+              ? (isMob ? 'growth' : 'dashboard')
+              : rawView || (origin.includes('bgos.') ? 'socialMedia' : 'verification');
           const prod = parsed.returnProduct ? `&product=${encodeURIComponent(parsed.returnProduct)}` : '';
           catchBackUrl = `${origin}/?view=${view}${prod}`;
           catchRetryUrl = `${appUrl}/api/oauth/googlebusiness/connect?originHost=${encodeURIComponent(origin)}&returnView=${view}${prod}`;

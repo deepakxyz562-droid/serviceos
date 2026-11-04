@@ -369,7 +369,7 @@ export default function SetupScreen() {
     try {
       const token = await getToken();
       const url =
-        `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=reviews` +
+        `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=setup` +
         `&redirectUri=${encodeURIComponent(returnUrl)}` +
         `&originHost=${encodeURIComponent(WEB_URL)}` +
         (token ? `&auth=${encodeURIComponent(token)}` : '');
@@ -382,7 +382,7 @@ export default function SetupScreen() {
       try {
         const token = await getToken();
         const url =
-          `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=reviews` +
+          `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=setup` +
           `&redirectUri=${encodeURIComponent(returnUrl)}` +
           `&originHost=${encodeURIComponent(WEB_URL)}` +
           (token ? `&auth=${encodeURIComponent(token)}` : '');

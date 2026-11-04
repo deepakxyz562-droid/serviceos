@@ -260,3 +260,82 @@ it('renders error page with "Return to BGOS App" linking to bgos://setup for mob
   expect(html).toContain('href="bgos://gbp-callback"');
   expect(html).not.toContain('href="https://fieseros.com/?view=reviews"');
 });
+
+it('sanitizes returnView=reviews to growth when starting connect from mobile', async () => {
+  const req = new NextRequest(
+    'https://fieseros.com/api/oauth/googlebusiness?product=bgos&client=mobile&returnView=reviews&redirectUri=bgos%3A%2F%2Fgbp-callback',
+  );
+  const res = await startGbpConnect(req);
+  expect(res.status).toBe(307);
+
+  const location = new URL(res.headers.get('location')!);
+  const stateParam = location.searchParams.get('state');
+  expect(stateParam).toBeTruthy();
+
+  const state = JSON.parse(Buffer.from(stateParam!, 'base64url').toString());
+  expect(state.isMobile).toBe(true);
+  expect(state.returnView).toBe('growth');
+  expect(state.returnView).not.toBe('reviews');
+});
+
+it('sanitizes returnView=reviews on web BGOS fallback to dashboard instead of reviews', async () => {
+  const stateObj = {
+    tenantId: 'tenant-1',
+    userId: 'user-1',
+    csrf: 'test-csrf-123',
+    expires: Date.now() + 60000,
+    isMobile: false,
+    returnProduct: 'bgos',
+    returnView: 'reviews',
+    originHost: 'https://fieseros.com',
+  };
+  const stateParam = Buffer.from(JSON.stringify(stateObj)).toString('base64url');
+
+  const fetchMock = vi.fn().mockImplementation((url: string) => {
+    if (url.includes('oauth2.googleapis.com/token')) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: 'invalid_client',
+            error_description: 'Client secret invalid',
+          }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response('Not Found', { status: 404 }));
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const req = new NextRequest(
+    `https://fieseros.com/api/oauth/googlebusiness/callback?code=bad-code&state=${stateParam}`,
+    {
+      headers: {
+        Cookie: 'gbp_oauth_csrf=test-csrf-123',
+      },
+    },
+  );
+
+  const res = await gbpCallback(req);
+  const html = await res.text();
+  expect(html).toContain('Back to Dashboard');
+  expect(html).toContain('href="https://fieseros.com/?view=dashboard&product=bgos"');
+  expect(html).not.toContain('view=reviews');
+});
+
+it('preserves returnView=select-profile and redirectUri=bgos://select-profile for select-profile mobile screen', async () => {
+  const req = new NextRequest(
+    'https://fieseros.com/api/oauth/googlebusiness?product=bgos&client=mobile&returnView=select-profile&redirectUri=bgos%3A%2F%2Fselect-profile',
+  );
+  const res = await startGbpConnect(req);
+  expect(res.status).toBe(307);
+
+  const location = new URL(res.headers.get('location')!);
+  const stateParam = location.searchParams.get('state');
+  expect(stateParam).toBeTruthy();
+
+  const state = JSON.parse(Buffer.from(stateParam!, 'base64url').toString());
+  expect(state.isMobile).toBe(true);
+  expect(state.returnView).toBe('select-profile');
+  expect(state.mobileReturnUri).toBe('bgos://select-profile');
+});

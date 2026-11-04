@@ -193,15 +193,20 @@ export async function GET(request: NextRequest) {
     queryProduct ||
     (originHost.includes('bgos.') ? 'bgos' : originHost.includes('bos.') ? 'bos' : null);
 
-  const queryView = request.nextUrl.searchParams.get('returnView') || request.nextUrl.searchParams.get('view');
-  const returnView =
-    queryView ||
-    (returnProduct === 'bgos' || originHost.includes('bgos.') ? 'socialMedia' : 'verification');
-
   const clientParam = searchParams.get('client');
   const redirectUriParam = searchParams.get('redirectUri');
   const isMobile = clientParam === 'mobile' || Boolean(redirectUriParam && redirectUriParam.startsWith('bgos://'));
   const mobileReturnUri = redirectUriParam || (isMobile ? 'bgos://gbp-callback' : null);
+
+  const rawQueryView = request.nextUrl.searchParams.get('returnView') || request.nextUrl.searchParams.get('view');
+  // Prevent legacy or mistaken "reviews" redirect from stranding mobile or web users on the Reviews workstation
+  const queryView =
+    rawQueryView === 'reviews'
+      ? (isMobile ? 'growth' : 'dashboard')
+      : rawQueryView;
+  const returnView =
+    queryView ||
+    (returnProduct === 'bgos' || originHost.includes('bgos.') ? 'socialMedia' : 'verification');
 
   const state = Buffer.from(
     JSON.stringify({
