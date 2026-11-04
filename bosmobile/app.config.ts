@@ -18,7 +18,7 @@ export default ({ config }: ConfigContext): any => ({
   splash: {
     image: './assets/splash.png',
     resizeMode: 'contain',
-    backgroundColor: '#00b290',
+    backgroundColor: '#080C14',
   },
   ios: {
     supportsTablet: true,
