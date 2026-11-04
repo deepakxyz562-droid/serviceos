@@ -18,7 +18,7 @@ export default ({ config }: ConfigContext): any => ({
   splash: {
     image: './assets/splash.png',
     resizeMode: 'contain',
-    backgroundColor: '#080C14',
+    backgroundColor: '#00b290',
   },
   ios: {
     supportsTablet: true,
@@ -36,7 +36,7 @@ export default ({ config }: ConfigContext): any => ({
     package: 'com.fieseros.bos',
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#080C14',
+      backgroundColor: '#00b290',
     },
     permissions: [
       'android.permission.RECORD_AUDIO',
