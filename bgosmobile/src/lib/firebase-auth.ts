@@ -67,22 +67,16 @@ export async function sendFirebaseOtp(phoneNumber: string): Promise<SendOtpResul
 
     if (!response.ok || !data.sessionInfo) {
       const msg = data.error?.message || '';
+      console.warn('[Firebase Auth] sendVerificationCode notice:', msg);
 
-      if (msg.includes('BILLING_NOT_ENABLED')) {
+      if (msg.includes('BILLING_NOT_ENABLED') || msg.includes('MISSING_CLIENT_IDENTIFIER')) {
         return {
           success: false,
           error:
-            'Firebase carrier SMS requires the Blaze pay-as-you-go plan. If you just upgraded, Google takes 15–30 minutes to propagate billing. For instant testing, add your phone number under Firebase Console > Authentication > Phone numbers for testing, or use test number +91 99999 99999 (code: 123456).',
+            'Unable to send verification SMS right now. Please verify your mobile number or try again in a few moments.',
         };
       }
-      if (msg.includes('MISSING_CLIENT_IDENTIFIER')) {
-        return {
-          success: false,
-          error:
-            'Firebase requires phone anti-abuse verification for carrier SMS. For instant testing, add your phone number to Firebase Console (Authentication > Sign-in method > Phone > Phone numbers for testing), or use test number +91 99999 99999 (code: 123456).',
-        };
-      }
-      if (msg.includes('TOO_MANY_ATTEMPTS')) {
+      if (msg.includes('TOO_MANY_ATTEMPTS') || msg.includes('QUOTA_EXCEEDED')) {
         return {
           success: false,
           error: 'Too many OTP requests from this number. Please wait a few minutes before trying again.',
@@ -97,7 +91,7 @@ export async function sendFirebaseOtp(phoneNumber: string): Promise<SendOtpResul
 
       return {
         success: false,
-        error: msg || 'Unable to send OTP. Please try again or use Email sign-in.',
+        error: 'Unable to send verification code. Please check your number or sign in with Email / Google.',
       };
     }
 

@@ -237,7 +237,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
       if (!res.ok || !data.sessionInfo) {
         const msg = data.error?.message || '';
         if (msg.includes('BILLING_NOT_ENABLED') || msg.includes('MISSING_CLIENT_IDENTIFIER')) {
-          toast.error('Carrier SMS requires registered test numbers (e.g. +91 99999 99999 / code: 123456).');
+          toast.error('Unable to send verification SMS right now. Please check your phone number and try again.');
         } else {
           toast.error(msg || 'Failed to send OTP code.');
         }
@@ -549,11 +549,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                       >
                         {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending Code...</> : 'Send Verification Code'}
                       </Button>
-                      <div className="p-2.5 bg-emerald-50 rounded-md border border-emerald-100 text-center">
-                        <p className="text-xs text-emerald-800 font-medium">
-                          💡 Test login available: +91 99999 99999 (Code: 123456)
-                        </p>
-                      </div>
                     </motion.div>
                   )}
                 </>

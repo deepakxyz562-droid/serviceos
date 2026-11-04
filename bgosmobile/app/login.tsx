@@ -143,12 +143,38 @@ export default function LoginScreen() {
     }
   }
 
-  return (
-    <Screen title="Welcome to BGOS" subtitle="One platform for all your business growth.">
-      <View style={{ alignItems: 'center', paddingVertical: 18 }}>
-        <Brand large />
-      </View>
+  const loginHeader = (
+    <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 16 }}>
+      <Brand large />
+      <Text
+        accessibilityRole="header"
+        style={{
+          fontSize: 26,
+          fontWeight: '800',
+          color: colors.ink,
+          letterSpacing: -0.6,
+          textAlign: 'center',
+          marginTop: 14,
+        }}
+      >
+        Welcome to BGOS
+      </Text>
+      <Text
+        style={{
+          fontSize: 13.5,
+          lineHeight: 19,
+          color: colors.muted,
+          textAlign: 'center',
+          marginTop: 6,
+        }}
+      >
+        One platform for all your business growth.
+      </Text>
+    </View>
+  );
 
+  return (
+    <Screen customHeader={loginHeader}>
       <View style={[ui.row, { justifyContent: 'center', marginBottom: 12 }]}>
         <Chip label="Email & Password" selected={method === 'email'} onPress={() => setMethod('email')} />
         <Chip label="Mobile OTP" selected={method === 'phone'} onPress={() => setMethod('phone')} />
@@ -293,12 +319,6 @@ export default function LoginScreen() {
                   disabled={busy || phoneDigits.length !== selectedCountry.digits}
                   onPress={handleSendOtp}
                 />
-
-                <View style={{ marginTop: 8, padding: 10, backgroundColor: '#F0FDF4', borderRadius: 10, borderWidth: 1, borderColor: '#DCFCE7' }}>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#166534', textAlign: 'center' }}>
-                    💡 Test login available: +91 99999 99999 (Code: 123456)
-                  </Text>
-                </View>
               </>
             )}
           </>
