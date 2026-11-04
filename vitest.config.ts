@@ -69,6 +69,7 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
       'react-native': resolve(__dirname, 'tests/mocks/react-native.ts'),
       'expo-secure-store': resolve(__dirname, 'tests/mocks/expo-secure-store.ts'),
+      '@expo/vector-icons': resolve(__dirname, 'tests/mocks/expo-vector-icons.ts'),
     },
   },
 })

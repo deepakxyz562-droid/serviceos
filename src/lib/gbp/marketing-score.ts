@@ -59,12 +59,10 @@ export async function computeMarketingScore(tenantId: string, bypassCache = fals
 
   const since30d = new Date(now - 30 * 24 * 60 * 60 * 1000);
 
+  const { prepareGoogleAccount } = await import('@/lib/social/google-account-helper');
   const [audit, googleAccount] = await Promise.all([
     computeGbpAudit(tenantId),
-    db.socialAccount.findFirst({
-      where: { tenantId, platform: 'googlebusiness', isActive: true },
-      select: { id: true, accountId: true, accountName: true, metadata: true },
-    }),
+    prepareGoogleAccount(tenantId),
   ]);
 
   const reviewScope = await googleReviewScope(tenantId);

@@ -92,8 +92,38 @@ export async function GET(request: NextRequest) {
     // to prevent schema mismatch crashes when the column is absent in PostgREST.
 
     // Platform filter — search the publishTargets JSON for an entry with that platform.
-    // SQLite doesn't have JSON-path queries, so we use a `contains` on the raw JSON string.
-    if (platform && isValidPlatform(platform)) {
+    // If googlebusiness is requested, scope to the active Google Business Profile account
+    const profileIdParam = searchParams.get('profileId');
+    if (platform === 'googlebusiness') {
+      const { prepareGoogleAccount } = await import('@/lib/social/google-account-helper');
+      const activeAccount = await prepareGoogleAccount(
+        tenantId,
+        profileIdParam && profileIdParam !== 'all' ? profileIdParam : undefined,
+      );
+      if (activeAccount) {
+        const conditions: Array<Record<string, unknown>> = [
+          { publishTargets: { contains: `"socialAccountId":"${activeAccount.id}"` } },
+        ];
+        if (activeAccount.accountId) {
+          conditions.push({ publishTargets: { contains: `"socialAccountId":"${activeAccount.accountId}"` } });
+          conditions.push({ publishTargets: { contains: `"accountId":"${activeAccount.accountId}"` } });
+        }
+        let gbpCount = 1;
+        try {
+          gbpCount = await db.socialAccount.count({
+            where: { tenantId, platform: 'googlebusiness', isActive: true },
+          });
+        } catch {}
+        // If there's only 1 account connected in the workspace and no specific profile was requested,
+        // include generic googlebusiness target posts
+        if (gbpCount <= 1 && !profileIdParam) {
+          conditions.push({ publishTargets: { contains: '"platform":"googlebusiness"' } });
+        }
+        where.OR = conditions;
+      } else {
+        where.OR = [{ publishTargets: { contains: '"platform":"googlebusiness"' } }];
+      }
+    } else if (platform && isValidPlatform(platform)) {
       where.OR = [{ publishTargets: { contains: `"platform":"${platform}"` } }];
     }
 
@@ -261,11 +291,21 @@ export async function POST(request: NextRequest) {
       const requestedPlatforms = body.platforms;
       const ownedAccounts = await db.socialAccount.findMany({
         where: { tenantId, platform: { in: requestedPlatforms }, isActive: true },
-        select: { id: true, platform: true },
+        select: { id: true, platform: true, accountId: true },
       });
+      const { prepareGoogleAccount } = await import('@/lib/social/google-account-helper');
+      const activeGbp = await prepareGoogleAccount(tenantId);
+
       for (const p of requestedPlatforms) {
         if (isValidPlatform(p)) {
-          const match = ownedAccounts.find((a) => a.platform === p);
+          let match = ownedAccounts.find((a) => a.platform === p);
+          // Prioritize the active Google Business Profile location
+          if (p === 'googlebusiness' && activeGbp) {
+            const activeMatch = ownedAccounts.find(
+              (a) => a.id === activeGbp.id || (a.accountId && a.accountId === activeGbp.accountId),
+            );
+            if (activeMatch) match = activeMatch;
+          }
           if (match) {
             targets.push({ platform: p as SocialPlatform, socialAccountId: match.id });
           }

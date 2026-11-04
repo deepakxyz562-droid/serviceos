@@ -51,11 +51,16 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
     throw new Error('Tenant not found');
   }
 
-  const [googleAccount, reviewsCount, photosCount, servicesCount] = await Promise.all([
-    db.socialAccount.findFirst({
-      where: { tenantId, platform: 'googlebusiness', isActive: true },
-    }),
-    db.review.count({ where: { tenantId } }),
+  const { prepareGoogleAccount } = await import('@/lib/social/google-account-helper');
+  const { googleReviewScope } = await import('@/lib/social/google-review-scope');
+
+  const [googleAccount, reviewScope] = await Promise.all([
+    prepareGoogleAccount(tenantId),
+    googleReviewScope(tenantId),
+  ]);
+
+  const [reviewsCount, photosCount, servicesCount] = await Promise.all([
+    db.review.count({ where: { tenantId, ...reviewScope } }),
     db.socialPost.count({
       where: { tenantId, mediaUrls: { not: '[]' } },
     }),

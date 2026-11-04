@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Screen, colors } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { PhotosBoard } from '../../src/components/gbp/photos-grid';
@@ -29,6 +29,12 @@ export default function PhotosScreen() {
   const shortId = activeProfile?.shortId || (gbpPlace.data?.place?.locationId ? `#${gbpPlace.data.place.locationId.slice(-4)}` : '');
   const phone = discover.data?.phone || gbpPlace.data?.place?.phone || '';
   const version = discover.data?.version || 'v2.83';
+
+  useFocusEffect(
+    useCallback(() => {
+      void Promise.all([photosRes.refresh(), gbpPlace.refresh(), discover.refresh()]).catch(() => {});
+    }, [photosRes, gbpPlace, discover]),
+  );
 
   return (
     <View style={{ flex: 1 }}>

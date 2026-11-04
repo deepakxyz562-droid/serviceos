@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Pressable, Text, TextInput, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import {
@@ -49,7 +49,7 @@ type ScheduleChoice = 'now' | 'daily' | 'weekly';
 
 type ReviewsResponse = { reviews: Review[]; pagination?: { total: number } };
 type PostsResponse = { data: SocialPost[]; pagination?: { total: number } };
-type AccountsResponse = { data: { id: string; platform: string; accountName?: string }[] };
+type AccountsResponse = { data: { id: string; platform: string; accountName?: string; accountId?: string }[] };
 
 const POST_TYPES: { value: PostType; label: string }[] = [
   { value: 'whats_new', label: "What's New" },
@@ -206,10 +206,17 @@ export default function GrowthScreen() {
     [photosRes.data],
   );
 
-  const gbpAccountId = useMemo(
-    () => gbpAccounts.data?.data?.find((a) => a.platform === 'googlebusiness')?.id || null,
-    [gbpAccounts.data],
-  );
+  const activeLocationId = gbpPlace.data?.place?.locationId;
+  const gbpAccountId = useMemo(() => {
+    const list = gbpAccounts.data?.data || [];
+    if (activeLocationId) {
+      const match = list.find(
+        (a) => a.platform === 'googlebusiness' && (a.accountId === activeLocationId || a.id === activeLocationId),
+      );
+      if (match) return match.id;
+    }
+    return list.find((a) => a.platform === 'googlebusiness')?.id || null;
+  }, [gbpAccounts.data, activeLocationId]);
 
   const timelineCounts = useMemo(
     () => ({
@@ -538,7 +545,7 @@ export default function GrowthScreen() {
     }
   }
 
-  const refreshAll = async () => {
+  const refreshAll = useCallback(async () => {
     await Promise.all([
       workspace.refresh(),
       reviews.refresh(),
@@ -549,7 +556,22 @@ export default function GrowthScreen() {
       photosRes.refresh(),
       gbpAccounts.refresh(),
     ]).catch(() => {});
-  };
+  }, [
+    workspace,
+    reviews,
+    audit,
+    analytics,
+    gbpPlace,
+    postsRes,
+    photosRes,
+    gbpAccounts,
+  ]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshAll();
+    }, [refreshAll]),
+  );
 
   // ─── Render helpers ──────────────────────────────────────────────────────
 

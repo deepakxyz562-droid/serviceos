@@ -56,8 +56,29 @@ import { validateSocialPost } from '../../src/lib/social-validation';
 import { futureLocalTime } from '../../src/lib/dates';
 import { loadJson, saveJson } from '../../src/lib/device-storage';
 import { PostsBoard } from '../../src/components/gbp/posts-list';
+import { SocialCalendarView } from '../../src/components/gbp/social-calendar';
 import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
 import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
+
+const TIME_SLOTS = [
+  { label: '08:00 AM (Early Rush)', value: '08:00' },
+  { label: '09:00 AM (Standard Business)', value: '09:00' },
+  { label: '10:30 AM (Mid-Morning Peak)', value: '10:30' },
+  { label: '12:00 PM (Lunch Break)', value: '12:00' },
+  { label: '02:30 PM (Afternoon Focus)', value: '14:30' },
+  { label: '05:00 PM (Evening Commute)', value: '17:00' },
+  { label: '07:30 PM (Prime Browsing)', value: '19:30' },
+];
+
+const AUTOPILOT_THEMES = [
+  { day: 'Mon', title: 'Service Spotlight', icon: 'place', desc: 'Promote weekly availability & booking' },
+  { day: 'Tue', title: 'Pro Advice & Tip', icon: 'tips-and-updates', desc: 'Educational guide & problem prevention' },
+  { day: 'Wed', title: 'Midweek Offer', icon: 'local-offer', desc: 'Limited savings package for midweek bookings' },
+  { day: 'Thu', title: '5-Star Reviews', icon: 'star', desc: 'Highlight customer satisfaction & trust' },
+  { day: 'Fri', title: 'Weekend Priority', icon: 'flash-on', desc: 'Fast response for urgent weekend needs' },
+  { day: 'Sat', title: 'Behind the Scenes', icon: 'engineering', desc: 'Dedicated craftsmanship & team standards' },
+  { day: 'Sun', title: 'Community Connection', icon: 'favorite', desc: 'Friendly presence & easy scheduling' },
+];
 import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 import type { GbpPlaceResult } from '../../src/components/gbp/types';
 
@@ -614,7 +635,11 @@ function AutoBrandedPosterCard({
 
 export default function MarketingScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ generate?: string; mode?: string }>();
+  const params = useLocalSearchParams<{ generate?: string; mode?: string; view?: string; date?: string }>();
+  const [postSubView, setPostSubView] = useState<'list' | 'calendar'>(
+    params.view === 'calendar' ? 'calendar' : 'list'
+  );
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
   const pendingRequest = useRef<{ body: string; key: string } | null>(null);
   const saving = useRef(false);
 
@@ -889,7 +914,12 @@ export default function MarketingScreen() {
       setActiveMode('posts');
       router.setParams({ mode: '' });
     }
-  }, [params.generate, params.mode]);
+    if (params.view === 'calendar') {
+      setPostSubView('calendar');
+    } else if (params.view === 'list') {
+      setPostSubView('list');
+    }
+  }, [params.generate, params.mode, params.view]);
 
   // Social account resolution
   const availableAccounts = accounts.data?.data || [];
@@ -1955,46 +1985,68 @@ export default function MarketingScreen() {
           ══════════════════════════════════════════════════════════════════════ */}
       {activeMode === 'autopilot' && (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 90 }}>
-          {/* Hero Banner */}
-          <View
-            style={{
-              backgroundColor: '#0F172A',
-              borderRadius: 16,
-              padding: 16,
-              marginBottom: 16,
-              borderWidth: 1,
-              borderColor: '#1E293B',
-              gap: 8,
-            }}
-          >
+          {/* Hero Banner with Dynamic Progress */}
+          <View style={styles.apHeroCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 6,
-                  backgroundColor: '#064E3B',
+                  backgroundColor: apConfig.enabled ? '#DCFCE7' : '#FEF3C7',
                   paddingHorizontal: 10,
                   paddingVertical: 4,
                   borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: apConfig.enabled ? '#86EFAC' : '#FDE68A',
                 }}
               >
-                <MaterialIcons name="bolt" size={14} color="#34D399" />
-                <Text style={{ color: '#34D399', fontSize: 11, fontWeight: '700' }}>
-                  {apConfig.enabled ? 'Autopilot Active' : 'Autopilot Paused'}
+                <MaterialIcons
+                  name="bolt"
+                  size={14}
+                  color={apConfig.enabled ? '#15803D' : '#B45309'}
+                />
+                <Text
+                  style={{
+                    color: apConfig.enabled ? '#15803D' : '#B45309',
+                    fontSize: 11,
+                    fontWeight: '800',
+                  }}
+                >
+                  {apConfig.enabled ? 'Autopilot Active & Posting' : 'Autopilot Paused'}
                 </Text>
               </View>
-              <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '600' }}>
-                {apConfig.daysRemaining} days left
+              <Text style={{ color: '#64748B', fontSize: 11.5, fontWeight: '700' }}>
+                {apConfig.daysRemaining} days remaining
               </Text>
             </View>
 
-            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>
-              Daily Multi-Platform Autopilot
+            <Text style={{ color: '#0F172A', fontSize: 17, fontWeight: '800', letterSpacing: -0.3 }}>
+              Daily Localized Social Media Autopilot
             </Text>
-            <Text style={{ color: '#94A3B8', fontSize: 12, lineHeight: 18 }}>
-              Automatically create and publish daily localized updates with Flux-1 Schnell graphics to Google, Instagram, and Facebook.
+            <Text style={{ color: '#64748B', fontSize: 12, lineHeight: 18 }}>
+              Automated daily publishing for Google Business, Instagram, and Facebook. High-converting branded flyers and captions created specifically for {effectiveBusinessName}.
             </Text>
+
+            {/* Campaign Progress Bar */}
+            <View style={{ gap: 4, marginTop: 4 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>Campaign Progress</Text>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#009F50' }}>
+                  {apConfig.totalPostsCreated} posts published
+                </Text>
+              </View>
+              <View style={{ height: 6, borderRadius: 3, backgroundColor: '#E2E8F0', overflow: 'hidden' }}>
+                <View
+                  style={{
+                    height: '100%',
+                    width: `${Math.min(100, Math.max(6, (apConfig.totalPostsCreated / (apConfig.totalPostsCreated + apConfig.daysRemaining || 30)) * 100))}%`,
+                    backgroundColor: '#009F50',
+                    borderRadius: 3,
+                  }}
+                />
+              </View>
+            </View>
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
               <Pressable
@@ -2002,17 +2054,17 @@ export default function MarketingScreen() {
                 style={{
                   flex: 1,
                   backgroundColor: apConfig.enabled ? '#D97706' : '#009F50',
-                  paddingVertical: 10,
-                  borderRadius: 10,
+                  paddingVertical: 11,
+                  borderRadius: 12,
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexDirection: 'row',
                   gap: 6,
                 }}
               >
-                <MaterialIcons name={apConfig.enabled ? 'pause' : 'play-arrow'} size={16} color="#FFFFFF" />
-                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
-                  {apConfig.enabled ? 'Pause Autopilot' : 'Activate Daily Posting'}
+                <MaterialIcons name={apConfig.enabled ? 'pause' : 'play-arrow'} size={18} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
+                  {apConfig.enabled ? 'Pause Autopilot' : 'Activate Daily Autopilot'}
                 </Text>
               </Pressable>
 
@@ -2028,12 +2080,10 @@ export default function MarketingScreen() {
                 }}
                 disabled={apTriggering}
                 style={{
-                  backgroundColor: '#1E293B',
+                  backgroundColor: '#0F172A',
                   paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: '#334155',
+                  paddingVertical: 11,
+                  borderRadius: 12,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
@@ -2041,11 +2091,90 @@ export default function MarketingScreen() {
                 {apTriggering ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Post Today</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <MaterialIcons name="auto-awesome" size={14} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Post Today</Text>
+                  </View>
                 )}
               </Pressable>
             </View>
           </View>
+
+          {/* 7-Day Content Forecast Queue Preview */}
+          <Card style={{ marginBottom: 14, gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="auto-awesome" size={16} color="#009F50" />
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>7-Day Content Rotation</Text>
+              </View>
+              <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>Smart Theme Engine</Text>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+              {AUTOPILOT_THEMES.map((theme, tIdx) => (
+                <View
+                  key={`theme-${tIdx}`}
+                  style={{
+                    width: 135,
+                    padding: 10,
+                    borderRadius: 12,
+                    backgroundColor: '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    gap: 4,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#009F50', backgroundColor: '#DCFCE7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                      {theme.day.toUpperCase()}
+                    </Text>
+                    <MaterialIcons name={theme.icon as any} size={15} color="#475569" />
+                  </View>
+                  <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '800', color: '#0F172A', marginTop: 2 }}>
+                    {theme.title}
+                  </Text>
+                  <Text numberOfLines={2} style={{ fontSize: 10, color: '#64748B', lineHeight: 14 }}>
+                    {theme.desc}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </Card>
+
+          {/* Preferred Daily Posting Time (Interactive Trigger) */}
+          <Pressable
+            onPress={() => setTimePickerOpen(true)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#FFFFFF',
+              borderRadius: 14,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              marginBottom: 14,
+              shadowColor: '#000',
+              shadowOpacity: 0.03,
+              shadowRadius: 3,
+              elevation: 1,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="schedule" size={20} color="#2563EB" />
+              </View>
+              <View>
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>Preferred Posting Time</Text>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>Daily slot for auto-publishing</Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F0FDF4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: '#DCFCE7' }}>
+              <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#009F50' }}>{apConfig.postingTime}</Text>
+              <MaterialIcons name="edit" size={14} color="#009F50" />
+            </View>
+          </Pressable>
 
           {/* Duration Selector */}
           <Card style={{ marginBottom: 14, gap: 12 }}>
@@ -2217,64 +2346,216 @@ export default function MarketingScreen() {
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
               <Text style={{ fontSize: 12, color: '#64748B' }}>Preferred Daily Time</Text>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>{apConfig.postingTime} AM</Text>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
-              <Text style={{ fontSize: 12, color: '#64748B' }}>Image Provider</Text>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50' }}>Cloudflare Flux-1 Schnell</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50' }}>{apConfig.postingTime}</Text>
             </View>
           </Card>
         </ScrollView>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          MODE 2: POSTS & APPROVALS (All 6 status pills, Approve/Reject, etc.)
+          MODE 2: POSTS & CALENDAR (List View vs Interactive Calendar View)
           ══════════════════════════════════════════════════════════════════════ */}
       {activeMode === 'posts' && (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 90 }}>
           {/* Connected Social Accounts Header */}
           <StayActiveSocialMediaCard />
 
-          {/* Quick Header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 12 }}>
-            <View>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Posts & Approvals</Text>
-              <Text style={{ fontSize: 12, color: '#64748B' }}>Filter by live lifecycle status</Text>
-            </View>
+          {/* Segmented Switcher: Posts List vs Content Calendar */}
+          <View style={styles.postViewSwitcher}>
             <Pressable
-              onPress={() => setActiveMode('studio')}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 4,
-                backgroundColor: '#009F50',
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 20,
-              }}
+              onPress={() => setPostSubView('list')}
+              style={[styles.postViewBtn, postSubView === 'list' && styles.postViewBtnActive]}
             >
-              <MaterialIcons name="add" size={16} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>New Post</Text>
+              <MaterialIcons
+                name="view-list"
+                size={16}
+                color={postSubView === 'list' ? '#009F50' : '#64748B'}
+              />
+              <Text style={[styles.postViewBtnText, postSubView === 'list' && styles.postViewBtnTextActive]}>
+                Posts & Approvals
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setPostSubView('calendar')}
+              style={[styles.postViewBtn, postSubView === 'calendar' && styles.postViewBtnActive]}
+            >
+              <MaterialIcons
+                name="calendar-month"
+                size={16}
+                color={postSubView === 'calendar' ? '#009F50' : '#64748B'}
+              />
+              <Text style={[styles.postViewBtnText, postSubView === 'calendar' && styles.postViewBtnTextActive]}>
+                Content Calendar
+              </Text>
             </Pressable>
           </View>
 
-          {/* Shared 6-Pill Posts Board */}
-          <PostsBoard refreshKey={boardRefresh} />
+          {postSubView === 'list' ? (
+            <>
+              {/* Quick Header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 12 }}>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Posts & Approvals</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B' }}>Filter by live lifecycle status & platform</Text>
+                </View>
+                <Pressable
+                  onPress={() => setActiveMode('studio')}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    backgroundColor: '#009F50',
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 20,
+                  }}
+                >
+                  <MaterialIcons name="add" size={16} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>New Post</Text>
+                </Pressable>
+              </View>
+
+              {/* Shared Modern Posts Board */}
+              <PostsBoard
+                refreshKey={boardRefresh}
+                onNeedCompose={() => setActiveMode('studio')}
+              />
+            </>
+          ) : (
+            /* Interactive Dynamic Social Calendar */
+            <SocialCalendarView
+              refreshTrigger={boardRefresh}
+              onScheduleForDate={() => {
+                setActiveMode('studio');
+              }}
+            />
+          )}
         </ScrollView>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          MODE 1: STUDIO / CREATE (3-Step Wizard from Screenshots)
-          ══════════════════════════════════════════════════════════════════════ */}
-      <Modal visible={draftPickerOpen} animationType="slide" onRequestClose={()=>setDraftPickerOpen(false)}>
-        <View style={{flex:1,padding:24,paddingTop:50,gap:12}}>
-          <Pressable onPress={()=>setDraftPickerOpen(false)}><Text>Close drafts</Text></Pressable>
-          <Text style={{fontSize:24,fontWeight:'700'}}>Saved designs</Text>
-          <ScrollView>{designDrafts.map(draft=><Pressable key={draft.id} style={{paddingVertical:18,borderBottomWidth:1,borderColor:'#dbe4e1'}} onPress={()=>{
-            const open=()=>{try{const restored=validateDesign(JSON.parse(draft.designJson));generationEpoch.current++;setIsGeneratingImage(false);setBusy(false);historyTravel.current=true;setDesignPast([]);setDesignFuture([]);handleCustomDesignChange(restored);setCaption(draft.content);setEditingDesignId(draft.id);setDesignRevision(draft.updatedAt);savedDesignSnapshot.current=JSON.stringify({design:restored,caption:draft.content});setAutosaveFailed(false);setActiveTemplateId(null);setHasGenerated(true);setStudioStep(2);setDraftPickerOpen(false);}catch{setError('This draft could not be opened.');}};
-            if(savedDesignSnapshot.current!==designSnapshot)Alert.alert('Open saved design?','Unsaved changes in this canvas will be replaced.',[{text:'Keep editing',style:'cancel'},{text:'Open draft',onPress:open}]);else open();
-          }}><Text>{draft.content?.slice(0,80)||'Untitled design'}</Text><Text>{new Date(draft.updatedAt).toLocaleString()}</Text></Pressable>)}</ScrollView>
-          {moreDrafts&&<Pressable onPress={()=>void loadDesignDrafts(draftPage+1)}><Text>Load more</Text></Pressable>}
+      {/* ── Time Picker Modal ── */}
+      <Modal visible={timePickerOpen} animationType="slide" transparent onRequestClose={() => setTimePickerOpen(false)}>
+        <View style={styles.timeModalOverlay}>
+          <View style={styles.timeModalContent}>
+            <View style={styles.timeModalHeader}>
+              <Text style={styles.timeModalTitle}>Select Daily Posting Time</Text>
+              <Pressable onPress={() => setTimePickerOpen(false)} style={styles.modalCloseBtn}>
+                <MaterialIcons name="close" size={18} color="#0F172A" />
+              </Pressable>
+            </View>
+            <Text style={styles.timeModalSub}>Choose the time when your local audience is most active:</Text>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {TIME_SLOTS.map((slot) => {
+                const isSelected = apConfig.postingTime === slot.value;
+                return (
+                  <Pressable
+                    key={slot.value}
+                    onPress={() => {
+                      setTimePickerOpen(false);
+                      saveAutopilot({ postingTime: slot.value });
+                    }}
+                    style={[
+                      styles.timeSlotRow,
+                      isSelected && styles.timeSlotRowSelected,
+                    ]}
+                  >
+                    <Text style={[styles.timeSlotText, isSelected && styles.timeSlotTextSelected]}>
+                      {slot.label}
+                    </Text>
+                    {isSelected && <MaterialIcons name="check" size={18} color="#009F50" />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Redesigned Saved Drafts Picker Modal ── */}
+      <Modal visible={draftPickerOpen} animationType="slide" transparent onRequestClose={() => setDraftPickerOpen(false)}>
+        <View style={styles.draftModalOverlay}>
+          <View style={styles.draftModalContent}>
+            <View style={styles.draftModalHeader}>
+              <View>
+                <Text style={styles.draftModalTitle}>Saved Poster Drafts</Text>
+                <Text style={styles.draftModalSub}>{designDrafts.length} drafts saved on this device</Text>
+              </View>
+              <Pressable onPress={() => setDraftPickerOpen(false)} style={styles.modalCloseBtn}>
+                <MaterialIcons name="close" size={20} color="#0F172A" />
+              </Pressable>
+            </View>
+
+            {designDrafts.length === 0 ? (
+              <View style={styles.emptyDraftsWrap}>
+                <MaterialIcons name="folder-open" size={40} color="#CBD5E1" />
+                <Text style={styles.emptyDraftsTitle}>No saved drafts yet</Text>
+                <Text style={styles.emptyDraftsSub}>Designs you save in Studio will appear here for easy editing.</Text>
+              </View>
+            ) : (
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 10, paddingVertical: 10 }}>
+                {designDrafts.map((draft) => {
+                  const open = () => {
+                    try {
+                      const restored = validateDesign(JSON.parse(draft.designJson));
+                      generationEpoch.current++;
+                      setIsGeneratingImage(false);
+                      setBusy(false);
+                      historyTravel.current = true;
+                      setDesignPast([]);
+                      setDesignFuture([]);
+                      handleCustomDesignChange(restored);
+                      setCaption(draft.content);
+                      setEditingDesignId(draft.id);
+                      setDesignRevision(draft.updatedAt);
+                      savedDesignSnapshot.current = JSON.stringify({ design: restored, caption: draft.content });
+                      setAutosaveFailed(false);
+                      setActiveTemplateId(null);
+                      setHasGenerated(true);
+                      setStudioStep(2);
+                      setDraftPickerOpen(false);
+                    } catch {
+                      setError('This draft could not be opened.');
+                    }
+                  };
+
+                  return (
+                    <Pressable
+                      key={draft.id}
+                      onPress={() => {
+                        if (savedDesignSnapshot.current !== designSnapshot) {
+                          Alert.alert(
+                            'Open saved design?',
+                            'Unsaved changes in this canvas will be replaced.',
+                            [
+                              { text: 'Keep editing', style: 'cancel' },
+                              { text: 'Open draft', onPress: open },
+                            ]
+                          );
+                        } else {
+                          open();
+                        }
+                      }}
+                      style={styles.draftItemCard}
+                    >
+                      <View style={styles.draftIconBox}>
+                        <MaterialIcons name="description" size={20} color="#009F50" />
+                      </View>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text numberOfLines={1} style={styles.draftItemTitle}>
+                          {draft.content?.slice(0, 60) || 'Untitled Design'}
+                        </Text>
+                        <Text style={styles.draftItemDate}>
+                          Updated {new Date(draft.updatedAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
         </View>
       </Modal>
       <Modal visible={templatePickerOpen} animationType="slide" onRequestClose={() => setTemplatePickerOpen(false)}>
@@ -2994,32 +3275,8 @@ export default function MarketingScreen() {
                 )}
 
                 {/* Live Full-Bleed Canvas Editor */}
-                <View style={{ marginBottom: 10 }}>
+                <View style={{ marginBottom: 14 }}>
                   <PosterEditor doc={design} onChange={handleCustomDesignChange} />
-                </View>
-
-                {/* Contextual Bottom Action Toolbar (NRA / Canva style) */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', backgroundColor: '#FFFFFF', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 6, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 2, marginBottom: 16 }}>
-                  <Pressable onPress={() => setTemplatePickerOpen(true)} style={{ alignItems: 'center', gap: 3, flex: 1 }}>
-                    <MaterialIcons name="grid-view" size={20} color="#009F50" />
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>Templates</Text>
-                  </Pressable>
-                  <Pressable onPress={() => setEditSheet('text')} style={{ alignItems: 'center', gap: 3, flex: 1 }}>
-                    <MaterialIcons name="title" size={20} color="#334155" />
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Text</Text>
-                  </Pressable>
-                  <Pressable onPress={() => setEditSheet('photo')} style={{ alignItems: 'center', gap: 3, flex: 1 }}>
-                    <MaterialIcons name="image" size={20} color="#334155" />
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Photo & AI</Text>
-                  </Pressable>
-                  <Pressable onPress={() => setEditSheet('style')} style={{ alignItems: 'center', gap: 3, flex: 1 }}>
-                    <MaterialIcons name="palette" size={20} color="#334155" />
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Style</Text>
-                  </Pressable>
-                  <Pressable onPress={() => setEditSheet('brand')} style={{ alignItems: 'center', gap: 3, flex: 1 }}>
-                    <MaterialIcons name="storefront" size={20} color="#334155" />
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Brand</Text>
-                  </Pressable>
                 </View>
 
                 {/* Summary Row 1: Caption */}
@@ -4849,5 +5106,184 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 8,
     marginBottom: 4,
+  },
+
+  // Post view switcher
+  postViewSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 3,
+    marginVertical: 8,
+    gap: 4,
+  },
+  postViewBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 6,
+  },
+  postViewBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  postViewBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  postViewBtnTextActive: {
+    fontWeight: '800',
+    color: '#009F50',
+  },
+
+  // Autopilot hero card
+  apHeroCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+    gap: 10,
+  },
+
+  // Time picker modal
+  timeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  timeModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 36,
+    gap: 12,
+  },
+  timeModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  timeModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  timeModalSub: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  timeSlotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  timeSlotRowSelected: {
+    backgroundColor: '#F0FDF4',
+  },
+  timeSlotText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  timeSlotTextSelected: {
+    fontWeight: '800',
+    color: '#009F50',
+  },
+
+  // Drafts modal
+  draftModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  draftModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 34,
+    maxHeight: '80%',
+    gap: 12,
+  },
+  draftModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  draftModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  draftModalSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  emptyDraftsWrap: {
+    alignItems: 'center',
+    paddingVertical: 36,
+    gap: 8,
+  },
+  emptyDraftsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  emptyDraftsSub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    maxWidth: 240,
+  },
+  draftItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  draftIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  draftItemTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  draftItemDate: {
+    fontSize: 11,
+    color: '#64748B',
   },
 });
