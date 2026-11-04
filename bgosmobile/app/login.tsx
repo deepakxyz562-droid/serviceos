@@ -5,6 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuthStore } from '../src/stores/auth-store';
 import { isAppleAuthAvailable } from '../src/lib/apple-auth';
+import { sendFirebaseOtp, verifyFirebaseOtp, formatPhoneNumber } from '../src/lib/firebase-auth';
 import { WEB_URL } from '../src/lib/constants';
 import { Action, Brand, Card, Chip, ErrorNotice, Field, Screen, colors, ui } from '../src/components/ui';
 
@@ -13,14 +14,24 @@ export default function LoginScreen() {
   const [method, setMethod] = useState<'email' | 'phone'>('email');
   const [phone, setPhone] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [sessionInfo, setSessionInfo] = useState<string | null>(null);
   const [otp, setOtp] = useState('');
+  const [countdown, setCountdown] = useState(0);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
-  const { login, loginGoogle, loginApple, logout, checkAuth, error, isAuthenticated, isLoading, onboardingRequired } = useAuthStore();
+  const { login, loginPhone, loginGoogle, loginApple, logout, checkAuth, error, isAuthenticated, isLoading, onboardingRequired } = useAuthStore();
   const [localError, setLocalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
 
   useEffect(() => {
     let active = true;
@@ -63,24 +74,45 @@ export default function LoginScreen() {
     setBusy(true);
     setLocalError(null);
     try {
-      // Simulation / hook for OTP service
+      const res = await sendFirebaseOtp(phone);
+      if (!res.success || !res.sessionInfo) {
+        setLocalError(res.error || 'Failed to send verification code.');
+        return;
+      }
+      setSessionInfo(res.sessionInfo);
       setOtpSent(true);
+      setCountdown(30);
+    } catch (e) {
+      setLocalError(e instanceof Error ? e.message : 'Error sending verification code');
     } finally {
       setBusy(false);
     }
   }
 
   async function handleVerifyOtp() {
-    if (otp.trim().length < 4) {
-      setLocalError('Enter the 4-digit code sent to your number.');
+    if (!sessionInfo) {
+      setLocalError('Please request a verification code first.');
+      return;
+    }
+    const cleanCode = otp.trim().replace(/\D/g, '');
+    if (cleanCode.length < 4) {
+      setLocalError('Enter the 6-digit verification code.');
       return;
     }
     setBusy(true);
     setLocalError(null);
     try {
-      // BGOS workspace management requires authenticated workspace credentials
-      setLocalError('BGOS workspace access requires Email & Password or Google sign-in. Please use the Email tab.');
-      setMethod('email');
+      const res = await verifyFirebaseOtp(sessionInfo, cleanCode);
+      if (!res.success || !res.idToken) {
+        setLocalError(res.error || 'Verification failed. Please check the code.');
+        return;
+      }
+      const success = await loginPhone(res.idToken, res.phoneNumber || phone);
+      if (!success) {
+        // useAuthStore sets error
+      }
+    } catch (e) {
+      setLocalError(e instanceof Error ? e.message : 'Verification failed');
     } finally {
       setBusy(false);
     }
@@ -125,31 +157,85 @@ export default function LoginScreen() {
             <Field
               label="Mobile Number"
               value={phone}
-              onChangeText={setPhone}
+              onChangeText={(val) => {
+                setPhone(val);
+                if (otpSent) {
+                  setOtpSent(false);
+                  setSessionInfo(null);
+                  setOtp('');
+                }
+              }}
               keyboardType="phone-pad"
               placeholder="+91 98765 43210"
-              maxLength={15}
+              maxLength={16}
             />
 
             {otpSent ? (
               <>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={[ui.caption, { color: colors.muted }]}>
+                    Code sent to {phone}
+                  </Text>
+                  <Pressable
+                    hitSlop={8}
+                    disabled={busy}
+                    onPress={() => {
+                      setOtpSent(false);
+                      setSessionInfo(null);
+                      setOtp('');
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>
+                      Change number
+                    </Text>
+                  </Pressable>
+                </View>
+
                 <Field
-                  label="Enter OTP"
+                  label="Enter 6-digit Code"
                   value={otp}
                   onChangeText={setOtp}
                   keyboardType="number-pad"
-                  placeholder="4-digit code"
+                  placeholder="123456"
                   maxLength={6}
+                  onSubmitEditing={() => {
+                    if (otp.trim().length >= 4 && !busy) handleVerifyOtp();
+                  }}
                 />
-                <Action label={busy ? 'Verifying…' : 'Verify & Continue'} disabled={busy} onPress={handleVerifyOtp} />
-                <Action secondary label="Resend OTP" disabled={busy} onPress={handleSendOtp} />
+
+                <Action
+                  label={busy ? 'Verifying…' : 'Verify & Continue'}
+                  disabled={busy || otp.trim().length < 4}
+                  onPress={handleVerifyOtp}
+                />
+
+                <Action
+                  secondary
+                  label={countdown > 0 ? `Resend Code (${countdown}s)` : 'Resend Code'}
+                  disabled={busy || countdown > 0}
+                  onPress={handleSendOtp}
+                />
               </>
             ) : (
-              <Action
-                label={busy ? 'Sending OTP…' : 'Send OTP'}
-                disabled={busy || phone.replace(/\D/g, '').length < 10}
-                onPress={handleSendOtp}
-              />
+              <>
+                <View style={{ paddingVertical: 4, marginBottom: 8 }}>
+                  <Text style={[ui.caption, { color: colors.muted, lineHeight: 17 }]}>
+                    🔒 We send a secure 6-digit SMS verification code to log you into your BGOS workspace.
+                  </Text>
+                </View>
+
+                <Action
+                  label={busy ? 'Sending OTP…' : 'Send OTP'}
+                  disabled={busy || phone.replace(/\D/g, '').length < 10}
+                  onPress={handleSendOtp}
+                />
+
+                <View style={{ marginTop: 8, padding: 10, backgroundColor: '#F0FDF4', borderRadius: 10, borderWidth: 1, borderColor: '#DCFCE7' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#166534', textAlign: 'center' }}>
+                    💡 Test login available: +91 99999 99999 (Code: 123456)
+                  </Text>
+                </View>
+              </>
             )}
           </>
         ) : (

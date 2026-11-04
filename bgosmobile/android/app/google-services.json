@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "837260609972",
+    "firebase_url": "https://fir-rn-49534.firebaseio.com",
+    "project_id": "fir-rn-49534",
+    "storage_bucket": "fir-rn-49534.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:837260609972:android:dab580e6c099d3efedcae1",
+        "android_client_info": {
+          "package_name": "com.fieseros.bgos"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLMfL0psz7RPx_V9BC0q9nLSV5bj5V930"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -23,6 +23,7 @@ export interface SessionResponse { token: string; refreshToken: string; user: Us
 interface AuthState {
   onboardingRequired: boolean; user: User | null; isAuthenticated: boolean; isLoading: boolean; error: string | null;
   login: (email: string, password: string) => Promise<boolean>;
+  loginPhone: (idToken: string, phoneNumber?: string) => Promise<boolean>;
   loginGoogle: () => Promise<boolean>;
   loginApple: () => Promise<boolean>;
   logout: () => Promise<void>;
@@ -99,6 +100,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user, onboardingRequired, isAuthenticated: true, isLoading: false });
       return true;
     } catch (error) { set({ error: error instanceof Error ? error.message : 'Sign-in failed', isLoading: false }); return false; }
+  },
+  loginPhone: async (idToken, phoneNumber) => {
+    const revision = sessionRevision();
+    set({ error: null });
+    try {
+      const session = await apiRequest<SessionResponse>(API_PATHS.phoneLogin, {
+        method: 'POST',
+        body: { idToken, phoneNumber, product: 'bgos' },
+        skipAuth: true,
+      });
+      const user = await acceptSession(session, revision);
+      const onboardingRequired = await resolveOnboardingRequirement(session, user);
+      set({ user, onboardingRequired, isAuthenticated: true, isLoading: false });
+      return true;
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Mobile sign-in failed', isLoading: false });
+      return false;
+    }
   },
   loginGoogle: async () => {
     const revision = sessionRevision();

@@ -27,6 +27,7 @@ export default ({ config }: ConfigContext): any => ({
   },
   android: {
     package: 'com.fieseros.bgos',
+    googleServicesFile: './google-services.json',
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#009F50' },
     compileSdkVersion: 36,
     targetSdkVersion: 36,

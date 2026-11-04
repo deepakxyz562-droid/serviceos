@@ -42,6 +42,7 @@ export const BGOS_SUPPORT_EMAIL = 'support@fieseros.com';
 
 export const API_PATHS = {
   login: '/api/auth/login',
+  phoneLogin: '/api/bgos/mobile-auth/phone',
   currentUser: '/api/bgos/mobile-auth/session',
   // Omnichannel Live Inbox
   inboxSessions: '/api/omnichannel/conversations',
