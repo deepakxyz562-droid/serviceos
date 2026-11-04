@@ -50,7 +50,9 @@ interface OnboardingState {
     autoReplyReviews: boolean;
     autoGeneratePosts: boolean;
     autoPublishPhotos: boolean;
+    enableChatbot?: boolean;
   };
+  website?: string;
   businessName: string;
   industry: string;
 }
@@ -120,6 +122,7 @@ export default function SetupScreen() {
   const [autoReplyReviews, setAutoReplyReviews] = useState(true);
   const [autoGeneratePosts, setAutoGeneratePosts] = useState(true);
   const [autoPublishPhotos, setAutoPublishPhotos] = useState(true);
+  const [enableChatbot, setEnableChatbot] = useState(true);
 
   // Multi-location modal
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
@@ -130,6 +133,7 @@ export default function SetupScreen() {
   const [locationAddress, setLocationAddress] = useState('');
   const [locationCategory, setLocationCategory] = useState('');
   const [locationPinCode, setLocationPinCode] = useState('');
+  const [locationWebsite, setLocationWebsite] = useState('');
 
   // Step 3 PDF upload
   const [uploadedPdfName, setUploadedPdfName] = useState<string | null>(null);
@@ -203,6 +207,7 @@ export default function SetupScreen() {
         setAutoReplyReviews(res.automations.autoReplyReviews ?? true);
         setAutoGeneratePosts(res.automations.autoGeneratePosts ?? true);
         setAutoPublishPhotos(res.automations.autoPublishPhotos ?? true);
+        setEnableChatbot(res.automations.enableChatbot ?? true);
       }
 
       if (res.activeLocation) {
@@ -210,9 +215,11 @@ export default function SetupScreen() {
         setLocationAddress(res.activeLocation.address || '');
         setLocationCategory(res.activeLocation.category || res.industry || 'Local Store / Service');
         setLocationPinCode(res.activeLocation.address?.match(/\b\d{6}\b/)?.[0] || '');
+        setLocationWebsite(res.activeLocation.website || res.website || '');
       } else if (res.businessName) {
         setLocationName(res.businessName);
         setLocationCategory(res.industry || 'Local Store / Service');
+        if (res.website) setLocationWebsite(res.website);
       }
 
       // If already has connected GBP, step can start at 2 (Location) or saved step
@@ -403,6 +410,8 @@ export default function SetupScreen() {
           locationAddress: locationAddress || data?.activeLocation?.address,
           locationCategory: locationCategory || data?.activeLocation?.category,
           locationPinCode: locationPinCode,
+          locationWebsite: locationWebsite || data?.activeLocation?.website,
+          website: locationWebsite || data?.activeLocation?.website,
           offerings: offeringsList,
           aboutText,
           keywords: selectedKeywords,
@@ -411,6 +420,7 @@ export default function SetupScreen() {
             autoReplyReviews,
             autoGeneratePosts,
             autoPublishPhotos,
+            enableChatbot,
           },
         },
       }).catch((err) => {
@@ -837,6 +847,19 @@ export default function SetupScreen() {
               </View>
             </View>
 
+            <Field
+              label="Business Website (Optional)"
+              value={locationWebsite}
+              onChangeText={setLocationWebsite}
+              placeholder="e.g. https://yourbusiness.com"
+              keyboardType="url"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Text style={{ fontSize: 11.5, color: colors.muted, marginTop: -8, lineHeight: 16 }}>
+              If available, our AI will automatically scan your website to train your 24/7 chatbot with your services, pricing, and FAQs.
+            </Text>
+
             <Action
               label="Save Location & Next"
               icon="arrow-forward"
@@ -846,6 +869,7 @@ export default function SetupScreen() {
                   data.activeLocation.name = locationName;
                   data.activeLocation.address = locationAddress;
                   data.activeLocation.category = locationCategory;
+                  data.activeLocation.website = locationWebsite;
                 }
                 saveProgress(3);
               }}
@@ -890,6 +914,15 @@ export default function SetupScreen() {
 
             {aboutSubTab === 'offerings' ? (
               <View style={{ gap: 14 }}>
+                {locationWebsite ? (
+                  <View style={styles.websiteSyncBanner}>
+                    <MaterialIcons name="language" size={16} color={colors.brand} />
+                    <Text style={styles.websiteSyncBannerText}>
+                      Website Linked: <Text style={{ fontWeight: '800' }}>{locationWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '')}</Text> · AI will sync & index your services
+                    </Text>
+                  </View>
+                ) : null}
+
                 {/* Upload Brochure Card (from 3.Offerings.jpg) */}
                 <View style={styles.brochureUploadCard}>
                   <View style={{ flex: 1, gap: 4 }}>
@@ -1297,6 +1330,32 @@ export default function SetupScreen() {
             <View style={{ gap: 12 }}>
               <View style={styles.automationToggleRow}>
                 <View style={{ flex: 1, gap: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.ink }}>
+                      24/7 AI Chatbot & Lead Concierge
+                    </Text>
+                    <View style={styles.recommendedPill}>
+                      <Text style={styles.recommendedPillText}>RECOMMENDED</Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 12, color: colors.muted }}>
+                    Answers customer questions, captures leads, and takes booking requests 24/7.
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.brand, marginTop: 2, fontWeight: '600' }}>
+                    {locationWebsite
+                      ? '✓ Training from your website + Google Business profile'
+                      : '✓ Live on your free hosted booking link (no website needed) & website embed ready'}
+                  </Text>
+                </View>
+                <Switch
+                  value={enableChatbot}
+                  onValueChange={setEnableChatbot}
+                  trackColor={{ false: colors.line, true: colors.brand }}
+                />
+              </View>
+
+              <View style={styles.automationToggleRow}>
+                <View style={{ flex: 1, gap: 2 }}>
                   <Text style={{ fontSize: 14, fontWeight: '700', color: colors.ink }}>
                     Auto-Reply to Google Reviews
                   </Text>
@@ -1352,7 +1411,7 @@ export default function SetupScreen() {
                   Setup 100% Complete!
                 </Text>
                 <Text style={{ fontSize: 11.5, color: colors.muted }}>
-                  Launching BGOS will start your local marketing, review replies, and growth dashboard.
+                  Launching BGOS activates your local marketing, 24/7 AI chatbot, review replies, and growth dashboard.
                 </Text>
               </View>
             </View>
@@ -1911,5 +1970,33 @@ const styles = StyleSheet.create({
   locationOptionCardSelected: {
     borderColor: colors.brand,
     backgroundColor: colors.brandSoft,
+  },
+  websiteSyncBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  websiteSyncBannerText: {
+    fontSize: 12,
+    color: '#166534',
+    flex: 1,
+  },
+  recommendedPill: {
+    backgroundColor: '#DCFCE7',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  recommendedPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#15803D',
+    letterSpacing: 0.5,
   },
 });

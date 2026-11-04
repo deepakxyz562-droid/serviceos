@@ -127,6 +127,12 @@ export default function AgentsScreen() {
           <Action secondary label="View channel connections" onPress={() => router.push('/(tabs)/integrations')} />
 
           <Action
+            label="Live Chat & Booking Page"
+            icon="public"
+            onPress={() => router.push('/booking-page')}
+          />
+
+          <Action
             label="Monitor Active Chats in Inbox"
             icon="chat"
             onPress={() => router.push('/(tabs)/inbox')}

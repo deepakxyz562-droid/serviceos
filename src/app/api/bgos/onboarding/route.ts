@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { trainBgosChatbotKnowledge } from '@/lib/bgos-onboarding-knowledge';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,12 +68,20 @@ export async function GET(request: NextRequest) {
       discoveredLocations[0]?.id || ''
     );
     const baseLocation = discoveredLocations.find((loc) => loc.id === activeLocationId) || discoveredLocations[0] || null;
+    const effectiveWebsite =
+      tenantSettings.locationWebsite ||
+      tenantSettings.website ||
+      baseLocation?.website ||
+      (tenant as any).website ||
+      '';
+
     const activeLocation = baseLocation
       ? {
           ...baseLocation,
           name: tenantSettings.locationName || baseLocation.name || tenant.name,
           address: tenantSettings.locationAddress || baseLocation.address || tenant.address || '',
           category: tenantSettings.locationCategory || baseLocation.category || tenant.industry || '',
+          website: effectiveWebsite,
         }
       : null;
 
@@ -97,6 +106,7 @@ export async function GET(request: NextRequest) {
       autoReplyReviews: true,
       autoGeneratePosts: true,
       autoPublishPhotos: true,
+      enableChatbot: true,
     };
 
     const hasConnectedGbp = discoveredLocations.length > 0;
@@ -113,7 +123,14 @@ export async function GET(request: NextRequest) {
       aboutText,
       keywords,
       hours,
-      automations,
+      automations: {
+        autoReplyReviews: true,
+        autoGeneratePosts: true,
+        autoPublishPhotos: true,
+        enableChatbot: true,
+        ...automations,
+      },
+      website: effectiveWebsite,
       businessName: activeLocation?.name || tenant.brandProfile?.businessName || '',
       industry: activeLocation?.category || tenant.industry || 'Field Services',
     });
@@ -138,6 +155,8 @@ export async function POST(request: NextRequest) {
       locationAddress,
       locationCategory,
       locationPinCode,
+      locationWebsite,
+      website,
       offerings,
       aboutText,
       keywords,
@@ -229,6 +248,15 @@ export async function POST(request: NextRequest) {
     if (locationAddress) tenantSettings.locationAddress = String(locationAddress).trim();
     if (locationCategory) tenantSettings.locationCategory = String(locationCategory).trim();
     if (locationPinCode) tenantSettings.locationPinCode = String(locationPinCode).trim();
+    const effectiveWebsite = typeof locationWebsite === 'string'
+      ? locationWebsite.trim()
+      : typeof website === 'string'
+      ? website.trim()
+      : undefined;
+    if (effectiveWebsite !== undefined) {
+      tenantSettings.locationWebsite = effectiveWebsite;
+      tenantSettings.website = effectiveWebsite;
+    }
 
     const nextStep = typeof step === 'number' ? Math.min(Math.max(step, 1), 5) : tenant.onboardingStep;
     const shouldComplete = complete === true || step === 5;
@@ -240,9 +268,25 @@ export async function POST(request: NextRequest) {
         ...(locationName ? { name: String(locationName).trim() } : {}),
         ...(locationAddress ? { address: String(locationAddress).trim() } : {}),
         ...(locationCategory ? { industry: String(locationCategory).trim() } : {}),
+        ...(effectiveWebsite !== undefined ? { website: effectiveWebsite } : {}),
         onboardingStep: shouldComplete ? 5 : nextStep,
         ...(shouldComplete ? { onboardingCompleted: true } : {}),
       },
+    });
+
+    // 7. Background AI Chatbot Training (Dual-Brain: Profile, Services, Hours + Website Crawl if available)
+    void trainBgosChatbotKnowledge({
+      tenantId: user.tenantId,
+      userId: user.id,
+      businessName: locationName || tenantSettings.locationName || tenantSettings.activeGbpTitle || tenant.name || 'Business',
+      industry: locationCategory || tenantSettings.locationCategory || tenant.industry,
+      address: locationAddress || tenantSettings.locationAddress || tenant.address,
+      website: effectiveWebsite || tenantSettings.locationWebsite || tenantSettings.website,
+      offerings: Array.isArray(offerings) ? offerings : tenantSettings.offerings,
+      aboutText: aboutText || tenantSettings.aboutBusiness,
+      hours: hours || tenantSettings.businessHours,
+    }).catch((trainErr) => {
+      console.warn('[api/bgos/onboarding] trainBgosChatbotKnowledge background warning:', trainErr);
     });
 
     return NextResponse.json({

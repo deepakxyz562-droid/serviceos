@@ -57,7 +57,9 @@ interface OnboardingResponse {
     autoReplyReviews: boolean;
     autoGeneratePosts: boolean;
     autoPublishPhotos: boolean;
+    enableChatbot?: boolean;
   };
+  website?: string;
   businessName: string;
   industry: string;
 }
