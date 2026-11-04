@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "317472909457",
+    "firebase_url": "https://jobplatform-b4f50.firebaseio.com",
+    "project_id": "jobplatform-b4f50",
+    "storage_bucket": "jobplatform-b4f50.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:317472909457:android:00da50e83420cd7eee3730",
+        "android_client_info": {
+          "package_name": "com.fieseros.bos"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9qw5RIo0vq4PqWs2wj8ZiROP2SDzyhks"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

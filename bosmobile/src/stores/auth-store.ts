@@ -11,6 +11,11 @@ import {
 import { apiRequest } from '@/lib/api';
 import { API_PATHS, API_BASE_URL } from '@/lib/constants';
 import { clearPushToken } from '@/lib/notifications';
+import {
+  requestPhoneOtp,
+  verifyPhoneOtpCode,
+  exchangeFirebaseIdToken,
+} from '@/lib/firebase-auth';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
@@ -173,6 +178,9 @@ interface AuthState {
     country?: string,
   ) => Promise<'authenticated' | 'verification_required' | false>;
   loginWithGoogle: () => Promise<boolean>;
+  sendPhoneOtp: (phone: string) => Promise<{ success: boolean; message: string; devOtp?: string }>;
+  verifyPhoneOtp: (phone: string, otpCode: string) => Promise<boolean>;
+  loginWithFirebaseToken: (idToken: string) => Promise<boolean>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -426,6 +434,75 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({
         isLoading: false,
         error: err.message || 'Google sign-in could not be completed. Please try again.',
+      });
+      return false;
+    }
+  },
+
+  sendPhoneOtp: async (phone: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const res = await requestPhoneOtp(phone);
+      set({ isLoading: false, error: null });
+      return { success: true, message: res.message, devOtp: res.devOtp };
+    } catch (err: any) {
+      const msg = err.message || 'Failed to send verification code. Please check your number.';
+      set({ isLoading: false, error: msg });
+      return { success: false, message: msg };
+    }
+  },
+
+  verifyPhoneOtp: async (phone: string, otpCode: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const data = await verifyPhoneOtpCode(phone, otpCode);
+      if (data.token) {
+        await setTokens(data.token, data.refreshToken);
+        await setStoredUserData({ user: data.user, tenant: data.tenant });
+
+        set({
+          token: data.token,
+          user: data.user,
+          tenant: data.tenant,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        });
+        return true;
+      }
+      throw new Error('Invalid response from server');
+    } catch (err: any) {
+      set({
+        isLoading: false,
+        error: err.message || 'Invalid verification code. Please try again.',
+      });
+      return false;
+    }
+  },
+
+  loginWithFirebaseToken: async (idToken: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const data = await exchangeFirebaseIdToken(idToken);
+      if (data.token) {
+        await setTokens(data.token, data.refreshToken);
+        await setStoredUserData({ user: data.user, tenant: data.tenant });
+
+        set({
+          token: data.token,
+          user: data.user,
+          tenant: data.tenant,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        });
+        return true;
+      }
+      throw new Error('Failed to create session with Firebase token');
+    } catch (err: any) {
+      set({
+        isLoading: false,
+        error: err.message || 'Firebase phone authentication failed. Please try again.',
       });
       return false;
     }

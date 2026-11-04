@@ -14,6 +14,9 @@ export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://bos.fieseros
 
 export const API_PATHS = {
   login: '/api/auth/login',
+  firebaseSession: '/api/auth/firebase/session',
+  phoneSendOtp: '/api/auth/phone/send-otp',
+  phoneVerifyOtp: '/api/auth/phone/verify-otp',
   sessions: '/api/chat/sessions',
   sessionMessages: (id: string) => `/api/chat/sessions/${id}/messages`,
   claimSession: (id: string) => `/api/chat/sessions/${id}/claim`,
