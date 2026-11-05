@@ -97,8 +97,8 @@ const groups=Object.keys(BUSINESS_GROUPS) as (keyof typeof BUSINESS_GROUPS)[];
 const slug=(value:string)=>value.toLowerCase().replace(/[’']/g,'').replace(/[^a-z0-9]+/g,'-').replace(/-$/,'');
 const supporting:Record<Purpose,string[]>={
  Promotion:['Featured offer','Offer details','Valid dates & terms'],
- 'Trust-building':['Customer feedback','Add an approved quote or verified result','Customer or project name'],
- 'Business profile':['Business spotlight','Introduce this part of your business','Meet the team'],
+ 'Trust-building':['Customer feedback','Discover the experiences behind our work.','Customer or project name'],
+ 'Business profile':['Business spotlight','Get to know our business.','Meet the team'],
  Engagement:['Field notes','Share your answer or ask us a question','Join the conversation'],
  Conversion:['Get in touch','Tell us what you have in mind','Contact the team'],
  Festival:['Seasonal greetings','With warm wishes from our team','Celebrate with us'],

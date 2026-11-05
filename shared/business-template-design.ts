@@ -1,67 +1,139 @@
+import { posterAdvances } from './poster-font-advances';
 import { BUSINESS_EDITIONS } from './business-template-collection';
-import { composeStudioPoster, type StudioPosterInput } from './poster-composition';
+import type { StudioPosterInput } from './poster-composition';
 import { validateDesign, type DesignLayer } from './marketing-design';
 
-const byLayout=new Map(BUSINESS_EDITIONS.map(template=>[template.layout as string,template]));
-const details:Record<string,[string,string]> = {
- 'Customer review':['Approved customer quote','Customer name'], '5-star review highlight':['Add the verified star rating','Add the matching review'],
- 'Testimonial':['Their words','Approved client attribution'], 'Success story':['The challenge','The result'], 'Case study':['The brief','What changed'],
- 'Rating celebration':['Verified rating','Number of reviews'], 'Our services':['First service','Second service'], 'Our process':['01 · Enquiry','02 · Next steps'],
- 'Years of experience':['Year established','Milestone'], 'Meet the team':['Team member','Role or specialty'], 'Branch opening':['Opening date','New address'],
- 'Tips':['What to check','Why it matters'], 'FAQs':['Question','Answer'], 'Quiz':['Choice A','Choice B'], 'Myth vs fact':['Myth','Fact'],
- 'Poll post':['Option A','Option B'], 'Did you know':['The detail','Why it matters'], 'Reminder post':['When','What to bring'],
- 'Discount offer':['Offer amount','Eligible items'], 'Seasonal sale':['Seasonal selection','Sale dates'], 'Combo offer':['First item','Paired with'],
- 'Limited-time deal':['Offer details','Ends on'], 'Launch offer':['Introducing','Launch date'], 'Referral offer':['Referral benefit','How to refer'],
- 'First-visit discount':['Welcome offer','First-visit terms'], 'Membership offer':['Member benefit','Plan details'],
+const editions = new Map(BUSINESS_EDITIONS.map(template => [String(template.layout), template]));
+// Paper, text and solid action colour. The action label always sits on the ink colour.
+const palettes: Record<string, string[]> = {
+  emerald: ['#EAF4ED','#113A30','#ABCFB5'], rose_chic: ['#FCEDF0','#511D32','#EDADBA'],
+  trust_amber: ['#FFF1D6','#482B13','#EEBA62'], cyber_tech: ['#EAF0FF','#142B56','#A6C4FA'],
+  sand: ['#F7F0E3','#3E3127','#D9B998'], dark: ['#19282C','#F4F3E9','#ABC7BC'],
+  royal_gold: ['#2C2732','#FAF2DD','#DABF88'], luxe_dark: ['#262427','#F9EEE5','#DCA58D'],
 };
-const festivalMotifs:Record<string,[string,string,string]> = {
- diwali:['#431443','#FFC560','✦'],holi:['#632654','#FFB5AC','●'],eid:['#123E3D','#F6D899','☾'],christmas:['#123C32','#E6AD86','✶'],
- new_year:['#1E2144','#EBC883','✧'],independence_day:['#174E39','#FFCB8C','✳'],republic_day:['#183665','#F9C87F','✳'],
- rakhi:['#681C39','#F4B587','❖'],navratri:['#591D21','#FFBD73','✦'],valentine:['#6B2644','#FFBECF','♥'],
- mothers_day:['#573147','#EDBED4','✿'],fathers_day:['#243F51','#CFDDB2','◆'],
+const seasonal:Record<string,string[]> = {
+  diwali:['#431443','#FFEDCE','#FFC560'],holi:['#632654','#FFF3DB','#FFB5AC'],eid:['#123E3D','#FFF6D8','#F6D899'],
+  christmas:['#123C32','#FFF1DE','#E6AD86'],new_year:['#1E2144','#FFF1CE','#EBC883'],
+  independence_day:['#174E39','#FFF2DB','#FFCB8C'],republic_day:['#183665','#FFF2D4','#F9C87F'],
+  rakhi:['#681C39','#FFF0E1','#F4B587'],navratri:['#591D21','#FFF0CF','#FFBD73'],valentine:['#6B2644','#FFF0ED','#FFBECF'],
+  mothers_day:['#573147','#FFF4EE','#EDBED4'],fathers_day:['#243F51','#F3F8EA','#CFDDB2'],
 };
+
+type PosterFont = keyof typeof posterAdvances;
+
+function textHeight(value:string,width:number,size:number,font:PosterFont='sans') {
+  const advances=posterAdvances[font];
+  const measure=(word:string)=>Array.from(word).reduce((sum,ch)=>{
+    const index=ch.charCodeAt(0)-32;
+    return sum+(advances[index] ?? 900)*size/1000;
+  },0);
+  const available=width*.98;
+  let rows=0;
+  for(const paragraph of value.split('\n')) {
+    let used=0;
+    rows++;
+    for(const word of paragraph.split(/\s+/)) {
+      const wordWidth=measure(word);
+      const space=used ? measure(' ') : 0;
+      if(used && used+space+wordWidth>available){rows++;used=wordWidth;}
+      else used+=space+wordWidth;
+      while(used>available){rows++;used-=available;}
+    }
+  }
+  return Math.ceil(size*(1.12*rows+.12));
+}
+
 export function composeBusinessEdition(input:StudioPosterInput) {
- const template=byLayout.get(input.layout || '');
- if (!template?.edition) throw new Error('Unknown business template');
- const {intent,purpose,direction,variant,slides}=template.edition;
- const doc=composeStudioPoster({...input,layout:`studio_${direction}`});
- const {width:w,height:h}=doc;
- const photo=doc.layers.find(l=>l.id==='bg_photo');
- const foreground=doc.layers.find(l=>l.id==='brand')!.color;
- const accent=doc.layers.find(l=>l.id==='brand_rule')!.background;
- const type=(id:string,text:string,x:number,y:number,width:number,height:number,size:number,color=foreground):DesignLayer=>({
-  id,type:'text',text,x:x*w,y:y*h,width:width*w,height:height*h,fontSize:size,color,background:'transparent',opacity:1,fontWeight:700,
- });
- const shape=(id:string,x:number,y:number,width:number,height:number,background:string):DesignLayer=>({
-  ...type(id,'',x,y,width,height,24),type:'shape',background,
- });
- if (purpose==='Festival') {
-  const [ink,gold]=festivalMotifs[template.occasionId!]!;
-  doc.background=ink;
-  doc.layers=doc.layers.filter(l=>['logo','brand','footer'].includes(l.id)).map(l=>({...l,color:gold}));
-  if (variant && photo) doc.layers.unshift({...photo,x:.55*w,y:.2*h,width:.40*w,height:.56*h,borderRadius:120});
-  const space = variant ? .46 : .84;
-  doc.layers.push(shape('frame-top',.06,.13,.88,.003,gold),shape('frame-bottom',.06,.85,.88,.003,gold),
-   shape('ornament',.08,.27,.12,.009,gold),type('badge',input.badge || intent,.08,.36,space,.06,25,gold),
-   {...type('headline',input.headline,.08,.44,space,.20,variant?49:70,'#FFFFFF'),fontFamily:'editorial'},
-   type('subtitle',input.subtitle || '',.08,.66,space,.13,27,gold),type('cta',input.cta || '',.08,.86,.82,.05,26,gold));
-  // A photographed greeting keeps its replaceable visual independent of the lettering.
-  if (!variant && photo) doc.layers.push({...photo,x:.66*w,y:.16*h,width:.25*w,height:.18*h,cropX:50,cropY:50,borderRadius:100});
- } else if (['Before/after','Client transformation'].includes(intent) && photo) {
-  doc.layers=doc.layers.filter(l=>['brand','logo','brand_rule','footer'].includes(l.id));
-  const vertical=variant===1;
-  const frames=vertical?[[.06,.28,.62,.23],[.32,.53,.62,.23]]:[[.06,.34,.43,.38],[.51,.34,.43,.38]];
-  doc.layers.push(type('headline',input.headline,.06,.15,.88,.12,54));
-  frames.forEach(([x,y,width,height],i)=>doc.layers.push({...photo,id:i?'after_photo':'bg_photo',x:x*w,y:y*h,width:width*w,height:height*h},
-   {...type(i?'after_label':'before_label',i?'After':'Before',x,y+.01,width*.55,.055,27,'#FFFFFF'),background:'#172B35'}));
-  doc.layers.push(type('subtitle',input.subtitle || '',.06,.79,.88,.07,28),type('cta',input.cta || '',.06,.87,.88,.05,26,accent));
- } else if(details[intent] || slides) {
-  // Reserve a separate information rail, so labels never cover the original artwork.
-  for(const layer of doc.layers){layer.y*=.78;layer.height*=.78;if(layer.type==='text')layer.fontSize=Math.max(12,Math.floor(layer.fontSize*.78));}
-  const pair=details[intent] || ['Field guide','Swipe for the next step'];
-  doc.layers.push(shape('rail',.06,.80,.88,.003,accent),
-   type('detail_left',pair[0],.06,.83,.42,.11,28),
-   type('detail_right',pair[1],.52,.83,.42,.11,28,accent));
- }
- return validateDesign(doc);
+  const template=editions.get(input.layout || '');
+  if(!template?.edition) throw new Error('Unknown business template');
+  const {purpose,intent,variant}=template.edition;
+  const [w,h]=({'1:1':[1080,1080],'4:5':[1080,1350],'9:16':[1080,1920],'16:9':[1920,1080]})[input.ratio as '1:1'] || [1080,1350];
+  const [paper,ink,tint]=seasonal[template.occasionId || ''] || palettes[input.theme || template.theme] || palettes.sand;
+  const layers:DesignLayer[]=[];
+  function base(id:string,type:DesignLayer['type'],x:number,y:number,width:number,height:number):DesignLayer {
+    return {id,type,x,y,width,height,color:ink,background:'transparent',opacity:1,fontSize:24};
+  }
+  function text(id:string,value:string,x:number,y:number,width:number,height:number,size:number,options:Partial<DesignLayer>={}) {
+    if(value) layers.push({...base(id,'text',x,y,width,height),text:value,fontSize:size,fontWeight:500,lineHeight:1.12,...options});
+  }
+  function box(id:string,x:number,y:number,width:number,height:number,color:string,radius=0) {
+    layers.push({...base(id,'shape',x,y,width,height),background:color,borderRadius:radius});
+  }
+  function image(id:string,x:number,y:number,width:number,height:number) {
+    if(input.photo) layers.push({...base(id,'image',x,y,width,height),src:input.photo,photoFit:'cover',cropX:50,cropY:50});
+  }
+
+  const margin=54;
+  const story=h>w*1.55;
+  const paired=['Before/after','Client transformation'].includes(intent);
+  const split=!paired && !story && (w>h || variant===1);
+  const mirror=split && (purpose==='Engagement' || purpose==='Festival');
+  const panelWidth=split?Math.round(w*(w>h?.51:.56)):w;
+  const left=mirror?w-panelWidth:0;
+  const x=left+margin;
+  const lineWidth=panelWidth-2*margin;
+  const top=story?96:42;
+  const brandX=x+(input.logoUrl?70:0);
+  const brandWidth=lineWidth-(brandX-x);
+  const brandSize=Math.min(input.brand.length>42?28:38,Math.max(18,Math.floor(brandWidth/(Math.max(input.brand.length,1)*.55))));
+  const brandHeight=Math.max(52,textHeight(input.brand,brandWidth,brandSize));
+  if(input.logoUrl) layers.push({...base('logo','image',x,top,52,52),src:input.logoUrl,photoFit:'contain'});
+  text('brand',input.brand,brandX,top,brandWidth,brandHeight,brandSize,{fontWeight:700});
+  const headerEnd=top+brandHeight+24;
+  const badge=input.badge?.trim() || '';
+  const title=input.headline.trim();
+  const body=input.subtitle?.trim() || '';
+  const cta=input.cta?.trim() || '';
+  const contact=[input.website?.replace(/^https?:\/\//,''),input.phone].filter(Boolean).join('  ·  ');
+  const footerH=contact?textHeight(contact,lineWidth,30)+16:0;
+  const bottom=h-(story?98:44)-footerH;
+  const maxCopy=split?bottom-headerEnd-36:Math.floor((bottom-headerEnd)*(paired?.48:story?.44:.56));
+  let titleSize=split && w<=h?80:story?108:94;
+  let bodySize=story?42:38;
+  const headlineFont=purpose==='Festival' || purpose==='Trust-building'?'editorial':'display';
+  const measure=()=> {
+    const heading=textHeight(title,lineWidth,titleSize,headlineFont);
+    const sub=body?textHeight(body,lineWidth,bodySize):0;
+    return {heading,sub,total:(badge?52:0)+heading+(sub?14+sub:0)+(cta?26+78:0)};
+  };
+  let block=measure();
+  while(block.total>maxCopy && (titleSize>48 || bodySize>30)) {
+    titleSize=Math.max(48,titleSize-2);bodySize=Math.max(30,bodySize-1);block=measure();
+  }
+  const firstCopy=!paired && !split && !story && variant===2;
+  const imageTop=firstCopy?headerEnd+block.total+32:headerEnd;
+  const imageBottom=firstCopy?bottom:bottom-block.total-32;
+  if(paired) {
+    const gap=14, width=(w-margin*2-gap)/2;
+    [0,1].forEach(i=>{
+      const px=margin+i*(gap+width);
+      image(i?'after_photo':'bg_photo',px,imageTop,width,imageBottom-imageTop);
+      box(i?'after_plate':'before_plate',px+16,imageBottom-78,155,60,ink,12);
+      text(i?'after_label':'before_label',i?'After':'Before',px+32,imageBottom-70,126,49,36,{color:paper,fontWeight:700});
+    });
+  } else if(split) {
+    image('bg_photo',mirror?0:panelWidth,0,w-panelWidth,h);
+  } else {
+    const inset=purpose==='Festival' || purpose==='Trust-building'?margin:0;
+    image('bg_photo',inset,imageTop,w-2*inset,imageBottom-imageTop);
+  }
+  let y=split?Math.round(headerEnd+(bottom-headerEnd-block.total)*.48):firstCopy?headerEnd:bottom-block.total;
+  if(badge) {
+    box('badge_rule',x,y+6,8,32,tint);
+    text('badge',badge,x+22,y,lineWidth-22,48,32,{fontWeight:700});
+    y+=52;
+  }
+  text('headline',title,x,y,lineWidth,block.heading,titleSize,{fontWeight:800,fontFamily:headlineFont});
+  y+=block.heading;
+  if(body) {y+=14;text('subtitle',body,x,y,lineWidth,block.sub,bodySize);y+=block.sub;}
+  if(cta) {
+    y+=26;
+    const labelEm=Array.from(cta).reduce((sum,ch)=>sum+(posterAdvances.sans[ch.charCodeAt(0)-32] ?? 900)/1000,0)*1.08;
+    const size=Math.min(40,Math.max(20,Math.floor((lineWidth-48)/labelEm)));
+    const buttonWidth=Math.min(lineWidth,Math.ceil(labelEm*size)+48);
+    box('cta_plate',x,y,buttonWidth,78,ink,20);
+    text('cta',cta,x+22,y+13,buttonWidth-44,58,size,{color:paper,fontWeight:700,textAlign:'center'});
+  }
+  if(contact) text('footer',contact,x,bottom+16,lineWidth,footerH-16,30);
+  return validateDesign({version:1,width:w,height:h,background:paper,layers});
 }
