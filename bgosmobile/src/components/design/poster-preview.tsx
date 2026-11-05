@@ -4,7 +4,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { PROFESSIONAL_ASSETS } from './professional-assets';
 import { WEB_URL } from '../../lib/constants';
-import { coverImage } from '../../../../shared/design-gestures';
 import type { MarketingDesign } from '../../../../shared/marketing-design';
 
 function getEmblemIconName(id: string, src?: string): keyof typeof MaterialIcons.glyphMap {
@@ -31,7 +30,6 @@ export function PosterPreview({ doc }: { doc: MarketingDesign }) {
     BgosEditorial: require('../../../assets/fonts/BgosEditorial.ttf'),
     BgosDisplay: require('../../../assets/fonts/BgosDisplay.ttf'),
   });
-  const [imageSizes, setImageSizes] = useState<Record<string, { width: number; height: number }>>({});
   const scale = width / doc.width;
 
   return (
@@ -87,10 +85,13 @@ export function PosterPreview({ doc }: { doc: MarketingDesign }) {
             }
 
             if (l.type === 'image') {
-              const size = imageSizes[l.src || ''];
-              const covered = coverImage(l, size || { width: l.width, height: l.height }, l.cropX ?? 50, l.cropY ?? 50);
-              const imageWidth = covered.width * scale,
-                imageHeight = covered.height * scale;
+              const isCutoutOrEmblem =
+                l.src?.startsWith('data:image/png;base64') ||
+                l.src?.startsWith('data:image/svg+xml') ||
+                l.id.includes('cutout') ||
+                l.id.includes('emblem') ||
+                l.id.includes('logo');
+
               return (
                 <View key={l.id} style={style}>
                   {failed[l.src || ''] ? (
@@ -109,19 +110,12 @@ export function PosterPreview({ doc }: { doc: MarketingDesign }) {
                         }
                       }
                       onError={() => setFailed((p) => ({ ...p, [l.src || '']: true }))}
-                      onLoad={(e) => {
-                        const source = e.nativeEvent.source;
-                        if (source.width && source.height)
-                          setImageSizes((p) => ({ ...p, [l.src || '']: { width: source.width, height: source.height } }));
-                      }}
                       style={{
-                        position: 'absolute',
-                        width: imageWidth,
-                        height: imageHeight,
-                        left: covered.left * scale,
-                        top: covered.top * scale,
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: (l.borderRadius || 0) * scale,
                       }}
-                      resizeMode="cover"
+                      resizeMode={isCutoutOrEmblem ? 'contain' : 'cover'}
                     />
                   )}
                 </View>

@@ -8,6 +8,7 @@ Processes image in RAM buffer and returns transparent PNG bytes.
 
 import io
 import os
+from PIL import Image
 from fastapi import FastAPI, Header, HTTPException, UploadFile, File
 from fastapi.responses import Response
 from rembg import remove, new_session
@@ -45,7 +46,35 @@ async def remove_background(
         # 3. Perform background removal using rembg
         output_bytes = remove(image_bytes, session=session)
 
-        # 4. Return PNG response directly from RAM
-        return Response(content=output_bytes, media_type="image/png")
+        # 4. Standard Mode Auto-Trim: compute tight non-transparent bounding box
+        out_img = Image.open(io.BytesIO(output_bytes))
+        orig_w, orig_h = out_img.size
+        bbox = out_img.getbbox()
+
+        if bbox:
+            # 2px safety padding bounded to image dimensions to preserve anti-aliased edge alphas
+            pad = 2
+            left = max(0, bbox[0] - pad)
+            top = max(0, bbox[1] - pad)
+            right = min(orig_w, bbox[2] + pad)
+            bottom = min(orig_h, bbox[3] + pad)
+            cropped_img = out_img.crop((left, top, right, bottom))
+            cropped_buf = io.BytesIO()
+            cropped_img.save(cropped_buf, format="PNG")
+            cropped_bytes = cropped_buf.getvalue()
+            cropped_w, cropped_h = cropped_img.size
+        else:
+            cropped_bytes = output_bytes
+            left, top, right, bottom = 0, 0, orig_w, orig_h
+            cropped_w, cropped_h = orig_w, orig_h
+
+        headers = {
+            "X-Cutout-Bbox": f"{left},{top},{right},{bottom}",
+            "X-Cutout-Orig-Size": f"{orig_w},{orig_h}",
+            "X-Cutout-Size": f"{cropped_w},{cropped_h}",
+        }
+
+        # 5. Return trimmed PNG response directly from RAM
+        return Response(content=cropped_bytes, media_type="image/png", headers=headers)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Background removal failed: {str(e)}")

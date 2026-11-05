@@ -62,7 +62,7 @@ export function createDesign(input: { brand: string; headline: string; subtitle:
   const [width,height] = sizes[input.ratio || '1:1'] || sizes['1:1'];
   const layer = (id: string, type: DesignLayer['type'], y: number, h: number): DesignLayer => ({ id,type,x:60,y,width:width-120,height:h,color:'#ffffff',background:'transparent',fontSize:48,opacity:1 });
   return { version:1,width,height,background:'#063d35',layers:[
-    ...(input.photo ? [{...layer('photo','image',0,height),x:0,width,src:input.photo,opacity:0.3}] : []),
+    ...(input.photo ? [{...layer('photo','image',0,height),x:0,width,src:input.photo,opacity:0.3,cropX:50,cropY:0}] : []),
     {...layer('brand','text',60,80),text:input.brand,fontSize:32},
     {...layer('headline','text',height*.28,220),text:input.headline,fontSize:72},
     {...layer('badge','text',height*.55,100),text:input.badge,fontSize:60,color:'#5eead4'},
@@ -310,7 +310,8 @@ export function createCommercialPosterDesign(input: {
     return trimmed.length > 0 && /^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,)/i.test(trimmed);
   };
 
-  const photoSrc = isEligibleImage(input.photo)
+  const isCustomUserPhoto = isEligibleImage(input.photo);
+  const photoSrc = isCustomUserPhoto
     ? input.photo!.trim()
     : 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80';
   const logoSrc = isEligibleImage(input.logoUrl) ? input.logoUrl!.trim() : undefined;
@@ -326,7 +327,7 @@ export function createCommercialPosterDesign(input: {
       height,
       background: themeColors.bg,
       layers: [
-        { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height: splitY, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 1 },
+        { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height: splitY, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 1, cropX: 50, cropY: 0 },
         { id: 'card_bg', type: 'shape', x: 0, y: splitY, width, height: height - splitY, color: 'transparent', background: themeColors.scrimBg, fontSize: 16, opacity: 1, borderTopLeftRadius: 36, borderTopRightRadius: 36, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.18)' },
         { id: 'badge', type: 'text', x: 50, y: splitY + 28, width: Math.min(320, width - 100), height: 48, text: badgeText, color: themeColors.badgeText, background: themeColors.badgeBg, fontSize: 20, opacity: 1, borderRadius: 24, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)', alignItems: 'center', justifyContent: 'center', padding: '0 24px', fontWeight: 900, letterSpacing: 1 },
         { id: 'brand', type: 'text', x: Math.min(400, width - 260), y: splitY + 32, width: Math.max(200, width - 450), height: 40, text: brandText.toUpperCase(), color: '#ffffff', background: 'transparent', fontSize: 22, opacity: 1, fontWeight: 800, letterSpacing: 0.8 },
@@ -369,7 +370,7 @@ export function createCommercialPosterDesign(input: {
       height,
       background: '#180404',
       layers: [
-        { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 1 },
+        { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 1, cropX: 50, cropY: 0 },
         { id: 'urgent_banner', type: 'shape', x: 0, y: 0, width, height: 90, color: 'transparent', background: '#DC2626', fontSize: 16, opacity: 0.95 },
         { id: 'badge', type: 'text', x: 30, y: 22, width: width - 60, height: 46, text: `🚨 ${badgeText} • 24/7 RAPID RESPONSE`, color: '#FFFFFF', background: 'transparent', fontSize: 24, opacity: 1, alignItems: 'center', justifyContent: 'center', fontWeight: 900, letterSpacing: 1 },
         ...(logoSrc
@@ -412,7 +413,7 @@ export function createCommercialPosterDesign(input: {
       height,
       background: '#040914',
       layers: [
-        { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 0.9 },
+        { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 0.9, cropX: 50, cropY: 0 },
         { id: 'hud_top_bar', type: 'shape', x: 40, y: 36, width: width - 80, height: 60, color: 'transparent', background: '#020617', fontSize: 16, opacity: 0.85, borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(56, 189, 248, 0.4)' },
         { id: 'badge', type: 'text', x: 55, y: 46, width: 220, height: 40, text: `● ${badgeText}`, color: '#38bdf8', background: '#0e243a', fontSize: 18, opacity: 1, borderRadius: 20, alignItems: 'center', justifyContent: 'center', fontWeight: 900, letterSpacing: 1.2 },
         { id: 'brand', type: 'text', x: 290, y: 48, width: width - 420, height: 36, text: brandText.toUpperCase(), color: '#ffffff', background: 'transparent', fontSize: 20, opacity: 1, fontWeight: 800, letterSpacing: 1 },
@@ -438,7 +439,7 @@ export function createCommercialPosterDesign(input: {
       height,
       background: '#090807',
       layers: [
-        { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 0.85 },
+        { id: 'bg_photo', type: 'image', x: 0, y: 0, width, height, src: photoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 0.85, cropX: 50, cropY: 0 },
         { id: 'luxury_border', type: 'shape', x: 30, y: 30, width: width - 60, height: height - 60, color: 'transparent', background: 'transparent', fontSize: 16, opacity: 1, borderWidth: 1.5, borderColor: 'rgba(217, 180, 114, 0.45)' },
         { id: 'brand', type: 'text', x: 50, y: 60, width: width - 100, height: 46, text: brandText.toUpperCase(), color: '#d4af37', background: 'transparent', fontSize: 24, opacity: 1, alignItems: 'center', justifyContent: 'center', fontWeight: 800, letterSpacing: 4 },
         ...(logoSrc ? [{ id: 'brand_logo', type: 'image' as const, x: Math.round(width / 2 - 25), y: 115, width: 50, height: 50, src: logoSrc, color: '#ffffff', background: 'transparent', fontSize: 16, opacity: 1, borderRadius: 25, borderWidth: 1.5, borderColor: 'rgba(212, 175, 55, 0.8)' }] : []),
@@ -471,8 +472,10 @@ export function createCommercialPosterDesign(input: {
       background: 'transparent',
       fontSize: 16,
       opacity: 1,
+      cropX: 50,
+      cropY: 0,
     },
-    // 2. Top Scrim (dark gradient simulation)
+    // 2. Top Scrim (dark gradient simulation - suppressed when custom user photo is provided)
     {
       id: 'top_scrim',
       type: 'shape',
@@ -483,7 +486,8 @@ export function createCommercialPosterDesign(input: {
       color: 'transparent',
       background: '#000000',
       fontSize: 16,
-      opacity: 0.55,
+      opacity: isCustomUserPhoto ? 0 : 0.55,
+      hidden: isCustomUserPhoto,
     },
     // 3. Top Offer Badge
     {

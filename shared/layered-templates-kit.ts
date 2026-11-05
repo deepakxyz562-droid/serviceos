@@ -577,29 +577,59 @@ export function composeKitPoster(input: StudioPosterInput): MarketingDesign {
     opacity: 1,
   });
 
-  // Layer 1: Background photo (authentic Google-hosted commercial photography)
-  layers.push({
-    ...base('bg_photo', 'image', 0, 0, 1, 1),
-    src: input.photo || definition.photo,
-    cropX: 50,
-    cropY: 50,
-  });
-
-  // Layer 2: Decorative Scrim / Contrast Container Panel
   const isDarkPaper =
     definition.paper.toLowerCase().includes('#1') ||
     definition.paper.toLowerCase().includes('#2') ||
     definition.paper.toLowerCase().includes('#0') ||
     definition.paper.toLowerCase().includes('#3');
 
-  layers.push({
-    ...base('scrim_panel', 'shape', 0.05, 0.05, 0.9, 0.9),
-    background: definition.paper,
-    opacity: isDarkPaper ? 0.88 : 0.94,
-    borderRadius: 20,
-    borderColor: definition.accent,
-    borderWidth: 2,
-  });
+  const isHeroPhotoKit =
+    definition.kitSource === 'kit_4' ||
+    definition.kitSource === 'kit_5' ||
+    definition.kitSource === 'kit_7' ||
+    definition.kitSource === 'kit_9';
+
+  if (isHeroPhotoKit) {
+    // Hero photo full-bleed atmospheric backdrop
+    layers.push({
+      ...base('bg_photo', 'image', 0, 0, 1, 1),
+      src: input.photo || definition.photo,
+      cropX: 50,
+      cropY: 0,
+    });
+
+    // Translucent contrast scrim overlay so photography shines through with rich clarity
+    layers.push({
+      ...base('scrim_panel', 'shape', 0.04, 0.04, 0.92, 0.92),
+      background: definition.paper,
+      opacity: isDarkPaper ? 0.38 : 0.44,
+      borderRadius: 20,
+      borderColor: definition.accent,
+      borderWidth: 2,
+    });
+  } else {
+    // Card showcase templates (Automotive, Clinic, Salon, Real Estate, Retail)
+    // 1. Solid container panel
+    layers.push({
+      ...base('scrim_panel', 'shape', 0.04, 0.04, 0.92, 0.92),
+      background: definition.paper,
+      opacity: 1,
+      borderRadius: 20,
+      borderColor: definition.accent,
+      borderWidth: 2,
+    });
+
+    // 2. Center showcase photo card in FRONT of container panel
+    layers.push({
+      ...base('bg_photo', 'image', 0.08, 0.43, 0.84, 0.28),
+      src: input.photo || definition.photo,
+      borderRadius: 14,
+      borderColor: definition.accentBg || '#E2E8F0',
+      borderWidth: 1,
+      cropX: 50,
+      cropY: 0,
+    });
+  }
 
   // Layer 3: Graphic Emblem (Gold Chef Hat, Diya, Lightning Bolt, Shield, Cross)
   if (definition.graphicEmblem) {
@@ -652,10 +682,10 @@ export function composeKitPoster(input: StudioPosterInput): MarketingDesign {
   // Layer 6: Main Headline (Editable typography)
   const headlineTextVal = input.headline || definition.headline;
   layers.push({
-    ...base('headline', 'text', 0.09, 0.22, 0.82, 0.18),
+    ...base('headline', 'text', 0.09, isHeroPhotoKit ? 0.22 : 0.20, 0.82, isHeroPhotoKit ? 0.18 : 0.14),
     text: headlineTextVal,
     color: definition.ink,
-    fontSize: Math.round(unit * 0.06),
+    fontSize: Math.round(unit * (isHeroPhotoKit ? 0.06 : 0.052)),
     fontFamily: definition.fontFamily,
     fontWeight: 800,
     lineHeight: 1.15,
@@ -665,7 +695,7 @@ export function composeKitPoster(input: StudioPosterInput): MarketingDesign {
   // Layer 7: Graphic Divider (Ornate Gold Flourish Line if present, e.g. Kit 4)
   if (definition.graphicDivider) {
     layers.push({
-      ...base('graphic_divider', 'image', 0.09, 0.41, 0.32, (0.32 * width) / height * 0.22),
+      ...base('graphic_divider', 'image', 0.09, isHeroPhotoKit ? 0.41 : 0.35, 0.32, (0.32 * width) / height * 0.22),
       src: definition.graphicDivider,
     });
   }
@@ -673,11 +703,14 @@ export function composeKitPoster(input: StudioPosterInput): MarketingDesign {
   // Layer 8: Subtitle / Value Proposition
   const subtitleVal = input.subtitle || definition.subtitle;
   if (subtitleVal) {
+    const subtitleY = isHeroPhotoKit
+      ? (definition.graphicDivider ? 0.45 : 0.42)
+      : (definition.graphicDivider ? 0.38 : 0.35);
     layers.push({
-      ...base('subtitle', 'text', 0.09, definition.graphicDivider ? 0.45 : 0.42, 0.82, 0.09),
+      ...base('subtitle', 'text', 0.09, subtitleY, 0.82, isHeroPhotoKit ? 0.09 : 0.06),
       text: subtitleVal,
       color: isDarkPaper ? '#CBD5E1' : '#475569',
-      fontSize: Math.round(unit * 0.028),
+      fontSize: Math.round(unit * (isHeroPhotoKit ? 0.028 : 0.024)),
       fontFamily: 'sans',
       fontWeight: 500,
       lineHeight: 1.25,
@@ -690,13 +723,13 @@ export function composeKitPoster(input: StudioPosterInput): MarketingDesign {
   if (bullets.length > 0) {
     const bulletText = bullets.map((b) => `✔  ${b}`).join('\n');
     layers.push({
-      ...base('features_list', 'text', 0.09, 0.54, 0.82, 0.17),
+      ...base('features_list', 'text', 0.09, isHeroPhotoKit ? 0.54 : 0.72, 0.82, isHeroPhotoKit ? 0.17 : 0.08),
       text: bulletText,
       color: definition.ink,
-      fontSize: Math.round(unit * 0.026),
+      fontSize: Math.round(unit * (isHeroPhotoKit ? 0.026 : 0.022)),
       fontFamily: 'sans',
       fontWeight: 600,
-      lineHeight: 1.4,
+      lineHeight: 1.35,
       textAlign: 'left',
     });
   }
@@ -704,14 +737,14 @@ export function composeKitPoster(input: StudioPosterInput): MarketingDesign {
   // Layer 10: Coupon Code Box (For sales kits)
   if (definition.couponCode) {
     layers.push({
-      ...base('coupon_box', 'shape', 0.09, 0.725, 0.48, 0.045),
+      ...base('coupon_box', 'shape', 0.09, isHeroPhotoKit ? 0.725 : 0.73, 0.48, 0.045),
       background: definition.accentBg || '#FEF3C7',
       borderRadius: 8,
       borderWidth: 1.5,
       borderColor: definition.accent,
     });
     layers.push({
-      ...base('coupon_text', 'text', 0.1, 0.73, 0.46, 0.035),
+      ...base('coupon_text', 'text', 0.1, isHeroPhotoKit ? 0.73 : 0.735, 0.46, 0.035),
       text: `USE CODE: ${definition.couponCode}`,
       color: definition.accent,
       fontSize: Math.round(unit * 0.024),
@@ -723,16 +756,17 @@ export function composeKitPoster(input: StudioPosterInput): MarketingDesign {
 
   // Layer 11: Call to Action Button
   const ctaVal = input.cta || definition.cta;
+  const ctaY = isHeroPhotoKit ? 0.795 : 0.81;
   layers.push({
-    ...base('cta_button', 'shape', 0.09, 0.795, 0.55, 0.065),
+    ...base('cta_button', 'shape', 0.09, ctaY, 0.55, 0.06),
     background: definition.accent,
     borderRadius: 12,
   });
   layers.push({
-    ...base('cta_text', 'text', 0.11, 0.81, 0.51, 0.04),
+    ...base('cta_text', 'text', 0.11, ctaY + 0.012, 0.51, 0.038),
     text: ctaVal,
     color: '#FFFFFF',
-    fontSize: Math.round(unit * 0.03),
+    fontSize: Math.round(unit * 0.028),
     fontFamily: 'sans',
     fontWeight: 800,
     textAlign: 'center',
@@ -748,7 +782,7 @@ export function composeKitPoster(input: StudioPosterInput): MarketingDesign {
 
   if (footerContacts) {
     layers.push({
-      ...base('footer_contacts', 'text', 0.09, 0.88, 0.82, 0.035),
+      ...base('footer_contacts', 'text', 0.09, isHeroPhotoKit ? 0.88 : 0.89, 0.82, 0.035),
       text: footerContacts,
       color: isDarkPaper ? '#94A3B8' : '#64748B',
       fontSize: Math.round(unit * 0.022),

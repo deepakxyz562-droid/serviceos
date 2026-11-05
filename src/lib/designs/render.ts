@@ -138,7 +138,28 @@ export async function renderDesign(value: unknown, tenantId: string, options: {f
           const sharp=(await import('sharp')).default;
           const normalized=await sharp(Buffer.from(ab),{limitInputPixels:24_000_000}).rotate().png().toBuffer();
           ab=normalized.buffer.slice(normalized.byteOffset,normalized.byteOffset+normalized.byteLength) as ArrayBuffer;
-          children.push(React.createElement('img', { key:l.id, src: ab as unknown as string, width:l.width, height:l.height, style:{...style,objectFit:'cover',objectPosition:`${l.cropX??50}% ${l.cropY??50}%`} }));
+          const isCutoutOrLogo = Boolean(
+            l.src?.startsWith('data:image/png;base64') ||
+            l.src?.startsWith('data:image/svg+xml') ||
+            l.id.includes('cutout') ||
+            l.id.includes('emblem') ||
+            l.id.includes('logo')
+          );
+          const isBackgroundOrHero = l.id === 'bg_photo' || (l.x === 0 && l.y === 0) || l.id.includes('photo');
+          const defaultCropY = isBackgroundOrHero ? 0 : 50;
+          const cropY = l.cropY !== undefined ? l.cropY : defaultCropY;
+          const objectFit = isCutoutOrLogo ? 'contain' : 'cover';
+          children.push(React.createElement('img', {
+            key: l.id,
+            src: ab as unknown as string,
+            width: l.width,
+            height: l.height,
+            style: {
+              ...style,
+              objectFit,
+              objectPosition: `${l.cropX ?? 50}% ${cropY}%`,
+            },
+          }));
         }
       }
     } else {

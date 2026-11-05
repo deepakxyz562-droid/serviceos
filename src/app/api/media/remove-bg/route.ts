@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import sharp from 'sharp';
 import { getAuthUser } from '@/lib/auth';
 
 /**
@@ -88,14 +89,60 @@ export async function POST(request: NextRequest) {
 
       if (workerRes.ok) {
         const cutoutBuffer = Buffer.from(await workerRes.arrayBuffer());
-        const base64DataUri = `data:image/png;base64,${cutoutBuffer.toString('base64')}`;
+        let finalBuffer = cutoutBuffer;
+        let bounds = {
+          left: 0,
+          top: 0,
+          width: 0,
+          height: 0,
+          origWidth: 0,
+          origHeight: 0,
+        };
+
+        const bboxHeader = workerRes.headers.get('x-cutout-bbox');
+        const origSizeHeader = workerRes.headers.get('x-cutout-orig-size');
+        const croppedSizeHeader = workerRes.headers.get('x-cutout-size');
+
+        if (bboxHeader && origSizeHeader && croppedSizeHeader) {
+          const [left, top, right, bottom] = bboxHeader.split(',').map(Number);
+          const [origW, origH] = origSizeHeader.split(',').map(Number);
+          const [cropW, cropH] = croppedSizeHeader.split(',').map(Number);
+          bounds = {
+            left: isNaN(left) ? 0 : left,
+            top: isNaN(top) ? 0 : top,
+            width: isNaN(cropW) ? right - left : cropW,
+            height: isNaN(cropH) ? bottom - top : cropH,
+            origWidth: isNaN(origW) ? 0 : origW,
+            origHeight: isNaN(origH) ? 0 : origH,
+          };
+        } else {
+          // Sharp auto-trim safety fallback
+          try {
+            const trimmed = await sharp(cutoutBuffer).trim().toBuffer({ resolveWithObject: true });
+            finalBuffer = trimmed.data;
+            const origMeta = await sharp(cutoutBuffer).metadata();
+            bounds = {
+              left: Math.abs(trimmed.info.trimOffsetLeft || 0),
+              top: Math.abs(trimmed.info.trimOffsetTop || 0),
+              width: trimmed.info.width,
+              height: trimmed.info.height,
+              origWidth: origMeta.width || trimmed.info.width,
+              origHeight: origMeta.height || trimmed.info.height,
+            };
+          } catch {
+            // Proceed with raw buffer if trim fails
+          }
+        }
+
+        const base64DataUri = `data:image/png;base64,${finalBuffer.toString('base64')}`;
 
         return NextResponse.json({
           success: true,
           mimeType: 'image/png',
           cutoutDataUri: base64DataUri,
-          sizeBytes: cutoutBuffer.length,
+          sizeBytes: finalBuffer.length,
           provider: 'self-hosted-rembg',
+          bounds,
         });
       }
     } catch (workerErr: unknown) {
@@ -120,12 +167,29 @@ export async function POST(request: NextRequest) {
 
         if (cloudRes.ok) {
           const cutoutBuffer = Buffer.from(await cloudRes.arrayBuffer());
+          let finalBuffer = cutoutBuffer;
+          let bounds = { left: 0, top: 0, width: 0, height: 0, origWidth: 0, origHeight: 0 };
+          try {
+            const trimmed = await sharp(cutoutBuffer).trim().toBuffer({ resolveWithObject: true });
+            finalBuffer = trimmed.data;
+            const origMeta = await sharp(cutoutBuffer).metadata();
+            bounds = {
+              left: Math.abs(trimmed.info.trimOffsetLeft || 0),
+              top: Math.abs(trimmed.info.trimOffsetTop || 0),
+              width: trimmed.info.width,
+              height: trimmed.info.height,
+              origWidth: origMeta.width || trimmed.info.width,
+              origHeight: origMeta.height || trimmed.info.height,
+            };
+          } catch {}
+
           return NextResponse.json({
             success: true,
             mimeType: 'image/png',
-            cutoutDataUri: `data:image/png;base64,${cutoutBuffer.toString('base64')}`,
-            sizeBytes: cutoutBuffer.length,
+            cutoutDataUri: `data:image/png;base64,${finalBuffer.toString('base64')}`,
+            sizeBytes: finalBuffer.length,
             provider: 'cloud-removebg',
+            bounds,
           });
         }
       } catch (cloudErr) {

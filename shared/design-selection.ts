@@ -12,14 +12,25 @@ export function layersAtPoint(
   doc: MarketingDesign,
   x: number,
   y: number,
-  options?: { includeShapes?: boolean }
+  options?: { includeShapes?: boolean; excludeBackdrop?: boolean }
 ): DesignLayer[] {
   const includeShapes = options?.includeShapes ?? false;
+  const excludeBackdrop = options?.excludeBackdrop ?? false;
   return doc.layers
     .map((layer, index) => ({ layer, index }))
     .filter(({ layer: l }) => {
       if (l.hidden) return false;
       if (l.type === 'shape' && !includeShapes) return false;
+      if (
+        excludeBackdrop &&
+        l.id === 'bg_photo' &&
+        l.x === 0 &&
+        l.y === 0 &&
+        l.width >= doc.width &&
+        l.height >= doc.height
+      ) {
+        return false;
+      }
       const angle = (-(l.rotation || 0) * Math.PI) / 180;
       const dx = x - l.x - l.width / 2;
       const dy = y - l.y - l.height / 2;

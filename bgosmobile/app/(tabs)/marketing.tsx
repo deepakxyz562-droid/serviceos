@@ -787,6 +787,7 @@ export default function MarketingScreen() {
   const [imageProvider, setImageProvider] = useState<'cloudflare' | 'gemini' | 'openrouter'>('cloudflare');
   useEffect(()=>()=>{generationEpoch.current++;},[]);
   const [autosaveFailed,setAutosaveFailed] = useState(false);
+  const [isCanvasGestureActive, setIsCanvasGestureActive] = useState(false);
   const applyPosterTemplate = (t: PosterTemplate) => {
     generationEpoch.current++;
     setBusy(false);
@@ -872,6 +873,32 @@ export default function MarketingScreen() {
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
 
+  // Step 3: Interactive Review & Preview Card Actions
+  const [previewLiked, setPreviewLiked] = useState(false);
+  const [previewBookmarked, setPreviewBookmarked] = useState(false);
+  const [showCommentPreview, setShowCommentPreview] = useState(false);
+  const [previewCommentText, setPreviewCommentText] = useState('');
+
+  const handleToggleLikePreview = useCallback(() => {
+    setPreviewLiked((prev) => {
+      const next = !prev;
+      if (next) {
+        setSuccessNotice('Saved to your favorite marketing ideas!');
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleBookmarkPreview = useCallback(() => {
+    setPreviewBookmarked((prev) => {
+      const next = !prev;
+      if (next) {
+        setSuccessNotice('Template bookmarked for quick reuse!');
+      }
+      return next;
+    });
+  }, []);
+
   async function handleSaveAsMyTemplate() {
     try {
       setBusy(true);
@@ -939,7 +966,7 @@ export default function MarketingScreen() {
   const [manualAccountIds, setManualAccountIds] = useState<string[] | null>(null);
 
   const selectedAccountIds = useMemo(
-    () => selectedPublishingIds(availableAccounts, manualAccountIds, savedGooglePublishingAccountId),
+    () => selectedPublishingIds(availableAccounts, manualAccountIds, savedGooglePublishingAccountId, { requireExplicitSelection: true }),
     [availableAccounts, manualAccountIds, savedGooglePublishingAccountId]
   );
 
@@ -962,6 +989,14 @@ export default function MarketingScreen() {
       return [...current, accountId];
     });
   }, [selectedAccountIds]);
+
+  const handleSelectAllAccounts = useCallback(() => {
+    setManualAccountIds(availableAccounts.filter((a) => a.isActive).map((a) => a.id));
+  }, [availableAccounts]);
+
+  const handleClearAllAccounts = useCallback(() => {
+    setManualAccountIds([]);
+  }, []);
 
   const gbpAccount = useMemo(() => {
     return (
@@ -1049,6 +1084,18 @@ export default function MarketingScreen() {
       brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category
     );
   }, [caption, effectiveBusinessName, effectiveBusinessWebsite, brandProfile.data?.profile?.industry, gbpPlace.data?.place?.category]);
+
+  const handleSharePreview = useCallback(async () => {
+    try {
+      const text = `${headline || effectiveHeadline}\n\n${caption || effectiveCaption}\n\n${bookingLink ? `Book online: ${bookingLink}` : ''}`;
+      await Share.share({
+        title: headline || effectiveHeadline,
+        message: text,
+      });
+    } catch (err) {
+      console.warn('Share preview error:', err);
+    }
+  }, [headline, effectiveHeadline, caption, effectiveCaption, bookingLink]);
 
   const userInitials = useMemo(() => {
     const raw =
@@ -1954,7 +2001,7 @@ export default function MarketingScreen() {
     const resolvedPosterUrl = customPosterUri || bgPhotoUrl;
     const mediaList = resolvedPosterUrl ? [resolvedPosterUrl] : [];
     const postCaption = (caption || effectiveCaption).trim();
-    const contentCheck = validateSocialPost(postCaption, selectedPlatforms, mediaList);
+    const contentCheck = validateSocialPost(postCaption, selectedPlatforms, mediaList, { isPoster: isPosterMode });
     if (contentCheck) {
       setError(contentCheck);
       return;
@@ -3460,7 +3507,11 @@ export default function MarketingScreen() {
                 </View>
               </View>
 
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 110 }}>
+              <ScrollView
+                style={{ flex: 1 }}
+                scrollEnabled={!isCanvasGestureActive}
+                contentContainerStyle={{ padding: 14, paddingBottom: 110 }}
+              >
                 {autosaveFailed && (
                   <Pressable onPress={() => void submitPost('draft', true)} style={{ marginBottom: 10, padding: 8, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#FCA5A5' }}>
                     <Text style={{ color: '#B91C1C', fontSize: 11.5, fontWeight: '700', textAlign: 'center' }}>Changes not saved. Tap to retry.</Text>
@@ -3472,6 +3523,7 @@ export default function MarketingScreen() {
                   <PosterEditor
                     doc={design}
                     onChange={handleCustomDesignChange}
+                    onGestureActive={setIsCanvasGestureActive}
                     onOpenTemplates={() => setTemplatePickerOpen(true)}
                     onOpenRatio={() => setEditSheet('style')}
                   />
@@ -3530,6 +3582,8 @@ export default function MarketingScreen() {
                   selectedIds={selectedAccountIds}
                   toggle={togglePublishingAccount}
                   manage={() => router.push('/(tabs)/integrations')}
+                  onSelectAll={handleSelectAllAccounts}
+                  onClearAll={handleClearAllAccounts}
                 />
 
                 {/* ── Mockup Feed Card (Instagram Style) ── */}
@@ -3565,15 +3619,87 @@ export default function MarketingScreen() {
                     />
                   </View>
 
-                  {/* Social Action Icons */}
+                  {/* Interactive Social Action Icons */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                      <MaterialIcons name="favorite-border" size={22} color="#0F172A" />
-                      <MaterialIcons name="chat-bubble-outline" size={20} color="#0F172A" />
-                      <MaterialIcons name="send" size={20} color="#0F172A" />
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Like this post"
+                        onPress={handleToggleLikePreview}
+                        hitSlop={8}
+                      >
+                        <MaterialIcons
+                          name={previewLiked ? 'favorite' : 'favorite-border'}
+                          size={22}
+                          color={previewLiked ? '#EF4444' : '#0F172A'}
+                        />
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Toggle post comments preview"
+                        onPress={() => setShowCommentPreview((p) => !p)}
+                        hitSlop={8}
+                      >
+                        <MaterialIcons
+                          name="chat-bubble-outline"
+                          size={20}
+                          color={showCommentPreview ? '#009F50' : '#0F172A'}
+                        />
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Share post to social apps"
+                        onPress={handleSharePreview}
+                        hitSlop={8}
+                      >
+                        <MaterialIcons name="send" size={20} color="#0F172A" />
+                      </Pressable>
                     </View>
-                    <MaterialIcons name="bookmark-border" size={22} color="#0F172A" />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Bookmark this template"
+                      onPress={handleToggleBookmarkPreview}
+                      hitSlop={8}
+                    >
+                      <MaterialIcons
+                        name={previewBookmarked ? 'bookmark' : 'bookmark-border'}
+                        size={22}
+                        color={previewBookmarked ? '#009F50' : '#0F172A'}
+                      />
+                    </Pressable>
                   </View>
+
+                  {/* Interactive Comments & Hashtags Preview Panel */}
+                  {showCommentPreview && (
+                    <View style={{ paddingHorizontal: 12, paddingBottom: 10, paddingTop: 2, backgroundColor: '#F8FAFC', borderTopWidth: 1, borderColor: '#F1F5F9' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 4 }}>
+                        💬 First Pinned Comment (SEO Hashtags):
+                      </Text>
+                      <Text style={{ fontSize: 11.5, color: '#0284C7', lineHeight: 16 }}>
+                        #{businessDisplayName.replace(/[^A-Za-z0-9]/g, '')} #SpecialOffer #LocalBusiness #ServiceDeal #BookNow
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' }}>
+                        <TextInput
+                          placeholder="Add preview comment..."
+                          placeholderTextColor="#94A3B8"
+                          value={previewCommentText}
+                          onChangeText={setPreviewCommentText}
+                          style={[styles.configInput, { flex: 1, height: 32, paddingVertical: 4, fontSize: 11 }]}
+                        />
+                        <Pressable
+                          onPress={() => {
+                            if (previewCommentText.trim()) {
+                              setSuccessNotice('Preview comment added to post discussion!');
+                              setPreviewCommentText('');
+                            }
+                          }}
+                          style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#009F50', borderRadius: 6 }}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>Post</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )}
 
                   {/* Caption snippet */}
                   <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>

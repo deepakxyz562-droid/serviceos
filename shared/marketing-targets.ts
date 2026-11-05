@@ -35,17 +35,23 @@ export function publishingTargets(
 }
 
 /**
- * Resolve the selected account IDs. If user hasn't manually interacted,
- * default to pre-checking the active Google Business Profile account.
+ * Resolve the selected account IDs.
+ * When requireExplicitSelection is true (or user sets manual selection),
+ * requires the user to explicitly pick their account without silent auto-selection.
  */
 export function selectedPublishingIds(
   accounts: PublishingAccount[],
   manualIds: string[] | null,
-  savedGoogleAccountId?: string | null
+  savedGoogleAccountId?: string | null,
+  options?: { requireExplicitSelection?: boolean }
 ): string[] {
   if (manualIds !== null) {
     const validIds = new Set(accounts.filter((a) => a.isActive).map((a) => a.id));
     return manualIds.filter((id) => validIds.has(id));
+  }
+
+  if (options?.requireExplicitSelection) {
+    return [];
   }
 
   const selected: string[] = [];

@@ -68,6 +68,7 @@ export function PosterEditor({
   onSelectLayer,
   onOpenTemplates,
   onOpenRatio,
+  onGestureActive,
 }: {
   selectedLayerId?: string;
   onSelectLayer?: (id: string) => void;
@@ -75,6 +76,7 @@ export function PosterEditor({
   onChange: (doc: MarketingDesign) => void;
   onOpenTemplates?: () => void;
   onOpenRatio?: () => void;
+  onGestureActive?: (active: boolean) => void;
 }) {
   const [localSelected, setLocalSelected] = useState('');
   const selected = selectedLayerId ?? localSelected;
@@ -100,6 +102,14 @@ export function PosterEditor({
 
   const visibleDoc = preview || doc;
   const layer = visibleDoc.layers.find((l) => l.id === selected);
+  const isBackdrop = Boolean(
+    layer &&
+      layer.id === 'bg_photo' &&
+      layer.x === 0 &&
+      layer.y === 0 &&
+      layer.width >= doc.width &&
+      layer.height >= doc.height
+  );
 
   function selectLayer(id: string) {
     setSelected(id);
@@ -116,8 +126,8 @@ export function PosterEditor({
     setOverlapIds([]);
   }
 
-  const current = useRef({ doc, onChange, width: canvasWidth, selected });
-  current.current = { doc, onChange, width: canvasWidth, selected };
+  const current = useRef({ doc, onChange, width: canvasWidth, selected, onGestureActive });
+  current.current = { doc, onChange, width: canvasWidth, selected, onGestureActive };
 
   const pendingGesture = useRef<Partial<DesignLayer> | null>(null);
   const drag = useRef<{ layer: DesignLayer; doc: MarketingDesign; distance: number; angle: number } | null>(
@@ -144,15 +154,17 @@ export function PosterEditor({
   const resizeStart = useRef<{
     layer: DesignLayer;
     doc: MarketingDesign;
+    aspectRatio: number;
+    isAspectLocked: boolean;
   } | null>(null);
 
   const rotateStart = useRef<{
     layer: DesignLayer;
     doc: MarketingDesign;
     initialRotation: number;
-    armLength: number;
-    startTouchX: number;
-    startTouchY: number;
+    centerX: number;
+    centerY: number;
+    startTouchAngle: number;
   } | null>(null);
 
   // 1. Direct Touch Drag on Layer Body (Single-finger Move & Two-finger Pinch/Twist)
@@ -161,6 +173,7 @@ export function PosterEditor({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (e) => {
+        current.current.onGestureActive?.(true);
         pendingGesture.current = null;
         dragStart.current = null;
         const c = current.current;
@@ -207,13 +220,35 @@ export function PosterEditor({
           };
         } else {
           // Single-touch: smooth move with boundary clamping & snap
-          p = gestureLayer(start.layer, start.doc, g.dx * scale, g.dy * scale, 'move');
+          const dx = g.dx * scale;
+          const dy = g.dy * scale;
+          let x = Math.round(start.layer.x + dx);
+          let y = Math.round(start.layer.y + dy);
+
+          const minX = -Math.round(start.layer.width * 0.4);
+          const maxX = start.doc.width - Math.round(start.layer.width * 0.6);
+          const minY = -Math.round(start.layer.height * 0.4);
+          const maxY = start.doc.height - Math.round(start.layer.height * 0.6);
+
+          x = Math.max(minX, Math.min(maxX, x));
+          y = Math.max(minY, Math.min(maxY, y));
+
+          // Center snap when near center
+          if (Math.abs(x + start.layer.width / 2 - start.doc.width / 2) < 16) {
+            x = Math.round((start.doc.width - start.layer.width) / 2);
+          }
+          if (Math.abs(y + start.layer.height / 2 - start.doc.height / 2) < 16) {
+            y = Math.round((start.doc.height - start.layer.height) / 2);
+          }
+
+          p = { x, y };
         }
 
         pendingGesture.current = p;
         setPreview(patchDesignLayer(start.doc, start.layer.id, p));
       },
       onPanResponderRelease: () => {
+        current.current.onGestureActive?.(false);
         setPreview(null);
         const start = dragStart.current;
         dragStart.current = null;
@@ -223,6 +258,7 @@ export function PosterEditor({
         pendingGesture.current = null;
       },
       onPanResponderTerminate: () => {
+        current.current.onGestureActive?.(false);
         setPreview(null);
         dragStart.current = null;
         pendingGesture.current = null;
@@ -236,23 +272,55 @@ export function PosterEditor({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        current.current.onGestureActive?.(true);
         pendingGesture.current = null;
         resizeStart.current = null;
         const c = current.current;
         const l = c.doc.layers.find((lyr) => lyr.id === c.selected);
         if (!l || l.locked) return;
-        resizeStart.current = { layer: l, doc: c.doc };
+        resizeStart.current = {
+          layer: l,
+          doc: c.doc,
+          aspectRatio: l.width / Math.max(1, l.height),
+          isAspectLocked:
+            l.type === 'image' ||
+            l.id.includes('photo') ||
+            l.id.includes('logo') ||
+            l.id.includes('emblem') ||
+            l.id.includes('cutout'),
+        };
       },
       onPanResponderMove: (_e, g) => {
         const start = resizeStart.current;
         if (!start || start.layer.locked) return;
         const c = current.current;
         const scale = c.doc.width / c.width;
-        const p = gestureLayer(start.layer, start.doc, g.dx * scale, g.dy * scale, 'resize');
+        const dxCanvas = g.dx * scale;
+        const dyCanvas = g.dy * scale;
+
+        // Transform displacement into layer's local rotated coordinate space
+        const rotRad = (-(start.layer.rotation || 0) * Math.PI) / 180;
+        const localDx = dxCanvas * Math.cos(rotRad) - dyCanvas * Math.sin(rotRad);
+        const localDy = dxCanvas * Math.sin(rotRad) + dyCanvas * Math.cos(rotRad);
+
+        let newWidth: number;
+        let newHeight: number;
+
+        if (start.isAspectLocked) {
+          const change = (localDx + localDy * start.aspectRatio) / 2;
+          newWidth = Math.max(32, Math.min(Math.round(start.doc.width * 1.5), Math.round(start.layer.width + change)));
+          newHeight = Math.max(24, Math.min(Math.round(start.doc.height * 1.5), Math.round(newWidth / start.aspectRatio)));
+        } else {
+          newWidth = Math.max(32, Math.min(Math.round(start.doc.width * 1.5), Math.round(start.layer.width + localDx)));
+          newHeight = Math.max(24, Math.min(Math.round(start.doc.height * 1.5), Math.round(start.layer.height + localDy)));
+        }
+
+        const p: Partial<DesignLayer> = { width: newWidth, height: newHeight };
         pendingGesture.current = p;
         setPreview(patchDesignLayer(start.doc, start.layer.id, p));
       },
       onPanResponderRelease: () => {
+        current.current.onGestureActive?.(false);
         setPreview(null);
         const start = resizeStart.current;
         resizeStart.current = null;
@@ -262,6 +330,7 @@ export function PosterEditor({
         pendingGesture.current = null;
       },
       onPanResponderTerminate: () => {
+        current.current.onGestureActive?.(false);
         setPreview(null);
         resizeStart.current = null;
         pendingGesture.current = null;
@@ -269,40 +338,53 @@ export function PosterEditor({
     })
   ).current;
 
-  // 3. Top Stem Knob (Touch & Swing to Rotate fluidly 0° - 360°)
+  // 3. Stem Knob (Touch & Swing to Rotate fluidly 0° - 360°)
   const rotateResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (e) => {
+        current.current.onGestureActive?.(true);
         pendingGesture.current = null;
         rotateStart.current = null;
         const c = current.current;
         const l = c.doc.layers.find((lyr) => lyr.id === c.selected);
         if (!l || l.locked) return;
         const scale = c.width / c.doc.width;
-        const armLength = (l.height * scale) / 2 + 28;
+        const isNearTop = (l.y / c.doc.width) * c.width < 45;
+        const armLength = (l.height * scale) / 2 + 24;
+        const initRot = l.rotation || 0;
+        const rotRad = (initRot * Math.PI) / 180;
+
+        const sign = isNearTop ? 1 : -1;
+        const vScreenX = -sign * armLength * Math.sin(rotRad);
+        const vScreenY = sign * armLength * Math.cos(rotRad);
+
+        const touchX = e.nativeEvent.pageX;
+        const touchY = e.nativeEvent.pageY;
+
+        const centerX = touchX - vScreenX;
+        const centerY = touchY - vScreenY;
+
+        const startTouchAngle = (Math.atan2(touchY - centerY, touchX - centerX) * 180) / Math.PI;
+
         rotateStart.current = {
           layer: l,
           doc: c.doc,
-          initialRotation: l.rotation || 0,
-          armLength,
-          startTouchX: e.nativeEvent.pageX,
-          startTouchY: e.nativeEvent.pageY,
+          initialRotation: initRot,
+          centerX,
+          centerY,
+          startTouchAngle,
         };
       },
       onPanResponderMove: (e) => {
         const start = rotateStart.current;
         if (!start || start.layer.locked) return;
-        const dx = e.nativeEvent.pageX - start.startTouchX;
-        const dy = e.nativeEvent.pageY - start.startTouchY;
+        const currentTouchX = e.nativeEvent.pageX;
+        const currentTouchY = e.nativeEvent.pageY;
 
-        // Angle from center of object to current touch
-        const vX = dx;
-        const vY = -start.armLength + dy;
-        const angleCurrent = Math.atan2(vY, vX);
-        const angleInitial = -Math.PI / 2; // top center
-        let deltaDeg = ((angleCurrent - angleInitial) * 180) / Math.PI;
+        const currentAngle = (Math.atan2(currentTouchY - start.centerY, currentTouchX - start.centerX) * 180) / Math.PI;
+        let deltaDeg = currentAngle - start.startTouchAngle;
 
         let newRot = (start.initialRotation + deltaDeg) % 360;
         if (newRot > 180) newRot -= 360;
@@ -321,6 +403,7 @@ export function PosterEditor({
         setPreview(patchDesignLayer(start.doc, start.layer.id, p));
       },
       onPanResponderRelease: () => {
+        current.current.onGestureActive?.(false);
         setPreview(null);
         const start = rotateStart.current;
         rotateStart.current = null;
@@ -330,6 +413,7 @@ export function PosterEditor({
         pendingGesture.current = null;
       },
       onPanResponderTerminate: () => {
+        current.current.onGestureActive?.(false);
         setPreview(null);
         rotateStart.current = null;
         pendingGesture.current = null;
@@ -337,8 +421,38 @@ export function PosterEditor({
     })
   ).current;
 
-  // ── LAYER MANIPULATION HELPERS (DELETE, NUDGE, ROTATE, ORDER) ─────────────
+  // ── LAYER MANIPULATION HELPERS (SCALE, DELETE, NUDGE, ROTATE, ORDER) ──
+  function handleScaleStep(deltaPercent: number) {
+    const l = doc.layers.find((lyr) => lyr.id === selected);
+    if (!l || l.locked) return;
+    const factor = 1 + deltaPercent / 100;
+    const newWidth = Math.max(32, Math.min(Math.round(doc.width * 1.5), Math.round(l.width * factor)));
+    const aspectRatio = l.width / Math.max(1, l.height);
+    const isAspectLocked =
+      l.type === 'image' ||
+      l.id.includes('photo') ||
+      l.id.includes('logo') ||
+      l.id.includes('emblem') ||
+      l.id.includes('cutout');
+    const newHeight = isAspectLocked
+      ? Math.max(24, Math.min(Math.round(doc.height * 1.5), Math.round(newWidth / aspectRatio)))
+      : Math.max(24, Math.min(Math.round(doc.height * 1.5), Math.round(l.height * factor)));
+
+    patch({ width: newWidth, height: newHeight });
+  }
+
   function handleDeleteLayer(id: string) {
+    if (isBackdrop && id === 'bg_photo') {
+      Alert.alert(
+        'Background Photo',
+        'The template background photo cannot be deleted. You can replace it with any photo from your library.',
+        [
+          { text: 'Replace Photo', onPress: () => void replacePhoto(false) },
+          { text: 'OK', style: 'cancel' },
+        ]
+      );
+      return;
+    }
     if (doc.layers.length <= 1) {
       Alert.alert('Cannot Delete', 'The design must keep at least one layer.');
       return;
@@ -455,29 +569,64 @@ export function PosterEditor({
       if (add) {
         if (latest.doc.layers.length >= 40) throw new Error('Maximum 40 layers supported.');
         const id = Crypto.randomUUID();
+        const newLayer: DesignLayer = {
+          id,
+          type: 'image',
+          x: Math.round(latest.doc.width * 0.1),
+          y: Math.round(latest.doc.height * 0.40),
+          width: Math.round(latest.doc.width * 0.8),
+          height: Math.round(latest.doc.height * 0.32),
+          borderRadius: 16,
+          src: result.url,
+          assetId: result.assetId,
+          color: '#ffffff',
+          background: 'transparent',
+          fontSize: 16,
+          opacity: 1,
+          cropX: 50,
+          cropY: 0,
+        };
+        // Insert behind text layers so title, badge, and logo are never hidden
+        const firstTextIdx = latest.doc.layers.findIndex((l) => l.type === 'text');
+        const insertIdx = firstTextIdx >= 0 ? firstTextIdx : latest.doc.layers.length;
+        const nextLayers = [...latest.doc.layers];
+        nextLayers.splice(insertIdx, 0, newLayer);
+
         latest.onChange({
           ...latest.doc,
-          layers: [
-            ...latest.doc.layers,
-            {
-              id,
-              type: 'image',
-              x: 40,
-              y: 40,
-              width: latest.doc.width - 80,
-              height: latest.doc.height * 0.45,
-              src: result.url,
-              assetId: result.assetId,
-              color: '#ffffff',
-              background: 'transparent',
-              fontSize: 16,
-              opacity: 1,
-            },
-          ],
+          layers: nextLayers,
         });
         selectLayer(id);
       } else {
-        latest.onChange(patchDesignLayer(latest.doc, targetId || 'bg_photo', { src: result.url, assetId: result.assetId }));
+        const replaceId = targetId || 'bg_photo';
+        const targetLayer = latest.doc.layers.find((l) => l.id === replaceId);
+        const isBackgroundPhoto =
+          !targetLayer ||
+          targetLayer.id === 'bg_photo' ||
+          (targetLayer.x === 0 && targetLayer.y === 0 && targetLayer.width >= latest.doc.width && targetLayer.height >= latest.doc.height);
+
+        const nextLayers = latest.doc.layers.map((l) => {
+          if (l.id === replaceId) {
+            return {
+              ...l,
+              src: result.url,
+              assetId: result.assetId,
+              cropX: l.cropX ?? 50,
+              cropY: l.cropY ?? 0,
+            };
+          }
+          // When replacing the background photo, automatically suppress top_scrim so the custom photo is completely unobscured
+          if (isBackgroundPhoto && l.id === 'top_scrim') {
+            return { ...l, opacity: 0, hidden: true };
+          }
+          return l;
+        });
+
+        latest.onChange({
+          ...latest.doc,
+          layers: nextLayers,
+        });
+        selectLayer(replaceId);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Photo upload failed.');
@@ -510,12 +659,73 @@ export function PosterEditor({
         cutoutDataUri?: string;
         notice?: string;
         error?: string;
+        bounds?: {
+          left: number;
+          top: number;
+          width: number;
+          height: number;
+          origWidth: number;
+          origHeight: number;
+        };
       }>('/api/media/remove-bg', {
         method: 'POST',
         body: { imageUrl: currentUrl },
       });
       if (res.success && res.cutoutDataUri) {
-        patch({ src: res.cutoutDataUri });
+        const bounds = res.bounds;
+        const currentLayer = doc.layers.find((l) => l.id === layerId);
+        if (
+          currentLayer &&
+          bounds &&
+          bounds.width > 0 &&
+          bounds.height > 0 &&
+          bounds.origWidth > 0 &&
+          bounds.origHeight > 0
+        ) {
+          const isCurrentlyBackdrop =
+            currentLayer.id === 'bg_photo' &&
+            currentLayer.x === 0 &&
+            currentLayer.y === 0 &&
+            currentLayer.width >= doc.width &&
+            currentLayer.height >= doc.height;
+
+          if (isCurrentlyBackdrop) {
+            // Auto-detach backdrop to floating cutout layer with natural aspect ratio
+            const scaleX = doc.width / bounds.origWidth;
+            const scaleY = doc.height / bounds.origHeight;
+            const newW = Math.max(160, Math.min(Math.round(doc.width * 0.85), Math.round(bounds.width * scaleX)));
+            const newH = Math.max(160, Math.min(Math.round(doc.height * 0.7), Math.round(bounds.height * scaleY)));
+            const newX = Math.round((doc.width - newW) / 2);
+            const newY = Math.round(doc.height * 0.40);
+
+            patch({
+              src: res.cutoutDataUri,
+              x: newX,
+              y: newY,
+              width: newW,
+              height: newH,
+              borderRadius: 0,
+            });
+          } else {
+            // Floating image: preserve subject center / visual spot and collapse bounds
+            const scaleX = currentLayer.width / bounds.origWidth;
+            const scaleY = currentLayer.height / bounds.origHeight;
+            const newW = Math.max(40, Math.round(bounds.width * scaleX));
+            const newH = Math.max(40, Math.round(bounds.height * scaleY));
+            const newX = Math.round(currentLayer.x + bounds.left * scaleX);
+            const newY = Math.round(currentLayer.y + bounds.top * scaleY);
+
+            patch({
+              src: res.cutoutDataUri,
+              x: newX,
+              y: newY,
+              width: newW,
+              height: newH,
+            });
+          }
+        } else {
+          patch({ src: res.cutoutDataUri });
+        }
       } else {
         const msg = res.error || res.notice || 'Background removal could not be completed';
         setError(msg);
@@ -568,19 +778,33 @@ export function PosterEditor({
       >
         <PosterPreview doc={visibleDoc} />
 
-        {/* Canvas Touch Overlay - Direct Tap to Select */}
+        {/* Canvas Touch Overlay - Direct Tap to Select / Tap Outside to Deselect */}
         <Pressable
           accessibilityLabel="Select an object on the design"
           style={StyleSheet.absoluteFill}
           onPress={(e) => {
             const x = (e.nativeEvent.locationX * doc.width) / canvasWidth;
             const y = (e.nativeEvent.locationY * doc.width) / canvasWidth;
-            const hits = layersAtPoint(doc, x, y);
-            setOverlapIds(hits.map((l) => l.id));
-            if (hits[0]) {
-              selectLayer(hits[0].id);
+            const contentHits = layersAtPoint(doc, x, y, { excludeBackdrop: true });
+            if (contentHits[0]) {
+              // Tapped a specific foreground element (text, logo, card, emblem)
+              selectLayer(contentHits[0].id);
+              setOverlapIds(contentHits.map((l) => l.id));
             } else {
-              done();
+              // Tapped on empty canvas / outside content elements
+              if (selected) {
+                // If any layer (or backdrop) was selected, tap outside immediately DESELECTS!
+                done();
+              } else {
+                // Nothing was selected: tap on background photo selects backdrop
+                const bg = doc.layers.find((l) => l.id === 'bg_photo' && !l.hidden);
+                if (bg) {
+                  selectLayer(bg.id);
+                  setOverlapIds([bg.id]);
+                } else {
+                  done();
+                }
+              }
             }
           }}
         />
@@ -588,6 +812,7 @@ export function PosterEditor({
         {/* Selected Layer Interactive Touch Box with Move, Resize & Rotate Handles */}
         {layer && !layer.hidden && (
           <View
+            pointerEvents="box-none"
             style={{
               position: 'absolute',
               left: (layer.x / doc.width) * canvasWidth,
@@ -600,140 +825,154 @@ export function PosterEditor({
           >
             {/* Direct Touch Drag Surface on Layer Body */}
             <View
-              {...(!layer.locked ? bodyResponder.panHandlers : {})}
+              {...(!layer.locked && !isBackdrop ? bodyResponder.panHandlers : {})}
               accessible
               accessibilityRole="button"
-              accessibilityLabel={`Drag ${getFriendlyName(layer.id)}`}
+              accessibilityLabel={`Selected ${getFriendlyName(layer.id)}`}
               style={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
                 right: 0,
                 bottom: 0,
-                borderWidth: 2,
+                borderWidth: 1.5,
                 borderColor: '#009F50',
                 borderStyle: 'dashed',
                 borderRadius: ((layer.borderRadius || 0) / doc.width) * canvasWidth,
-                backgroundColor: 'rgba(0, 159, 80, 0.05)',
+                backgroundColor: 'transparent',
               }}
             />
 
-            {!layer.locked && (
-              <>
-                {/* ── Top Stem & Rotate Knob ── */}
-                <View
-                  pointerEvents="none"
-                  style={{
-                    position: 'absolute',
-                    top: -20,
-                    left: ((layer.width / doc.width) * canvasWidth) / 2 - 1,
-                    width: 2,
-                    height: 20,
-                    backgroundColor: '#009F50',
-                  }}
-                />
-                <View
-                  {...rotateResponder.panHandlers}
-                  accessible
-                  accessibilityRole="adjustable"
-                  accessibilityLabel="Rotate layer handle"
-                  style={{
-                    position: 'absolute',
-                    top: -40,
-                    left: ((layer.width / doc.width) * canvasWidth) / 2 - 16,
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: '#FFFFFF',
-                    borderWidth: 2,
-                    borderColor: '#009F50',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.22,
-                    shadowRadius: 3,
-                    elevation: 5,
-                    zIndex: 40,
-                  }}
-                >
-                  <MaterialIcons name="refresh" size={18} color="#009F50" />
-                </View>
+            {!layer.locked && (() => {
+              const layerYOnCanvas = (layer.y / doc.width) * canvasWidth;
+              const layerHeightOnCanvas = (layer.height / doc.width) * canvasWidth;
+              const canvasHeight = (doc.height / doc.width) * canvasWidth;
+              const isNearBottom = (layerYOnCanvas + layerHeightOnCanvas) > (canvasHeight - 45);
+              const layerWidthOnCanvas = (layer.width / doc.width) * canvasWidth;
 
-                {/* ── Bottom-Right Corner Resize Grip Handle ── */}
-                <View
-                  {...resizeResponder.panHandlers}
-                  accessible
-                  accessibilityRole="adjustable"
-                  accessibilityLabel="Resize layer handle"
-                  style={{
-                    position: 'absolute',
-                    bottom: -16,
-                    right: -16,
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: '#009F50',
-                    borderWidth: 2,
-                    borderColor: '#FFFFFF',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.25,
-                    shadowRadius: 3,
-                    elevation: 5,
-                    zIndex: 40,
-                  }}
-                >
-                  <MaterialIcons name="open-in-full" size={15} color="#FFFFFF" />
-                </View>
+              return (
+                <>
+                  {/* ── Stem & Rotate Knob (Bottom placement prevents headline occlusion; flips up only if near canvas bottom) ── */}
+                  {!isBackdrop && (
+                    <>
+                      <View
+                        pointerEvents="none"
+                        style={{
+                          position: 'absolute',
+                          ...(isNearBottom ? { top: -20 } : { bottom: -20 }),
+                          left: layerWidthOnCanvas / 2 - 1,
+                          width: 2,
+                          height: 20,
+                          backgroundColor: '#009F50',
+                        }}
+                      />
+                      <View
+                        {...rotateResponder.panHandlers}
+                        accessible
+                        accessibilityRole="adjustable"
+                        accessibilityLabel="Rotate layer handle"
+                        hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                        style={{
+                          position: 'absolute',
+                          ...(isNearBottom ? { top: -40 } : { bottom: -40 }),
+                          left: layerWidthOnCanvas / 2 - 16,
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: '#FFFFFF',
+                          borderWidth: 2,
+                          borderColor: '#009F50',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.22,
+                          shadowRadius: 3,
+                          elevation: 5,
+                          zIndex: 40,
+                        }}
+                      >
+                        <MaterialIcons name="refresh" size={18} color="#009F50" />
+                      </View>
+                    </>
+                  )}
 
-                {/* Corner Anchor Dots for Visual Precision Cue */}
-                <View
-                  pointerEvents="none"
-                  style={{
-                    position: 'absolute',
-                    top: -5,
-                    left: -5,
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: '#FFFFFF',
-                    borderWidth: 2,
-                    borderColor: '#009F50',
-                  }}
-                />
-                <View
-                  pointerEvents="none"
-                  style={{
-                    position: 'absolute',
-                    top: -5,
-                    right: -5,
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: '#FFFFFF',
-                    borderWidth: 2,
-                    borderColor: '#009F50',
-                  }}
-                />
-                <View
-                  pointerEvents="none"
-                  style={{
-                    position: 'absolute',
-                    bottom: -5,
-                    left: -5,
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: '#FFFFFF',
-                    borderWidth: 2,
-                    borderColor: '#009F50',
-                  }}
-                />
-              </>
-            )}
+                  {/* ── Bottom-Right Corner Resize Grip Handle ── */}
+                  <View
+                    {...resizeResponder.panHandlers}
+                    accessible
+                    accessibilityRole="adjustable"
+                    accessibilityLabel="Resize layer handle"
+                    hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                    style={{
+                      position: 'absolute',
+                      bottom: -16,
+                      right: -16,
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: '#009F50',
+                      borderWidth: 2,
+                      borderColor: '#FFFFFF',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.25,
+                      shadowRadius: 3,
+                      elevation: 5,
+                      zIndex: 40,
+                    }}
+                  >
+                    <MaterialIcons name="open-in-full" size={15} color="#FFFFFF" />
+                  </View>
+
+                  {/* Corner Anchor Dots for Visual Precision Cue */}
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      top: -5,
+                      left: -5,
+                      width: 10,
+                      height: 10,
+                      borderRadius: 5,
+                      backgroundColor: '#FFFFFF',
+                      borderWidth: 2,
+                      borderColor: '#009F50',
+                    }}
+                  />
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      top: -5,
+                      right: -5,
+                      width: 10,
+                      height: 10,
+                      borderRadius: 5,
+                      backgroundColor: '#FFFFFF',
+                      borderWidth: 2,
+                      borderColor: '#009F50',
+                    }}
+                  />
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      bottom: -5,
+                      left: -5,
+                      width: 10,
+                      height: 10,
+                      borderRadius: 5,
+                      backgroundColor: '#FFFFFF',
+                      borderWidth: 2,
+                      borderColor: '#009F50',
+                    }}
+                  />
+                </>
+              );
+            })()}
           </View>
         )}
       </View>
@@ -814,18 +1053,22 @@ export function PosterEditor({
           <View style={styles.contextualHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
               <MaterialIcons
-                name={layer.type === 'image' ? 'image' : layer.type === 'text' ? 'title' : 'category'}
+                name={isBackdrop ? 'wallpaper' : layer.type === 'image' ? 'image' : layer.type === 'text' ? 'title' : 'category'}
                 size={16}
                 color="#009F50"
               />
               <Text numberOfLines={1} style={styles.contextualTitle}>
-                {getFriendlyName(layer.id)}
+                {isBackdrop ? 'Background Photo' : getFriendlyName(layer.id)}
               </Text>
-              {layer.locked && (
+              {isBackdrop ? (
+                <View style={[styles.lockBadge, { backgroundColor: '#E0F2FE' }]}>
+                  <Text style={[styles.lockBadgeText, { color: '#0369A1' }]}>Background Photo</Text>
+                </View>
+              ) : layer.locked ? (
                 <View style={styles.lockBadge}>
                   <Text style={styles.lockBadgeText}>Locked</Text>
                 </View>
-              )}
+              ) : null}
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1023,15 +1266,17 @@ export function PosterEditor({
               <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
                 <Pressable
                   onPress={() => void replacePhoto(false)}
-                  style={[styles.photoActionBtn, { flex: 1, minWidth: 90 }]}
+                  style={[styles.photoActionBtn, { flex: 1, minWidth: 95 }]}
                 >
                   <MaterialIcons name="image" size={16} color="#009F50" />
-                  <Text style={styles.photoActionBtnText}>Replace</Text>
+                  <Text style={styles.photoActionBtnText}>
+                    {isBackdrop ? 'Replace Photo' : 'Replace'}
+                  </Text>
                 </Pressable>
 
                 <Pressable
                   onPress={() => void replacePhoto(true)}
-                  style={[styles.photoActionBtn, { flex: 1, minWidth: 90, backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' }]}
+                  style={[styles.photoActionBtn, { flex: 1, minWidth: 95, backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' }]}
                 >
                   <MaterialIcons name="add-photo-alternate" size={16} color="#0284C7" />
                   <Text style={[styles.photoActionBtnText, { color: '#0284C7' }]}>Add Photo</Text>
@@ -1040,7 +1285,7 @@ export function PosterEditor({
                 <Pressable
                   onPress={() => void handleRemoveBackground(layer.id, layer.src)}
                   disabled={removingBgLayerId === layer.id}
-                  style={[styles.photoActionBtn, { flex: 1.2, minWidth: 110, backgroundColor: '#FAF5FF', borderColor: '#E9D5FF' }]}
+                  style={[styles.photoActionBtn, { flex: 1.2, minWidth: 115, backgroundColor: '#FAF5FF', borderColor: '#E9D5FF' }]}
                 >
                   {removingBgLayerId === layer.id ? (
                     <ActivityIndicator size="small" color="#9333EA" />
@@ -1055,7 +1300,9 @@ export function PosterEditor({
 
               {/* Crop / Position Directional Controls */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
-                <Text style={styles.controlLabel}>Adjust Photo Position</Text>
+                <Text style={styles.controlLabel}>
+                  {isBackdrop ? 'Pan Photo Position' : 'Adjust Photo Position'}
+                </Text>
                 <View style={{ flexDirection: 'row', gap: 5 }}>
                   <Pressable
                     onPress={() => patch({ cropX: Math.max(0, (layer.cropX ?? 50) - 10) })}
@@ -1119,133 +1366,159 @@ export function PosterEditor({
             </View>
           )}
 
-          {/* Universal Transform, Order & Position Tools (Available for all layers) */}
-          <View style={styles.universalTransformSection}>
-            {/* Header: Transform & Position with Live Angle Display */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <Text style={styles.controlLabel}>Position & Rotation</Text>
-              <Pressable
-                disabled={layer.locked}
-                onPress={handleResetRotation}
-                style={{
-                  paddingHorizontal: 8,
-                  paddingVertical: 2.5,
-                  borderRadius: 6,
-                  backgroundColor: layer.rotation ? '#FEF3C7' : '#F1F5F9',
-                }}
-              >
-                <Text style={{ fontSize: 11, fontWeight: '700', color: layer.rotation ? '#B45309' : '#64748B' }}>
-                  Angle: {Math.round(layer.rotation || 0)}° {layer.rotation ? '(Reset 0°)' : ''}
-                </Text>
-              </Pressable>
+          {/* Universal Transform, Order & Position Tools (Available for all floating layers) */}
+          {!isBackdrop && (
+            <View style={styles.universalTransformSection}>
+              {/* Header: Transform & Position with Live Angle Display */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={styles.controlLabel}>Position & Transform</Text>
+                <Pressable
+                  disabled={layer.locked}
+                  onPress={handleResetRotation}
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 2.5,
+                    borderRadius: 6,
+                    backgroundColor: layer.rotation ? '#FEF3C7' : '#F1F5F9',
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: layer.rotation ? '#B45309' : '#64748B' }}>
+                    Angle: {Math.round(layer.rotation || 0)}° {layer.rotation ? '(Reset 0°)' : ''}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Row 1: Scale Stepper [-] [+] & Z-Order Depth */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 8 }}>
+                <View style={styles.stepperGroup}>
+                  <Text style={styles.controlLabel}>Scale</Text>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => handleScaleStep(-5)}
+                    style={styles.stepperBtn}
+                  >
+                    <MaterialIcons name="remove" size={15} color="#0F172A" />
+                  </Pressable>
+                  <Text style={[styles.stepperVal, { minWidth: 64 }]}>
+                    {Math.round(layer.width)}×{Math.round(layer.height)}
+                  </Text>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => handleScaleStep(5)}
+                    style={styles.stepperBtn}
+                  >
+                    <MaterialIcons name="add" size={15} color="#0F172A" />
+                  </Pressable>
+                </View>
+
+                {/* Z-Order Layer Stacking */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => handleMoveLayerOrder(layer.id, 'forward')}
+                    style={styles.transformActionBtn}
+                  >
+                    <MaterialIcons name="arrow-upward" size={14} color="#0F172A" />
+                    <Text style={styles.transformActionBtnText}>Up</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => handleMoveLayerOrder(layer.id, 'backward')}
+                    style={styles.transformActionBtn}
+                  >
+                    <MaterialIcons name="arrow-downward" size={14} color="#0F172A" />
+                    <Text style={styles.transformActionBtnText}>Down</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Row 2: Rotation Steppers & 90° Turn */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 8 }}>
+                {/* Rotation Stepper Group */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => handleRotateStep(-15)}
+                    style={styles.transformActionBtn}
+                  >
+                    <MaterialIcons name="rotate-left" size={15} color="#0F172A" />
+                    <Text style={styles.transformActionBtnText}>-15°</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => handleRotateStep(15)}
+                    style={styles.transformActionBtn}
+                  >
+                    <MaterialIcons name="rotate-right" size={15} color="#0F172A" />
+                    <Text style={styles.transformActionBtnText}>+15°</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => handleRotateStep(90)}
+                    style={[styles.transformActionBtn, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}
+                  >
+                    <MaterialIcons name="refresh" size={14} color="#009F50" />
+                    <Text style={[styles.transformActionBtnText, { color: '#009F50' }]}>90°</Text>
+                  </Pressable>
+                </View>
+
+                {/* Center Alignment Presets */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={handleCenterHorizontally}
+                    style={styles.alignPresetBtn}
+                  >
+                    <MaterialIcons name="align-horizontal-center" size={14} color="#009F50" />
+                    <Text style={styles.alignPresetBtnText}>Center H</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={handleCenterVertically}
+                    style={styles.alignPresetBtn}
+                  >
+                    <MaterialIcons name="align-vertical-center" size={14} color="#009F50" />
+                    <Text style={styles.alignPresetBtnText}>Center V</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Row 3: Precision Nudge Pad */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                <Text style={styles.controlLabel}>Nudge (12px)</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => handleNudge(-12, 0)}
+                    style={styles.nudgeBtn}
+                  >
+                    <MaterialIcons name="arrow-back" size={15} color="#0F172A" />
+                  </Pressable>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => handleNudge(12, 0)}
+                    style={styles.nudgeBtn}
+                  >
+                    <MaterialIcons name="arrow-forward" size={15} color="#0F172A" />
+                  </Pressable>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => handleNudge(0, -12)}
+                    style={styles.nudgeBtn}
+                  >
+                    <MaterialIcons name="arrow-upward" size={15} color="#0F172A" />
+                  </Pressable>
+                  <Pressable
+                    disabled={layer.locked}
+                    onPress={() => handleNudge(0, 12)}
+                    style={styles.nudgeBtn}
+                  >
+                    <MaterialIcons name="arrow-downward" size={15} color="#0F172A" />
+                  </Pressable>
+                </View>
+              </View>
             </View>
-
-            {/* Row 1: Rotation Steppers, 90° Turn & Z-Order Depth */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 8 }}>
-              {/* Rotation Stepper Group */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={() => handleRotateStep(-15)}
-                  style={styles.transformActionBtn}
-                >
-                  <MaterialIcons name="rotate-left" size={15} color="#0F172A" />
-                  <Text style={styles.transformActionBtnText}>-15°</Text>
-                </Pressable>
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={() => handleRotateStep(15)}
-                  style={styles.transformActionBtn}
-                >
-                  <MaterialIcons name="rotate-right" size={15} color="#0F172A" />
-                  <Text style={styles.transformActionBtnText}>+15°</Text>
-                </Pressable>
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={() => handleRotateStep(90)}
-                  style={[styles.transformActionBtn, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}
-                >
-                  <MaterialIcons name="refresh" size={14} color="#009F50" />
-                  <Text style={[styles.transformActionBtnText, { color: '#009F50' }]}>90°</Text>
-                </Pressable>
-              </View>
-
-              {/* Z-Order Layer Stacking */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={() => handleMoveLayerOrder(layer.id, 'forward')}
-                  style={styles.transformActionBtn}
-                >
-                  <MaterialIcons name="arrow-upward" size={14} color="#0F172A" />
-                  <Text style={styles.transformActionBtnText}>Up</Text>
-                </Pressable>
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={() => handleMoveLayerOrder(layer.id, 'backward')}
-                  style={styles.transformActionBtn}
-                >
-                  <MaterialIcons name="arrow-downward" size={14} color="#0F172A" />
-                  <Text style={styles.transformActionBtnText}>Down</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {/* Row 2: Precision Nudge & Center Presets */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-              {/* Alignment Presets */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={handleCenterHorizontally}
-                  style={styles.alignPresetBtn}
-                >
-                  <MaterialIcons name="align-horizontal-center" size={14} color="#009F50" />
-                  <Text style={styles.alignPresetBtnText}>Center H</Text>
-                </Pressable>
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={handleCenterVertically}
-                  style={styles.alignPresetBtn}
-                >
-                  <MaterialIcons name="align-vertical-center" size={14} color="#009F50" />
-                  <Text style={styles.alignPresetBtnText}>Center V</Text>
-                </Pressable>
-              </View>
-
-              {/* 4-Way Arrow Nudge Pad */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={() => handleNudge(-12, 0)}
-                  style={styles.nudgeBtn}
-                >
-                  <MaterialIcons name="arrow-back" size={15} color="#0F172A" />
-                </Pressable>
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={() => handleNudge(12, 0)}
-                  style={styles.nudgeBtn}
-                >
-                  <MaterialIcons name="arrow-forward" size={15} color="#0F172A" />
-                </Pressable>
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={() => handleNudge(0, -12)}
-                  style={styles.nudgeBtn}
-                >
-                  <MaterialIcons name="arrow-upward" size={15} color="#0F172A" />
-                </Pressable>
-                <Pressable
-                  disabled={layer.locked}
-                  onPress={() => handleNudge(0, 12)}
-                  style={styles.nudgeBtn}
-                >
-                  <MaterialIcons name="arrow-downward" size={15} color="#0F172A" />
-                </Pressable>
-              </View>
-            </View>
-          </View>
+          )}
         </View>
       )}
 
@@ -1395,7 +1668,7 @@ const styles = StyleSheet.create({
   },
   canvasContainer: {
     borderRadius: 16,
-    overflow: 'hidden',
+    overflow: 'visible',
     backgroundColor: '#070A13',
     alignItems: 'center',
     justifyContent: 'center',
