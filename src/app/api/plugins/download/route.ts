@@ -2,15 +2,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 
-// GET /api/plugins/download — Download WordPress plugin (AI Forms or CRM Connector)
-// Phase 8: now supports ?plugin=ai (Fieseros AI plugin) or ?plugin=crm (legacy CRM connector)
+// GET /api/plugins/download — Download WordPress plugin (BGOS Chatbot, AI Forms, or CRM Connector)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const format = searchParams.get('format') || 'php'
-    const pluginType = searchParams.get('plugin') || 'crm' // 'ai' or 'crm'
+    const format = searchParams.get('format') || 'zip'
+    const pluginType = searchParams.get('plugin') || 'bgos-chat' // 'bgos-chat', 'ai', or 'crm'
 
-    // Phase 8: serve the AI Forms plugin when plugin=ai
+    // BGOS AI Chatbot WordPress plugin ZIP
+    if (pluginType === 'bgos-chat' || pluginType === 'chatbot' || (pluginType === 'ai' && format === 'zip')) {
+      const zipPath = join(process.cwd(), 'public', 'downloads', 'bgos-ai-chatbot.zip')
+      if (existsSync(zipPath)) {
+        const zipBuffer = readFileSync(zipPath)
+        return new NextResponse(zipBuffer, {
+          headers: {
+            'Content-Type': 'application/zip',
+            'Content-Disposition': 'attachment; filename="bgos-ai-chatbot.zip"',
+            'X-Plugin-Version': '1.0.0',
+            'X-Plugin-Type': 'bgos-ai-chatbot',
+          },
+        })
+      }
+    }
+
+    // Phase 8: serve the AI Forms plugin when plugin=ai (raw PHP)
     const pluginPath = pluginType === 'ai'
       ? join(process.cwd(), 'src', 'plugins', 'wordpress', 'fieseros-ai', 'fieseros-ai.php')
       : join(process.cwd(), 'public', 'downloads', 'fieseros-wp-plugin', 'fieseros-crm-connector.php')
@@ -19,7 +34,7 @@ export async function GET(request: NextRequest) {
     const pluginVersion = pluginType === 'ai' ? '1.0.0' : '2.0.0'
     const pluginLabel = pluginType === 'ai' ? 'Fieseros AI' : 'Fieseros CRM Connector'
 
-    if (format === 'zip' || format === 'php') {
+    if (format === 'php') {
       if (!existsSync(pluginPath)) {
         return NextResponse.json(
           { error: `${pluginLabel} plugin file not found` },
