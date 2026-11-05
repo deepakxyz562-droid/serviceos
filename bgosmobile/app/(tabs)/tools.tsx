@@ -38,6 +38,7 @@ import { enablePush } from '../../src/lib/push';
 import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 
 export default function ToolsScreen() {
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -256,8 +257,8 @@ export default function ToolsScreen() {
 
   return (
     <Screen
-      title="Settings & Hub"
-      subtitle="My plan, social accounts, growth tools, privacy & settings."
+      title="Tools"
+      subtitle="Open a tool or manage your business."
       onRefresh={workspace.refresh}
     >
       <ErrorNotice message={error || workspace.error} retry={workspace.refresh} />
@@ -268,6 +269,80 @@ export default function ToolsScreen() {
         </Card>
       ) : null}
 
+      {/* ─────────────────────────────────────────────────────────────
+          3. TOOLS & OPERATIONS
+          ───────────────────────────────────────────────────────────── */}
+      <Card>
+        <View style={[ui.row, { gap: 6, alignItems: 'center', marginBottom: 6 }]}>
+          <MaterialIcons name="build" size={20} color={colors.brand} />
+          <Text style={ui.heading}>Tools</Text>
+        </View>
+        <MenuRow
+          title="Brand Brain (AI Preferences)"
+          detail="Products, branding, founder bio & AI guardrails"
+          icon="psychology"
+          onPress={() => router.push('/preferences')}
+        />
+        <MenuRow
+          title="1-Tap WhatsApp Reviews"
+          detail="Send personalized 5★ Google review invites to customer chats"
+          icon="chat"
+          onPress={() => router.push('/(tabs)/reviews')}
+        />
+        <MenuRow
+          title="Manage Google Profile"
+          detail="Contact & Address, AI & Automation, Post on Google"
+          icon="storefront"
+          onPress={() => router.push('/manage-profile')}
+        />
+        <MenuRow
+          title="QR Standee Studio"
+          detail="Printable countertop review cards with verified Google rating"
+          icon="qr-code-2"
+          onPress={() => router.push('/qr-standee')}
+        />
+        <MenuRow
+          title="Keyword Planner"
+          detail="Local SEO ranking discovery for your city"
+          icon="travel-explore"
+          onPress={() => router.push('/keyword-planner')}
+        />
+        <MenuRow
+          title="4-Tier Growth Report"
+          detail="Interactions → Enquiries → Qualified Leads → Revenue"
+          icon="insights"
+          onPress={() => router.push('/growth-report')}
+        />
+        <MenuRow
+          title="Review Reply Settings"
+          detail="Salutations, response length & auto-replies"
+          icon="reviews"
+          onPress={() => router.push('/reply-settings')}
+        />
+        <MenuRow
+          title="Unified Inbox & Chat"
+          detail="WhatsApp, Instagram & visitor radar"
+          icon="chat"
+          onPress={() => router.push('/(tabs)/inbox')}
+        />
+        <MenuRow
+          title="Business Phone & Keypad"
+          detail="Dialpad, call logs & transcription"
+          icon="phone"
+          onPress={() => router.push('/(tabs)/phone')}
+        />
+        <MenuRow
+          title="Leads & CRM Pipeline"
+          detail="Manage leads, statuses & follow-ups"
+          icon="people-outline"
+          onPress={() => router.push('/(tabs)/leads')}
+        />
+      </Card>
+
+      <Pressable accessibilityRole="button" accessibilityState={{expanded:openGroup==='Plan & billing'}} onPress={()=>setOpenGroup(openGroup==='Plan & billing'?null:'Plan & billing')} style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderRadius:12,padding:16,backgroundColor:'white'}}>
+        <Text style={ui.heading}>Plan & billing</Text><MaterialIcons name={openGroup==='Plan & billing'?'expand-less':'expand-more'} size={22} color={colors.muted}/>
+      </Pressable>
+      {openGroup==='Plan & billing' && <>
       {/* ─────────────────────────────────────────────────────────────
           1. MY PLAN & BILLING
           ───────────────────────────────────────────────────────────── */}
@@ -348,6 +423,11 @@ export default function ToolsScreen() {
         </View>
       </Card>
 
+      </>}
+      <Pressable accessibilityRole="button" accessibilityState={{expanded:openGroup==='Channels'}} onPress={()=>setOpenGroup(openGroup==='Channels'?null:'Channels')} style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderRadius:12,padding:16,backgroundColor:'white'}}>
+        <Text style={ui.heading}>Channels</Text><MaterialIcons name={openGroup==='Channels'?'expand-less':'expand-more'} size={22} color={colors.muted}/>
+      </Pressable>
+      {openGroup==='Channels' && <>
       {/* ─────────────────────────────────────────────────────────────
           2. SOCIAL ACCOUNTS & CHANNELS
           ───────────────────────────────────────────────────────────── */}
@@ -445,76 +525,11 @@ export default function ToolsScreen() {
         />
       </Card>
 
-      {/* ─────────────────────────────────────────────────────────────
-          3. TOOLS & OPERATIONS
-          ───────────────────────────────────────────────────────────── */}
-      <Card>
-        <View style={[ui.row, { gap: 6, alignItems: 'center', marginBottom: 6 }]}>
-          <MaterialIcons name="build" size={20} color={colors.brand} />
-          <Text style={ui.heading}>Tools</Text>
-        </View>
-        <MenuRow
-          title="Brand Brain (AI Preferences)"
-          detail="Products, branding, founder bio & AI guardrails"
-          icon="psychology"
-          onPress={() => router.push('/preferences')}
-        />
-        <MenuRow
-          title="1-Tap WhatsApp Reviews"
-          detail="Send personalized 5★ Google review invites to customer chats"
-          icon="chat"
-          onPress={() => router.push('/(tabs)/reviews')}
-        />
-        <MenuRow
-          title="Manage Google Profile"
-          detail="Contact & Address, AI & Automation, Post on Google"
-          icon="storefront"
-          onPress={() => router.push('/manage-profile')}
-        />
-        <MenuRow
-          title="QR Standee Studio"
-          detail="Printable countertop review cards with verified Google rating"
-          icon="qr-code-2"
-          onPress={() => router.push('/qr-standee')}
-        />
-        <MenuRow
-          title="Keyword Planner"
-          detail="Local SEO ranking discovery for your city"
-          icon="travel-explore"
-          onPress={() => router.push('/keyword-planner')}
-        />
-        <MenuRow
-          title="4-Tier Growth Report"
-          detail="Interactions → Enquiries → Qualified Leads → Revenue"
-          icon="insights"
-          onPress={() => router.push('/growth-report')}
-        />
-        <MenuRow
-          title="Review Reply Settings"
-          detail="Salutations, response length & auto-replies"
-          icon="reviews"
-          onPress={() => router.push('/reply-settings')}
-        />
-        <MenuRow
-          title="Unified Inbox & Chat"
-          detail="WhatsApp, Instagram & visitor radar"
-          icon="chat"
-          onPress={() => router.push('/(tabs)/inbox')}
-        />
-        <MenuRow
-          title="Business Phone & Keypad"
-          detail="Dialpad, call logs & transcription"
-          icon="phone"
-          onPress={() => router.push('/(tabs)/phone')}
-        />
-        <MenuRow
-          title="Leads & CRM Pipeline"
-          detail="Manage leads, statuses & follow-ups"
-          icon="people-outline"
-          onPress={() => router.push('/(tabs)/leads')}
-        />
-      </Card>
-
+      </>}
+      <Pressable accessibilityRole="button" accessibilityState={{expanded:openGroup==='Business profile & booking'}} onPress={()=>setOpenGroup(openGroup==='Business profile & booking'?null:'Business profile & booking')} style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderRadius:12,padding:16,backgroundColor:'white'}}>
+        <Text style={ui.heading}>Business profile & booking</Text><MaterialIcons name={openGroup==='Business profile & booking'?'expand-less':'expand-more'} size={22} color={colors.muted}/>
+      </Pressable>
+      {openGroup==='Business profile & booking' && <>
       {/* ── DIGITAL IDENTITY & PUBLIC ASSETS ── */}
       {data && (
         <View style={{ gap: 14 }}>
@@ -874,6 +889,11 @@ export default function ToolsScreen() {
         </View>
       )}
 
+      </>}
+      <Pressable accessibilityRole="button" accessibilityState={{expanded:openGroup==='Account & settings'}} onPress={()=>setOpenGroup(openGroup==='Account & settings'?null:'Account & settings')} style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderRadius:12,padding:16,backgroundColor:'white'}}>
+        <Text style={ui.heading}>Account & settings</Text><MaterialIcons name={openGroup==='Account & settings'?'expand-less':'expand-more'} size={22} color={colors.muted}/>
+      </Pressable>
+      {openGroup==='Account & settings' && <>
       {/* ─────────────────────────────────────────────────────────────
           4. ACCOUNT & WORKSPACE
           ───────────────────────────────────────────────────────────── */}
@@ -1035,6 +1055,7 @@ export default function ToolsScreen() {
         </View>
       </Card>
 
+      </>}
       {/* ── Booking Page & Services Customizer Sheet ── */}
       <Modal
         visible={bookingModalOpen}

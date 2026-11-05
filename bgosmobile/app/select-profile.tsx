@@ -1,3 +1,4 @@
+import { invalidateResourceScope } from '../src/lib/resource-cache';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -60,7 +61,7 @@ export default function SelectProfileScreen() {
         method: 'POST',
         body: { profileId: p.id },
       });
-      await discover.refresh();
+      invalidateResourceScope();
       Alert.alert('Profile Switched', `Active profile is now ${p.name} (${p.shortId})`, [
         {
           text: 'OK',

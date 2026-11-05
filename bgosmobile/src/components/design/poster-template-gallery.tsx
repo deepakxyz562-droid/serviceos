@@ -1,3 +1,4 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { PosterPreview } from './poster-preview';
 'use client';
 
@@ -15,6 +16,7 @@ import {
   Image,
   Pressable,
   ScrollView,
+  FlatList, Modal,
   StyleSheet,
   Text,
   TextInput,
@@ -68,7 +70,7 @@ const TemplateThumb = PosterPreview;
 export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searchQuery }: PosterTemplateGalleryProps) {
   const [localSearch, setLocalSearch] = useState('');
   const [isStandaloneSearchOpen, setIsStandaloneSearchOpen] = useState(false);
-  const activeSearch = searchQuery !== undefined ? searchQuery : localSearch;
+  const activeSearch = searchQuery || '';
   const [activeCategory, setActiveCategory] = useState<'for_you' | 'my_templates' | 'all' | string>('for_you');
   const [customTemplates, setCustomTemplates] = useState<PosterTemplate[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -108,7 +110,7 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
             : orderedTemplates.filter((t) => t.category === activeCategory || t.collection === activeCategory || (activeCategory==='professional'&&t.id.startsWith('professional-')));
     if (!activeSearch.trim()) return base;
     const q = activeSearch.trim().toLowerCase();
-    return base.filter(
+    return [...new Map([...customTemplates, ...orderedTemplates].map(t=>[t.id,t])).values()].filter(
       (t) =>
         t.name.toLowerCase().includes(q) ||
         t.headline.toLowerCase().includes(q) ||
@@ -116,22 +118,15 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
     );
   }, [activeCategory, customTemplates, forYouTemplates, orderedTemplates, activeSearch]);
 
-  const docs = useMemo(() => {
-    const map = new Map<string, MarketingDesign>();
-    for (const t of filteredTemplates) {
-      map.set(
-        t.id,
-        buildTemplateDesignDoc(t, {
-          businessName: business.businessName,
-          phone: business.phone,
-          website: business.website,
-          logoUrl: business.logoUri || undefined,
-          tagline: business.tagline,
-        })
-      );
-    }
-    return map;
-  }, [filteredTemplates, business]);
+
+
+  function closeSearch() {setIsStandaloneSearchOpen(false);setLocalSearch('');}
+  const searchResults = useMemo(()=>{
+    if(!isStandaloneSearchOpen) return [];
+    const query=localSearch.trim().toLowerCase();
+    return [...new Map([...customTemplates,...orderedTemplates].map(t=>[t.id,t])).values()].filter(t=>
+      [t.name,t.headline,t.category.replace(/_/g,' '),t.occasionId,...(t.industries||[])].join(' ').toLowerCase().includes(query));
+  },[localSearch,isStandaloneSearchOpen,customTemplates,orderedTemplates]);
 
   async function handleUploadTemplates() {
     try {
@@ -230,51 +225,25 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
 
   return (
     <View style={{ flex: 1 }}>
-      {searchQuery === undefined && (
-        isStandaloneSearchOpen ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, marginBottom: 8, marginTop: 4, gap: 8 }}>
-            <View style={[styles.searchWrap, { flex: 1 }]}>
-              <MaterialIcons name="search" size={16} color="#009F50" />
-              <TextInput
-                value={localSearch}
-                onChangeText={setLocalSearch}
-                placeholder="Search templates & occasions…"
-                placeholderTextColor="#94A3B8"
-                autoFocus
-                accessibilityLabel="Search templates"
-                style={styles.searchInput}
-              />
-              {localSearch.length > 0 && (
-                <Pressable onPress={() => setLocalSearch('')} hitSlop={6}>
-                  <MaterialIcons name="cancel" size={16} color="#94A3B8" />
-                </Pressable>
-              )}
-            </View>
-            <Pressable
-              onPress={() => {
-                setLocalSearch('');
-                setIsStandaloneSearchOpen(false);
-              }}
-              style={{ padding: 6 }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>Cancel</Text>
-            </Pressable>
+      {searchQuery === undefined && <Pressable accessibilityRole="button" accessibilityLabel="Search templates"
+        onPress={()=>setIsStandaloneSearchOpen(true)} style={{alignSelf:'flex-start',width:48,height:44,alignItems:'center',justifyContent:'center'}}>
+        <MaterialIcons name="search" size={22} color="#007840"/>
+      </Pressable>}
+      <Modal visible={isStandaloneSearchOpen} presentationStyle="fullScreen" animationType="slide" onRequestClose={closeSearch}>
+        <SafeAreaView style={{flex:1,backgroundColor:'#fff',paddingHorizontal:14}}>
+          <View style={{flexDirection:'row',alignItems:'center',gap:8,marginVertical:8}}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back to templates" onPress={closeSearch} style={{padding:12}}><MaterialIcons name="arrow-back" size={22}/></Pressable>
+            <TextInput accessibilityLabel="Search all templates" placeholder="Search all templates" autoFocus returnKeyType="search" value={localSearch} onChangeText={setLocalSearch} style={[styles.searchWrap,{flex:1}]}/>
           </View>
-        ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 14, marginBottom: 6 }}>
-            <Pressable
-              onPress={() => setIsStandaloneSearchOpen(true)}
-              style={styles.standaloneSearchTrigger}
-              accessibilityRole="button"
-              accessibilityLabel="Search templates"
-            >
-              <MaterialIcons name="search" size={16} color="#64748B" />
-              <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '600' }}>Search templates…</Text>
-            </Pressable>
-          </View>
-        )
-      )}
-
+          <FlatList data={searchResults} keyboardShouldPersistTaps="handled" initialNumToRender={6} numColumns={2}
+            columnWrapperStyle={{justifyContent:'space-between',marginBottom:10}} keyExtractor={item=>item.id}
+            ListEmptyComponent={<Text style={{padding:16}}>No matching templates. Try a business type or occasion.</Text>}
+            renderItem={({item})=><Pressable accessibilityRole="button" accessibilityLabel={item.name} style={styles.card} onPress={()=>{closeSearch();onApply(item);}}>
+              <TemplateThumb doc={buildTemplateDesignDoc(item,{...business,logoUrl:business.logoUri||undefined})}/>
+              <Text style={[styles.cardName,{padding:8}]}>{item.name}</Text>
+            </Pressable>}/>
+        </SafeAreaView>
+      </Modal>
       {/* Category chips */}
       <ScrollView
         horizontal
@@ -302,13 +271,18 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
       </ScrollView>
 
       {/* Template grid */}
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 14, paddingTop: 10, paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.grid}>
-          {/* Tile 1: Always Present Upload Card */}
+      <FlatList<PosterTemplate | null>
+        key={activeCategory}
+        data={[null,...filteredTemplates]}
+        numColumns={2}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
+        keyboardShouldPersistTaps="handled"
+        keyExtractor={t=>t?.id || '__upload__'}
+        columnWrapperStyle={{justifyContent:'space-between',marginBottom:10}}
+        contentContainerStyle={{padding:14,paddingBottom:120}}
+        renderItem={({item:t})=> !t ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Upload custom poster or template"
@@ -333,8 +307,7 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
             </View>
           </Pressable>
 
-          {/* Render Filtered Templates */}
-          {filteredTemplates.map((t) => (
+        ) : (
             <Pressable
               key={t.id}
               accessibilityRole="button"
@@ -345,7 +318,7 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
                 pressed && { opacity: 0.88, transform: [{ scale: 0.985 }] },
               ]}
             >
-              <TemplateThumb doc={docs.get(t.id)!} />
+              <TemplateThumb doc={buildTemplateDesignDoc(t,{...business,logoUrl:business.logoUri || undefined})} />
               <View style={styles.cardFooter}>
                 <Text style={styles.cardName} numberOfLines={1}>
                   {t.name}
@@ -355,10 +328,8 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
                 </Text>
               </View>
             </Pressable>
-          ))}
-        </View>
-
-        {filteredTemplates.length === 0 && activeCategory === 'my_templates' && (
+        )}
+        ListFooterComponent={filteredTemplates.length === 0 && activeCategory === 'my_templates' ? (
           <View style={styles.emptyWrap}>
             <MaterialIcons name="folder-open" size={36} color="#94A3B8" />
             <Text style={styles.emptyTitle}>No saved templates yet</Text>
@@ -366,8 +337,8 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
               Tap "Upload Design" to import your own flyers and graphics from Canva, Photoshop, or your gallery.
             </Text>
           </View>
-        )}
-      </ScrollView>
+        ) : null}
+      />
     </View>
   );
 }

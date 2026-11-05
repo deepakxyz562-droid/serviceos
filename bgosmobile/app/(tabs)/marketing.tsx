@@ -38,7 +38,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Screen,
@@ -646,32 +646,30 @@ export default function MarketingScreen() {
   const pendingRequest = useRef<{ body: string; key: string } | null>(null);
   const saving = useRef(false);
 
+  const [activeMode, setActiveMode] = useState<'studio' | 'autopilot' | 'posts'>(
+    params.mode === 'posts' ? 'posts' : params.mode === 'autopilot' ? 'autopilot' : 'studio'
+  );
+  const [studioStep, setStudioStep] = useState<1 | 2 | 3>(1);
+  const [templateSearchOpen, setTemplateSearchOpen] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [studioCreateTab, setStudioCreateTab] = useState<'templates' | 'ideas' | 'drafts'>('templates');
   // ── Resources ─────────────────────────────────────────────────────────────
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
-  const discover = useResource<{ activeProfile?: { id: string; name: string } }>('/api/gbp/accounts/discover');
-  const accounts = useResource<{ data: Account[] }>('/api/social/accounts');
+  const discover = useResource<{ activeProfile?: { id: string; name: string } }>('/api/gbp/accounts/discover',0,activeMode !== 'studio' || studioStep === 3);
+  const accounts = useResource<{ data: Account[] }>('/api/social/accounts',0,activeMode !== 'studio' || studioStep === 3);
   const brandProfile = useResource<BrandProfileData>('/api/brand-profile');
   const promptSuggestions = useResource<{
     business?: { name?: string; category?: string };
     website?: string;
     websiteTags?: string[];
     suggestions: Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string; headline?: string; badge?: string }>;
-  }>('/api/social/prompts/suggestions');
+  }>('/api/social/prompts/suggestions', 0, activeMode === 'studio' && studioStep === 1 && studioCreateTab === 'ideas');
 
-  useFocusEffect(
-    useCallback(() => {
-      void discover.refresh();
-      void gbpPlace.refresh();
-      void accounts.refresh();
-      void workspace.refresh();
-    }, [discover.refresh, gbpPlace.refresh, accounts.refresh, workspace.refresh])
-  );
+
 
   // ── Mode Switch: Studio / Create vs Autopilot vs Posts & Approvals ──────────
-  const [activeMode, setActiveMode] = useState<'studio' | 'autopilot' | 'posts'>(
-    params.mode === 'posts' ? 'posts' : params.mode === 'autopilot' ? 'autopilot' : 'studio'
-  );
+
 
   // ── Autopilot State ────────────────────────────────────────────────────────
   const [apConfig, setApConfig] = useState<{
@@ -753,7 +751,7 @@ export default function MarketingScreen() {
   };
 
   // ── Studio 3-Step Flow (01 Create -> 02 Design -> 03 Review) ───────────────
-  const [studioStep, setStudioStep] = useState<1 | 2 | 3>(1);
+
   const [studioSubTab, setStudioSubTab] = useState<'chat' | 'design'>('chat');
 
   // ── Content State ──────────────────────────────────────────────────────────
@@ -771,9 +769,8 @@ export default function MarketingScreen() {
   const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
 
   // ─── Flyer-Maker-style template gallery entry ──────────────────────────
-  const [studioCreateTab, setStudioCreateTab] = useState<'templates' | 'ideas'>('templates');
-  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-  const [templateSearchQuery, setTemplateSearchQuery] = useState('');
+
+
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const activeTemplateBgPrompt = activeTemplateId
     ? getTemplateById(activeTemplateId)?.bgPrompt
@@ -808,8 +805,8 @@ export default function MarketingScreen() {
     setHasGenerated(true);
     setActiveUserPrompt('');
     setStudioCreateTab('templates');
-    setStudioStep(1);
-    setStudioSubTab('chat');
+    setStudioStep(2);
+    setStudioSubTab('design');
 
     try {
       const initialDoc = createCommercialPosterDesign({
@@ -966,7 +963,7 @@ export default function MarketingScreen() {
   const [manualAccountIds, setManualAccountIds] = useState<string[] | null>(null);
 
   const selectedAccountIds = useMemo(
-    () => selectedPublishingIds(availableAccounts, manualAccountIds, savedGooglePublishingAccountId, { requireExplicitSelection: true }),
+    () => selectedPublishingIds(availableAccounts, manualAccountIds ?? (savedGooglePublishingAccountId ? [savedGooglePublishingAccountId] : []), savedGooglePublishingAccountId),
     [availableAccounts, manualAccountIds, savedGooglePublishingAccountId]
   );
 
@@ -1388,7 +1385,7 @@ export default function MarketingScreen() {
             clearInterval(pollInterval);
             setIsGeneratingImage(false);
           } finally { checking=false; }
-        }, 600);
+        }, 2000);
       } else {
         setIsGeneratingImage(false);
       }
@@ -1778,15 +1775,25 @@ export default function MarketingScreen() {
   const [designDrafts, setDesignDrafts] = useState<Array<{ id: string; content: string; designJson: string; updatedAt: string }>>([]);
   const [draftPage, setDraftPage] = useState(1);
   const [moreDrafts, setMoreDrafts] = useState(false);
+  const draftRequest = useRef(0);
+  const [draftLoading,setDraftLoading] = useState(false);
+  const [draftError,setDraftError] = useState('');
   async function loadDesignDrafts(page = 1) {
+    const request = ++draftRequest.current;
+    setDraftLoading(true);
+    setDraftError('');
+    if (page === 1) {setDesignDrafts([]);setMoreDrafts(false);setDraftPage(0);}
     try {
-      const result = await apiRequest<{ data: Array<{ id: string; content: string; designJson: string; updatedAt: string }> }>(`/api/social/posts?status=draft&limit=20&page=${page}`);
-      const rows = result.data.filter((d) => d.designJson);
-      setDesignDrafts((previous) => (page === 1 ? rows : [...previous, ...rows]));
+      const result = await apiRequest<{data:typeof designDrafts; pagination:{totalPages:number}}>(
+        `/api/social/posts?status=draft&kind=poster&limit=20&page=${page}`);
+      if (request !== draftRequest.current) return;
+      setDesignDrafts(previous => page === 1 ? result.data : [...new Map([...previous,...result.data].map(row=>[row.id,row])).values()]);
       setDraftPage(page);
-      setMoreDrafts(result.data.length === 20);
+      setMoreDrafts(page < result.pagination.totalPages);
     } catch {
-      setError('Could not load saved designs. Please retry.');
+      if (request === draftRequest.current) setDraftError('Could not load your saved posters.');
+    } finally {
+      if (request === draftRequest.current) setDraftLoading(false);
     }
   }
 
@@ -1916,7 +1923,7 @@ export default function MarketingScreen() {
             clearInterval(pollInterval);
             setIsGeneratingImage(false);
           } finally { checking=false; }
-        }, 600);
+        }, 2000);
       } else {
         setIsGeneratingImage(false);
       }
@@ -2092,6 +2099,82 @@ export default function MarketingScreen() {
   }
 
   async function handleUseMyPhoto() { await handlePickCustomPoster(); }
+
+  const savedDraftsContent = (<>
+            {draftLoading && designDrafts.length === 0 ? <ActivityIndicator accessibilityLabel="Loading saved drafts" /> : draftError && designDrafts.length === 0 ? <ErrorNotice message={draftError} retry={()=>void loadDesignDrafts()}/> : designDrafts.length === 0 ? (
+              <View style={styles.emptyDraftsWrap}>
+                <MaterialIcons name="folder-open" size={40} color="#CBD5E1" />
+                <Text style={styles.emptyDraftsTitle}>No saved drafts yet</Text>
+                <Text style={styles.emptyDraftsSub}>Designs you save in Studio will appear here for easy editing.</Text>
+              </View>
+            ) : (
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 10, paddingVertical: 10 }}>
+                {designDrafts.map((draft) => {
+                  let preview: MarketingDesign | null = null;
+                  try { preview = validateDesign(JSON.parse(draft.designJson)); } catch { /* Invalid drafts remain visible for recovery. */ }
+                  const open = () => {
+                    try {
+                      const restored = validateDesign(JSON.parse(draft.designJson));
+                      generationEpoch.current++;
+                      setIsGeneratingImage(false);
+                      setBusy(false);
+                      historyTravel.current = true;
+                      setDesignPast([]);
+                      setDesignFuture([]);
+                      handleCustomDesignChange(restored);
+                      setCaption(draft.content);
+                      setEditingDesignId(draft.id);
+                      setDesignRevision(draft.updatedAt);
+                      savedDesignSnapshot.current = JSON.stringify({ design: restored, caption: draft.content });
+                      setAutosaveFailed(false);
+                      setActiveTemplateId(null);
+                      setHasGenerated(true);
+                      setStudioStep(2);
+                      setDraftPickerOpen(false);
+                    } catch {
+                      setError('This draft could not be opened.');
+                    }
+                  };
+
+                  return (
+                    <Pressable
+                      key={draft.id}
+                      onPress={() => {
+                        if (savedDesignSnapshot.current !== designSnapshot) {
+                          Alert.alert(
+                            'Open saved design?',
+                            'Unsaved changes in this canvas will be replaced.',
+                            [
+                              { text: 'Keep editing', style: 'cancel' },
+                              { text: 'Open draft', onPress: open },
+                            ]
+                          );
+                        } else {
+                          open();
+                        }
+                      }}
+                      style={styles.draftItemCard}
+                    >
+                      <View style={styles.draftIconBox}>
+                        {preview ? <PosterPreview doc={preview}/> : <MaterialIcons name="description" size={20} color="#009F50" />}
+                      </View>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text numberOfLines={1} style={styles.draftItemTitle}>
+                          {draft.content?.slice(0, 60) || 'Untitled Design'}
+                        </Text>
+                        <Text style={styles.draftItemDate}>
+                          Updated {new Date(draft.updatedAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
+                    </Pressable>
+                  );
+                })}
+                {draftError ? <ErrorNotice message={draftError} retry={()=>void loadDesignDrafts(draftPage+1)}/> :
+                  moreDrafts && <Action label={draftLoading?'Loading…':'Load more drafts'} secondary disabled={draftLoading} onPress={()=>void loadDesignDrafts(draftPage+1)}/>}
+              </ScrollView>
+            )}
+  </>);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F8FAFC', paddingTop: Math.max(insets.top, 12) }}>
@@ -2663,82 +2746,14 @@ export default function MarketingScreen() {
             <View style={styles.draftModalHeader}>
               <View>
                 <Text style={styles.draftModalTitle}>Saved Poster Drafts</Text>
-                <Text style={styles.draftModalSub}>{designDrafts.length} drafts saved on this device</Text>
+                <Text style={styles.draftModalSub}>Workspace posters · Recently edited</Text>
               </View>
               <Pressable onPress={() => setDraftPickerOpen(false)} style={styles.modalCloseBtn}>
                 <MaterialIcons name="close" size={20} color="#0F172A" />
               </Pressable>
             </View>
 
-            {designDrafts.length === 0 ? (
-              <View style={styles.emptyDraftsWrap}>
-                <MaterialIcons name="folder-open" size={40} color="#CBD5E1" />
-                <Text style={styles.emptyDraftsTitle}>No saved drafts yet</Text>
-                <Text style={styles.emptyDraftsSub}>Designs you save in Studio will appear here for easy editing.</Text>
-              </View>
-            ) : (
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 10, paddingVertical: 10 }}>
-                {designDrafts.map((draft) => {
-                  const open = () => {
-                    try {
-                      const restored = validateDesign(JSON.parse(draft.designJson));
-                      generationEpoch.current++;
-                      setIsGeneratingImage(false);
-                      setBusy(false);
-                      historyTravel.current = true;
-                      setDesignPast([]);
-                      setDesignFuture([]);
-                      handleCustomDesignChange(restored);
-                      setCaption(draft.content);
-                      setEditingDesignId(draft.id);
-                      setDesignRevision(draft.updatedAt);
-                      savedDesignSnapshot.current = JSON.stringify({ design: restored, caption: draft.content });
-                      setAutosaveFailed(false);
-                      setActiveTemplateId(null);
-                      setHasGenerated(true);
-                      setStudioStep(2);
-                      setDraftPickerOpen(false);
-                    } catch {
-                      setError('This draft could not be opened.');
-                    }
-                  };
-
-                  return (
-                    <Pressable
-                      key={draft.id}
-                      onPress={() => {
-                        if (savedDesignSnapshot.current !== designSnapshot) {
-                          Alert.alert(
-                            'Open saved design?',
-                            'Unsaved changes in this canvas will be replaced.',
-                            [
-                              { text: 'Keep editing', style: 'cancel' },
-                              { text: 'Open draft', onPress: open },
-                            ]
-                          );
-                        } else {
-                          open();
-                        }
-                      }}
-                      style={styles.draftItemCard}
-                    >
-                      <View style={styles.draftIconBox}>
-                        <MaterialIcons name="description" size={20} color="#009F50" />
-                      </View>
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text numberOfLines={1} style={styles.draftItemTitle}>
-                          {draft.content?.slice(0, 60) || 'Untitled Design'}
-                        </Text>
-                        <Text style={styles.draftItemDate}>
-                          Updated {new Date(draft.updatedAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                      </View>
-                      <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            )}
+            {savedDraftsContent}
           </View>
         </View>
       </Modal>
@@ -2864,35 +2879,9 @@ export default function MarketingScreen() {
               {!hasGenerated ? (
                 /* ── Flyer-Maker-style entry: Templates / AI Ideas ── */
                 <View style={{ flex: 1 }}>
-                    {isSearchExpanded && studioCreateTab === 'templates' ? (
-                      <View style={styles.searchExpandedWrap}>
-                        <MaterialIcons name="search" size={18} color="#009F50" style={{ marginLeft: 6 }} />
-                        <TextInput
-                          value={templateSearchQuery}
-                          onChangeText={setTemplateSearchQuery}
-                          placeholder="Search 120+ templates, occasions…"
-                          placeholderTextColor="#94A3B8"
-                          autoFocus
-                          style={styles.searchExpandedInput}
-                          accessibilityLabel="Search templates and occasions"
-                        />
+                    <View style={styles.createSegmentWrap}>
                         <Pressable
-                          onPress={() => {
-                            setTemplateSearchQuery('');
-                            setIsSearchExpanded(false);
-                          }}
-                          hitSlop={8}
-                          style={styles.searchExpandedCloseBtn}
-                          accessibilityRole="button"
-                          accessibilityLabel="Close search"
-                        >
-                          <MaterialIcons name="close" size={18} color="#64748B" />
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <View style={styles.createSegmentWrap}>
-                        <Pressable
-                          onPress={() => setStudioCreateTab('templates')}
+                          onPress={() => {setStudioCreateTab('templates');setTemplateSearchOpen(false);}}
                           style={[styles.createSegmentBtn, studioCreateTab === 'templates' && styles.createSegmentBtnActive]}
                           accessibilityRole="button"
                           accessibilityState={{ selected: studioCreateTab === 'templates' }}
@@ -2900,13 +2889,13 @@ export default function MarketingScreen() {
                         >
                           <MaterialIcons name="grid-view" size={14} color={studioCreateTab === 'templates' ? '#FFFFFF' : '#64748B'} />
                           <Text style={[styles.createSegmentText, studioCreateTab === 'templates' && styles.createSegmentTextActive]}>
-                            Templates
+                            Browse templates
                           </Text>
                         </Pressable>
                         <Pressable
                           onPress={() => {
                             setStudioCreateTab('ideas');
-                            setIsSearchExpanded(false);
+
                           }}
                           style={[styles.createSegmentBtn, studioCreateTab === 'ideas' && styles.createSegmentBtnActive]}
                           accessibilityRole="button"
@@ -2915,24 +2904,29 @@ export default function MarketingScreen() {
                         >
                           <MaterialIcons name="auto-awesome" size={14} color={studioCreateTab === 'ideas' ? '#FFFFFF' : '#64748B'} />
                           <Text style={[styles.createSegmentText, studioCreateTab === 'ideas' && styles.createSegmentTextActive]}>
-                            AI Chat
+                            Describe a post
                           </Text>
                         </Pressable>
-                        {studioCreateTab === 'templates' && (
-                          <Pressable
-                            onPress={() => setIsSearchExpanded(true)}
-                            style={styles.searchIconBtn}
-                            accessibilityRole="button"
-                            accessibilityLabel="Search templates"
-                          >
-                            <MaterialIcons name="search" size={18} color="#475569" />
-                          </Pressable>
-                        )}
+
+                        <Pressable accessibilityRole="button" accessibilityLabel="Search templates" accessibilityState={{expanded:templateSearchOpen}}
+                          onPress={()=>{setStudioCreateTab('templates');setTemplateSearchOpen(!templateSearchOpen);}}
+                          style={{width:44,height:44,alignItems:'center',justifyContent:'center'}}>
+                          <MaterialIcons name="search" size={22} color={templateSearchOpen?'#009F50':'#64748B'}/>
+                        </Pressable>
+                        <Pressable accessibilityRole="tab" accessibilityLabel="Saved drafts" accessibilityState={{selected:studioCreateTab==='drafts'}}
+                          onPress={()=>{setStudioCreateTab('drafts');setTemplateSearchOpen(false);void loadDesignDrafts();}}
+                          style={{width:44,height:44,borderRadius:12,backgroundColor:studioCreateTab==='drafts'?'#E6F7EE':'transparent',alignItems:'center',justifyContent:'center'}}>
+                          <MaterialIcons name="folder-open" size={22} color={studioCreateTab==='drafts'?'#009F50':'#64748B'}/>
+                        </Pressable>
                       </View>
-                    )}
-                    {studioCreateTab === 'templates' ? (
+                    {templateSearchOpen && studioCreateTab === 'templates' && <View style={{flexDirection:'row',alignItems:'center',margin:12,borderWidth:1,borderColor:'#E2E8F0',borderRadius:12,paddingLeft:12}}>
+                      <TextInput accessibilityLabel="Search templates" autoFocus autoCapitalize="none" placeholder="Search templates" value={templateSearch} onChangeText={setTemplateSearch} style={{flex:1,minHeight:44}}/>
+                      <Pressable accessibilityRole="button" accessibilityLabel="Close search" onPress={()=>{setTemplateSearchOpen(false);setTemplateSearch('');}} style={{padding:12}}><MaterialIcons name="close" size={20}/></Pressable>
+                    </View>}
+                    {studioCreateTab === 'drafts' ? <View style={{flex:1,padding:14}}><Text style={{fontSize:18,fontWeight:'700',marginBottom:8}}>Saved drafts</Text>{savedDraftsContent}</View> : studioCreateTab === 'templates' ? (
                       <View style={{ flex: 1 }}>
                         <PosterTemplateGallery
+                          searchQuery={templateSearchOpen ? templateSearch : ''}
                           business={{
                             businessName: effectiveBusinessName,
                             category: brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category || '',
@@ -2941,7 +2935,6 @@ export default function MarketingScreen() {
                             logoUri: effectiveBusinessLogo,
                             tagline: effectiveBusinessTagline,
                           }}
-                          searchQuery={templateSearchQuery}
                           onApply={applyPosterTemplate}
                           onDescribeIdea={() => setStudioCreateTab('ideas')}
                         />
@@ -2978,7 +2971,7 @@ export default function MarketingScreen() {
                       What would you like to create?
                     </Text>
                     <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', maxWidth: 290, lineHeight: 18, marginBottom: 20 }}>
-                      Pick an idea below or describe your promotion to generate high-converting posters & copy.
+                      Describe your post, or start with an idea below.
                     </Text>
 
                     {/* Quick 1-Tap Feature Idea Chips */}
@@ -2986,9 +2979,9 @@ export default function MarketingScreen() {
                       {(promptSuggestions.data?.suggestions && promptSuggestions.data.suggestions.length > 0
                         ? promptSuggestions.data.suggestions.slice(0, 3)
                         : [
-                            { id: '1', icon: '📱', title: 'Live App Tracking', prompt: 'Promote our live mobile tracking app with GPS route navigation' },
-                            { id: '2', icon: '⏱️', title: 'GPS Attendance Launch', prompt: 'Announce smart geo-fenced staff attendance tracking app' },
-                            { id: '3', icon: '🚀', title: 'Special Promo Offer', prompt: 'Special 20% discount offer for all new clients this month' },
+                            { id: '1', icon: '📱', title: 'Introduce my business', prompt: 'Introduce my business using its saved profile.' },
+                            { id: '2', icon: '⏱️', title: 'Highlight a service', prompt: 'Spotlight a service from my business profile.' },
+                            { id: '3', icon: '🚀', title: 'Plan a promotion', prompt: 'Help me draft a promotion using only the offer details I provide.' },
                           ]
                       ).map((item) => (
                         <Pressable
@@ -3112,7 +3105,7 @@ export default function MarketingScreen() {
                           style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}
                         >
                           <MaterialIcons name="grid-view" size={14} color="#0F172A" />
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>Templates</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>Browse templates</Text>
                         </Pressable>
 
                         <Pressable
@@ -3182,7 +3175,7 @@ export default function MarketingScreen() {
                         >
                           <MaterialIcons name="rocket-launch" size={17} color="#FFFFFF" />
                           <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.2 }}>
-                            1-Tap Post to Google & Social →
+                            Review post →
                           </Text>
                         </Pressable>
 
@@ -3235,7 +3228,7 @@ export default function MarketingScreen() {
                         >
                           <MaterialIcons name="edit" size={13} color="#64748B" />
                           <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>
-                            Advanced: Edit in Canvas Studio
+                            Edit design
                           </Text>
                         </Pressable>
                       </View>
@@ -3428,7 +3421,7 @@ export default function MarketingScreen() {
                     placeholder={
                       generationMode === 'image_only'
                         ? 'Describe image to generate...'
-                        : 'Describe campaign or feature idea...'
+                        : 'Describe your post or ask for a change…'
                     }
                     placeholderTextColor="#94A3B8"
                     multiline
@@ -3564,7 +3557,7 @@ export default function MarketingScreen() {
                   onPress={() => setStudioStep(3)}
                   style={styles.primaryFlexButton}
                 >
-                  <Text style={styles.primaryActionText}>Continue →</Text>
+                  <Text style={styles.primaryActionText}>Review post →</Text>
                 </Pressable>
               </View>
             </View>
@@ -3789,6 +3782,7 @@ export default function MarketingScreen() {
                     </View>
                   </View>
 
+                  {scheduleMode !== 'now' && <Text style={styles.configCardTitle}>Time zone · {Intl.DateTimeFormat().resolvedOptions().timeZone}</Text>}
                   {scheduleMode === 'schedule' && (
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
                       <TextInput
@@ -4787,8 +4781,8 @@ const styles = StyleSheet.create({
   createSegmentWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
+    gap: 4,
+    paddingHorizontal: 8,
     paddingTop: 8,
     paddingBottom: 0,
     backgroundColor: '#FFFFFF',
@@ -4858,7 +4852,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 36,
+    minHeight: 44,
+    paddingVertical: 6,
     borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -4869,7 +4864,9 @@ const styles = StyleSheet.create({
     borderColor: '#009F50',
   },
   createSegmentText: {
-    fontSize: 12.5,
+    textAlign: 'center',
+    flexShrink: 1,
+    fontSize: 12,
     fontWeight: '800',
     color: '#64748B',
   },

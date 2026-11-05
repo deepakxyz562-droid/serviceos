@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
   Screen,
@@ -63,7 +63,14 @@ export default function PhoneScreen() {
     stats: { total: number; totalDurationSec: number; todayCount: number } | null;
   }>('/api/vapi/calls?limit=50');
 
+  const { open } = useLocalSearchParams<{ open?: string }>();
   const [activeTab, setActiveTab] = useState<'recent' | 'forwarding' | 'dialpad'>('recent');
+  React.useEffect(() => {
+    if (open === 'dialpad') {
+      setActiveTab('dialpad');
+      router.setParams({open: ''});
+    }
+  }, [open, router]);
   const [dialNumber, setDialNumber] = useState('');
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
   const [search, setSearch] = useState('');

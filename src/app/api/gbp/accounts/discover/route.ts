@@ -114,14 +114,14 @@ export async function GET(request: NextRequest) {
       }
       const id = String(sa.accountId || meta.locationId || sa.id);
       return id === activeProfileId || sa.id === activeProfileId;
-    }) || socialAccounts[0] || null;
+    });
 
     return NextResponse.json({
       email: googleEmail,
       count: profiles.length,
       hasConnectedGbp: true,
       activeProfileId: activeProfile ? activeProfile.id : null,
-      savedPublishingAccountId: activeSocialAccount ? activeSocialAccount.id : null,
+      savedPublishingAccountId: tenantSettings.activeGbpLocationId ? activeSocialAccount?.id ?? null : null,
       activeProfile,
       profiles,
       phone: tenant?.phone || '',

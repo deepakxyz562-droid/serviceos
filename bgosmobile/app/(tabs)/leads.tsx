@@ -45,6 +45,13 @@ export default function LeadsScreen() {
   const [phone, setPhone] = useState(params.phone || '');
   const [email, setEmail] = useState('');
   const [service, setService] = useState('');
+  const [moreDetails,setMoreDetails] = useState(false);
+  const [attempted,setAttempted] = useState(false);
+  const [savedNotice,setSavedNotice] = useState('');
+  const invalidName = !name.trim();
+  const invalidPhone = !/^\+?[\d ()-]+$/.test(phone.trim()) || !/^\d{7,15}$/.test(phone.replace(/\D/g,''));
+  const invalidEmail = Boolean(email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
+  useEffect(()=>{if(open){setAttempted(false);setMoreDetails(Boolean(email || service));setSavedNotice('');}},[open]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,6 +81,10 @@ export default function LeadsScreen() {
   );
 
   async function create() {
+    if (busy) return;
+    setAttempted(true);
+    if (invalidEmail) setMoreDetails(true);
+    if (invalidName || invalidPhone || invalidEmail) return;
     setBusy(true);
     setError(null);
     try {
@@ -88,6 +99,7 @@ export default function LeadsScreen() {
           source: 'mobile_app',
         },
       });
+      setSavedNotice(name.trim() + ' added to leads.');
       setOpen(false);
       setName('');
       setPhone('');
@@ -173,6 +185,7 @@ export default function LeadsScreen() {
         </View>
       </ScrollView>
 
+      {savedNotice ? <Text accessibilityLiveRegion="polite" style={{color:'#007840',fontWeight:'600'}}>{savedNotice}</Text> : null}
       <ErrorNotice message={error || resource.error} retry={resource.refresh} />
 
       {resource.loading ? (
@@ -268,42 +281,29 @@ export default function LeadsScreen() {
       {/* Add Lead Modal */}
       <Modal visible={open} animationType="slide" onRequestClose={() => { if (!busy) setOpen(false); }}>
         <Screen
-          title="Add New Lead"
-          subtitle="Capture contact details for immediate follow-up."
-          showBack={true}
+          title="Add lead"
+          subtitle="Enter the contact details for your follow-up."
+          showBack
           onBack={() => { if (!busy) setOpen(false); }}
+          floatingAction={<Action label={busy?'Saving…':'Save lead'} disabled={busy} icon="person-add" onPress={create}/>}
         >
           <ErrorNotice message={error} />
-          <Field label="Full Name" value={name} onChangeText={setName} maxLength={150} placeholder="e.g. Priya Singh" />
-          <Field
-            label="Phone with Country Code"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-            placeholder="+91 98765 43210"
-          />
-          <Field
-            label="Email Address (Optional)"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            placeholder="priya@example.com"
-          />
-          <Field
-            label="Service / Product Interest"
-            value={service}
-            onChangeText={setService}
-            placeholder="e.g. Hair Spa or Bulk Order"
-          />
-
-          <Action
-            label={busy ? 'Saving…' : 'Save & Track Lead'}
-            icon="person-add"
-            disabled={busy || !name.trim() || phone.replace(/\D/g, '').length < 7}
-            onPress={create}
-          />
-          <Action secondary label="Cancel" disabled={busy} onPress={() => setOpen(false)} />
+          <Card>
+            <Field label="Name" value={name} onChangeText={setName} autoComplete="name" maxLength={150} placeholder="Full name"/>
+            {attempted && invalidName && <Text style={{color:'#B42318'}}>Enter the lead’s name.</Text>}
+            <Field label="Phone" value={phone} onChangeText={setPhone} autoComplete="tel" keyboardType="phone-pad" placeholder="+91 98765 43210"/>
+            {attempted && invalidPhone && <Text style={{color:'#B42318'}}>Enter a phone number with 7–15 digits, including the country code if needed.</Text>}
+          </Card>
+          <Pressable accessibilityRole="button" accessibilityState={{expanded:moreDetails}}
+            onPress={()=>setMoreDetails(!moreDetails)} style={{minHeight:44,flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}>
+            <Text style={{fontWeight:'700'}}>More details</Text>
+            <MaterialIcons name={moreDetails?'expand-less':'expand-more'} size={22}/>
+          </Pressable>
+          {moreDetails && <Card>
+            <Field label="Email (optional)" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" placeholder="name@example.com"/>
+            {attempted && invalidEmail && <Text style={{color:'#B42318'}}>Enter a valid email address or leave it blank.</Text>}
+            <Field label="Interested in (optional)" value={service} onChangeText={setService} placeholder="Service or product"/>
+          </Card>}
         </Screen>
       </Modal>
 

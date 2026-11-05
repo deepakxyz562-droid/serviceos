@@ -1024,7 +1024,7 @@ export function PosterEditor({
 
           <View style={styles.overviewFooterRow}>
             <Text style={styles.helperTipText}>
-              💡 Tap any text or photo on canvas to edit.
+              Tap text or a photo to edit.
             </Text>
             <Pressable
               onPress={() => void exportImage('png')}

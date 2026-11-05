@@ -80,11 +80,14 @@ export async function GET(request: NextRequest) {
     const where: {
       tenantId: string;
       status?: string;
+      NOT?: {designJson:{equals:null}};
       approvalStatus?: string;
       OR?: Array<Record<string, unknown>>;
       createdAt?: { gte?: Date; lte?: Date };
     } = { tenantId };
 
+    const posterDrafts = status === 'draft' && searchParams.get('kind') === 'poster';
+    if (posterDrafts) where.NOT = {designJson:{equals:null}};
     if (status) where.status = status;
 
     // AI-post review workflow (Pending / Approved / Rejected pills).
@@ -143,7 +146,7 @@ export async function GET(request: NextRequest) {
     const [posts, totalCount] = await Promise.all([
       db.socialPost.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: posterDrafts ? { updatedAt: 'desc' } : { createdAt: 'desc' },
         skip: approval && approval !== 'any' ? 0 : (page - 1) * limit,
         take: approval && approval !== 'any' ? 100 : limit,
         select: {
@@ -153,7 +156,6 @@ export async function GET(request: NextRequest) {
           content: true,
           mediaUrls: true,
           designJson: true,
-          updatedAt: true,
           linkUrl: true,
           publishTargets: true,
           scheduledAt: true,

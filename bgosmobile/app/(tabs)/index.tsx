@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, Animated, ActivityIndicator, Alert, Linking, Modal, Pressable, useWindowDimensions, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card, Screen, Action, ErrorNotice, MenuRow, Badge, MetricCard, ui, colors, Avatar, Loading } from '../../src/components/ui';
@@ -222,8 +222,8 @@ function GrowthCockpitQuickStrip() {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 10,
+        paddingVertical: 8,
+        paddingHorizontal: 8,
         borderRadius: 14,
         backgroundColor: sc.cardBg,
         borderWidth: 1,
@@ -239,8 +239,8 @@ function GrowthCockpitQuickStrip() {
     >
       <View
         style={{
-          width: 38,
-          height: 38,
+          width: 28,
+          height: 28,
           borderRadius: 11,
           backgroundColor: sc.iconBg,
           alignItems: 'center',
@@ -252,7 +252,7 @@ function GrowthCockpitQuickStrip() {
       <View style={{ flex: 1, gap: 1.5 }}>
         <Text
           style={{ fontSize: 12.5, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {sc.label}
         </Text>
@@ -260,39 +260,15 @@ function GrowthCockpitQuickStrip() {
           {sc.desc}
         </Text>
       </View>
-      <MaterialIcons name="chevron-right" size={16} color={sc.iconColor} style={{ opacity: 0.7 }} />
+
     </Pressable>
   );
 
   return (
     <Card style={{ padding: 14, gap: 12 }}>
-      {/* Cockpit Header with Active Mission Control Chip */}
-      <View style={[ui.row, { justifyContent: 'space-between' }]}>
-        <View style={[ui.row, { gap: 7 }]}>
-          <MaterialIcons name="auto-awesome" size={17} color={colors.brand} />
-          <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }}>
-            Growth & Brand Cockpit
-          </Text>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: '#ECFDF5',
-              paddingHorizontal: 6,
-              paddingVertical: 2,
-              borderRadius: 8,
-              gap: 4,
-              borderWidth: 1,
-              borderColor: '#A7F3D0',
-            }}
-          >
-            <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#059669' }} />
-            <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#047857' }}>4 Hubs</Text>
-          </View>
-        </View>
-        <Pressable accessibilityRole="button" onPress={() => router.push('/preferences')}>
-          <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.brand }}>Configure AI →</Text>
-        </Pressable>
+      <View style={[ui.row,{gap:8}]}>
+        <MaterialIcons name="auto-awesome" size={18} color={colors.brand}/>
+        <Text style={[ui.heading,{flexShrink:1}]}>Growth &amp; Brand Cockpit</Text>
       </View>
 
       {/* 2x2 Pixel-Perfect Executive Grid */}
@@ -511,15 +487,22 @@ export default function HomeScreen() {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [expandedCompetitor, setExpandedCompetitor] = useState<string | null>(null);
+  const { width, fontScale } = useWindowDimensions();
+  const compactActions = width < 375 || fontScale > 1.2;
+  const [showInsights,setShowInsights] = useState(false);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const inbox = useResource<BgosConversation[]>('/api/omnichannel/conversations', 15000);
-  const bookings = useResource<{ bookings: Booking[] }>('/api/bookings?limit=100');
+  const dayStart = new Date();
+  dayStart.setHours(0,0,0,0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setHours(23,59,59,999);
+  const bookings = useResource<{ bookings: Booking[] }>(`/api/bookings?dateFrom=${dayStart.toISOString()}&dateTo=${dayEnd.toISOString()}&limit=100`);
   const leads = useResource<{ leads: unknown[]; pagination?: { total: number } }>('/api/leads?limit=1');
   const calls = useResource<{ stats: { todayCount: number; total: number } | null }>('/api/vapi/calls?limit=1&stats=true');
   const reviews = useResource<{ reviews: Array<{ rating: number }> }>('/api/reviews?limit=50');
-  const marketingScore = useResource<MarketingScoreResponse>('/api/gbp/marketing-score');
+  const marketingScore = useResource<MarketingScoreResponse>('/api/gbp/marketing-score', 0, showInsights);
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
-  const competitors = useResource<CompetitorsResponse>('/api/gbp/competitors');
+  const competitors = useResource<CompetitorsResponse>('/api/gbp/competitors', 0, showInsights);
   const growthActions = useResource<GrowthActionsResponse>('/api/gbp/growth-actions');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
 
@@ -537,19 +520,15 @@ export default function HomeScreen() {
       leads.refresh(),
       calls.refresh(),
       reviews.refresh(),
-      marketingScore.refresh(),
+      showInsights && marketingScore.refresh(),
       gbpPlace.refresh(),
-      competitors.refresh(),
+      showInsights && competitors.refresh(),
       growthActions.refresh(),
       discover.refresh(),
-    ].map((p) => p.catch(() => {})));
+    ].map((p) => Promise.resolve(p).catch(() => {})));
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      void refresh();
-    }, [])
-  );
+
 
   const unreadCount = inbox.data ? inbox.data.reduce((s, c) => s + c.unreadCount, 0) : '—';
   const leadTotal = leads.data?.pagination?.total ?? '—';
@@ -579,6 +558,26 @@ export default function HomeScreen() {
   const totalDone = growthActions.data?.totalDone ?? 0;
   const totalTarget = growthActions.data?.totalTarget ?? 10;
   const leftCount = growthActions.data?.leftCount ?? Math.max(0, totalTarget - totalDone);
+
+  const [growthButtonWidth, setGrowthButtonWidth] = useState(320);
+  const nudge = useRef(new Animated.Value(0)).current;
+  const prompted = useRef(false);
+  const hasGrowthActions = Boolean(growthActions.data && leftCount > 0);
+  useFocusEffect(useCallback(() => {
+    if (!hasGrowthActions || prompted.current || growthModalOpen) return;
+    let active = true;
+    const stop = () => { nudge.stopAnimation(); nudge.setValue(0); };
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', reduced => {
+      if (reduced) {active = false;stop();}
+    });
+    void AccessibilityInfo.isReduceMotionEnabled().then(reduced => {
+      if (!active || reduced) return;
+      prompted.current = true;
+      const step = (toValue:number) => Animated.timing(nudge,{toValue,duration:1000,useNativeDriver:true});
+      Animated.sequence([Animated.delay(500),step(1),Animated.timing(nudge,{toValue:0,duration:0,useNativeDriver:true}),Animated.delay(650),step(1)]).start();
+    }).catch(()=>{});
+    return () => {active=false;subscription.remove();stop();};
+  },[hasGrowthActions,growthModalOpen,nudge]));
 
   async function dismissGrowthAction(id: string) {
     if (dismissingId) return;
@@ -687,12 +686,13 @@ export default function HomeScreen() {
   const growthActionFloatingDock = (
     <View style={{ width: '100%' }}>
       <Pressable
+        onLayout={event=>setGrowthButtonWidth(event.nativeEvent.layout.width)}
         accessibilityRole="button"
         accessibilityLabel={`Growth Action: ${totalDone} of ${totalTarget} done, ${leftCount} left`}
         onPress={() => setGrowthModalOpen(true)}
         style={({ pressed }) => ({
           width: '100%',
-          height: 50,
+          minHeight: 50,
           borderRadius: 25,
           overflow: 'hidden',
           opacity: pressed ? 0.9 : 1,
@@ -707,18 +707,20 @@ export default function HomeScreen() {
           <View style={{ flex: 1, backgroundColor: '#9333EA' }} />
           <View style={{ flex: 1, backgroundColor: '#EA580C' }} />
         </View>
+        <Animated.View pointerEvents="none" style={{position:'absolute',top:0,bottom:0,width:60,backgroundColor:'rgba(255,255,255,0.16)',transform:[{translateX:nudge.interpolate({inputRange:[0,1],outputRange:[-80,growthButtonWidth+80]})},{skewX:'-18deg'}]}}/>
         <View
           style={{
-            flex: 1,
+            minHeight: 50,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingHorizontal: 20,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 18 }}>⚡</Text>
-            <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontWeight: '800', letterSpacing: -0.2 }}>
+          <View style={{ flex:1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Animated.Text style={{fontSize:18,transform:[{scale:nudge.interpolate({inputRange:[0,0.5,1],outputRange:[1,1.15,1]})}]}}>⚡</Animated.Text>
+            <Text style={{ color: '#FFFFFF', flexShrink: 1, fontSize: 13.5, fontWeight: '800', letterSpacing: -0.2 }}>
               Growth Action ({growthActions.loading && !growthActions.data ? '…' : `${totalDone} of ${totalTarget} done • ${leftCount} left`})
             </Text>
           </View>
@@ -739,98 +741,151 @@ export default function HomeScreen() {
         retry={refresh}
       />
 
-      {/* Plan Status Banner — dynamic based on real workspace plan status */}
-      {workspace.data?.plan?.status === 'trial' ? (
-        <View
-          style={{
-            borderRadius: 14,
-            overflow: 'hidden',
-            marginBottom: 10,
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: '#4F46E5',
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-              <MaterialIcons name="auto-awesome" size={18} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
-                7 Days Free Trial Active
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => router.push('/my-plan')}
-              style={{
-                backgroundColor: '#FFFFFF',
-                paddingHorizontal: 12,
-                paddingVertical: 5,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: '#4F46E5', fontSize: 12, fontWeight: '800' }}>My Plan →</Text>
-            </Pressable>
-          </View>
-          <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 14, paddingVertical: 6 }}>
-            <Text style={{ fontSize: 11, color: '#3730A3', fontWeight: '600' }}>
-              Full access to Google Growth, 1-Tap Reviews & AI · Upgrade anytime from ₹499/mo
-            </Text>
-          </View>
-        </View>
-      ) : workspace.data?.plan?.status === 'active' ? (
-        <View
-          style={{
-            borderRadius: 14,
-            overflow: 'hidden',
-            marginBottom: 10,
-            borderWidth: 1,
-            borderColor: '#A7F3D0',
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: '#ECFDF5',
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-              <MaterialIcons name="verified" size={18} color="#059669" />
-              <View>
-                <Text style={{ color: '#065F46', fontSize: 13, fontWeight: '800' }}>
-                  {(workspace.data.plan.code || 'STARTER').toUpperCase()} Plan Active
-                </Text>
-                <Text style={{ color: '#047857', fontSize: 11, fontWeight: '500' }}>
-                  All Growth Hubs & AI automations unlocked
-                </Text>
-              </View>
-            </View>
-            <Pressable
-              onPress={() => router.push('/my-plan')}
-              style={{
-                backgroundColor: '#059669',
-                paddingHorizontal: 12,
-                paddingVertical: 5,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Manage →</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
-      {/* Growth Cockpit Quick Strip: Brand Brain · Manage Profile · QR Standee · Growth Report */}
       <GrowthCockpitQuickStrip />
 
+      <Card style={{padding:14, gap:10}}>
+        <Text style={ui.heading}>Quick Actions</Text>
+        <View style={{flexDirection:'row', flexWrap:'wrap', gap:8}}>
+          {([
+            {label:'Create post', icon:'auto-awesome', onPress:()=>router.push('/(tabs)/marketing?generate=1')},
+            {label:'Add lead', icon:'person-add', onPress:()=>router.push('/(tabs)/leads?create=1')},
+            {label:'Make call', icon:'dialpad', onPress:()=>router.push('/(tabs)/phone?open=dialpad')},
+            {label:'Request review', icon:'star-outline', onPress:()=>setReviewModalOpen(true)},
+          ] as const).map(action=>(
+            <Pressable key={action.label} accessibilityRole="button" onPress={action.onPress}
+              style={({pressed})=>({flexGrow:1,flexBasis:compactActions?'46%':0,minHeight:52,alignItems:'center',justifyContent:'center',
+                paddingVertical:6,gap:4,borderRadius:10,backgroundColor:pressed?'#DCFCE7':'#F3F8F5'})}>
+              <MaterialIcons name={action.icon} size={20} color={colors.brand}/>
+              <Text style={{textAlign:'center',fontSize:12,fontWeight:'600',color:colors.ink}}>{action.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </Card>
+
+      {/* Workspace Hub Menu */}
+      <Card>
+        <Text style={ui.heading}>Growth Operations</Text>
+        <MenuRow
+          title="Google Business & Reviews"
+          detail={reviewDetail}
+          icon="storefront"
+          onPress={() => router.push('/(tabs)/growth')}
+        />
+        <MenuRow
+          title="Marketing Studio"
+          detail="Create multi-channel posts with AI"
+          icon="auto-awesome"
+          onPress={() => router.push('/(tabs)/marketing')}
+        />
+        <MenuRow
+          title="AI Assistant & Receptionist"
+          detail="Train knowledge and test sandbox chat"
+          icon="smart-toy"
+          onPress={() => router.push('/(tabs)/agents')}
+        />
+        <MenuRow
+          title="Digital Card & Share Tools"
+          detail="Share direct booking and chat links"
+          icon="share"
+          onPress={() => router.push('/(tabs)/tools')}
+        />
+      </Card>
+
+      <Text style={ui.heading}>Today</Text>
+      {/* 2x2 Metric Tiles */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+        <MetricCard
+          value={leadTotal}
+          label="Total Leads"
+          trendPositive={true}
+          icon="people-outline"
+        />
+        <MetricCard
+          value={callCount}
+          label="Calls Today"
+          trendPositive={true}
+          icon="phone-in-talk"
+        />
+        <MetricCard
+          value={unreadCount}
+          label="Unread Messages"
+          trendPositive={true}
+          icon="chat-bubble-outline"
+        />
+        <MetricCard
+          value={appointments?.length ?? '—'}
+          label="Today's Schedule"
+          trendPositive={true}
+          icon="event"
+        />
+      </View>
+
+      {/* Today's Appointments or Next Conversations */}
+      <Card>
+        <View style={[ui.row, { justifyContent: 'space-between' }]}>
+          <Text style={ui.heading}>{agency ? 'Next Conversations' : "Today's Appointments"}</Text>
+          <Badge label={agency ? 'Pipeline' : `${appointments?.length || 0} scheduled`} accent />
+        </View>
+
+        {agency ? (
+          <>
+            <Text style={ui.body}>Review your leads and outreach before the next follow-up call.</Text>
+            <MenuRow
+              title="Lead Pipeline"
+              detail="Review contacts and follow-ups"
+              icon="people-outline"
+              onPress={() => router.push('/(tabs)/leads')}
+            />
+            <MenuRow
+              title="Campaign Approvals"
+              detail="Review email & WhatsApp broadcasts"
+              icon="send"
+              onPress={() => router.push('/(tabs)/outreach')}
+            />
+          </>
+        ) : bookings.error ? (
+          <Text style={ui.body}>Appointments are currently unavailable. Retry above.</Text>
+        ) : appointments?.length ? (
+          appointments.slice(0, 4).map((b) => (
+            <View
+              key={b.id}
+              style={[
+                ui.row,
+                {
+                  justifyContent: 'space-between',
+                  paddingVertical: 8,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.line,
+                },
+              ]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={ui.heading}>{b.customerName || b.title || 'Client Appointment'}</Text>
+                <Text style={ui.caption}>
+                  {b.title || 'Service'} · {new Date(b.scheduledAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+              <Badge label={b.status} success={b.status === 'confirmed'} />
+            </View>
+          ))
+        ) : (
+          <Text style={ui.body}>
+            {bookings.loading ? 'Loading your schedule…' : 'No appointments scheduled for today.'}
+          </Text>
+        )}
+
+        <Action
+          secondary
+          label="View Full Calendar"
+          icon="event"
+          onPress={() => router.push('/(tabs)/appointments')}
+        />
+      </Card>
+
+      <Pressable accessibilityRole="button" accessibilityState={{expanded:showInsights}} onPress={()=>setShowInsights(!showInsights)} style={{padding:16,backgroundColor:'#fff',borderRadius:14}}>
+        <Text style={ui.heading}>{showInsights ? 'Hide growth insights' : 'View growth insights'}</Text>
+      </Pressable>
+      {showInsights && <>
       {/* Marketing Score — unified 3-slide carousel (Gauge, Growth line chart, Marketing tracker) */}
       <MarketingScoreCard
         res={marketingScore}
@@ -982,6 +1037,7 @@ export default function HomeScreen() {
         )}
       </Card>
 
+      </>}
       {/* AI Assistant Live Banner */}
       <Card style={{ backgroundColor: colors.hero, borderColor: colors.hero, padding: 18 }}>
         <View style={[ui.row, { justifyContent: 'space-between' }]}>
@@ -1022,314 +1078,94 @@ export default function HomeScreen() {
         </View>
       </Card>
 
-      {/* 2x2 Metric Tiles */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-        <MetricCard
-          value={leadTotal}
-          label="Total Leads"
-          trendPositive={true}
-          icon="people-outline"
-        />
-        <MetricCard
-          value={callCount}
-          label="Calls Today"
-          trendPositive={true}
-          icon="phone-in-talk"
-        />
-        <MetricCard
-          value={unreadCount}
-          label="Unread Messages"
-          trendPositive={true}
-          icon="chat-bubble-outline"
-        />
-        <MetricCard
-          value={appointments?.length ?? '—'}
-          label="Today's Schedule"
-          trendPositive={true}
-          icon="event"
-        />
-      </View>
-
-      {/* Quick Action Launcher Card */}
-      <Card style={{ padding: 14, gap: 12 }}>
-        <View style={[ui.row, { justifyContent: 'space-between' }]}>
-          <Text style={ui.heading}>⚡ Quick Actions</Text>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted }}>Instant Shortcuts</Text>
+      {/* Plan Status Banner — dynamic based on real workspace plan status */}
+      {workspace.data?.plan?.status === 'trial' ? (
+        <View
+          style={{
+            borderRadius: 14,
+            overflow: 'hidden',
+            marginBottom: 10,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: '#4F46E5',
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+              <MaterialIcons name="auto-awesome" size={18} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                7 Days Free Trial Active
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => router.push('/my-plan')}
+              style={{
+                backgroundColor: '#FFFFFF',
+                paddingHorizontal: 12,
+                paddingVertical: 5,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: '#4F46E5', fontSize: 12, fontWeight: '800' }}>My Plan →</Text>
+            </Pressable>
+          </View>
+          <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 14, paddingVertical: 6 }}>
+            <Text style={{ fontSize: 11, color: '#3730A3', fontWeight: '600' }}>
+              Full access to Google Growth, 1-Tap Reviews & AI · Upgrade anytime from ₹499/mo
+            </Text>
+          </View>
         </View>
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          {/* AI Post */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Create AI Post"
-            onPress={() => router.push('/(tabs)/marketing')}
-            style={({ pressed }) => ({
-              flex: 1,
+      ) : workspace.data?.plan?.status === 'active' ? (
+        <View
+          style={{
+            borderRadius: 14,
+            overflow: 'hidden',
+            marginBottom: 10,
+            borderWidth: 1,
+            borderColor: '#A7F3D0',
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: '#ECFDF5',
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              flexDirection: 'row',
               alignItems: 'center',
-              opacity: pressed ? 0.75 : 1,
-            })}
+              justifyContent: 'space-between',
+            }}
           >
-            <View
-              style={{
-                width: 50,
-                height: 50,
-                borderRadius: 25,
-                backgroundColor: '#F3E8FF',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 6,
-                shadowColor: '#8B5CF6',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.12,
-                shadowRadius: 4,
-                elevation: 2,
-              }}
-            >
-              <MaterialIcons name="auto-awesome" size={24} color="#7C3AED" />
-            </View>
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: '700',
-                color: colors.ink,
-                textAlign: 'center',
-              }}
-              numberOfLines={1}
-            >
-              AI Post
-            </Text>
-            <Text style={{ fontSize: 10, color: colors.muted, textAlign: 'center', marginTop: 1 }}>
-              Generate
-            </Text>
-          </Pressable>
-
-          {/* Add Lead */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Add New Lead"
-            onPress={() => router.push('/(tabs)/leads?create=1')}
-            style={({ pressed }) => ({
-              flex: 1,
-              alignItems: 'center',
-              opacity: pressed ? 0.75 : 1,
-            })}
-          >
-            <View
-              style={{
-                width: 50,
-                height: 50,
-                borderRadius: 25,
-                backgroundColor: '#EFF6FF',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 6,
-                shadowColor: '#3B82F6',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.12,
-                shadowRadius: 4,
-                elevation: 2,
-              }}
-            >
-              <MaterialIcons name="person-add" size={24} color="#2563EB" />
-            </View>
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: '700',
-                color: colors.ink,
-                textAlign: 'center',
-              }}
-              numberOfLines={1}
-            >
-              Add Lead
-            </Text>
-            <Text style={{ fontSize: 10, color: colors.muted, textAlign: 'center', marginTop: 1 }}>
-              CRM
-            </Text>
-          </Pressable>
-
-          {/* Make Call */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Phone Dialer"
-            onPress={() => router.push('/(tabs)/phone')}
-            style={({ pressed }) => ({
-              flex: 1,
-              alignItems: 'center',
-              opacity: pressed ? 0.75 : 1,
-            })}
-          >
-            <View
-              style={{
-                width: 50,
-                height: 50,
-                borderRadius: 25,
-                backgroundColor: '#ECFDF5',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 6,
-                shadowColor: '#10B981',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.12,
-                shadowRadius: 4,
-                elevation: 2,
-              }}
-            >
-              <MaterialIcons name="phone-in-talk" size={24} color="#059669" />
-            </View>
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: '700',
-                color: colors.ink,
-                textAlign: 'center',
-              }}
-              numberOfLines={1}
-            >
-              Call
-            </Text>
-            <Text style={{ fontSize: 10, color: colors.muted, textAlign: 'center', marginTop: 1 }}>
-              Dialer
-            </Text>
-          </Pressable>
-
-          {/* Ask Review */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Ask Review on WhatsApp"
-            onPress={() => setReviewModalOpen(true)}
-            style={({ pressed }) => ({
-              flex: 1,
-              alignItems: 'center',
-              opacity: pressed ? 0.75 : 1,
-            })}
-          >
-            <View
-              style={{
-                width: 50,
-                height: 50,
-                borderRadius: 25,
-                backgroundColor: '#FEF3C7',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 6,
-                shadowColor: '#F59E0B',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.15,
-                shadowRadius: 4,
-                elevation: 2,
-              }}
-            >
-              <MaterialIcons name="star" size={24} color="#D97706" />
-            </View>
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: '700',
-                color: colors.ink,
-                textAlign: 'center',
-              }}
-              numberOfLines={1}
-            >
-              Ask Review
-            </Text>
-            <Text style={{ fontSize: 10, color: '#059669', fontWeight: '700', textAlign: 'center', marginTop: 1 }}>
-              WhatsApp
-            </Text>
-          </Pressable>
-        </View>
-      </Card>
-
-      {/* Today's Appointments or Next Conversations */}
-      <Card>
-        <View style={[ui.row, { justifyContent: 'space-between' }]}>
-          <Text style={ui.heading}>{agency ? 'Next Conversations' : "Today's Appointments"}</Text>
-          <Badge label={agency ? 'Pipeline' : `${appointments?.length || 0} scheduled`} accent />
-        </View>
-
-        {agency ? (
-          <>
-            <Text style={ui.body}>Review your leads and outreach before the next follow-up call.</Text>
-            <MenuRow
-              title="Lead Pipeline"
-              detail="Review contacts and follow-ups"
-              icon="people-outline"
-              onPress={() => router.push('/(tabs)/leads')}
-            />
-            <MenuRow
-              title="Campaign Approvals"
-              detail="Review email & WhatsApp broadcasts"
-              icon="send"
-              onPress={() => router.push('/(tabs)/outreach')}
-            />
-          </>
-        ) : bookings.error ? (
-          <Text style={ui.body}>Appointments are currently unavailable. Retry above.</Text>
-        ) : appointments?.length ? (
-          appointments.slice(0, 4).map((b) => (
-            <View
-              key={b.id}
-              style={[
-                ui.row,
-                {
-                  justifyContent: 'space-between',
-                  paddingVertical: 8,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.line,
-                },
-              ]}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={ui.heading}>{b.customerName || b.title || 'Client Appointment'}</Text>
-                <Text style={ui.caption}>
-                  {b.title || 'Service'} · {new Date(b.scheduledAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+              <MaterialIcons name="verified" size={18} color="#059669" />
+              <View>
+                <Text style={{ color: '#065F46', fontSize: 13, fontWeight: '800' }}>
+                  {(workspace.data.plan.code || 'STARTER').toUpperCase()} Plan Active
+                </Text>
+                <Text style={{ color: '#047857', fontSize: 11, fontWeight: '500' }}>
+                  All Growth Hubs & AI automations unlocked
                 </Text>
               </View>
-              <Badge label={b.status} success={b.status === 'confirmed'} />
             </View>
-          ))
-        ) : (
-          <Text style={ui.body}>
-            {bookings.loading ? 'Loading your schedule…' : 'No appointments scheduled for today.'}
-          </Text>
-        )}
-
-        <Action
-          secondary
-          label="View Full Calendar"
-          icon="event"
-          onPress={() => router.push('/(tabs)/appointments')}
-        />
-      </Card>
-
-      {/* Workspace Hub Menu */}
-      <Card>
-        <Text style={ui.heading}>Growth Operations</Text>
-        <MenuRow
-          title="Google Business & Reviews"
-          detail={reviewDetail}
-          icon="storefront"
-          onPress={() => router.push('/(tabs)/growth')}
-        />
-        <MenuRow
-          title="Marketing Studio"
-          detail="Create multi-channel posts with AI"
-          icon="auto-awesome"
-          onPress={() => router.push('/(tabs)/marketing')}
-        />
-        <MenuRow
-          title="AI Assistant & Receptionist"
-          detail="Train knowledge and test sandbox chat"
-          icon="smart-toy"
-          onPress={() => router.push('/(tabs)/agents')}
-        />
-        <MenuRow
-          title="Digital Card & Share Tools"
-          detail="Share direct booking and chat links"
-          icon="share"
-          onPress={() => router.push('/(tabs)/tools')}
-        />
-      </Card>
+            <Pressable
+              onPress={() => router.push('/my-plan')}
+              style={{
+                backgroundColor: '#059669',
+                paddingHorizontal: 12,
+                paddingVertical: 5,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Manage →</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       {/* More Tools — everything that left the bottom bar stays one tap away */}
       <MoreToolsGrid />

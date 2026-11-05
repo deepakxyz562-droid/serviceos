@@ -1,24 +1,25 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { apiRequest } from '../lib/api';
-export function useResource<T>(path: string, interval = 0) {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const generation = useRef(0);
-  const refresh = useCallback(async () => {
-    const version = ++generation.current;
-    try { const value = await apiRequest<T>(path); if (version === generation.current) { setData(value); setError(null); } }
-    catch (err) { if (version === generation.current) setError(err instanceof Error ? err.message : 'Could not load data. Please retry.'); }
-    finally { if (version === generation.current) setLoading(false); }
-  }, [path]);
-  useEffect(() => { setLoading(true); setData(null); return () => { generation.current++; }; }, [path]);
+import { sessionRevision } from '../lib/auth';
+import { useAuthStore } from '../stores/auth-store';
+import { getResource, subscribePartition, resourcePartition } from '../lib/resource-cache';
+
+export function useResource<T>(path: string, interval = 0, enabled = true) {
+  const user = useAuthStore(state => state.user);
+  const partition = useSyncExternalStore(subscribePartition, resourcePartition, resourcePartition);
+  const entry = getResource<T>(JSON.stringify([sessionRevision(),user?.id,user?.tenantId,user?.workspaceId,partition,path]));
+  const state = useSyncExternalStore(entry.subscribe, entry.snapshot, entry.snapshot);
+  const load = useCallback(() => apiRequest<T>(path), [path]);
+  const refresh = useCallback(() => entry.read(load, 0, true), [entry, load]);
   useFocusEffect(useCallback(() => {
-    refresh();
-    const timer = interval ? setInterval(() => { if (AppState.currentState === 'active') refresh(); }, interval) : undefined;
-    const subscription = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
-    return () => { if (timer) clearInterval(timer); subscription.remove(); generation.current++; };
-  }, [refresh, interval]));
-  return { data, loading, error, refresh, setData };
+    if (!enabled || !user) return;
+    const check = () => { if (AppState.currentState !== 'background') void entry.read(load, Math.min(interval || 30000, 30000)); };
+    check();
+    const timer = interval ? setInterval(check, interval) : undefined;
+    const subscription = AppState.addEventListener('change', status => { if (status === 'active') check(); });
+    return () => { if (timer) clearInterval(timer); subscription.remove(); };
+  }, [entry, load, interval, enabled, user]));
+  return {...state, refresh, setData:entry.setData};
 }

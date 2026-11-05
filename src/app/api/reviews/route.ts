@@ -94,6 +94,18 @@ export async function GET(request: NextRequest) {
       ];
     }
 
+    // Stored replies use compact JSON with text (or the legacy replyText key).
+    // Google metadata alone is not a reply.
+    if (searchParams.get('needsReply') === 'true') {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        {NOT:{responseJson:{contains:'"text":"'}}},
+        {NOT:{responseJson:{contains:'"replyText":"'}}},
+      ];
+    }
+    if (searchParams.get('countOnly') === 'true') {
+      return NextResponse.json({total:await db.review.count({where})});
+    }
     const [reviews, total] = await Promise.all([
       db.review.findMany({
         where,

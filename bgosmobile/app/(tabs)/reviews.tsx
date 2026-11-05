@@ -1,3 +1,4 @@
+import { pendingCountPath } from '../../src/hooks/use-pending-replies';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -14,8 +15,8 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { Card, Empty, ErrorNotice, Loading, Screen, colors, ui } from '../../src/components/ui';
+import { useRouter } from 'expo-router';
+import { Action, Card, Empty, ErrorNotice, Loading, Screen, colors, ui } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { relativeDate, formatReviewTime } from '../../src/components/gbp/bits';
@@ -32,7 +33,7 @@ interface DiscoverResponse {
 }
 
 type ReviewsResponse = { reviews: Review[]; pagination?: { total: number } };
-type ReviewFilter = 'all' | '5star' | '4star' | '3star' | 'critical' | 'replied';
+type ReviewFilter = 'needs_reply' | 'all' | '5star' | '4star' | '3star' | 'critical' | 'replied';
 
 interface KeywordUsage {
   keyword: string;
@@ -146,6 +147,11 @@ function GradientOutlineReplyButton({
 
 export default function ReviewRepliesScreen() {
   const router = useRouter();
+  const [filter, setFilter] = useState<ReviewFilter>('needs_reply');
+  const [settingsOpen,setSettingsOpen] = useState(false);
+  const pendingCount = useResource<{total:number}>(pendingCountPath,0,false);
+  const [pendingPage,setPendingPage] = useState(1);
+  const pendingFeed = useResource<ReviewsResponse>(`/api/reviews?source=google&needsReply=true&limit=50&page=${pendingPage}`,0,filter==='needs_reply');
   const reviews = useResource<ReviewsResponse>('/api/reviews?source=google&limit=50');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
@@ -209,7 +215,7 @@ export default function ReviewRepliesScreen() {
     }
   }
 
-  const [filter, setFilter] = useState<ReviewFilter>('all');
+
   const [drafts, setDrafts] = useState<Record<string, { text: string; keywords?: KeywordUsage[] }>>({});
   const [draftBusyId, setDraftBusyId] = useState<string | null>(null);
   const [replyBusyId, setReplyBusyId] = useState<string | null>(null);
@@ -227,16 +233,7 @@ export default function ReviewRepliesScreen() {
   const shortId = activeProfile?.shortId || (gbpPlace.data?.place?.locationId ? `#${gbpPlace.data.place.locationId.slice(-4)}` : '');
   const phone = discover.data?.phone || gbpPlace.data?.place?.phone || '';
 
-  useFocusEffect(
-    useCallback(() => {
-      void Promise.all([
-        reviews.refresh(),
-        gbpPlace.refresh(),
-        discover.refresh(),
-        autoReplyConfig.refresh(),
-      ]).catch(() => {});
-    }, [])
-  );
+
   const version = discover.data?.version || 'v2.83';
 
   const all = useMemo(() => reviews.data?.reviews || [], [reviews.data]);
@@ -326,13 +323,14 @@ export default function ReviewRepliesScreen() {
   const critical = useMemo(() => all.filter((r) => Math.round(r.rating || 5) <= 2), [all]);
 
   const shown = useMemo(() => {
+    if (filter === 'needs_reply') return (pendingFeed.data?.reviews || []).filter(isPending);
     if (filter === '5star') return fiveStars;
     if (filter === '4star') return fourStars;
     if (filter === '3star') return threeStars;
     if (filter === 'critical') return critical;
     if (filter === 'replied') return replied;
     return all;
-  }, [all, filter, fiveStars, fourStars, threeStars, critical, replied]);
+  }, [pendingFeed.data,isPending,all, filter, fiveStars, fourStars, threeStars, critical, replied]);
 
   async function handleTriggerAutoReply() {
     if (autoReplyBusy) return;
@@ -347,7 +345,7 @@ export default function ReviewRepliesScreen() {
       const msg = res.message || `Processed ${res.processedCount} auto-replies.`;
       setNotice(msg);
       Alert.alert('AI Auto-Reply', msg);
-      await reviews.refresh();
+      await Promise.all([reviews.refresh(),pendingFeed.refresh(),pendingCount.refresh()]);
     } catch (err: unknown) {
       const errMsg = (err as Error).message || 'AI Auto-reply failed.';
       setLocalError(errMsg);
@@ -372,7 +370,7 @@ export default function ReviewRepliesScreen() {
       const syncMsg = res.message || `Synced ${res.totalFetched || 0} reviews from Google Maps.`;
       setNotice(syncMsg);
       Alert.alert('Google Sync Completed', syncMsg);
-      await reviews.refresh();
+      await Promise.all([reviews.refresh(),pendingFeed.refresh(),pendingCount.refresh()]);
     } catch (err: unknown) {
       const syncErr = (err as Error).message || 'Failed to sync Google reviews.';
       setLocalError(syncErr);
@@ -498,7 +496,7 @@ export default function ReviewRepliesScreen() {
           `${errorDetail}\n\nNote: Google reviews from connected or personal accounts typically take 24–72 hours to clear Google Maps moderation before replies can be synced to Google.`
         );
       }
-      await reviews.refresh();
+      await Promise.all([reviews.refresh(),pendingFeed.refresh(),pendingCount.refresh()]);
     } catch (e) {
       const msg = (e as Error).message || 'Could not publish reply.';
       setLocalError(msg);
@@ -523,7 +521,7 @@ export default function ReviewRepliesScreen() {
               await apiRequest(`/api/reviews/${review.id}/reply`, { method: 'DELETE' });
               setNotice('Reply removed.');
               Alert.alert('Reply Deleted', 'Your review reply has been removed.');
-              await reviews.refresh();
+              await Promise.all([reviews.refresh(),pendingFeed.refresh(),pendingCount.refresh()]);
             } catch (e) {
               Alert.alert('Error', (e as Error).message || 'Failed to delete reply.');
             } finally {
@@ -587,10 +585,10 @@ export default function ReviewRepliesScreen() {
           </View>
         }
         onRefresh={async () => {
-          await Promise.all([reviews.refresh(), gbpPlace.refresh(), discover.refresh()]).catch(() => {});
+          await Promise.all([reviews.refresh(), pendingFeed.refresh(),pendingCount.refresh(),gbpPlace.refresh(), discover.refresh()]).catch(() => {});
         }}
       >
-        <ErrorNotice message={reviews.error || gbpPlace.error} retry={reviews.refresh} />
+        <ErrorNotice message={(filter==='needs_reply'?pendingFeed.error:reviews.error) || gbpPlace.error} retry={filter==='needs_reply'?pendingFeed.refresh:reviews.refresh} />
         <ErrorNotice message={localError} />
 
         {notice ? (
@@ -599,6 +597,179 @@ export default function ReviewRepliesScreen() {
           </View>
         ) : null}
 
+        {/* ── FILTER PILLS: All | 5★ | 4★ | 3★ | Critical | Replied ── */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 6, gap: 6 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 }}
+            style={{ flex: 1 }}
+          >
+            <Pressable accessibilityRole="button" accessibilityState={{selected:filter==='needs_reply'}} onPress={()=>setFilter('needs_reply')} style={{paddingHorizontal:14,paddingVertical:8,borderRadius:20,backgroundColor:filter==='needs_reply'?'#065f46':'#f1f5f9'}}><Text style={{fontWeight:'700',color:filter==='needs_reply'?'white':'#334155'}}>Needs reply{pendingCount.data ? ' ('+pendingCount.data.total+')' : ''}</Text></Pressable>
+            {/* All */}
+            <Pressable
+              onPress={() => setFilter('all')}
+              style={{
+                backgroundColor: filter === 'all' ? '#0F172A' : '#F1F5F9',
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 20,
+              }}
+            >
+              <Text
+                style={{
+                  color: filter === 'all' ? '#FFFFFF' : '#64748B',
+                  fontWeight: filter === 'all' ? '800' : '600',
+                  fontSize: 12.5,
+                }}
+              >
+                All ({all.length})
+              </Text>
+            </Pressable>
+
+            {/* 5 Stars */}
+            <Pressable
+              onPress={() => setFilter('5star')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: filter === '5star' ? '#0F172A' : '#F1F5F9',
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 20,
+              }}
+            >
+              <Text
+                style={{
+                  color: filter === '5star' ? '#FFFFFF' : '#F59E0B',
+                  fontWeight: filter === '5star' ? '800' : '700',
+                  fontSize: 12.5,
+                }}
+              >
+                ⭐ 5 Stars ({fiveStars.length})
+              </Text>
+            </Pressable>
+
+            {/* 4 Stars */}
+            <Pressable
+              onPress={() => setFilter('4star')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: filter === '4star' ? '#0F172A' : '#F1F5F9',
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 20,
+              }}
+            >
+              <Text
+                style={{
+                  color: filter === '4star' ? '#FFFFFF' : '#64748B',
+                  fontWeight: filter === '4star' ? '800' : '600',
+                  fontSize: 12.5,
+                }}
+              >
+                ⭐ 4 Stars ({fourStars.length})
+              </Text>
+            </Pressable>
+
+            {/* 3 Stars */}
+            <Pressable
+              onPress={() => setFilter('3star')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: filter === '3star' ? '#0F172A' : '#F1F5F9',
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 20,
+              }}
+            >
+              <Text
+                style={{
+                  color: filter === '3star' ? '#FFFFFF' : '#64748B',
+                  fontWeight: filter === '3star' ? '800' : '600',
+                  fontSize: 12.5,
+                }}
+              >
+                ⭐ 3 Stars ({threeStars.length})
+              </Text>
+            </Pressable>
+
+            {/* Critical 1-2 Stars */}
+            {critical.length > 0 && (
+              <Pressable
+                onPress={() => setFilter('critical')}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5,
+                  backgroundColor: filter === 'critical' ? '#0F172A' : '#FEF2F2',
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: '#FECACA',
+                }}
+              >
+                <Text
+                  style={{
+                    color: filter === 'critical' ? '#FFFFFF' : '#DC2626',
+                    fontWeight: '800',
+                    fontSize: 12.5,
+                  }}
+                >
+                  ⚠️ 1-2 Stars ({critical.length})
+                </Text>
+              </Pressable>
+            )}
+
+            {/* Replied */}
+            <Pressable
+              onPress={() => setFilter('replied')}
+              style={{
+                backgroundColor: filter === 'replied' ? '#0F172A' : '#F1F5F9',
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 20,
+              }}
+            >
+              <Text
+                style={{
+                  color: filter === 'replied' ? '#FFFFFF' : '#059669',
+                  fontWeight: filter === 'replied' ? '800' : '700',
+                  fontSize: 12.5,
+                }}
+              >
+                ✓ Replied ({replied.length})
+              </Text>
+            </Pressable>
+          </ScrollView>
+
+          {/* Filter icon button */}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => Alert.alert('Filter Reviews', 'Filter by 5★, 4★, 1★ or date range.')}
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              backgroundColor: '#FFFFFF',
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <MaterialIcons name="filter-list" size={18} color="#64748B" />
+          </Pressable>
+        </View>
+
+        <Pressable accessibilityRole="button" accessibilityState={{expanded:settingsOpen}} onPress={()=>setSettingsOpen(!settingsOpen)} style={{paddingVertical:12}}><Text style={{color:'#007841',fontWeight:'700'}}>{settingsOpen?'Hide review tools':'Review insights & tools'}</Text></Pressable>
+        {settingsOpen && <>
         {/* ── TOP CAROUSEL: SLIDE 1 (Google Ratings) | SLIDE 2 (Reviews Trend) ── */}
         <View
           onLayout={(e) => setSlideWidth(e.nativeEvent.layout.width)}
@@ -796,175 +967,6 @@ export default function ReviewRepliesScreen() {
           </View>
         </View>
 
-        {/* ── FILTER PILLS: All | 5★ | 4★ | 3★ | Critical | Replied ── */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 6, gap: 6 }}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 }}
-            style={{ flex: 1 }}
-          >
-            {/* All */}
-            <Pressable
-              onPress={() => setFilter('all')}
-              style={{
-                backgroundColor: filter === 'all' ? '#0F172A' : '#F1F5F9',
-                paddingHorizontal: 14,
-                paddingVertical: 7,
-                borderRadius: 20,
-              }}
-            >
-              <Text
-                style={{
-                  color: filter === 'all' ? '#FFFFFF' : '#64748B',
-                  fontWeight: filter === 'all' ? '800' : '600',
-                  fontSize: 12.5,
-                }}
-              >
-                All ({all.length})
-              </Text>
-            </Pressable>
-
-            {/* 5 Stars */}
-            <Pressable
-              onPress={() => setFilter('5star')}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 5,
-                backgroundColor: filter === '5star' ? '#0F172A' : '#F1F5F9',
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 20,
-              }}
-            >
-              <Text
-                style={{
-                  color: filter === '5star' ? '#FFFFFF' : '#F59E0B',
-                  fontWeight: filter === '5star' ? '800' : '700',
-                  fontSize: 12.5,
-                }}
-              >
-                ⭐ 5 Stars ({fiveStars.length})
-              </Text>
-            </Pressable>
-
-            {/* 4 Stars */}
-            <Pressable
-              onPress={() => setFilter('4star')}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 5,
-                backgroundColor: filter === '4star' ? '#0F172A' : '#F1F5F9',
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 20,
-              }}
-            >
-              <Text
-                style={{
-                  color: filter === '4star' ? '#FFFFFF' : '#64748B',
-                  fontWeight: filter === '4star' ? '800' : '600',
-                  fontSize: 12.5,
-                }}
-              >
-                ⭐ 4 Stars ({fourStars.length})
-              </Text>
-            </Pressable>
-
-            {/* 3 Stars */}
-            <Pressable
-              onPress={() => setFilter('3star')}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 5,
-                backgroundColor: filter === '3star' ? '#0F172A' : '#F1F5F9',
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 20,
-              }}
-            >
-              <Text
-                style={{
-                  color: filter === '3star' ? '#FFFFFF' : '#64748B',
-                  fontWeight: filter === '3star' ? '800' : '600',
-                  fontSize: 12.5,
-                }}
-              >
-                ⭐ 3 Stars ({threeStars.length})
-              </Text>
-            </Pressable>
-
-            {/* Critical 1-2 Stars */}
-            {critical.length > 0 && (
-              <Pressable
-                onPress={() => setFilter('critical')}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 5,
-                  backgroundColor: filter === 'critical' ? '#0F172A' : '#FEF2F2',
-                  paddingHorizontal: 12,
-                  paddingVertical: 7,
-                  borderRadius: 20,
-                  borderWidth: 1,
-                  borderColor: '#FECACA',
-                }}
-              >
-                <Text
-                  style={{
-                    color: filter === 'critical' ? '#FFFFFF' : '#DC2626',
-                    fontWeight: '800',
-                    fontSize: 12.5,
-                  }}
-                >
-                  ⚠️ 1-2 Stars ({critical.length})
-                </Text>
-              </Pressable>
-            )}
-
-            {/* Replied */}
-            <Pressable
-              onPress={() => setFilter('replied')}
-              style={{
-                backgroundColor: filter === 'replied' ? '#0F172A' : '#F1F5F9',
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 20,
-              }}
-            >
-              <Text
-                style={{
-                  color: filter === 'replied' ? '#FFFFFF' : '#059669',
-                  fontWeight: filter === 'replied' ? '800' : '700',
-                  fontSize: 12.5,
-                }}
-              >
-                ✓ Replied ({replied.length})
-              </Text>
-            </Pressable>
-          </ScrollView>
-
-          {/* Filter icon button */}
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => Alert.alert('Filter Reviews', 'Filter by 5★, 4★, 1★ or date range.')}
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 17,
-              backgroundColor: '#FFFFFF',
-              borderWidth: 1,
-              borderColor: '#E2E8F0',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <MaterialIcons name="filter-list" size={18} color="#64748B" />
-          </Pressable>
-        </View>
 
         {/* ── AI AUTO-REPLY & PUBLISH TOGGLE CARD ── */}
         <View
@@ -1224,12 +1226,13 @@ export default function ReviewRepliesScreen() {
           </Pressable>
         </View>
 
+        </>}
         {/* ── REVIEW LIST ── */}
-        {reviews.loading ? (
+        {(filter==='needs_reply'?pendingFeed.loading:reviews.loading) ? (
           <Loading />
         ) : shown.length === 0 ? (
           <Empty
-            title={filter === 'critical' ? 'No critical reviews 🎉' : 'No reviews found'}
+            title={filter === 'needs_reply' ? 'No reviews waiting for a reply' : filter === 'critical' ? 'No critical reviews 🎉' : 'No reviews found'}
             detail="Verified Google reviews will display here automatically."
           />
         ) : (
@@ -1592,6 +1595,11 @@ export default function ReviewRepliesScreen() {
             );
           })
         )}
+        {filter==='needs_reply' && (pendingPage>1 || (pendingFeed.data?.pagination?.total||0)>50) && <View style={{flexDirection:'row',justifyContent:'space-between'}}>
+          <Action label="Previous" secondary disabled={pendingPage===1} onPress={()=>setPendingPage(p=>p-1)}/>
+          <Text>Page {pendingPage}</Text>
+          <Action label="Next" secondary disabled={pendingPage*50 >= (pendingFeed.data?.pagination?.total||0)} onPress={()=>setPendingPage(p=>p+1)}/>
+        </View>}
       </Screen>
 
       {/* Floating Microphone Button (Screenshots 08.55.28 & 08.55.29) */}
