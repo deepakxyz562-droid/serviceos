@@ -133,64 +133,90 @@ export function PosterEditor({
     }
   }
 
-  const responder = useRef(
+  // ── TOUCH GESTURE RESPONDERS (MOVE, RESIZE, ROTATE) ──────────────────────
+  const dragStart = useRef<{
+    layer: DesignLayer;
+    doc: MarketingDesign;
+    touchDistance: number;
+    touchAngle: number;
+  } | null>(null);
+
+  const resizeStart = useRef<{
+    layer: DesignLayer;
+    doc: MarketingDesign;
+  } | null>(null);
+
+  const rotateStart = useRef<{
+    layer: DesignLayer;
+    doc: MarketingDesign;
+    initialRotation: number;
+    armLength: number;
+    startTouchX: number;
+    startTouchY: number;
+  } | null>(null);
+
+  // 1. Direct Touch Drag on Layer Body (Single-finger Move & Two-finger Pinch/Twist)
+  const bodyResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (e) => {
         pendingGesture.current = null;
-        drag.current = null;
+        dragStart.current = null;
         const c = current.current;
         const l = c.doc.layers.find((lyr) => lyr.id === c.selected);
         if (!l || l.locked) return;
         const [a, b] = e.nativeEvent.touches;
-        drag.current = {
+        dragStart.current = {
           layer: l,
           doc: c.doc,
-          distance: b ? Math.hypot(b.pageX - a.pageX, b.pageY - a.pageY) : 0,
-          angle: b ? Math.atan2(b.pageY - a.pageY, b.pageX - a.pageX) : 0,
+          touchDistance: b ? Math.hypot(b.pageX - a.pageX, b.pageY - a.pageY) : 0,
+          touchAngle: b ? Math.atan2(b.pageY - a.pageY, b.pageX - a.pageX) : 0,
         };
       },
       onPanResponderMove: (e, g) => {
-        const start = drag.current;
-        if (!start) return;
+        const start = dragStart.current;
+        if (!start || start.layer.locked) return;
         const c = current.current;
         const scale = c.doc.width / c.width;
         const touches = e.nativeEvent.touches;
-        let p: Partial<DesignLayer> = gestureLayer(
-          start.layer,
-          start.doc,
-          g.dx * scale,
-          g.dy * scale,
-          'move'
-        );
-        if (touches.length >= 2 && !start.distance) {
+
+        let p: Partial<DesignLayer>;
+        if (touches.length >= 2 && !start.touchDistance) {
           const [a, b] = touches;
-          start.distance = Math.hypot(b.pageX - a.pageX, b.pageY - a.pageY);
-          start.angle = Math.atan2(b.pageY - a.pageY, b.pageX - a.pageX);
+          start.touchDistance = Math.hypot(b.pageX - a.pageX, b.pageY - a.pageY);
+          start.touchAngle = Math.atan2(b.pageY - a.pageY, b.pageX - a.pageX);
         }
-        if (touches.length >= 2 && start.distance) {
+
+        if (touches.length >= 2 && start.touchDistance) {
+          // Multi-touch: simultaneous pinch-zoom and twist-rotate
           const [a, b] = touches;
-          const factor = Math.hypot(b.pageX - a.pageX, b.pageY - a.pageY) / start.distance;
+          const currentDist = Math.hypot(b.pageX - a.pageX, b.pageY - a.pageY);
+          const factor = Math.max(0.15, Math.min(6, currentDist / start.touchDistance));
+          const currentAngle = Math.atan2(b.pageY - a.pageY, b.pageX - a.pageX);
+          const deltaAngle = ((currentAngle - start.touchAngle) * 180) / Math.PI;
+
+          let newRot = ((start.layer.rotation || 0) + deltaAngle) % 360;
+          if (newRot > 180) newRot -= 360;
+          if (newRot < -180) newRot += 360;
+
           p = {
-            width: start.layer.width * factor,
-            height: start.layer.height * factor,
-            rotation: Math.max(
-              -180,
-              Math.min(
-                180,
-                (start.layer.rotation || 0) +
-                  ((Math.atan2(b.pageY - a.pageY, b.pageX - a.pageX) - start.angle) * 180) / Math.PI
-              )
-            ),
+            width: Math.max(24, Math.min(start.doc.width, Math.round(start.layer.width * factor))),
+            height: Math.max(24, Math.min(start.doc.height, Math.round(start.layer.height * factor))),
+            rotation: Math.round(newRot),
           };
+        } else {
+          // Single-touch: smooth move with boundary clamping & snap
+          p = gestureLayer(start.layer, start.doc, g.dx * scale, g.dy * scale, 'move');
         }
+
         pendingGesture.current = p;
         setPreview(patchDesignLayer(start.doc, start.layer.id, p));
       },
       onPanResponderRelease: () => {
         setPreview(null);
-        const start = drag.current;
-        drag.current = null;
+        const start = dragStart.current;
+        dragStart.current = null;
         if (start && pendingGesture.current) {
           current.current.onChange(patchDesignLayer(start.doc, start.layer.id, pendingGesture.current));
         }
@@ -198,11 +224,206 @@ export function PosterEditor({
       },
       onPanResponderTerminate: () => {
         setPreview(null);
-        drag.current = null;
+        dragStart.current = null;
         pendingGesture.current = null;
       },
     })
   ).current;
+
+  // 2. Corner Grip Handle (Bottom-Right Drag to Resize)
+  const resizeResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        pendingGesture.current = null;
+        resizeStart.current = null;
+        const c = current.current;
+        const l = c.doc.layers.find((lyr) => lyr.id === c.selected);
+        if (!l || l.locked) return;
+        resizeStart.current = { layer: l, doc: c.doc };
+      },
+      onPanResponderMove: (_e, g) => {
+        const start = resizeStart.current;
+        if (!start || start.layer.locked) return;
+        const c = current.current;
+        const scale = c.doc.width / c.width;
+        const p = gestureLayer(start.layer, start.doc, g.dx * scale, g.dy * scale, 'resize');
+        pendingGesture.current = p;
+        setPreview(patchDesignLayer(start.doc, start.layer.id, p));
+      },
+      onPanResponderRelease: () => {
+        setPreview(null);
+        const start = resizeStart.current;
+        resizeStart.current = null;
+        if (start && pendingGesture.current) {
+          current.current.onChange(patchDesignLayer(start.doc, start.layer.id, pendingGesture.current));
+        }
+        pendingGesture.current = null;
+      },
+      onPanResponderTerminate: () => {
+        setPreview(null);
+        resizeStart.current = null;
+        pendingGesture.current = null;
+      },
+    })
+  ).current;
+
+  // 3. Top Stem Knob (Touch & Swing to Rotate fluidly 0° - 360°)
+  const rotateResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        pendingGesture.current = null;
+        rotateStart.current = null;
+        const c = current.current;
+        const l = c.doc.layers.find((lyr) => lyr.id === c.selected);
+        if (!l || l.locked) return;
+        const scale = c.width / c.doc.width;
+        const armLength = (l.height * scale) / 2 + 28;
+        rotateStart.current = {
+          layer: l,
+          doc: c.doc,
+          initialRotation: l.rotation || 0,
+          armLength,
+          startTouchX: e.nativeEvent.pageX,
+          startTouchY: e.nativeEvent.pageY,
+        };
+      },
+      onPanResponderMove: (e) => {
+        const start = rotateStart.current;
+        if (!start || start.layer.locked) return;
+        const dx = e.nativeEvent.pageX - start.startTouchX;
+        const dy = e.nativeEvent.pageY - start.startTouchY;
+
+        // Angle from center of object to current touch
+        const vX = dx;
+        const vY = -start.armLength + dy;
+        const angleCurrent = Math.atan2(vY, vX);
+        const angleInitial = -Math.PI / 2; // top center
+        let deltaDeg = ((angleCurrent - angleInitial) * 180) / Math.PI;
+
+        let newRot = (start.initialRotation + deltaDeg) % 360;
+        if (newRot > 180) newRot -= 360;
+        if (newRot < -180) newRot += 360;
+
+        // Magnetic snap to cardinal angles within 4 degrees
+        for (const snap of [0, 90, -90, 180, -180, 45, -45]) {
+          if (Math.abs(newRot - snap) < 4) {
+            newRot = snap;
+            break;
+          }
+        }
+
+        const p: Partial<DesignLayer> = { rotation: Math.round(newRot) };
+        pendingGesture.current = p;
+        setPreview(patchDesignLayer(start.doc, start.layer.id, p));
+      },
+      onPanResponderRelease: () => {
+        setPreview(null);
+        const start = rotateStart.current;
+        rotateStart.current = null;
+        if (start && pendingGesture.current) {
+          current.current.onChange(patchDesignLayer(start.doc, start.layer.id, pendingGesture.current));
+        }
+        pendingGesture.current = null;
+      },
+      onPanResponderTerminate: () => {
+        setPreview(null);
+        rotateStart.current = null;
+        pendingGesture.current = null;
+      },
+    })
+  ).current;
+
+  // ── LAYER MANIPULATION HELPERS (DELETE, NUDGE, ROTATE, ORDER) ─────────────
+  function handleDeleteLayer(id: string) {
+    if (doc.layers.length <= 1) {
+      Alert.alert('Cannot Delete', 'The design must keep at least one layer.');
+      return;
+    }
+    Alert.alert(
+      'Delete Layer',
+      `Are you sure you want to delete "${getFriendlyName(id)}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            const remaining = doc.layers.filter((l) => l.id !== id);
+            onChange({ ...doc, layers: remaining });
+            setSelected('');
+          },
+        },
+      ]
+    );
+  }
+
+  function handleNudge(dx: number, dy: number) {
+    const l = doc.layers.find((lyr) => lyr.id === selected);
+    if (!l || l.locked) return;
+    const newX = Math.max(0, Math.min(doc.width - l.width, l.x + dx));
+    const newY = Math.max(0, Math.min(doc.height - l.height, l.y + dy));
+    patch({ x: newX, y: newY });
+  }
+
+  function handleCenterHorizontally() {
+    const l = doc.layers.find((lyr) => lyr.id === selected);
+    if (!l || l.locked) return;
+    patch({ x: Math.max(0, Math.round((doc.width - l.width) / 2)) });
+  }
+
+  function handleCenterVertically() {
+    const l = doc.layers.find((lyr) => lyr.id === selected);
+    if (!l || l.locked) return;
+    patch({ y: Math.max(0, Math.round((doc.height - l.height) / 2)) });
+  }
+
+  function handleRotateStep(delta: number) {
+    const l = doc.layers.find((lyr) => lyr.id === selected);
+    if (!l || l.locked) return;
+    let next = ((l.rotation || 0) + delta) % 360;
+    if (next > 180) next -= 360;
+    if (next < -180) next += 360;
+    patch({ rotation: Math.round(next) });
+  }
+
+  function handleResetRotation() {
+    const l = doc.layers.find((lyr) => lyr.id === selected);
+    if (!l || l.locked) return;
+    patch({ rotation: 0 });
+  }
+
+  function handleMoveLayerOrder(id: string, direction: 'forward' | 'backward' | 'front' | 'back') {
+    const idx = doc.layers.findIndex((l) => l.id === id);
+    if (idx === -1) return;
+    const currentLayer = doc.layers[idx];
+    const otherLayers = doc.layers.filter((l) => l.id !== id);
+
+    let newLayers: DesignLayer[];
+    if (direction === 'front') {
+      newLayers = [...otherLayers, currentLayer];
+    } else if (direction === 'back') {
+      newLayers = [currentLayer, ...otherLayers];
+    } else if (direction === 'forward') {
+      if (idx >= doc.layers.length - 1) return;
+      const copy = [...doc.layers];
+      const temp = copy[idx];
+      copy[idx] = copy[idx + 1];
+      copy[idx + 1] = temp;
+      newLayers = copy;
+    } else {
+      if (idx <= 0) return;
+      const copy = [...doc.layers];
+      const temp = copy[idx];
+      copy[idx] = copy[idx - 1];
+      copy[idx - 1] = temp;
+      newLayers = copy;
+    }
+    onChange({ ...doc, layers: newLayers });
+  }
 
   async function replacePhoto(add = false) {
     const targetId = selected;
@@ -293,10 +514,12 @@ export function PosterEditor({
         method: 'POST',
         body: { imageUrl: currentUrl },
       });
-      if (res.cutoutDataUri) {
+      if (res.success && res.cutoutDataUri) {
         patch({ src: res.cutoutDataUri });
-      } else if (res.notice) {
-        setError(res.notice);
+      } else {
+        const msg = res.error || res.notice || 'Background removal could not be completed';
+        setError(msg);
+        Alert.alert('Background Removal', msg);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Background removal failed');
@@ -362,52 +585,155 @@ export function PosterEditor({
           }}
         />
 
-        {/* Selected Layer Boundary Ring */}
+        {/* Selected Layer Interactive Touch Box with Move, Resize & Rotate Handles */}
         {layer && !layer.hidden && (
           <View
-            pointerEvents="none"
-            accessibilityLabel={`Selected ${getFriendlyName(layer.id)}`}
             style={{
               position: 'absolute',
               left: (layer.x / doc.width) * canvasWidth,
               top: (layer.y / doc.width) * canvasWidth,
               width: (layer.width / doc.width) * canvasWidth,
               height: (layer.height / doc.width) * canvasWidth,
-              zIndex: 10,
-              borderWidth: 2,
-              borderColor: '#009F50',
-              borderStyle: 'dashed',
-              backgroundColor: 'transparent',
+              zIndex: 30,
               transform: [{ rotate: `${layer.rotation || 0}deg` }],
             }}
-          />
-        )}
-
-        {/* Dedicated Pan / Drag Handle */}
-        {layer && !layer.hidden && !layer.locked && (
-          <View
-            {...responder.panHandlers}
-            accessible
-            accessibilityLabel="Drag selected object"
-            style={{
-              position: 'absolute',
-              left: Math.max(0, Math.min(canvasWidth - 38, ((layer.x + layer.width) / doc.width) * canvasWidth - 19)),
-              top: Math.max(0, Math.min((doc.height / doc.width) * canvasWidth - 38, ((layer.y + layer.height) / doc.width) * canvasWidth - 19)),
-              width: 38,
-              height: 38,
-              zIndex: 20,
-              borderRadius: 19,
-              backgroundColor: '#009F50',
-              alignItems: 'center',
-              justifyContent: 'center',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 3,
-              elevation: 4,
-            }}
           >
-            <MaterialIcons name="open-with" size={20} color="#FFFFFF" />
+            {/* Direct Touch Drag Surface on Layer Body */}
+            <View
+              {...(!layer.locked ? bodyResponder.panHandlers : {})}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel={`Drag ${getFriendlyName(layer.id)}`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                borderWidth: 2,
+                borderColor: '#009F50',
+                borderStyle: 'dashed',
+                borderRadius: ((layer.borderRadius || 0) / doc.width) * canvasWidth,
+                backgroundColor: 'rgba(0, 159, 80, 0.05)',
+              }}
+            />
+
+            {!layer.locked && (
+              <>
+                {/* ── Top Stem & Rotate Knob ── */}
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    top: -20,
+                    left: ((layer.width / doc.width) * canvasWidth) / 2 - 1,
+                    width: 2,
+                    height: 20,
+                    backgroundColor: '#009F50',
+                  }}
+                />
+                <View
+                  {...rotateResponder.panHandlers}
+                  accessible
+                  accessibilityRole="adjustable"
+                  accessibilityLabel="Rotate layer handle"
+                  style={{
+                    position: 'absolute',
+                    top: -40,
+                    left: ((layer.width / doc.width) * canvasWidth) / 2 - 16,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 2,
+                    borderColor: '#009F50',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.22,
+                    shadowRadius: 3,
+                    elevation: 5,
+                    zIndex: 40,
+                  }}
+                >
+                  <MaterialIcons name="refresh" size={18} color="#009F50" />
+                </View>
+
+                {/* ── Bottom-Right Corner Resize Grip Handle ── */}
+                <View
+                  {...resizeResponder.panHandlers}
+                  accessible
+                  accessibilityRole="adjustable"
+                  accessibilityLabel="Resize layer handle"
+                  style={{
+                    position: 'absolute',
+                    bottom: -16,
+                    right: -16,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: '#009F50',
+                    borderWidth: 2,
+                    borderColor: '#FFFFFF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 3,
+                    elevation: 5,
+                    zIndex: 40,
+                  }}
+                >
+                  <MaterialIcons name="open-in-full" size={15} color="#FFFFFF" />
+                </View>
+
+                {/* Corner Anchor Dots for Visual Precision Cue */}
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    top: -5,
+                    left: -5,
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 2,
+                    borderColor: '#009F50',
+                  }}
+                />
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    top: -5,
+                    right: -5,
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 2,
+                    borderColor: '#009F50',
+                  }}
+                />
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    bottom: -5,
+                    left: -5,
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 2,
+                    borderColor: '#009F50',
+                  }}
+                />
+              </>
+            )}
           </View>
         )}
       </View>
@@ -545,6 +871,15 @@ export function PosterEditor({
                   size={16}
                   color="#64748B"
                 />
+              </Pressable>
+
+              {/* Delete Layer Button */}
+              <Pressable
+                accessibilityLabel="Delete Layer"
+                onPress={() => handleDeleteLayer(layer.id)}
+                style={[styles.iconActionBtn, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}
+              >
+                <MaterialIcons name="delete-outline" size={17} color="#DC2626" />
               </Pressable>
 
               {/* Done Button */}
@@ -783,6 +1118,134 @@ export function PosterEditor({
               </ScrollView>
             </View>
           )}
+
+          {/* Universal Transform, Order & Position Tools (Available for all layers) */}
+          <View style={styles.universalTransformSection}>
+            {/* Header: Transform & Position with Live Angle Display */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <Text style={styles.controlLabel}>Position & Rotation</Text>
+              <Pressable
+                disabled={layer.locked}
+                onPress={handleResetRotation}
+                style={{
+                  paddingHorizontal: 8,
+                  paddingVertical: 2.5,
+                  borderRadius: 6,
+                  backgroundColor: layer.rotation ? '#FEF3C7' : '#F1F5F9',
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '700', color: layer.rotation ? '#B45309' : '#64748B' }}>
+                  Angle: {Math.round(layer.rotation || 0)}° {layer.rotation ? '(Reset 0°)' : ''}
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Row 1: Rotation Steppers, 90° Turn & Z-Order Depth */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 8 }}>
+              {/* Rotation Stepper Group */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Pressable
+                  disabled={layer.locked}
+                  onPress={() => handleRotateStep(-15)}
+                  style={styles.transformActionBtn}
+                >
+                  <MaterialIcons name="rotate-left" size={15} color="#0F172A" />
+                  <Text style={styles.transformActionBtnText}>-15°</Text>
+                </Pressable>
+                <Pressable
+                  disabled={layer.locked}
+                  onPress={() => handleRotateStep(15)}
+                  style={styles.transformActionBtn}
+                >
+                  <MaterialIcons name="rotate-right" size={15} color="#0F172A" />
+                  <Text style={styles.transformActionBtnText}>+15°</Text>
+                </Pressable>
+                <Pressable
+                  disabled={layer.locked}
+                  onPress={() => handleRotateStep(90)}
+                  style={[styles.transformActionBtn, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}
+                >
+                  <MaterialIcons name="refresh" size={14} color="#009F50" />
+                  <Text style={[styles.transformActionBtnText, { color: '#009F50' }]}>90°</Text>
+                </Pressable>
+              </View>
+
+              {/* Z-Order Layer Stacking */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Pressable
+                  disabled={layer.locked}
+                  onPress={() => handleMoveLayerOrder(layer.id, 'forward')}
+                  style={styles.transformActionBtn}
+                >
+                  <MaterialIcons name="arrow-upward" size={14} color="#0F172A" />
+                  <Text style={styles.transformActionBtnText}>Up</Text>
+                </Pressable>
+                <Pressable
+                  disabled={layer.locked}
+                  onPress={() => handleMoveLayerOrder(layer.id, 'backward')}
+                  style={styles.transformActionBtn}
+                >
+                  <MaterialIcons name="arrow-downward" size={14} color="#0F172A" />
+                  <Text style={styles.transformActionBtnText}>Down</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Row 2: Precision Nudge & Center Presets */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+              {/* Alignment Presets */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Pressable
+                  disabled={layer.locked}
+                  onPress={handleCenterHorizontally}
+                  style={styles.alignPresetBtn}
+                >
+                  <MaterialIcons name="align-horizontal-center" size={14} color="#009F50" />
+                  <Text style={styles.alignPresetBtnText}>Center H</Text>
+                </Pressable>
+                <Pressable
+                  disabled={layer.locked}
+                  onPress={handleCenterVertically}
+                  style={styles.alignPresetBtn}
+                >
+                  <MaterialIcons name="align-vertical-center" size={14} color="#009F50" />
+                  <Text style={styles.alignPresetBtnText}>Center V</Text>
+                </Pressable>
+              </View>
+
+              {/* 4-Way Arrow Nudge Pad */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Pressable
+                  disabled={layer.locked}
+                  onPress={() => handleNudge(-12, 0)}
+                  style={styles.nudgeBtn}
+                >
+                  <MaterialIcons name="arrow-back" size={15} color="#0F172A" />
+                </Pressable>
+                <Pressable
+                  disabled={layer.locked}
+                  onPress={() => handleNudge(12, 0)}
+                  style={styles.nudgeBtn}
+                >
+                  <MaterialIcons name="arrow-forward" size={15} color="#0F172A" />
+                </Pressable>
+                <Pressable
+                  disabled={layer.locked}
+                  onPress={() => handleNudge(0, -12)}
+                  style={styles.nudgeBtn}
+                >
+                  <MaterialIcons name="arrow-upward" size={15} color="#0F172A" />
+                </Pressable>
+                <Pressable
+                  disabled={layer.locked}
+                  onPress={() => handleNudge(0, 12)}
+                  style={styles.nudgeBtn}
+                >
+                  <MaterialIcons name="arrow-downward" size={15} color="#0F172A" />
+                </Pressable>
+              </View>
+            </View>
+          </View>
         </View>
       )}
 
@@ -819,7 +1282,7 @@ export function PosterEditor({
                     onPress={() => selectLayer(l.id)}
                     style={[styles.layerRowCard, isSelected && styles.layerRowCardActive]}
                   >
-                    {l.type === 'image' ? (
+                    {l.type === 'image' && !l.src?.startsWith('data:image/svg+xml') && !l.id.includes('divider') ? (
                       <Image
                         source={PROFESSIONAL_ASSETS[l.src || ''] || { uri: l.src }}
                         style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#E2E8F0' }}
@@ -827,7 +1290,15 @@ export function PosterEditor({
                     ) : (
                       <View style={[styles.layerIconBox, isSelected && { backgroundColor: '#DCFCE7' }]}>
                         <MaterialIcons
-                          name={l.type === 'text' ? 'title' : 'category'}
+                          name={
+                            l.id === 'graphic_divider' || l.id.includes('divider')
+                              ? 'remove'
+                              : l.src?.startsWith('data:image/svg+xml') || l.id.includes('emblem')
+                              ? 'auto-awesome'
+                              : l.type === 'text'
+                              ? 'title'
+                              : 'category'
+                          }
                           size={18}
                           color={isSelected ? '#009F50' : '#475569'}
                         />
@@ -845,7 +1316,36 @@ export function PosterEditor({
                       </Text>
                     </View>
 
-                    {isSelected && <MaterialIcons name="check-circle" size={20} color="#009F50" />}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      {/* Move Layer Up in Stack */}
+                      <Pressable
+                        accessibilityLabel="Move layer up"
+                        onPress={() => handleMoveLayerOrder(l.id, 'forward')}
+                        style={styles.modalLayerActionBtn}
+                      >
+                        <MaterialIcons name="arrow-upward" size={14} color="#475569" />
+                      </Pressable>
+
+                      {/* Move Layer Down in Stack */}
+                      <Pressable
+                        accessibilityLabel="Move layer down"
+                        onPress={() => handleMoveLayerOrder(l.id, 'backward')}
+                        style={styles.modalLayerActionBtn}
+                      >
+                        <MaterialIcons name="arrow-downward" size={14} color="#475569" />
+                      </Pressable>
+
+                      {/* Delete Layer */}
+                      <Pressable
+                        accessibilityLabel="Delete layer"
+                        onPress={() => handleDeleteLayer(l.id)}
+                        style={[styles.modalLayerActionBtn, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}
+                      >
+                        <MaterialIcons name="delete-outline" size={14} color="#DC2626" />
+                      </Pressable>
+
+                      {isSelected && <MaterialIcons name="check-circle" size={18} color="#009F50" />}
+                    </View>
                   </Pressable>
                 );
               })}
@@ -1200,5 +1700,65 @@ const styles = StyleSheet.create({
   decorationsToggleBtn: {
     paddingVertical: 12,
     alignItems: 'center',
+  },
+  universalTransformSection: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  transformActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  transformActionBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  alignPresetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  alignPresetBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#009F50',
+  },
+  nudgeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalLayerActionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

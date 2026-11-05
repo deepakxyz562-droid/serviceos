@@ -133,15 +133,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Graceful fallback: return original as transparent data URI with service status flag
-    const base64DataUri = `data:${contentType};base64,${imageBuffer.toString('base64')}`;
-    return NextResponse.json({
-      success: true,
-      mimeType: contentType,
-      cutoutDataUri: base64DataUri,
-      notice: 'Rembg worker offline — original photo retained.',
-      provider: 'fallback-direct',
-    });
+    // When background removal cannot be completed, return an honest service error
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Background removal service is offline or unavailable. Please ensure rembg worker is running on port 8008.',
+        provider: 'none',
+      },
+      { status: 503 }
+    );
   } catch (error: unknown) {
     console.error('Error in remove-bg gateway:', error);
     return NextResponse.json(

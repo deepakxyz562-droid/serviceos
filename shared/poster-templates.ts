@@ -1,5 +1,6 @@
 import { PROFESSIONAL_POSTERS } from './professional-posters';
 import { STUDIO_POSTERS } from './poster-studio-catalog';
+import { LAYERED_KIT_POSTERS } from './layered-templates-kit';
 /**
  * BGOS Poster Template Registry — Flyer-Maker-style professional template gallery.
  *
@@ -1098,6 +1099,7 @@ const neutralCopy: Record<PosterCategoryId, [string,string]> = {
 };
 const unsupported = /\d+%|guarantee|zero |#1|5.star|verified|certified|24.?7|free |first \d|lifetime|lowest|OEM|hallmark/i;
 export const POSTER_TEMPLATES: PosterTemplate[] = [
+ ...LAYERED_KIT_POSTERS,
  ...PROFESSIONAL_POSTERS,
  ...STUDIO_POSTERS,
  ...ORIGINAL_POSTER_TEMPLATES.map((t,index):PosterTemplate=>({

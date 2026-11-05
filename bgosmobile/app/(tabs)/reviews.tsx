@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   Share,
+  Switch,
   Text,
   TextInput,
   View,
@@ -148,6 +149,65 @@ export default function ReviewRepliesScreen() {
   const reviews = useResource<ReviewsResponse>('/api/reviews?source=google&limit=50');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
+  const autoReplyConfig = useResource<{
+    enabled: boolean;
+    autoPublish: boolean;
+    minRating: number;
+    pendingCount: number;
+  }>('/api/reviews/auto-reply');
+
+  const [autoReplyEnabled, setAutoReplyEnabled] = useState<boolean | null>(null);
+  const [autoPublishEnabled, setAutoPublishEnabled] = useState<boolean | null>(null);
+
+  const effectiveAutoReply =
+    autoReplyEnabled !== null
+      ? autoReplyEnabled
+      : (autoReplyConfig.data?.enabled ?? false);
+  const effectiveAutoPublish =
+    autoPublishEnabled !== null
+      ? autoPublishEnabled
+      : (autoReplyConfig.data?.autoPublish ?? true);
+
+  async function handleToggleAutoReply(newValue: boolean) {
+    setAutoReplyEnabled(newValue);
+    try {
+      await apiRequest('/api/reviews/auto-reply', {
+        method: 'PATCH',
+        body: { enabled: newValue },
+      });
+      await autoReplyConfig.refresh();
+      if (newValue && pending.length > 0) {
+        Alert.alert(
+          'AI Auto-Reply Enabled',
+          `Auto-reply is now active! Would you like to generate and publish replies to ${pending.length} pending review${pending.length === 1 ? '' : 's'} now?`,
+          [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'Auto-Reply Now',
+              onPress: () => void handleTriggerAutoReply(),
+            },
+          ]
+        );
+      }
+    } catch (err: unknown) {
+      setAutoReplyEnabled(!newValue);
+      Alert.alert('Update Failed', (err as Error).message || 'Failed to update auto-reply setting');
+    }
+  }
+
+  async function handleToggleAutoPublish(newValue: boolean) {
+    setAutoPublishEnabled(newValue);
+    try {
+      await apiRequest('/api/reviews/auto-reply', {
+        method: 'PATCH',
+        body: { autoPublish: newValue },
+      });
+      await autoReplyConfig.refresh();
+    } catch (err: unknown) {
+      setAutoPublishEnabled(!newValue);
+      Alert.alert('Update Failed', (err as Error).message || 'Failed to update auto-publish setting');
+    }
+  }
 
   const [filter, setFilter] = useState<ReviewFilter>('all');
   const [drafts, setDrafts] = useState<Record<string, { text: string; keywords?: KeywordUsage[] }>>({});
@@ -169,7 +229,12 @@ export default function ReviewRepliesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void Promise.all([reviews.refresh(), gbpPlace.refresh(), discover.refresh()]).catch(() => {});
+      void Promise.all([
+        reviews.refresh(),
+        gbpPlace.refresh(),
+        discover.refresh(),
+        autoReplyConfig.refresh(),
+      ]).catch(() => {});
     }, [])
   );
   const version = discover.data?.version || 'v2.83';
@@ -901,90 +966,195 @@ export default function ReviewRepliesScreen() {
           </Pressable>
         </View>
 
-        {/* ── AUTO-REPLY COMMAND BAR ── */}
+        {/* ── AI AUTO-REPLY & PUBLISH TOGGLE CARD ── */}
         <View
           style={{
-            backgroundColor: pending.length > 0 ? '#EFF6FF' : '#F8FAFC',
-            borderWidth: 1,
-            borderColor: pending.length > 0 ? '#BFDBFE' : '#E2E8F0',
+            backgroundColor: effectiveAutoReply ? '#F0FDF4' : '#F8FAFC',
+            borderWidth: 1.5,
+            borderColor: effectiveAutoReply ? '#BBF7D0' : '#E2E8F0',
             borderRadius: 14,
-            padding: 12,
-            marginBottom: 10,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 10,
+            padding: 13,
+            marginBottom: 12,
+            shadowColor: '#0F172A',
+            shadowOpacity: 0.04,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 4,
+            elevation: 1,
           }}
         >
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <MaterialIcons name="auto-awesome" size={16} color={pending.length > 0 ? '#2563EB' : '#059669'} />
-              <Text style={{ fontSize: 13, fontWeight: '800', color: pending.length > 0 ? '#1E40AF' : '#065F46' }}>
-                AI Auto-Reply {pending.length === 0 ? 'Active' : ''}
+          {/* Main Auto-Reply & Publish Toggle Row */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons
+                  name="bolt"
+                  size={18}
+                  color={effectiveAutoReply ? '#16A34A' : '#64748B'}
+                />
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '800',
+                    color: effectiveAutoReply ? '#14532D' : '#0F172A',
+                  }}
+                >
+                  AI Auto-Reply & Publish
+                </Text>
+                {effectiveAutoReply && (
+                  <View
+                    style={{
+                      paddingHorizontal: 6,
+                      paddingVertical: 1.5,
+                      borderRadius: 4,
+                      backgroundColor: '#DCFCE7',
+                    }}
+                  >
+                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#15803D' }}>
+                      ON
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text
+                style={{
+                  fontSize: 11.5,
+                  color: effectiveAutoReply ? '#166534' : '#64748B',
+                  marginTop: 2,
+                  lineHeight: 16,
+                }}
+              >
+                {effectiveAutoReply
+                  ? effectiveAutoPublish
+                    ? 'Automatically generates & posts replies to Google Maps for 4★ & 5★ reviews.'
+                    : 'Automatically generates AI drafts for reviews (requires 1-tap publish).'
+                  : 'Manual review mode. Turn ON to automatically answer reviews.'}
               </Text>
             </View>
-            <Text style={{ fontSize: 11.5, color: pending.length > 0 ? '#3B82F6' : '#64748B', marginTop: 2 }}>
-              {pending.length > 0
-                ? `${pending.length} pending review${pending.length === 1 ? '' : 's'} waiting for replies`
-                : 'All reviews answered! Use Sync or + Test Review.'}
-            </Text>
+
+            <Switch
+              value={effectiveAutoReply}
+              onValueChange={(val) => void handleToggleAutoReply(val)}
+              trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+              thumbColor={effectiveAutoReply ? '#16A34A' : '#F1F5F9'}
+              ios_backgroundColor="#CBD5E1"
+            />
           </View>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            {pending.length > 0 ? (
+
+          {/* Sub-Option: Auto-Publish directly to Google Maps */}
+          {effectiveAutoReply && (
+            <View
+              style={{
+                marginTop: 10,
+                paddingTop: 10,
+                borderTopWidth: 1,
+                borderTopColor: '#DCFCE7',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <View style={{ flex: 1, marginRight: 10 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#166534' }}>
+                  Publish directly to Google Maps
+                </Text>
+                <Text style={{ fontSize: 10.5, color: '#15803D' }}>
+                  {effectiveAutoPublish
+                    ? 'Replies post to Google automatically without manual approval'
+                    : 'Saves as drafts for your quick 1-tap review'}
+                </Text>
+              </View>
+              <Switch
+                value={effectiveAutoPublish}
+                onValueChange={(val) => void handleToggleAutoPublish(val)}
+                trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+                thumbColor={effectiveAutoPublish ? '#16A34A' : '#F1F5F9'}
+                ios_backgroundColor="#CBD5E1"
+                style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+              />
+            </View>
+          )}
+
+          {/* Pending Reviews Batch Action & Sync Row */}
+          <View
+            style={{
+              marginTop: 10,
+              paddingTop: 10,
+              borderTopWidth: 1,
+              borderTopColor: effectiveAutoReply ? '#DCFCE7' : '#E2E8F0',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              {pending.length > 0 ? (
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1E40AF' }}>
+                  ⚡ {pending.length} pending review{pending.length === 1 ? '' : 's'} waiting
+                </Text>
+              ) : (
+                <Text style={{ fontSize: 11, color: '#64748B' }}>
+                  All reviews answered. Sync with Maps below.
+                </Text>
+              )}
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {pending.length > 0 && (
+                <Pressable
+                  disabled={autoReplyBusy}
+                  onPress={() => void handleTriggerAutoReply()}
+                  style={({ pressed }) => ({
+                    backgroundColor: '#2563EB',
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    opacity: autoReplyBusy ? 0.6 : pressed ? 0.85 : 1,
+                  })}
+                >
+                  {autoReplyBusy ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="bolt" size={14} color="#FFFFFF" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>
+                        Auto-Reply Now
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
+
               <Pressable
-                disabled={autoReplyBusy}
-                onPress={() => void handleTriggerAutoReply()}
+                disabled={syncBusy}
+                onPress={() => void handleSyncGoogle()}
                 style={({ pressed }) => ({
-                  backgroundColor: '#2563EB',
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 10,
+                  backgroundColor: '#FFFFFF',
+                  borderWidth: 1,
+                  borderColor: '#CBD5E1',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 8,
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 4,
-                  opacity: autoReplyBusy ? 0.6 : pressed ? 0.85 : 1,
+                  opacity: syncBusy ? 0.6 : pressed ? 0.85 : 1,
                 })}
               >
-                {autoReplyBusy ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                {syncBusy ? (
+                  <ActivityIndicator size="small" color="#0F172A" />
                 ) : (
                   <>
-                    <MaterialIcons name="bolt" size={15} color="#FFFFFF" />
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
-                      Auto-Reply ({pending.length})
+                    <MaterialIcons name="refresh" size={13} color="#0F172A" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>
+                      Sync Maps
                     </Text>
                   </>
                 )}
               </Pressable>
-            ) : (
-              <>
-                <Pressable
-                  disabled={syncBusy}
-                  onPress={() => void handleSyncGoogle()}
-                  style={({ pressed }) => ({
-                    backgroundColor: '#FFFFFF',
-                    borderWidth: 1,
-                    borderColor: '#CBD5E1',
-                    paddingHorizontal: 10,
-                    paddingVertical: 7,
-                    borderRadius: 10,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 4,
-                    opacity: syncBusy ? 0.6 : pressed ? 0.85 : 1,
-                  })}
-                >
-                  {syncBusy ? (
-                    <ActivityIndicator size="small" color="#0F172A" />
-                  ) : (
-                    <>
-                      <MaterialIcons name="refresh" size={14} color="#0F172A" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Sync Maps</Text>
-                    </>
-                  )}
-                </Pressable>
-              </>
-            )}
+            </View>
           </View>
         </View>
 

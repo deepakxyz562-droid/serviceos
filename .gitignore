@@ -99,6 +99,13 @@ db/*.db-journal
 # Mini services
 /mini-services/
 
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+server/rembg-service/.venv/
+
 # Examples
 /examples/
 

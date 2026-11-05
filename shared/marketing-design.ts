@@ -1,5 +1,6 @@
 import { composeProfessionalPoster } from './professional-posters';
 import { composeStudioPoster } from './poster-composition';
+import { composeKitPoster } from './layered-templates-kit';
 /** Versioned, portable source document. Coordinates are in canvas pixels. */
 export type DesignLayer = {
   locked?: boolean; hidden?: boolean; groupId?: string;
@@ -34,7 +35,7 @@ export function validateDesign(value: unknown): MarketingDesign {
   for (const l of d.layers) {
     if (!l || typeof l.id !== 'string' || !l.id || ids.has(l.id) || !['text','image','shape'].includes(l.type) || !color(l.color) || !color(l.background) || ![l.x,l.y,l.width,l.height,l.fontSize,l.opacity].every(Number.isFinite) || l.x < 0 || l.y < 0 || l.width <= 0 || l.height <= 0 || l.x + l.width > d.width || l.y + l.height > d.height || l.fontSize < 8 || l.fontSize > 200 || l.opacity < 0 || l.opacity > 1) throw new Error('Invalid design layer');
     if (l.type === 'text' && (typeof l.text !== 'string' || l.text.length > 1000)) throw new Error('Invalid design text');
-    if (l.type === 'image' && (typeof l.src !== 'string' || l.src.length > 6_000_000 || !(/^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,)/i.test(l.src)||/^\/images\/bgos\/templates\/[a-z0-9-]+\.webp$/.test(l.src)))) throw new Error('Use an HTTPS image or upload a PNG, JPEG or WebP');
+    if (l.type === 'image' && (typeof l.src !== 'string' || l.src.length > 6_000_000 || !(/^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,|data:image\/svg\+xml(;utf8,|;base64,|,))/i.test(l.src)||/^\/images\/bgos\/templates\/[a-z0-9-]+\.webp$/.test(l.src)))) throw new Error('Use an HTTPS image, SVG vector, or upload a PNG, JPEG or WebP');
     if(l.assetId !== undefined && (typeof l.assetId !== 'string' || l.assetId.length > 100)) throw new Error('Invalid asset reference');
     if(l.rotation !== undefined && (!Number.isFinite(l.rotation) || Math.abs(l.rotation)>180)) throw new Error('Invalid rotation');
     for(const crop of [l.cropX,l.cropY]) if(crop !== undefined && (!Number.isFinite(crop)||crop<0||crop>100)) throw new Error('Invalid crop position');
@@ -83,6 +84,7 @@ export type CommercialTheme =
 export type PosterTemplateLayout =
   | `professional_${string}`
   | `studio_${number}`
+  | `kit_${string}`
   | 'bold_offer'
   | 'split_card'
   | 'tech_modern'
@@ -287,6 +289,7 @@ export function createCommercialPosterDesign(input: {
   };
   const [width, height] = sizes[input.ratio || '4:5'] || sizes['4:5'];
 
+  if (input.layout?.startsWith('kit_')) return composeKitPoster(input);
   if (input.layout?.startsWith('professional_')) return composeProfessionalPoster(input);
   if (input.layout?.startsWith('studio_')) return composeStudioPoster(input);
   const layout = input.layout || 'bold_offer';

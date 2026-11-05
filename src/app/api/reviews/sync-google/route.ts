@@ -29,7 +29,8 @@ export async function POST(request: NextRequest) {
 
     let autoReplySettings = {
       enabled: false,
-      minRating: 5,
+      autoPublish: true,
+      minRating: 4,
       tone: 'friendly, professional, SEO-optimized',
     };
 
@@ -173,19 +174,28 @@ export async function POST(request: NextRequest) {
       // Never delete reviews based on matching author/comment: two locations can
       // legitimately receive identical feedback. Provider resource IDs identify reviews.
 
-      // Check if auto-reply should run for unreplied positive review
+      // Check if auto-reply should run for unreplied review
       const hasReply = gRev.reply?.comment || (existing.responseJson && existing.responseJson !== '{}');
-      if (
-        autoReplySettings.enabled &&
-        !hasReply &&
-        gRev.rating >= autoReplySettings.minRating
-      ) {
+      if (autoReplySettings.enabled && !hasReply) {
         try {
           const businessName = tenant?.name || 'our company';
-          const aiPrompt = `You are the owner of ${businessName}. A customer named ${gRev.authorName || 'a customer'} left a ${gRev.rating}-star review on Google:
-"${gRev.comment || 'Great service!'}"
+          const isHighRating = gRev.rating >= autoReplySettings.minRating;
+          const shouldAutoPublish = isHighRating && autoReplySettings.autoPublish !== false;
 
+          let aiPrompt = '';
+          if (gRev.rating <= 2) {
+            aiPrompt = `You are the owner of ${businessName}. A customer named ${gRev.authorName || 'a customer'} left a ${gRev.rating}-star review on Google:
+"${gRev.comment || 'Needs improvement'}"
+Write a sincere, professional apology reply (1-3 sentences) acknowledging their concern without being defensive, and invite them to contact management directly to resolve this. Do not thank them for a great review.`;
+          } else if (gRev.rating === 3) {
+            aiPrompt = `You are the owner of ${businessName}. A customer named ${gRev.authorName || 'a customer'} left a 3-star review on Google:
+"${gRev.comment || 'Average experience'}"
+Write a balanced, polite reply (1-2 sentences) thanking them for their feedback and committing to better service.`;
+          } else {
+            aiPrompt = `You are the owner of ${businessName}. A customer named ${gRev.authorName || 'a customer'} left a ${gRev.rating}-star review on Google:
+"${gRev.comment || 'Great service!'}"
 Write a warm, authentic, professional reply (1-3 sentences) thanking them by name, naturally mentioning the quality service, and inviting them back. Include natural local SEO keywords for the business. Keep it concise, friendly, and sincere. Do not include quotes around the reply.`;
+          }
 
           const aiReply = await callAI([
             { role: 'system', content: 'You are an expert local business reputation manager.' },
@@ -198,14 +208,17 @@ Write a warm, authentic, professional reply (1-3 sentences) thanking them by nam
             let publishedToGoogle = false;
             let googleError: string | null = null;
             let moderationState: string | undefined;
-            try {
-              const submitted = await replyToGoogleBusinessReview(googleAccount, gRev.reviewId, replyText);
-              moderationState = submitted.reviewReplyState;
-              publishedToGoogle = googleReplyState(moderationState).publishedToGoogle;
-            } catch (syncErr: unknown) {
-              const msg = syncErr instanceof Error ? syncErr.message : String(syncErr);
-              console.warn('[reviews/sync-google] Direct Google reply failed:', gRev.reviewId, msg);
-              googleError = msg;
+
+            if (shouldAutoPublish && googleAccount && gRev.reviewId) {
+              try {
+                const submitted = await replyToGoogleBusinessReview(googleAccount, gRev.reviewId, replyText);
+                moderationState = submitted.reviewReplyState;
+                publishedToGoogle = googleReplyState(moderationState).publishedToGoogle;
+              } catch (syncErr: unknown) {
+                const msg = syncErr instanceof Error ? syncErr.message : String(syncErr);
+                console.warn('[reviews/sync-google] Direct Google reply failed:', gRev.reviewId, msg);
+                googleError = msg;
+              }
             }
 
             await db.review.update({

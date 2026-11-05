@@ -34,23 +34,39 @@ export async function saveDesignAsset(bytes:Buffer,tenantId:string,userId:string
     return {assetId:asset.id,url:asset.url};
   }catch(error){await deleteFile('campaign-assets',`${tenantId}/design-assets/${fileName}`).catch(()=>false);throw error;}
 }
-export async function persistDesignAssets(value:unknown,tenantId:string,userId:string){
-  const design=validateDesign(value);
-  for(const layer of design.layers){
-    if(layer.type!=='image')continue;
-    if(layer.src?.startsWith('data:')){
-      const match=/^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(layer.src);
-      if(!match)throw new Error('Invalid uploaded image');
-      const asset=await saveDesignAsset(Buffer.from(match[1],'base64'),tenantId,userId);
-      layer.src=asset.url;layer.assetId=asset.assetId;
-    } else if(layer.assetId){
-      const asset=await db.imageLibrary.findFirst({where:{id:layer.assetId,tenantId,folder:'bgos-design'}});
-      if(!asset)throw new Error('Design image is unavailable in this workspace');
-      layer.src=asset.url;
-    } else if(layer.src?.includes('/design-assets/')){
-      const asset=await db.imageLibrary.findFirst({where:{url:layer.src,tenantId,folder:'bgos-design'}});
-      if(!asset)throw new Error('Upload this design image again; it is no longer available');
-      layer.assetId=asset.id;
+export async function persistDesignAssets(value: unknown, tenantId: string, userId: string) {
+  const design = validateDesign(value);
+  for (const layer of design.layers) {
+    if (layer.type !== 'image') continue;
+
+    // 1. SVG Vector Emblems & Motifs (Keep inline as vector graphics)
+    if (layer.src?.startsWith('data:image/svg+xml')) {
+      continue;
+    }
+
+    // 2. Base64 raster data URIs (PNG, JPEG, WebP)
+    if (layer.src?.startsWith('data:')) {
+      const match = /^data:image\/(?:png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=\s]+)$/i.exec(layer.src);
+      if (!match) throw new Error('Invalid uploaded image format. Please upload PNG, JPEG, or WebP.');
+      const cleanBase64 = match[1].replace(/\s+/g, '');
+      const bytes = Buffer.from(cleanBase64, 'base64');
+
+      // In production or when persistent storage is configured, upload to storage
+      if (isS3Configured() || isSupabaseStorageConfigured()) {
+        const asset = await saveDesignAsset(bytes, tenantId, userId);
+        layer.src = asset.url;
+        layer.assetId = asset.assetId;
+      }
+      // If storage is not configured (e.g. dev mode without S3/Supabase), retain valid data URI
+      continue;
+    } else if (layer.assetId) {
+      const asset = await db.imageLibrary.findFirst({ where: { id: layer.assetId, tenantId, folder: 'bgos-design' } });
+      if (!asset) throw new Error('Design image is unavailable in this workspace');
+      layer.src = asset.url;
+    } else if (layer.src?.includes('/design-assets/')) {
+      const asset = await db.imageLibrary.findFirst({ where: { url: layer.src, tenantId, folder: 'bgos-design' } });
+      if (!asset) throw new Error('Upload this design image again; it is no longer available');
+      layer.assetId = asset.id;
     }
   }
   return design;

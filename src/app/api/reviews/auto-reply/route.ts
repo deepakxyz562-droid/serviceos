@@ -31,7 +31,8 @@ export async function GET(request: NextRequest) {
     } catch {}
 
     const autoReplyReviews = settings.autoReplyReviews || {};
-    const enabled = autoReplyReviews.enabled ?? true;
+    const enabled = autoReplyReviews.enabled ?? false;
+    const autoPublish = autoReplyReviews.autoPublish ?? true;
     const minRating = typeof autoReplyReviews.minRating === 'number' ? autoReplyReviews.minRating : 4;
 
     const unrepliedReviews = await db.review.findMany({
@@ -54,6 +55,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       enabled,
+      autoPublish,
       minRating,
       pendingCount,
       language: settings.replySettings?.replyLanguage || 'English',
@@ -62,6 +64,62 @@ export async function GET(request: NextRequest) {
   } catch (err: unknown) {
     console.error('[reviews/auto-reply] GET error:', err);
     return NextResponse.json({ error: 'Failed to fetch auto-reply status' }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/reviews/auto-reply
+ * Updates review auto-reply and auto-publish settings for the tenant.
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = await getAuthUser(request);
+    if (!user || !user.tenantId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const tenant = await db.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { settingsJson: true },
+    });
+
+    let settings: Record<string, any> = {};
+    try {
+      settings = JSON.parse(tenant?.settingsJson || '{}');
+    } catch {}
+
+    const currentAutoReply = settings.autoReplyReviews || {};
+    const updatedAutoReply = {
+      ...currentAutoReply,
+      ...(typeof body.enabled === 'boolean' ? { enabled: body.enabled } : {}),
+      ...(typeof body.autoPublish === 'boolean' ? { autoPublish: body.autoPublish } : {}),
+      ...(typeof body.minRating === 'number' ? { minRating: body.minRating } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+
+    settings.autoReplyReviews = updatedAutoReply;
+
+    await db.tenant.update({
+      where: { id: user.tenantId },
+      data: { settingsJson: JSON.stringify(settings) },
+    });
+
+    return NextResponse.json({
+      success: true,
+      settings: updatedAutoReply,
+      message: updatedAutoReply.enabled
+        ? updatedAutoReply.autoPublish
+          ? 'AI Auto-Reply & Publish enabled'
+          : 'AI Auto-Reply enabled (drafts only)'
+        : 'AI Auto-Reply disabled',
+    });
+  } catch (err: unknown) {
+    console.error('[reviews/auto-reply] PATCH error:', err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to update auto-reply settings' },
+      { status: 500 }
+    );
   }
 }
 

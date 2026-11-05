@@ -11,6 +11,17 @@ import { validateDesign } from '../../../shared/marketing-design';
 async function imageData(src: string): Promise<ArrayBuffer | null> {
   if (!src || !src.trim()) return null;
 
+  if (src.startsWith('data:image/svg+xml')) {
+    const rawContent = src.split(',')[1] || '';
+    let svgBytes: Buffer;
+    if (src.includes(';base64,')) {
+      svgBytes = Buffer.from(rawContent, 'base64');
+    } else {
+      svgBytes = Buffer.from(decodeURIComponent(rawContent), 'utf8');
+    }
+    return svgBytes.buffer.slice(svgBytes.byteOffset, svgBytes.byteOffset + svgBytes.byteLength) as ArrayBuffer;
+  }
+
   if (src.startsWith('data:image/')) {
     const base64Data = src.split(',')[1];
     if (!base64Data) return null;
@@ -55,7 +66,9 @@ async function imageData(src: string): Promise<ArrayBuffer | null> {
     url.hostname.endsWith('.imagedelivery.net') ||
     url.hostname.endsWith('.unsplash.com') ||
     url.hostname.endsWith('.fieseros.com') ||
-    url.hostname.endsWith('.supabase.co');
+    url.hostname.endsWith('.supabase.co') ||
+    url.hostname === 'lh3.googleusercontent.com' ||
+    url.hostname.endsWith('.googleusercontent.com');
 
   if (!isAllowedProto || url.username || url.password || (url.port && !isLocalDev) || !isAllowedDomain) {
     throw new Error('Upload this image before using it in an export. Its host is not an approved asset source.');
