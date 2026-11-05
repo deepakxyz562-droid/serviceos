@@ -110,6 +110,13 @@ export async function GET(request: NextRequest) {
       } catch {}
     }
 
+    let tenantSettings: Record<string, any> = {};
+    if ((tenant as any)?.settingsJson) {
+      try {
+        tenantSettings = JSON.parse((tenant as any).settingsJson);
+      } catch {}
+    }
+
     // Calculate profile completeness dynamically
     const computeCompleteness = (t: string, c: string, a: string, p: string, w: string) => {
       let score = 0;
@@ -150,6 +157,11 @@ export async function GET(request: NextRequest) {
           regularHours,
           completionScore: score,
           missingFields: missing,
+          communicationPhone: tenantSettings.communicationPhone || null,
+          aiReplySalutation: tenantSettings.aiReplySalutation || null,
+          supportBranding: tenantSettings.supportBranding ?? true,
+          additionalCategories: tenantSettings.additionalCategories || [],
+          openingDate: tenantSettings.openingDate || null,
         },
         metrics: {
           totalViews: 0,
@@ -267,6 +279,11 @@ export async function GET(request: NextRequest) {
           : 'Google Business Profile connected and active (300 QPM approved).',
         completionScore: score,
         missingFields: missing,
+        communicationPhone: tenantSettings.communicationPhone || null,
+        aiReplySalutation: tenantSettings.aiReplySalutation || null,
+        supportBranding: tenantSettings.supportBranding ?? true,
+        additionalCategories: tenantSettings.additionalCategories || [],
+        openingDate: tenantSettings.openingDate || null,
       },
       metrics: {
         totalViews,
@@ -332,6 +349,42 @@ export async function PATCH(request: NextRequest) {
     }
     if (body.regularHours && typeof body.regularHours === 'object') {
       updateData.businessHoursJson = JSON.stringify(body.regularHours);
+    }
+
+    // Handle settingsJson updates (WhatsApp communication phone, AI salutation, branding, additional categories, opening date)
+    const hasSettingsField =
+      typeof body.communicationPhone !== 'undefined' ||
+      typeof body.aiReplySalutation !== 'undefined' ||
+      typeof body.supportBranding !== 'undefined' ||
+      typeof body.additionalCategories !== 'undefined' ||
+      typeof body.openingDate !== 'undefined';
+
+    if (hasSettingsField) {
+      const currentTenant = await db.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { settingsJson: true },
+      });
+      let currentSettings: Record<string, any> = {};
+      try {
+        currentSettings = JSON.parse(currentTenant?.settingsJson || '{}');
+      } catch {}
+
+      if (typeof body.communicationPhone !== 'undefined') {
+        currentSettings.communicationPhone = String(body.communicationPhone).trim();
+      }
+      if (typeof body.aiReplySalutation !== 'undefined') {
+        currentSettings.aiReplySalutation = String(body.aiReplySalutation).trim();
+      }
+      if (typeof body.supportBranding !== 'undefined') {
+        currentSettings.supportBranding = Boolean(body.supportBranding);
+      }
+      if (typeof body.additionalCategories !== 'undefined') {
+        currentSettings.additionalCategories = Array.isArray(body.additionalCategories) ? body.additionalCategories : [];
+      }
+      if (typeof body.openingDate !== 'undefined') {
+        currentSettings.openingDate = String(body.openingDate).trim();
+      }
+      updateData.settingsJson = JSON.stringify(currentSettings);
     }
 
     if (Object.keys(updateData).length > 0) {

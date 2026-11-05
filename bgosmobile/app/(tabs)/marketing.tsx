@@ -29,6 +29,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -804,8 +805,8 @@ export default function MarketingScreen() {
     setHasGenerated(true);
     setActiveUserPrompt('');
     setStudioCreateTab('templates');
-    setStudioStep(2);
-    setStudioSubTab('design');
+    setStudioStep(1);
+    setStudioSubTab('chat');
 
     try {
       const initialDoc = createCommercialPosterDesign({
@@ -3103,31 +3104,9 @@ export default function MarketingScreen() {
                         </Pressable>
                       </View>
 
-                      {/* Primary Actions: Open Design Editor & Continue to Publish */}
-                      <View style={{ paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6, backgroundColor: '#FFFFFF', gap: 8 }}>
-                        <Pressable
-                          onPress={() => {
-                            setStudioStep(2);
-                            setStudioSubTab('design');
-                          }}
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 6,
-                            paddingVertical: 12,
-                            borderRadius: 12,
-                            backgroundColor: '#F0FDF4',
-                            borderWidth: 1.5,
-                            borderColor: '#009F50',
-                          }}
-                        >
-                          <MaterialIcons name="tune" size={16} color="#009F50" />
-                          <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#009F50' }}>
-                            Open Design Editor & Canvas →
-                          </Text>
-                        </Pressable>
-
+                      {/* 1-Tap Fast Action Suite — Zero Canvas Friction */}
+                      <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8, backgroundColor: '#FFFFFF', gap: 8 }}>
+                        {/* 1. Primary 1-Tap Publish */}
                         <Pressable
                           onPress={() => setStudioStep(3)}
                           style={{
@@ -3145,8 +3124,62 @@ export default function MarketingScreen() {
                             elevation: 4,
                           }}
                         >
+                          <MaterialIcons name="rocket-launch" size={17} color="#FFFFFF" />
                           <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.2 }}>
-                            Continue to Publish →
+                            1-Tap Post to Google & Social →
+                          </Text>
+                        </Pressable>
+
+                        {/* 2. Share to WhatsApp Status */}
+                        <Pressable
+                          onPress={async () => {
+                            try {
+                              const shareText = `${headline || effectiveHeadline}\n\n${subtitle || ''}\n\nCall: ${brandPhone || effectiveBusinessPhone || ''}\nVisit: ${brandWebsite || effectiveBusinessWebsite || ''}`;
+                              await Share.share({
+                                message: shareText,
+                                title: headline || 'Business Promotion',
+                              });
+                            } catch (err: unknown) {
+                              console.warn('Share error:', err);
+                            }
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 7,
+                            paddingVertical: 11,
+                            borderRadius: 12,
+                            backgroundColor: '#F0FDF4',
+                            borderWidth: 1.5,
+                            borderColor: '#22C55E',
+                          }}
+                        >
+                          <MaterialIcons name="share" size={16} color="#16A34A" />
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: '#16A34A' }}>
+                            Share to WhatsApp Status
+                          </Text>
+                        </Pressable>
+
+                        {/* 3. Advanced Canvas Studio Editing (Optional) */}
+                        <Pressable
+                          onPress={() => {
+                            setStudioStep(2);
+                            setStudioSubTab('design');
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 5,
+                            paddingVertical: 8,
+                            borderRadius: 8,
+                            backgroundColor: 'transparent',
+                          }}
+                        >
+                          <MaterialIcons name="edit" size={13} color="#64748B" />
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>
+                            Advanced: Edit in Canvas Studio
                           </Text>
                         </Pressable>
                       </View>

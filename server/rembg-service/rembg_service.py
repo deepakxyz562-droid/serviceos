@@ -1,0 +1,51 @@
+"""
+BGOS Rembg Background Removal Microservice
+------------------------------------------
+FastAPI worker using Python rembg + ONNX Runtime.
+Protected with X-BGOS-API-KEY secret header token.
+Processes image in RAM buffer and returns transparent PNG bytes.
+"""
+
+import io
+import os
+from fastapi import FastAPI, Header, HTTPException, UploadFile, File
+from fastapi.responses import Response
+from rembg import remove, new_session
+
+app = FastAPI(title="BGOS Rembg Worker", version="1.0.0")
+
+# Secret internal API key from environment variable
+SECRET_API_KEY = os.environ.get("BGOS_REMBG_SECRET", "bgos-rembg-internal-secret")
+
+# Preload session on startup (u2net / birefnet-general)
+MODEL_NAME = os.environ.get("REMBG_MODEL", "u2net")
+session = new_session(MODEL_NAME)
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "model": MODEL_NAME}
+
+
+@app.post("/remove-bg")
+async def remove_background(
+    file: UploadFile = File(...),
+    x_bgos_api_key: str = Header(None, alias="X-BGOS-API-KEY"),
+):
+    # 1. Enforce Secret Token Authentication
+    if not x_bgos_api_key or x_bgos_api_key != SECRET_API_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden: Invalid or missing X-BGOS-API-KEY header")
+
+    # 2. Read image bytes into memory buffer
+    image_bytes = await file.read()
+    if not image_bytes or len(image_bytes) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Invalid image file or size exceeds 10MB")
+
+    try:
+        # 3. Perform background removal using rembg
+        output_bytes = remove(image_bytes, session=session)
+
+        # 4. Return PNG response directly from RAM
+        return Response(content=output_bytes, media_type="image/png")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Background removal failed: {str(e)}")

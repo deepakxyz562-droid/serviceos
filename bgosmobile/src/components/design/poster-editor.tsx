@@ -90,6 +90,7 @@ export function PosterEditor({
   const [activeTool, setActiveTool] = useState<'text' | 'color' | 'photo'>('text');
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [removingBgLayerId, setRemovingBgLayerId] = useState<string | null>(null);
   const [preview, setPreview] = useState<MarketingDesign | null>(null);
 
   useEffect(() => {
@@ -274,6 +275,32 @@ export function PosterEditor({
       setError(e instanceof Error ? e.message : 'Export failed.');
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleRemoveBackground(layerId: string, currentUrl?: string) {
+    if (!currentUrl) return;
+    setRemovingBgLayerId(layerId);
+    setError('');
+    try {
+      const res = await apiRequest<{
+        success: boolean;
+        cutoutDataUri?: string;
+        notice?: string;
+        error?: string;
+      }>('/api/media/remove-bg', {
+        method: 'POST',
+        body: { imageUrl: currentUrl },
+      });
+      if (res.cutoutDataUri) {
+        patch({ src: res.cutoutDataUri });
+      } else if (res.notice) {
+        setError(res.notice);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Background removal failed');
+    } finally {
+      setRemovingBgLayerId(null);
     }
   }
 
@@ -673,21 +700,36 @@ export function PosterEditor({
           {/* Contextual Body: PHOTO TOOLS */}
           {layer.type === 'image' && (
             <View style={styles.toolBody}>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
                 <Pressable
                   onPress={() => void replacePhoto(false)}
-                  style={styles.photoActionBtn}
+                  style={[styles.photoActionBtn, { flex: 1, minWidth: 90 }]}
                 >
-                  <MaterialIcons name="image" size={17} color="#009F50" />
-                  <Text style={styles.photoActionBtnText}>Replace Photo</Text>
+                  <MaterialIcons name="image" size={16} color="#009F50" />
+                  <Text style={styles.photoActionBtnText}>Replace</Text>
                 </Pressable>
 
                 <Pressable
                   onPress={() => void replacePhoto(true)}
-                  style={[styles.photoActionBtn, { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' }]}
+                  style={[styles.photoActionBtn, { flex: 1, minWidth: 90, backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' }]}
                 >
-                  <MaterialIcons name="add-photo-alternate" size={17} color="#0284C7" />
-                  <Text style={[styles.photoActionBtnText, { color: '#0284C7' }]}>Add New Photo</Text>
+                  <MaterialIcons name="add-photo-alternate" size={16} color="#0284C7" />
+                  <Text style={[styles.photoActionBtnText, { color: '#0284C7' }]}>Add Photo</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => void handleRemoveBackground(layer.id, layer.src)}
+                  disabled={removingBgLayerId === layer.id}
+                  style={[styles.photoActionBtn, { flex: 1.2, minWidth: 110, backgroundColor: '#FAF5FF', borderColor: '#E9D5FF' }]}
+                >
+                  {removingBgLayerId === layer.id ? (
+                    <ActivityIndicator size="small" color="#9333EA" />
+                  ) : (
+                    <MaterialIcons name="auto-fix-high" size={16} color="#9333EA" />
+                  )}
+                  <Text style={[styles.photoActionBtnText, { color: '#7E22CE' }]}>
+                    {removingBgLayerId === layer.id ? 'Removing…' : 'Cutout (No BG)'}
+                  </Text>
                 </Pressable>
               </View>
 

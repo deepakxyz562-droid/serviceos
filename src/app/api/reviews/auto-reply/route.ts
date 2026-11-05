@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { replyToGoogleBusinessReview } from '@/lib/social/adapters/googlebusiness';
+import { buildReviewReplyPrompt } from '@/lib/reviews/reply-prompt';
 import { callAI } from '@/lib/ai-client';
 
 export const dynamic = 'force-dynamic';
@@ -107,6 +108,10 @@ export async function POST(request: NextRequest) {
       } catch {}
     }
     const businessName = settings.activeGbpTitle || gbpMeta.locationTitle || googleAccount?.accountName || tenant?.name || 'our business';
+    const salutation = settings.aiReplySalutation || settings.replySettings?.salutation || undefined;
+    const phone = gbpMeta.phoneNumbers?.primaryPhone || gbpMeta.phone || (tenant as any)?.phone || undefined;
+    const address = gbpMeta.storefrontAddress?.addressLines?.join(', ') || gbpMeta.address || (tenant as any)?.address || undefined;
+    const category = gbpMeta.primaryCategory?.displayName || gbpMeta.category || (tenant as any)?.category || undefined;
 
     const whereClause: Record<string, any> = {
       tenantId: user.tenantId,
@@ -161,23 +166,30 @@ export async function POST(request: NextRequest) {
         const rating = review.rating || 5;
         const comment = review.comment || 'Great experience!';
 
-        const aiPrompt =
-          replyLanguage === 'Hindi'
-            ? `आप ${businessName} के मालिक हैं। ग्राहक ${author} ने Google पर ${rating}-स्टार रिव्यू दिया है:
-"${comment}"
-हिंदी में 2-3 वाक्यों का विनम्र, पेशेवर और आभार व्यक्त करने वाला उत्तर लिखें। ग्राहक का नाम लें, सेवा की गुणवत्ता का उल्लेख करें और उन्हें दोबारा आने के लिए आमंत्रित करें। कोई उद्धरण चिह्न (quotes) न लगाएं।`
-            : `You are the owner of ${businessName}. A customer named ${author} left a ${rating}-star review on Google:
-"${comment}"
-Write a warm, authentic, professional reply (2-3 sentences) thanking them by name, naturally mentioning the quality service, and inviting them back. Include natural local SEO keywords for the business. Keep it concise, friendly, and sincere. Do not include quotes around the reply.`;
+        const promptConfig = buildReviewReplyPrompt({
+          author,
+          rating,
+          comment,
+          businessName,
+          category,
+          address,
+          phone,
+          salutation,
+          language: replyLanguage,
+        });
 
         const aiRes = await callAI([
-          { role: 'system', content: 'You are an expert local business reputation manager.' },
-          { role: 'user', content: aiPrompt },
+          { role: 'system', content: promptConfig.systemPrompt },
+          { role: 'user', content: promptConfig.userPrompt },
         ]);
 
         let replyText = (typeof aiRes === 'string' ? aiRes : (aiRes as any)?.content || (aiRes as any)?.text || '').trim();
+        // Remove any quotes added by AI
+        if ((replyText.startsWith('"') && replyText.endsWith('"')) || (replyText.startsWith("'") && replyText.endsWith("'"))) {
+          replyText = replyText.slice(1, -1).trim();
+        }
         if (!replyText) {
-          replyText = `Thank you so much ${author}! We truly appreciate your ${rating}-star review and look forward to serving you again at ${businessName}.`;
+          replyText = promptConfig.fallbackText;
         }
 
         let publishedToGoogle = false;

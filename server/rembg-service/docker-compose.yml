@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  rembg-worker:
+    build: .
+    container_name: bgos-rembg-service
+    ports:
+      - "8008:8008"
+    environment:
+      - BGOS_REMBG_SECRET=bgos-rembg-internal-secret
+      - REMBG_MODEL=u2net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

@@ -340,21 +340,53 @@ export default function ReviewRepliesScreen() {
     try {
       const rating = Math.max(1, Math.min(5, Math.round(review.rating || 0)));
       const businessTitle = activeProfile?.name || gbpPlace.data?.place?.title || 'our business';
-      const prompt =
-        `Write a Google review reply (2-3 sentences, warm and professional) to this ${rating}★ review` +
-        ` from ${review.authorName || 'valued customer'}` +
-        (review.comment ? `: "${review.comment}"` : ' (rating only)') +
-        `. Tailor response warmly on behalf of ${businessTitle}.`;
-      const res = await apiRequest<{ caption: string; keywords?: KeywordUsage[] }>('/api/social/ai-caption', {
-        method: 'POST',
-        body: { topic: prompt, platforms: ['googlebusiness'], tone: 'Friendly and professional' },
-      });
-      if (!res.caption) throw new Error('AI reply generation failed. You can write one manually.');
+      const author = review.authorName || 'valued customer';
+      const comment = review.comment ? `"${review.comment}"` : 'Rating only';
+      const phone = gbpPlace.data?.place?.phone || '';
+
+      let topic = '';
+      let tone = 'Friendly and professional';
+      let fallbackText = '';
+
+      if (rating <= 2) {
+        topic = `Write a sincere, professional apology reply to an unhappy customer ${author} who left a ${rating}★ review: ${comment}. Sincerely apologize on behalf of ${businessTitle}, acknowledge the issue without being defensive, and provide direct contact ${phone || 'our management team'} so management can resolve it privately. NEVER thank them for a great review and do not use cheerful emojis. 2-3 sentences.`;
+        tone = 'Empathetic, apologetic, and de-escalating';
+        fallbackText = `Dear ${author}, we sincerely apologize that your experience with ${businessTitle} did not meet expectations. We take your feedback seriously and want to make it right. Please reach out to us directly at ${phone || 'our office'} so we can address your concerns.`;
+      } else if (rating === 3) {
+        topic = `Write a polite, balanced Google review reply to customer ${author} who left a 3★ review: ${comment}. Thank them for honest feedback on behalf of ${businessTitle}, note dedication to improving, and invite them back to experience 5-star service. 2-3 sentences.`;
+        tone = 'Professional, constructive, and respectful';
+        fallbackText = `Thank you for sharing your feedback, ${author}. We appreciate your honest thoughts and are continuously working to refine our service at ${businessTitle}. We hope to welcome you back soon and deliver a true 5-star experience!`;
+      } else {
+        topic = `Write an enthusiastic, grateful Google review reply (2-3 sentences) to customer ${author} for their ${rating}★ review: ${comment}. Thank them warmly on behalf of ${businessTitle}, highlight their compliments, and invite them back.`;
+        tone = 'Warm, enthusiastic, and appreciative';
+        fallbackText = `Thank you so much for the wonderful ${rating}-star review, ${author}! The entire team at ${businessTitle} is thrilled to hear about your great experience. We look forward to welcoming you back soon!`;
+      }
+
+      let caption = '';
+      let keywords: KeywordUsage[] = DEFAULT_KEYWORDS_FALLBACK;
+      try {
+        const res = await apiRequest<{ caption: string; keywords?: KeywordUsage[] }>('/api/social/ai-caption', {
+          method: 'POST',
+          body: { topic, platforms: ['googlebusiness'], tone },
+        });
+        if (res.caption) {
+          caption = res.caption.trim();
+          if ((caption.startsWith('"') && caption.endsWith('"')) || (caption.startsWith("'") && caption.endsWith("'"))) {
+            caption = caption.slice(1, -1).trim();
+          }
+          if (res.keywords && res.keywords.length > 0) keywords = res.keywords;
+        }
+      } catch {
+        // Fallback gracefully on network/AI timeout
+      }
+
+      if (!caption) caption = fallbackText;
+
       setDrafts((prev) => ({
         ...prev,
         [review.id]: {
-          text: res.caption,
-          keywords: res.keywords || DEFAULT_KEYWORDS_FALLBACK,
+          text: caption,
+          keywords,
         },
       }));
     } catch (e) {

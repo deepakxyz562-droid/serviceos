@@ -300,10 +300,33 @@ function buildReplyTopic(params: {
   category: string;
   address: string;
 }): string {
+  const rating = Math.round(params.rating || 5);
+  const author = params.author || 'a customer';
+  const comment = params.comment ? `"${params.comment}"` : 'Rating only';
+
+  if (rating <= 2) {
+    return [
+      `Write a sincere, professional apology reply from ${params.businessName}`,
+      `to customer ${author} who left a ${rating}-star review: ${comment}.`,
+      'Acknowledge their frustration without making excuses, apologize sincerely on behalf of management,',
+      'and invite them to reach out privately to our management team to make it right.',
+      'NEVER thank them for a great review, no cheerful emojis, and no SEO keyword stuffing. 2-3 sentences.',
+    ].join(' ');
+  }
+
+  if (rating === 3) {
+    return [
+      `Write a polite, balanced Google review reply from ${params.businessName}`,
+      `to customer ${author} who left a 3-star review: ${comment}.`,
+      'Thank them for their honest constructive feedback, note dedication to continuous improvement,',
+      'and invite them back to experience 5-star service. 2-3 sentences, sincere.',
+    ].join(' ');
+  }
+
   return [
     `Write a warm, professional Google Business review reply from ${params.businessName}`,
-    `(${params.category}${params.address ? `, ${params.address}` : ''}) to customer ${params.author || 'a customer'}`,
-    `who left a ${params.rating}-star review: "${params.comment || 'Great service!'}".`,
+    `(${params.category}${params.address ? `, ${params.address}` : ''}) to customer ${author}`,
+    `who left a ${params.rating}-star review: ${comment}.`,
     'Thank them by name, mention the service quality, and naturally include local SEO keywords',
     'for the business and city. Keep it 1-3 sentences, sincere, no quotes around the reply.',
   ].join(' ');

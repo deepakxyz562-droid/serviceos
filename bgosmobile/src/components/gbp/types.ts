@@ -99,6 +99,12 @@ export type GbpPlaceResult = {
     statusMessage?: string;
     completionScore?: number;
     missingFields?: string[];
+    communicationPhone?: string | null;
+    aiReplySalutation?: string | null;
+    supportBranding?: boolean;
+    additionalCategories?: string[];
+    openingDate?: string | null;
+    regularHours?: any;
   } | null;
   tenantFallback?: {
     name?: string;
@@ -109,6 +115,12 @@ export type GbpPlaceResult = {
     description?: string;
     completionScore?: number;
     missingFields?: string[];
+    communicationPhone?: string | null;
+    aiReplySalutation?: string | null;
+    supportBranding?: boolean;
+    additionalCategories?: string[];
+    openingDate?: string | null;
+    regularHours?: any;
   } | null;
   metrics?: {
     totalViews: number;
