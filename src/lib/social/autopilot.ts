@@ -5,6 +5,7 @@ import { callAI } from '@/lib/ai-client';
 import { publishPost } from '@/lib/social/publisher';
 import { generateDesignImage } from '@/lib/designs/image-provider';
 import { saveDesignAsset } from '@/lib/designs/assets';
+import { renderDesign } from '@/lib/designs/render';
 import { logActivity } from '@/lib/activity-log';
 
 export type AutopilotDuration = '7_days' | '30_days' | '1_year' | 'custom';
@@ -14,6 +15,8 @@ export interface AutopilotConfig {
   duration: AutopilotDuration;
   customDays?: number;
   platforms: Array<'googlebusiness' | 'instagram' | 'facebook'>;
+  accountIds?: string[];
+  templateIds?: string[];
   postingTime: string;
   timeZone: string;
   startDate: string;
@@ -74,6 +77,8 @@ export async function getTenantAutopilotConfig(tenantId: string): Promise<Autopi
     duration,
     customDays,
     platforms: Array.isArray(raw.platforms) && raw.platforms.length > 0 ? raw.platforms : DEFAULT_PLATFORMS,
+    accountIds: Array.isArray(raw.accountIds) ? raw.accountIds : undefined,
+    templateIds: Array.isArray(raw.templateIds) ? raw.templateIds : [],
     postingTime: raw.postingTime || '09:00',
     timeZone: raw.timeZone || 'UTC',
     startDate,
@@ -100,7 +105,7 @@ export async function saveTenantAutopilotConfig(
   let endDate = updates.endDate || current.endDate;
 
   // If enabling newly or resetting duration
-  if (updates.enabled && (!current.enabled || (updates.duration !== undefined && updates.duration !== current.duration))) {
+  if (updates.enabled && (!current.enabled || (updates.duration !== undefined && updates.duration !== current.duration) || (updates.customDays !== undefined && updates.customDays !== current.customDays))) {
     startDate = updates.startDate || now.toISOString();
     endDate = updates.endDate || new Date(new Date(startDate).getTime() + totalDays * 24 * 60 * 60 * 1000).toISOString();
   }
@@ -176,13 +181,47 @@ export async function generateDailyAutopilotPost(
       return { success: false, error: 'Autopilot is paused or completed' };
     }
 
-    const targetAccounts=tenant.socialAccounts.filter(acc=>config.platforms.includes(acc.platform as any));
+    const targetAccounts=tenant.socialAccounts.filter(acc=>config.platforms.includes(acc.platform as any) && (!config.accountIds || config.accountIds.includes(acc.id)));
     if(!targetAccounts.length)return {success:false,error:'Connect a selected social channel before posting'};
     const slot=localPostingSlot(new Date(),config.timeZone);
     const postId='autopilot_'+createHash('sha256').update(`${tenantId}:${slot.date}`).digest('hex');
     const prior=await db.socialPost.findUnique({where:{id:postId}});
-    if(prior)return {success:false,postId,error:`Today's autopilot post already exists (${prior.status}). Check its delivery status before retrying.`};
-    await db.socialPost.create({data:{id:postId,tenantId,content:'',status:'generating',mediaUrls:'[]',publishTargets:'[]',createdById:'system-autopilot'}});
+    if (prior) {
+      if (prior.status === 'published') {
+        if (!config.lastRunAt || localPostingSlot(new Date(config.lastRunAt),config.timeZone).date !== slot.date)
+          await saveTenantAutopilotConfig(tenantId,{lastRunAt:new Date().toISOString(),totalPostsCreated:config.totalPostsCreated+1});
+        return {success:true,postId};
+      }
+      const age = Date.now() - new Date(prior.updatedAt).getTime();
+      // Never reclaim an uncertain provider delivery. A response may have been lost.
+      if (prior.status === 'publishing') return {success:false,postId,error:'Delivery is awaiting reconciliation. Check the channel before retrying.'};
+      let attempts = 1;
+      try { attempts = JSON.parse(prior.gbpOfferData || '{}').autopilotAttempts || 1; } catch {}
+      if (attempts >= 3 || age < 5 * 60_000 || (prior.status === 'generating' && age < 15 * 60_000))
+        return {success:false,postId,error:'Daily post is processing or retry limit reached. Check recent activity.'};
+      if (!['failed','partial','generating','scheduled'].includes(prior.status)) return {success:false,postId,error:'Post cannot be retried in its current state.'};
+      try {
+        const targets=JSON.parse(prior.publishTargets || '[]');
+        if (targets.some((t:{error?:string})=>/timeout|timed out|network|fetch failed|abort|ECONN/i.test(t.error || '')))
+          return {success:false,postId,error:'A channel response was uncertain. Check the external account before retrying.'};
+      } catch { return {success:false,postId,error:'Invalid delivery record. Review this post.'}; }
+      const claimed = await db.socialPost.updateMany({where:{id:postId,status:prior.status,updatedAt:prior.updatedAt},data:{status:'generating',gbpOfferData:JSON.stringify({autopilotAttempts:attempts+1})}});
+      if (!claimed.count) return {success:false,postId,error:'Another worker is handling this post.'};
+      claimedPostId = postId;
+      if (prior.content && prior.publishTargets && prior.publishTargets !== '[]') {
+        const previousTargets = JSON.parse(prior.publishTargets);
+        if (!previousTargets.every((target:{socialAccountId:string;status:string})=>target.status === 'published' || targetAccounts.some(account=>account.id === target.socialAccountId)))
+          throw new Error('A publishing account was removed or disconnected. Review this post before retrying.');
+        await db.socialPost.update({where:{id:postId},data:{status:'scheduled'}});
+        await publishPost(postId);
+        const delivered = await db.socialPost.findUnique({where:{id:postId}});
+        if (delivered?.status !== 'published') throw new Error('Delivery incomplete. Inspect individual channel results.');
+        await saveTenantAutopilotConfig(tenantId,{lastRunAt:new Date().toISOString(),totalPostsCreated:config.totalPostsCreated+1});
+        return {success:true,postId};
+      }
+    } else {
+      await db.socialPost.create({data:{id:postId,tenantId,content:'',status:'generating',mediaUrls:'[]',publishTargets:'[]',gbpOfferData:JSON.stringify({autopilotAttempts:1}),createdById:'system-autopilot'}});
+    }
     claimedPostId=postId;
 
     const businessName = tenant.brandProfile?.businessName || tenant.name || 'Local Service Pro';
@@ -192,6 +231,8 @@ export async function generateDailyAutopilotPost(
     const dayIndex = (new Date(`${slot.date}T12:00:00Z`).getUTCDay()+6)%7;
     const todayTheme = THEMES[dayIndex] || THEMES[0];
 
+    const useTemplate = config.contentSource === 'my_templates' ||
+      (config.contentSource === 'hybrid' && Number(slot.date.replace(/-/g,'')) % 2 === 0);
     // 1. Generate SEO-optimized copy for the post
     const prompt = `Write a high-converting social media post for ${businessName} (${industry} in ${city}).
 Today's Theme: ${todayTheme.focus} (${todayTheme.angle}).
@@ -206,6 +247,7 @@ Requirements:
 7. Never invent reviews, discounts, emergency availability, guarantees or customer stories. If these are not provided in the business context, use an educational post instead.`;
 
     let content = '';
+    if (!useTemplate) {
     try {
       const aiRes = await callAI({
         messages: [
@@ -220,31 +262,32 @@ Requirements:
       throw new Error('AI copy generation failed. No fallback advertising claims were published.');
     }
     if(!content.trim())throw new Error('AI returned empty content');
+    }
 
     // 2. Generate Graphic with Cloudflare Workers AI Flux-1 Schnell
     const imagePrompt = `Clean professional advertisement poster for ${businessName}, ${industry} in ${city}. High quality commercial photography, sleek layout, warm lighting, high detail, modern style.`;
     const mediaUrls: string[] = [];
+    let postDesignJson: string | null = null;
 
     const actorId = userId || 'system-autopilot';
 
-    try {
-      const generated = await generateDesignImage(
-        imagePrompt,
-        'cloudflare',
-        AbortSignal.timeout(60000),
-        true
-      );
-      if (generated && generated.bytes) {
-        const savedAsset = await saveDesignAsset(generated.bytes, tenantId, actorId);
-        if (savedAsset?.url) {
-          mediaUrls.push(savedAsset.url);
-        }
-      }
-    } catch (imgErr) {
-      console.warn(`[social/autopilot] Flux-1 image generation fallback for tenant ${tenantId}:`, imgErr);
-      if (tenant.logo) {
-        mediaUrls.push(tenant.logo);
-      }
+    if (useTemplate) {
+      const ids = config.templateIds || [];
+      if (!ids.length) throw new Error('Select saved posters for Autopilot first.');
+      const template = await db.socialPost.findFirst({where:{tenantId,id:ids[Number(slot.date.replace(/-/g,'')) % ids.length]}});
+      if (!template?.designJson) throw new Error('Selected poster is unavailable. Update Autopilot templates.');
+      postDesignJson = template.designJson;
+      const rendered = await renderDesign(JSON.parse(template.designJson),tenantId);
+      mediaUrls.push(rendered.imageUrl);
+      content = template.content?.trim() || '';
+      if (!content) throw new Error('Add a caption to the selected saved poster before publishing.');
+    } else {
+      const key = await db.aiProviderKey.findFirst({where:{isActive:true,provider:{in:['gemini','openrouter','cloudflare']}},orderBy:{priority:'asc'},select:{provider:true}});
+      if (!key) throw new Error('Configure an image provider in Superadmin.');
+      const generated = await generateDesignImage(imagePrompt,key.provider as 'gemini'|'openrouter'|'cloudflare',AbortSignal.timeout(60000),true);
+      if (!generated?.bytes) throw new Error('Image generation returned no image.');
+      const asset = await saveDesignAsset(generated.bytes,tenantId,actorId);
+      mediaUrls.push(asset.url);
     }
 
     // 3. Match publish targets to enabled channels
@@ -257,6 +300,7 @@ Requirements:
     // 4. Create SocialPost
     if(config.platforms.includes('instagram')&&!mediaUrls.length)throw new Error('Instagram requires an image; generation failed');
     const latest=await getTenantAutopilotConfig(tenantId);
+    if(JSON.stringify([latest.accountIds,latest.platforms,latest.contentSource,latest.templateIds]) !== JSON.stringify([config.accountIds,config.platforms,config.contentSource,config.templateIds])) throw new Error('Autopilot settings changed during generation. Retry with the new settings.');
     if(!latest.enabled&&!userId)throw new Error('Autopilot paused during generation');
     const post = await db.socialPost.update({
       where:{id:postId},
@@ -264,6 +308,7 @@ Requirements:
         tenantId,
         content: content.trim(),
         mediaUrls: JSON.stringify(mediaUrls),
+        designJson: postDesignJson,
         publishTargets: JSON.stringify(publishTargets),
         status: 'scheduled',
         gbpPostType: 'whats_new',

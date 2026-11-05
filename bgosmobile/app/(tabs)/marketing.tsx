@@ -28,6 +28,8 @@ import {
   Dimensions,
   Image,
   Linking,
+  KeyboardAvoidingView,
+  Platform,
   Modal,
   Pressable,
   ScrollView,
@@ -650,9 +652,10 @@ export default function MarketingScreen() {
     params.mode === 'posts' ? 'posts' : params.mode === 'autopilot' ? 'autopilot' : 'studio'
   );
   const [studioStep, setStudioStep] = useState<1 | 2 | 3>(1);
+  const [showCreationOptions,setShowCreationOptions] = useState(false);
   const [templateSearchOpen, setTemplateSearchOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState('');
-  const [studioCreateTab, setStudioCreateTab] = useState<'templates' | 'ideas' | 'drafts'>('templates');
+  const [studioCreateTab, setStudioCreateTab] = useState<'templates' | 'ideas' | 'drafts'>('ideas');
   // ── Resources ─────────────────────────────────────────────────────────────
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
@@ -678,6 +681,9 @@ export default function MarketingScreen() {
     customDays?: number;
     contentSource?: 'ai_generated' | 'my_templates' | 'hybrid';
     platforms: string[];
+    timeZone?: string;
+    accountIds?: string[];
+    templateIds?: string[];
     postingTime: string;
     totalPostsCreated: number;
     daysRemaining: number;
@@ -690,15 +696,30 @@ export default function MarketingScreen() {
     daysRemaining: 30,
     contentSource: 'ai_generated',
   });
+  const [apError,setApError] = useState<string | null>(null);
+  const [apNextRun,setApNextRun] = useState<string | null>(null);
+  const [apReady,setApReady] = useState(false);
+  const [apRecent,setApRecent] = useState<Array<{id:string;content:string;status:string;failureReason?:string;publishTargets:string}>>([]);
+  const [apAccounts,setApAccounts] = useState<Array<{id:string;platform:string;accountName:string}>>([]);
+  const apSaving = useRef(false);
+  const [apTemplates,setApTemplates] = useState<Array<{id:string;content:string}>>([]);
+  const [apTemplatePage,setApTemplatePage] = useState(0);
+  const [apMoreTemplates,setApMoreTemplates] = useState(false);
+  const loadApTemplates = async (page=1) => {
+    try {const res=await apiRequest<{data:typeof apTemplates;pagination:{totalPages:number}}>(`/api/social/posts?status=draft&kind=poster&limit=20&page=${page}`);setApTemplates(old=>page===1?res.data:[...old,...res.data]);setApTemplatePage(page);setApMoreTemplates(page<res.pagination.totalPages);} catch {setApError('Saved posters could not be loaded. Try again.');}
+  };
   const [apLoading, setApLoading] = useState(false);
   const [apTriggering, setApTriggering] = useState(false);
 
   const loadAutopilot = async () => {
     try {
       setApLoading(true);
-      const res = await apiRequest<{ config: any; daysRemaining: number }>('/api/social/autopilot');
+      setApError(null);
+      const res = await apiRequest<{ config: any; daysRemaining: number; nextRunAt:string|null; recentPosts: typeof apRecent; accounts: typeof apAccounts }>('/api/social/autopilot');
       if (res?.config) {
+        setApNextRun(res.nextRunAt);setApReady(true);setApRecent(res.recentPosts || []);setApAccounts(res.accounts || []);
         setApConfig({
+          timeZone:res.config.timeZone,accountIds:res.config.accountIds,templateIds:res.config.templateIds || [],
           enabled: res.config.enabled,
           duration: res.config.duration || '30_days',
           customDays: res.config.customDays,
@@ -706,32 +727,39 @@ export default function MarketingScreen() {
           platforms: res.config.platforms || ['googlebusiness', 'instagram', 'facebook'],
           postingTime: res.config.postingTime || '09:00',
           totalPostsCreated: res.config.totalPostsCreated || 0,
-          daysRemaining: res.daysRemaining || 30,
+          daysRemaining: res.daysRemaining ?? 0,
         });
       }
-    } catch {} finally {
+    } catch {setApError('Could not load Autopilot. Retry before changing settings.');setApReady(false);} finally {
       setApLoading(false);
     }
   };
 
   const saveAutopilot = async (updates: Partial<typeof apConfig> & { triggerPostNow?: boolean }) => {
+    if (apSaving.current || !apReady) return;
+    apSaving.current=true;
     try {
       setApLoading(true);
-      const res = await apiRequest<{ config: any; daysRemaining: number; message: string }>('/api/social/autopilot', {
+      setApError(null);
+      const res = await apiRequest<{ config: any; daysRemaining: number; nextRunAt:string|null; message: string; triggerResult?:{success:boolean;error?:string} }>('/api/social/autopilot', {
         method: 'POST',
-        body: {
+        body: updates.enabled === false && Object.keys(updates).length === 1 ? {enabled:false} : {
           enabled: updates.enabled !== undefined ? updates.enabled : apConfig.enabled,
           duration: updates.duration || apConfig.duration,
           customDays: updates.customDays !== undefined ? updates.customDays : apConfig.customDays,
           contentSource: updates.contentSource || apConfig.contentSource,
           platforms: updates.platforms || apConfig.platforms,
           postingTime: updates.postingTime || apConfig.postingTime,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+          accountIds:updates.accountIds ?? apConfig.accountIds ?? [],
+          templateIds:updates.templateIds ?? apConfig.templateIds ?? [],
+          timeZone: updates.timeZone || apConfig.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
           triggerPostNow: updates.triggerPostNow || false,
         },
       });
       if (res?.config) {
+        setApNextRun(res.nextRunAt);
         setApConfig({
+          timeZone:res.config.timeZone,accountIds:res.config.accountIds ?? apConfig.accountIds,templateIds:res.config.templateIds || [],
           enabled: res.config.enabled,
           duration: res.config.duration,
           customDays: res.config.customDays,
@@ -741,14 +769,19 @@ export default function MarketingScreen() {
           totalPostsCreated: res.config.totalPostsCreated,
           daysRemaining: res.daysRemaining,
         });
-        Alert.alert('Autopilot', res.message || 'Settings saved successfully');
+        if (res.triggerResult && !res.triggerResult.success) {setApError(res.triggerResult.error || 'Post could not be published.');Alert.alert('Post needs attention',res.triggerResult.error || 'Check recent activity.');}
+        else Alert.alert('Autopilot', updates.triggerPostNow ? 'Post published successfully.' : 'Settings saved.');
+        if (updates.triggerPostNow) await loadAutopilot();
       }
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to update autopilot');
     } finally {
+      apSaving.current=false;
       setApLoading(false);
     }
   };
+
+  useEffect(()=>{if(activeMode==='autopilot') void loadAutopilot();},[activeMode]);
 
   // ── Studio 3-Step Flow (01 Create -> 02 Design -> 03 Review) ───────────────
 
@@ -2177,7 +2210,7 @@ export default function MarketingScreen() {
   </>);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F8FAFC', paddingTop: Math.max(insets.top, 12) }}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: '#F8FAFC', paddingTop: Math.max(insets.top, 12) }}>
       {/* ── Top Mode Switcher Bar ────────────────────────────────────────── */}
       <View style={styles.modeBar}>
         <Pressable
@@ -2192,7 +2225,7 @@ export default function MarketingScreen() {
             color={activeMode === 'studio' ? '#009F50' : '#64748B'}
           />
           <Text style={[styles.modeTabText, activeMode === 'studio' && styles.modeTabTextActive]}>
-            Studio
+            Create
           </Text>
         </Pressable>
 
@@ -2201,7 +2234,7 @@ export default function MarketingScreen() {
           accessibilityState={{ selected: activeMode === 'autopilot' }}
           onPress={() => {
             setActiveMode('autopilot');
-            loadAutopilot();
+
           }}
           style={[styles.modeTab, activeMode === 'autopilot' && styles.modeTabActive]}
         >
@@ -2227,7 +2260,7 @@ export default function MarketingScreen() {
             color={activeMode === 'posts' ? '#009F50' : '#64748B'}
           />
           <Text style={[styles.modeTabText, activeMode === 'posts' && styles.modeTabTextActive]}>
-            Posts & Calendar
+            Posts
           </Text>
         </Pressable>
       </View>
@@ -2252,6 +2285,8 @@ export default function MarketingScreen() {
           ══════════════════════════════════════════════════════════════════════ */}
       {activeMode === 'autopilot' && (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 90 }}>
+          <ErrorNotice message={apError} retry={loadAutopilot}/>
+          {!apReady ? <View style={{padding:24}}>{apLoading && <ActivityIndicator/>}<Text style={{textAlign:'center',marginTop:12}}>Load your settings to manage Autopilot.</Text></View> : <>
           {/* Hero Banner with Dynamic Progress */}
           <View style={styles.apHeroCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -2280,7 +2315,7 @@ export default function MarketingScreen() {
                     fontWeight: '800',
                   }}
                 >
-                  {apConfig.enabled ? 'Autopilot Active & Posting' : 'Autopilot Paused'}
+                  {apConfig.enabled ? 'Autopilot enabled' : apConfig.daysRemaining===0 ? 'Campaign completed' : 'Autopilot paused'}
                 </Text>
               </View>
               <Text style={{ color: '#64748B', fontSize: 11.5, fontWeight: '700' }}>
@@ -2340,12 +2375,12 @@ export default function MarketingScreen() {
                   try {
                     setApTriggering(true);
                     Alert.alert('Generating Post', "Dispatching today's post across your connected channels...");
-                    await saveAutopilot({ triggerPostNow: true, enabled: true });
+                    await saveAutopilot({ triggerPostNow: true });
                   } finally {
                     setApTriggering(false);
                   }
                 }}
-                disabled={apTriggering}
+                disabled={apTriggering || apLoading}
                 style={{
                   backgroundColor: '#0F172A',
                   paddingHorizontal: 14,
@@ -2366,47 +2401,6 @@ export default function MarketingScreen() {
               </Pressable>
             </View>
           </View>
-
-          {/* 7-Day Content Forecast Queue Preview */}
-          <Card style={{ marginBottom: 14, gap: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialIcons name="auto-awesome" size={16} color="#009F50" />
-                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>7-Day Content Rotation</Text>
-              </View>
-              <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>Smart Theme Engine</Text>
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
-              {AUTOPILOT_THEMES.map((theme, tIdx) => (
-                <View
-                  key={`theme-${tIdx}`}
-                  style={{
-                    width: 135,
-                    padding: 10,
-                    borderRadius: 12,
-                    backgroundColor: '#F8FAFC',
-                    borderWidth: 1,
-                    borderColor: '#E2E8F0',
-                    gap: 4,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#009F50', backgroundColor: '#DCFCE7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                      {theme.day.toUpperCase()}
-                    </Text>
-                    <MaterialIcons name={theme.icon as any} size={15} color="#475569" />
-                  </View>
-                  <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '800', color: '#0F172A', marginTop: 2 }}>
-                    {theme.title}
-                  </Text>
-                  <Text numberOfLines={2} style={{ fontSize: 10, color: '#64748B', lineHeight: 14 }}>
-                    {theme.desc}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
-          </Card>
 
           {/* Preferred Daily Posting Time (Interactive Trigger) */}
           <Pressable
@@ -2522,12 +2516,16 @@ export default function MarketingScreen() {
 
           {/* Content Source Selector */}
           <Card style={{ marginBottom: 14, gap: 12 }}>
-            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Post Content Source</Text>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Post content</Text>
+            <Action secondary label="Choose saved posters" onPress={()=>void loadApTemplates()}/>
+            {apTemplates.map(poster=><Pressable key={poster.id} disabled={apLoading} accessibilityRole="checkbox" accessibilityState={{checked:(apConfig.templateIds || []).includes(poster.id)}} onPress={()=>void saveAutopilot({templateIds:(apConfig.templateIds || []).includes(poster.id)?(apConfig.templateIds || []).filter(id=>id!==poster.id):[...(apConfig.templateIds || []),poster.id]})} style={{flexDirection:'row',gap:8,minHeight:44,alignItems:'center'}}><MaterialIcons size={22} color="#009F50" name={(apConfig.templateIds || []).includes(poster.id)?'check-box':'check-box-outline-blank'}/><Text style={{flex:1}} numberOfLines={2}>{poster.content || 'Untitled poster'}</Text></Pressable>)}
+            {apMoreTemplates && <Action secondary label="More saved posters" onPress={()=>void loadApTemplates(apTemplatePage+1)}/>}
+            {apTemplatePage>0 && !apTemplates.length && <Text>Save a poster draft in Create to use it here.</Text>}
             <View style={{ gap: 8 }}>
               {[
-                { id: 'ai_generated', title: '✨ AI & Festival Posters (Default)', desc: 'Generates daily designs based on your industry and festivals' },
-                { id: 'my_templates', title: '📁 My Uploaded Templates', desc: 'Rotates through your custom uploaded flyer designs' },
-                { id: 'hybrid', title: '🔀 Hybrid (AI + My Templates)', desc: 'Mixes user-uploaded creatives with seasonal AI designs' },
+                { id: 'ai_generated', title: 'AI designs', desc: 'Generates a daily image and caption for your business' },
+                { id: 'my_templates', title: 'Saved posters', desc: 'Publishes selected saved posters and their captions unchanged' },
+                { id: 'hybrid', title: 'Mix AI and saved posters', desc: 'Alternates AI designs with your selected saved posters' },
               ].map((src) => {
                 const isSelected = (apConfig.contentSource || 'ai_generated') === src.id;
                 return (
@@ -2559,63 +2557,36 @@ export default function MarketingScreen() {
             </View>
           </Card>
 
-          {/* Channels Selection */}
-          <Card style={{ marginBottom: 14, gap: 12 }}>
-            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Publishing Channels</Text>
-            {[
-              { id: 'googlebusiness', name: 'Google Business Profile', icon: 'place' },
-              { id: 'instagram', name: 'Instagram', icon: 'camera-alt' },
-              { id: 'facebook', name: 'Facebook Page', icon: 'public' },
-            ].map((ch) => {
-              const active = apConfig.platforms.includes(ch.id);
-              return (
-                <Pressable
-                  key={ch.id}
-                  onPress={() => {
-                    const next = active
-                      ? apConfig.platforms.filter((p) => p !== ch.id)
-                      : [...apConfig.platforms, ch.id];
-                    if (next.length === 0) {
-                      Alert.alert('Notice', 'Please keep at least one channel selected.');
-                      return;
-                    }
-                    saveAutopilot({ platforms: next });
-                  }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingVertical: 10,
-                    borderBottomWidth: 1,
-                    borderBottomColor: '#F1F5F9',
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <MaterialIcons name={ch.icon as any} size={18} color="#009F50" />
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#0F172A' }}>{ch.name}</Text>
-                  </View>
-                  <MaterialIcons
-                    name={active ? 'check-box' : 'check-box-outline-blank'}
-                    size={22}
-                    color={active ? '#009F50' : '#94A3B8'}
-                  />
-                </Pressable>
-              );
+          <Card><Text style={{fontWeight:'700'}}>Publishing accounts</Text>
+            <Text>Choose exactly where your daily posts will appear.</Text>
+            {apAccounts.filter(a=>['googlebusiness','facebook','instagram'].includes(a.platform)).map(account=>{
+              const selected=(apConfig.accountIds || []).includes(account.id);
+              return <Pressable key={account.id} disabled={apLoading} accessibilityRole="checkbox" accessibilityState={{checked:selected}} onPress={()=>{
+                const ids=selected?(apConfig.accountIds || []).filter(id=>id!==account.id):[...(apConfig.accountIds || []),account.id];
+                void saveAutopilot({accountIds:ids,platforms:[...new Set(apAccounts.filter(a=>ids.includes(a.id)).map(a=>a.platform))].length ? [...new Set(apAccounts.filter(a=>ids.includes(a.id)).map(a=>a.platform))] : apConfig.platforms});
+              }} style={{flexDirection:'row',alignItems:'center',gap:10,minHeight:48}}><MaterialIcons name={selected?'check-box':'check-box-outline-blank'} size={24} color="#009F50"/><View><Text>{account.accountName}</Text><Text style={{color:'#64748B'}}>{account.platform}</Text></View></Pressable>;
             })}
+            {!apAccounts.length && <Text>Connect a publishing account in Integrations first.</Text>}
           </Card>
 
+          <Card><Text style={{fontWeight:'700'}}>Recent activity</Text>
+            {!apRecent.length && <Text>No Autopilot posts yet.</Text>}
+            {apRecent.map(post=><View key={post.id} style={{gap:6,paddingVertical:10}}><Text numberOfLines={2}>{post.content || 'Generating design'}</Text><Text style={{fontWeight:'700'}}>{post.status}</Text>{post.failureReason && <Text style={{color:'#B42318'}}>{post.failureReason}</Text>}{(()=>{try{return JSON.parse(post.publishTargets || '[]').map((t:any)=><Text key={t.socialAccountId}>{apAccounts.find(a=>a.id===t.socialAccountId)?.accountName || t.platform} · {t.status}{t.error ? ` · ${t.error}` : ''}</Text>);}catch{return null;}})()}</View>)}
+            <Action secondary label="Refresh activity" onPress={loadAutopilot}/>
+          </Card>
           {/* Progress Summary */}
           <Card style={{ gap: 8 }}>
-            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Engine Status</Text>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Schedule</Text><Text>Next eligible run · {apNextRun ? new Date(apNextRun).toLocaleString() : 'Not scheduled'}</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
               <Text style={{ fontSize: 12, color: '#64748B' }}>Total Posts Created</Text>
               <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>{apConfig.totalPostsCreated} posts</Text>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
               <Text style={{ fontSize: 12, color: '#64748B' }}>Preferred Daily Time</Text>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50' }}>{apConfig.postingTime}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50' }}>{apConfig.postingTime} · {apConfig.timeZone}</Text>
             </View>
           </Card>
+          </>}
         </ScrollView>
       )}
 
@@ -3098,60 +3069,7 @@ export default function MarketingScreen() {
                         />
                       </View>
 
-                      {/* Canva/Instagram Story Style 4-Tool Edit Bar */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 10, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#F1F5F9', gap: 6 }}>
-                        <Pressable
-                          onPress={() => setTemplatePickerOpen(true)}
-                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}
-                        >
-                          <MaterialIcons name="grid-view" size={14} color="#0F172A" />
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>Browse templates</Text>
-                        </Pressable>
-
-                        <Pressable
-                          onPress={() => setIsEditingText(true)}
-                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}
-                        >
-                          <MaterialIcons name="edit" size={14} color="#334155" />
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Text</Text>
-                        </Pressable>
-
-                        <Pressable
-                          onPress={() => {
-                            const curIndex = COMMERCIAL_THEME_KEYS.indexOf(colorTheme);
-                            const nextTheme = COMMERCIAL_THEME_KEYS[(curIndex + 1) % COMMERCIAL_THEME_KEYS.length];
-                            cycleTheme(nextTheme);
-                          }}
-                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}
-                        >
-                          <View
-                            style={{
-                              width: 11,
-                              height: 11,
-                              borderRadius: 6,
-                              backgroundColor: COMMERCIAL_THEMES[colorTheme]?.badgeBg || '#009F50',
-                              borderWidth: 1,
-                              borderColor: '#CBD5E1',
-                            }}
-                          />
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Style</Text>
-                        </Pressable>
-
-                        <Pressable
-                          onPress={handleRegenerateImage}
-                          disabled={isGeneratingImage}
-                          style={{ flex: 1.1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 10, backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0' }}
-                        >
-                          {isGeneratingImage ? (
-                            <ActivityIndicator size="small" color="#009F50" />
-                          ) : (
-                            <MaterialIcons name="auto-awesome" size={14} color="#009F50" />
-                          )}
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#009F50' }}>
-                            {isGeneratingImage ? 'Rendering…' : 'New Photo'}
-                          </Text>
-                        </Pressable>
-                      </View>
+                      <View style={{padding:12}}><Action secondary label="Edit design" icon="edit" onPress={()=>{setStudioStep(2);setStudioSubTab('design');}}/></View>
 
                       {/* 1-Tap Fast Action Suite — Zero Canvas Friction */}
                       <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8, backgroundColor: '#FFFFFF', gap: 8 }}>
@@ -3290,42 +3208,13 @@ export default function MarketingScreen() {
 
               {/* Bottom Sticky Action Bar: Suggestions (if generated) + Mode Selector + Floating Composer */}
               <View style={styles.promptInputContainer}>
-                {/* Suggestions row shown when generated */}
-                {hasGenerated && promptSuggestions.data?.suggestions && promptSuggestions.data.suggestions.length > 0 && (
-                  <View style={{ marginBottom: 8 }}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 2 }}>
-                      {promptSuggestions.data.suggestions.map((s) => (
-                        <Pressable
-                          key={s.id}
-                          onPress={() => setSelectedIdeaModal(s)}
-                          style={({ pressed }) => [
-                            {
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 6,
-                              paddingHorizontal: 10,
-                              paddingVertical: 5,
-                              borderRadius: 10,
-                              backgroundColor: '#FFFFFF',
-                              borderWidth: 1,
-                              borderColor: '#E2E8F0',
-                            },
-                            pressed && { opacity: 0.7 },
-                          ]}
-                        >
-                          <Text style={{ fontSize: 12 }}>{s.icon || '💡'}</Text>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>{s.title || s.chipLabel || 'Idea'}</Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-
-                {/* Generation Mode Switcher */}
-                <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+                <Pressable accessibilityRole="button" accessibilityState={{expanded:showCreationOptions}} onPress={()=>setShowCreationOptions(!showCreationOptions)} style={{minHeight:44,flexDirection:'row',alignItems:'center',gap:6}}>
+                  <MaterialIcons name="tune" size={18} color="#64748B"/><Text style={{color:'#64748B'}}>Format · {generationMode==='poster'?'AI poster':generationMode==='graphic'?'Editable design':'Photo'}</Text><MaterialIcons name={showCreationOptions?'expand-less':'expand-more'} size={18} color="#64748B"/>
+                </Pressable>
+                {showCreationOptions && <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
                   <Pressable
                     onPress={() => {
-                      setGenerationMode('poster');
+                      setGenerationMode('poster');setShowCreationOptions(false);
                       setActiveVisualFormat('poster');
                     }}
                     style={[
@@ -3350,7 +3239,7 @@ export default function MarketingScreen() {
 
                   <Pressable
                     onPress={() => {
-                      setGenerationMode('graphic');
+                      setGenerationMode('graphic');setShowCreationOptions(false);
                       setActiveVisualFormat('canvas');
                     }}
                     style={[
@@ -3374,7 +3263,7 @@ export default function MarketingScreen() {
                   </Pressable>
 
                   <Pressable
-                    onPress={() => setGenerationMode('image_only')}
+                    onPress={() => {setGenerationMode('image_only');setShowCreationOptions(false);}}
                     style={[
                       styles.modeBtn,
                       generationMode === 'image_only' && styles.modeBtnActive,
@@ -3394,7 +3283,7 @@ export default function MarketingScreen() {
                       📷 Photo
                     </Text>
                   </Pressable>
-                </View>
+                </View>}
 
                 {/* Floating Composer */}
                 <View style={styles.promptInputRow}>
@@ -4773,7 +4662,7 @@ export default function MarketingScreen() {
           </Modal>
         </View>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -4875,29 +4764,24 @@ const styles = StyleSheet.create({
   },
   modeBar: {
     flexDirection: 'row',
-    backgroundColor: '#EEF2F6',
-    borderRadius: 14,
-    marginHorizontal: 12,
-    marginVertical: 8,
-    padding: 3,
-    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    gap: 8,
   },
   modeTab: {
     flex: 1,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    paddingVertical: 8,
-    borderRadius: 11,
+    gap: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   modeTabActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    borderBottomColor: '#009F50',
   },
   modeTabText: {
     fontSize: 12,

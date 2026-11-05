@@ -109,8 +109,8 @@ export function AutopilotStudio({ onConnectAccount }: { onConnectAccount?: () =>
       });
 
       const resJson = await res.json();
-      if (!res.ok) {
-        throw new Error(resJson.error || 'Failed to update autopilot');
+      if (!res.ok || resJson.triggerResult?.success === false) {
+        throw new Error(resJson.triggerResult?.error || resJson.error || 'Failed to update autopilot');
       }
 
       toast.success(resJson.message || 'Autopilot updated successfully!');
@@ -125,15 +125,15 @@ export function AutopilotStudio({ onConnectAccount }: { onConnectAccount?: () =>
   const handleTriggerToday = async () => {
     try {
       setTriggering(true);
-      toast.info("Generating today's post with Flux-1 Schnell & copywriting...");
+      toast.info("Generating today's post with your configured provider...");
       const res = await authFetch('/api/social/autopilot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ triggerPostNow: true, enabled: true }),
+        body: JSON.stringify({ triggerPostNow: true }),
       });
       const resJson = await res.json();
-      if (!res.ok) {
-        throw new Error(resJson.error || "Failed to dispatch today's post");
+      if (!res.ok || resJson.triggerResult?.success === false) {
+        throw new Error(resJson.triggerResult?.error || resJson.error || "Failed to dispatch today's post");
       }
       toast.success("Today's autopilot post successfully created & dispatched!");
       fetchAutopilotData();

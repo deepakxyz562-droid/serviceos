@@ -8,12 +8,14 @@
  * or BGOS_WORKER_ORIGIN HTTP proxy configuration.
  */
 
+import { setTimeout, setInterval, clearTimeout, clearInterval } from 'node:timers';
 import { db } from '@/lib/db';
 import { getTenantAutopilotConfig, generateDailyAutopilotPost } from '@/lib/social/autopilot';
 import { autopilotDue } from '@/lib/social/autopilot-schedule';
 
 let workerInterval: NodeJS.Timeout | null = null;
 let isTicking = false;
+let bootTimer: NodeJS.Timeout | null = null;
 
 /**
  * Execute a single autopilot worker tick.
@@ -32,8 +34,12 @@ export async function runAutopilotTick(now: Date = new Date()): Promise<{
 
   try {
     // 1. Fetch tenants that have active social accounts
+    let tenantsChecked = 0;
+    let afterId: string | undefined;
+    for (;;) {
     const tenants = await db.tenant.findMany({
       where: {
+        ...(afterId ? {id:{gt:afterId}} : {}),
         socialAccounts: {
           some: { isActive: true },
         },
@@ -46,6 +52,7 @@ export async function runAutopilotTick(now: Date = new Date()): Promise<{
       orderBy: { id: 'asc' },
     });
 
+    tenantsChecked += tenants.length;
     for (const tenant of tenants) {
       try {
         const config = await getTenantAutopilotConfig(tenant.id);
@@ -61,6 +68,12 @@ export async function runAutopilotTick(now: Date = new Date()): Promise<{
       }
     }
 
+    if (tenants.length < 50) break;
+    const nextId = tenants[tenants.length-1].id;
+    if (nextId === afterId) break;
+    afterId = nextId;
+    }
+
     // 2. Process WhatsApp quiet-chat inactivity follow-ups
     try {
       const { processQuietChatFollowups } = await import('@/lib/whatsapp/inactivity-followup');
@@ -71,7 +84,7 @@ export async function runAutopilotTick(now: Date = new Date()): Promise<{
     }
 
     return {
-      tenantsChecked: tenants.length,
+      tenantsChecked,
       processedCount,
       publishedCount,
       whatsappNudges,
@@ -103,12 +116,14 @@ export function startBgosAutopilotWorker() {
   console.log('[Autopilot Daemon] Initializing in-process BGOS autopilot scheduler (60s loop)...');
 
   // Stagger initial tick after 15s so DB pools & migrations settle on server start
-  setTimeout(async () => {
+  bootTimer = setTimeout(async () => {
+    if (isTicking) return;
+    isTicking = true;
     try {
       await runAutopilotTick();
     } catch {
       // Suppressed during boot
-    }
+    } finally { isTicking = false; }
   }, 15_000);
 
   // Setup recurring 60s tick
@@ -139,6 +154,7 @@ export function startBgosAutopilotWorker() {
  * Stop the worker daemon (used for unit tests or graceful shutdowns).
  */
 export function stopBgosAutopilotWorker() {
+  if (bootTimer) { clearTimeout(bootTimer); bootTimer = null; }
   if (workerInterval) {
     clearInterval(workerInterval);
     workerInterval = null;

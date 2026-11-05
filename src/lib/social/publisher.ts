@@ -275,12 +275,20 @@ export async function publishPost(postId: string): Promise<void> {
     }
   }
 
-  // Publish each target in parallel. Each target is isolated so a failure
-  // on one doesn't block the others.
+  // Checkpoint each result before another external delivery. If persistence fails,
+  // leave the post publishing so recovery cannot blindly duplicate a delivery.
   const publishParams = toPublishParams(post);
-  const results = await Promise.all(
-    targets.map((target) => publishSingleTarget(postId, post.tenantId, target, publishParams)),
-  );
+  const results = [...targets];
+  for (let i=0;i<results.length;i++) {
+    if (results[i].status === 'published') continue;
+    results[i] = await publishSingleTarget(postId,post.tenantId,results[i],publishParams);
+    try {
+      await db.socialPost.update({where:{id:postId},data:{publishTargets:JSON.stringify(results)}});
+    } catch (error) {
+      console.error('[social/publisher] Delivery checkpoint failed; reconciliation required',error);
+      return;
+    }
+  }
 
   // Compute final status.
   const successCount = results.filter((r) => r.status === 'published').length;
