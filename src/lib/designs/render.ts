@@ -1,3 +1,4 @@
+import { framedPhoto } from '../../../shared/photo-framing';
 import {designFontFamily} from '../../../shared/design-fonts';
 import { db } from '@/lib/db';
 import { readFile } from 'fs/promises';
@@ -132,34 +133,21 @@ export async function renderDesign(value: unknown, tenantId: string, options: {f
     };
     if (l.type === 'image') {
       if (l.src && l.src.trim()) {
-        let ab = await imageData(l.src);
+        const ab = await imageData(l.src);
+        if (!ab) throw new Error('Empty design image');
         if (ab) {
           // Satori cannot decode WebP; normalize all approved image inputs first.
           const sharp=(await import('sharp')).default;
-          const normalized=await sharp(Buffer.from(ab),{limitInputPixels:24_000_000}).rotate().png().toBuffer();
-          ab=normalized.buffer.slice(normalized.byteOffset,normalized.byteOffset+normalized.byteLength) as ArrayBuffer;
-          const isCutoutOrLogo = Boolean(
-            l.src?.startsWith('data:image/png;base64') ||
-            l.src?.startsWith('data:image/svg+xml') ||
-            l.id.includes('cutout') ||
-            l.id.includes('emblem') ||
-            l.id.includes('logo')
-          );
-          const isBackgroundOrHero = l.id === 'bg_photo' || (l.x === 0 && l.y === 0) || l.id.includes('photo');
-          const defaultCropY = isBackgroundOrHero ? 0 : 50;
-          const cropY = l.cropY !== undefined ? l.cropY : defaultCropY;
-          const objectFit = isCutoutOrLogo ? 'contain' : 'cover';
-          children.push(React.createElement('img', {
-            key: l.id,
-            src: ab as unknown as string,
-            width: l.width,
-            height: l.height,
-            style: {
-              ...style,
-              objectFit,
-              objectPosition: `${l.cropX ?? 50}% ${cropY}%`,
-            },
-          }));
+          const normalized = await sharp(Buffer.from(ab), {limitInputPixels:24_000_000})
+            .rotate().png().toBuffer({resolveWithObject:true});
+          const bytes = normalized.data;
+          const frame = framedPhoto(l, normalized.info);
+          children.push(React.createElement('div', { key:l.id, style },
+            React.createElement('img', {
+              src:bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+              width:frame.width, height:frame.height,
+              style:{position:'absolute',left:frame.left,top:frame.top,width:frame.width,height:frame.height},
+            })));
         }
       }
     } else {

@@ -448,31 +448,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Render the exact source revision before queuing publication.
-    // If the image is ALREADY a pre-rendered composite export (e.g. from bgos-design-export or explicitly marked isPreRendered), skip re-rendering.
-    // Otherwise, any post with a structured design must be rendered to composite the headline, badge, and text overlays onto the photo.
+    // Only explicit composite exports can bypass rendering. Uploaded source photos may share their URL path.
     const hasPreRenderedMedia = Array.isArray(body.mediaUrls) && body.mediaUrls.length > 0 && typeof body.mediaUrls[0] === 'string' && body.mediaUrls[0].trim().length > 0;
-    const isAlreadyRendered = hasPreRenderedMedia && (
-      body.mediaUrls[0].includes('bgos-design-export') ||
-      body.mediaUrls[0].includes('/designs/') ||
-      Boolean(body.isPreRendered)
-    );
+    const isAlreadyRendered = hasPreRenderedMedia && body.isPreRendered === true;
 
     if (design && !isDraft && !isAlreadyRendered) {
       try {
         const { renderDesign } = await import('@/lib/designs/render');
         const rendered = await renderDesign(design, tenantId);
-        if (rendered?.imageUrl) {
-          body.mediaUrls = [rendered.imageUrl];
-        }
+        if (!rendered?.imageUrl) throw new Error('Missing rendered image');
+        body.mediaUrls = [rendered.imageUrl];
       } catch (renderError) {
-        console.warn('[api/social/posts] renderDesign warning:', renderError instanceof Error ? renderError.message : renderError);
-        // If we already have a mediaUrl (e.g. background photo or asset), fall back to it gracefully
-        if (!hasPreRenderedMedia) {
-          return NextResponse.json(
-            { error: `Could not export design image: ${renderError instanceof Error ? renderError.message : 'Rendering error'}` },
-            { status: 400 }
-          );
-        }
+        console.warn('[api/social/posts] Design export failed', renderError instanceof Error ? renderError.message : renderError);
+        return NextResponse.json({error:'Could not render your design. Please retry before publishing.'},{status:503});
       }
     }
 

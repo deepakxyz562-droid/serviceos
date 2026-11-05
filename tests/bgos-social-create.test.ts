@@ -45,16 +45,17 @@ it('renders design into a composite PNG when publishing a poster', async () => {
 });
 it('bypasses renderDesign when mediaUrl is already an exported design graphic', async () => {
   const dummyDesign = { version: 1, width: 1080, height: 1080, background: '#000000', layers: [] };
-  const res = await POST(request({ isPoster: true, mediaUrls: ['https://assets.example.com/designs/already-rendered.png'], design: dummyDesign }, 'key-poster-already-123'));
+  const res = await POST(request({ isPoster: true, isPreRendered: true, mediaUrls: ['https://assets.example.com/designs/already-rendered.png'], design: dummyDesign }, 'key-poster-already-123'));
   expect(res.status).toBe(201);
   expect(m.renderDesign).not.toHaveBeenCalled();
   expect(m.create.mock.calls[0][0].data.mediaUrls).toBe(JSON.stringify(['https://assets.example.com/designs/already-rendered.png']));
 });
-it('falls back to mediaUrls gracefully if renderDesign fails without throwing 500', async () => {
+it('keeps a failed design export out of the publishing queue', async () => {
   m.renderDesign.mockRejectedValue(new Error('Font download timeout'));
   const dummyDesign = { version: 1, width: 1080, height: 1080, background: '#000000', layers: [] };
-  const res = await POST(request({ mediaUrls: ['https://example.com/fallback.jpg'], design: dummyDesign }, 'key-fallback-12345678'));
-  expect(res.status).toBe(201);
+  const res = await POST(request({ mediaUrls: ['https://example.com/designs/source.jpg'], design: dummyDesign }, 'key-fallback-12345678'));
+  expect(res.status).toBe(503);
   expect(m.renderDesign).toHaveBeenCalled();
-  expect(m.create.mock.calls[0][0].data.mediaUrls).toBe(JSON.stringify(['https://example.com/fallback.jpg']));
+  expect(m.create).not.toHaveBeenCalled();
+  expect(m.after).not.toHaveBeenCalled();
 });

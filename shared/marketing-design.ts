@@ -3,6 +3,7 @@ import { composeStudioPoster } from './poster-composition';
 import { composeKitPoster } from './layered-templates-kit';
 /** Versioned, portable source document. Coordinates are in canvas pixels. */
 export type DesignLayer = {
+  photoFit?: 'contain' | 'cover';
   locked?: boolean; hidden?: boolean; groupId?: string;
   id: string; type: 'text' | 'image' | 'shape'; x: number; y: number;
   width: number; height: number; text?: string; src?: string; assetId?: string; rotation?: number; cropX?: number; cropY?: number;
@@ -38,6 +39,7 @@ export function validateDesign(value: unknown): MarketingDesign {
     if (l.type === 'image' && (typeof l.src !== 'string' || l.src.length > 6_000_000 || !(/^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,|data:image\/svg\+xml(;utf8,|;base64,|,))/i.test(l.src)||/^\/images\/bgos\/templates\/[a-z0-9-]+\.webp$/.test(l.src)))) throw new Error('Use an HTTPS image, SVG vector, or upload a PNG, JPEG or WebP');
     if(l.assetId !== undefined && (typeof l.assetId !== 'string' || l.assetId.length > 100)) throw new Error('Invalid asset reference');
     if(l.rotation !== undefined && (!Number.isFinite(l.rotation) || Math.abs(l.rotation)>180)) throw new Error('Invalid rotation');
+    if (l.photoFit !== undefined && !['contain','cover'].includes(l.photoFit)) throw new Error('Invalid photo fit');
     for(const crop of [l.cropX,l.cropY]) if(crop !== undefined && (!Number.isFinite(crop)||crop<0||crop>100)) throw new Error('Invalid crop position');
     for(const r of [l.borderRadius, l.borderTopLeftRadius, l.borderTopRightRadius, l.borderBottomLeftRadius, l.borderBottomRightRadius]) if(r !== undefined && (!Number.isFinite(r) || r < 0 || r > 500)) throw new Error('Invalid border radius');
     for(const bw of [l.borderWidth, l.borderTopWidth, l.borderBottomWidth]) if(bw !== undefined && (!Number.isFinite(bw) || bw < 0 || bw > 50)) throw new Error('Invalid border width');

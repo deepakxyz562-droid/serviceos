@@ -1,3 +1,4 @@
+import { framedPhoto } from '../../../../shared/photo-framing';
 import React, { useState } from 'react';
 import { Image, PixelRatio, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -30,6 +31,7 @@ export function PosterPreview({ doc }: { doc: MarketingDesign }) {
     BgosEditorial: require('../../../assets/fonts/BgosEditorial.ttf'),
     BgosDisplay: require('../../../assets/fonts/BgosDisplay.ttf'),
   });
+  const [sizes, setSizes] = useState<Record<string, {width:number;height:number}>>({});
   const scale = width / doc.width;
 
   return (
@@ -85,13 +87,8 @@ export function PosterPreview({ doc }: { doc: MarketingDesign }) {
             }
 
             if (l.type === 'image') {
-              const isCutoutOrEmblem =
-                l.src?.startsWith('data:image/png;base64') ||
-                l.src?.startsWith('data:image/svg+xml') ||
-                l.id.includes('cutout') ||
-                l.id.includes('emblem') ||
-                l.id.includes('logo');
-
+              const src = l.src || '';
+              const frame = framedPhoto(l, sizes[src] || l);
               return (
                 <View key={l.id} style={style}>
                   {failed[l.src || ''] ? (
@@ -110,12 +107,14 @@ export function PosterPreview({ doc }: { doc: MarketingDesign }) {
                         }
                       }
                       onError={() => setFailed((p) => ({ ...p, [l.src || '']: true }))}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        borderRadius: (l.borderRadius || 0) * scale,
+                      onLoad={({nativeEvent:{source}}) => {
+                        if(source.width > 0 && source.height > 0) setSizes(prev =>
+                          prev[src]?.width === source.width && prev[src]?.height === source.height
+                            ? prev : {...prev,[src]:{width:source.width,height:source.height}});
                       }}
-                      resizeMode={isCutoutOrEmblem ? 'contain' : 'cover'}
+                      style={{position:'absolute', width:frame.width*scale, height:frame.height*scale,
+                        left:frame.left*scale, top:frame.top*scale}}
+                      resizeMode="stretch"
                     />
                   )}
                 </View>

@@ -1,3 +1,4 @@
+import { addedPhotoFrame, photoFit, verticalAnchor } from '../../../../shared/photo-framing';
 import React, { useRef, useState, useEffect } from 'react';
 import {
   StyleSheet,
@@ -572,10 +573,8 @@ export function PosterEditor({
         const newLayer: DesignLayer = {
           id,
           type: 'image',
-          x: Math.round(latest.doc.width * 0.1),
-          y: Math.round(latest.doc.height * 0.40),
-          width: Math.round(latest.doc.width * 0.8),
-          height: Math.round(latest.doc.height * 0.32),
+          ...addedPhotoFrame(latest.doc, asset),
+          photoFit: 'contain',
           borderRadius: 16,
           src: result.url,
           assetId: result.assetId,
@@ -612,7 +611,8 @@ export function PosterEditor({
               src: result.url,
               assetId: result.assetId,
               cropX: l.cropX ?? 50,
-              cropY: l.cropY ?? 0,
+              cropY: verticalAnchor(l),
+              photoFit: l.photoFit ?? (isBackgroundPhoto ? 'cover' as const : photoFit(l)),
             };
           }
           // When replacing the background photo, automatically suppress top_scrim so the custom photo is completely unobscured
@@ -699,7 +699,7 @@ export function PosterEditor({
             const newY = Math.round(doc.height * 0.40);
 
             patch({
-              src: res.cutoutDataUri,
+              src: res.cutoutDataUri, assetId:undefined, photoFit:'contain',
               x: newX,
               y: newY,
               width: newW,
@@ -716,7 +716,7 @@ export function PosterEditor({
             const newY = Math.round(currentLayer.y + bounds.top * scaleY);
 
             patch({
-              src: res.cutoutDataUri,
+              src: res.cutoutDataUri, assetId:undefined, photoFit:'contain',
               x: newX,
               y: newY,
               width: newW,
@@ -724,7 +724,7 @@ export function PosterEditor({
             });
           }
         } else {
-          patch({ src: res.cutoutDataUri });
+          patch({ src: res.cutoutDataUri, assetId:undefined, photoFit:'contain' });
         }
       } else {
         const msg = res.error || res.notice || 'Background removal could not be completed';
@@ -1298,10 +1298,18 @@ export function PosterEditor({
                 </Pressable>
               </View>
 
-              {/* Crop / Position Directional Controls */}
+              <View style={{flexDirection:'row',gap:8}}>
+                {(['contain','cover'] as const).map(mode => <Pressable key={mode}
+                  accessibilityRole="radio" accessibilityState={{selected:photoFit(layer)===mode}}
+                  onPress={()=>patch({photoFit:mode})} style={[styles.photoActionBtn,{minHeight:44,
+                    backgroundColor:photoFit(layer)===mode?'#DCFCE7':'#fff'}]}>
+                  <Text style={styles.photoActionBtnText}>{mode==='contain'?'Fit whole photo':'Fill frame'}</Text>
+                </Pressable>)}
+              </View>
+              {photoFit(layer)==='cover' && (
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
                 <Text style={styles.controlLabel}>
-                  {isBackdrop ? 'Pan Photo Position' : 'Adjust Photo Position'}
+                  Reposition
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 5 }}>
                   <Pressable
@@ -1317,19 +1325,19 @@ export function PosterEditor({
                     <MaterialIcons name="arrow-forward" size={15} color="#0F172A" />
                   </Pressable>
                   <Pressable
-                    onPress={() => patch({ cropY: Math.max(0, (layer.cropY ?? 50) - 10) })}
+                    onPress={() => patch({ cropY: Math.max(0, verticalAnchor(layer) - 10) })}
                     style={styles.stepperBtn}
                   >
                     <MaterialIcons name="arrow-upward" size={15} color="#0F172A" />
                   </Pressable>
                   <Pressable
-                    onPress={() => patch({ cropY: Math.min(100, (layer.cropY ?? 50) + 10) })}
+                    onPress={() => patch({ cropY: Math.min(100, verticalAnchor(layer) + 10) })}
                     style={styles.stepperBtn}
                   >
                     <MaterialIcons name="arrow-downward" size={15} color="#0F172A" />
                   </Pressable>
                 </View>
-              </View>
+              </View>)}
             </View>
           )}
 
