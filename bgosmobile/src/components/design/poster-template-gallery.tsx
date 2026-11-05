@@ -1,3 +1,4 @@
+import { BUSINESS_GROUPS, TEMPLATE_FORMATS, TEMPLATE_PURPOSES, templateMatches } from '../../../../shared/business-template-collection';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PosterPreview } from './poster-preview';
 'use client';
@@ -73,6 +74,14 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
   const activeSearch = searchQuery || '';
   const [activeCategory, setActiveCategory] = useState<'for_you' | 'my_templates' | 'all' | string>('for_you');
   const [customTemplates, setCustomTemplates] = useState<PosterTemplate[]>([]);
+  const [filtersOpen,setFiltersOpen] = useState(false);
+  const [filters,setFilters] = useState<Record<'purpose'|'group'|'format',string>>({purpose:'',group:'',format:''});
+  const [carousel,setCarousel] = useState<PosterTemplate | null>(null);
+  const filterCount=Object.values(filters).filter(Boolean).length;
+  function chooseTemplate(template:PosterTemplate) {
+    if(template.edition?.slides) setCarousel(template);
+    else onApply(template);
+  }
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -108,25 +117,15 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
           : activeOccasionIds.has(activeCategory)
             ? orderedTemplates.filter((t) => t.occasionId === activeCategory)
             : orderedTemplates.filter((t) => t.category === activeCategory || t.collection === activeCategory || (activeCategory==='professional'&&t.id.startsWith('professional-')));
-    if (!activeSearch.trim()) return base;
-    const q = activeSearch.trim().toLowerCase();
-    return [...new Map([...customTemplates, ...orderedTemplates].map(t=>[t.id,t])).values()].filter(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        t.headline.toLowerCase().includes(q) ||
-        t.category.includes(q) || (t.industries || []).some(industry => industry.includes(q))
-    );
-  }, [activeCategory, customTemplates, forYouTemplates, orderedTemplates, activeSearch]);
-
-
+    const catalog = activeSearch.trim() ? [...customTemplates,...orderedTemplates] : base;
+    return catalog.filter(t=>templateMatches(t,activeSearch) && Object.entries(filters).every(([key,value])=>
+      !value || t.edition?.[key as keyof typeof filters] === value));
+  }, [activeCategory, customTemplates, forYouTemplates, orderedTemplates, activeSearch, filters, activeOccasionIds]);
 
   function closeSearch() {setIsStandaloneSearchOpen(false);setLocalSearch('');}
-  const searchResults = useMemo(()=>{
-    if(!isStandaloneSearchOpen) return [];
-    const query=localSearch.trim().toLowerCase();
-    return [...new Map([...customTemplates,...orderedTemplates].map(t=>[t.id,t])).values()].filter(t=>
-      [t.name,t.headline,t.category.replace(/_/g,' '),t.occasionId,...(t.industries||[])].join(' ').toLowerCase().includes(query));
-  },[localSearch,isStandaloneSearchOpen,customTemplates,orderedTemplates]);
+  const searchResults = useMemo(()=>isStandaloneSearchOpen
+    ? [...customTemplates,...orderedTemplates].filter(t=>templateMatches(t,localSearch))
+    : [],[localSearch,isStandaloneSearchOpen,customTemplates,orderedTemplates]);
 
   async function handleUploadTemplates() {
     try {
@@ -238,10 +237,36 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
           <FlatList data={searchResults} keyboardShouldPersistTaps="handled" initialNumToRender={6} numColumns={2}
             columnWrapperStyle={{justifyContent:'space-between',marginBottom:10}} keyExtractor={item=>item.id}
             ListEmptyComponent={<Text style={{padding:16}}>No matching templates. Try a business type or occasion.</Text>}
-            renderItem={({item})=><Pressable accessibilityRole="button" accessibilityLabel={item.name} style={styles.card} onPress={()=>{closeSearch();onApply(item);}}>
+            renderItem={({item})=><Pressable accessibilityRole="button" accessibilityLabel={item.name} style={styles.card} onPress={()=>{closeSearch();chooseTemplate(item);}}>
               <TemplateThumb doc={buildTemplateDesignDoc(item,{...business,logoUrl:business.logoUri||undefined})}/>
               <Text style={[styles.cardName,{padding:8}]}>{item.name}</Text>
             </Pressable>}/>
+        </SafeAreaView>
+      </Modal>
+      <Modal visible={Boolean(carousel)} animationType="slide" onRequestClose={()=>setCarousel(null)}>
+        <SafeAreaView style={{flex:1,padding:16,gap:14}}>
+          <Pressable accessibilityRole="button" onPress={()=>setCarousel(null)} style={{minHeight:44}}><Text>Back to templates</Text></Pressable>
+          <Text style={{fontSize:20,fontWeight:'700'}}>{carousel?.name}</Text>
+          <Text>Select a slide to edit and save.</Text>
+          <ScrollView>{carousel?.edition?.slides?.map((title,index)=>{
+            const slide={...carousel,headline:title,badge:`Field guide · ${index+1} / 4`,subtitle:['A practical guide in four steps.', 'Note the details that matter to you.', 'Keep a short list to use for comparison.', 'Choose one action to take today.'][index],cta:index===3?'Save this guide':'Next step →'};
+            return <Pressable accessibilityRole="button" key={title} onPress={()=>{setCarousel(null);onApply(slide);}} style={{flexDirection:'row',gap:14,alignItems:'center',paddingVertical:8}}>
+              <View style={{width:72}}><TemplateThumb doc={buildTemplateDesignDoc(slide,business)}/></View><Text style={{flex:1}}>{index+1}. {title}</Text>
+            </Pressable>;
+          })}</ScrollView>
+        </SafeAreaView>
+      </Modal>
+      <Modal visible={filtersOpen} animationType="slide" onRequestClose={()=>setFiltersOpen(false)}>
+        <SafeAreaView style={{flex:1,padding:16,gap:12}}>
+          <Text style={{fontSize:22,fontWeight:'700'}}>Filter templates</Text>
+          <ScrollView>{(['purpose','group','format'] as const).map(key=><View key={key} style={{marginBottom:18}}>
+            <Text style={{fontWeight:'700',marginBottom:8}}>{{purpose:'Purpose',group:'Business group',format:'Format'}[key]}</Text>
+            <View style={{flexDirection:'row',flexWrap:'wrap',gap:6}}>{['',...(key==='purpose'?TEMPLATE_PURPOSES:key==='group'?Object.keys(BUSINESS_GROUPS):Object.keys(TEMPLATE_FORMATS))].map(option=>
+              <Pressable key={option} accessibilityRole="button" accessibilityState={{selected:filters[key]===option}} style={[styles.chip,filters[key]===option && styles.chipActive,{minHeight:44}]} onPress={()=>{setActiveCategory('all');setFilters(previous=>({...previous,[key]:option}));}}>
+                <Text style={[styles.chipText,filters[key]===option && styles.chipTextActive]}>{option || 'Any'}</Text>
+              </Pressable>)}</View>
+          </View>)}</ScrollView>
+          <Pressable accessibilityRole="button" style={[styles.chip,styles.chipActive,{minHeight:48}]} onPress={()=>setFiltersOpen(false)}><Text style={styles.chipTextActive}>Show {filteredTemplates.length} templates</Text></Pressable>
         </SafeAreaView>
       </Modal>
       {/* Category chips */}
@@ -251,6 +276,7 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
         style={{ flexGrow: 0 }}
         contentContainerStyle={{ paddingHorizontal: 14, gap: 8, paddingTop: 8, paddingBottom: 4 }}
       >
+        <Pressable accessibilityRole="button" onPress={()=>setFiltersOpen(true)} style={styles.chip}><MaterialIcons name="tune" size={16}/><Text style={styles.chipText}>Filters{filterCount ? ` · ${filterCount}` : ''}</Text></Pressable>
         {chips.map((c) => {
           const active = activeCategory === c.id;
           return (
@@ -312,7 +338,7 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
               key={t.id}
               accessibilityRole="button"
               accessibilityLabel={`Use ${t.name} template`}
-              onPress={() => onApply(t)}
+              onPress={() => chooseTemplate(t)}
               style={({ pressed }) => [
                 styles.card,
                 pressed && { opacity: 0.88, transform: [{ scale: 0.985 }] },

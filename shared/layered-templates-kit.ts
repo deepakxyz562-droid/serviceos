@@ -649,10 +649,10 @@ export function composeKitPoster(input: StudioPosterInput): MarketingDesign {
 
   const brandTextVal = input.brand || 'Your Business Name';
   layers.push({
-    ...base('brand_name', 'text', input.logoUrl ? 0.18 : 0.09, 0.08, 0.62, 0.05),
+    ...base('brand', 'text', input.logoUrl ? 0.18 : 0.09, 0.08, 0.62, 0.05),
     text: brandTextVal,
     color: definition.accent,
-    fontSize: Math.round(unit * 0.032),
+    fontSize: Math.max(10, Math.min(Math.round(unit * 0.032), (width * 0.62) / (brandTextVal.length * 0.58))),
     fontFamily: definition.fontFamily,
     fontWeight: 800,
     textAlign: 'left',

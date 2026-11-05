@@ -1,3 +1,4 @@
+import { composeBusinessEdition } from './business-template-design';
 import { composeProfessionalPoster } from './professional-posters';
 import { composeStudioPoster } from './poster-composition';
 import { composeKitPoster } from './layered-templates-kit';
@@ -84,6 +85,7 @@ export type CommercialTheme =
   | 'dark';
 
 export type PosterTemplateLayout =
+  | `business_${string}`
   | `professional_${string}`
   | `studio_${number}`
   | `kit_${string}`
@@ -291,6 +293,7 @@ export function createCommercialPosterDesign(input: {
   };
   const [width, height] = sizes[input.ratio || '4:5'] || sizes['4:5'];
 
+  if (input.layout?.startsWith('business_')) return composeBusinessEdition(input);
   if (input.layout?.startsWith('kit_')) return composeKitPoster(input);
   if (input.layout?.startsWith('professional_')) return composeProfessionalPoster(input);
   if (input.layout?.startsWith('studio_')) return composeStudioPoster(input);

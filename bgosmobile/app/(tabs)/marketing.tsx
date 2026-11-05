@@ -171,7 +171,7 @@ function AutoBrandedPosterCard({
   layout?: PosterTemplateLayout;
 }) {
   if(document)return <View style={{height,aspectRatio:document.width/document.height,alignSelf:'center'}}><PosterPreview doc={document}/></View>;
-  if (layout.startsWith('studio_') || layout.startsWith('professional_')) {
+  if (['studio_', 'professional_', 'business_', 'kit_'].some(prefix=>layout.startsWith(prefix))) {
     const ratio = aspectRatio === 1 ? '1:1' : aspectRatio < .6 ? '9:16' : aspectRatio > 1 ? '16:9' : '4:5';
     const doc = createCommercialPosterDesign({brand:businessName,headline,subtitle,badge,cta:ctaText,photo:photoUri||undefined,logoUrl:logoUri||undefined,website,phone,ratio,theme,layout});
     return <View style={{height,aspectRatio,alignSelf:'center'}}><PosterPreview doc={doc}/>{isGenerating && <ActivityIndicator style={{position:'absolute',top:12,right:12}}/>}</View>;

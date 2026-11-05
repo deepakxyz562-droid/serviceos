@@ -1,3 +1,4 @@
+import { BUSINESS_EDITIONS, type BusinessEdition } from './business-template-collection';
 import { PROFESSIONAL_POSTERS } from './professional-posters';
 import { STUDIO_POSTERS } from './poster-studio-catalog';
 import { LAYERED_KIT_POSTERS } from './layered-templates-kit';
@@ -72,6 +73,9 @@ export const POSTER_OCCASION_WINDOWS: PosterOccasionWindow[] = [
   { id: 'republic_day', name: 'Republic Day', emoji: '🇮🇳', startMonth: 1, endMonth: 1 },
   { id: 'valentine', name: "Valentine's Day", emoji: '💝', startMonth: 2, endMonth: 2 },
   { id: 'holi', name: 'Holi', emoji: '🎨', startMonth: 2, endMonth: 3 },
+  { id:'ganesh_chaturthi',name:'Ganesh Chaturthi',emoji:'🌼',startMonth:8,endMonth:9 },
+  { id:'mothers_day',name:'Mother’s Day',emoji:'🌷',startMonth:5,endMonth:5 },
+  { id:'fathers_day',name:'Father’s Day',emoji:'🌿',startMonth:6,endMonth:6 },
   { id: 'summer', name: 'Summer Season', emoji: '☀️', startMonth: 3, endMonth: 6 },
   { id: 'monsoon', name: 'Monsoon Season', emoji: '🌧️', startMonth: 6, endMonth: 8 },
   { id: 'independence_day', name: 'Independence Day', emoji: '🇮🇳', startMonth: 8, endMonth: 8 },
@@ -94,6 +98,7 @@ export function getActivePosterOccasions(currentDate = new Date()): PosterOccasi
 export type PosterAspect = '1:1' | '4:5' | '9:16' | '16:9';
 
 export interface PosterTemplate {
+  edition?: BusinessEdition;
   id: string;
   name: string;
   collection?: 'creative' | 'standard';
@@ -1099,6 +1104,7 @@ const neutralCopy: Record<PosterCategoryId, [string,string]> = {
 };
 const unsupported = /\d+%|guarantee|zero |#1|5.star|verified|certified|24.?7|free |first \d|lifetime|lowest|OEM|hallmark/i;
 export const POSTER_TEMPLATES: PosterTemplate[] = [
+ ...BUSINESS_EDITIONS,
  ...LAYERED_KIT_POSTERS,
  ...PROFESSIONAL_POSTERS,
  ...STUDIO_POSTERS,
@@ -1197,7 +1203,7 @@ export function orderTemplatesForGallery(
     const ca = categoryOrder.get(a.category) ?? 99;
     const cb = categoryOrder.get(b.category) ?? 99;
     if (ca !== cb) return ca - cb;
-    return a.id.localeCompare(b.id);
+    return Number(Boolean(a.edition)) - Number(Boolean(b.edition)) || a.id.localeCompare(b.id);
   });
 }
 
