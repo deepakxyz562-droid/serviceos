@@ -1,4 +1,4 @@
-import { unregisterPush } from '../lib/push';
+import { unregisterPush, autoSyncPushToken } from '../lib/push';
 import { create } from 'zustand';
 import {
   getToken,
@@ -98,6 +98,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await acceptSession(session, revision);
       const onboardingRequired = await resolveOnboardingRequirement(session, user);
       set({ user, onboardingRequired, isAuthenticated: true, isLoading: false });
+      void autoSyncPushToken().catch(() => {});
       return true;
     } catch (error) { set({ error: error instanceof Error ? error.message : 'Sign-in failed', isLoading: false }); return false; }
   },
@@ -113,6 +114,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await acceptSession(session, revision);
       const onboardingRequired = await resolveOnboardingRequirement(session, user);
       set({ user, onboardingRequired, isAuthenticated: true, isLoading: false });
+      void autoSyncPushToken().catch(() => {});
       return true;
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Mobile sign-in failed', isLoading: false });
@@ -128,6 +130,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await acceptSession(session, revision);
       const onboardingRequired = await resolveOnboardingRequirement(session, user);
       set({ user, onboardingRequired, isAuthenticated: true, isLoading: false });
+      void autoSyncPushToken().catch(() => {});
       return true;
     } catch (error) { set({ error: error instanceof Error ? error.message : 'Google sign-in failed', isLoading: false }); return false; }
   },
@@ -140,6 +143,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await acceptSession(session, revision);
       const onboardingRequired = await resolveOnboardingRequirement(session, user);
       set({ user, onboardingRequired, isAuthenticated: true, isLoading: false });
+      void autoSyncPushToken().catch(() => {});
       return true;
     } catch (error) { set({ error: error instanceof Error ? error.message : 'Apple sign-in failed', isLoading: false }); return false; }
   },
@@ -189,6 +193,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         await saveUser(session.user).catch(() => {});
         const onboardingRequired = await resolveOnboardingRequirement(session, session.user);
         set({ user: session.user, onboardingRequired, isAuthenticated: true, isLoading: false, error: null });
+        void autoSyncPushToken().catch(() => {});
       }
     } catch (error) {
       if (revision !== sessionRevision()) return;

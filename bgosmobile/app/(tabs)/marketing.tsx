@@ -1,4 +1,6 @@
 import { PosterEditor } from '../../src/components/design/poster-editor';
+import { PublishingAccountPicker } from '../../src/components/design/publishing-account-picker';
+import { publishingTargets, selectedPublishingIds } from '../../../shared/marketing-targets';
 import { backgroundBrief } from '../../../shared/design-editor';
 import { PosterPreview } from '../../src/components/design/poster-preview';
 import '../../src/lib/runtime-polyfills';
@@ -862,7 +864,6 @@ export default function MarketingScreen() {
   } | null>(null);
 
   // Offer details & Review step
-  const [reviewPlatform, setReviewPlatform] = useState<'instagram' | 'facebook' | 'googlebusiness'>('instagram');
   const [offerStartDate, setOfferStartDate] = useState('6 Nov');
   const [offerEndDate, setOfferEndDate] = useState('8 Nov');
   const [bookingLink, setBookingLink] = useState('');
@@ -931,38 +932,60 @@ export default function MarketingScreen() {
     }
   }, [params.generate, params.mode, params.view]);
 
-  // Social account resolution
+  // Social account resolution & publishing targets
   const availableAccounts = accounts.data?.data || [];
   const activeProfileId = discover.data?.activeProfile?.id;
-  const gbpAccount =
-    availableAccounts.find(
-      (a) =>
-        a.platform === 'googlebusiness' &&
-        a.isActive &&
-        (activeProfileId
-          ? a.id === activeProfileId || a.accountId === activeProfileId
-          : a.accountName?.toLowerCase().includes('fieser') || a.accountId === '10777612572223040949')
-    ) || availableAccounts.find((a) => a.platform === 'googlebusiness' && a.isActive);
-  const fbAccount = availableAccounts.find((a) => a.platform === 'facebook' && a.isActive);
-  const igAccount = availableAccounts.find((a) => a.platform === 'instagram' && a.isActive);
+  const savedGooglePublishingAccountId = (discover.data as any)?.savedPublishingAccountId || null;
+  const [manualAccountIds, setManualAccountIds] = useState<string[] | null>(null);
 
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['googlebusiness', 'instagram', 'facebook']);
+  const selectedAccountIds = useMemo(
+    () => selectedPublishingIds(availableAccounts, manualAccountIds, savedGooglePublishingAccountId),
+    [availableAccounts, manualAccountIds, savedGooglePublishingAccountId]
+  );
 
-  // Sync selectedPlatforms with connected accounts so publishing doesn't target disconnected channels
-  useEffect(() => {
-    if (availableAccounts.length > 0) {
-      const activePlatforms = Array.from(new Set(availableAccounts.filter((a) => a.isActive).map((a) => a.platform)));
-      if (activePlatforms.length > 0) {
-        setSelectedPlatforms((prev) => {
-          const valid = prev.filter((p) => activePlatforms.includes(p));
-          const withGbp = activePlatforms.includes('googlebusiness') && !valid.includes('googlebusiness')
-            ? ['googlebusiness', ...valid]
-            : valid;
-          return withGbp.length > 0 ? withGbp : [activePlatforms[0]];
-        });
+  const targets = useMemo(
+    () => publishingTargets(availableAccounts, selectedAccountIds),
+    [availableAccounts, selectedAccountIds]
+  );
+
+  const selectedPlatforms = useMemo(
+    () => Array.from(new Set(targets.map((t) => t.platform))),
+    [targets]
+  );
+
+  const togglePublishingAccount = useCallback((accountId: string) => {
+    setManualAccountIds((prev) => {
+      const current = prev !== null ? prev : selectedAccountIds;
+      if (current.includes(accountId)) {
+        return current.filter((id) => id !== accountId);
       }
-    }
-  }, [availableAccounts]);
+      return [...current, accountId];
+    });
+  }, [selectedAccountIds]);
+
+  const gbpAccount = useMemo(() => {
+    return (
+      availableAccounts.find(
+        (a) =>
+          a.platform === 'googlebusiness' &&
+          a.isActive &&
+          (savedGooglePublishingAccountId
+            ? a.id === savedGooglePublishingAccountId
+            : activeProfileId
+            ? a.id === activeProfileId || a.accountId === activeProfileId
+            : true)
+      ) || availableAccounts.find((a) => a.platform === 'googlebusiness' && a.isActive)
+    );
+  }, [availableAccounts, savedGooglePublishingAccountId, activeProfileId]);
+
+  const fbAccount = useMemo(
+    () => availableAccounts.find((a) => a.platform === 'facebook' && a.isActive),
+    [availableAccounts]
+  );
+  const igAccount = useMemo(
+    () => availableAccounts.find((a) => a.platform === 'instagram' && a.isActive),
+    [availableAccounts]
+  );
 
   const [brandLogoUri, setBrandLogoUri] = useState<string | null>(null);
   const [brandTagline, setBrandTagline] = useState<string>('');
@@ -1083,20 +1106,6 @@ export default function MarketingScreen() {
     [headline, effectiveHeadline, subtitle, discountBadge, ctaText, bgPhotoUrl]
   );
 
-  // Targets for publishing
-  const targets = useMemo(() => {
-    const list: { platform: string; socialAccountId: string }[] = [];
-    if (selectedPlatforms.includes('googlebusiness') && gbpAccount) {
-      list.push({ platform: 'googlebusiness', socialAccountId: gbpAccount.id });
-    }
-    if (selectedPlatforms.includes('facebook') && fbAccount) {
-      list.push({ platform: 'facebook', socialAccountId: fbAccount.id });
-    }
-    if (selectedPlatforms.includes('instagram') && igAccount) {
-      list.push({ platform: 'instagram', socialAccountId: igAccount.id });
-    }
-    return list;
-  }, [selectedPlatforms, gbpAccount, fbAccount, igAccount]);
 
   const handlePickLogo = async () => {
     try {
@@ -3436,15 +3445,10 @@ export default function MarketingScreen() {
                   </Pressable>
                 </View>
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => void submitPost('draft', true)}
-                    disabled={busy}
-                    style={{ paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }}
-                  >
-                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>{busy ? 'Saving…' : 'Save'}</Text>
-                  </Pressable>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ fontSize: 11.5, fontWeight: '600', color: '#64748B' }}>
+                    {busy ? 'Saving…' : '✓ Saved'}
+                  </Text>
                   <Pressable
                     accessibilityRole="button"
                     onPress={() => setTemplatePickerOpen(true)}
@@ -3485,73 +3489,30 @@ export default function MarketingScreen() {
                   <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
                 </Pressable>
 
-                {/* Summary Row 2: Target Channels */}
-                <Pressable
-                  onPress={() => {
-                    Alert.alert('Publishing Channels', 'Select destination channels:', [
-                      {
-                        text: selectedPlatforms.includes('instagram') ? '✓ Instagram' : '＋ Instagram',
-                        onPress: () =>
-                          setSelectedPlatforms((prev) =>
-                            prev.includes('instagram') ? prev.filter((p) => p !== 'instagram') : [...prev, 'instagram']
-                          ),
-                      },
-                      {
-                        text: selectedPlatforms.includes('facebook') ? '✓ Facebook' : '＋ Facebook',
-                        onPress: () =>
-                          setSelectedPlatforms((prev) =>
-                            prev.includes('facebook') ? prev.filter((p) => p !== 'facebook') : [...prev, 'facebook']
-                          ),
-                      },
-                      {
-                        text: selectedPlatforms.includes('googlebusiness') ? '✓ Google Business' : '＋ Google Business',
-                        onPress: () =>
-                          setSelectedPlatforms((prev) =>
-                            prev.includes('googlebusiness')
-                              ? prev.filter((p) => p !== 'googlebusiness')
-                              : [...prev, 'googlebusiness']
-                          ),
-                      },
-                      { text: 'Done' },
-                    ]);
-                  }}
-                  style={styles.summaryRow}
-                >
-                  <MaterialIcons name="groups" size={18} color="#64748B" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.summaryTitle}>
-                      {selectedPlatforms.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' + ')}
-                    </Text>
-                    <Text style={styles.summarySubtitle}>{selectedPlatforms.length} accounts selected</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
-                </Pressable>
               </ScrollView>
 
-              {/* Step 2 Sticky Footer: Save Template, Save Draft & Review CTA */}
+              {/* Step 2 Sticky Footer: More Actions Overflow & Primary Continue */}
               <View style={styles.dualStickyFooter}>
                 <Pressable
-                  disabled={busy}
-                  onPress={handleSaveAsMyTemplate}
-                  style={[styles.secondaryButton, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="More design actions"
+                  onPress={() =>
+                    Alert.alert('Design Actions', 'Choose an action for this design:', [
+                      { text: 'Save draft', onPress: () => void submitPost('draft') },
+                      { text: 'Save as reusable template', onPress: () => void handleSaveAsMyTemplate() },
+                      { text: 'Cancel', style: 'cancel' },
+                    ])
+                  }
+                  style={[styles.secondaryButton, { flex: 0, paddingHorizontal: 16 }]}
                 >
-                  <MaterialIcons name="star" size={14} color="#009F50" />
-                  <Text style={[styles.secondaryButtonText, { color: '#009F50', fontWeight: '800' }]}>Save Template</Text>
-                </Pressable>
-
-                <Pressable
-                  disabled={busy}
-                  onPress={() => submitPost('draft')}
-                  style={styles.secondaryButton}
-                >
-                  <Text style={styles.secondaryButtonText}>Save draft</Text>
+                  <MaterialIcons name="more-horiz" size={24} color="#475569" />
                 </Pressable>
 
                 <Pressable
                   onPress={() => setStudioStep(3)}
                   style={styles.primaryFlexButton}
                 >
-                  <Text style={styles.primaryActionText}>Review & schedule →</Text>
+                  <Text style={styles.primaryActionText}>Continue →</Text>
                 </Pressable>
               </View>
             </View>
@@ -3563,32 +3524,13 @@ export default function MarketingScreen() {
           {studioStep === 3 && (
             <View style={{ flex: 1 }}>
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 110 }}>
-                {/* Channel Selector Pills */}
-                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-                  <Pressable
-                    onPress={() => setReviewPlatform('instagram')}
-                    style={[
-                      styles.platformTab,
-                      reviewPlatform === 'instagram' && styles.platformTabActive,
-                    ]}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: reviewPlatform === 'instagram' ? '#009F50' : '#64748B' }}>
-                      📸 Instagram
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => setReviewPlatform('facebook')}
-                    style={[
-                      styles.platformTab,
-                      reviewPlatform === 'facebook' && styles.platformTabActive,
-                    ]}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: reviewPlatform === 'facebook' ? '#009F50' : '#64748B' }}>
-                      📘 Facebook
-                    </Text>
-                  </Pressable>
-                </View>
+                {/* Where would you like to publish? Account Selector */}
+                <PublishingAccountPicker
+                  accounts={availableAccounts}
+                  selectedIds={selectedAccountIds}
+                  toggle={togglePublishingAccount}
+                  manage={() => router.push('/(tabs)/integrations')}
+                />
 
                 {/* ── Mockup Feed Card (Instagram Style) ── */}
                 <View style={styles.mockupCard}>
@@ -3781,19 +3723,38 @@ export default function MarketingScreen() {
               {/* Step 3 Sticky Footer: Publish / Schedule CTA */}
               <View style={styles.promptInputContainer}>
                 <Pressable
-                  disabled={busy}
+                  disabled={busy || targets.length === 0}
                   onPress={() => submitPost(scheduleMode === 'now' ? 'published' : 'scheduled')}
-                  style={[styles.primaryActionButton, busy && { opacity: 0.6 }]}
+                  style={[
+                    styles.primaryActionButton,
+                    (busy || targets.length === 0) && { opacity: 0.6 },
+                  ]}
                 >
                   {busy ? (
                     <ActivityIndicator color="#FFFFFF" size="small" />
                   ) : (
                     <Text style={styles.primaryActionText}>
-                      {scheduleMode === 'now'
-                        ? `Publish to ${selectedPlatforms.length} accounts`
+                      {targets.length === 0
+                        ? scheduleMode === 'now'
+                          ? 'Select an account to publish'
+                          : 'Select an account to schedule'
+                        : scheduleMode === 'now'
+                        ? targets.length === 1
+                          ? targets[0].platform === 'googlebusiness'
+                            ? 'Publish to Google Business'
+                            : targets[0].platform === 'facebook'
+                            ? 'Publish to Facebook'
+                            : 'Publish to Instagram'
+                          : `Publish to ${targets.length} accounts`
                         : scheduleMode === 'multi_day'
                         ? `Schedule ${multiDayCount}-Day Campaign`
-                        : 'Schedule post'}
+                        : targets.length === 1
+                        ? targets[0].platform === 'googlebusiness'
+                          ? 'Schedule on Google Business'
+                          : targets[0].platform === 'facebook'
+                          ? 'Schedule on Facebook'
+                          : 'Schedule on Instagram'
+                        : `Schedule on ${targets.length} accounts`}
                     </Text>
                   )}
                 </Pressable>

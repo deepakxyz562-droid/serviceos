@@ -61,7 +61,10 @@ export async function enablePush(): Promise<{ success: boolean; message: string 
 
     // Try to register native device push token (FCM on Android / APNs on iOS)
     let token: string | null = null;
-    const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
+    const projectId =
+      Constants.easConfig?.projectId ||
+      Constants.expoConfig?.extra?.eas?.projectId ||
+      '30078807-9b75-42c3-97c3-41fb166c40f2';
 
     if (Device.isDevice && projectId && !isExpoGo) {
       try {
@@ -99,6 +102,38 @@ export async function enablePush(): Promise<{ success: boolean; message: string 
       success: true,
       message: 'In-app notifications enabled! Live updates will appear in your BGOS Inbox.',
     };
+  }
+}
+
+/**
+ * Automatically syncs the push token with the backend on login/app startup
+ * if the user has already granted notification permissions.
+ */
+export async function autoSyncPushToken(): Promise<void> {
+  if (isExpoGo) return;
+  try {
+    const granted = await isPushPermissionGranted();
+    if (!granted) return;
+
+    const projectId =
+      Constants.easConfig?.projectId ||
+      Constants.expoConfig?.extra?.eas?.projectId ||
+      '30078807-9b75-42c3-97c3-41fb166c40f2';
+
+    if (Device.isDevice && projectId) {
+      const tokenRes = await Notifications.getExpoPushTokenAsync({ projectId }).catch(() => null);
+      const token = tokenRes?.data;
+      if (token) {
+        await apiRequest('/api/notifications/push/subscribe', {
+          method: 'POST',
+          body: { expoPushToken: token, platform: Platform.OS },
+        }).catch(() => {});
+        await SecureStore.setItemAsync(PUSH_TOKEN_KEY, token).catch(() => {});
+        await SecureStore.setItemAsync(PUSH_ENABLED_KEY, 'true').catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.log('[push] autoSyncPushToken background notice:', err);
   }
 }
 

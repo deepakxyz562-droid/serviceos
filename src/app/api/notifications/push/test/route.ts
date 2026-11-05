@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
+import { db } from '@/lib/db';
 import { isWebPushConfigured } from '@/lib/notifications';
 import { sendWebPushToUserWithDiagnostics } from '@/lib/web-push-send';
 
@@ -26,9 +27,9 @@ export const dynamic = 'force-dynamic';
  *   503 { error: 'Web Push is not configured...', result } — missing/bad VAPID
  *   500 { error: 'Failed to send test push' }              — unexpected error
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -41,9 +42,16 @@ export async function POST() {
         { status: 400 }
       );
     }
-    if (!isWebPushConfigured()) {
+
+    const activeSubs = await db.pushSubscription.findMany({
+      where: { userId: user.id, isActive: true },
+      select: { endpoint: true },
+    });
+    const hasExpoSub = activeSubs.some((s) => s.endpoint.startsWith('expo://'));
+
+    if (!hasExpoSub && !isWebPushConfigured()) {
       return NextResponse.json(
-        { error: 'Web Push is not configured on the server (missing VAPID keys)' },
+        { error: 'Push notifications are not configured on the server (missing VAPID keys)' },
         { status: 503 }
       );
     }

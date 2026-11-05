@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
         count: 0,
         hasConnectedGbp: false,
         activeProfileId: null,
+        savedPublishingAccountId: null,
         activeProfile: null,
         profiles: [],
         phone: tenant?.phone || '',
@@ -104,11 +105,23 @@ export async function GET(request: NextRequest) {
     );
     const activeProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0] || null;
 
+    const activeSocialAccount = socialAccounts.find((sa) => {
+      let meta: Record<string, any> = {};
+      if (sa.metadata) {
+        try {
+          meta = typeof sa.metadata === 'string' ? JSON.parse(sa.metadata) : sa.metadata;
+        } catch {}
+      }
+      const id = String(sa.accountId || meta.locationId || sa.id);
+      return id === activeProfileId || sa.id === activeProfileId;
+    }) || socialAccounts[0] || null;
+
     return NextResponse.json({
       email: googleEmail,
       count: profiles.length,
       hasConnectedGbp: true,
       activeProfileId: activeProfile ? activeProfile.id : null,
+      savedPublishingAccountId: activeSocialAccount ? activeSocialAccount.id : null,
       activeProfile,
       profiles,
       phone: tenant?.phone || '',

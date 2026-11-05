@@ -6,6 +6,7 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
+  Alert,
   PanResponder,
   ScrollView,
   Linking,
@@ -417,49 +418,33 @@ export function PosterEditor({
       {!selected && (
         <View style={styles.overviewDock}>
           <View style={styles.overviewActionsRow}>
-            {onOpenTemplates && (
-              <Pressable
-                onPress={onOpenTemplates}
-                style={styles.overviewBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Choose Template"
-              >
-                <MaterialIcons name="grid-view" size={17} color="#009F50" />
-                <Text style={styles.overviewBtnText}>Templates</Text>
-              </Pressable>
-            )}
+            <Pressable
+              onPress={() =>
+                Alert.alert('Add to design', 'Choose what to add to the canvas:', [
+                  { text: 'Text', onPress: handleAddText },
+                  { text: 'Photo', onPress: () => void replacePhoto(true) },
+                  { text: 'Cancel', style: 'cancel' },
+                ])
+              }
+              style={styles.overviewBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Add text or photo"
+            >
+              <MaterialIcons name="add" size={19} color="#009F50" />
+              <Text style={[styles.overviewBtnText, { color: '#009F50', fontWeight: '800' }]}>Add</Text>
+            </Pressable>
 
             {onOpenRatio && (
               <Pressable
                 onPress={onOpenRatio}
                 style={styles.overviewBtn}
                 accessibilityRole="button"
-                accessibilityLabel="Change Aspect Ratio"
+                accessibilityLabel="Change design size"
               >
-                <MaterialIcons name="aspect-ratio" size={17} color="#0F172A" />
-                <Text style={styles.overviewBtnText}>Ratio</Text>
+                <MaterialIcons name="aspect-ratio" size={18} color="#475569" />
+                <Text style={styles.overviewBtnText}>Size</Text>
               </Pressable>
             )}
-
-            <Pressable
-              onPress={handleAddText}
-              style={styles.overviewBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Add New Text Layer"
-            >
-              <MaterialIcons name="title" size={17} color="#0F172A" />
-              <Text style={styles.overviewBtnText}>+ Text</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => void replacePhoto(true)}
-              style={styles.overviewBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Add Photo"
-            >
-              <MaterialIcons name="add-photo-alternate" size={17} color="#0F172A" />
-              <Text style={styles.overviewBtnText}>+ Photo</Text>
-            </Pressable>
 
             <Pressable
               onPress={() => setLayersOpen(true)}
@@ -467,8 +452,8 @@ export function PosterEditor({
               accessibilityRole="button"
               accessibilityLabel="View All Layers"
             >
-              <MaterialIcons name="layers" size={17} color="#0F172A" />
-              <Text style={styles.overviewBtnText}>Layers ({doc.layers.length})</Text>
+              <MaterialIcons name="layers" size={18} color="#475569" />
+              <Text style={styles.overviewBtnText}>Layers</Text>
             </Pressable>
           </View>
 

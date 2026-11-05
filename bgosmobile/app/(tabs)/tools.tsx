@@ -916,8 +916,31 @@ export default function ToolsScreen() {
               icon="notifications"
               onPress={() =>
                 run(async () => {
-                  await enablePush();
-                  setNotice('Push notifications enabled for this device.');
+                  const res = await enablePush();
+                  setNotice(res.message);
+                })
+              }
+            />
+
+            <Action
+              secondary
+              disabled={busy}
+              label="Send Test Push Notification"
+              icon="notifications-active"
+              onPress={() =>
+                run(async () => {
+                  try {
+                    const res = await apiRequest<{ ok: boolean; result?: { sent: number; failed: number } }>('/api/notifications/push/test', {
+                      method: 'POST',
+                    });
+                    if (res?.result && res.result.sent > 0) {
+                      Alert.alert('Test Push Sent', `Dispatched test notification to ${res.result.sent} device(s)! Check your device notification tray.`);
+                    } else {
+                      Alert.alert('Test Push Notice', 'No active push device registered. Please tap "Enable Push Notifications" first.');
+                    }
+                  } catch (e: unknown) {
+                    Alert.alert('Test Push Failed', e instanceof Error ? e.message : 'Could not send test push.');
+                  }
                 })
               }
             />

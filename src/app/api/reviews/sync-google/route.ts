@@ -8,6 +8,7 @@ import {
   replyToGoogleBusinessReview,
 } from '@/lib/social/adapters/googlebusiness';
 import { callAI } from '@/lib/ai-client';
+import { sendWebPushToUser } from '@/lib/web-push-send';
 
 /**
  * POST /api/reviews/sync-google
@@ -226,6 +227,45 @@ Write a warm, authentic, professional reply (1-3 sentences) thanking them by nam
         } catch (autoErr) {
           console.warn('[reviews/sync-google] Auto-reply failed for review:', gRev.reviewId, autoErr);
         }
+      }
+    }
+
+    // If new reviews were imported, notify the business owner via mobile push
+    if (newReviewsCount > 0) {
+      try {
+        const ownerUsers = await db.user.findMany({
+          where: { tenantId: user.tenantId, role: { in: ['owner', 'admin'] } },
+          select: { id: true },
+        });
+
+        const latestNewReview = allGoogleReviews[0];
+        const author = latestNewReview?.authorName || 'A customer';
+        const rating = latestNewReview?.rating || 5;
+        const comment = latestNewReview?.comment ? `"${latestNewReview.comment.slice(0, 80)}…"` : '';
+        const pushTitle = newReviewsCount === 1
+          ? `⭐ New ${rating}★ Google Review from ${author}`
+          : `⭐ ${newReviewsCount} New Google Reviews Received`;
+        const pushBody = newReviewsCount === 1
+          ? (comment || `Customer left a ${rating}-star rating on Google Maps. Tap to reply.`)
+          : `You received ${newReviewsCount} new customer reviews on Google Maps. Tap to review & reply.`;
+
+        for (const owner of ownerUsers) {
+          await sendWebPushToUser(owner.id, user.tenantId, {
+            title: pushTitle,
+            body: pushBody,
+            url: '/reviews',
+            data: {
+              route: '/(tabs)/reviews',
+              view: 'reviews',
+              rating,
+              count: newReviewsCount,
+            },
+            tag: `google_reviews_sync_${Date.now()}`,
+            requireInteraction: true,
+          }).catch((err) => console.warn('[reviews/sync-google] Owner push failed:', err));
+        }
+      } catch (pushErr) {
+        console.warn('[reviews/sync-google] Push notification fan-out notice:', pushErr);
       }
     }
 

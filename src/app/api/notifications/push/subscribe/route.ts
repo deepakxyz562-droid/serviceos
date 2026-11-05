@@ -40,7 +40,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required', code: 'AUTH_REQUIRED' },
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
             keysJson,
             userAgent,
             isActive: true,
-            tenantId: user.tenantId,
+            tenantId: user.tenantId || 'platform',
           },
           select: { id: true },
         });
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
       } else {
         const created = await db.pushSubscription.create({
           data: {
-            tenantId: user.tenantId,
+            tenantId: user.tenantId || 'platform',
             userId: user.id,
             endpoint: finalEndpoint,
             keysJson,
@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required', code: 'AUTH_REQUIRED' },
