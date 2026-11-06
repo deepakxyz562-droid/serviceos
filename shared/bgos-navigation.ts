@@ -9,10 +9,10 @@ export const BGOS_NAVIGATION = [
     ],
   },
   {
-    title: 'AI & Phone',
+    title: 'AI & Calls',
     items: [
       { view: 'agentStudio', label: 'AI Assistant', iconName: 'Bot' },
-      { view: 'aiReceptionist', label: 'Business Phone & AI Voice', iconName: 'PhoneCall' },
+      { view: 'callTracker', label: 'Call Tracker & Leads', iconName: 'PhoneCall' },
     ],
   },
   {
@@ -40,13 +40,14 @@ const allowed = new Set<string>([
   'creatorProfile', 'creatorOffers', 'canvas', 'notifications', 'activityLogs', 'helpAdmin',
   'socialAccounts', 'postComposer', 'postsList', 'socialAnalytics', 'emailProviders',
   'aiCallHistory', 'aiAgents', 'workflows', 'formsAnalytics', 'leadDiscovery', 'employees',
-  'liveChat', 'billing', 'campaigns',
+  'liveChat', 'billing', 'campaigns', 'aiReceptionist', 'callLogs',
 ]);
 
 export function bgosView(view: string): string {
   if (view === 'workflowAutomations') return 'workflows';
   if (view === 'chatbotBuilder') return 'agentStudio';
   if (view === 'formsDashboard') return 'dashboard';
+  if (view === 'aiReceptionist' || view === 'callLogs') return 'callTracker';
   return allowed.has(view) ? view : 'dashboard';
 }
 
@@ -55,7 +56,7 @@ export function bgosNavigationView(view: string): string {
   if (view === 'formSubmissions') return 'formBuilder';
   if (['booking', 'calendar', 'meetingTypes', 'appointmentTypes'].includes(view)) return 'scheduling';
   if (['socialAccounts', 'postComposer', 'postsList', 'socialAnalytics', 'reviews', 'gbpAI'].includes(view)) return 'socialMedia';
-  if (['aiCallHistory', 'aiAgents'].includes(view)) return 'aiReceptionist';
+  if (['aiCallHistory', 'aiAgents', 'aiReceptionist', 'callLogs'].includes(view)) return 'callTracker';
   if (view === 'creatorOffers') return 'creatorProfile';
   if (view === 'employees' || view === 'billing') return 'settings';
   if (view === 'liveChat') return 'omnichannel';

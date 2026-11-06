@@ -285,6 +285,7 @@ const viewComponents: Record<string, any> = {
   // The main sidebar "AI Receptionist" now opens the new AiReceptionistSettings wrapper, which
   // shows the onboarding wizard (if not configured) or the permanent workspace (if active).
   // No BYOK, no Vapi API key, no "Configure AI Voice" — the tenant never sees provider credentials.
+  callTracker: AiCallHistoryView,
   aiReceptionist: AiReceptionistView,
   aiAgents: AiAgentsView,
   aiPhoneNumbers: SmsNumbersView, // redirect legacy deep links to the real phone numbers UI

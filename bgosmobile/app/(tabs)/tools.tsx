@@ -180,8 +180,8 @@ export default function ToolsScreen() {
           onPress={() => router.push('/(tabs)/inbox')}
         />
         <MenuRow
-          title="Business Phone & Keypad"
-          detail="Dialpad, call logs & transcription"
+          title="Call Tracker & Leads"
+          detail="Call logs, 1-tap CRM capture & follow-ups"
           icon="phone"
           onPress={() => router.push('/(tabs)/phone')}
         />

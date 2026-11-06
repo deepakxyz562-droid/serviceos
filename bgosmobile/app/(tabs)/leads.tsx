@@ -33,7 +33,7 @@ type Lead = {
 };
 
 export default function LeadsScreen() {
-  const params = useLocalSearchParams<{ create?: string; phone?: string; name?: string }>();
+  const params = useLocalSearchParams<{ create?: string; phone?: string; name?: string; notes?: string; source?: string }>();
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [stage, setStage] = useState('all');
@@ -67,9 +67,10 @@ export default function LeadsScreen() {
     if (params.create === '1') {
       if (params.phone) setPhone(params.phone);
       if (params.name) setName(params.name);
+      if (params.notes) setService(params.notes);
       setOpen(true);
     }
-  }, [params.create, params.phone, params.name]);
+  }, [params.create, params.phone, params.name, params.notes]);
 
   const resource = useResource<{
     leads: Lead[];
@@ -96,7 +97,8 @@ export default function LeadsScreen() {
           email: email.trim() || undefined,
           title: service.trim() || undefined,
           status: 'new_lead',
-          source: 'mobile_app',
+          source: params.source || 'mobile_app',
+          description: params.notes || undefined,
         },
       });
       setSavedNotice(name.trim() + ' added to leads.');
@@ -194,7 +196,7 @@ export default function LeadsScreen() {
         !resource.error && (
           <Empty
             title="No leads in this pipeline stage"
-            detail="Capture inquiries automatically through your AI receptionist, or create leads manually."
+            detail="Capture inquiries automatically through Call Tracker and forms, or create leads manually."
             actionLabel="＋ Create First Lead"
             onAction={() => setOpen(true)}
           />

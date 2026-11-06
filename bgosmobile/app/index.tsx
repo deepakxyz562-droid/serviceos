@@ -47,7 +47,7 @@ export default function Index() {
             <Text style={styles.badgeText}>📷 Instagram</Text>
           </View>
           <View style={styles.channelBadge}>
-            <Text style={styles.badgeText}>📞 AI Phone</Text>
+            <Text style={styles.badgeText}>📞 Call Tracker</Text>
           </View>
         </View>
 
@@ -55,7 +55,7 @@ export default function Index() {
           Get Found. Get Customers.{'\n'}Grow Your Business.
         </Text>
         <Text style={styles.description}>
-          AI receptionist, multi-channel inbox, leads CRM and social marketing studio. All in your pocket.
+          Smart call tracker, multi-channel inbox, leads CRM and social marketing studio. All in your pocket.
         </Text>
       </View>
 

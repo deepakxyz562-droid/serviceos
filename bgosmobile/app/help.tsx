@@ -194,7 +194,7 @@ export default function HelpScreen() {
           </Pressable>
         </Card>
 
-        {/* 2. In-App AI Assistant & Receptionist */}
+        {/* 2. In-App AI Chat Assistant */}
         <Card style={{ padding: 16, gap: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -212,7 +212,7 @@ export default function HelpScreen() {
               </View>
               <View>
                 <Text style={{ fontSize: 15, fontWeight: '800', color: colors.ink }}>
-                  AI Assistant & Receptionist
+                  AI Chat Assistant
                 </Text>
                 <Text style={{ fontSize: 11.5, color: '#7C3AED', fontWeight: '700' }}>
                   Interactive Sandbox & Training

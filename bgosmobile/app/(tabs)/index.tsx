@@ -860,7 +860,13 @@ export default function HomeScreen() {
           onPress={() => router.push('/(tabs)/marketing')}
         />
         <MenuRow
-          title="AI Assistant & Receptionist"
+          title="Call Tracker & Leads"
+          detail="Track calls, 1-tap CRM leads & WhatsApp"
+          icon="phone"
+          onPress={() => router.push('/(tabs)/phone')}
+        />
+        <MenuRow
+          title="AI Chat Assistant"
           detail="Train knowledge and test sandbox chat"
           icon="smart-toy"
           onPress={() => router.push('/(tabs)/agents')}

@@ -144,6 +144,7 @@ const viewLabels: Record<ViewType, string> = {
   integrations: 'Integrations',
   marketplaceDashboard: 'Marketplace Dashboard',
   claimBusiness: 'Claim Business',
+  callTracker: 'Call Tracker & Leads',
   aiReceptionist: 'AI Voice Receptionist',
   aiAgents: 'Ai Agents',
   aiPhoneNumbers: 'Ai Phone Numbers',
