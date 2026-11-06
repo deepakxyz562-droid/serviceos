@@ -1,0 +1,29 @@
+# Fieseros
+
+> Fieseros (https://fieseros.com) is an autonomous, AI-powered field service management (FSM) platform and operating system designed for trade businesses, commercial contractors, and home service providers. It combines a 24/7 AI voice receptionist, intelligent GPS route dispatching, automated quoting, invoicing with zero platform commission, and a verified contractor marketplace.
+
+## Key Information
+- Platform: Fieseros
+- Website: https://fieseros.com
+- Headquarters: Wilmington, Delaware, United States
+- Operating Hours: Monday – Friday, 9:00 AM – 6:00 PM ET (Support & Sales); 24/7 Autonomous AI Reception & Dispatch
+- Commission Model: 0% platform commission on payments; $0 lead fees for verified contractors
+- Core Architecture: Next.js App Router, PostgreSQL / Supabase, PWA (iOS & Android offline-first)
+- Primary Supported Industries: HVAC, Electrical, Plumbing, Roofing, Pest Control, Landscaping, Cleaning, Auto Repair, General Contracting
+
+## Core Modules & Capabilities
+- [AI Voice Receptionist](https://fieseros.com#ai-receptionist): 24/7 inbound AI phone agent that answers calls within 2 rings, qualifies callers, captures emergency service details, and books appointments directly into dispatch calendars.
+- [AI Smart Dispatch Board](https://fieseros.com#dispatch): Dynamic dispatch engine matching technician certifications, live GPS coordinates, parts-on-van inventory, and traffic patterns to optimize daily route density.
+- [Field Service CRM & Invoicing](https://fieseros.com#invoicing): End-to-end customer management, multi-option tiered quotes (Good/Better/Best), instant tap-to-pay on site, automated review requests, and zero-fee payment processing.
+- [GPTForm™ & Chatbot Engine](https://fieseros.com/templates): Over 20,000 synthesized booking forms and conversational AI lead magnets embeddable on contractor websites.
+- [Verified Pro Marketplace](https://fieseros.com/marketplace): Directory of verified trade businesses across the US, Canada, UK, and Australia with independent verification badges for Identity, Business, Insurance, and Licensing.
+
+## Public Endpoints & Directories
+- [Marketplace Directory](https://fieseros.com/marketplace): Browse verified trade professionals by industry, city, and state/province.
+- [Form & Chatbot Templates](https://fieseros.com/templates): Comprehensive library of trade-specific lead intake and booking templates.
+- [Contact & Support](https://fieseros.com/contact-us): Sales, technical support, and operating hours (Monday – Friday 9:00 AM – 6:00 PM ET).
+- [Terms of Service](https://fieseros.com/terms): Platform usage and provider service agreements.
+- [Privacy Policy](https://fieseros.com/privacy): Data protection, GDPR, and consumer privacy commitments.
+
+## Optional Reference
+- [Full Documentation](https://fieseros.com/llms-full.txt): Comprehensive technical specifications, architectural details, regional compliance, and in-depth trade workflows.

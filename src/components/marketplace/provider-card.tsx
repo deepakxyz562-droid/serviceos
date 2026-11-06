@@ -495,7 +495,7 @@ function ProviderCardImpl({
         <div className="flex items-center gap-2 text-foreground font-medium">
           <Building2 className="h-4 w-4 text-emerald-600 shrink-0" />
           <span>
-            {listItem.employeesCount ? `${listItem.employeesCount} employees` : 'Founded team'}
+            {listItem.employeesCount ? `${listItem.employeesCount} employees` : 'Verified team'}
           </span>
         </div>
         {serviceRadiusKm ? (
@@ -722,7 +722,7 @@ function MinimalCard({
         <div className="flex items-center gap-2 text-foreground font-medium">
           <Building2 className="h-4 w-4 text-emerald-600 shrink-0" />
           <span>
-            {provider.employeesCount ? `${provider.employeesCount} employees` : 'Founded team'}
+            {provider.employeesCount ? `${provider.employeesCount} employees` : 'Verified team'}
           </span>
         </div>
         {serviceRadiusKm ? (

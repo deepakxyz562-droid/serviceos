@@ -957,6 +957,7 @@ export function HiringChecklist({ business }: EvergreenProps) {
     business.industry,
     business.name,
     business.tagline,
+    business.country,
   )
 
   return (
@@ -1328,6 +1329,7 @@ export function PlatformFaqs({ business }: EvergreenProps) {
     business.city,
     business.name,
     business.tagline,
+    business.country,
   )
 
   return (

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, ActivityIndicator, Alert, Linking, Modal, Pressable, useWindowDimensions, ScrollView, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, ActivityIndicator, Alert, Easing, Linking, Modal, Pressable, useWindowDimensions, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card, Screen, Action, ErrorNotice, MenuRow, Badge, MetricCard, ui, colors, Avatar, Loading } from '../../src/components/ui';
@@ -561,23 +561,46 @@ export default function HomeScreen() {
 
   const [growthButtonWidth, setGrowthButtonWidth] = useState(320);
   const nudge = useRef(new Animated.Value(0)).current;
-  const prompted = useRef(false);
+  const pressScale = useRef(new Animated.Value(1)).current;
   const hasGrowthActions = Boolean(growthActions.data && leftCount > 0);
   useFocusEffect(useCallback(() => {
-    if (!hasGrowthActions || prompted.current || growthModalOpen) return;
     let active = true;
-    const stop = () => { nudge.stopAnimation(); nudge.setValue(0); };
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', reduced => {
-      if (reduced) {active = false;stop();}
+    const loopAnim = Animated.loop(
+      Animated.sequence([
+        Animated.delay(2200),
+        Animated.timing(nudge, {
+          toValue: 1,
+          duration: 1100,
+          easing: Easing.bezier(0.4, 0, 0.2, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(nudge, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (reduced) => {
+      if (reduced) {
+        loopAnim.stop();
+        nudge.setValue(0);
+      }
     });
-    void AccessibilityInfo.isReduceMotionEnabled().then(reduced => {
+
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
       if (!active || reduced) return;
-      prompted.current = true;
-      const step = (toValue:number) => Animated.timing(nudge,{toValue,duration:1000,useNativeDriver:true});
-      Animated.sequence([Animated.delay(500),step(1),Animated.timing(nudge,{toValue:0,duration:0,useNativeDriver:true}),Animated.delay(650),step(1)]).start();
-    }).catch(()=>{});
-    return () => {active=false;subscription.remove();stop();};
-  },[hasGrowthActions,growthModalOpen,nudge]));
+      loopAnim.start();
+    }).catch(() => {});
+
+    return () => {
+      active = false;
+      subscription.remove();
+      loopAnim.stop();
+      nudge.setValue(0);
+    };
+  }, [nudge]));
 
   async function dismissGrowthAction(id: string) {
     if (dismissingId) return;
@@ -685,48 +708,105 @@ export default function HomeScreen() {
   // Floating Growth Action Dock (Always visible sticky full-width bar above bottom tabs)
   const growthActionFloatingDock = (
     <View style={{ width: '100%' }}>
-      <Pressable
-        onLayout={event=>setGrowthButtonWidth(event.nativeEvent.layout.width)}
-        accessibilityRole="button"
-        accessibilityLabel={`Growth Action: ${totalDone} of ${totalTarget} done, ${leftCount} left`}
-        onPress={() => setGrowthModalOpen(true)}
-        style={({ pressed }) => ({
-          width: '100%',
-          minHeight: 50,
-          borderRadius: 25,
-          overflow: 'hidden',
-          opacity: pressed ? 0.9 : 1,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.25,
-          shadowRadius: 6,
-          elevation: 8,
-        })}
-      >
-        <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row' }}>
-          <View style={{ flex: 1, backgroundColor: '#9333EA' }} />
-          <View style={{ flex: 1, backgroundColor: '#EA580C' }} />
-        </View>
-        <Animated.View pointerEvents="none" style={{position:'absolute',top:0,bottom:0,width:60,backgroundColor:'rgba(255,255,255,0.16)',transform:[{translateX:nudge.interpolate({inputRange:[0,1],outputRange:[-80,growthButtonWidth+80]})},{skewX:'-18deg'}]}}/>
-        <View
-          style={{
-            minHeight: 50,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-          }}
+      <Animated.View style={{ transform: [{ scale: pressScale }] }}>
+        <Pressable
+          onLayout={(event) => setGrowthButtonWidth(event.nativeEvent.layout.width)}
+          accessibilityRole="button"
+          accessibilityLabel={`Growth Action: ${totalDone} of ${totalTarget} done, ${leftCount} left`}
+          onPress={() => setGrowthModalOpen(true)}
+          onPressIn={() => Animated.spring(pressScale, { toValue: 0.96, useNativeDriver: true }).start()}
+          onPressOut={() => Animated.spring(pressScale, { toValue: 1, friction: 4, tension: 50, useNativeDriver: true }).start()}
+          style={({ pressed }) => ({
+            width: '100%',
+            minHeight: 52,
+            borderRadius: 26,
+            overflow: 'hidden',
+            shadowColor: '#9333EA',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.35,
+            shadowRadius: 10,
+            elevation: 8,
+          })}
         >
-          <View style={{ flex:1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Animated.Text style={{fontSize:18,transform:[{scale:nudge.interpolate({inputRange:[0,0.5,1],outputRange:[1,1.15,1]})}]}}>⚡</Animated.Text>
-            <Text style={{ color: '#FFFFFF', flexShrink: 1, fontSize: 13.5, fontWeight: '800', letterSpacing: -0.2 }}>
-              Growth Action ({growthActions.loading && !growthActions.data ? '…' : `${totalDone} of ${totalTarget} done • ${leftCount} left`})
-            </Text>
+          {/* Vibrant dual-gradient background */}
+          <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row' }}>
+            <View style={{ flex: 1, backgroundColor: '#9333EA' }} />
+            <View style={{ flex: 1, backgroundColor: '#EA580C' }} />
           </View>
-          <MaterialIcons name="chevron-right" size={22} color="#FFFFFF" />
-        </View>
-      </Pressable>
+
+          {/* Sweeping Shimmer Beam 1: Wide ambient glow */}
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              width: 100,
+              backgroundColor: 'rgba(255,255,255,0.18)',
+              transform: [
+                { translateX: nudge.interpolate({ inputRange: [0, 1], outputRange: [-120, growthButtonWidth + 120] }) },
+                { skewX: '-20deg' },
+              ],
+            }}
+          />
+
+          {/* Sweeping Shimmer Beam 2: Bright center streak */}
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              width: 45,
+              backgroundColor: 'rgba(255,255,255,0.38)',
+              transform: [
+                { translateX: nudge.interpolate({ inputRange: [0, 1], outputRange: [-90, growthButtonWidth + 150] }) },
+                { skewX: '-20deg' },
+              ],
+            }}
+          />
+
+          <View
+            style={{
+              minHeight: 52,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+            }}
+          >
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Animated.View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: 'rgba(255,255,255,0.22)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.4)',
+                  transform: [{ scale: nudge.interpolate({ inputRange: [0, 0.35, 0.7, 1], outputRange: [1, 1.28, 1.05, 1] }) }],
+                }}
+              >
+                <Text style={{ fontSize: 16 }}>⚡</Text>
+              </Animated.View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontWeight: '900', letterSpacing: -0.2 }}>
+                  Growth Actions
+                </Text>
+                <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '700' }}>
+                  {growthActions.loading && !growthActions.data ? 'Loading next steps…' : `${totalDone} of ${totalTarget} done • ${leftCount} remaining`}
+                </Text>
+              </View>
+            </View>
+            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
+            </View>
+          </View>
+        </Pressable>
+      </Animated.View>
     </View>
   );
 

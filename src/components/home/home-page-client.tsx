@@ -8,11 +8,11 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 
-// LandingPage is loaded with ssr:false to optimize hydration and avoid
-// server-side overhead for interactive sub-views.
+// LandingPage is rendered with SSR enabled so crawlers and visitors receive
+// the full landing page in the initial HTML payload (eliminating splash-screen LCP penalty).
 const LandingPage = dynamic(
   () => import('@/components/landing/dual-audience-landing').then(m => ({ default: m.DualAudienceLanding })),
-  { ssr: false, loading: () => <ViewLoader /> }
+  { ssr: true }
 );
 const AuthPage = dynamic(
   () => import('@/components/auth/auth-page').then(m => ({ default: m.AuthPage })),
@@ -230,7 +230,10 @@ export default function HomePageClient() {
     queryClient.clear();
   }, [clearAuth, queryClient]);
 
-  const [isLoading, setIsLoading] = useState(true);
+  // Only show the blocking view loader if the visitor has a saved session in localStorage
+  // that is actively being verified. Unauthenticated visitors & crawlers immediately render
+  // the full LandingPage with complete SSR (eliminating the blank loading splash screen).
+  const [isVerifyingSession, setIsVerifyingSession] = useState(false);
   const [unauthView, setUnauthView] = useState<UnauthView>('landing');
   const [initialAuthTab, setInitialAuthTab] = useState<'login' | 'register'>('login');
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
@@ -635,6 +638,15 @@ export default function HomePageClient() {
   useEffect(() => {
     const init = async () => {
       try {
+        if (typeof window !== 'undefined') {
+          const hasSavedAuth = Boolean(
+            localStorage.getItem('fieseros_auth') || localStorage.getItem('fieseros_token')
+          );
+          if (hasSavedAuth) {
+            setIsVerifyingSession(true);
+          }
+        }
+
         handleOAuthCallback();
 
         if (typeof window !== 'undefined') {
@@ -760,8 +772,9 @@ export default function HomePageClient() {
         await checkSession();
       } catch (err) {
         console.error('Init error:', err);
+      } finally {
+        setIsVerifyingSession(false);
       }
-      setIsLoading(false);
     };
     init();
   }, [handleOAuthCallback, checkSession]);
@@ -1063,8 +1076,10 @@ export default function HomePageClient() {
     [setAuth, setShowOnboarding]
   );
 
-  // Don't render anything until client-side mounted
-  if (isLoading) {
+  // Only show the blocking view loader if actively verifying an existing stored session
+  // for a returning authenticated user. Unauthenticated visitors & crawlers immediately render
+  // the full LandingPage with complete SSR (eliminating the blank loading splash screen).
+  if (isVerifyingSession && !auth.isAuthenticated) {
     return <ViewLoader />;
   }
 

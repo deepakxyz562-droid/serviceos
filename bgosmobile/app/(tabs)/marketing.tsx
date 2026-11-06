@@ -655,7 +655,7 @@ export default function MarketingScreen() {
   const [showCreationOptions,setShowCreationOptions] = useState(false);
   const [templateSearchOpen, setTemplateSearchOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState('');
-  const [studioCreateTab, setStudioCreateTab] = useState<'templates' | 'ideas' | 'drafts'>('ideas');
+  const [studioCreateTab, setStudioCreateTab] = useState<'templates' | 'ideas' | 'search' | 'drafts'>('templates');
   // ── Resources ─────────────────────────────────────────────────────────────
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
@@ -2767,18 +2767,31 @@ export default function MarketingScreen() {
       {activeMode === 'studio' && (
         <View style={{ flex: 1 }}>
           {/* Sub-Tab Navigation Header for Step 1 (when design exists), Step 2 (Editor) & Step 3 (Review) */}
-          {(studioStep > 1 || hasGenerated || Boolean(customPosterUri) || Boolean(design)) && (
+          {(studioStep > 1 || hasGenerated || Boolean(customPosterUri) || Boolean(customDesign) || Boolean(activeTemplateId)) && (
             <View style={styles.subTabBar}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                 <Pressable
                   onPress={() => {
-                    if (studioStep === 3) setStudioStep(2);
-                    else if (studioStep === 2) {
-                      setStudioStep(1);
-                      setStudioSubTab('chat');
+                    if (studioStep === 3) {
+                      setStudioStep(2);
+                    } else if (studioStep === 2) {
+                      if (activeTemplateId || studioCreateTab === 'templates' || studioCreateTab === 'search') {
+                        setStudioStep(1);
+                        setStudioCreateTab('templates');
+                        setCustomDesign(null);
+                        setHasGenerated(false);
+                        setCustomPosterUri(null);
+                        setActiveTemplateId(null);
+                      } else {
+                        setStudioStep(1);
+                        setStudioSubTab('chat');
+                      }
                     } else if (studioStep === 1) {
                       setHasGenerated(false);
                       setCustomPosterUri(null);
+                      setCustomDesign(null);
+                      setActiveTemplateId(null);
+                      setActiveUserPrompt('');
                     }
                   }}
                   style={{ padding: 6, borderRadius: 8, backgroundColor: '#F1F5F9' }}
@@ -2796,7 +2809,7 @@ export default function MarketingScreen() {
               </View>
 
               {/* Chat vs Design toggle - visible whenever design exists in step 1 or 2 */}
-              {studioStep <= 2 && (hasGenerated || Boolean(customPosterUri) || Boolean(design)) && (
+              {studioStep <= 2 && (hasGenerated || Boolean(customPosterUri) || Boolean(customDesign) || Boolean(activeTemplateId)) && (
                 <View style={styles.segmentedToggle}>
                   <Pressable
                     onPress={() => {
@@ -2851,53 +2864,97 @@ export default function MarketingScreen() {
                 /* ── Flyer-Maker-style entry: Templates / AI Ideas ── */
                 <View style={{ flex: 1 }}>
                     <View style={styles.createSegmentWrap}>
-                        <Pressable
-                          onPress={() => {setStudioCreateTab('templates');setTemplateSearchOpen(false);}}
-                          style={[styles.createSegmentBtn, studioCreateTab === 'templates' && styles.createSegmentBtnActive]}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: studioCreateTab === 'templates' }}
-                          accessibilityLabel="Browse poster templates"
-                        >
-                          <MaterialIcons name="grid-view" size={14} color={studioCreateTab === 'templates' ? '#FFFFFF' : '#64748B'} />
-                          <Text style={[styles.createSegmentText, studioCreateTab === 'templates' && styles.createSegmentTextActive]}>
-                            Browse templates
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => {
-                            setStudioCreateTab('ideas');
+                      <Pressable
+                        onPress={() => setStudioCreateTab('templates')}
+                        style={[styles.createSegmentBtn, studioCreateTab === 'templates' && styles.createSegmentBtnActive]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: studioCreateTab === 'templates' }}
+                        accessibilityLabel="Templates"
+                      >
+                        <MaterialIcons name="grid-view" size={15} color={studioCreateTab === 'templates' ? '#009F50' : '#64748B'} />
+                        <Text style={[styles.createSegmentText, studioCreateTab === 'templates' && styles.createSegmentTextActive]}>
+                          Templates
+                        </Text>
+                      </Pressable>
 
-                          }}
-                          style={[styles.createSegmentBtn, studioCreateTab === 'ideas' && styles.createSegmentBtnActive]}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: studioCreateTab === 'ideas' }}
-                          accessibilityLabel="Describe with AI ideas"
-                        >
-                          <MaterialIcons name="auto-awesome" size={14} color={studioCreateTab === 'ideas' ? '#FFFFFF' : '#64748B'} />
-                          <Text style={[styles.createSegmentText, studioCreateTab === 'ideas' && styles.createSegmentTextActive]}>
-                            Describe a post
-                          </Text>
-                        </Pressable>
+                      <Pressable
+                        onPress={() => setStudioCreateTab('ideas')}
+                        style={[styles.createSegmentBtn, studioCreateTab === 'ideas' && styles.createSegmentBtnActive]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: studioCreateTab === 'ideas' }}
+                        accessibilityLabel="Describe post"
+                      >
+                        <MaterialIcons name="auto-awesome" size={15} color={studioCreateTab === 'ideas' ? '#009F50' : '#64748B'} />
+                        <Text style={[styles.createSegmentText, studioCreateTab === 'ideas' && styles.createSegmentTextActive]}>
+                          Describe
+                        </Text>
+                      </Pressable>
 
-                        <Pressable accessibilityRole="button" accessibilityLabel="Search templates" accessibilityState={{expanded:templateSearchOpen}}
-                          onPress={()=>{setStudioCreateTab('templates');setTemplateSearchOpen(!templateSearchOpen);}}
-                          style={{width:44,height:44,alignItems:'center',justifyContent:'center'}}>
-                          <MaterialIcons name="search" size={22} color={templateSearchOpen?'#009F50':'#64748B'}/>
-                        </Pressable>
-                        <Pressable accessibilityRole="tab" accessibilityLabel="Saved drafts" accessibilityState={{selected:studioCreateTab==='drafts'}}
-                          onPress={()=>{setStudioCreateTab('drafts');setTemplateSearchOpen(false);void loadDesignDrafts();}}
-                          style={{width:44,height:44,borderRadius:12,backgroundColor:studioCreateTab==='drafts'?'#E6F7EE':'transparent',alignItems:'center',justifyContent:'center'}}>
-                          <MaterialIcons name="folder-open" size={22} color={studioCreateTab==='drafts'?'#009F50':'#64748B'}/>
-                        </Pressable>
+                      <Pressable
+                        onPress={() => setStudioCreateTab('search')}
+                        style={[styles.createSegmentBtn, studioCreateTab === 'search' && styles.createSegmentBtnActive]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: studioCreateTab === 'search' }}
+                        accessibilityLabel="Search templates"
+                      >
+                        <MaterialIcons name="search" size={16} color={studioCreateTab === 'search' ? '#009F50' : '#64748B'} />
+                        <Text style={[styles.createSegmentText, studioCreateTab === 'search' && styles.createSegmentTextActive]}>
+                          Search
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => {
+                          setStudioCreateTab('drafts');
+                          void loadDesignDrafts();
+                        }}
+                        style={[styles.createSegmentBtn, studioCreateTab === 'drafts' && styles.createSegmentBtnActive]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: studioCreateTab === 'drafts' }}
+                        accessibilityLabel="Saved folders"
+                      >
+                        <MaterialIcons name="folder-open" size={15} color={studioCreateTab === 'drafts' ? '#009F50' : '#64748B'} />
+                        <Text style={[styles.createSegmentText, studioCreateTab === 'drafts' && styles.createSegmentTextActive]}>
+                          Folders
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    {studioCreateTab === 'search' && (
+                      <View style={styles.searchExpandedWrap}>
+                        <MaterialIcons name="search" size={18} color="#009F50" />
+                        <TextInput
+                          accessibilityLabel="Search templates"
+                          autoFocus
+                          autoCapitalize="none"
+                          placeholder="Search by topic, service or style..."
+                          placeholderTextColor="#94A3B8"
+                          value={templateSearch}
+                          onChangeText={setTemplateSearch}
+                          style={styles.searchExpandedInput}
+                        />
+                        {templateSearch.length > 0 && (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Clear search"
+                            onPress={() => setTemplateSearch('')}
+                            style={styles.searchExpandedCloseBtn}
+                          >
+                            <MaterialIcons name="close" size={16} color="#64748B" />
+                          </Pressable>
+                        )}
                       </View>
-                    {templateSearchOpen && studioCreateTab === 'templates' && <View style={{flexDirection:'row',alignItems:'center',margin:12,borderWidth:1,borderColor:'#E2E8F0',borderRadius:12,paddingLeft:12}}>
-                      <TextInput accessibilityLabel="Search templates" autoFocus autoCapitalize="none" placeholder="Search templates" value={templateSearch} onChangeText={setTemplateSearch} style={{flex:1,minHeight:44}}/>
-                      <Pressable accessibilityRole="button" accessibilityLabel="Close search" onPress={()=>{setTemplateSearchOpen(false);setTemplateSearch('');}} style={{padding:12}}><MaterialIcons name="close" size={20}/></Pressable>
-                    </View>}
-                    {studioCreateTab === 'drafts' ? <View style={{flex:1,padding:14}}><Text style={{fontSize:18,fontWeight:'700',marginBottom:8}}>Saved drafts</Text>{savedDraftsContent}</View> : studioCreateTab === 'templates' ? (
+                    )}
+
+                    {studioCreateTab === 'drafts' ? (
+                      <View style={{ flex: 1, padding: 14 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8, color: '#0F172A' }}>Saved Drafts & Folders</Text>
+                        {savedDraftsContent}
+                      </View>
+                    ) : studioCreateTab === 'templates' || studioCreateTab === 'search' ? (
                       <View style={{ flex: 1 }}>
                         <PosterTemplateGallery
-                          searchQuery={templateSearchOpen ? templateSearch : ''}
+                          searchQuery={studioCreateTab === 'search' ? templateSearch : ''}
                           business={{
                             businessName: effectiveBusinessName,
                             category: brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category || '',
@@ -4670,10 +4727,10 @@ const styles = StyleSheet.create({
   createSegmentWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
+    gap: 3,
+    paddingHorizontal: 10,
     paddingTop: 8,
-    paddingBottom: 0,
+    paddingBottom: 6,
     backgroundColor: '#FFFFFF',
   },
   searchIconBtn: {
@@ -4689,16 +4746,20 @@ const styles = StyleSheet.create({
   searchExpandedWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 38,
-    marginHorizontal: 14,
-    marginTop: 8,
-    marginBottom: 0,
+    height: 40,
+    marginHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 6,
     borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
     borderColor: '#009F50',
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     gap: 8,
+    shadowColor: '#009F50',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   searchExpandedInput: {
     flex: 1,
@@ -4740,22 +4801,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    minHeight: 44,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    gap: 4,
+    height: 38,
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   createSegmentBtnActive: {
     backgroundColor: '#009F50',
     borderColor: '#009F50',
+    shadowColor: '#009F50',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
   },
   createSegmentText: {
     textAlign: 'center',
     flexShrink: 1,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: '#64748B',
   },

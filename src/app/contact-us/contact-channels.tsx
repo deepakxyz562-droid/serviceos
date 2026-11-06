@@ -43,27 +43,38 @@ export default function ContactChannels() {
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
   const [isOpenNow, setIsOpenNow] = useState(true);
 
-  // Compute live operating status in IST (Indian Standard Time, UTC+5:30)
+  // Compute live operating status in Eastern Time (America/New_York - Wilmington, DE HQ)
   useEffect(() => {
     const checkOpenStatus = () => {
-      const now = new Date();
-      // IST is UTC+5.5 hours
-      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-      const istTime = new Date(utc + 3600000 * 5.5);
+      try {
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/New_York",
+          weekday: "short",
+          hour: "numeric",
+          minute: "numeric",
+          hour12: false,
+        });
+        const parts = formatter.formatToParts(now);
+        const weekday = parts.find((p) => p.type === "weekday")?.value;
+        const hour = parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
+        const minute = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
+        const totalMinutes = hour * 60 + minute;
 
-      const day = istTime.getDay(); // 0 = Sun, 1 = Mon, ... 6 = Sat
-      const hours = istTime.getHours();
-      const minutes = istTime.getMinutes();
-      const totalMinutes = hours * 60 + minutes;
+        const isWeekday = ["Mon", "Tue", "Wed", "Thu", "Fri"].includes(weekday || "");
+        const isSaturday = weekday === "Sat";
 
-      if (day >= 1 && day <= 5) {
-        // Mon-Fri: 9:00 AM (540m) to 6:00 PM (1080m)
-        setIsOpenNow(totalMinutes >= 540 && totalMinutes <= 1080);
-      } else if (day === 6) {
-        // Saturday: 10:00 AM (600m) to 2:00 PM (840m)
-        setIsOpenNow(totalMinutes >= 600 && totalMinutes <= 840);
-      } else {
-        // Sunday: Closed
+        if (isWeekday) {
+          // Mon-Fri: 9:00 AM (540m) to 6:00 PM (1080m) ET
+          setIsOpenNow(totalMinutes >= 540 && totalMinutes <= 1080);
+        } else if (isSaturday) {
+          // Saturday: 10:00 AM (600m) to 2:00 PM (840m) ET
+          setIsOpenNow(totalMinutes >= 600 && totalMinutes <= 840);
+        } else {
+          // Sunday: Closed
+          setIsOpenNow(false);
+        }
+      } catch {
         setIsOpenNow(false);
       }
     };
@@ -174,11 +185,11 @@ export default function ContactChannels() {
         <CardContent className="p-4 space-y-2.5 text-xs">
           <div className="flex items-center justify-between py-1 border-b border-border/40">
             <span className="font-medium text-foreground">Monday &ndash; Friday</span>
-            <span className="text-muted-foreground font-mono">9:00 AM &ndash; 6:00 PM IST</span>
+            <span className="text-muted-foreground font-mono">9:00 AM &ndash; 6:00 PM ET</span>
           </div>
           <div className="flex items-center justify-between py-1 border-b border-border/40">
             <span className="font-medium text-foreground">Saturday</span>
-            <span className="text-muted-foreground font-mono">10:00 AM &ndash; 2:00 PM IST</span>
+            <span className="text-muted-foreground font-mono">10:00 AM &ndash; 2:00 PM ET</span>
           </div>
           <div className="flex items-center justify-between py-1">
             <span className="font-medium text-foreground">Sunday</span>
@@ -187,7 +198,7 @@ export default function ContactChannels() {
 
           <div className="bg-muted/40 rounded-lg p-2.5 mt-3 text-[11px] text-muted-foreground flex items-center gap-2">
             <Sparkles className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-            <span>24/7 AI Receptionist &amp; Automated Dispatch remain active around the clock.</span>
+            <span>24/7 AI Receptionist &amp; Automated Dispatch active around the clock across all timezones.</span>
           </div>
         </CardContent>
       </Card>

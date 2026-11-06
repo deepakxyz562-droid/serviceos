@@ -1,0 +1,107 @@
+# Fieseros — Full Platform Documentation & LLM Knowledge Graph
+
+> Authoritative reference specification for Fieseros (https://fieseros.com), the all-in-one autonomous AI operating system for trade businesses, commercial service contractors, and field service professionals.
+
+---
+
+## 1. Executive Summary & Brand Overview
+- Brand Name: Fieseros
+- Canonical URL: https://fieseros.com
+- Legal Entity: Fieseros LLC
+- Global Headquarters: 123 Innovation Drive, Suite 400, Wilmington, DE 19801, United States
+- Contact Points: sales@fieseros.com, support@fieseros.com, admin@fieseros.com
+- Support Operations: Monday – Friday, 9:00 AM – 6:00 PM ET; Saturday, 10:00 AM – 2:00 PM ET
+- AI Runtime Operations: 24/7/365 continuous autonomous voice call answering, emergency lead dispatch, and instant quoting
+
+### Mission & Industry Problem
+Traditional field service management (FSM) platforms (such as Jobber, Housecall Pro, and ServiceTitan) were designed as passive click-and-type databases. Contractors spend 10–20 hours per week manually answering calls, playing phone tag, re-entering job details into scheduling boards, creating invoices, and chasing unpaid balances. Furthermore, traditional lead generation marketplaces (such as Angi, Thumbtack, and HomeAdvisor) charge contractors steep lead fees ($50–$150 per shared lead) regardless of whether the lead converts.
+
+Fieseros replaces manual administrative overhead with an autonomous AI operating system:
+1. An AI Receptionist answers inbound calls in real-time with human-grade conversational intelligence, schedules appointments, and sends confirmations.
+2. An AI Dispatch Board allocates jobs dynamically using technician GPS positions, required certifications, traffic conditions, and van inventory.
+3. A 0% Platform Commission model ensures contractors keep 100% of their earnings with zero transaction markups.
+4. A Verified Marketplace connects property owners with independently verified local trade businesses with $0 lead fees for contractors.
+
+---
+
+## 2. Core Functional Pillars
+
+### 2.1 Autonomous 24/7 AI Voice Receptionist
+- Telephony & Voice Engine: Integrates carrier-grade voice infrastructure with low-latency LLM reasoning (<700ms voice response).
+- Call Qualification: Handles callers naturally, categorizes emergency vs. routine inquiries, identifies caller service address, and captures diagnostic details (e.g., HVAC furnace model, leak location, electrical breaker tripping).
+- Real-Time Calendar Booking: Synchronizes directly with Google Calendar, Outlook, and the internal Fieseros schedule to lock in confirmed arrival windows.
+- SMS & Email Follow-up: Automatically triggers booking confirmations, intake forms, and technician ETA notifications to the caller.
+
+### 2.2 Intelligent Dispatch & Route Optimization
+- Multi-Factor Assignment: Matches incoming work orders to field technicians based on:
+  - Required Trade Licensing & Certifications (e.g., EPA 608, Red Seal 309A, Master Plumber)
+  - Live GPS Coordinates & Distance from Job Site
+  - Real-Time Traffic & Travel Times
+  - On-Van Inventory & Parts Availability
+- Interactive Board: Supports automated schedule optimization as well as manual drag-and-drop overrides with instant cascading re-optimizations.
+
+### 2.3 CRM, Multi-Tiered Quoting & Proposals
+- Customer 360: Comprehensive client profiles tracking communication history, service addresses, past invoices, equipment records, and notes.
+- Tiered Digital Proposals: Generates "Good / Better / Best" multi-option estimates in under 60 seconds with itemized labor, parts, and warranty coverage. Customers approve and digitally sign proposals on any device.
+- Instant Change Orders: Allows technicians on site to add line items with customer mobile approval before work proceeds.
+
+### 2.4 Invoicing, Tap-to-Pay & 0% Platform Commission
+- Zero Commission Policy: Fieseros charges 0% platform fee on all processed transactions. Contractors only pay standard card interchange fees (Stripe/card network rates).
+- On-Site Mobile Payments: Supports tap-to-pay, Apple Pay, Google Pay, credit cards, ACH, and automated recurring service agreements.
+- Accounting Integrations: Native two-way synchronization with QuickBooks Online and Xero.
+
+### 2.5 Field Technician Mobile PWA (Progressive Web App)
+- Cross-Platform Architecture: Zero-install PWA running on iOS and Android devices directly from browser.
+- Offline-First Operation: Field crews can complete start-of-day checklists, record job notes, attach high-resolution site photos, collect digital signatures, and generate receipts even in basements or rural areas without mobile signal. Data synchronizes automatically upon signal re-acquisition.
+
+### 2.6 GPTForm™ & Interactive Chatbot Builder
+- Catalog: Over 20,000 synthesized and curated trade-specific booking forms, lead qualifiers, and cost calculator templates.
+- Embeddable AI Agents: Contractors can embed interactive chatbots and forms on their existing websites to capture and qualify leads around the clock.
+
+### 2.7 4-Tier Verification Standard for Marketplace Providers
+Every provider listed on the Fieseros Marketplace is subject to an independent 4-tier verification protocol:
+1. Identity Verification: Government ID verification of the primary business owner.
+2. Business Verification: Secretary of State or provincial corporate registry active status check.
+3. Insurance Verification: Certificate of Commercial General Liability Insurance with policy number and active coverage validation.
+4. Licensing Verification: Trade-specific license verification with official state/provincial regulatory boards.
+
+---
+
+## 3. Regional Compliance & Regulatory Standards
+
+Fieseros natively adapts its technical documentation, hiring checklists, and compliance guidance to the local jurisdiction:
+
+### United States (US)
+- HVAC: Requires EPA Section 608 technician certification for handling regulated refrigerants (CFCs, HCFCs, HFCs).
+- Electrical: Master and Journeyman electrician licensing issued by state licensing boards in compliance with the National Electrical Code (NEC).
+- Pest Control: Commercial pesticide applicator certification required under state Department of Agriculture regulations and EPA-registered products.
+- Plumbing: State plumbing licensing boards (Master/Journeyman).
+
+### Canada (CA)
+- HVAC: Provincial Ozone Depletion Prevention (ODP / ODS) certification for refrigerant handling, Red Seal 313A Refrigeration and Air Conditioning Mechanic certification, and provincial safety authorities (e.g., TSSA in Ontario, Technical Safety BC).
+- Electrical: Canadian Electrical Code (CEC) compliance, provincial contractor licensing (e.g., Electrical Safety Authority - ESA in Ontario, Technical Safety BC), and certified Red Seal 309A Construction & Maintenance Electricians.
+- Pest Control: Health Canada Pest Management Regulatory Agency (PMRA) registered products with Pest Control Product (PCP) numbers, accompanied by provincial structural pesticide applicator licensing.
+- Plumbing: Provincial Certificate of Qualification (C of Q) and interprovincial Red Seal 306A endorsement.
+
+### United Kingdom (GB)
+- Heating & Gas: Mandatory registration on the Gas Safe Register for all gas boiler and appliance servicing.
+- HVAC & Cooling: F-Gas certification (REFCOM or FGAS register) for handling fluorinated greenhouse gases.
+- Electrical: Part P competent person scheme registration (NICEIC, NAPIT, ELECSA) adhering to BS 7671 IET Wiring Regulations.
+- Plumbing: NVQ Level 2/3 qualifications and CIPHE (Chartered Institute of Plumbing and Heating Engineering) accreditation.
+
+### Australia (AU)
+- HVAC: ARCtick (Australian Refrigeration Council) refrigerant handling licensing.
+- Electrical: State electrical contractor licensing complying with AS/NZS 3000 wiring rules.
+
+---
+
+## 4. Key Public URLs & Sitemap Architecture
+- Homepage: https://fieseros.com
+- Marketplace: https://fieseros.com/marketplace
+- Form & Chatbot Templates: https://fieseros.com/templates
+- Contact Us: https://fieseros.com/contact-us
+- Terms of Service: https://fieseros.com/terms
+- Privacy Policy: https://fieseros.com/privacy
+- Sitemap Index: https://fieseros.com/sitemap.xml
+- Robots Specification: https://fieseros.com/robots.txt
+- Machine-Readable AI Manifest: https://fieseros.com/llms.txt

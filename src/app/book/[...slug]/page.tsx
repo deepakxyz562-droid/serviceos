@@ -56,9 +56,9 @@ export default function PublicBookingPage({
   // Timezone State
   const [timezone, setTimezone] = useState<string>(() => {
     try {
-      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
     } catch {
-      return 'Asia/Kolkata';
+      return 'America/New_York';
     }
   });
 
@@ -414,12 +414,12 @@ export default function PublicBookingPage({
                       onChange={(e) => setTimezone(e.target.value)}
                       className="bg-transparent font-medium border-0 underline hover:text-blue-600 text-xs focus:ring-0 cursor-pointer"
                     >
-                      <option value="Asia/Kolkata">India Standard Time (IST)</option>
                       <option value="America/New_York">Eastern Time (US &amp; Canada)</option>
                       <option value="America/Chicago">Central Time (US &amp; Canada)</option>
                       <option value="America/Denver">Mountain Time (US &amp; Canada)</option>
                       <option value="America/Los_Angeles">Pacific Time (US &amp; Canada)</option>
-                      <option value="Europe/London">London (GMT)</option>
+                      <option value="Europe/London">London (GMT / BST)</option>
+                      <option value="Asia/Kolkata">India Standard Time (IST)</option>
                       <option value="UTC">Coordinated Universal Time (UTC)</option>
                     </select>
                   </div>

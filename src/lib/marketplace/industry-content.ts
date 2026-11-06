@@ -57,12 +57,12 @@ export interface CommonService {
 }
 
 interface IndustryContent {
-  /** Returns an ~120-150 word paragraph about hiring this industry in `city`. */
+  /** Returns an ~120-150 word paragraph about hiring this industry in `city` and `country`. */
   aboutParagraph: (city: string, country: string) => string
-  /** 4-6 hiring checklist items specific to this industry. */
-  hiringChecklist: HiringChecklistItem[]
-  /** Returns 3 platform-level FAQs for this industry in `city`. */
-  platformFaqs: (city: string) => PlatformFaq[]
+  /** 4-6 hiring checklist items specific to this industry, optionally country-aware. */
+  hiringChecklist: HiringChecklistItem[] | ((country?: string | null) => HiringChecklistItem[])
+  /** Returns 3 platform-level FAQs for this industry in `city`, optionally country-aware. */
+  platformFaqs: (city: string, country?: string | null) => PlatformFaq[]
 }
 
 /**
@@ -81,150 +81,393 @@ interface SubIndustryMatch {
 // ── Per-industry content ────────────────────────────────────────────────────
 
 const HVAC_CONTENT: IndustryContent = {
-  aboutParagraph: (city, _country) =>
-    `Finding a reliable HVAC technician in ${city} matters more than most homeowners realise — a poorly serviced furnace or undercharged AC unit can quietly add 20–30% to your energy bills. A qualified HVAC contractor handles heating, ventilation, and air conditioning work including annual tune-ups, emergency furnace repair, central AC installation, heat pump replacement, and indoor air quality assessments. When comparing providers, look for EPA Section 608 certification (required for refrigerant handling), proof of liability insurance, and written estimates that itemise labour, parts, and warranty terms. Fieseros lists HVAC businesses serving ${city} and the surrounding area, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`,
-  hiringChecklist: [
-    {
-      title: 'Verify EPA Section 608 certification',
-      description:
-        'Federal law requires anyone handling refrigerants to hold an EPA Section 608 card. Ask to see the technician’s card before they start work — no exceptions.',
-    },
-    {
-      title: 'Confirm liability insurance',
-      description:
-        'Covers property damage if a technician damages your HVAC system, ductwork, or home during service. Ask for the insurance carrier name and policy number.',
-    },
-    {
-      title: 'Get an itemised written estimate',
-      description:
-        'Labour, parts, refrigerant, and disposal fees should be listed separately so you can compare quotes line-by-line. Avoid flat "system replacement" quotes with no breakdown.',
-    },
-    {
-      title: 'Ask about equipment warranties',
-      description:
-        'Most furnaces and AC units come with 10-year parts warranties from the manufacturer; the installer’s labour warranty typically runs 1–2 years. Get both in writing.',
-    },
-    {
-      title: 'Check emergency response time',
-      description:
-        'HVAC failures in peak summer or winter can be dangerous. Confirm the provider’s after-hours policy and typical response window before you actually need it.',
-    },
-  ],
-  platformFaqs: (city) => [
-    {
-      question: 'How do I know an HVAC provider on Fieseros is verified?',
-      answer:
-        'Every Fieseros provider profile shows four verification badges — Identity, Business, Insurance, and Licence. A green “Confirmed” badge means we’ve independently checked that credential; “Pending” means the provider is still submitting documentation. You can click any badge to see exactly what was verified.',
-    },
-    {
-      question: `What should I ask an HVAC technician in ${city} before hiring them?`,
-      answer:
-        'Ask about their EPA Section 608 certification (required for refrigerant work), proof of liability insurance, written estimates, equipment warranties, and emergency availability. The “What to expect when hiring” section above lists the full checklist with explanations.',
-    },
-    {
-      question: 'Is it free to get a quote through Fieseros?',
-      answer:
-        'Yes. Requesting a quote through Fieseros is always free for the customer. The provider receives your request and responds directly — there’s no middleman fee, no commission, and no obligation to proceed with the work.',
-    },
-  ],
+  aboutParagraph: (city, country) => {
+    const c = (country || '').toUpperCase().trim()
+    if (c === 'CA' || c === 'CANADA') {
+      return `Finding a reliable HVAC technician in ${city} matters more than most homeowners realise — in Canadian climates, an efficient, properly serviced furnace or heat pump is essential for safety through harsh winters. A qualified HVAC contractor handles heating, ventilation, and air conditioning including annual furnace tune-ups, heat pump installation, central AC service, boiler maintenance, and indoor air quality assessments. When comparing providers, verify Red Seal 313A certification (Refrigeration and Air Conditioning Mechanic), provincial Ozone Depletion Prevention (ODP / ODS) licensing for refrigerant handling, and appropriate gas fitter certification (such as TSSA in Ontario or Technical Safety BC). Ensure the company carries full liability insurance and provides itemised written estimates. Fieseros lists verified HVAC businesses serving ${city} and the surrounding area, with credential checks visible on each profile so you can hire with total confidence.`
+    }
+    if (c === 'GB' || c === 'UK' || c === 'UNITED KINGDOM') {
+      return `Finding a reliable heating and cooling engineer in ${city} is vital for keeping your home comfortable and energy bills under control. A qualified HVAC engineer handles boiler installations, central heating repairs, heat pumps, air conditioning servicing, and ventilation systems. When hiring in the UK, always verify the technician is on the Gas Safe Register for gas boilers and holds valid F-Gas certification (such as REFCOM) for refrigerant handling. Confirm they carry public liability insurance and provide written quotations breaking down labour, parts, and warranties. Fieseros lists verified HVAC businesses serving ${city}, with verification badges clearly displayed on each profile.`
+    }
+    if (c === 'AU' || c === 'AUSTRALIA') {
+      return `Finding an experienced HVAC technician in ${city} is essential for surviving extreme heatwaves and maintaining year-round indoor climate comfort. A qualified technician handles split system air conditioning, ducted heating and cooling, heat pumps, and ongoing maintenance. When hiring in Australia, ensure the technician holds an ARCtick (Australian Refrigeration Council) refrigerant handling licence and the required state contractor licence. Always verify public liability insurance and insist on itemised written quotes detailing equipment and labour warranties. Fieseros lists verified air conditioning and heating specialists serving ${city}.`
+    }
+    return `Finding a reliable HVAC technician in ${city} matters more than most homeowners realise — a poorly serviced furnace or undercharged AC unit can quietly add 20–30% to your energy bills. A qualified HVAC contractor handles heating, ventilation, and air conditioning work including annual tune-ups, emergency furnace repair, central AC installation, heat pump replacement, and indoor air quality assessments. When comparing providers, look for EPA Section 608 certification (required for refrigerant handling), proof of liability insurance, and written estimates that itemise labour, parts, and warranty terms. Fieseros lists HVAC businesses serving ${city} and the surrounding area, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`
+  },
+  hiringChecklist: (country) => {
+    const c = (country || '').toUpperCase().trim()
+    if (c === 'CA' || c === 'CANADA') {
+      return [
+        {
+          title: 'Verify Red Seal 313A / provincial ODP certification',
+          description:
+            'Provincial environmental regulations require an Ozone Depletion Prevention (ODP / ODS) card for refrigerant handling. For comprehensive HVAC systems, look for Red Seal 313A refrigeration mechanics and certified gas technicians (e.g. TSSA G1/G2).',
+        },
+        {
+          title: 'Confirm liability insurance & WSIB/Workers\' Comp',
+          description:
+            'Covers property damage and workplace safety. Ensure the contractor carries at least $2M commercial general liability and active provincial workers\' compensation coverage.',
+        },
+        {
+          title: 'Get an itemised written estimate',
+          description:
+            'Labour, equipment, permits, and old unit disposal fees should be listed separately so you can compare quotes line-by-line. Avoid single-figure lump sum bids.',
+        },
+        {
+          title: 'Ask about equipment & labour warranties',
+          description:
+            'Most high-efficiency furnaces and heat pumps carry 10-year manufacturer parts warranties; quality installers typically guarantee their labour for 1–2 years in writing.',
+        },
+        {
+          title: 'Check emergency winter response time',
+          description:
+            'Heating failures in sub-zero weather can freeze plumbing lines within hours. Confirm the provider’s 24/7 emergency policy and guaranteed response window.',
+        },
+      ]
+    }
+    if (c === 'GB' || c === 'UK' || c === 'UNITED KINGDOM') {
+      return [
+        {
+          title: 'Check the Gas Safe Register',
+          description:
+            'It is a legal requirement in the UK for anyone working on gas boilers or appliances to be on the Gas Safe Register. Always inspect their physical ID card before work begins.',
+        },
+        {
+          title: 'Verify F-Gas certification (REFCOM)',
+          description:
+            'Engineers handling heat pumps or air conditioning systems must hold valid F-Gas certification to legally work with fluorinated refrigerants.',
+        },
+        {
+          title: 'Confirm public liability insurance',
+          description:
+            'Protects your property against accidental water or fire damage during boiler installation or heating repairs. Ask for their certificate of insurance.',
+        },
+        {
+          title: 'Obtain an itemised written quote',
+          description:
+            'Quotes should clearly break down boiler/heat pump unit costs, radiator balancing, flushing, labour, and VAT so there are no hidden surprises.',
+        },
+        {
+          title: 'Review manufacturer warranties',
+          description:
+            'Accredited installers can often offer extended 7–10 year manufacturer warranties on major boiler and heat pump brands (Worcester Bosch, Vaillant, Viessmann).',
+        },
+      ]
+    }
+    return [
+      {
+        title: 'Verify EPA Section 608 certification',
+        description:
+          'Federal law requires anyone handling refrigerants to hold an EPA Section 608 card. Ask to see the technician’s card before they start work — no exceptions.',
+      },
+      {
+        title: 'Confirm liability insurance',
+        description:
+          'Covers property damage if a technician damages your HVAC system, ductwork, or home during service. Ask for the insurance carrier name and policy number.',
+      },
+      {
+        title: 'Get an itemised written estimate',
+        description:
+          'Labour, parts, refrigerant, and disposal fees should be listed separately so you can compare quotes line-by-line. Avoid flat "system replacement" quotes with no breakdown.',
+      },
+      {
+        title: 'Ask about equipment warranties',
+        description:
+          'Most furnaces and AC units come with 10-year parts warranties from the manufacturer; the installer’s labour warranty typically runs 1–2 years. Get both in writing.',
+      },
+      {
+        title: 'Check emergency response time',
+        description:
+          'HVAC failures in peak summer or winter can be dangerous. Confirm the provider’s after-hours policy and typical response window before you actually need it.',
+      },
+    ]
+  },
+  platformFaqs: (city, country) => {
+    const c = (country || '').toUpperCase().trim()
+    const isCanada = c === 'CA' || c === 'CANADA'
+    const isUK = c === 'GB' || c === 'UK' || c === 'UNITED KINGDOM'
+
+    const credentialText = isCanada
+      ? 'their provincial ODP refrigerant card, Red Seal 313A qualification, gas fitter credentials (e.g. TSSA in Ontario), liability insurance, and emergency heating availability'
+      : isUK
+      ? 'their Gas Safe registration number, F-Gas credentials (REFCOM), public liability insurance, and manufacturer warranty coverage'
+      : 'their EPA Section 608 certification (required for refrigerant work), proof of liability insurance, written estimates, equipment warranties, and emergency availability'
+
+    return [
+      {
+        question: 'How do I know an HVAC provider on Fieseros is verified?',
+        answer:
+          'Every Fieseros provider profile shows four verification badges — Identity, Business, Insurance, and Licence. A green “Confirmed” badge means we’ve independently checked that credential; “Pending” means the provider is still submitting documentation. You can click any badge to see exactly what was verified.',
+      },
+      {
+        question: `What should I ask an HVAC technician in ${city} before hiring them?`,
+        answer: `Ask about ${credentialText}. The “What to expect when hiring” section above lists the full checklist with explanations.`,
+      },
+      {
+        question: 'Is it free to get a quote through Fieseros?',
+        answer:
+          'Yes. Requesting a quote through Fieseros is always free for the customer. The provider receives your request and responds directly — there’s no middleman fee, no commission, and no obligation to proceed with the work.',
+      },
+    ]
+  },
 }
 
 const PLUMBING_CONTENT: IndustryContent = {
-  aboutParagraph: (city, _country) =>
-    `A trustworthy plumber in ${city} is the difference between a five-minute fix and a flooded basement. Professional plumbing contractors handle everything from dripping taps and running toilets to whole-house repipes, water heater installation, sewer line camera inspection, and emergency burst-pipe repair. When hiring, ask whether the plumber is licensed in your state (most US states require a Journeyman or Master Plumber licence), carries liability insurance, and offers a written warranty on parts and labour. Watch for red flags: quotes given over the phone without seeing the job, pressure to pay in cash, or refusal to provide a written estimate. Fieseros lists plumbers serving ${city}, with each provider’s verification status — identity, business, insurance, and licensing — visible on their profile so you can hire with confidence.`,
-  hiringChecklist: [
-    {
-      title: 'Verify state licensure',
-      description:
-        'Most US states require a Journeyman or Master Plumber licence. Ask for the licence number and verify it on your state contractor board’s website before work begins.',
-    },
-    {
-      title: 'Confirm liability insurance',
-      description:
-        'Covers water damage if a repair fails or a pipe bursts during work. Plumbers should carry at least $1M general liability — ask for a certificate of insurance.',
-    },
-    {
-      title: 'Get a written estimate before work starts',
-      description:
-        'Ask whether the quote is flat-rate or time-and-materials, and what triggers a change order. Avoid any plumber who refuses to put the estimate in writing.',
-    },
-    {
-      title: 'Ask about warranty on parts and labour',
-      description:
-        'Quality plumbers typically guarantee their workmanship for 1–2 years. Manufacturer warranties on parts (water heaters, fixtures) vary — get the warranty document before paying.',
-    },
-    {
-      title: 'Confirm emergency availability',
-      description:
-        'Burst pipes don’t wait for business hours. Ask about after-hours rates, weekend coverage, and typical response time before an emergency forces a rushed decision.',
-    },
-  ],
-  platformFaqs: (city) => [
-    {
-      question: 'How do I know a plumber on Fieseros is verified?',
-      answer:
-        'Every Fieseros provider profile shows four verification badges — Identity, Business, Insurance, and Licence. A green “Confirmed” badge means we’ve independently checked that credential; “Pending” means the provider is still submitting documentation.',
-    },
-    {
-      question: `What should I ask a plumber in ${city} before hiring them?`,
-      answer:
-        'Ask for their state licence number, proof of liability insurance, a written estimate (flat-rate or time-and-materials), warranty on parts and labour, and emergency availability. The “What to expect when hiring” section above lists the full checklist.',
-    },
-    {
-      question: 'Is it free to get a quote through Fieseros?',
-      answer:
-        'Yes. Requesting a quote through Fieseros is always free for the customer. The provider receives your request and responds directly — there’s no middleman fee, no commission, and no obligation to proceed with the work.',
-    },
-  ],
+  aboutParagraph: (city, country) => {
+    const c = (country || '').toUpperCase().trim()
+    if (c === 'CA' || c === 'CANADA') {
+      return `A trustworthy plumber in ${city} is the difference between a quick repair and thousands of dollars in water damage. Professional plumbing contractors handle everything from dripping faucets and drain clearing to full-house repiping, water heater and tankless boiler installation, backflow prevention, and sewer camera inspection. When hiring in Canada, verify that the plumber holds a provincial Certificate of Qualification (C of Q) or Red Seal 306A Plumber endorsement, carries liability insurance, and pulls municipal plumbing permits for drain or supply alterations. Beware of contractors who quote over the phone without inspection or request cash payments without a written invoice. Fieseros lists verified plumbers serving ${city}, with credential badges visible on each profile.`
+    }
+    if (c === 'GB' || c === 'UK' || c === 'UNITED KINGDOM') {
+      return `Finding an experienced plumber in ${city} protects your property from severe leaks, drainage blockages, and water damage. Professional plumbers handle everything from tap repairs and unblocking drains to bathroom installations, cylinder replacements, and emergency burst-pipe callouts. When hiring in the UK, look for plumbers registered with CIPHE (Chartered Institute of Plumbing and Heating Engineering) or holding NVQ Level 2/3 plumbing qualifications. If the work involves a gas boiler or unvented hot water cylinder, ensure the technician is on the Gas Safe Register or holds G3 unvented certification. Fieseros lists verified plumbing professionals serving ${city}.`
+    }
+    return `A trustworthy plumber in ${city} is the difference between a five-minute fix and a flooded basement. Professional plumbing contractors handle everything from dripping taps and running toilets to whole-house repipes, water heater installation, sewer line camera inspection, and emergency burst-pipe repair. When hiring, ask whether the plumber is licensed in your state (most US states require a Journeyman or Master Plumber licence), carries liability insurance, and offers a written warranty on parts and labour. Watch for red flags: quotes given over the phone without seeing the job, pressure to pay in cash, or refusal to provide a written estimate. Fieseros lists plumbers serving ${city}, with each provider’s verification status — identity, business, insurance, and licensing — visible on their profile so you can hire with confidence.`
+  },
+  hiringChecklist: (country) => {
+    const c = (country || '').toUpperCase().trim()
+    if (c === 'CA' || c === 'CANADA') {
+      return [
+        {
+          title: 'Verify provincial Certificate of Qualification / Red Seal 306A',
+          description:
+            'Plumbing is a compulsory trade in most Canadian provinces. Verify that the tradesperson holds a provincial Certificate of Qualification (C of Q) or interprovincial Red Seal 306A licence.',
+        },
+        {
+          title: 'Confirm $2M+ commercial liability insurance',
+          description:
+            'Water damage spreads quickly between floors. Plumbers should carry at least $2M commercial general liability insurance to protect against accidental pipe bursts or joint failures.',
+        },
+        {
+          title: 'Ensure municipal plumbing permits are pulled',
+          description:
+            'Major drainage repairs, backwater valve installations, and repiping require municipal permits and municipal inspection. Avoid contractors who advise skipping permits.',
+        },
+        {
+          title: 'Get an itemised written estimate',
+          description:
+            'Ask whether the quote is flat-rate or hourly, with fixtures, valves, pipe materials, and disposal listed transparently. Always get warranty terms in writing.',
+        },
+        {
+          title: 'Confirm 24/7 emergency response and rates',
+          description:
+            'Burst pipes and sewer backups require immediate dispatch. Clarify after-hours callout fees and typical arrival windows before an emergency strikes.',
+        },
+      ]
+    }
+    if (c === 'GB' || c === 'UK' || c === 'UNITED KINGDOM') {
+      return [
+        {
+          title: 'Verify plumbing qualifications (NVQ Level 2/3 or CIPHE)',
+          description:
+            'Check that the plumber has completed formal apprenticeship training (NVQ Level 2 or 3 in Plumbing and Heating) or holds membership with the Chartered Institute of Plumbing and Heating Engineering.',
+        },
+        {
+          title: 'Check Gas Safe registration if work involves heating or boilers',
+          description:
+            'If the job touches gas piping, a boiler, or a gas water heater, the technician must legally be registered on the Gas Safe Register. Always inspect their ID card.',
+        },
+        {
+          title: 'Confirm public liability insurance',
+          description:
+            'Plumbers should hold at least £2M public liability insurance to protect your property against unexpected leaks or flooding during work.',
+        },
+        {
+          title: 'Get a clear, written quotation',
+          description:
+            'Make sure you receive an itemised quote explaining whether billing is fixed-price or hourly, detailing materials, and confirming if VAT is included.',
+        },
+        {
+          title: 'Ask about guarantees on workmanship',
+          description:
+            'Reputable plumbers typically guarantee pipework and joint repairs for at least 12 months. Ensure this is noted on your invoice.',
+        },
+      ]
+    }
+    return [
+      {
+        title: 'Verify state licensure',
+        description:
+          'Most US states require a Journeyman or Master Plumber licence. Ask for the licence number and verify it on your state contractor board’s website before work begins.',
+      },
+      {
+        title: 'Confirm liability insurance',
+        description:
+          'Covers water damage if a repair fails or a pipe bursts during work. Plumbers should carry at least $1M general liability — ask for a certificate of insurance.',
+      },
+      {
+        title: 'Get a written estimate before work starts',
+        description:
+          'Ask whether the quote is flat-rate or time-and-materials, and what triggers a change order. Avoid any plumber who refuses to put the estimate in writing.',
+      },
+      {
+        title: 'Ask about warranty on parts and labour',
+        description:
+          'Quality plumbers typically guarantee their workmanship for 1–2 years. Manufacturer warranties on parts (water heaters, fixtures) vary — get the warranty document before paying.',
+      },
+      {
+        title: 'Confirm emergency availability',
+        description:
+          'Burst pipes don’t wait for business hours. Ask about after-hours rates, weekend coverage, and typical response time before an emergency forces a rushed decision.',
+      },
+    ]
+  },
+  platformFaqs: (city, country) => {
+    const c = (country || '').toUpperCase().trim()
+    const isCanada = c === 'CA' || c === 'CANADA'
+    const isUK = c === 'GB' || c === 'UK' || c === 'UNITED KINGDOM'
+
+    const credentialText = isCanada
+      ? 'their provincial Certificate of Qualification (C of Q) or Red Seal 306A number, proof of liability insurance, written estimates, and municipal permit protocols'
+      : isUK
+      ? 'their NVQ qualifications or CIPHE membership, Gas Safe card (if heating/boiler related), public liability insurance, and written guarantees'
+      : 'their state licence number, proof of liability insurance, a written estimate (flat-rate or time-and-materials), warranty on parts and labour, and emergency availability'
+
+    return [
+      {
+        question: 'How do I know a plumber on Fieseros is verified?',
+        answer:
+          'Every Fieseros provider profile shows four verification badges — Identity, Business, Insurance, and Licence. A green “Confirmed” badge means we’ve independently checked that credential; “Pending” means the provider is still submitting documentation.',
+      },
+      {
+        question: `What should I ask a plumber in ${city} before hiring them?`,
+        answer: `Ask about ${credentialText}. The “What to expect when hiring” section above lists the full checklist.`,
+      },
+      {
+        question: 'Is it free to get a quote through Fieseros?',
+        answer:
+          'Yes. Requesting a quote through Fieseros is always free for the customer. The provider receives your request and responds directly — there’s no middleman fee, no commission, and no obligation to proceed with the work.',
+      },
+    ]
+  },
 }
 
 const ELECTRICAL_CONTENT: IndustryContent = {
-  aboutParagraph: (city, _country) =>
-    `Electrical work is one area where DIY is genuinely dangerous — faulty wiring causes an estimated 51,000 home fires each year in the US alone. A licensed electrician in ${city} handles panel upgrades, outlet and switch installation, whole-house rewiring, EV charger installation, lighting design, and emergency fault diagnosis. When hiring, verify the electrician holds a state-issued Master or Journeyman licence (requirements vary by state but all 50 states licence electricians), carries liability insurance, and pulls permits for work that requires inspection. Beware of contractors who want to skip the permit process — it’s a red flag for both code compliance and insurance coverage. Fieseros lists electricians serving ${city}, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`,
-  hiringChecklist: [
-    {
-      title: 'Verify state electrical licence',
-      description:
-        'All 50 US states licence electricians (Master or Journeyman). Ask for the licence number and verify it on your state’s electrical board website. Unlicensed electrical work is illegal in most jurisdictions and voids homeowners insurance.',
-    },
-    {
-      title: 'Confirm liability insurance',
-      description:
-        'Electrical work carries fire risk. The electrician should carry at least $1M general liability and ideally workers’ comp if they have employees. Ask for a certificate of insurance.',
-    },
-    {
-      title: 'Insist on permits for major work',
-      description:
-        'Panel upgrades, new circuits, and rewiring require permits and inspection in most jurisdictions. A contractor who wants to "skip the permit" is a red flag — the work won’t be insurable or saleable later.',
-    },
-    {
-      title: 'Get a written estimate with parts + labour',
-      description:
-        'Electrical estimates should itemise fixtures, wire, panels, and labour separately. Avoid contractors who give a single lump-sum number with no breakdown.',
-    },
-    {
-      title: 'Ask about warranty and follow-up',
-      description:
-        'Quality electricians guarantee workmanship for 1–5 years. Manufacturer warranties on panels, breakers, and fixtures are separate — make sure you receive both warranty documents.',
-    },
-  ],
-  platformFaqs: (city) => [
-    {
-      question: 'How do I know an electrician on Fieseros is verified?',
-      answer:
-        'Every Fieseros provider profile shows four verification badges — Identity, Business, Insurance, and Licence. A green “Confirmed” badge means we’ve independently checked that credential; “Pending” means the provider is still submitting documentation.',
-    },
-    {
-      question: `What should I ask an electrician in ${city} before hiring them?`,
-      answer:
-        'Ask for their state licence number (Master or Journeyman), proof of liability insurance, whether they pull permits, a written estimate itemising parts and labour, and warranty coverage. The “What to expect when hiring” section above lists the full checklist.',
-    },
-    {
-      question: 'Is it free to get a quote through Fieseros?',
-      answer:
-        'Yes. Requesting a quote through Fieseros is always free for the customer. The provider receives your request and responds directly — there’s no middleman fee, no commission, and no obligation to proceed with the work.',
-    },
-  ],
+  aboutParagraph: (city, country) => {
+    const c = (country || '').toUpperCase().trim()
+    if (c === 'CA' || c === 'CANADA') {
+      return `Electrical work is one area where DIY is genuinely dangerous — faulty wiring and overloaded circuits represent a leading cause of residential electrical fires across Canada. A licensed electrical contractor in ${city} handles panel upgrades, 200A service conversions, EV charger installation, whole-home rewiring, lighting design, and emergency fault diagnosis in compliance with the Canadian Electrical Code (CEC). When hiring, verify the contractor is registered with your provincial safety authority (such as the Electrical Safety Authority in Ontario or Technical Safety BC), employs certified Red Seal 309A electricians, carries commercial liability insurance, and files required permits for inspection. Beware of any contractor who suggests skipping permits — uninspected work voids insurance coverage and endangers your home. Fieseros lists verified electrical contractors serving ${city}, with credential badges visible on every profile.`
+    }
+    if (c === 'GB' || c === 'UK' || c === 'UNITED KINGDOM') {
+      return `Electrical work requires rigorous technical skill and strict adherence to BS 7671 (IET Wiring Regulations). A registered electrician in ${city} handles consumer unit (fuse box) upgrades, EV charge point installation, full or partial rewiring, smart home automation, and Electrical Installation Condition Reports (EICRs). When hiring in the UK, choose an electrician registered with an approved Part P competent person scheme (such as NICEIC, NAPIT, or ELECSA) who can self-certify work to building regulations and issue formal safety certificates. Always confirm public liability insurance before work begins. Fieseros lists verified electrical professionals serving ${city}, with verification badges clearly displayed on each profile.`
+    }
+    return `Electrical work is one area where DIY is genuinely dangerous — faulty wiring causes an estimated 51,000 home fires each year in the US alone. A licensed electrician in ${city} handles panel upgrades, outlet and switch installation, whole-house rewiring, EV charger installation, lighting design, and emergency fault diagnosis. When hiring, verify the electrician holds a state-issued Master or Journeyman licence (requirements vary by state but all 50 states licence electricians), carries liability insurance, and pulls permits for work that requires inspection. Beware of contractors who want to skip the permit process — it’s a red flag for both code compliance and insurance coverage. Fieseros lists electricians serving ${city}, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`
+  },
+  hiringChecklist: (country) => {
+    const c = (country || '').toUpperCase().trim()
+    if (c === 'CA' || c === 'CANADA') {
+      return [
+        {
+          title: 'Verify provincial electrical contractor licence',
+          description:
+            'In Canada, electrical contractors must hold a provincial licence (such as an ECRA/ESA licence in Ontario or Technical Safety BC contractor licence). Certified electricians carry a Red Seal 309A Construction & Maintenance Electrician endorsement.',
+        },
+        {
+          title: 'Insist on safety authority permits and inspection',
+          description:
+            'Panel upgrades, new subpanels, EV chargers, and rewiring legally require notification and inspection by your provincial safety authority. Never hire a contractor who proposes bypassing inspection.',
+        },
+        {
+          title: 'Confirm $2M+ liability insurance and workers\' comp',
+          description:
+            'Electrical work involves inherent fire and surge risks. Confirm the contractor carries active commercial general liability and provincial workers\' compensation (WSIB/WorkSafeBC).',
+        },
+        {
+          title: 'Get an itemised estimate with parts and labour',
+          description:
+            'Estimates should detail panels, breakers, conduit, copper wiring, and labour separately. Avoid vague lump-sum quotes that leave scope ambiguous.',
+        },
+        {
+          title: 'Request a formal Certificate of Acceptance',
+          description:
+            'Once major electrical work is inspected and passed, your safety authority issues a Certificate of Acceptance/Inspection. Keep this document for your home insurer and resale records.',
+        },
+      ]
+    }
+    if (c === 'GB' || c === 'UK' || c === 'UNITED KINGDOM') {
+      return [
+        {
+          title: 'Verify Part P scheme registration (NICEIC or NAPIT)',
+          description:
+            'Registration under an authorised competent person scheme ensures the electrician is assessed annually, complies with BS 7671 wiring regulations, and can self-certify work to local building control.',
+        },
+        {
+          title: 'Request an Electrical Installation Certificate (EIC)',
+          description:
+            'For new circuits, fuse box changes, or rewiring, you must receive an EIC and a Building Regulations Compliance Certificate within 30 days of completion.',
+        },
+        {
+          title: 'Confirm public liability insurance',
+          description:
+            'Make sure the electrician carries at least £2M public liability insurance to cover property damage or accidental electrical faults.',
+        },
+        {
+          title: 'Get an itemised written quotation',
+          description:
+            'Ensure consumer unit components, surge protection devices (SPDs), fixtures, and labour are transparently priced with VAT clearly stated.',
+        },
+        {
+          title: 'Ask about workmanship guarantees',
+          description:
+            'Scheme-registered electricians often provide insurance-backed warranty schemes (e.g. NICEIC Platinum Promise) covering work for up to 6 years.',
+        },
+      ]
+    }
+    return [
+      {
+        title: 'Verify state electrical licence',
+        description:
+          'All 50 US states licence electricians (Master or Journeyman). Ask for the licence number and verify it on your state’s electrical board website. Unlicensed electrical work is illegal in most jurisdictions and voids homeowners insurance.',
+      },
+      {
+        title: 'Confirm liability insurance',
+        description:
+          'Electrical work carries fire risk. The electrician should carry at least $1M general liability and ideally workers’ comp if they have employees. Ask for a certificate of insurance.',
+      },
+      {
+        title: 'Insist on permits for major work',
+        description:
+          'Panel upgrades, new circuits, and rewiring require permits and inspection in most jurisdictions. A contractor who wants to "skip the permit" is a red flag — the work won’t be insurable or saleable later.',
+      },
+      {
+        title: 'Get a written estimate with parts + labour',
+        description:
+          'Electrical estimates should itemise fixtures, wire, panels, and labour separately. Avoid contractors who give a single lump-sum number with no breakdown.',
+      },
+      {
+        title: 'Ask about warranty and follow-up',
+        description:
+          'Quality electricians guarantee workmanship for 1–5 years. Manufacturer warranties on panels, breakers, and fixtures are separate — make sure you receive both warranty documents.',
+      },
+    ]
+  },
+  platformFaqs: (city, country) => {
+    const c = (country || '').toUpperCase().trim()
+    const isCanada = c === 'CA' || c === 'CANADA'
+    const isUK = c === 'GB' || c === 'UK' || c === 'UNITED KINGDOM'
+
+    const credentialText = isCanada
+      ? 'their provincial electrical contractor licence (e.g. ECRA/ESA in Ontario or Technical Safety BC licence), Red Seal 309A credentials, proof of insurance, and confirmation that safety authority permits will be filed'
+      : isUK
+      ? 'their Part P scheme registration (NICEIC, NAPIT), public liability insurance, whether an Electrical Installation Certificate will be provided, and an itemised quotation'
+      : 'their state licence number (Master or Journeyman), proof of liability insurance, whether they pull permits, a written estimate itemising parts and labour, and warranty coverage'
+
+    return [
+      {
+        question: 'How do I know an electrician on Fieseros is verified?',
+        answer:
+          'Every Fieseros provider profile shows four verification badges — Identity, Business, Insurance, and Licence. A green “Confirmed” badge means we’ve independently checked that credential; “Pending” means the provider is still submitting documentation.',
+      },
+      {
+        question: `What should I ask an electrician in ${city} before hiring them?`,
+        answer: `Ask about ${credentialText}. The “What to expect when hiring” section above lists the full checklist.`,
+      },
+      {
+        question: 'Is it free to get a quote through Fieseros?',
+        answer:
+          'Yes. Requesting a quote through Fieseros is always free for the customer. The provider receives your request and responds directly — there’s no middleman fee, no commission, and no obligation to proceed with the work.',
+      },
+    ]
+  },
 }
 
 const CLEANING_CONTENT: IndustryContent = {
@@ -375,52 +618,132 @@ const ROOFING_CONTENT: IndustryContent = {
 }
 
 const PEST_CONTROL_CONTENT: IndustryContent = {
-  aboutParagraph: (city, _country) =>
-    `Pest control in ${city} isn’t just about comfort — untreated infestations can damage your property’s structure (termites cause an estimated $5bn in US property damage annually) and pose real health risks (rodents, cockroaches, and bed bugs all carry pathogens). Professional pest control companies handle termite treatment, rodent control, bed bug heat treatment, wasp and bee removal, mosquito abatement, and preventive quarterly treatments. When hiring, verify the technician holds a state pesticide applicator licence (required in all 50 states for commercial pesticide application), confirm the company carries liability insurance, and ask which products will be used — reputable operators provide EPA product labels and material safety data sheets on request. Fieseros lists pest control businesses serving ${city}, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`,
-  hiringChecklist: [
-    {
-      title: 'Verify state pesticide applicator licence',
-      description:
-        'All 50 US states require a commercial pesticide applicator licence. Ask for the licence number and verify it on your state’s Department of Agriculture or pesticide regulation website.',
-    },
-    {
-      title: 'Ask which products will be used',
-      description:
-        'Reputable operators provide EPA product labels and Safety Data Sheets (SDS) on request. If anyone in your household has pets, children, or chemical sensitivities, confirm the products are safe for re-entry after the recommended drying time.',
-    },
-    {
-      title: 'Confirm liability insurance',
-      description:
-        'Covers property damage or contamination if a treatment goes wrong (e.g. overspray damaging plants or finishes). Pest control companies should carry at least $1M general liability.',
-    },
-    {
-      title: 'Get a written treatment plan',
-      description:
-        'The plan should specify the target pest, treatment method, products used, follow-up schedule, and what you need to do (vacate, cover food, etc.). Avoid companies that quote a price without inspecting the property first.',
-    },
-    {
-      title: 'Beware of "one and done" guarantees',
-      description:
-        'Most infestations (termites, bed bugs, rodents) require multi-visit protocols. A single-treatment "lifetime guarantee" is a sales red flag — legitimate pest control is iterative.',
-    },
-  ],
-  platformFaqs: (city) => [
-    {
-      question: 'How do I know a pest control company on Fieseros is verified?',
-      answer:
-        'Every Fieseros provider profile shows four verification badges — Identity, Business, Insurance, and Licence. A green “Confirmed” badge means we’ve independently checked that credential; “Pending” means the provider is still submitting documentation.',
-    },
-    {
-      question: `What should I ask a pest control company in ${city} before hiring them?`,
-      answer:
-        'Ask for their state pesticide applicator licence number, which products will be used (request EPA labels and SDS sheets), proof of liability insurance, a written treatment plan, and the follow-up schedule. The “What to expect when hiring” section above lists the full checklist.',
-    },
-    {
-      question: 'Is it free to get a quote through Fieseros?',
-      answer:
-        'Yes. Requesting a quote through Fieseros is always free for the customer. The provider receives your request and responds directly — there’s no middleman fee, no commission, and no obligation to proceed with the treatment.',
-    },
-  ],
+  aboutParagraph: (city, country) => {
+    const c = (country || '').toUpperCase().trim()
+    if (c === 'CA' || c === 'CANADA') {
+      return `Pest control in ${city} isn’t just about comfort — untreated infestations can cause extensive structural damage and pose serious health risks to occupants. Professional pest control operators handle carpenter ants, rodent exclusion, bed bug heat treatment, wasp removal, cockroach eradication, and preventative seasonal treatments. When hiring in Canada, verify that the exterminator holds a valid provincial pesticide applicator licence and that the company is registered. Ensure all pesticide treatments use products approved by Health Canada's Pest Management Regulatory Agency (PMRA) bearing registered Pest Control Product (PCP) numbers. Reputable exterminators provide Safety Data Sheets (SDS) and clear re-entry guidelines for pets and children. Fieseros lists verified pest control businesses serving ${city}, with credential badges visible on every profile.`
+    }
+    if (c === 'GB' || c === 'UK' || c === 'UNITED KINGDOM') {
+      return `Dealing with pests in ${city} requires prompt, professional intervention to prevent property damage and public health hazards. Professional pest controllers manage rodent proofing, wasp nest eradication, bed bug treatments, bird deterrence, and insect management in compliance with UK pest management legislation. When hiring in the UK, look for technicians certified by the British Pest Control Association (BPCA) or the National Pest Technicians Association (NPTA) who hold Level 2 awards in pest management. Ensure the company holds public liability insurance and provides thorough inspection reports with transparent treatment guarantees. Fieseros lists verified pest control providers serving ${city}.`
+    }
+    return `Pest control in ${city} isn’t just about comfort — untreated infestations can damage your property’s structure (termites cause an estimated $5bn in US property damage annually) and pose real health risks (rodents, cockroaches, and bed bugs all carry pathogens). Professional pest control companies handle termite treatment, rodent control, bed bug heat treatment, wasp and bee removal, mosquito abatement, and preventive quarterly treatments. When hiring, verify the technician holds a state pesticide applicator licence (required in all 50 states for commercial pesticide application), confirm the company carries liability insurance, and ask which products will be used — reputable operators provide EPA product labels and material safety data sheets on request. Fieseros lists pest control businesses serving ${city}, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`
+  },
+  hiringChecklist: (country) => {
+    const c = (country || '').toUpperCase().trim()
+    if (c === 'CA' || c === 'CANADA') {
+      return [
+        {
+          title: 'Verify provincial structural pesticide applicator licence',
+          description:
+            'In Canada, commercial pesticide application requires a provincial applicator certificate and business exterminator permit. Ask for their licence number and confirm it with your provincial environment ministry.',
+        },
+        {
+          title: 'Ensure Health Canada PMRA-registered products (PCP number)',
+          description:
+            'All pesticides used must be registered under Health Canada’s Pest Management Regulatory Agency with an active PCP number. Ask to see the product label and Safety Data Sheet (SDS).',
+        },
+        {
+          title: 'Confirm liability insurance & chemical contamination coverage',
+          description:
+            'Exterminators should carry at least $1M general liability insurance with specific environmental impairment or pollution endorsements.',
+        },
+        {
+          title: 'Get a comprehensive written treatment protocol',
+          description:
+            'The plan must specify targeted pests, application methods, safety precautions (drying and ventilation time before re-entry), and schedule of follow-up visits.',
+        },
+        {
+          title: 'Avoid unrealistic "one-and-done" promises',
+          description:
+            'Persistent infestations (bed bugs, rodents, carpenter ants) require multi-stage treatments and follow-up monitoring. Quality exterminators offer structured re-treatment guarantees.',
+        },
+      ]
+    }
+    if (c === 'GB' || c === 'UK' || c === 'UNITED KINGDOM') {
+      return [
+        {
+          title: 'Verify BPCA or NPTA membership',
+          description:
+            'Members of the British Pest Control Association or National Pest Technicians Association are vetted, insured, and adhere to industry codes of best practice and CRRU stewardship guidelines.',
+        },
+        {
+          title: 'Confirm RSPH / BPCA Level 2 qualification',
+          description:
+            'Technicians should hold a recognized RSPH Level 2 Award in Pest Management (or equivalent) demonstrating safe handling of rodenticides and insecticides.',
+        },
+        {
+          title: 'Check public liability insurance',
+          description:
+            'Ensure the company holds comprehensive public liability insurance (minimum £2M–£5M) covering accidental damage or contamination.',
+        },
+        {
+          title: 'Obtain an inspection report and treatment plan',
+          description:
+            'A professional exterminator surveys entry points, moisture sources, and harborage areas before quoting, providing a clear written baiting or proofing plan.',
+        },
+        {
+          title: 'Verify safe re-entry times for pets and family',
+          description:
+            'Clarify exclusion times and safe cleaning procedures following chemical or heat treatments, especially if young children or pets reside on the premises.',
+        },
+      ]
+    }
+    return [
+      {
+        title: 'Verify state pesticide applicator licence',
+        description:
+          'All 50 US states require a commercial pesticide applicator licence. Ask for the licence number and verify it on your state’s Department of Agriculture or pesticide regulation website.',
+      },
+      {
+        title: 'Ask which products will be used',
+        description:
+          'Reputable operators provide EPA product labels and Safety Data Sheets (SDS) on request. If anyone in your household has pets, children, or chemical sensitivities, confirm the products are safe for re-entry after the recommended drying time.',
+      },
+      {
+        title: 'Confirm liability insurance',
+        description:
+          'Covers property damage or contamination if a treatment goes wrong (e.g. overspray damaging plants or finishes). Pest control companies should carry at least $1M general liability.',
+      },
+      {
+        title: 'Get a written treatment plan',
+        description:
+          'The plan should specify the target pest, treatment method, products used, follow-up schedule, and what you need to do (vacate, cover food, etc.). Avoid companies that quote a price without inspecting the property first.',
+      },
+      {
+        title: 'Beware of "one and done" guarantees',
+        description:
+          'Most infestations (termites, bed bugs, rodents) require multi-visit protocols. A single-treatment "lifetime guarantee" is a sales red flag — legitimate pest control is iterative.',
+      },
+    ]
+  },
+  platformFaqs: (city, country) => {
+    const c = (country || '').toUpperCase().trim()
+    const isCanada = c === 'CA' || c === 'CANADA'
+    const isUK = c === 'GB' || c === 'UK' || c === 'UNITED KINGDOM'
+
+    const credentialText = isCanada
+      ? 'their provincial pesticide applicator licence, confirmation of Health Canada PMRA-approved products with PCP numbers, liability insurance, and written follow-up protocols'
+      : isUK
+      ? 'their BPCA/NPTA membership, RSPH Level 2 qualifications, public liability insurance, and written baiting/proofing plan'
+      : 'their state pesticide applicator licence number, which products will be used (request EPA labels and SDS sheets), proof of liability insurance, a written treatment plan, and the follow-up schedule'
+
+    return [
+      {
+        question: 'How do I know a pest control company on Fieseros is verified?',
+        answer:
+          'Every Fieseros provider profile shows four verification badges — Identity, Business, Insurance, and Licence. A green “Confirmed” badge means we’ve independently checked that credential; “Pending” means the provider is still submitting documentation.',
+      },
+      {
+        question: `What should I ask a pest control company in ${city} before hiring them?`,
+        answer: `Ask about ${credentialText}. The “What to expect when hiring” section above lists the full checklist.`,
+      },
+      {
+        question: 'Is it free to get a quote through Fieseros?',
+        answer:
+          'Yes. Requesting a quote through Fieseros is always free for the customer. The provider receives your request and responds directly — there’s no middleman fee, no commission, and no obligation to proceed with the treatment.',
+      },
+    ]
+  },
 }
 
 const PAINTING_CONTENT: IndustryContent = {
@@ -1446,13 +1769,17 @@ export function getIndustryHiringChecklist(
   industry: string | null,
   businessName?: string | null,
   tagline?: string | null,
+  country?: string | null,
 ): HiringChecklistItem[] {
   const { content } = resolveIndustryContentWithSubIndustry(industry, businessName ?? null, tagline ?? null)
+  if (typeof content.hiringChecklist === 'function') {
+    return content.hiringChecklist(country)
+  }
   return content.hiringChecklist
 }
 
 /**
- * Returns 3 platform-level FAQs for this industry in `city`.
+ * Returns 3 platform-level FAQs for this industry in `city` (country-aware).
  * Sub-industry aware (window cleaning, carpet cleaning, etc.).
  *
  * The returned FAQs are also merged into the FAQ JSON-LD schema so
@@ -1464,10 +1791,11 @@ export function getIndustryPlatformFaqs(
   city: string | null,
   businessName?: string | null,
   tagline?: string | null,
+  country?: string | null,
 ): PlatformFaq[] {
   const cityName = city?.trim() || 'your area'
   const { content } = resolveIndustryContentWithSubIndustry(industry, businessName ?? null, tagline ?? null)
-  return content.platformFaqs(cityName)
+  return content.platformFaqs(cityName, country)
 }
 
 /**

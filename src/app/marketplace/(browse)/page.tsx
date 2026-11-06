@@ -589,14 +589,17 @@ export default async function MarketplaceBrowsePage({
                   <p className="text-xs sm:text-sm text-muted-foreground">
                     Describe your job in 60s. Verified local pros send 3 tiered proposals with upfront pricing, arrival windows, and escrow protection.
                   </p>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-xs text-muted-foreground font-medium">
-                    <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1 text-xs text-muted-foreground font-medium">
+                    <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
                       <ShieldCheck className="size-3.5" /> 100% Verified Pros
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="size-3.5 text-teal-600" /> Quotes in ~10 mins
+                    <span className="text-slate-300 dark:text-slate-700 hidden sm:inline" aria-hidden="true">&bull;</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="size-3.5 text-teal-600" />
+                      <span>Quotes in ~10 mins</span>
                     </span>
-                    <span className="text-xs font-bold text-amber-600">
+                    <span className="text-slate-300 dark:text-slate-700 hidden sm:inline" aria-hidden="true">&bull;</span>
+                    <span className="inline-flex items-center text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                       $0 Lead Fee for Pros
                     </span>
                   </div>

@@ -415,6 +415,7 @@ export default async function PublicBusinessHubPage({
     business.city,
     business.name,
     business.tagline,
+    business.country,
   )
   const allFaqsForSchema: FaqItem[] = business.claimed
     ? [

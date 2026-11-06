@@ -1063,12 +1063,12 @@ export default function CreatorPublicProfilePage({
                     onChange={(e) => setSelectedSlot(e.target.value)}
                     className="w-full h-9 rounded-xl border bg-background px-3 text-xs font-medium font-mono"
                   >
-                    <option value="10:00">10:00 AM (IST)</option>
-                    <option value="11:30">11:30 AM (IST)</option>
-                    <option value="14:00">02:00 PM (IST)</option>
-                    <option value="15:30">03:30 PM (IST)</option>
-                    <option value="17:00">05:00 PM (IST)</option>
-                    <option value="18:30">06:30 PM (IST)</option>
+                    <option value="10:00">10:00 AM</option>
+                    <option value="11:30">11:30 AM</option>
+                    <option value="14:00">02:00 PM</option>
+                    <option value="15:30">03:30 PM</option>
+                    <option value="17:00">05:00 PM</option>
+                    <option value="18:30">06:30 PM</option>
                   </select>
                 </div>
               </div>
