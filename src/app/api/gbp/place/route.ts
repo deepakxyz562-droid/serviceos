@@ -186,8 +186,23 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Connected Google Account: Fetch genuine place details & Google API telemetry
-    const placeDetails = await fetchGoogleBusinessPlaceDetails(googleAccount);
+    // Connected Google Account: Fetch genuine place details & Google API telemetry in parallel
+    const [placeDetailsResult, perfResult] = await Promise.allSettled([
+      fetchGoogleBusinessPlaceDetails(googleAccount),
+      fetchGoogleBusinessPerformanceMetrics(googleAccount),
+    ]);
+
+    const placeDetails = placeDetailsResult.status === 'fulfilled'
+      ? placeDetailsResult.value
+      : {
+          title: fallbackName,
+          category: fallbackCategory,
+          address: fallbackAddress,
+          phone: fallbackPhone,
+          website: fallbackWebsite,
+          placeId: (tenant as any)?.googlePlaceId || null,
+          mapsUri: undefined,
+        };
 
     let searchImpressions = 0;
     let mapsImpressions = 0;
@@ -195,15 +210,13 @@ export async function GET(request: NextRequest) {
     let directionRequests = 0;
     let websiteClicks = 0;
 
-    try {
-      const perf = await fetchGoogleBusinessPerformanceMetrics(googleAccount);
+    if (perfResult.status === 'fulfilled') {
+      const perf = perfResult.value;
       searchImpressions = perf.searchImpressions;
       mapsImpressions = perf.mapsImpressions;
       callClicks = perf.callClicks;
       directionRequests = perf.directionRequests;
       websiteClicks = perf.websiteClicks;
-    } catch {
-      // Telemetry might be pending Google Cloud form approval
     }
 
     const meta = (googleAccount.metadata || {}) as Record<string, any>;

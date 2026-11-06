@@ -148,6 +148,7 @@ function GradientOutlineReplyButton({
 export default function ReviewRepliesScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<ReviewFilter>('needs_reply');
+  const [displayLimit, setDisplayLimit] = useState(15);
   const [settingsOpen,setSettingsOpen] = useState(false);
   const pendingCount = useResource<{total:number}>(pendingCountPath,0,false);
   const [pendingPage,setPendingPage] = useState(1);
@@ -331,6 +332,13 @@ export default function ReviewRepliesScreen() {
     if (filter === 'replied') return replied;
     return all;
   }, [pendingFeed.data,isPending,all, filter, fiveStars, fourStars, threeStars, critical, replied]);
+
+  const visibleReviews = useMemo(() => shown.slice(0, displayLimit), [shown, displayLimit]);
+
+  function handleSelectFilter(newFilter: ReviewFilter) {
+    setFilter(newFilter);
+    setDisplayLimit(15);
+  }
 
   async function handleTriggerAutoReply() {
     if (autoReplyBusy) return;
@@ -605,10 +613,10 @@ export default function ReviewRepliesScreen() {
             contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 }}
             style={{ flex: 1 }}
           >
-            <Pressable accessibilityRole="button" accessibilityState={{selected:filter==='needs_reply'}} onPress={()=>setFilter('needs_reply')} style={{paddingHorizontal:14,paddingVertical:8,borderRadius:20,backgroundColor:filter==='needs_reply'?'#065f46':'#f1f5f9'}}><Text style={{fontWeight:'700',color:filter==='needs_reply'?'white':'#334155'}}>Needs reply{pendingCount.data ? ' ('+pendingCount.data.total+')' : ''}</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityState={{selected:filter==='needs_reply'}} onPress={()=>handleSelectFilter('needs_reply')} style={{paddingHorizontal:14,paddingVertical:8,borderRadius:20,backgroundColor:filter==='needs_reply'?'#065f46':'#f1f5f9'}}><Text style={{fontWeight:'700',color:filter==='needs_reply'?'white':'#334155'}}>Needs reply{pendingCount.data ? ' ('+pendingCount.data.total+')' : ''}</Text></Pressable>
             {/* All */}
             <Pressable
-              onPress={() => setFilter('all')}
+              onPress={() => handleSelectFilter('all')}
               style={{
                 backgroundColor: filter === 'all' ? '#0F172A' : '#F1F5F9',
                 paddingHorizontal: 14,
@@ -629,7 +637,7 @@ export default function ReviewRepliesScreen() {
 
             {/* 5 Stars */}
             <Pressable
-              onPress={() => setFilter('5star')}
+              onPress={() => handleSelectFilter('5star')}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -653,7 +661,7 @@ export default function ReviewRepliesScreen() {
 
             {/* 4 Stars */}
             <Pressable
-              onPress={() => setFilter('4star')}
+              onPress={() => handleSelectFilter('4star')}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -677,7 +685,7 @@ export default function ReviewRepliesScreen() {
 
             {/* 3 Stars */}
             <Pressable
-              onPress={() => setFilter('3star')}
+              onPress={() => handleSelectFilter('3star')}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -702,7 +710,7 @@ export default function ReviewRepliesScreen() {
             {/* Critical 1-2 Stars */}
             {critical.length > 0 && (
               <Pressable
-                onPress={() => setFilter('critical')}
+                onPress={() => handleSelectFilter('critical')}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -729,7 +737,7 @@ export default function ReviewRepliesScreen() {
 
             {/* Replied */}
             <Pressable
-              onPress={() => setFilter('replied')}
+              onPress={() => handleSelectFilter('replied')}
               style={{
                 backgroundColor: filter === 'replied' ? '#0F172A' : '#F1F5F9',
                 paddingHorizontal: 12,
@@ -1236,7 +1244,7 @@ export default function ReviewRepliesScreen() {
             detail="Verified Google reviews will display here automatically."
           />
         ) : (
-          shown.map((review) => {
+          visibleReviews.map((review) => {
             const reply = parseReply(review);
             const author = review.authorName || 'Google User';
             const rating = Math.max(1, Math.min(5, Math.round(review.rating || 0)));
@@ -1594,6 +1602,27 @@ export default function ReviewRepliesScreen() {
               </Card>
             );
           })
+        )}
+        {shown.length > displayLimit && (
+          <View style={{ alignItems: 'center', marginVertical: 12 }}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setDisplayLimit((prev) => prev + 15)}
+              style={({ pressed }) => ({
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+                borderRadius: 20,
+                backgroundColor: '#F1F5F9',
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                Show More Reviews ({shown.length - displayLimit} remaining) ↓
+              </Text>
+            </Pressable>
+          </View>
         )}
         {filter==='needs_reply' && (pendingPage>1 || (pendingFeed.data?.pagination?.total||0)>50) && <View style={{flexDirection:'row',justifyContent:'space-between'}}>
           <Action label="Previous" secondary disabled={pendingPage===1} onPress={()=>setPendingPage(p=>p-1)}/>

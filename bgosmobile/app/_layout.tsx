@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
 import { notificationDestination } from '../src/lib/notification-routing';
 import { useAuthStore } from '../src/stores/auth-store';
@@ -25,6 +26,12 @@ try {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    BgosDesign: require('../assets/fonts/BgosDesign-Regular.ttf'),
+    BgosDesignBold: require('../assets/fonts/BgosDesign-Bold.ttf'),
+    BgosEditorial: require('../assets/fonts/BgosEditorial.ttf'),
+    BgosDisplay: require('../assets/fonts/BgosDisplay.ttf'),
+  });
   const { isAuthenticated, isLoading, onboardingRequired, checkAuth } = useAuthStore();
   const router = useRouter();
 

@@ -15,7 +15,8 @@ export function useResource<T>(path: string, interval = 0, enabled = true) {
   const refresh = useCallback(() => entry.read(load, 0, true), [entry, load]);
   useFocusEffect(useCallback(() => {
     if (!enabled || !user) return;
-    const check = () => { if (AppState.currentState !== 'background') void entry.read(load, Math.min(interval || 30000, 30000)); };
+    const maxAge = interval > 0 ? interval : 180000;
+    const check = () => { if (AppState.currentState !== 'background') void entry.read(load, maxAge); };
     check();
     const timer = interval ? setInterval(check, interval) : undefined;
     const subscription = AppState.addEventListener('change', status => { if (status === 'active') check(); });

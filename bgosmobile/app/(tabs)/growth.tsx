@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Pressable, Text, TextInput, View } from 'react-native';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import {
@@ -557,21 +557,15 @@ export default function GrowthScreen() {
       gbpAccounts.refresh(),
     ]).catch(() => {});
   }, [
-    workspace,
-    reviews,
-    audit,
-    analytics,
-    gbpPlace,
-    postsRes,
-    photosRes,
-    gbpAccounts,
+    workspace.refresh,
+    reviews.refresh,
+    audit.refresh,
+    analytics.refresh,
+    gbpPlace.refresh,
+    postsRes.refresh,
+    photosRes.refresh,
+    gbpAccounts.refresh,
   ]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void refreshAll();
-    }, [refreshAll]),
-  );
 
   // ─── Render helpers ──────────────────────────────────────────────────────
 

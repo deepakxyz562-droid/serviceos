@@ -499,7 +499,7 @@ export default function HomeScreen() {
   const bookings = useResource<{ bookings: Booking[] }>(`/api/bookings?dateFrom=${dayStart.toISOString()}&dateTo=${dayEnd.toISOString()}&limit=100`);
   const leads = useResource<{ leads: unknown[]; pagination?: { total: number } }>('/api/leads?limit=1');
   const calls = useResource<{ stats: { todayCount: number; total: number } | null }>('/api/vapi/calls?limit=1&stats=true');
-  const reviews = useResource<{ reviews: Array<{ rating: number }> }>('/api/reviews?limit=50');
+  const reviews = useResource<{ reviews: Array<{ rating: number }> }>('/api/reviews?limit=5');
   const marketingScore = useResource<MarketingScoreResponse>('/api/gbp/marketing-score', 0, showInsights);
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const competitors = useResource<CompetitorsResponse>('/api/gbp/competitors', 0, showInsights);
@@ -530,19 +530,21 @@ export default function HomeScreen() {
 
 
 
-  const unreadCount = inbox.data ? inbox.data.reduce((s, c) => s + c.unreadCount, 0) : '—';
-  const leadTotal = leads.data?.pagination?.total ?? '—';
-  const callCount = calls.data?.stats?.todayCount ?? '—';
-  const avgRating = reviews.data?.reviews?.length
-    ? (reviews.data.reviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0) / reviews.data.reviews.length).toFixed(1)
-    : null;
-  const reviewDetail = avgRating
-    ? `${avgRating} ★ rating · Ask customers via WhatsApp`
-    : 'Ask customers for Google reviews via WhatsApp';
-
   // ── Google's Performance (Last 30 Days) — REAL metrics from /api/gbp/place ──
   const perf = gbpPlace.data?.metrics;
   const perfConnected = Boolean(gbpPlace.data?.isConnected);
+
+  const unreadCount = inbox.data ? inbox.data.reduce((s, c) => s + c.unreadCount, 0) : '—';
+  const leadTotal = leads.data?.pagination?.total ?? '—';
+  const callCount = calls.data?.stats?.todayCount ?? '—';
+  const avgRating = perf?.avgRating
+    ? Number(perf.avgRating).toFixed(1)
+    : reviews.data?.reviews?.length
+      ? (reviews.data.reviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0) / reviews.data.reviews.length).toFixed(1)
+      : null;
+  const reviewDetail = avgRating
+    ? `${avgRating} ★ rating · Ask customers via WhatsApp`
+    : 'Ask customers for Google reviews via WhatsApp';
   const perfCells = useMemo(
     () => [
       { label: 'Profile Views', value: perf ? (perf.searchImpressions || 0) + (perf.mapsImpressions || 0) : null },

@@ -9,6 +9,8 @@ type Session = { token: string; refreshToken?: string; user?: SessionUser };
 let revision = 0;
 let blocked = false;
 let writes: Promise<unknown> = Promise.resolve();
+let cachedSession: Session | null = null;
+let sessionLoaded = false;
 const listeners = new Set<() => void>();
 export const sessionRevision = () => revision;
 export function onSessionEnded(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
@@ -21,14 +23,19 @@ function serialized<T>(operation: () => Promise<T>): Promise<T> {
 async function readSession(): Promise<Session | null> {
   await writes;
   if (blocked) return null;
+  if (sessionLoaded) return cachedSession;
   const raw = await SecureStore.getItemAsync(SESSION_KEY);
   if (raw) {
     const value = JSON.parse(raw);
     if (typeof value.token !== 'string' || !value.token) throw new Error('Saved session is invalid. Please sign in again.');
+    cachedSession = value;
+    sessionLoaded = true;
     return value;
   }
   const token = await SecureStore.getItemAsync(LEGACY_ACCESS);
-  return token ? { token, refreshToken: await SecureStore.getItemAsync(LEGACY_REFRESH) || undefined } : null;
+  cachedSession = token ? { token, refreshToken: await SecureStore.getItemAsync(LEGACY_REFRESH) || undefined } : null;
+  sessionLoaded = true;
+  return cachedSession;
 }
 export async function getToken() { return (await readSession())?.token || null; }
 export async function getRefreshToken() { return (await readSession())?.refreshToken || null; }
@@ -41,6 +48,7 @@ export async function saveUser(user: SessionUser) {
         const value = JSON.parse(raw);
         value.user = user;
         await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(value));
+        if (cachedSession) cachedSession.user = user;
       } catch {}
     }
   });
@@ -50,12 +58,16 @@ export async function setTokens(token: string, refreshToken?: string, expectedRe
     if (expectedRevision !== revision) throw new Error('Session changed. Please sign in again.');
     if (!token) throw new Error('Missing session token');
     await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ token, refreshToken, user }));
+    cachedSession = { token, refreshToken, user };
+    sessionLoaded = true;
     blocked = false;
   });
 }
 export async function clearTokens() {
   revision++;
   blocked = true;
+  cachedSession = null;
+  sessionLoaded = true;
   notifySessionEnded();
   return serialized(async () => {
     const results = await Promise.allSettled([SESSION_KEY, LEGACY_ACCESS, LEGACY_REFRESH].map(key => SecureStore.deleteItemAsync(key)));

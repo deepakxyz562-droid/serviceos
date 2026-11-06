@@ -2,7 +2,6 @@ import { framedPhoto } from '../../../../shared/photo-framing';
 import React, { useState } from 'react';
 import { Image, PixelRatio, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useFonts } from 'expo-font';
 import { PROFESSIONAL_ASSETS } from './professional-assets';
 import { WEB_URL } from '../../lib/constants';
 import type { MarketingDesign } from '../../../../shared/marketing-design';
@@ -25,12 +24,6 @@ function getEmblemIconName(id: string, src?: string): keyof typeof MaterialIcons
 export function PosterPreview({ doc }: { doc: MarketingDesign }) {
   const [width, setWidth] = useState(0),
     [failed, setFailed] = useState<Record<string, boolean>>({});
-  const [fonts] = useFonts({
-    BgosDesign: require('../../../assets/fonts/BgosDesign-Regular.ttf'),
-    BgosDesignBold: require('../../../assets/fonts/BgosDesign-Bold.ttf'),
-    BgosEditorial: require('../../../assets/fonts/BgosEditorial.ttf'),
-    BgosDisplay: require('../../../assets/fonts/BgosDisplay.ttf'),
-  });
   const [sizes, setSizes] = useState<Record<string, {width:number;height:number}>>({});
   const scale = width / doc.width;
 
@@ -123,7 +116,7 @@ export function PosterPreview({ doc }: { doc: MarketingDesign }) {
 
             return (
               <View key={l.id} style={style}>
-                {l.type === 'text' && fonts && (
+                {l.type === 'text' && (
                   <Text
                     style={{
                       color: l.color,
