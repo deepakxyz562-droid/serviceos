@@ -41,6 +41,7 @@ import {
   Store,
   Package,
 } from 'lucide-react';
+import { isBgosWorkspace } from '../../../../../shared/product-context';
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -110,6 +111,51 @@ interface AgentTrainTabProps {
 }
 
 export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
+  const isBgos = isBgosWorkspace(useAppStore(s => s.auth));
+  const [sourceError, setSourceError] = useState<string | null>(null);
+  const [retryFile, setRetryFile] = useState<File | null>(null);
+  const [deletingDoc, setDeletingDoc] = useState<string | null>(null);
+  const [sourceRevision, setSourceRevision] = useState(0);
+  const [storedSources, setStoredSources] = useState<Array<{id:string;title:string;status:string;error?:string;charCount:number;createdAt:string}>>([]);
+  const [sourceLoadError, setSourceLoadError] = useState<string | null>(null);
+  const [testQuestion, setTestQuestion] = useState('');
+  const [sourceMatches, setSourceMatches] = useState<Array<{documentTitle:string;content:string}> | null>(null);
+  const [testingSources, setTestingSources] = useState(false);
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const load = async () => {
+      try {
+        const response = await fetch('/api/ai/knowledge');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not load source status.');
+        if (!active) return;
+        setStoredSources(data.documents || []); setSourceLoadError(null);
+        if (data.documents?.some((d: {status:string}) => d.status === 'processing')) timer=setTimeout(load,3000);
+      } catch(error) { if(active) setSourceLoadError(error instanceof Error ? error.message : 'Could not load sources.'); }
+    };
+    void load();
+    return () => { active=false; clearTimeout(timer); };
+  }, [sourceRevision, agent.id]);
+  const previewSource = async (id: string) => {
+    try {
+      const response=await fetch(`/api/ai/knowledge/${encodeURIComponent(id)}`);
+      const data=await response.json();
+      if(!response.ok) throw new Error(data.error || 'Could not load source.');
+      setPreviewDoc({title:data.document.title,content:data.document.content});
+    } catch(error) {setSourceError(error instanceof Error ? error.message : 'Preview failed.');}
+  };
+  const testSources = async () => {
+    if(!testQuestion.trim() || testingSources) return;
+    setTestingSources(true);setSourceError(null);setSourceMatches(null);
+    try {
+      const response=await fetch(`/api/ai/knowledge?q=${encodeURIComponent(testQuestion.trim())}`);
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error || 'Could not test sources.');
+      setSourceMatches(data.results || []);
+    }catch(error){setSourceError(error instanceof Error ? error.message : 'Test failed.');}
+    finally{setTestingSources(false);}
+  };
   const [crawlUrlInput, setCrawlUrlInput] = useState('');
   const [crawlMode, setCrawlMode] = useState<'sitemap' | 'single'>('sitemap');
   const [crawling, setCrawling] = useState(false);
@@ -131,6 +177,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
 
   useEffect(() => {
+    if (isBgos) return;
     fetch('/api/commerce/products')
       .then((r) => r.json())
       .then((d) => {
@@ -156,7 +203,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
         setProductsList(deduped);
       })
       .catch(() => {});
-  }, []);
+  }, [isBgos]);
 
   const [faqQ, setFaqQ] = useState('');
   const [faqA, setFaqA] = useState('');
@@ -173,84 +220,55 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
   const [answerInput, setAnswerInput] = useState('');
   const [resolving, setResolving] = useState(false);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-
+  const uploadFile = async (file: File) => {
+    if (isUploadingDoc) return;
     setIsUploadingDoc(true);
-    const toastId = toast.loading(`Uploading & indexing "${file.name}"...`);
-
+    setSourceError(null);
+    setRetryFile(file);
     try {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
-
-      const res = await fetch('/api/ai/knowledge/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
+      const res = await fetch('/api/ai/knowledge/upload', { method: 'POST', body: formData });
       const data = await res.json().catch(() => ({}));
-
-      const ext = file.name.split('.').pop()?.toLowerCase() || '';
-      const docType: TrainingDocument['type'] = ext === 'pdf' ? 'pdf' : 'text';
-
-      const newDoc: TrainingDocument = {
-        id: data.document?.id || `doc_${Date.now()}`,
-        name: file.name,
-        size: file.size,
-        type: docType,
-        status: res.ok ? 'indexed' : 'indexed',
-        indexedAt: new Date().toISOString(),
-      };
-
-      onChange({
-        ...agent,
-        knowledge: {
-          ...agent.knowledge,
-          documents: [...(agent.knowledge?.documents || []), newDoc],
-        },
-      });
-
-      if (res.ok) {
-        toast.success(`"${file.name}" indexed successfully into knowledge base!`, { id: toastId });
-      } else {
-        toast.info(`"${file.name}" saved to agent training docs.`, { id: toastId });
+      if (!res.ok || !data.document?.id || data.document.status !== 'ready') {
+        throw new Error(data.error || 'The document was not indexed. Please retry.');
       }
-    } catch {
-      const ext = file.name.split('.').pop()?.toLowerCase() || '';
-      const docType: TrainingDocument['type'] = ext === 'pdf' ? 'pdf' : 'text';
-      const fallbackDoc: TrainingDocument = {
-        id: `doc_${Date.now()}`,
-        name: file.name,
-        size: file.size,
-        type: docType,
-        status: 'indexed',
-        indexedAt: new Date().toISOString(),
+      const newDoc: TrainingDocument = {
+        id: data.document.id, name: file.name, size: file.size,
+        type: file.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'text',
+        status: 'indexed', indexedAt: new Date().toISOString(),
       };
-      onChange({
-        ...agent,
-        knowledge: {
-          ...agent.knowledge,
-          documents: [...(agent.knowledge?.documents || []), fallbackDoc],
-        },
-      });
-      toast.info(`"${file.name}" saved to agent training docs.`, { id: toastId });
-    } finally {
-      setIsUploadingDoc(false);
-    }
+      onChange({ ...agent, knowledge: { ...agent.knowledge,
+        documents: [...(agent.knowledge?.documents || []).filter(d => d.id !== newDoc.id), newDoc] } });
+      setRetryFile(null);
+      toast.success('Document ready', { description: 'The source is indexed. Save assistant changes to retain its reference.' });
+    } catch (error) {
+      setSourceError(error instanceof Error ? error.message : 'Upload failed. Your document has not been added.');
+    } finally { setIsUploadingDoc(false); setSourceRevision(n=>n+1); }
+  };
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) void uploadFile(file);
   };
 
-  const handleDeleteDocument = (docId: string) => {
-    onChange({
-      ...agent,
-      knowledge: {
-        ...agent.knowledge,
-        documents: (agent.knowledge?.documents || []).filter((d) => d.id !== docId),
-      },
-    });
-    toast.success('Document removed from knowledge base');
+  const handleDeleteDocument = async (docId: string) => {
+    if (deletingDoc || !window.confirm('Delete this knowledge source? The assistant will no longer be able to use it.')) return;
+    setDeletingDoc(docId);
+    setSourceError(null);
+    try {
+      const res = await fetch(`/api/ai/knowledge/${encodeURIComponent(docId)}`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 404) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not delete source. Please retry.');
+      }
+      onChange({ ...agent, knowledge: { ...agent.knowledge,
+        documents: (agent.knowledge?.documents || []).filter(d => d.id !== docId) } });
+      toast.success('Source deleted', { description: 'Save assistant changes to update its source list.' });
+    } catch (error) {
+      setSourceError(error instanceof Error ? error.message : 'Could not delete source.');
+    } finally { setDeletingDoc(null); setSourceRevision(n=>n+1); }
   };
 
   // Fetch unanswered questions on load
@@ -276,6 +294,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
   const handleCrawlUrl = async () => {
     if (!crawlUrlInput.trim() || crawling) return;
     setCrawling(true);
+    setSourceError(null);
     setCrawledPagesCount(null);
 
     try {
@@ -292,22 +311,23 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        toast.success(`Successfully crawled & indexed ${data.ingestedCount || data.pagesDiscovered} pages!`);
-        setCrawledPagesCount(data.ingestedCount || data.pagesDiscovered);
+        if (!data.ingestedCount) { setSourceError('No pages were indexed. Check that the website is publicly accessible and try a single page.'); return; }
+        toast.success(`${data.ingestedCount} website pages are ready.`);
+        setCrawledPagesCount(data.ingestedCount ?? 0);
         if (data.structuredFacts) {
           setExtractedFacts(data.structuredFacts);
         }
 
-        const newDocs: TrainingDocument[] = (data.ingestedDocs || []).map((d: any) => ({
-          id: d.id || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        const newDocs: TrainingDocument[] = (data.ingestedDocs || []).filter((d: any) => !!d.id).map((d: any) => ({
+          id: d.id,
           name: d.title || d.url,
-          size: d.charCount || 45000,
+          size: d.charCount || 0,
           type: 'url' as const,
           status: 'indexed' as const,
           snippet: `Crawled from ${d.url}`,
           indexedAt: new Date().toISOString(),
           url: d.url,
-          content: d.content || d.text || `Crawled and indexed from ${d.url}`,
+          content: d.content || d.text || '',
         }));
 
         onChange({
@@ -326,6 +346,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
       toast.error('Network error during web crawl');
     } finally {
       setCrawling(false);
+      setSourceRevision(n=>n+1);
     }
   };
 
@@ -351,7 +372,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
 
     setFaqQ('');
     setFaqA('');
-    toast.success('FAQ added to knowledge base');
+    toast.info('FAQ added to draft. Save changes to apply it.');
   };
 
   const removeFaq = (id: string) => {
@@ -600,7 +621,13 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
     }
   };
 
-  const allDocs = agent.knowledge?.documents || [];
+  // Server records are the authority; local references cannot prove indexing succeeded.
+  const allDocs: TrainingDocument[] = storedSources.map(source => {
+    const reference = agent.knowledge?.documents?.find(d => d.id === source.id);
+    return { ...reference, id:source.id, name:source.title, size:source.charCount,
+      type:reference?.type || 'text', status:source.status === 'ready' ? 'indexed' : source.status === 'processing' ? 'indexing' : 'failed',
+      indexedAt:source.createdAt };
+  });
 
   const folderCounts = React.useMemo(() => {
     const counts: Record<string, number> = { 'All Pages': allDocs.length };
@@ -642,17 +669,40 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
 
   return (
     <div className="space-y-4">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".pdf,.docx,.txt,.csv,.md,.json"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+      <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
+        <div><h3 className="font-semibold">What should your assistant know?</h3>
+        <p className="text-sm text-muted-foreground">Add your website, documents, common questions or business details. Test answers before using them with customers.</p></div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setActiveSourceCategory('website')}>Add website</Button>
+          <Button variant="outline" disabled={isUploadingDoc} onClick={() => fileInputRef.current?.click()}>Upload document</Button>
+          <Button variant="outline" onClick={() => setActiveSourceCategory('faq')}>Add question &amp; answer</Button>
+          <Button variant="outline" onClick={() => setActiveSourceCategory('facts')}>Business details</Button>
+        </div>
+        <p className="text-xs text-muted-foreground">Document uploads are processed immediately. FAQ and business-detail edits require Save changes.</p>
+        {isUploadingDoc && <p role="status" className="text-sm">Uploading and processing document…</p>}
+        {sourceError && <div role="alert" className="text-sm text-destructive">{sourceError}{retryFile && <Button variant="outline" disabled={isUploadingDoc} onClick={() => void uploadFile(retryFile)} className="ml-2">Retry upload</Button>}</div>}
+      </div>
+      {sourceLoadError && <div role="alert" className="text-sm text-destructive">{sourceLoadError}<Button variant="outline" onClick={()=>setSourceRevision(n=>n+1)}>Retry</Button></div>}
+      {storedSources.filter(d=>d.status==='failed').map(d=><div key={d.id} role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm"><strong>{d.title}: processing failed</strong><p>{d.error || 'Upload the source again to retry.'}</p><Button variant="outline" disabled={!!deletingDoc} onClick={()=>void handleDeleteDocument(d.id)}>Remove failed source</Button></div>)}
+      <details className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Check what your assistant can find</summary><p className="text-sm text-muted-foreground my-2">Search indexed documents for a customer question. These are supporting passages, not a generated answer; use Test Lab to check the full response.</p><div className="flex gap-2"><Input aria-label="Test knowledge question" value={testQuestion} onChange={e=>setTestQuestion(e.target.value)} placeholder="What is your cancellation policy?"/><Button disabled={testingSources || !testQuestion.trim()} onClick={()=>void testSources()}>{testingSources?'Searching…':'Find sources'}</Button></div>{sourceMatches?.length===0 && <p role="status" className="mt-3 text-sm">No matching source found. Add an answer or document covering this question.</p>}{sourceMatches?.map((match,i)=><blockquote key={i} className="mt-3 border-l-2 pl-3 text-sm"><strong>{match.documentTitle}</strong><p className="whitespace-pre-wrap">{match.content}</p></blockquote>)}</details>
       {/* ── 0. SOURCE CATEGORY FILTER BAR (TEXT.COM PARITY) ── */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-border/60">
         {[
-          { id: 'all', label: 'All Sources', count: allDocs.length + (agent.knowledge?.faqPairs?.length || 0) + productsList.length, icon: Layers },
+          { id: 'all', label: 'All Sources', count: allDocs.length + (agent.knowledge?.faqPairs?.length || 0) + (isBgos ? 0 : productsList.length), icon: Layers },
           { id: 'products', label: 'Products & Store', count: productsList.length, icon: ShoppingBag },
           { id: 'website', label: 'Websites & Sitemaps', count: allDocs.filter(d => d.type === 'url').length || agent.knowledge?.crawledUrls?.length || 0, icon: Globe },
           { id: 'files', label: 'Files & PDFs', count: allDocs.filter(d => d.type === 'pdf' || d.type === 'text').length, icon: FileText },
-          { id: 'faq', label: 'FAQ Pairs', count: agent.knowledge?.faqPairs?.length || 0, icon: HelpCircle },
-          { id: 'facts', label: 'Verified Facts', count: currentAreas.length + (Array.isArray(currentFacts.services) ? currentFacts.services.length : 0), icon: Database },
-          { id: 'unanswered', label: 'Unanswered Gaps', count: unansweredList.length, icon: MessageSquareWarning },
-        ].map((cat) => {
+          { id: 'faq', label: 'Questions & answers', count: agent.knowledge?.faqPairs?.length || 0, icon: HelpCircle },
+          { id: 'facts', label: 'Business details', count: currentAreas.length + (Array.isArray(currentFacts.services) ? currentFacts.services.length : 0), icon: Database },
+          { id: 'unanswered', label: 'Unanswered questions', count: unansweredList.length, icon: MessageSquareWarning },
+        ].filter(cat => !isBgos || cat.id !== 'products').map((cat) => {
           const Icon = cat.icon;
           const isActive = activeSourceCategory === cat.id;
           return (
@@ -743,7 +793,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
               <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-200">
                 <span className="flex items-center gap-1.5 font-semibold">
                   <CheckCircle2 className="size-3.5 text-emerald-500" />
-                  Indexed {crawledPagesCount} pages into Agent RAG Knowledge Base
+                  {crawledPagesCount} website pages ready
                 </span>
               </div>
             )}
@@ -841,7 +891,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
                   <BookOpen className="size-4 text-blue-600" />
                   Hierarchical Knowledge &amp; Page Directory
                   <Badge variant="secondary" className="text-[10px] font-mono">
-                    {filteredDocs.length} of {allDocs.length} indexed
+                    {filteredDocs.length} of {allDocs.length} sources
                   </Badge>
                 </CardTitle>
                 <CardDescription className="text-[11px] mt-0.5">
@@ -928,7 +978,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
                 {filteredDocs.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center p-8 text-center text-muted-foreground space-y-2">
                     <BookOpen className="size-8 text-muted-foreground/40 stroke-1" />
-                    <p className="text-xs font-semibold">No indexed pages found in this folder</p>
+                    <p className="text-xs font-semibold">No sources found in this folder</p>
                     <p className="text-[11px] max-w-sm">
                       {searchPageQuery
                         ? `No pages match "${searchPageQuery}". Try adjusting your search query.`
@@ -966,9 +1016,9 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
                                 </a>
                               )}
                               <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
-                                <span>{(doc.size / 1024).toFixed(0)} KB</span>
+                                <span>{doc.size.toLocaleString()} characters</span>
                                 <span>•</span>
-                                <span className="text-emerald-600 dark:text-emerald-400 font-medium">✓ Ready for Chat RAG</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-medium">{doc.status === 'indexed' ? 'Ready' : doc.status === 'indexing' ? 'Processing…' : 'Failed — upload again'}</span>
                               </div>
                             </div>
                           </div>
@@ -979,13 +1029,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
                               type="button"
                               variant="ghost"
                               size="sm"
-                              onClick={() => {
-                                setPreviewDoc({
-                                  title: doc.name || docUrl,
-                                  url: docUrl,
-                                  content: doc.snippet || doc.content || 'Indexed page content ready for vector search.',
-                                });
-                              }}
+                              onClick={() => void previewSource(doc.id)}
                               className="h-7 px-2 text-[11px] gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
                               title="Preview Content"
                             >
@@ -996,7 +1040,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
                               type="button"
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleDeleteDocument(doc.id)}
+                              disabled={!!deletingDoc} onClick={() => void handleDeleteDocument(doc.id)}
                               className="size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"
                               title="Delete Page"
                             >
@@ -1015,7 +1059,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
       )}
 
       {/* ── 2. DETERMINISTIC BUSINESS FACTS & SERVICE AREAS (ZERO-HALLUCINATION GUI) ── */}
-      {(activeSourceCategory === 'all' || activeSourceCategory === 'facts') && (
+      {(activeSourceCategory === 'facts') && (
         <Card className="rounded-xl border-violet-200/80 dark:border-violet-900/60 bg-violet-50/20 dark:bg-violet-950/10 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <div className="flex items-center justify-between">
@@ -1172,7 +1216,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
       )}
 
       {/* ── 3. UNANSWERED QUESTIONS REVIEW INBOX ── */}
-      {(activeSourceCategory === 'all' || activeSourceCategory === 'unanswered') && (
+      {(activeSourceCategory === 'unanswered') && (
         <Card className="rounded-xl border-amber-200 dark:border-amber-900/40 bg-amber-50/20 dark:bg-amber-950/10 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <div className="flex items-center justify-between">
@@ -1265,18 +1309,18 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
       )}
 
       {/* ── 4. DOCUMENTS & PDF / NOTION / ZENDESK UPLOADER ── */}
-      {(activeSourceCategory === 'all' || activeSourceCategory === 'files') && (
+      {(activeSourceCategory === 'files') && (
         <Card className="rounded-xl border-border/80 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-xs font-bold flex items-center gap-1.5">
-            <FileText className="size-3.5 text-blue-600" /> Training Documents, PDFs &amp; Notion
+            <FileText className="size-3.5 text-blue-600" /> Documents
           </CardTitle>
           <CardDescription className="text-[11px]">
-            Upload brochures, medical policies, warranty terms, or Notion/Zendesk docs.
+            Upload PDF, DOCX or text files up to 10 MB. Scanned PDFs require OCR first.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 pt-0 space-y-2">
-          {agent.knowledge?.documents?.map((doc) => (
+          {allDocs.filter(doc=>doc.type!=='url').map((doc) => (
             <div
               key={doc.id}
               className="p-2.5 bg-muted/40 border border-border/60 rounded-lg flex items-center justify-between gap-2"
@@ -1288,19 +1332,20 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
                     {doc.name}
                   </p>
                   <p className="text-[10px] text-muted-foreground">
-                    {(doc.size / 1024).toFixed(0)} KB • Status: {doc.status}
+                    {doc.size.toLocaleString()} characters • Status: {doc.status}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[9px] border-none">
-                  Active
+                <Button variant="ghost" size="sm" onClick={()=>void previewSource(doc.id)}>Preview</Button>
+                <Badge className="bg-muted text-foreground text-[9px] border-none">
+                  {doc.status === 'indexed' ? 'Ready' : doc.status === 'indexing' ? 'Processing' : 'Failed'}
                 </Badge>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  onClick={() => handleDeleteDocument(doc.id)}
+                  disabled={!!deletingDoc} onClick={() => void handleDeleteDocument(doc.id)}
                   className="size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                   title="Remove document"
                 >
@@ -1310,13 +1355,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
             </div>
           ))}
 
-          <input
-            type="file"
-            ref={fileInputRef}
-            accept=".pdf,.doc,.docx,.txt,.csv,.md,.json"
-            className="hidden"
-            onChange={handleFileUpload}
-          />
+
 
           <Button
             type="button"
@@ -1341,7 +1380,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
       )}
 
       {/* ── 5. FAQ BUILDER ── */}
-      {(activeSourceCategory === 'all' || activeSourceCategory === 'faq') && (
+      {(activeSourceCategory === 'faq') && (
         <Card className="rounded-xl border-border/80 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-xs font-bold flex items-center gap-1.5">
@@ -1401,7 +1440,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
       )}
 
       {/* ── PRODUCTS & E-COMMERCE CATALOG KNOWLEDGE (TIDIO LYRO PARITY) ── */}
-      {(activeSourceCategory === 'all' || activeSourceCategory === 'products') && (
+      {!isBgos && (activeSourceCategory === 'all' || activeSourceCategory === 'products') && (
         <Card className="rounded-xl border-border/80 shadow-xs">
           <CardHeader className="p-4 pb-2">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1736,11 +1775,11 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
               )}
             </DialogHeader>
             <div className="flex-1 overflow-y-auto p-3.5 bg-muted/30 rounded-lg border text-xs font-mono whitespace-pre-wrap leading-relaxed max-h-[50vh]">
-              {previewDoc.content || 'Content indexed and chunked for vector similarity search.'}
+              {previewDoc.content || 'No extracted text preview is available for this source. Test the assistant to verify its answers.'}
             </div>
             <DialogFooter className="flex items-center justify-between sm:justify-between">
               <span className="text-[11px] text-muted-foreground">
-                {previewDoc.content ? `${previewDoc.content.length.toLocaleString()} characters indexed` : 'Active in dual-brain knowledge'}
+                {previewDoc.content ? `${previewDoc.content.length.toLocaleString()} characters indexed` : 'Source details'}
               </span>
               <Button size="sm" variant="outline" onClick={() => setPreviewDoc(null)}>
                 Close

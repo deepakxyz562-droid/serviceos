@@ -1,3 +1,4 @@
+import { serviceInputError } from '../../../../shared/service-input';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
@@ -16,8 +17,8 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category');
     const active = searchParams.get('active');
     const search = searchParams.get('search');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50') || 50));
 
     const where: Record<string, unknown> = {
       tenantId: user.tenantId,
@@ -64,6 +65,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({error: 'Invalid service'}, {status: 400});
+    const validationError = serviceInputError(body, false);
+    if (validationError) return NextResponse.json({error: validationError}, {status: 400});
     const {
       name,
       description,

@@ -9,7 +9,7 @@
  * agent without any multi-agent directory or selection screens.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
@@ -21,12 +21,16 @@ export interface ChatbotBuilderViewProps {
   onBackToDashboard?: () => void;
 }
 
-// Cache primary agent in module memory so switching between views is instant (no spinner)
-let cachedPrimaryAgent: FormAgentData | null = null;
+// Agent configuration is scoped to this mounted, authenticated workspace.
 
 export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: ChatbotBuilderViewProps = {}) {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const auth = useAppStore((s) => s.auth);
+  const scope = `${auth?.user?.id || ''}:${auth?.tenant?.id || ''}:${auth?.workspace?.id || ''}`;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const requestEpoch = useRef(0);
+  const [loadedScope,setLoadedScope] = useState(scope);
 
   const handleBackToDashboard = () => {
     if (onBackToDashboard) {
@@ -40,22 +44,23 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
     }
   };
 
-  const [activeStudioAgent, setActiveStudioAgent] = useState<FormAgentData | null>(() => cachedPrimaryAgent);
-  const [loading, setLoading] = useState(() => !cachedPrimaryAgent);
+  const [activeStudioAgent, setActiveStudioAgent] = useState<FormAgentData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [siteOrigin, setSiteOrigin] = useState('');
 
   const fetchPrimaryAgent = useCallback(async () => {
-    if (!cachedPrimaryAgent) {
-      setLoading(true);
-    }
+    const epoch = ++requestEpoch.current;
+    setLoading(true);
+    setActiveStudioAgent(null);
+    setLoadedScope(scope);
     setError(null);
     try {
       const res = await fetch('/api/forms/agents');
       if (res.ok) {
         const data = await res.json();
+        if (scopeRef.current !== scope || epoch !== requestEpoch.current) return;
         if (Array.isArray(data.agents) && data.agents.length > 0) {
-          cachedPrimaryAgent = data.agents[0];
           setActiveStudioAgent(data.agents[0]);
         } else {
           // Auto-initialize the single agent for this business
@@ -67,28 +72,9 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
             welcomeGreeting: `Hi! Welcome to ${bizName}. How can I assist you today?`,
           };
 
-          // Save default agent to DB so it persists
-          try {
-            const saveRes = await fetch('/api/forms/agents', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(defaultAgent),
-            });
-            if (saveRes.ok) {
-              const saved = await saveRes.json();
-              const ag = saved.agent || defaultAgent;
-              cachedPrimaryAgent = ag;
-              setActiveStudioAgent(ag);
-            } else {
-              cachedPrimaryAgent = defaultAgent;
-              setActiveStudioAgent(defaultAgent);
-              toast.info('AI Assistant initialized locally');
-            }
-          } catch {
-            cachedPrimaryAgent = defaultAgent;
-            setActiveStudioAgent(defaultAgent);
-            toast.info('AI Assistant loaded locally');
-          }
+          // First-time setup is an unsaved draft until the user explicitly saves it.
+          setActiveStudioAgent({...defaultAgent, id: '', slug: ''});
+          toast.info('New assistant draft. Add your details and save to create it.');
         }
       } else {
         const errData = await res.json().catch(() => ({}));
@@ -101,9 +87,9 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
       setError(msg);
       toast.error(msg);
     } finally {
-      setLoading(false);
+      if (scopeRef.current === scope && epoch === requestEpoch.current) setLoading(false);
     }
-  }, [auth]);
+  }, [scope]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -112,7 +98,7 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
     fetchPrimaryAgent();
   }, [fetchPrimaryAgent]);
 
-  if (loading && !activeStudioAgent) {
+  if (loadedScope !== scope || (loading && !activeStudioAgent)) {
     return (
       <div className="flex flex-1 h-full min-h-[400px] w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
@@ -166,6 +152,7 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
   // Directly and always render the full-screen visual AI Agent Builder
   return (
     <FormAgentStudio
+      key={scope}
       initialAgent={activeStudioAgent || DEFAULT_FORM_AGENT}
       onChange={(updated) => {
         setActiveStudioAgent(updated);

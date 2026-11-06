@@ -5,53 +5,7 @@ import { logActivity } from '@/lib/activity-log';
 
 export const runtime = 'nodejs';
 
-/**
- * Extract clean readable text from various file buffers
- */
-function extractTextFromBuffer(buffer: Buffer, mimeType: string, filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase() || '';
-
-  if (ext === 'txt' || ext === 'md' || ext === 'csv' || ext === 'json' || mimeType.startsWith('text/')) {
-    return buffer.toString('utf-8');
-  }
-
-  if (ext === 'docx') {
-    // Extract XML text strings from docx archive buffer
-    const raw = buffer.toString('binary');
-    const textMatches = raw.match(/<w:t[^>]*>([^<]+)<\/w:t>/g);
-    if (textMatches && textMatches.length > 0) {
-      return textMatches
-        .map((m) => m.replace(/<[^>]+>/g, ''))
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    }
-    // Fallback printable ascii extraction
-    return buffer.toString('utf-8').replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s{2,}/g, ' ');
-  }
-
-  if (ext === 'pdf') {
-    // Extract text streams from PDF buffer
-    const content = buffer.toString('binary');
-    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
-    let extracted = '';
-    let match;
-    while ((match = streamRegex.exec(content)) !== null) {
-      const plain = match[1].replace(/[^\x20-\x7E\n\r\t]/g, ' ');
-      if (plain.length > 20) {
-        extracted += ' ' + plain;
-      }
-    }
-    if (extracted.trim().length > 50) {
-      return extracted.replace(/\s+/g, ' ').trim();
-    }
-    // Fallback: printable characters
-    return buffer.toString('utf-8').replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s{2,}/g, ' ');
-  }
-
-  // Generic fallback
-  return buffer.toString('utf-8').replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s{2,}/g, ' ');
-}
+import { extractKnowledgeFile, KNOWLEDGE_FILE_MAX_BYTES } from '@/lib/knowledge-file-text';
 
 export async function POST(req: NextRequest) {
   try {
@@ -72,16 +26,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
+    if (!(file instanceof File) || file.size > KNOWLEDGE_FILE_MAX_BYTES) return NextResponse.json({error: 'Upload a file no larger than 10 MB.'}, {status: 413});
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const filename = file.name || 'document.txt';
     const mimeType = file.type || 'application/octet-stream';
 
-    const text = extractTextFromBuffer(buffer, mimeType, filename).trim();
+    let text: string;
+    try { text = await extractKnowledgeFile(buffer, filename); } catch {
+      return NextResponse.json({error: 'Could not read this document. Use an unencrypted PDF with selectable text, DOCX, TXT, Markdown, CSV or JSON file.'}, {status: 422});
+    }
 
     if (!text || text.length < 10) {
       return NextResponse.json(
-        { error: 'Could not extract readable text from the uploaded document.' },
+        { error: 'No readable text found. Scanned documents need OCR before uploading.' },
         { status: 400 },
       );
     }

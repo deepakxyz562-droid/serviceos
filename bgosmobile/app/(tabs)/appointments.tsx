@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -16,6 +16,7 @@ import {
 } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
+import { DateTimeField } from '../../src/components/booking/date-time-field';
 import { localDay, futureLocalTime } from '../../src/lib/dates';
 import { WEB_URL } from '../../src/lib/constants';
 import type { BgosWorkspace } from '../../src/types/bgos-contracts';
@@ -40,13 +41,14 @@ export default function AppointmentsScreen() {
     return d;
   });
 
-  // Filter bookings from yesterday onwards so upcoming appointments are never crowded out by past history
-  const startOfWindow = new Date();
-  startOfWindow.setDate(startOfWindow.getDate() - 1);
-  startOfWindow.setHours(0, 0, 0, 0);
-
-  const resource = useResource<{ bookings: Booking[] }>(
-    `/api/bookings?limit=100&dateFrom=${encodeURIComponent(startOfWindow.toISOString())}&sortBy=scheduledAt&sortOrder=asc`
+  const startOfWindow = new Date(days[0]);
+  startOfWindow.setHours(0,0,0,0);
+  const endOfWindow = new Date(days[6]);
+  endOfWindow.setHours(23,59,59,999);
+  const [bookingPage,setBookingPage] = useState(1);
+  useEffect(()=>{setBookingPage(1);setSelectedDate(days[0]);},[weekOffset]);
+  const resource = useResource<{ bookings: Booking[]; pagination?: {totalPages?:number} }>(
+    `/api/bookings?limit=50&page=${bookingPage}&dateFrom=${encodeURIComponent(startOfWindow.toISOString())}&dateTo=${encodeURIComponent(endOfWindow.toISOString())}&sortBy=scheduledAt&sortOrder=asc`
   );
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -55,6 +57,12 @@ export default function AppointmentsScreen() {
   const [bookModal, setBookModal] = useState(false);
   const [newClient, setNewClient] = useState('');
   const [newService, setNewService] = useState('');
+  const [serviceId,setServiceId] = useState<string | null>(null);
+  const [customerId,setCustomerId] = useState<string | null>(null);
+  const [clientSearch,setClientSearch] = useState('');
+  useEffect(()=>{const timer=setTimeout(()=>setClientSearch(newClient),300);return()=>clearTimeout(timer);},[newClient]);
+  const serviceOptions=useResource<{services:{id:string;name:string;duration:number}[]}>(`/api/services?active=true&limit=20&search=${encodeURIComponent(newService)}`,0,bookModal);
+  const customerOptions=useResource<{data:{id:string;name:string;phone?:string;email?:string}[]}>(`/api/contacts?limit=5&search=${encodeURIComponent(clientSearch)}`,0,bookModal && clientSearch.length>1 && !customerId);
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -88,12 +96,15 @@ export default function AppointmentsScreen() {
     setBusy(true);
     setError(null);
     try {
-      const scheduledIso = (newDate && newTime ? futureLocalTime(newDate, newTime) : null) || new Date().toISOString();
+      const scheduledIso = futureLocalTime(newDate, newTime);
+      if (!scheduledIso) { setError('Choose a valid future date and time.'); return; }
       await apiRequest('/api/bookings', {
         method: 'POST',
         body: {
           title: newService.trim(),
           customerName: newClient.trim(),
+          ...(customerId ? {customerPhone: customerOptions.data?.data.find(c=>c.id===customerId)?.phone, customerEmail: customerOptions.data?.data.find(c=>c.id===customerId)?.email} : {}),
+          ...(serviceId ? {serviceId, duration: serviceOptions.data?.services.find(s=>s.id===serviceId)?.duration} : {}),
           scheduledAt: scheduledIso,
           status: 'confirmed',
         },
@@ -101,6 +112,7 @@ export default function AppointmentsScreen() {
       setBookModal(false);
       setNewClient('');
       setNewService('');
+      setServiceId(null); setCustomerId(null);
       setNewDate('');
       setNewTime('');
       await resource.refresh();
@@ -357,8 +369,9 @@ export default function AppointmentsScreen() {
                     disabled={busy}
                     onPress={() => {
                       setSelectedBooking(b);
-                      setDateStr('');
-                      setTimeStr('');
+                      const original = b.scheduledAt ? new Date(b.scheduledAt) : new Date();
+                      setDateStr(localDay(original));
+                      setTimeStr(`${String(original.getHours()).padStart(2,'0')}:${String(original.getMinutes()).padStart(2,'0')}`);
                     }}
                   />
                 </View>
@@ -368,22 +381,27 @@ export default function AppointmentsScreen() {
         ))
       )}
 
+      {!!resource.data?.pagination?.totalPages && resource.data.pagination.totalPages > 1 && <View style={[ui.row,{gap:12}]}><Action secondary label="Previous page" disabled={bookingPage===1} onPress={()=>setBookingPage(p=>p-1)}/><Text style={ui.caption}>Page {bookingPage}</Text><Action secondary label="Next page" disabled={bookingPage>=resource.data.pagination.totalPages} onPress={()=>setBookingPage(p=>p+1)}/></View>}
       {/* Book New Appointment Modal */}
-      <Modal visible={bookModal} animationType="slide" onRequestClose={() => setBookModal(false)}>
+      <Modal visible={bookModal} animationType="slide" onRequestClose={() => {if(!busy)setBookModal(false);}}>
         <Screen
           title="Book Appointment"
           subtitle="Reserve a slot on your business calendar."
           showBack={true}
-          onBack={() => setBookModal(false)}
+          onBack={() => {if(!busy)setBookModal(false);}}
         >
           <Card style={{ gap: 12 }}>
-            <Field label="Customer Full Name" value={newClient} onChangeText={setNewClient} placeholder="e.g. Priya Singh" />
-            <Field label="Service / Treatment" value={newService} onChangeText={setNewService} placeholder="e.g. Hair Spa or Consultation" />
-            <Field label="Date (YYYY-MM-DD)" value={newDate} onChangeText={setNewDate} placeholder="2026-10-15" />
-            <Field label="Time (HH:MM, 24-hr)" value={newTime} onChangeText={setNewTime} placeholder="14:30" />
+            <ErrorNotice message={error}/><Field label="Customer name" value={newClient} onChangeText={v=>{setNewClient(v);setCustomerId(null);}} placeholder="e.g. Priya Singh" />
+            {!!customerOptions.error && !customerId && <ErrorNotice message={customerOptions.error} retry={customerOptions.refresh}/>}
+            {!customerId && clientSearch.length>1 && customerOptions.data?.data.map(c=><Action key={c.id} secondary label={c.name} onPress={()=>{setCustomerId(c.id);setNewClient(c.name);}}/>)}
+            <Field label="Service" value={newService} onChangeText={v=>{setNewService(v);setServiceId(null);}} placeholder="e.g. Hair Spa or Consultation" />
+            <ErrorNotice message={serviceOptions.error} retry={serviceOptions.refresh}/>
+            {!serviceId && serviceOptions.data?.services.slice(0,5).map(service=><Action key={service.id} secondary label={`${service.name} · ${service.duration} min`} onPress={()=>{setServiceId(service.id);setNewService(service.name);}}/>)}
+            <DateTimeField day={newDate} time={newTime} onDay={setNewDate} onTime={setNewTime}/>
+
 
             <Action
-              label={busy ? 'Saving Booking…' : 'Confirm & Add Booking'}
+              label={busy ? 'Saving Booking…' : 'Add appointment'}
               icon="event-available"
               disabled={busy || !newClient.trim() || !newService.trim()}
               onPress={createBooking}
@@ -394,18 +412,17 @@ export default function AppointmentsScreen() {
       </Modal>
 
       {/* Reschedule Modal */}
-      <Modal visible={!!selectedBooking} onRequestClose={() => setSelectedBooking(null)} animationType="slide">
+      <Modal visible={!!selectedBooking} onRequestClose={() => {if(!busy)setSelectedBooking(null);}} animationType="slide">
         {selectedBooking && (
           <Screen
             title="Reschedule Appointment"
             subtitle={selectedBooking.customerName || selectedBooking.title}
             showBack={true}
-            onBack={() => setSelectedBooking(null)}
+            onBack={() => {if(!busy)setSelectedBooking(null);}}
           >
             <ErrorNotice message={error} />
             <Card style={{ gap: 12 }}>
-              <Field label="New Date (YYYY-MM-DD)" value={dateStr} onChangeText={setDateStr} placeholder="2026-10-16" />
-              <Field label="New Time (HH:MM, 24-hr)" value={timeStr} onChangeText={setTimeStr} placeholder="15:00" />
+              <DateTimeField day={dateStr} time={timeStr} onDay={setDateStr} onTime={setTimeStr}/>
               <Action label={busy ? 'Saving…' : 'Save New Time'} disabled={busy} onPress={reschedule} />
               <Action secondary label="Cancel" disabled={busy} onPress={() => setSelectedBooking(null)} />
             </Card>

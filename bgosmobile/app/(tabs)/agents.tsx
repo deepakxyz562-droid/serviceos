@@ -1,307 +1,113 @@
-import React, { useState } from 'react';
-import { Linking, Modal, ScrollView, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Linking, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
-import {
-  Screen,
-  Card,
-  Action,
-  Empty,
-  ErrorNotice,
-  Loading,
-  Chip,
-  Field,
-  ui,
-  colors,
-} from '../../src/components/ui';
+import { Screen, Card, Action, ErrorNotice, Loading, Chip, Field, ui } from '../../src/components/ui';
+import { useUnsavedWarning } from '../../src/hooks/use-unsaved-warning';
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
-import { WEB_URL } from '../../src/lib/constants';
 import { getBgosWebUrl } from '../../src/lib/bgos-urls';
+import type { FormAgentData } from '../../../src/features/forms/types/agent-types';
 
-type Agent = { id: string; name: string; roleTitle?: string; welcomeGreeting?: string; voiceTone?: string };
-
+type Tab = 'overview' | 'knowledge' | 'channels' | 'test';
 export default function AgentsScreen() {
   const router = useRouter();
-  const resource = useResource<{ agents: Agent[] }>('/api/forms/agents');
-  const [activeTab, setActiveTab] = useState<'channels' | 'testlab' | 'performance'>('channels');
-  const [error, setError] = useState<string | null>(null);
-  const [builderModal, setBuilderModal] = useState(false);
-
-  // Test Lab Chat State (Module 4.5 in mockups)
-  const [testMessages, setTestMessages] = useState<
-    { role: 'user' | 'assistant'; text: string; time: string }[]
-  >([]);
-  const [testInput, setTestInput] = useState('');
-  const [testBusy, setTestBusy] = useState(false);
-
-  async function sendTestMessage(msg?: string) {
-    const toSend = msg || testInput;
-    if (!toSend.trim() || testBusy) return;
-    if (!resource.data?.agents?.[0]?.id) { setError('Create an assistant in BGOS web first.'); return; }
-    setError(null);
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setTestMessages((prev) => [...prev, { role: 'user', text: toSend.trim(), time: now }]);
-    setTestInput('');
-    setTestBusy(true);
-
-    try {
-      const activeAgent = resource.data?.agents?.[0];
-      const endpoint = activeAgent?.id ? `/api/forms/agents/${activeAgent.id}/chat` : '/api/forms/agents/preview/chat';
-      const res = await apiRequest<{ reply?: string; response?: string; text?: string }>(endpoint, {
-        method: 'POST',
-        body: { message: toSend.trim(), history: testMessages.map(m => ({ role: m.role, content: m.text })) },
-      });
-      const replyText = res.reply || res.response || res.text;
-      if (!replyText) throw new Error('The assistant did not return a response. Please try again.');
-      setTestMessages((prev) => [
-        ...prev,
-        { role: 'assistant', text: replyText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
-      ]);
-    } catch (e) {
-      setError((e as Error).message || 'Unable to reach the assistant.');
-    } finally {
-      setTestBusy(false);
-    }
+  const resource = useResource<{agents: FormAgentData[]}>('/api/forms/agents');
+  const [tab,setTab] = useState<Tab>('overview');
+  const [selectedId,setSelectedId] = useState('');
+  const [draft,setDraft] = useState<FormAgentData | null>(null);
+  const [dirty,setDirty] = useState(false);
+  useUnsavedWarning(dirty);
+  const dirtyRef = useRef(false);
+  const [busy,setBusy] = useState(false);
+  const [error,setError] = useState<string | null>(null);
+  const [notice,setNotice] = useState('');
+  const [name,setName] = useState('');
+  const [question,setQuestion] = useState('');
+  const [answer,setAnswer] = useState('');
+  const [editingFaq,setEditingFaq] = useState<string | null>(null);
+  const [testInput,setTestInput] = useState('');
+  const [messages,setMessages] = useState<{role:'user'|'assistant';content:string}[]>([]);
+  const [testing,setTesting] = useState(false);
+  useEffect(()=>{
+    if(dirtyRef.current) return;
+    const selected = resource.data?.agents.find(a=>a.id===selectedId) || resource.data?.agents[0];
+    if(selected) {setDraft(selected);setSelectedId(selected.id);}
+  },[resource.data,selectedId]);
+  function edit(update: Partial<FormAgentData>) {
+    if(!draft)return;
+    dirtyRef.current=true;setDirty(true);setNotice('');setDraft({...draft,...update});
   }
-
-  return (
-    <Screen
-      title="AI Assistant Studio"
-      subtitle="Autonomous customer bots, multi-channel deployment & test lab."
-      showBack={true}
-      onRefresh={resource.refresh}
-      rightAction={
-        <Action
-          compact
-          label="＋ Agent"
-          icon="smart-toy"
-          onPress={() => setBuilderModal(true)}
-        />
-      }
-    >
-      <ErrorNotice message={error || resource.error} retry={resource.refresh} />
-
-      {/* Segmented Tabs: Channels, Test Lab, Performance */}
-      <View style={[ui.row, { justifyContent: 'space-between' }]}>
-        <Chip
-          label="Channel Bots"
-          selected={activeTab === 'channels'}
-          onPress={() => setActiveTab('channels')}
-        />
-        <Chip
-          label="Assistant Chat"
-          selected={activeTab === 'testlab'}
-          onPress={() => setActiveTab('testlab')}
-        />
-        <Chip
-          label="Performance"
-          selected={activeTab === 'performance'}
-          onPress={() => setActiveTab('performance')}
-        />
-      </View>
-
-      {/* CHANNELS VIEW (Screen 10 in mockups) */}
-      {activeTab === 'channels' && (
-        <View style={{ gap: 14 }}>
-          {/* Active AI Status Banner */}
-          <Card style={{ backgroundColor: colors.hero, borderColor: colors.hero, padding: 18 }}>
-            <View style={[ui.row, { justifyContent: 'space-between' }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFFFFF' }}>AI Autonomous Receptionist</Text>
-                <Text style={{ fontSize: 13, color: '#D1EAE5', marginTop: 4 }}>
-                  Answers questions, captures qualified leads, and books calendar slots 24/7.
-                </Text>
-              </View>
-              <MaterialIcons name="auto-awesome" size={32} color={colors.accent} />
-            </View>
-          </Card>
-
-          {resource.loading ? <Loading /> : resource.data?.agents?.length ? resource.data.agents.map(agent => (
-            <Card key={agent.id}>
-              <Text style={ui.heading}>{agent.name}</Text>
-              <Text style={ui.body}>{agent.roleTitle || 'Business assistant'}</Text>
-              <Text style={ui.caption}>Channel availability is managed in Integrations.</Text>
-            </Card>
-          )) : !resource.error ? <Empty title="No assistants configured" detail="Create your business assistant in BGOS web." /> : null}
-          <Action secondary label="View channel connections" onPress={() => router.push('/(tabs)/integrations')} />
-
-          <Action
-            label="Live Chat & Booking Page"
-            icon="public"
-            onPress={() => router.push('/booking-page')}
-          />
-
-          <Action
-            label="Monitor Active Chats in Inbox"
-            icon="chat"
-            onPress={() => router.push('/(tabs)/inbox')}
-          />
-          <Action
-            secondary
-            label="Configure Knowledge Base · Web"
-            icon="open-in-new"
-            onPress={() => Linking.openURL(getBgosWebUrl('agentStudio')).catch(() => {})}
-          />
-        </View>
-      )}
-
-      {/* TEST LAB SANDBOX VIEW (Module 4.5 in mockups) */}
-      {activeTab === 'testlab' && (
-        <View style={{ gap: 14 }}>
-          <Card style={{ gap: 8 }}>
-            <Text style={ui.heading}>Chat with your assistant</Text>
-            <Text style={ui.body}>
-              This uses your first configured assistant and its live actions. Requests may create bookings or leads.
-            </Text>
-
-            {/* Quick Test Prompts */}
-            <Text style={ui.label}>Try Sample Inquiries</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={[ui.row, { gap: 6 }]}>
-                {[
-                  'What are your business hours?',
-                  'Can I book an appointment?',
-                  'Do you have fresh chocolate cake?',
-                  'How much do services cost?',
-                ].map((prompt) => (
-                  <Chip
-                    key={prompt}
-                    label={prompt}
-                    selected={false}
-                    onPress={() => sendTestMessage(prompt)}
-                  />
-                ))}
-              </View>
-            </ScrollView>
-          </Card>
-
-          {/* Test Chat Stream */}
-          <Card style={{ padding: 12, minHeight: 260, maxHeight: 360 }}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={{ gap: 10 }}>
-                {testMessages.map((m, idx) => (
-                  <View
-                    key={idx}
-                    style={{
-                      maxWidth: '85%',
-                      alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                      backgroundColor: m.role === 'user' ? colors.brand : colors.soft,
-                      padding: 12,
-                      borderRadius: 14,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: '700',
-                        color: m.role === 'user' ? colors.brandSoft : colors.brand,
-                        marginBottom: 2,
-                      }}
-                    >
-                      {m.role === 'user' ? 'You' : '🤖 AI Assistant'}
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        lineHeight: 20,
-                        color: m.role === 'user' ? '#FFFFFF' : colors.ink,
-                      }}
-                    >
-                      {m.text}
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 10,
-                        color: m.role === 'user' ? '#D1EAE5' : colors.muted,
-                        marginTop: 4,
-                        alignSelf: 'flex-end',
-                      }}
-                    >
-                      {m.time}
-                    </Text>
-                  </View>
-                ))}
-                {testBusy && (
-                  <View style={{ alignSelf: 'flex-start', padding: 8 }}>
-                    <Text style={{ fontSize: 12, color: colors.muted }}>AI is typing…</Text>
-                  </View>
-                )}
-              </View>
-            </ScrollView>
-          </Card>
-
-          <Field
-            label="Type a test question"
-            value={testInput}
-            onChangeText={setTestInput}
-            placeholder="Ask about hours, pricing, bookings…"
-          />
-          <Action
-            label={testBusy ? 'Responding…' : 'Send Message'}
-            icon="send"
-            disabled={testBusy || !testInput.trim()}
-            onPress={() => sendTestMessage()}
-          />
-        </View>
-      )}
-
-      {activeTab === 'performance' && (
-        <Card>
-          <Text style={ui.heading}>Assistant analytics</Text>
-          <Text style={ui.body}>Review conversation performance and activity in BGOS web.</Text>
-          <Action label="Open AI Studio · Web" onPress={() => Linking.openURL(getBgosWebUrl('agentStudio')).catch(() => setError('Could not open the browser.'))} />
-        </Card>
-      )}
-
-      {/* 5-STEP AGENT BUILDER MODAL (Screen 11 in mockups) */}
-      <Modal visible={builderModal} animationType="slide" onRequestClose={() => setBuilderModal(false)}>
-        <Screen
-          title="Create AI Agent"
-          subtitle="5-step fast launch wizard."
-          showBack={true}
-          onBack={() => setBuilderModal(false)}
-        >
-          <Card style={{ gap: 14 }}>
-            {[
-              { num: '1', title: 'Choose template', desc: 'Start with ready industry agent' },
-              { num: '2', title: 'Train with your data', desc: 'Websites, PDFs, FAQs & products' },
-              { num: '3', title: 'Connect channels', desc: 'WhatsApp, Instagram, Web widget' },
-              { num: '4', title: 'Test your agent', desc: 'Try sample customer conversations' },
-              { num: '5', title: 'Launch', desc: 'Review configuration and publish' },
-            ].map((s) => (
-              <View key={s.num} style={[ui.row, { gap: 14 }]}>
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: colors.brand,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>{s.num}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={ui.heading}>{s.title}</Text>
-                  <Text style={ui.caption}>{s.desc}</Text>
-                </View>
-              </View>
-            ))}
-
-            <Action
-              label="Open Full Studio in Web"
-              icon="open-in-new"
-              onPress={() => {
-                setBuilderModal(false);
-                Linking.openURL(getBgosWebUrl('agentStudio')).catch(() => {});
-              }}
-            />
-            <Action secondary label="Close" onPress={() => setBuilderModal(false)} />
-          </Card>
-        </Screen>
-      </Modal>
-    </Screen>
-  );
+  async function save() {
+    if(!draft?.name.trim()) {setError('Enter an assistant name.');return;}
+    setBusy(true);setError(null);
+    try {
+      // Re-read before saving: keep another device's newer configuration intact.
+      const latest=await apiRequest<{agents:FormAgentData[]}>('/api/forms/agents');
+      const current=latest.agents.find(a=>a.id===draft.id);
+      if(current && current.updatedAt!==draft.updatedAt) throw new Error('This assistant changed on another device. Reload the saved version before editing again.');
+      const result=await apiRequest<{agent:FormAgentData}>('/api/forms/agents',{method:'POST',body:draft});
+      if(!result.agent?.id)throw new Error('The server did not confirm the save. Please retry.');
+      dirtyRef.current=false;setDirty(false);setDraft(result.agent);setNotice('Assistant changes saved.');setMessages([]);await resource.refresh();
+    }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+  }
+  async function create() {
+    if(!name.trim()) {setError('Enter a name for your assistant.');return;}
+    setBusy(true);setError(null);
+    try {
+      const result=await apiRequest<{agent:FormAgentData}>('/api/forms/agents',{method:'POST',body:{name:name.trim(),roleTitle:'Business assistant',welcomeGreeting:'Hello! How can we help you today?',knowledge:{documents:[],faqPairs:[],guardrails:[]}}});
+      if(!result.agent?.id)throw new Error('The server did not confirm assistant creation.');
+      setSelectedId(result.agent.id);await resource.refresh();setNotice('Assistant created. Add business information, then test its answers.');
+    }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+  }
+  function addFaq() {
+    if(!draft || !question.trim() || !answer.trim()) {setError('Enter both a question and an answer.');return;}
+    const faq={id:editingFaq || `faq_${Date.now()}`,question:question.trim(),answer:answer.trim()};
+    const existing=draft.knowledge?.faqPairs || [];
+    edit({knowledge:{...draft.knowledge,faqPairs:editingFaq ? existing.map(f=>f.id===editingFaq?faq:f) : [...existing,faq]}});
+    setQuestion('');setAnswer('');setEditingFaq(null);setError(null);
+  }
+  async function test(value = testInput) {
+    if(!draft?.id || testing || !value.trim())return;
+    if(dirty){setError('Save your changes before testing so the answer uses your latest information.');return;}
+    setTesting(true);setError(null);
+    const history=messages;
+    setMessages(old=>[...old,{role:'user',content:value.trim()}]);setTestInput('');
+    try {
+      const result=await apiRequest<{reply?:string;response?:string;text?:string}>(`/api/forms/agents/${draft.id}/chat`,{method:'POST',body:{message:value.trim(),history}});
+      const reply=result.reply||result.response||result.text;
+      if(!reply)throw new Error('No answer received. Please retry.');
+      setMessages(old=>[...old,{role:'assistant',content:reply}]);
+    }catch(e){setMessages(history);setTestInput(value);setError((e as Error).message);}finally{setTesting(false);}
+  }
+  function reload() {
+    Alert.alert('Reload saved version?', 'Unsaved edits will be discarded.',[{text:'Keep editing',style:'cancel'},{text:'Reload',style:'destructive',onPress:()=>{dirtyRef.current=false;setDirty(false);setError(null);void resource.refresh();}}]);
+  }
+  async function openWeb() {try{await Linking.openURL(getBgosWebUrl('agentStudio'));}catch{setError('Could not open the browser. Please try again.');}}
+  const faqs=draft?.knowledge?.faqPairs || [];
+  return <Screen title="Business assistant" subtitle="Teach it about your business, then test its answers." showBack onRefresh={()=>{if(dirty)reload();else void resource.refresh();}}>
+    <ErrorNotice message={error||resource.error} retry={dirty ? reload : resource.refresh}/>
+    {!!notice && <Text accessibilityLiveRegion="polite" style={ui.body}>{notice}</Text>}
+    {resource.loading && !resource.data ? <Loading/> : !draft ? <Card><Text style={ui.heading}>Set up your business assistant</Text><Text style={ui.body}>Start with a name. You can add answers and connect customer channels next.</Text><Field label="Assistant name" value={name} onChangeText={setName} placeholder="Your business assistant"/><Action label={busy?'Creating…':'Create assistant'} disabled={busy||!name.trim()} onPress={()=>void create()}/></Card> : <>
+      {(resource.data?.agents.length || 0)>1 && <View style={[ui.row,{flexWrap:'wrap',gap:8}]}>{resource.data?.agents.map(a=><Chip key={a.id} label={a.name} selected={selectedId===a.id} onPress={()=>{if(dirty||testing||busy){setError('Save or discard your current edits before switching assistants.');return;}setSelectedId(a.id);setMessages([]);}}/>)}</View>}
+      <View style={[ui.row,{flexWrap:'wrap',gap:8}]}>{(['overview','knowledge','channels','test'] as const).map(t=><Chip key={t} label={{overview:'Overview',knowledge:'Knowledge',channels:'Channels',test:'Test'}[t]} selected={tab===t} onPress={()=>setTab(t)}/>)}</View>
+      <Text style={ui.caption}>{draft.name} · {dirty?'Unsaved changes':'Saved configuration'}</Text>
+      {tab==='overview' && <>
+        <Card><Text style={ui.heading}>Get ready for customers</Text><Text style={ui.body}>{faqs.length} saved or draft answers · {draft.knowledge?.documents?.length || 0} source references</Text><Text style={ui.caption}>A saved configuration does not mean a channel is connected. Check Channels before going live.</Text><Action secondary label="1. Add business knowledge" onPress={()=>setTab('knowledge')}/><Action secondary label="2. Test customer questions" onPress={()=>setTab('test')}/><Action secondary label="3. Review connected channels" onPress={()=>setTab('channels')}/></Card>
+        <Card><Field label="Assistant name" value={draft.name} editable={!busy} onChangeText={name=>edit({name})}/><Field label="What does your assistant help with?" value={draft.roleTitle || ''} editable={!busy} onChangeText={roleTitle=>edit({roleTitle})}/><Field label="Welcome message" multiline value={draft.welcomeGreeting || ''} editable={!busy} onChangeText={welcomeGreeting=>edit({welcomeGreeting})}/></Card>
+      </>}
+      {tab==='knowledge' && <>
+        <Card><Text style={ui.heading}>Business information</Text><Text style={ui.body}>Keep services, hours, pricing and policies accurate. Add specific answers below.</Text><Action secondary label="Manage booking services" onPress={()=>router.push('/booking-page')}/><Text style={ui.caption}>Editing services here does not automatically add an FAQ. Include any pricing or booking policy the assistant needs in its answers.</Text></Card>
+        <Card><Text style={ui.heading}>{editingFaq?'Edit answer':'Add an answer'}</Text><Field label="Customer question" value={question} onChangeText={setQuestion} editable={!busy}/><Field label="Your answer" multiline value={answer} onChangeText={setAnswer} editable={!busy}/><Action secondary label={editingFaq?'Update answer':'Add to draft'} disabled={busy} onPress={addFaq}/>{editingFaq && <Action secondary label="Cancel edit" onPress={()=>{setEditingFaq(null);setQuestion('');setAnswer('');}}/>}</Card>
+        {faqs.map(f=><Card key={f.id}><Text style={ui.heading}>{f.question}</Text><Text style={ui.body}>{f.answer}</Text><View style={[ui.row,{gap:12}]}><Action secondary label="Edit" disabled={busy} onPress={()=>{setEditingFaq(f.id);setQuestion(f.question);setAnswer(f.answer);}}/><Action secondary danger label="Remove" disabled={busy} onPress={()=>Alert.alert('Remove answer?','Save changes to apply this removal.',[{text:'Cancel',style:'cancel'},{text:'Remove',style:'destructive',onPress:()=>edit({knowledge:{...draft.knowledge,faqPairs:faqs.filter(x=>x.id!==f.id)}})}])}/></View></Card>)}
+        <Card><Text style={ui.heading}>Website and documents</Text><Text style={ui.body}>Upload documents, import a website and review processing status in the web knowledge editor. Opens your browser; you may need to sign in.</Text><Action secondary label="Open advanced knowledge · Web" icon="open-in-new" onPress={()=>void openWeb()}/></Card>
+      </>}
+      {tab==='channels' && <Card><Text style={ui.heading}>Customer channels</Text><Text style={ui.body}>Review account connections in Integrations. Configure how this assistant uses each channel in the web Studio.</Text><Action label="View connected accounts" onPress={()=>router.push('/(tabs)/integrations')}/><Action secondary label="Configure assistant channels · Web" onPress={()=>void openWeb()}/><Action secondary label="View customer conversations" onPress={()=>router.push('/(tabs)/inbox')}/></Card>}
+      {tab==='test' && <>
+        <Card><Text style={ui.heading}>Test {draft.name}</Text><Text style={ui.body}>Check hours, services and pricing before sharing your assistant.</Text>{['What services do you offer?','How can I book an appointment?'].map(q=><Action key={q} secondary label={q} disabled={testing||dirty} onPress={()=>void test(q)}/>)}</Card>
+        {messages.map((m,i)=><Card key={i}><Text style={ui.label}>{m.role==='user'?'You':draft.name}</Text><Text selectable style={ui.body}>{m.content}</Text></Card>)}
+        <Card>{testing && <Text accessibilityLiveRegion="polite" style={ui.caption}>Preparing an answer…</Text>}<Field label="Ask a customer question" multiline value={testInput} onChangeText={setTestInput} editable={!testing}/><Action label={testing?'Responding…':'Test answer'} disabled={testing||dirty||!testInput.trim()} onPress={()=>void test()}/><Action secondary label="Clear conversation" disabled={testing} onPress={()=>setMessages([])}/></Card>
+      </>}
+      {dirty && <Card><Text style={ui.caption}>Your edits are not saved yet.</Text><Action label={busy?'Saving…':'Save changes'} disabled={busy} onPress={()=>void save()}/><Action secondary label="Discard edits" disabled={busy} onPress={reload}/></Card>}
+    </>}
+  </Screen>;
 }

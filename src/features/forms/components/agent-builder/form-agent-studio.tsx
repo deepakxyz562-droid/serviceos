@@ -174,8 +174,16 @@ export function FormAgentStudio({
   siteOrigin,
 }: FormAgentStudioProps) {
   const isBgos = isBgosWorkspace(useAppStore(s => s.auth));
-  const visibleChannels = isBgos ? CHANNELS_LIST.filter(channel => !['canva', 'presentation'].includes(channel.id)) : CHANNELS_LIST;
+  const visibleChannels = isBgos ? CHANNELS_LIST.filter(channel => !['canva', 'presentation', 'shopify'].includes(channel.id)) : CHANNELS_LIST;
   const [agent, setAgentState] = useState<FormAgentData>(initialAgent);
+  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(initialAgent));
+  const hasUnsavedChanges = !agent.id || JSON.stringify(agent) !== savedSnapshot;
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasUnsavedChanges]);
   const [studioTab, setStudioTab] = useState<StudioTabType>('overview');
   const [selectedChannel, setSelectedChannel] = useState<AgentChannelType>('chatbot');
   const [rightDrawerMode, setRightDrawerMode] = useState<'channel_settings' | 'designer'>('channel_settings');
@@ -276,6 +284,7 @@ export function FormAgentStudio({
   }, []);
 
   const setAgent = (updater: FormAgentData | ((prev: FormAgentData) => FormAgentData)) => {
+    if (saving) return;
     setAgentState((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       onChange?.(next);
@@ -289,6 +298,7 @@ export function FormAgentStudio({
     if (initialAgent && initialAgent.id !== initialAgentIdRef.current) {
       initialAgentIdRef.current = initialAgent.id;
       setAgentState(initialAgent);
+      setSavedSnapshot(JSON.stringify(initialAgent));
       setTitleInput(initialAgent.name);
     }
   }, [initialAgent]);
@@ -323,6 +333,7 @@ export function FormAgentStudio({
         : targetAgent;
 
       setAgentState(savedAgent);
+      setSavedSnapshot(JSON.stringify(savedAgent));
 
       // Persist to the form's agentConfig (this flows into schemaJson on save)
       if (onSave) {
@@ -385,7 +396,7 @@ export function FormAgentStudio({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={onBack}
+              onClick={() => { if (!hasUnsavedChanges || window.confirm('Discard unsaved assistant changes?')) onBack?.(); }}
               className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground gap-1 shrink-0"
             >
               <ArrowLeft className="size-3.5" /> Back
@@ -435,11 +446,11 @@ export function FormAgentStudio({
             type="button"
             size="sm"
             onClick={() => handleSave(agent, false)}
-            disabled={saving}
+            disabled={saving || !hasUnsavedChanges}
             className="h-9 text-xs font-bold px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-xs gap-1.5"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-            Publish Changes
+            {saving ? 'Saving…' : hasUnsavedChanges ? 'Save changes' : 'Saved'}
           </Button>
         </div>
       </header>

@@ -1,3 +1,4 @@
+import { serviceInputError } from '../../../../../shared/service-input';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -45,6 +46,9 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({error: 'Invalid service'}, {status: 400});
+    const validationError = serviceInputError(body, true);
+    if (validationError) return NextResponse.json({error: validationError}, {status: 400});
 
     const existing = await db.service.findFirst({
       where: { id, tenantId: user.tenantId },

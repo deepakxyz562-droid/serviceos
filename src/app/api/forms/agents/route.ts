@@ -1,3 +1,4 @@
+import type { FormAgent } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
           style: {
             ...DEFAULT_FORM_AGENT.style,
             ...(config.style || {}),
-          },
+          } as FormAgentData['style'],
           updatedAt: toIsoString(agent.updatedAt),
         };
         return NextResponse.json({ agent: merged });
@@ -127,7 +128,7 @@ export async function GET(request: NextRequest) {
           style: {
             ...DEFAULT_FORM_AGENT.style,
             ...(config.style || {}),
-          },
+          } as FormAgentData['style'],
           updatedAt: toIsoString(agent.updatedAt),
         } as FormAgentData;
       });
@@ -150,14 +151,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => ({}))) as FormAgentData;
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
+    if (!user?.tenantId) return NextResponse.json({error: 'Authentication required'}, {status: 401});
+    if (user.role === 'customer') return NextResponse.json({error: 'Not permitted'}, {status: 403});
 
     if (!body.name) {
       return NextResponse.json({ error: 'Agent name is required' }, { status: 400 });
     }
 
     const slug = body.slug || `agent-${Date.now()}`;
-    const candidateTenantId = user?.tenantId || body.tenantId || null;
+    const candidateTenantId = user.tenantId;
     let validTenantId: string | null = null;
     if (candidateTenantId) {
       const existingTenant = await db.tenant.findUnique({
@@ -194,7 +197,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Check if an agent already exists by ID or by slug
-    let existing = null;
+    let existing: FormAgent | null = null;
     if (body.id) {
       existing = await db.formAgent.findFirst({
         where: {
@@ -209,9 +212,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (existing && existing.tenantId !== user.tenantId) return NextResponse.json({error: 'Assistant not found'}, {status: 404});
+    if (existing && body.updatedAt && toIsoString(existing.updatedAt) !== body.updatedAt) return NextResponse.json({error: 'This assistant has changed. Reload before saving.'}, {status: 409});
     if (existing) {
       const updated = await db.formAgent.update({
-        where: { id: existing.id },
+        where: { id: existing.id, tenantId: user.tenantId, updatedAt: existing.updatedAt },
         data: {
           tenantId: validTenantId || existing.tenantId,
           slug: body.slug || existing.slug,
@@ -223,14 +228,14 @@ export async function POST(request: NextRequest) {
           voiceTone: voiceTone || 'friendly',
           welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
           greetingSubtitle: greetingSubtitle || null,
-          configJson: {
+          configJson: JSON.stringify({
             ...body,
             id: existing.id,
             slug: body.slug || existing.slug,
             avatarUrl: effectiveAvatar,
             brandColor: effectiveBrandColor,
             style: mergedStyle,
-          } as unknown as object,
+          }),
         },
       });
 
@@ -267,13 +272,13 @@ export async function POST(request: NextRequest) {
         voiceTone: voiceTone || 'friendly',
         welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
         greetingSubtitle: greetingSubtitle || null,
-        configJson: {
+        configJson: JSON.stringify({
           ...body,
           slug: resolvedSlug,
           avatarUrl: effectiveAvatar,
           brandColor: effectiveBrandColor,
           style: mergedStyle,
-        } as unknown as object,
+        }),
       },
     });
 
@@ -290,6 +295,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    if ((error as {code?: string})?.code === 'P2025') return NextResponse.json({error: 'This assistant changed while saving. Reload and try again.'}, {status: 409});
     console.error('[forms/agents POST] Error saving agent:', error);
     return NextResponse.json(
       { error: 'Failed to save form agent to database', details: error instanceof Error ? error.message : 'Unknown' },
