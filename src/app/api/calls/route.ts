@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { callInput, writeCall } from '@/lib/call-tracker-write';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,8 +34,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search')?.trim() || '';
     const filter = searchParams.get('filter') || 'all';
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(100, Math.max(1, (parseInt(searchParams.get('limit') || '50', 10) || 50)));
+    const page = Math.max(1, (parseInt(searchParams.get('page') || '1', 10) || 1));
     const skip = (page - 1) * limit;
 
     // Use Prisma AND array so search and filters combine cleanly without overwriting
@@ -181,83 +182,25 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * POST /api/calls
- * Manually logs a call or records a SIM call from the mobile app.
- * Uses db.$transaction for atomic CRM lead creation.
- */
+/** Authenticated ingestion; atomic persistence is implemented in PostgreSQL. */
 export async function POST(request: NextRequest) {
+  const auth = await getAuthUser();
+  if (!auth?.tenantId) return NextResponse.json({error:'Unauthorized'},{status:401});
+  let raw: unknown;
+  try { raw = await request.json(); } catch { return NextResponse.json({error:'Invalid JSON'},{status:400}); }
+  const parsed = callInput.safeParse(raw);
+  if (!parsed.success) return NextResponse.json({error:parsed.error.issues[0].message},{status:400});
+  const v = parsed.data;
   try {
-    const auth = await getAuthUser();
-    if (!auth?.tenantId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const customerPhone = (body.customerPhone || body.phone || '').trim();
-    if (!customerPhone) {
-      return NextResponse.json({ error: 'Phone number is required' }, { status: 400 });
-    }
-
-    const callType = body.callType || (body.durationSec === 0 ? 'missed' : 'inbound');
-    const durationSec = Math.max(0, parseInt(body.durationSec || '0', 10));
-    const summary = body.summary || body.notes || null;
-    const outcomeType = body.outcomeType || (callType === 'missed' ? 'missed' : 'connected');
-    const createLead = Boolean(body.createLead);
-    const leadName = (body.leadName || '').trim() || `Caller ${customerPhone.slice(-4)}`;
-    const leadValue = parseFloat(body.leadValue || '0') || 0;
-
-    const initialNotes = summary
-      ? [{ author: auth.name || 'User', text: `Call log: ${summary}`, createdAt: new Date().toISOString() }]
-      : [{ author: auth.name || 'User', text: `Call recorded (${callType}, ${durationSec}s)`, createdAt: new Date().toISOString() }];
-
-    const result = await db.$transaction(async (tx) => {
-      let createdLeadId: string | null = null;
-
-      if (createLead) {
-        const newLead = await tx.lead.create({
-          data: {
-            tenantId: auth.tenantId,
-            name: leadName,
-            phone: customerPhone,
-            source: 'phone_call',
-            status: 'new',
-            value: leadValue,
-            description: summary || `Call duration: ${durationSec}s · ${callType}`,
-            notesJson: JSON.stringify(initialNotes),
-          },
-        });
-        createdLeadId = newLead.id;
-      }
-
-      const call = await tx.aiCall.create({
-        data: {
-          tenantId: auth.tenantId,
-          customerPhone,
-          fromNumber: callType === 'outbound' ? 'You' : customerPhone,
-          toNumber: callType === 'outbound' ? customerPhone : 'You',
-          callType,
-          status: callType === 'missed' ? 'missed' : 'ended',
-          durationSec,
-          summary,
-          outcomeType,
-          endedReason: callType === 'missed' ? 'no-answer' : outcomeType || 'completed',
-          leadId: createdLeadId,
-          startedAt: new Date(Date.now() - durationSec * 1000),
-          endedAt: new Date(),
-        },
-      });
-
-      return { call, leadId: createdLeadId };
+    const result = await writeCall(auth.tenantId,'create',{
+      ...v, customerPhone:v.customerPhone || v.phone,
+      summary:v.summary || v.notes || null,
+      notesJson:JSON.stringify(v.notes ? [{author:auth.name || 'User',text:v.notes,createdAt:new Date().toISOString()}] : []),
+      // Manual records do not invent call timestamps from form duration.
+      startedAt:v.startedAt || null, endedAt:v.endedAt || null,
     });
-
-    return NextResponse.json({
-      success: true,
-      call: result.call,
-      leadId: result.leadId,
-    });
-  } catch (error) {
-    console.error('[Calls POST]', error);
-    return NextResponse.json({ error: 'Failed to record call' }, { status: 500 });
+    return NextResponse.json(result,{status:result.status || 200});
+  } catch {
+    return NextResponse.json({error:'Call could not be saved. Please retry; automatic retries will not duplicate identified events.'},{status:503});
   }
 }

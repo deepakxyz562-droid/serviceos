@@ -5740,6 +5740,8 @@ model AiPhoneNumber {
 
 model AiCall {
   id              String   @id @default(cuid())
+  captureSource   String?
+  sourceEventId   String?
   tenantId        String?
   workspaceId     String?
   vapiCallId      String?  @unique // Vapi call ID (Phase 7: @unique for idempotency)
@@ -5824,6 +5826,7 @@ model AiCall {
   @@index([receptionistId])
   // Phase 8 Hardening: reconciliation cron scans for ended calls with non-finalized billing
   @@index([status, billingStatus, endedAt])
+  @@unique([tenantId, captureSource, sourceEventId], map: "AiCall_tenant_source_event_key")
 }
 
 // ==========================================

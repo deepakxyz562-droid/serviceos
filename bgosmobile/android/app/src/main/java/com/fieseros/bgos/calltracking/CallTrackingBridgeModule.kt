@@ -84,6 +84,8 @@ class CallTrackingBridgeModule(private val reactContext: ReactApplicationContext
 
             val map: WritableMap = Arguments.createMap()
             map.putBoolean("enabled", enabled)
+            map.putString("syncError", prefs.getString("sync_error", null))
+            map.putString("businessAccount", prefs.getString("business_account", null))
             map.putInt("designatedSimSlot", designatedSlot)
             promise.resolve(map)
         } catch (e: Exception) {
@@ -176,4 +178,83 @@ class CallTrackingBridgeModule(private val reactContext: ReactApplicationContext
             promise.reject("CALL_LOG_ERROR", e.message, e)
         }
     }
+    @ReactMethod
+    fun getPhoneAccounts(promise: Promise) {
+        try {
+            val telecom = reactContext.getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
+            val result = Arguments.createArray()
+            telecom.callCapablePhoneAccounts.forEach { handle ->
+                val account = telecom.getPhoneAccount(handle)
+                if (account != null && account.hasCapabilities(android.telecom.PhoneAccount.CAPABILITY_SIM_SUBSCRIPTION)) {
+                    val item = Arguments.createMap()
+                    item.putString("id", "${handle.componentName.flattenToString()}|${handle.id}")
+                    item.putString("label", account.label.toString())
+                    result.pushMap(item)
+                }
+            }
+            promise.resolve(result)
+        } catch(e: Exception) { promise.reject("ACCOUNTS", "Phone accounts unavailable", e) }
+    }
+
+    @ReactMethod
+    fun configureCapture(owner: String, account: String, enabled: Boolean, promise: Promise) {
+        synchronized(CallCaptureWorker.lock) {
+            if (prefs.getString("owner", null) != owner) prefs.edit().clear().commit()
+            val edit = prefs.edit().putString("owner",owner).putString("business_account",account).putBoolean("tracking_enabled",enabled)
+            if (!prefs.contains("capture_since") || prefs.getString("business_account",null) != account) edit.putLong("capture_since",System.currentTimeMillis())
+            if (!prefs.contains("device_id")) edit.putString("device_id",java.util.UUID.randomUUID().toString())
+            if (!edit.commit()) { promise.reject("STORAGE","Unable to save tracking settings"); return }
+        }
+        if (enabled) CallCaptureWorker.schedule(reactContext)
+        promise.resolve(true)
+    }
+
+    @ReactMethod
+    fun pendingCalls(owner: String, promise: Promise) {
+        synchronized(CallCaptureWorker.lock) {
+            if (prefs.getString("owner",null) != owner) { promise.resolve("[]"); return }
+            val queue = org.json.JSONObject(prefs.getString("outbox","{}") ?: "{}")
+            val result = org.json.JSONArray()
+            queue.keys().forEach { result.put(queue.getJSONObject(it)) }
+            promise.resolve(result.toString())
+        }
+    }
+
+    @ReactMethod
+    fun acknowledgeCall(owner: String, id: String, promise: Promise) {
+        synchronized(CallCaptureWorker.lock) {
+            if (prefs.getString("owner",null) != owner) { promise.reject("OWNER","Session changed"); return }
+            val queue = org.json.JSONObject(prefs.getString("outbox","{}") ?: "{}")
+            val delivered = org.json.JSONObject(prefs.getString("delivered","{}") ?: "{}")
+            queue.remove(id)
+            delivered.put(id,true)
+            promise.resolve(prefs.edit().putString("outbox",queue.toString()).putString("delivered",delivered.toString()).commit())
+        }
+    }
+
+    @ReactMethod
+    fun clearCapture(promise: Promise) {
+        synchronized(CallCaptureWorker.lock) { prefs.edit().clear().commit() }
+        androidx.work.WorkManager.getInstance(reactContext).cancelUniqueWork("bgos-call-reconcile")
+        androidx.work.WorkManager.getInstance(reactContext).cancelUniqueWork("bgos-call-upload")
+        androidx.work.WorkManager.getInstance(reactContext).cancelUniqueWork("bgos-call-capture")
+        promise.resolve(true)
+    }
+
+    @ReactMethod
+    fun updateCaptureSession(owner: String, token: String, url: String, promise: Promise) {
+        try {
+            val uri = java.net.URI(url)
+            if (uri.scheme != "https" || uri.host.isNullOrBlank() || uri.userInfo != null || uri.query != null || uri.fragment != null) {
+                promise.reject("URL","Background sync requires HTTPS"); return
+            }
+            synchronized(CallCaptureWorker.lock) {
+                if(prefs.getString("owner",null)!=owner) {promise.resolve(false);return}
+                prefs.edit().putString("access_token",CaptureCredentials.encrypt(token)).putString("api_url",url.trimEnd('/')).commit()
+            }
+            CallSyncWorker.enqueue(reactContext)
+            promise.resolve(true)
+        } catch(e: Exception) {promise.reject("SESSION","Could not configure secure background sync",e)}
+    }
+
 }

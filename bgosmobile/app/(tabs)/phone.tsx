@@ -1,9 +1,11 @@
+import { CaptureSettings } from '../../src/components/phone/capture-settings';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Alert,
   AppState,
   Linking,
   Modal,
+  NativeModules,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -134,11 +136,15 @@ export default function PhoneScreen() {
   const pendingCallRef = useRef<{ number: string; startedAt: number } | null>(null);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (nextAppState === 'active' && pendingCallRef.current) {
         const callInfo = pendingCallRef.current;
         pendingCallRef.current = null;
 
+        // Native capture owns these records; do not offer a duplicate manual log.
+        if (NativeModules.BgosCallTracking) {
+          try { if ((await NativeModules.BgosCallTracking.getTrackingStatus()).enabled) return; } catch {}
+        }
         // Perform instant Caller ID resolution
         apiRequest<CallerLookup>(`/api/calls/lookup?phone=${encodeURIComponent(callInfo.number)}`)
           .then((res) => {
@@ -160,7 +166,7 @@ export default function PhoneScreen() {
   // Manual Log Form State
   const [logPhone, setLogPhone] = useState('');
   const [logType, setLogType] = useState<'inbound' | 'outbound' | 'missed'>('inbound');
-  const [logDurationMin, setLogDurationMin] = useState('2');
+  const [logDurationMin, setLogDurationMin] = useState('0');
   const [logOutcome, setLogOutcome] = useState('connected');
   const [logNotes, setLogNotes] = useState('');
   const [logCreateLead, setLogCreateLead] = useState(true);
@@ -331,6 +337,7 @@ export default function PhoneScreen() {
       }
     >
       <ErrorNotice message={callsResource.error} retry={callsResource.refresh} />
+      <CaptureSettings onSynced={callsResource.refresh} />
 
       {notice ? (
         <View style={{ backgroundColor: colors.successSoft, padding: 12, borderRadius: 12, marginBottom: 8 }}>
@@ -544,7 +551,7 @@ export default function PhoneScreen() {
                   ? 'No leads converted yet'
                   : 'No calls recorded'
               }
-              detail="Every phone call you make, receive, or log appears here for instant follow-up."
+              detail="Your synced business calls and manually logged calls appear here."
               actionLabel="+ Log Call"
               onAction={() => setLogModalOpen(true)}
             />

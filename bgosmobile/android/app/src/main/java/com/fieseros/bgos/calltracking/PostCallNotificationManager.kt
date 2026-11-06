@@ -14,7 +14,7 @@ import com.fieseros.bgos.R
 /**
  * PostCallNotificationManager
  * Shows a high-priority heads-up action notification right after a call ends.
- * Bypasses fragile SYSTEM_ALERT_WINDOW overlays and complies 100% with Google Play.
+ * Uses standard notifications; delivery remains subject to user notification settings.
  */
 object PostCallNotificationManager {
 
@@ -22,6 +22,7 @@ object PostCallNotificationManager {
     private const val CHANNEL_NAME = "BGOS Call Tracker"
 
     fun showPostCallNotification(context: Context, phoneNumber: String, durationSec: Int) {
+        if (Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
 
@@ -41,7 +42,7 @@ object PostCallNotificationManager {
         // 2. Intent to open BGOS app directly
         val appIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            data = Uri.parse("bgos://(tabs)/phone?action=log&number=${Uri.encode(phoneNumber)}")
+            data = Uri.parse("bgos://phone")
         }
         val appPendingIntent = PendingIntent.getActivity(
             context,
@@ -63,18 +64,18 @@ object PostCallNotificationManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val durationLabel = if (durationSec > 0) "${durationSec}s call" else "Missed call"
+        val durationLabel = if (durationSec > 0) "${durationSec}s talk time" else "No recorded talk time"
 
         // 4. Build Notification
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Call Ended: $phoneNumber")
-            .setContentText("$durationLabel • Tap to save notes or convert to CRM lead")
+            .setContentTitle("Call saved: $phoneNumber")
+            .setContentText("$durationLabel • Open your call tracker to review")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setAutoCancel(true)
             .setContentIntent(appPendingIntent)
-            .addAction(0, "+ Save Lead", appPendingIntent)
+            .addAction(0, "Review call", appPendingIntent)
             .addAction(0, "💬 WhatsApp", waPendingIntent)
             .build()
 
