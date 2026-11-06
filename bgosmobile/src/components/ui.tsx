@@ -80,6 +80,7 @@ export function Screen({
   customHeader,
   extraBottomPadding = 0,
   floatingAction,
+  scrollable = true,
 }: {
   title?: string;
   subtitle?: string;
@@ -92,6 +93,7 @@ export function Screen({
   customHeader?: React.ReactNode;
   extraBottomPadding?: number;
   floatingAction?: React.ReactNode;
+  scrollable?: boolean;
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -115,69 +117,78 @@ export function Screen({
   const floatingClearance = floatingAction ? 60 : 0;
   const bottomInset = Math.max(insets.bottom, 16) + 76 + extraBottomPadding + floatingClearance;
 
+  const headerContent = customHeader ? (
+    customHeader
+  ) : (
+    <>
+      <View style={ui.topbar}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8, flexWrap: 'nowrap' }}>
+          {canBack ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              onPress={handleBack}
+              style={ui.backBtn}
+            >
+              <MaterialIcons name="arrow-back" size={20} color={colors.ink} />
+            </Pressable>
+          ) : null}
+          <Brand />
+        </View>
+        {rightAction ? (
+          <View style={{ flexShrink: 0, alignItems: 'flex-end', maxWidth: '65%' }}>
+            {rightAction}
+          </View>
+        ) : (
+          <View style={[ui.row, { flexShrink: 0, gap: 6, flexWrap: 'nowrap' }]}>
+            <View style={[ui.statusDot, { backgroundColor: colors.accent }]} />
+            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.muted }}>Online</Text>
+          </View>
+        )}
+      </View>
+      {title ? (
+        <Text accessibilityRole="header" style={ui.title}>
+          {title}
+        </Text>
+      ) : null}
+      {subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : <View style={{ height: 14 }} />}
+    </>
+  );
+
   return (
     <SafeAreaView style={[ui.screen, { paddingTop: insets.top < 44 ? topInset : 0 }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={{ flex: 1, position: 'relative' }}>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={[ui.content, { paddingBottom: bottomInset }]}
-            refreshControl={
-              onRefresh ? (
-                <RefreshControl
-                  refreshing={refreshing || pulling}
-                  onRefresh={async () => {
-                    setPulling(true);
-                    try {
-                      await onRefresh();
-                    } finally {
-                      setPulling(false);
-                    }
-                  }}
-                  tintColor={colors.brand}
-                />
-              ) : undefined
-            }
-          >
-            {customHeader ? (
-              customHeader
-            ) : (
-              <>
-                <View style={ui.topbar}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8, flexWrap: 'nowrap' }}>
-                    {canBack ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Go back"
-                        onPress={handleBack}
-                        style={ui.backBtn}
-                      >
-                        <MaterialIcons name="arrow-back" size={20} color={colors.ink} />
-                      </Pressable>
-                    ) : null}
-                    <Brand />
-                  </View>
-                  {rightAction ? (
-                    <View style={{ flexShrink: 0, alignItems: 'flex-end', maxWidth: '65%' }}>
-                      {rightAction}
-                    </View>
-                  ) : (
-                    <View style={[ui.row, { flexShrink: 0, gap: 6, flexWrap: 'nowrap' }]}>
-                      <View style={[ui.statusDot, { backgroundColor: colors.accent }]} />
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.muted }}>Online</Text>
-                    </View>
-                  )}
-                </View>
-                {title ? (
-                  <Text accessibilityRole="header" style={ui.title}>
-                    {title}
-                  </Text>
-                ) : null}
-                {subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : <View style={{ height: 14 }} />}
-              </>
-            )}
-            <View style={ui.stack}>{children}</View>
-          </ScrollView>
+          {scrollable ? (
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={[ui.content, { paddingBottom: bottomInset }]}
+              refreshControl={
+                onRefresh ? (
+                  <RefreshControl
+                    refreshing={refreshing || pulling}
+                    onRefresh={async () => {
+                      setPulling(true);
+                      try {
+                        await onRefresh();
+                      } finally {
+                        setPulling(false);
+                      }
+                    }}
+                    tintColor={colors.brand}
+                  />
+                ) : undefined
+              }
+            >
+              {headerContent}
+              <View style={ui.stack}>{children}</View>
+            </ScrollView>
+          ) : (
+            <View style={{ flex: 1, paddingHorizontal: 16 }}>
+              {headerContent}
+              <View style={{ flex: 1, paddingBottom: bottomInset }}>{children}</View>
+            </View>
+          )}
 
           {floatingAction ? (
             <View

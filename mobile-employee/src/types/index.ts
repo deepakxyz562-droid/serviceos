@@ -236,6 +236,10 @@ export interface Job {
   visits?: ScheduledVisit[];
   signatures?: JobSignature[];
   lineItems?: JobLineItem[];
+  lineItemsJson?: string | null;
+  isCreatedByMe?: boolean;
+  isAssignedToMe?: boolean;
+  creationChannel?: string;
   lifecycleTimestamps?: Record<string, string | null> | null;
   // Backend `/api/jobs/[id]` returns counts (NOT arrays) for photos /
   // signatures / checklists via Prisma's `_count` relation aggregate. The
@@ -340,10 +344,14 @@ export interface JobSignature {
 
 export interface JobLineItem {
   id?: string;
-  description: string;
+  name?: string;
+  description?: string;
   quantity: number;
-  unitPrice: number;
-  total: number;
+  unitPrice?: number;
+  rate?: number;
+  total?: number;
+  amount?: number;
+  type?: 'material' | 'labor' | 'service';
 }
 
 // ── Job Completion Proof ─────────────────────────────────────────────

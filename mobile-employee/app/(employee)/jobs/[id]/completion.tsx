@@ -86,9 +86,14 @@ import {
   Check,
   FileText,
   X,
+  Wrench,
+  Mic,
+  Plus,
+  Sparkles,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
@@ -106,7 +111,8 @@ import {
   useCompleteProof,
   useJobLifecycle,
 } from '@/hooks/use-jobs';
-import { assetUrl, ApiRequestError } from '@/lib/api';
+import * as Haptics from 'expo-haptics';
+import { api, assetUrl, ApiRequestError } from '@/lib/api';
 import { COLORS } from '@/lib/constants';
 import { captureGps } from '@/lib/gps';
 import { trackingManager } from '@/lib/tracking-manager';
@@ -120,7 +126,7 @@ import {
   SIGNATURE_STROKE_WIDTH,
   type Stroke,
 } from '@/lib/job-proof-helpers';
-import type { JobPhoto, JobSignature, ChecklistItem } from '@/types';
+import type { JobPhoto, JobSignature, ChecklistItem, JobLineItem } from '@/types';
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -1082,8 +1088,115 @@ export default function JobCompletionScreen() {
 
   const user = useAuthStore((s) => s.user);
   const [notes, setNotes] = useState('');
+  const [lineItems, setLineItems] = useState<JobLineItem[]>([]);
+  const [showWrapUpModal, setShowWrapUpModal] = useState(false);
+  const [wrapUpTranscript, setWrapUpTranscript] = useState('');
+  const [wrapUpLoading, setWrapUpLoading] = useState(false);
 
   const job = jobQuery.data;
+
+  // Sync initial lineItems and notes from job query
+  useEffect(() => {
+    if (job) {
+      if (Array.isArray(job.lineItems) && job.lineItems.length > 0) {
+        setLineItems(job.lineItems);
+      } else if (job.lineItemsJson) {
+        try {
+          const parsed = typeof job.lineItemsJson === 'string' ? JSON.parse(job.lineItemsJson) : job.lineItemsJson;
+          if (Array.isArray(parsed)) setLineItems(parsed);
+        } catch {}
+      }
+      if (job.notes && !notes) {
+        setNotes(job.notes);
+      }
+    }
+  }, [job]);
+
+  const handleVoiceWrapUp = async () => {
+    const text = wrapUpTranscript.trim();
+    if (!text) {
+      show('Please speak or type extra parts / work first.', 'warning');
+      return;
+    }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setWrapUpLoading(true);
+
+    try {
+      const res = await api.post<{
+        success: boolean;
+        spokenFeedback?: string;
+        data?: {
+          newItems?: any[];
+          additionalTotal?: number;
+          completionNotes?: string;
+        };
+        error?: string;
+      }>('/api/ai/voice-command', {
+        transcript: text,
+        jobId: id,
+      });
+
+      if (!res || !res.success) {
+        show(res?.spokenFeedback || res?.error || 'Could not understand command.', 'error');
+        return;
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      show(res.spokenFeedback || 'Materials & extra work logged!', 'success');
+      setWrapUpTranscript('');
+      setShowWrapUpModal(false);
+
+      if (res?.data?.newItems && Array.isArray(res.data.newItems)) {
+        const items = res.data.newItems;
+        setLineItems((prev) => [...prev, ...items]);
+      }
+      if (res?.data?.completionNotes) {
+        const compNotes = res.data.completionNotes;
+        setNotes((prev) => (prev ? `${prev}\n${compNotes}` : compNotes));
+      }
+    } catch (err: any) {
+      show(err?.message || 'Failed to process voice command.', 'error');
+    } finally {
+      setWrapUpLoading(false);
+    }
+  };
+
+  const handleAddManualItem = () => {
+    const newItem: JobLineItem = {
+      id: `mat_${Date.now()}`,
+      name: 'New Part / Material',
+      description: 'Field material',
+      quantity: 1,
+      rate: 0,
+      amount: 0,
+      unitPrice: 0,
+      total: 0,
+      type: 'material',
+    };
+    setLineItems((prev) => [...prev, newItem]);
+  };
+
+  const handleUpdateItem = (index: number, updates: Partial<JobLineItem>) => {
+    setLineItems((prev) => {
+      const copy = [...prev];
+      const current = { ...copy[index], ...updates };
+      const qty = Number(current.quantity) || 1;
+      const rate = Number(current.rate ?? current.unitPrice ?? 0);
+      const amt = qty * rate;
+      current.quantity = qty;
+      current.rate = rate;
+      current.unitPrice = rate;
+      current.amount = amt;
+      current.total = amt;
+      copy[index] = current;
+      return copy;
+    });
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setLineItems((prev) => prev.filter((_, i) => i !== index));
+  };
   const allPhotos: JobPhoto[] = photosQuery.data ?? job?.photos ?? [];
   const allSignatures: JobSignature[] =
     signaturesQuery.data ?? job?.signatures ?? [];
@@ -1149,6 +1262,15 @@ export default function JobCompletionScreen() {
     ).trim();
 
     try {
+      // 0. Sync any added/updated line items to the job so invoice has the updated items
+      if (lineItems.length > 0) {
+        const subtotal = lineItems.reduce((acc, it) => acc + (Number(it.amount ?? it.total ?? 0)), 0);
+        await api.put(`/api/jobs/${id}`, {
+          lineItemsJson: JSON.stringify(lineItems),
+          quotedAmount: subtotal > 0 ? subtotal : undefined,
+        }).catch(() => null);
+      }
+
       // 1. Submit denormalized completion proof snapshot (photos + sig + notes
       //    + customerName). Photos and signatures are already persisted as
       //    proper JobPhoto / JobSignature rows from the inline captures — the
@@ -1208,6 +1330,7 @@ export default function JobCompletionScreen() {
     allPhotos,
     customerSignature,
     notes,
+    lineItems,
     show,
   ]);
 
@@ -1393,6 +1516,132 @@ export default function JobCompletionScreen() {
           />
         </Card>
 
+        {/* Materials, Hardware & Extra Work (Voice AI) */}
+        <Card className="mb-4 bg-emerald-50/40 border-emerald-500/20">
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <SectionHeader
+                icon={Wrench}
+                iconColor="#059669"
+                title="Materials & Extra Work"
+              />
+              <View className="bg-emerald-100 px-1.5 py-0.5 rounded-full">
+                <Text className="text-[10px] font-bold text-emerald-800">Voice AI</Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                  setShowWrapUpModal(true);
+                }}
+                className="h-8 px-2.5 rounded-lg bg-emerald-600 flex-row items-center gap-1 active:bg-emerald-700 shadow-xs"
+              >
+                <Mic size={13} color="#FFFFFF" />
+                <Text className="text-xs font-bold text-white">Voice Log</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={handleAddManualItem}
+                className="h-8 px-2 rounded-lg bg-white border border-border flex-row items-center gap-1 active:bg-muted"
+              >
+                <Plus size={13} color={COLORS.foreground} />
+                <Text className="text-xs font-medium text-foreground">Add</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <Text className="text-xs text-muted-foreground mb-2.5">
+            Log extra hardware, parts, or labor to automatically invoice the customer.
+          </Text>
+
+          {lineItems.length > 0 ? (
+            <View className="space-y-2">
+              <View className="rounded-xl border border-border bg-white overflow-hidden divide-y divide-border/60">
+                {lineItems.map((item, idx) => (
+                  <View key={item.id || idx} className="p-2.5 flex-row items-center justify-between gap-2">
+                    <View className="flex-1">
+                      <View className="flex-row items-center gap-1.5 mb-1">
+                        <View
+                          className={`px-1.5 py-0.2 rounded ${
+                            item.type === 'labor' ? 'bg-blue-100' : 'bg-amber-100'
+                          }`}
+                        >
+                          <Text
+                            className={`text-[9px] font-bold uppercase ${
+                              item.type === 'labor' ? 'text-blue-800' : 'text-amber-800'
+                            }`}
+                          >
+                            {item.type === 'labor' ? 'Labor' : 'Part'}
+                          </Text>
+                        </View>
+                        <TextInput
+                          value={item.name || item.description}
+                          onChangeText={(text) => handleUpdateItem(idx, { name: text, description: text })}
+                          className="flex-1 text-xs font-bold text-foreground py-0"
+                          placeholder="Item name"
+                        />
+                      </View>
+
+                      <View className="flex-row items-center gap-3">
+                        <View className="flex-row items-center gap-1">
+                          <Text className="text-[11px] text-muted-foreground">Qty:</Text>
+                          <TextInput
+                            keyboardType="numeric"
+                            value={String(item.quantity || 1)}
+                            onChangeText={(text) => handleUpdateItem(idx, { quantity: Number(text) || 1 })}
+                            className="h-6 px-1.5 text-xs font-semibold bg-muted/40 rounded border border-border/60 text-center min-w-[32px]"
+                          />
+                        </View>
+
+                        <View className="flex-row items-center gap-1">
+                          <Text className="text-[11px] text-muted-foreground">Rate: $</Text>
+                          <TextInput
+                            keyboardType="numeric"
+                            value={String(item.rate ?? item.unitPrice ?? 0)}
+                            onChangeText={(text) => handleUpdateItem(idx, { rate: Number(text) || 0, unitPrice: Number(text) || 0 })}
+                            className="h-6 px-1.5 text-xs font-semibold bg-muted/40 rounded border border-border/60 text-right min-w-[48px]"
+                          />
+                        </View>
+                      </View>
+                    </View>
+
+                    <View className="items-end gap-1.5">
+                      <Text className="text-xs font-extrabold text-emerald-600 font-mono">
+                        ${((item.quantity || 1) * (item.rate ?? item.unitPrice ?? 0)).toFixed(2)}
+                      </Text>
+                      <Pressable
+                        onPress={() => handleRemoveItem(idx)}
+                        hitSlop={6}
+                        className="p-1 rounded active:bg-red-50"
+                      >
+                        <Trash2 size={13} color="#DC2626" />
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              {/* Total Banner */}
+              <View className="flex-row items-center justify-between p-2.5 rounded-xl bg-emerald-100/60 border border-emerald-300">
+                <Text className="text-xs font-bold text-emerald-900">
+                  Total Added to Invoice ({lineItems.length} items):
+                </Text>
+                <Text className="text-sm font-black font-mono text-emerald-800">
+                  ${lineItems.reduce((acc, it) => acc + (Number(it.amount ?? it.total ?? 0)), 0).toFixed(2)}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View className="p-3 rounded-xl border border-dashed border-border items-center justify-center bg-white/60">
+              <Text className="text-xs text-muted-foreground text-center">
+                No parts or extra labor logged yet. Tap <Text className="font-bold text-emerald-700">Voice Log</Text> or speak parts used.
+              </Text>
+            </View>
+          )}
+        </Card>
+
         {/* Completion Notes */}
         <Card className="mb-4">
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -1492,6 +1741,54 @@ export default function JobCompletionScreen() {
         visible={submitting}
         message={completeProof.isPending ? 'Submitting proof…' : 'Completing job…'}
       />
+
+      {/* Voice Wrap-Up Modal */}
+      <Modal visible={showWrapUpModal} onClose={() => setShowWrapUpModal(false)} position="bottom">
+        <View className="p-4">
+          <View className="flex-row items-center justify-between mb-3">
+            <View className="flex-row items-center gap-2">
+              <View className="size-8 rounded-lg bg-emerald-600 items-center justify-center">
+                <Mic size={16} color="#FFFFFF" />
+              </View>
+              <View>
+                <Text className="text-base font-black text-foreground">Voice Wrap-Up</Text>
+                <Text className="text-xs text-muted-foreground">Log hardware, parts & extra labor</Text>
+              </View>
+            </View>
+            <Pressable onPress={() => setShowWrapUpModal(false)} hitSlop={8}>
+              <X size={16} color={COLORS.mutedForeground} />
+            </Pressable>
+          </View>
+
+          <TextInput
+            value={wrapUpTranscript}
+            onChangeText={setWrapUpTranscript}
+            placeholder='e.g. "Used 45uF capacitor $45 and 30m extra pipe flushing labor $50"'
+            placeholderTextColor={COLORS.mutedForeground}
+            multiline
+            numberOfLines={3}
+            className="w-full min-h-[85px] p-3 text-sm text-foreground bg-muted/40 rounded-xl border border-border/80 mb-3"
+            style={{ textAlignVertical: 'top' }}
+          />
+
+          <Pressable
+            onPress={handleVoiceWrapUp}
+            disabled={wrapUpLoading || !wrapUpTranscript.trim()}
+            className={`h-11 rounded-xl flex-row items-center justify-center gap-2 ${
+              !wrapUpTranscript.trim() || wrapUpLoading ? 'bg-emerald-600/50' : 'bg-emerald-600 active:bg-emerald-700'
+            }`}
+          >
+            {wrapUpLoading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Mic size={15} color="#FFFFFF" />
+                <Text className="text-xs font-bold text-white">Log Parts & Notes with AI</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

@@ -39,6 +39,8 @@ import {
   ShieldAlert,
   ChevronRight,
   Filter,
+  Mic,
+  Sparkles,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -46,6 +48,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { InlineSpinner } from '@/components/ui/Spinner';
 import { SosModal } from '@/components/safety/SosModal';
+import { VoiceJobModal } from '@/components/ai/VoiceJobModal';
 import { OfflineStatusBar } from '@/components/ui/OfflineStatusBar';
 import { useEmployeeJobs, useLoadMoreJobs } from '@/hooks/use-jobs';
 import { useAuthStore } from '@/stores/auth-store';
@@ -67,9 +70,11 @@ export default function JobsListScreen() {
   const tenantCurrency = useAuthStore((s) => s.tenant?.currency ?? 'USD');
 
   const [activeTab, setActiveTab] = useState<MasterTab>('active');
+  const [originFilter, setOriginFilter] = useState<'all' | 'assigned' | 'created'>('all');
   const [subFilter, setSubFilter] = useState<string>('all');
   const [searchInput, setSearchInput] = useState('');
   const [showSosModal, setShowSosModal] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
 
   const { data, isLoading, isRefetching, refetch, error } = useEmployeeJobs('all');
   const loadMore = useLoadMoreJobs('all');
@@ -130,6 +135,13 @@ export default function JobsListScreen() {
     if (activeTab === 'active') source = activeJobsRaw;
     else if (activeTab === 'upcoming') source = upcomingJobsRaw;
     else source = historyJobsRaw;
+
+    // Apply origin filter (all / from dispatch / created by me)
+    if (originFilter === 'assigned') {
+      source = source.filter((j) => j.isAssignedToMe !== false && !j.isCreatedByMe);
+    } else if (originFilter === 'created') {
+      source = source.filter((j) => j.isCreatedByMe);
+    }
 
     const q = searchInput.trim().toLowerCase();
 
@@ -280,11 +292,28 @@ export default function JobsListScreen() {
             {/* Top row: Customer Name + Status Badge + Quoted Amount */}
             <View className="flex-row items-center justify-between">
               <View className="flex-1 pr-2">
-                <Text className="text-sm font-extrabold text-foreground" numberOfLines={1}>
-                  {item.customer?.name || item.title || 'Client Service'}
-                </Text>
+                <View className="flex-row items-center gap-1.5 flex-wrap">
+                  <Text className="text-sm font-extrabold text-foreground" numberOfLines={1}>
+                    {item.customer?.name || item.title || 'Client Service'}
+                  </Text>
+                  {item.isCreatedByMe ? (
+                    <View className="bg-purple-100 px-1.5 py-0.5 rounded-full flex-row items-center gap-0.5">
+                      <Sparkles size={9} color="#7C3AED" />
+                      <Text className="text-[9px] font-bold text-purple-700">
+                        Created by You
+                      </Text>
+                    </View>
+                  ) : (
+                    <View className="bg-slate-100 px-1.5 py-0.5 rounded-full flex-row items-center gap-0.5">
+                      <Briefcase size={8} color="#64748B" />
+                      <Text className="text-[9px] font-medium text-slate-600">
+                        Dispatch
+                      </Text>
+                    </View>
+                  )}
+                </View>
                 {item.title && item.title !== item.customer?.name ? (
-                  <Text className="text-xs font-medium text-muted-foreground" numberOfLines={1}>
+                  <Text className="text-xs font-medium text-muted-foreground mt-0.5" numberOfLines={1}>
                     {item.title}
                   </Text>
                 ) : null}
@@ -374,19 +403,36 @@ export default function JobsListScreen() {
           </Text>
         </View>
 
-        {/* SOS Emergency Button */}
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-            setShowSosModal(true);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Emergency SOS Distress Signal"
-          className="flex-row items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 border border-red-300 shadow-xs active:bg-red-100"
-        >
-          <ShieldAlert size={16} color="#DC2626" />
-          <Text className="text-xs font-black text-red-600 tracking-wider">SOS</Text>
-        </Pressable>
+        {/* Right header actions: Voice Job + SOS */}
+        <View className="flex-row items-center gap-2">
+          {/* Voice Job Button */}
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+              setShowVoiceModal(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Create Job via AI Voice"
+            className="flex-row items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 border border-emerald-300 shadow-xs active:bg-emerald-100"
+          >
+            <Mic size={14} color="#059669" />
+            <Text className="text-xs font-bold text-emerald-700">Voice Job</Text>
+          </Pressable>
+
+          {/* SOS Emergency Button */}
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+              setShowSosModal(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Emergency SOS Distress Signal"
+            className="flex-row items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 border border-red-300 shadow-xs active:bg-red-100"
+          >
+            <ShieldAlert size={16} color="#DC2626" />
+            <Text className="text-xs font-black text-red-600 tracking-wider">SOS</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* 3 Master Segmented Tabs */}
@@ -485,6 +531,65 @@ export default function JobsListScreen() {
               {historyJobsRaw.length}
             </Text>
           </View>
+        </Pressable>
+      </View>
+
+      {/* Origin Filter Segment: All | From Dispatch | Created by Me */}
+      <View className="flex-row rounded-xl bg-slate-100 p-1 border border-border/50 mb-2.5">
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => {});
+            setOriginFilter('all');
+          }}
+          className={`flex-1 items-center justify-center py-1.5 rounded-lg flex-row gap-1 ${
+            originFilter === 'all' ? 'bg-white shadow-xs' : ''
+          }`}
+        >
+          <Text
+            className={`text-xs font-bold ${
+              originFilter === 'all' ? 'text-slate-900' : 'text-slate-500'
+            }`}
+          >
+            All ({data?.length ?? 0})
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => {});
+            setOriginFilter('assigned');
+          }}
+          className={`flex-1 items-center justify-center py-1.5 rounded-lg flex-row gap-1 ${
+            originFilter === 'assigned' ? 'bg-white shadow-xs' : ''
+          }`}
+        >
+          <Briefcase size={11} color={originFilter === 'assigned' ? '#0F172A' : '#64748B'} />
+          <Text
+            className={`text-xs font-bold ${
+              originFilter === 'assigned' ? 'text-slate-900' : 'text-slate-500'
+            }`}
+          >
+            Dispatch ({data?.filter((j) => j.isAssignedToMe !== false && !j.isCreatedByMe).length ?? 0})
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => {});
+            setOriginFilter('created');
+          }}
+          className={`flex-1 items-center justify-center py-1.5 rounded-lg flex-row gap-1 ${
+            originFilter === 'created' ? 'bg-white shadow-xs' : ''
+          }`}
+        >
+          <Sparkles size={11} color={originFilter === 'created' ? '#7C3AED' : '#64748B'} />
+          <Text
+            className={`text-xs font-bold ${
+              originFilter === 'created' ? 'text-purple-700' : 'text-slate-500'
+            }`}
+          >
+            Created ({data?.filter((j) => j.isCreatedByMe).length ?? 0})
+          </Text>
         </Pressable>
       </View>
 
@@ -694,6 +799,11 @@ export default function JobsListScreen() {
       <SosModal
         visible={showSosModal}
         onClose={() => setShowSosModal(false)}
+      />
+
+      <VoiceJobModal
+        visible={showVoiceModal}
+        onClose={() => setShowVoiceModal(false)}
       />
     </SafeAreaView>
   );

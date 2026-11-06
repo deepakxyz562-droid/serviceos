@@ -47,6 +47,7 @@ import {
   ShieldCheck,
   Sparkles,
   ShieldAlert,
+  Mic,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -56,6 +57,7 @@ import { SkeletonList } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FieldCopilotModal } from '@/components/ai/FieldCopilotModal';
+import { VoiceJobModal } from '@/components/ai/VoiceJobModal';
 import { SosModal } from '@/components/safety/SosModal';
 import { DailyPrestartModal } from '@/components/safety/DailyPrestartModal';
 import { OnMyWayModal } from '@/components/job/OnMyWayModal';
@@ -168,6 +170,7 @@ export default function TodayScreen() {
   const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
   const [ownerScope, setOwnerScope] = useState<'my' | 'all'>('my');
   const [showCopilot, setShowCopilot] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [showSosModal, setShowSosModal] = useState(false);
   const [onMyWayJob, setOnMyWayJob] = useState<Job | null>(null);
 
@@ -429,9 +432,19 @@ export default function TodayScreen() {
         <Card className="mb-2.5">
           <View className="flex-row items-center justify-between">
             <View className="flex-1 pr-3">
-              <Text className="text-base font-bold text-foreground">
-                {item.customer.name}
-              </Text>
+              <View className="flex-row items-center gap-1.5 flex-wrap">
+                <Text className="text-base font-bold text-foreground">
+                  {item.customer.name}
+                </Text>
+                {item.isCreatedByMe && (
+                  <View className="bg-purple-100 px-1.5 py-0.5 rounded-full flex-row items-center gap-0.5">
+                    <Sparkles size={8} color="#7C3AED" />
+                    <Text className="text-[9px] font-bold text-purple-700">
+                      Created by You
+                    </Text>
+                  </View>
+                )}
+              </View>
               <View className="mt-1 flex-row items-center">
                 <Clock size={12} color={COLORS.mutedForeground} />
                 <Text className="ml-1 text-xs text-muted-foreground">{time}</Text>
@@ -635,6 +648,43 @@ export default function TodayScreen() {
                 </View>
               </View>
             </View>
+
+            {/* AI Field Copilot Quick Action Bar */}
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                setShowVoiceModal(true);
+              }}
+              className="mb-3 rounded-2xl border border-emerald-500/30 bg-emerald-50/70 p-3 shadow-xs active:bg-emerald-100/70"
+            >
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2.5 flex-1 pr-2">
+                  <View className="size-9 rounded-xl bg-emerald-600 items-center justify-center shadow-xs">
+                    <Mic size={18} color="#FFFFFF" />
+                  </View>
+                  <View className="flex-1">
+                    <View className="flex-row items-center gap-1.5">
+                      <Text className="text-xs font-bold text-slate-900">
+                        AI Field Copilot
+                      </Text>
+                      <View className="bg-emerald-200/80 px-1.5 py-0.2 rounded-full">
+                        <Text className="text-[9px] font-extrabold text-emerald-900">
+                          HANDS-FREE
+                        </Text>
+                      </View>
+                    </View>
+                    <Text className="mt-0.5 text-[11px] text-muted-foreground" numberOfLines={1}>
+                      Speak to create a job & self-assign on the spot
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="h-8 px-2.5 rounded-lg bg-emerald-600 flex-row items-center justify-center gap-1">
+                  <Mic size={12} color="#FFFFFF" />
+                  <Text className="text-xs font-bold text-white">Voice Job</Text>
+                </View>
+              </View>
+            </Pressable>
 
             {/* 7-Day Date Scroller Ribbon (Calendar Navigator) */}
             <View className="mb-3">
@@ -996,6 +1046,11 @@ export default function TodayScreen() {
         onClose={() => setShowSosModal(false)}
         activeJobId={activeJob?.id}
         activeJobAddress={activeJob?.address}
+      />
+
+      <VoiceJobModal
+        visible={showVoiceModal}
+        onClose={() => setShowVoiceModal(false)}
       />
 
       {onMyWayJob ? (

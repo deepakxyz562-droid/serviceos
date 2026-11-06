@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get('filter') || 'all';
+    const scope = searchParams.get('scope') || 'all'; // 'all' | 'assigned' | 'created'
 
     // Pagination support: ?limit=50&offset=0
     // Default: no limit (backwards-compatible — returns all). The mobile app
@@ -59,10 +60,15 @@ export async function GET(request: NextRequest) {
       assigneeId: employee.id,
     };
 
+    if (scope === 'created') {
+      delete where.assigneeId;
+      where.externalId = `employee:${employee.id}`;
+    }
+
     // If an owner or admin logs into the employee app to test, but their personal
     // employee row has 0 assigned jobs, query by workspaceId instead so they can
     // test and see the jobs.
-    if ((user.role === 'owner' || user.role === 'admin') && user.workspaceId) {
+    if ((user.role === 'owner' || user.role === 'admin') && user.workspaceId && scope !== 'created') {
       const assignedCount = await db.job.count({ where: { assigneeId: employee.id } });
       if (assignedCount === 0) {
         where.workspaceId = user.workspaceId;
@@ -180,6 +186,38 @@ export async function GET(request: NextRequest) {
       ...(limit ? { take: limit, ...(offset > 0 ? { skip: offset } : {}) } : {}),
     });
 
+    // If scope is 'all', also discover jobs created by this employee in the field
+    if (scope === 'all') {
+      try {
+        const createdJobs = await db.job.findMany({
+          where: {
+            externalId: `employee:${employee.id}`,
+            ...(filter === 'completed' ? { status: { in: ['completed', 'invoice_generated', 'paid'] } } : {}),
+          },
+          include: {
+            assignee: {
+              select: { id: true, name: true, phone: true, role: true, status: true, avatar: true, rating: true, completedJobs: true },
+            },
+            customer: {
+              select: { id: true, name: true, phone: true, email: true, address: true },
+            },
+            resource: true,
+          },
+          take: 50,
+          orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'desc' }],
+        });
+        const existingIds = new Set(jobs.map((j) => j.id));
+        for (const cj of createdJobs) {
+          if (!existingIds.has(cj.id)) {
+            jobs.push(cj);
+            existingIds.add(cj.id);
+          }
+        }
+      } catch {
+        // ignore fallback
+      }
+    }
+
     // FIX: Batch the count queries. Previously this did 3 separate COUNT
     // queries PER job (3N+1 total queries). Now we do 3 grouped aggregate
     // queries total (one for photos, one for signatures, one for checklists),
@@ -244,6 +282,29 @@ export async function GET(request: NextRequest) {
       const serviceId = (job as { serviceId?: string | null }).serviceId;
       const service = serviceId ? serviceMap.get(serviceId) ?? null : null;
 
+      let parsedMeta: Record<string, any> = {};
+      try {
+        parsedMeta = typeof job.metadataJson === 'string' ? JSON.parse(job.metadataJson) : ((job.metadataJson as any) || {});
+      } catch {
+        parsedMeta = {};
+      }
+
+      let lineItems: any[] = [];
+      try {
+        lineItems = typeof job.lineItemsJson === 'string' ? JSON.parse(job.lineItemsJson) : ((job.lineItemsJson as any) || []);
+      } catch {
+        lineItems = [];
+      }
+
+      const isCreatedByMe = Boolean(
+        (parsedMeta.createdByEmployeeId && parsedMeta.createdByEmployeeId === employee.id) ||
+        (parsedMeta.createdByUserId && parsedMeta.createdByUserId === user.id) ||
+        (job.externalId && job.externalId === `employee:${employee.id}`) ||
+        (job.externalId && user.id && job.externalId === `user:${user.id}`)
+      );
+      const isAssignedToMe = job.assigneeId === employee.id;
+      const creationChannel = parsedMeta.creationChannel || (job.externalSource === 'mobile_voice_ai' ? 'mobile_voice_ai' : 'dispatch');
+
       // Destructure out metadataJson AND verificationPin so they're NOT spread
       // into the response. metadataJson is a heavy payload optimization;
       // verificationPin is a security requirement — technicians must NEVER see
@@ -256,6 +317,10 @@ export async function GET(request: NextRequest) {
         lifecycleTimestamps,
         lifecycleState,
         service,
+        lineItems,
+        isCreatedByMe,
+        isAssignedToMe,
+        creationChannel,
         _counts: {
           photos: photoMap.get(job.id) ?? 0,
           signatures: sigMap.get(job.id) ?? 0,
@@ -264,7 +329,13 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json(enriched);
+    const filtered = scope === 'assigned'
+      ? enriched.filter((j) => j.isAssignedToMe)
+      : scope === 'created'
+      ? enriched.filter((j) => j.isCreatedByMe)
+      : enriched;
+
+    return NextResponse.json(filtered);
   } catch (error) {
     // Log the FULL error (including Prisma code + message) so server logs
     // show exactly what failed. The generic 'Failed to fetch jobs' message

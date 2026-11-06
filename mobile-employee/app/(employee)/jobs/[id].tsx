@@ -1302,11 +1302,11 @@ export default function JobDetailScreen() {
                         {li.description}
                       </Text>
                       <Text className="text-xs text-muted-foreground mt-0.5">
-                        {li.quantity} × {formatCurrency(li.unitPrice, tenantCurrency)}
+                        {li.quantity} × {formatCurrency(li.unitPrice ?? li.rate ?? 0, tenantCurrency)}
                       </Text>
                     </View>
                     <Text className="text-sm font-bold text-foreground">
-                      {formatCurrency(li.total, tenantCurrency)}
+                      {formatCurrency(li.total ?? li.amount ?? ((li.quantity || 1) * (li.unitPrice ?? li.rate ?? 0)), tenantCurrency)}
                     </Text>
                   </View>
                 ))}

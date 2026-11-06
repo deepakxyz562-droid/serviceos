@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Linking,
@@ -13,9 +14,12 @@ import {
   Text,
   TextInput,
   View,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Screen,
   Card,
@@ -38,8 +42,27 @@ import {
   type FormAgentData,
   type FaqPair,
 } from '../../../src/features/forms/types/agent-types';
+import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 
 type Tab = 'overview' | 'knowledge' | 'channels' | 'test';
+
+// ─── Voice Tone Presets ───────────────────────────────────────────────────────
+const VOICE_TONES = [
+  { key: 'friendly', label: 'Friendly', emoji: '😊', desc: 'Warm, helpful & conversational', quote: '“Hello! I would love to help you find the perfect time today!”' },
+  { key: 'professional', label: 'Professional', emoji: '💼', desc: 'Direct, polished & courteous', quote: '“Good day. How may I assist you with your project inquiry?”' },
+  { key: 'sales', label: 'Sales Focus', emoji: '🚀', desc: 'Proactive & value-driven', quote: '“Welcome! Ask me for today’s exclusive offers & rates!”' },
+  { key: 'empathetic', label: 'Empathetic', emoji: '🤝', desc: 'Compassionate & reassuring', quote: '“We understand your needs and are here for you every step.”' },
+] as const;
+
+// ─── Greeting Quick Starters ─────────────────────────────────────────────────
+const GREETING_STARTERS = [
+  { title: 'Friendly Welcome', text: 'Hello and welcome! How can I assist you with our services today?' },
+  { title: 'Booking Focus', text: 'Hi there! Ready to schedule an appointment or get an upfront quote? Ask me anything!' },
+  { title: 'VIP Concierge', text: 'Welcome to our premium client desk. I can answer questions, check rates, and reserve your slot.' },
+];
+
+// ─── FAQ Categories ──────────────────────────────────────────────────────────
+const FAQ_CATEGORIES = ['All', 'Hours & Location', 'Pricing & Rates', 'Booking', 'Services', 'Policies'] as const;
 
 // ─── Pre-built Local Business FAQ Suggestions ──────────────────────────────
 const FAQ_SUGGESTIONS: Array<{ question: string; defaultAnswer: string; category: string }> = [
@@ -61,7 +84,7 @@ const FAQ_SUGGESTIONS: Array<{ question: string; defaultAnswer: string; category
   {
     question: 'What payment methods do you accept?',
     defaultAnswer: 'We accept all major credit/debit cards, UPI, cash, and digital bank transfers.',
-    category: 'Pricing & Payment',
+    category: 'Pricing & Rates',
   },
   {
     question: 'What is your rescheduling or cancellation policy?',
@@ -151,9 +174,17 @@ const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
   },
 ];
 
+interface ChannelStatusData {
+  whatsapp?: { connected: boolean; phoneNumber?: string; providerName?: string; reason?: string };
+  phone?: { addonActive: boolean; phoneNumber?: string; status?: string };
+  sms?: { connected: boolean };
+}
+
 export default function AgentsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const resource = useResource<{ agents: FormAgentData[] }>('/api/forms/agents');
+  const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
 
   const [tab, setTab] = useState<Tab>('overview');
   const [selectedId, setSelectedId] = useState('');
@@ -165,6 +196,10 @@ export default function AgentsScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showReadinessList, setShowReadinessList] = useState(false);
+
+  // Channels status
+  const [channelStatus, setChannelStatus] = useState<ChannelStatusData | null>(null);
 
   // Modals & Pickers
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
@@ -172,9 +207,12 @@ export default function AgentsScreen() {
   const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
   const [faqQuestion, setFaqQuestion] = useState('');
   const [faqAnswer, setFaqAnswer] = useState('');
-  const [faqCategory, setFaqCategory] = useState('General');
+  const [faqCategory, setFaqCategory] = useState<string>('General');
   const [faqSearch, setFaqSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [expandedFaqIds, setExpandedFaqIds] = useState<Set<string>>(new Set());
   const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [generatingFaqs, setGeneratingFaqs] = useState(false);
 
   // Fast Creation Form
   const [customName, setCustomName] = useState('');
@@ -199,43 +237,68 @@ export default function AgentsScreen() {
     if (selected) {
       setDraft(selected);
       setSelectedId(selected.id);
+      // Fetch channel status for this agent
+      void (async () => {
+        try {
+          const res = await apiRequest<ChannelStatusData>(`/api/forms/agents/${selected.id}/channel-status`);
+          setChannelStatus(res);
+        } catch {
+          setChannelStatus(null);
+        }
+      })();
+    } else {
+      setDraft(null);
+      setSelectedId('');
+      setChannelStatus(null);
     }
   }, [resource.data, selectedId]);
 
-  function edit(update: Partial<FormAgentData>) {
+  function triggerHaptic(style = Haptics.ImpactFeedbackStyle.Light) {
+    try {
+      void Haptics.impactAsync(style);
+    } catch {}
+  }
+
+  function edit(patch: Partial<FormAgentData>) {
     if (!draft) return;
-    dirtyRef.current = true;
+    setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
     setDirty(true);
-    setNotice(null);
-    setDraft({ ...draft, ...update });
+    dirtyRef.current = true;
   }
 
   async function save() {
-    if (!draft?.name.trim()) {
-      setError('Please provide a name for your business assistant.');
-      return;
-    }
+    if (!draft) return;
     setBusy(true);
     setError(null);
     try {
-      const latest = await apiRequest<{ agents: FormAgentData[] }>('/api/forms/agents');
-      const current = latest.agents.find((a) => a.id === draft.id);
-      if (current && current.updatedAt !== draft.updatedAt) {
-        throw new Error('This assistant was updated on another device. Please reload the saved version.');
-      }
       const result = await apiRequest<{ agent: FormAgentData }>('/api/forms/agents', {
         method: 'POST',
-        body: draft,
+        body: {
+          id: draft.id,
+          name: draft.name.trim(),
+          roleTitle: draft.roleTitle?.trim() || null,
+          voiceTone: draft.voiceTone || 'friendly',
+          avatarUrl: draft.avatarUrl || null,
+          welcomeGreeting: draft.welcomeGreeting?.trim() || null,
+          knowledge: draft.knowledge || { faqPairs: [] },
+          statusText: draft.statusText || 'Online',
+        },
       });
-      if (!result.agent?.id) throw new Error('Server did not confirm save.');
+
       dirtyRef.current = false;
       setDirty(false);
+      setNotice('Assistant saved successfully!');
+      try {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {}
+      setTimeout(() => setNotice(null), 3000);
       setDraft(result.agent);
-      setNotice('✓ Assistant settings saved successfully.');
-      setTimeout(() => setNotice(null), 4000);
       await resource.refresh();
     } catch (e) {
-      setError((e as Error).message);
+      setError((e as Error).message || 'Failed to save assistant changes.');
+      try {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } catch {}
     } finally {
       setBusy(false);
     }
@@ -244,102 +307,81 @@ export default function AgentsScreen() {
   async function createFromTemplate(template: IndustryTemplate) {
     setBusy(true);
     setError(null);
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const payload: Partial<FormAgentData> = {
-        name: template.name,
-        roleTitle: template.roleTitle,
-        avatarUrl: template.avatarUrl,
-        voiceTone: template.tone,
-        welcomeGreeting: template.welcomeGreeting,
-        knowledge: {
-          crawledUrls: [],
-          documents: [],
-          faqPairs: template.faqs,
-          systemPrompt: '',
-          guardrails: [],
-        },
-      };
       const result = await apiRequest<{ agent: FormAgentData }>('/api/forms/agents', {
         method: 'POST',
-        body: payload,
+        body: {
+          name: template.name,
+          roleTitle: template.roleTitle,
+          voiceTone: template.tone,
+          avatarUrl: template.avatarUrl,
+          welcomeGreeting: template.welcomeGreeting,
+          knowledge: { faqPairs: template.faqs },
+          statusText: 'Online',
+        },
       });
-      if (!result.agent?.id) throw new Error('Creation failed. Please retry.');
-      setSelectedId(result.agent.id);
+      dirtyRef.current = false;
+      setDirty(false);
+      setNotice(`Created ${template.name}!`);
+      setTimeout(() => setNotice(null), 3000);
       await resource.refresh();
-      setNotice(`✓ ${template.name} created! Test its responses or customize further.`);
-      setTimeout(() => setNotice(null), 4000);
+      setSelectedId(result.agent.id);
+      setDraft(result.agent);
     } catch (e) {
-      setError((e as Error).message);
+      setError((e as Error).message || 'Failed to create assistant from template.');
     } finally {
       setBusy(false);
     }
   }
 
   async function createCustom() {
-    if (!customName.trim()) {
-      setError('Please enter a name for your assistant.');
-      return;
-    }
+    if (!customName.trim()) return;
     setBusy(true);
     setError(null);
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const result = await apiRequest<{ agent: FormAgentData }>('/api/forms/agents', {
         method: 'POST',
         body: {
           name: customName.trim(),
-          roleTitle: 'Customer Care & Booking',
-          avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
+          roleTitle: 'Concierge & Intake Specialist',
           voiceTone: 'friendly',
-          welcomeGreeting: 'Hello! Welcome to our business. How can I help you today?',
-          knowledge: { documents: [], faqPairs: [], crawledUrls: [], guardrails: [] },
+          welcomeGreeting: `Hello! I am ${customName.trim()}. How can I help you today?`,
+          knowledge: { faqPairs: [] },
+          statusText: 'Online',
         },
       });
-      if (!result.agent?.id) throw new Error('Creation failed.');
-      setSelectedId(result.agent.id);
       setCustomName('');
+      dirtyRef.current = false;
+      setDirty(false);
+      setNotice('Custom assistant ready!');
+      setTimeout(() => setNotice(null), 3000);
       await resource.refresh();
-      setNotice('✓ Assistant created! Add business knowledge and test responses.');
-      setTimeout(() => setNotice(null), 4000);
+      setSelectedId(result.agent.id);
+      setDraft(result.agent);
     } catch (e) {
-      setError((e as Error).message);
+      setError((e as Error).message || 'Failed to create assistant.');
     } finally {
       setBusy(false);
     }
   }
 
-  function handleSaveFaq() {
-    if (!draft || !faqQuestion.trim() || !faqAnswer.trim()) {
-      setError('Please provide both a question and an answer.');
-      return;
-    }
-    const faqId = editingFaqId || `faq_${Date.now()}`;
-    const newFaq: FaqPair = {
-      id: faqId,
-      question: faqQuestion.trim(),
-      answer: faqAnswer.trim(),
-    };
-    const existing = draft.knowledge?.faqPairs || [];
-    const updated = editingFaqId
-      ? existing.map((f) => (f.id === editingFaqId ? newFaq : f))
-      : [...existing, newFaq];
-
-    edit({
-      knowledge: {
-        ...draft.knowledge,
-        faqPairs: updated,
-      },
+  function toggleFaqAccordion(id: string) {
+    triggerHaptic();
+    setExpandedFaqIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
-    setFaqModalOpen(false);
-    setEditingFaqId(null);
-    setFaqQuestion('');
-    setFaqAnswer('');
-    setError(null);
   }
 
   function handleOpenAddFaq(prefillQuestion?: string, prefillAnswer?: string) {
     setEditingFaqId(null);
     setFaqQuestion(prefillQuestion || '');
     setFaqAnswer(prefillAnswer || '');
+    setFaqCategory('General');
     setFaqModalOpen(true);
   }
 
@@ -347,56 +389,133 @@ export default function AgentsScreen() {
     setEditingFaqId(faq.id);
     setFaqQuestion(faq.question);
     setFaqAnswer(faq.answer);
+    setFaqCategory('General');
     setFaqModalOpen(true);
   }
 
-  function handleRemoveFaq(faqId: string) {
-    if (!draft) return;
-    Alert.alert('Remove Answer?', 'This answer will be removed once you save changes.', [
+  function handleSaveFaq() {
+    if (!faqQuestion.trim() || !faqAnswer.trim() || !draft) return;
+    const currentFaqs = draft.knowledge?.faqPairs || [];
+
+    let updated: FaqPair[];
+    if (editingFaqId) {
+      updated = currentFaqs.map((f) =>
+        f.id === editingFaqId ? { ...f, question: faqQuestion.trim(), answer: faqAnswer.trim() } : f
+      );
+    } else {
+      const newFaq: FaqPair = {
+        id: `faq_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        question: faqQuestion.trim(),
+        answer: faqAnswer.trim(),
+      };
+      updated = [newFaq, ...currentFaqs];
+      // Auto-expand newly added FAQ
+      setExpandedFaqIds((prev) => new Set(prev).add(newFaq.id));
+    }
+
+    edit({
+      knowledge: {
+        ...(draft.knowledge || {}),
+        faqPairs: updated,
+      },
+    });
+
+    setFaqModalOpen(false);
+    setFaqQuestion('');
+    setFaqAnswer('');
+    setEditingFaqId(null);
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
+  }
+
+  function handleRemoveFaq(id: string) {
+    Alert.alert('Delete Knowledge Answer?', 'This question will no longer be used by your assistant to answer customers.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Remove',
+        text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          const existing = draft.knowledge?.faqPairs || [];
+          if (!draft) return;
+          const currentFaqs = draft.knowledge?.faqPairs || [];
           edit({
             knowledge: {
-              ...draft.knowledge,
-              faqPairs: existing.filter((f) => f.id !== faqId),
+              ...(draft.knowledge || {}),
+              faqPairs: currentFaqs.filter((f) => f.id !== id),
             },
           });
+          setExpandedFaqIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+          triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
         },
       },
     ]);
   }
 
-  async function testChat(queryText?: string) {
-    const textToSend = (queryText || testInput).trim();
-    if (!draft?.id || testing || !textToSend) return;
+  async function generateAiFaqs() {
+    if (!draft) return;
+    setGeneratingFaqs(true);
+    setError(null);
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
 
-    if (dirty) {
-      Alert.alert(
-        'Save Changes First',
-        'Save your latest business edits so the assistant can answer using your newest information.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Save & Test', onPress: async () => { await save(); void executeChat(textToSend); } },
-        ]
-      );
-      return;
+    try {
+      const bizName = workspace.data?.bookingPageConfig?.businessName || workspace.data?.name || draft.name;
+      const prompt = `Generate 5 realistic customer FAQ questions and concise answers for a business named "${bizName}". Include questions about operating hours, pricing estimates, booking appointments, services offered, and satisfaction guarantee.`;
+
+      const res = await apiRequest<{ success?: boolean; agent?: FormAgentData }>('/api/forms/agents/generate', {
+        method: 'POST',
+        body: { prompt },
+      });
+
+      const newFaqs = res.agent?.knowledge?.faqPairs || [];
+      if (!newFaqs.length) throw new Error('AI was unable to generate FAQs at this moment. Please try again.');
+
+      const currentFaqs = draft.knowledge?.faqPairs || [];
+      const merged = [...currentFaqs];
+      let addedCount = 0;
+
+      for (const f of newFaqs) {
+        if (!merged.some((m) => m.question.toLowerCase() === f.question.toLowerCase())) {
+          merged.push({
+            id: f.id || `faq_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            question: f.question,
+            answer: f.answer,
+          });
+          addedCount++;
+        }
+      }
+
+      edit({
+        knowledge: {
+          ...(draft.knowledge || {}),
+          faqPairs: merged,
+        },
+      });
+
+      setNotice(`✨ Added ${addedCount} AI-generated FAQs! Review & tap Save.`);
+      setTimeout(() => setNotice(null), 4000);
+      try {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {}
+    } catch (e) {
+      setError((e as Error).message || 'Failed to auto-generate FAQs.');
+    } finally {
+      setGeneratingFaqs(false);
     }
-
-    await executeChat(textToSend);
   }
 
-  async function executeChat(textToSend: string) {
-    if (!draft?.id) return;
+  async function testChat(overrideMessage?: string) {
+    const textToSend = (overrideMessage || testInput).trim();
+    if (!textToSend || !draft || testing) return;
+
+    setTestInput('');
+    const userMsg = { role: 'user' as const, content: textToSend };
+    const history = [...messages, userMsg];
+    setMessages(history);
     setTesting(true);
     setError(null);
-    const history = [...messages];
-    const newMessages = [...messages, { role: 'user' as const, content: textToSend }];
-    setMessages(newMessages);
-    setTestInput('');
+    triggerHaptic();
 
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 100);
 
@@ -444,21 +563,26 @@ export default function AgentsScreen() {
     ]);
   }
 
-  async function openWebStudio() {
-    try {
-      await Linking.openURL(getBgosWebUrl('chatbotBuilder'));
-    } catch {
-      setError('Could not open web studio in browser.');
-    }
-  }
-
   // Derived setup readiness calculations
   const faqs = draft?.knowledge?.faqPairs || [];
   const filteredFaqs = useMemo(() => {
-    if (!faqSearch.trim()) return faqs;
-    const q = faqSearch.toLowerCase();
-    return faqs.filter((f) => f.question.toLowerCase().includes(q) || f.answer.toLowerCase().includes(q));
-  }, [faqs, faqSearch]);
+    let result = faqs;
+    if (selectedCategory !== 'All') {
+      result = result.filter((f) => {
+        const catMatch = FAQ_SUGGESTIONS.find(
+          (s) => s.question.toLowerCase() === f.question.toLowerCase()
+        )?.category;
+        return catMatch === selectedCategory;
+      });
+    }
+    if (faqSearch.trim()) {
+      const q = faqSearch.toLowerCase();
+      result = result.filter(
+        (f) => f.question.toLowerCase().includes(q) || f.answer.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [faqs, selectedCategory, faqSearch]);
 
   const readinessScore = useMemo(() => {
     if (!draft) return 0;
@@ -470,6 +594,42 @@ export default function AgentsScreen() {
     if (draft.avatarUrl) score += 10;
     return Math.min(100, score);
   }, [draft, faqs]);
+
+  const readinessChecklist = useMemo(() => {
+    if (!draft) return [];
+    return [
+      {
+        title: 'Assistant Identity',
+        detail: 'Name and professional job title configured',
+        done: Boolean(draft.name && draft.roleTitle),
+        tab: 'overview' as const,
+      },
+      {
+        title: 'Welcome Message',
+        detail: 'Custom greeting for new visitors',
+        done: Boolean(draft.welcomeGreeting && draft.welcomeGreeting.length > 15),
+        tab: 'overview' as const,
+      },
+      {
+        title: 'Trained Knowledge Base',
+        detail: `${faqs.length} FAQs active (3 recommended)`,
+        done: faqs.length >= 3,
+        tab: 'knowledge' as const,
+      },
+      {
+        title: 'Avatar Portrait',
+        detail: 'Representative brand persona photo',
+        done: Boolean(draft.avatarUrl),
+        tab: 'overview' as const,
+      },
+      {
+        title: 'WhatsApp Channel',
+        detail: channelStatus?.whatsapp?.connected ? 'Connected to business number' : 'Connect Meta Cloud API',
+        done: Boolean(channelStatus?.whatsapp?.connected),
+        tab: 'channels' as const,
+      },
+    ];
+  }, [draft, faqs, channelStatus]);
 
   const publicChatUrl = draft ? `${WEB_URL}/agent/${draft.slug || draft.id}` : '';
 
@@ -511,9 +671,9 @@ export default function AgentsScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
             <View
               style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
+                width: 50,
+                height: 50,
+                borderRadius: 25,
                 backgroundColor: 'rgba(255,255,255,0.15)',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -562,7 +722,7 @@ export default function AgentsScreen() {
                 style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#E2E8F0' }}
               />
               <View style={{ flex: 1, gap: 2 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <Text style={{ fontSize: 15, fontWeight: '800', color: colors.ink }}>{tmpl.name}</Text>
                   <View style={{ backgroundColor: colors.brandSoft, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
                     <Text style={{ fontSize: 10, fontWeight: '700', color: colors.brand }}>{tmpl.badge}</Text>
@@ -597,12 +757,13 @@ export default function AgentsScreen() {
     );
   }
 
-  // ─── Render: Main Assistant Workspace ────────────────────────────────────
+  // ─── Render: Main Assistant Studio ───────────────────────────────────────
   return (
     <Screen
       title="Business Assistant"
       subtitle="AI Chat, Booking & Customer Intake"
       showBack
+      scrollable={tab !== 'test'}
       onRefresh={() => {
         if (dirty) reload();
         else void resource.refresh();
@@ -611,7 +772,7 @@ export default function AgentsScreen() {
         dirty ? (
           <View
             style={{
-              backgroundColor: '#0F172A',
+              backgroundColor: '#070B2D',
               paddingVertical: 10,
               paddingHorizontal: 14,
               borderRadius: 16,
@@ -632,7 +793,7 @@ export default function AgentsScreen() {
                 Unsaved edits pending
               </Text>
             </View>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
+            <View style={{ flexDirection: 'row', gap: 6, flexShrink: 0 }}>
               <Pressable
                 accessibilityRole="button"
                 disabled={busy}
@@ -641,7 +802,7 @@ export default function AgentsScreen() {
                   paddingVertical: 8,
                   paddingHorizontal: 12,
                   borderRadius: 8,
-                  backgroundColor: 'rgba(255,255,255,0.12)',
+                  backgroundColor: 'rgba(255,255,255,0.14)',
                 }}
               >
                 <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '700' }}>Discard</Text>
@@ -674,10 +835,10 @@ export default function AgentsScreen() {
         </View>
       ) : null}
 
-      {/* ── 1. Assistant Profile Banner ── */}
-      <Card style={{ padding: 16, gap: 14 }}>
+      {/* ── 1. Hero Profile & Readiness Banner ── */}
+      <Card style={{ padding: 16, gap: 12 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          {/* Avatar with Edit Badge */}
+          {/* Avatar with Accessible 36x36 Edit Trigger */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Change assistant avatar"
@@ -690,7 +851,7 @@ export default function AgentsScreen() {
                   draft.avatarUrl ||
                   'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
               }}
-              style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: '#E2E8F0' }}
+              style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#E2E8F0' }}
             />
             <View
               style={{
@@ -698,23 +859,28 @@ export default function AgentsScreen() {
                 bottom: -2,
                 right: -2,
                 backgroundColor: colors.brand,
-                width: 22,
-                height: 22,
-                borderRadius: 11,
+                width: 26,
+                height: 26,
+                borderRadius: 13,
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderWidth: 2,
                 borderColor: '#FFFFFF',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.2,
+                shadowRadius: 2,
+                elevation: 2,
               }}
             >
-              <MaterialIcons name="edit" size={12} color="#FFFFFF" />
+              <MaterialIcons name="photo-camera" size={13} color="#FFFFFF" />
             </View>
           </Pressable>
 
           {/* Info & Status */}
-          <View style={{ flex: 1, gap: 3 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 17, fontWeight: '900', color: colors.ink }} numberOfLines={1}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
+              <Text style={{ fontSize: 17, fontWeight: '900', color: colors.ink, flexShrink: 1 }} numberOfLines={1}>
                 {draft.name}
               </Text>
               <View
@@ -741,13 +907,24 @@ export default function AgentsScreen() {
           </View>
         </View>
 
-        {/* Readiness Score Bar */}
-        <View style={{ gap: 6, paddingTop: 4, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+        {/* Interactive Readiness Score Bar */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setShowReadinessList((prev) => !prev)}
+          style={{ paddingTop: 6, borderTopWidth: 1, borderTopColor: '#F1F5F9', gap: 6 }}
+        >
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.muted }}>
-              Setup Readiness
-            </Text>
-            <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.brand }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.muted }}>
+                Setup Readiness
+              </Text>
+              <MaterialIcons
+                name={showReadinessList ? 'expand-less' : 'expand-more'}
+                size={16}
+                color={colors.muted}
+              />
+            </View>
+            <Text style={{ fontSize: 11.5, fontWeight: '800', color: readinessScore >= 80 ? '#10B981' : '#F59E0B' }}>
               {readinessScore}% Complete
             </Text>
           </View>
@@ -761,7 +938,49 @@ export default function AgentsScreen() {
               }}
             />
           </View>
-        </View>
+        </Pressable>
+
+        {/* Expandable Readiness Checklist */}
+        {showReadinessList && (
+          <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 10, gap: 8, marginTop: 2 }}>
+            {readinessChecklist.map((item, idx) => (
+              <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                  <MaterialIcons
+                    name={item.done ? 'check-circle' : 'radio-button-unchecked'}
+                    size={16}
+                    color={item.done ? '#10B981' : colors.muted}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: item.done ? colors.muted : colors.ink }}>
+                      {item.title}
+                    </Text>
+                    <Text style={{ fontSize: 10.5, color: colors.muted }} numberOfLines={1}>
+                      {item.detail}
+                    </Text>
+                  </View>
+                </View>
+                {!item.done && (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      triggerHaptic();
+                      setTab(item.tab);
+                    }}
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 6,
+                      backgroundColor: colors.brandSoft,
+                    }}
+                  >
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: colors.brand }}>Complete</Text>
+                  </Pressable>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
       </Card>
 
       {/* Multi-Agent Switcher (if tenant has >1 assistant) */}
@@ -777,6 +996,7 @@ export default function AgentsScreen() {
                   setError('Please save or discard pending edits before switching assistants.');
                   return;
                 }
+                triggerHaptic();
                 setSelectedId(a.id);
                 setMessages([]);
               }}
@@ -789,7 +1009,7 @@ export default function AgentsScreen() {
       <View
         style={{
           flexDirection: 'row',
-          backgroundColor: '#E2E8F0',
+          backgroundColor: '#F1F5F9',
           borderRadius: 14,
           padding: 3,
           gap: 2,
@@ -808,14 +1028,17 @@ export default function AgentsScreen() {
             <Pressable
               key={tabKey}
               accessibilityRole="button"
-              onPress={() => setTab(tabKey)}
+              onPress={() => {
+                triggerHaptic();
+                setTab(tabKey);
+              }}
               style={{
                 flex: 1,
                 paddingVertical: 9,
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexDirection: 'row',
-                gap: 5,
+                gap: 4,
                 backgroundColor: isSelected ? '#FFFFFF' : 'transparent',
                 borderRadius: 11,
                 shadowColor: isSelected ? '#000' : 'transparent',
@@ -845,7 +1068,7 @@ export default function AgentsScreen() {
         })}
       </View>
 
-      {/* ── 3. Tab: Overview ── */}
+      {/* ── 3. Tab: Overview (Profile & Persona) ── */}
       {tab === 'overview' && (
         <View style={{ gap: 14 }}>
           {/* Identity Fields */}
@@ -856,7 +1079,7 @@ export default function AgentsScreen() {
               value={draft.name}
               editable={!busy}
               onChangeText={(name) => edit({ name })}
-              placeholder="e.g. Clara"
+              placeholder="e.g. Elena"
             />
             <Field
               label="Role or Job Title"
@@ -872,23 +1095,19 @@ export default function AgentsScreen() {
             <Text style={ui.heading}>Voice & Personality Tone</Text>
             <Text style={ui.caption}>Controls the phrasing, warmth, and greeting style of customer replies.</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {(
-                [
-                  ['friendly', 'Friendly 😊', 'Warm, helpful and conversational'],
-                  ['professional', 'Professional 💼', 'Polished, direct and corporate'],
-                  ['sales', 'Sales Focus 🚀', 'Proactive, high-energy & conversion-led'],
-                  ['empathetic', 'Empathetic 🤝', 'Compassionate, reassuring and caring'],
-                ] as const
-              ).map(([toneKey, label, desc]) => {
-                const isSelected = (draft.voiceTone || 'friendly') === toneKey;
+              {VOICE_TONES.map((tone) => {
+                const isSelected = (draft.voiceTone || 'friendly') === tone.key;
                 return (
                   <Pressable
-                    key={toneKey}
+                    key={tone.key}
                     accessibilityRole="button"
-                    onPress={() => edit({ voiceTone: toneKey })}
+                    onPress={() => {
+                      triggerHaptic();
+                      edit({ voiceTone: tone.key });
+                    }}
                     style={{
                       flex: 1,
-                      minWidth: '45%',
+                      minWidth: '46%',
                       backgroundColor: isSelected ? colors.brandSoft : '#F8FAFC',
                       borderWidth: 1.5,
                       borderColor: isSelected ? colors.brand : '#E2E8F0',
@@ -904,64 +1123,81 @@ export default function AgentsScreen() {
                         color: isSelected ? colors.brand : colors.ink,
                       }}
                     >
-                      {label}
+                      {tone.label} {tone.emoji}
                     </Text>
-                    <Text style={{ fontSize: 10.5, color: colors.muted }}>{desc}</Text>
+                    <Text style={{ fontSize: 10.5, color: colors.muted }}>{tone.desc}</Text>
                   </Pressable>
                 );
               })}
             </View>
           </Card>
 
-          {/* Welcome Greeting */}
+          {/* Direct Editable Welcome Greeting Bubble */}
           <Card style={{ gap: 10 }}>
-            <Text style={ui.heading}>Welcome Greeting</Text>
-            <Text style={ui.caption}>First message visitors see when initiating a chat or scanning your QR.</Text>
-            <TextInput
-              multiline
-              numberOfLines={3}
-              value={draft.welcomeGreeting || ''}
-              onChangeText={(welcomeGreeting) => edit({ welcomeGreeting })}
-              placeholder="e.g. Hello! Welcome to our store. How can I help you today?"
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={ui.heading}>Welcome Greeting</Text>
+              <Text style={{ fontSize: 11, color: colors.muted }}>Shown to first-time visitors</Text>
+            </View>
+
+            {/* Quick Starters */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              {GREETING_STARTERS.map((s, idx) => (
+                <Pressable
+                  key={idx}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    triggerHaptic();
+                    edit({ welcomeGreeting: s.text });
+                  }}
+                  style={{
+                    backgroundColor: '#F1F5F9',
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.ink }}>{s.title}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <View
               style={{
                 backgroundColor: '#F8FAFC',
                 borderWidth: 1,
                 borderColor: '#E2E8F0',
-                borderRadius: 12,
+                borderRadius: 14,
                 padding: 12,
-                fontSize: 13.5,
-                color: colors.ink,
-                minHeight: 75,
-                textAlignVertical: 'top',
-              }}
-            />
-
-            {/* Bubble Preview */}
-            <View
-              style={{
-                backgroundColor: '#F1F5F9',
-                borderRadius: 12,
-                padding: 12,
-                marginTop: 2,
-                flexDirection: 'row',
-                gap: 10,
-                alignItems: 'flex-start',
+                gap: 8,
               }}
             >
-              <Image
-                source={{
-                  uri:
-                    draft.avatarUrl ||
-                    'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
-                }}
-                style={{ width: 28, height: 28, borderRadius: 14 }}
-              />
-              <View style={{ flex: 1, backgroundColor: '#FFFFFF', padding: 10, borderRadius: 12, gap: 2 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.muted }}>Visitor Preview</Text>
-                <Text style={{ fontSize: 12.5, color: colors.ink }}>
-                  {draft.welcomeGreeting || 'Hello! How can I assist you today?'}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Image
+                  source={{
+                    uri:
+                      draft.avatarUrl ||
+                      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
+                  }}
+                  style={{ width: 28, height: 28, borderRadius: 14 }}
+                />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted }}>
+                  {draft.name} · Live Preview
                 </Text>
               </View>
+              <TextInput
+                multiline
+                numberOfLines={3}
+                value={draft.welcomeGreeting || ''}
+                onChangeText={(welcomeGreeting) => edit({ welcomeGreeting })}
+                placeholder="e.g. Hello! Welcome to our store. How can I help you today?"
+                placeholderTextColor={colors.muted}
+                style={{
+                  fontSize: 13.5,
+                  color: colors.ink,
+                  minHeight: 65,
+                  textAlignVertical: 'top',
+                }}
+              />
             </View>
           </Card>
 
@@ -981,13 +1217,13 @@ export default function AgentsScreen() {
         </View>
       )}
 
-      {/* ── 4. Tab: Knowledge ── */}
+      {/* ── 4. Tab: Knowledge Base ── */}
       {tab === 'knowledge' && (
-        <View style={{ gap: 14 }}>
-          {/* Header & Add FAQ Button */}
+        <View style={{ gap: 12 }}>
+          {/* Action Header Card with ✨ AI Generate Button */}
           <Card style={{ gap: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <View style={{ flex: 1 }}>
                 <Text style={ui.heading}>Business Knowledge</Text>
                 <Text style={ui.caption}>{faqs.length} questions trained</Text>
               </View>
@@ -1010,35 +1246,99 @@ export default function AgentsScreen() {
               </Pressable>
             </View>
 
-            {/* Search Input */}
-            {faqs.length > 2 && (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: '#F8FAFC',
-                  borderRadius: 10,
-                  paddingHorizontal: 10,
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  gap: 8,
-                }}
-              >
-                <MaterialIcons name="search" size={18} color={colors.muted} />
-                <TextInput
-                  value={faqSearch}
-                  onChangeText={setFaqSearch}
-                  placeholder="Search questions or keywords…"
-                  placeholderTextColor={colors.muted}
-                  style={{ flex: 1, paddingVertical: 8, fontSize: 13, color: colors.ink }}
-                />
-                {faqSearch ? (
-                  <Pressable onPress={() => setFaqSearch('')}>
-                    <MaterialIcons name="close" size={16} color={colors.muted} />
-                  </Pressable>
-                ) : null}
+            {/* ✨ 1-Tap AI FAQ Generator Banner */}
+            <Pressable
+              accessibilityRole="button"
+              disabled={generatingFaqs}
+              onPress={() => void generateAiFaqs()}
+              style={({ pressed }) => ({
+                backgroundColor: colors.brandSoft,
+                borderWidth: 1,
+                borderColor: '#A7F3D0',
+                borderRadius: 12,
+                padding: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                opacity: generatingFaqs ? 0.7 : pressed ? 0.9 : 1,
+              })}
+            >
+              {generatingFaqs ? (
+                <ActivityIndicator size="small" color={colors.brand} />
+              ) : (
+                <MaterialIcons name="auto-awesome" size={22} color={colors.brand} />
+              )}
+              <View style={{ flex: 1, gap: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46' }}>
+                  {generatingFaqs ? 'Crafting FAQs with AI…' : '✨ Auto-Generate FAQs from Business'}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#047857' }}>
+                  Reads your services & generates 5 realistic customer questions
+                </Text>
               </View>
-            )}
+              <MaterialIcons name="arrow-forward" size={16} color={colors.brand} />
+            </Pressable>
+
+            {/* Search Input */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#F8FAFC',
+                borderRadius: 10,
+                paddingHorizontal: 10,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                gap: 8,
+              }}
+            >
+              <MaterialIcons name="search" size={18} color={colors.muted} />
+              <TextInput
+                value={faqSearch}
+                onChangeText={setFaqSearch}
+                placeholder="Search questions or keywords…"
+                placeholderTextColor={colors.muted}
+                style={{ flex: 1, paddingVertical: 8, fontSize: 13, color: colors.ink }}
+              />
+              {faqSearch ? (
+                <Pressable onPress={() => setFaqSearch('')} hitSlop={10}>
+                  <MaterialIcons name="close" size={16} color={colors.muted} />
+                </Pressable>
+              ) : null}
+            </View>
+
+            {/* Category Filter Pills */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              {FAQ_CATEGORIES.map((cat) => {
+                const isSelected = selectedCategory === cat;
+                return (
+                  <Pressable
+                    key={cat}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      triggerHaptic();
+                      setSelectedCategory(cat);
+                    }}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 8,
+                      backgroundColor: isSelected ? colors.brand : '#F1F5F9',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: isSelected ? '800' : '600',
+                        color: isSelected ? '#FFFFFF' : colors.ink,
+                      }}
+                    >
+                      {cat}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </Card>
 
           {/* 1-Tap FAQ Suggestions Tray */}
@@ -1081,7 +1381,7 @@ export default function AgentsScreen() {
             </ScrollView>
           </View>
 
-          {/* FAQ Accordion List */}
+          {/* Accordion FAQ Cards */}
           {filteredFaqs.length === 0 ? (
             <Card style={{ alignItems: 'center', padding: 24, gap: 8 }}>
               <MaterialIcons name="help-outline" size={32} color={colors.muted} />
@@ -1096,64 +1396,104 @@ export default function AgentsScreen() {
             </Card>
           ) : (
             <View style={{ gap: 8 }}>
-              {filteredFaqs.map((faq) => (
-                <View
-                  key={faq.id}
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: 14,
-                    padding: 14,
-                    borderWidth: 1,
-                    borderColor: '#E2E8F0',
-                    gap: 8,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink, flex: 1 }}>
-                      {faq.question}
-                    </Text>
-                    <View style={{ flexDirection: 'row', gap: 4 }}>
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => handleOpenEditFaq(faq)}
-                        style={{ padding: 4 }}
-                      >
-                        <MaterialIcons name="edit" size={17} color={colors.muted} />
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => handleRemoveFaq(faq.id)}
-                        style={{ padding: 4 }}
-                      >
-                        <MaterialIcons name="delete-outline" size={17} color={colors.danger} />
-                      </Pressable>
-                    </View>
+              {filteredFaqs.map((faq) => {
+                const isExpanded = expandedFaqIds.has(faq.id);
+                return (
+                  <View
+                    key={faq.id}
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => toggleFaqAccordion(faq.id)}
+                      style={{
+                        padding: 14,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                      }}
+                    >
+                      <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink, flex: 1 }}>
+                        {faq.question}
+                      </Text>
+                      <MaterialIcons
+                        name={isExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                        size={20}
+                        color={colors.muted}
+                      />
+                    </Pressable>
+
+                    {isExpanded && (
+                      <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 2, gap: 10, borderTopWidth: 1, borderTopColor: '#F8FAFC' }}>
+                        <Text style={{ fontSize: 12.5, color: colors.muted, lineHeight: 19 }}>
+                          {faq.answer}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
+                          <Pressable
+                            accessibilityRole="button"
+                            onPress={() => handleOpenEditFaq(faq)}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 4,
+                              paddingVertical: 6,
+                              paddingHorizontal: 10,
+                              borderRadius: 8,
+                              backgroundColor: '#F1F5F9',
+                            }}
+                          >
+                            <MaterialIcons name="edit" size={14} color={colors.ink} />
+                            <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.ink }}>Edit</Text>
+                          </Pressable>
+                          <Pressable
+                            accessibilityRole="button"
+                            onPress={() => handleRemoveFaq(faq.id)}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 4,
+                              paddingVertical: 6,
+                              paddingHorizontal: 10,
+                              borderRadius: 8,
+                              backgroundColor: '#FEE2E2',
+                            }}
+                          >
+                            <MaterialIcons name="delete-outline" size={14} color="#DC2626" />
+                            <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#DC2626' }}>Delete</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                  <Text style={{ fontSize: 12.5, color: colors.muted, lineHeight: 18 }}>
-                    {faq.answer}
-                  </Text>
-                </View>
-              ))}
+                );
+              })}
             </View>
           )}
 
-          {/* Advanced Web Crawl Banner */}
+          {/* Web Studio Advanced Training Link */}
           <Card style={{ gap: 8 }}>
             <Text style={ui.heading}>Website & Document Indexing</Text>
             <Text style={ui.body}>
-              Upload PDF brochures, price sheets, and crawl your website domain inside the BGOS Web Studio.
+              Upload PDF price sheets, brochures, or crawl your website in the BGOS Knowledge Studio.
             </Text>
             <Action
               secondary
               label="Open Knowledge Studio · Web"
               icon="open-in-new"
-              onPress={() => void openWebStudio()}
+              onPress={() => void Linking.openURL(getBgosWebUrl('chatbotBuilder'))}
             />
           </Card>
         </View>
       )}
 
-      {/* ── 5. Tab: Channels ── */}
+      {/* ── 5. Tab: Channels (Distribution) ── */}
       {tab === 'channels' && (
         <View style={{ gap: 14 }}>
           {/* Public Web Link Card */}
@@ -1177,7 +1517,11 @@ export default function AgentsScreen() {
               }}
             >
               <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted }}>Public Chat URL</Text>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: colors.brand }} numberOfLines={1}>
+              <Text
+                style={{ fontSize: 13, fontWeight: '600', color: colors.brand }}
+                numberOfLines={1}
+                ellipsizeMode="middle"
+              >
                 {publicChatUrl}
               </Text>
             </View>
@@ -1201,7 +1545,7 @@ export default function AgentsScreen() {
             </View>
           </Card>
 
-          {/* WhatsApp Channel Card */}
+          {/* WhatsApp Channel Card with Real Status */}
           <Card style={{ gap: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1210,26 +1554,38 @@ export default function AgentsScreen() {
                     width: 36,
                     height: 36,
                     borderRadius: 18,
-                    backgroundColor: '#DCFCE7',
+                    backgroundColor: channelStatus?.whatsapp?.connected ? '#DCFCE7' : '#F1F5F9',
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <MaterialIcons name="chat" size={20} color="#16A34A" />
+                  <MaterialIcons
+                    name="chat"
+                    size={20}
+                    color={channelStatus?.whatsapp?.connected ? '#16A34A' : colors.muted}
+                  />
                 </View>
                 <View>
                   <Text style={{ fontSize: 15, fontWeight: '800', color: colors.ink }}>WhatsApp Business</Text>
-                  <Text style={{ fontSize: 11, color: colors.muted }}>Instant 24/7 inquiry auto-reply</Text>
+                  <Text style={{ fontSize: 11, color: colors.muted }}>
+                    {channelStatus?.whatsapp?.connected
+                      ? `Connected: ${channelStatus.whatsapp.phoneNumber || 'Ready'}`
+                      : 'Instant 24/7 inquiry auto-reply'}
+                  </Text>
                 </View>
               </View>
-              <Badge accent label="Configure" />
+              {channelStatus?.whatsapp?.connected ? (
+                <Badge success label="Connected" />
+              ) : (
+                <Badge accent label="Configure" />
+              )}
             </View>
             <Text style={ui.body}>
               Connect your WhatsApp Business API number to let this assistant answer customer messages directly on WhatsApp.
             </Text>
             <Action
               secondary
-              label="Review Integrations"
+              label="Review WhatsApp Integrations"
               onPress={() => router.push('/(tabs)/integrations')}
             />
           </Card>
@@ -1269,45 +1625,52 @@ export default function AgentsScreen() {
         </View>
       )}
 
-      {/* ── 6. Tab: Live Test Arena ── */}
+      {/* ── 6. Tab: Live Test Arena (Full Height, Zero Nested Scroll) ── */}
       {tab === 'test' && (
-        <View style={{ gap: 10 }}>
-          {/* Header Action Bar */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.muted }}>
-              Live Conversation Sandbox
-            </Text>
+        <View style={{ flex: 1, gap: 8, marginTop: 4 }}>
+          {/* Header Bar */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#10B981' }} />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.muted }}>
+                Live Sandbox · {draft.name}
+              </Text>
+            </View>
             {messages.length > 0 && (
               <Pressable
                 accessibilityRole="button"
                 disabled={testing}
-                onPress={() => setMessages([])}
+                onPress={() => {
+                  triggerHaptic();
+                  setMessages([]);
+                }}
+                hitSlop={8}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
               >
                 <MaterialIcons name="refresh" size={14} color={colors.muted} />
-                <Text style={{ fontSize: 11.5, color: colors.muted, fontWeight: '700' }}>Clear Chat</Text>
+                <Text style={{ fontSize: 11.5, color: colors.muted, fontWeight: '700' }}>Clear</Text>
               </Pressable>
             )}
           </View>
 
-          {/* Chat Container */}
+          {/* Full Height Conversation Window */}
           <View
             style={{
+              flex: 1,
               backgroundColor: '#FFFFFF',
               borderRadius: 18,
               borderWidth: 1,
               borderColor: '#E2E8F0',
               overflow: 'hidden',
-              minHeight: 320,
-              maxHeight: 460,
             }}
           >
             <ScrollView
               ref={chatScrollRef}
-              style={{ flex: 1, padding: 14 }}
-              contentContainerStyle={{ gap: 12, paddingBottom: 16 }}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: 14, gap: 12, paddingBottom: 16 }}
+              keyboardShouldPersistTaps="handled"
             >
-              {/* Welcome Bubble from Assistant */}
+              {/* Initial Assistant Greeting Bubble */}
               <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start', maxWidth: '85%' }}>
                 <Image
                   source={{
@@ -1359,7 +1722,7 @@ export default function AgentsScreen() {
                     )}
                     <View
                       style={{
-                        maxWidth: '80%',
+                        maxWidth: '82%',
                         backgroundColor: isUser ? colors.brand : '#F1F5F9',
                         borderRadius: 16,
                         borderTopRightRadius: isUser ? 4 : 16,
@@ -1383,7 +1746,7 @@ export default function AgentsScreen() {
                 );
               })}
 
-              {/* Typing indicator */}
+              {/* Animated Typing Indicator */}
               {testing && (
                 <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                   <Image
@@ -1400,9 +1763,13 @@ export default function AgentsScreen() {
                       paddingHorizontal: 12,
                       paddingVertical: 8,
                       borderRadius: 14,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
                     }}
                   >
-                    <Text style={{ fontSize: 12, color: colors.muted, fontStyle: 'italic' }}>
+                    <ActivityIndicator size="small" color={colors.brand} />
+                    <Text style={{ fontSize: 12, color: colors.muted, fontStyle: 'italic', marginLeft: 4 }}>
                       {draft.name} is thinking…
                     </Text>
                   </View>
@@ -1410,7 +1777,7 @@ export default function AgentsScreen() {
               )}
             </ScrollView>
 
-            {/* Quick Test Chips */}
+            {/* Quick Prompt Chips */}
             <View style={{ borderTopWidth: 1, borderTopColor: '#F1F5F9', backgroundColor: '#F8FAFC', padding: 8 }}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                 {testChips.map((chip, idx) => (
@@ -1472,9 +1839,9 @@ export default function AgentsScreen() {
                 disabled={testing || !testInput.trim()}
                 onPress={() => void testChat()}
                 style={({ pressed }) => ({
-                  width: 38,
-                  height: 38,
-                  borderRadius: 19,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
                   backgroundColor: testInput.trim() ? colors.brand : '#E2E8F0',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1498,7 +1865,7 @@ export default function AgentsScreen() {
           <View style={[styles.modalCard, { maxHeight: '80%' }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>Choose an Assistant Avatar</Text>
-              <Pressable onPress={() => setAvatarModalOpen(false)}>
+              <Pressable onPress={() => setAvatarModalOpen(false)} hitSlop={10}>
                 <MaterialIcons name="close" size={22} color={colors.muted} />
               </Pressable>
             </View>
@@ -1510,6 +1877,7 @@ export default function AgentsScreen() {
                     key={item.id}
                     accessibilityRole="button"
                     onPress={() => {
+                      triggerHaptic();
                       edit({ avatarUrl: item.url });
                       setAvatarModalOpen(false);
                     }}
@@ -1547,7 +1915,7 @@ export default function AgentsScreen() {
               <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
                 {editingFaqId ? 'Edit Knowledge Answer' : 'Add Question & Answer'}
               </Text>
-              <Pressable onPress={() => setFaqModalOpen(false)}>
+              <Pressable onPress={() => setFaqModalOpen(false)} hitSlop={10}>
                 <MaterialIcons name="close" size={22} color={colors.muted} />
               </Pressable>
             </View>
@@ -1590,7 +1958,7 @@ export default function AgentsScreen() {
           <View style={[styles.modalCard, { alignItems: 'center' }]}>
             <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>Assistant QR Code</Text>
-              <Pressable onPress={() => setQrModalOpen(false)}>
+              <Pressable onPress={() => setQrModalOpen(false)} hitSlop={10}>
                 <MaterialIcons name="close" size={22} color={colors.muted} />
               </Pressable>
             </View>

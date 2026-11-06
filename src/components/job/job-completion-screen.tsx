@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import {
   CheckCircle2,
   XCircle,
@@ -10,6 +10,13 @@ import {
   FileText,
   Loader2,
   AlertCircle,
+  Mic,
+  MicOff,
+  Sparkles,
+  Plus,
+  Trash2,
+  Wrench,
+  Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -22,16 +29,23 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-// Note: we intentionally do NOT use the Radix ScrollArea here because its
-// inner Viewport wraps children in a `display: table` div, which collapses
-// the content height inside a flex container and prevents scrolling. A plain
-// `overflow-y-auto` div works reliably in flex layouts.
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { PhotoCapture, type JobPhoto } from './photo-capture';
 import { SignaturePad, type SavedSignature } from './signature-pad';
 import { useQueryClient } from '@tanstack/react-query';
 import { getJobInvalidations } from '@/lib/invalidation-helpers';
+
+interface WrapUpLineItem {
+  id: string;
+  name: string;
+  description?: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+  type?: 'material' | 'labor' | 'service';
+}
 
 interface JobCompletionScreenProps {
   open: boolean;
@@ -94,6 +108,53 @@ export function JobCompletionScreen({
   const [submitting, setSubmitting] = useState(false);
   const queryClient = useQueryClient();
 
+  // ── Materials, hardware & extra labor state ──────────────────────
+  const [lineItems, setLineItems] = useState<WrapUpLineItem[]>([]);
+  const [isListening, setIsListening] = useState(false);
+  const [speechTranscript, setSpeechTranscript] = useState('');
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const recognitionRef = useRef<any>(null);
+
+  // Initialize Speech Recognition
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      return;
+    }
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onresult = (event: any) => {
+        let currentTranscript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          currentTranscript += event.results[i][0].transcript;
+        }
+        setSpeechTranscript(currentTranscript);
+      };
+      recognition.onerror = () => setIsListening(false);
+      recognition.onend = () => setIsListening(false);
+      recognitionRef.current = recognition;
+    } catch {
+      setSpeechSupported(false);
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+    };
+  }, []);
+
   // Reset transient state whenever the dialog is (re)opened.
   useEffect(() => {
     if (open) {
@@ -102,8 +163,133 @@ export function JobCompletionScreen({
       setCustomerSigs([]);
       setEmployeeSigs([]);
       setCompletionNotes('');
+      setSpeechTranscript('');
+      setIsListening(false);
     }
   }, [open, jobId]);
+
+  // Fetch initial job lineItems & completion notes
+  useEffect(() => {
+    if (!open || !jobId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${jobId}`);
+        if (!res.ok) return;
+        const job = await res.json();
+        if (cancelled) return;
+        if (job.lineItemsJson) {
+          try {
+            const parsed = typeof job.lineItemsJson === 'string' ? JSON.parse(job.lineItemsJson) : job.lineItemsJson;
+            if (Array.isArray(parsed)) setLineItems(parsed);
+          } catch {}
+        }
+        if (job.completionNotes) {
+          setCompletionNotes((prev) => prev || job.completionNotes);
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, jobId]);
+
+  const toggleListening = () => {
+    if (isListening) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      setIsListening(false);
+      if (speechTranscript.trim()) {
+        handleVoiceWrapUp(speechTranscript);
+      }
+    } else {
+      setSpeechTranscript('');
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start();
+        } catch {
+          setIsListening(true);
+        }
+      }
+    }
+  };
+
+  const handleVoiceWrapUp = async (textToProcess?: string) => {
+    const text = (textToProcess || speechTranscript).trim();
+    if (!text) {
+      toast.error('Please speak or type extra parts / work first.');
+      return;
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+    }
+    setIsListening(false);
+    setIsProcessingVoice(true);
+
+    try {
+      const res = await fetch('/api/ai/voice-command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: text,
+          jobId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        toast.error(data.spokenFeedback || data.error || 'Could not understand wrap-up command.');
+        return;
+      }
+
+      toast.success(data.spokenFeedback || 'Materials and extra labor logged!');
+      setSpeechTranscript('');
+
+      if (data.data?.newItems && Array.isArray(data.data.newItems)) {
+        setLineItems((prev) => [...prev, ...data.data.newItems]);
+      }
+      if (data.data?.completionNotes) {
+        setCompletionNotes((prev) =>
+          prev ? `${prev}\n${data.data.completionNotes}` : data.data.completionNotes
+        );
+      }
+    } catch (err: any) {
+      console.error('Wrap up error:', err);
+      toast.error(err.message || 'Failed to process voice command.');
+    } finally {
+      setIsProcessingVoice(false);
+    }
+  };
+
+  const handleAddManualItem = () => {
+    const newItem: WrapUpLineItem = {
+      id: `item_${Date.now()}`,
+      name: 'Extra Material / Part',
+      quantity: 1,
+      rate: 0,
+      amount: 0,
+      type: 'material',
+    };
+    setLineItems((prev) => [...prev, newItem]);
+  };
+
+  const handleUpdateItem = (index: number, updates: Partial<WrapUpLineItem>) => {
+    setLineItems((prev) => {
+      const copy = [...prev];
+      const item = { ...copy[index], ...updates };
+      item.amount = (Number(item.quantity) || 1) * (Number(item.rate) || 0);
+      copy[index] = item;
+      return copy;
+    });
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setLineItems((prev) => prev.filter((_, i) => i !== index));
+  };
 
   // ── Initial fetch of existing signatures (so reopening reflects reality) ──
   useEffect(() => {
@@ -209,6 +395,19 @@ export function JobCompletionScreen({
     }
     setSubmitting(true);
     try {
+      // Sync any local line items changes to the job so invoice has the updated items
+      if (lineItems.length > 0) {
+        const subtotal = lineItems.reduce((acc, it) => acc + (Number(it.amount) || 0), 0);
+        await fetch(`/api/jobs/${jobId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lineItemsJson: JSON.stringify(lineItems),
+            quotedAmount: subtotal > 0 ? subtotal : undefined,
+          }),
+        }).catch(() => null);
+      }
+
       // Use the override endpoint if provided (e.g. employee portal uses
       // /api/employee/jobs/[id]/lifecycle for assignee-scoped validation).
       const endpoint = lifecycleEndpoint || `/api/jobs/${jobId}/lifecycle`;
@@ -475,6 +674,175 @@ export function JobCompletionScreen({
                 defaultSignatoryName={employeeName}
                 defaultSignatoryRole="Technician"
               />
+            </section>
+
+            {/* Materials, Hardware & Extra Work (Voice AI) */}
+            <section className="space-y-3 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-950/10">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-emerald-600 text-white shrink-0">
+                    <Wrench className="size-4" />
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-foreground">Materials, Hardware & Extra Work</h3>
+                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-0 text-[10px] gap-1">
+                        <Sparkles className="size-3" /> Voice AI
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Speak or log any additional parts used or extra labor to include on the invoice.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={isListening ? 'destructive' : 'default'}
+                    onClick={toggleListening}
+                    disabled={isProcessingVoice}
+                    className={cn(
+                      'h-8 px-3 text-xs gap-1.5 font-medium shadow-xs',
+                      !isListening && 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    )}
+                  >
+                    {isProcessingVoice ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" />
+                        <span>Processing...</span>
+                      </>
+                    ) : isListening ? (
+                      <>
+                        <MicOff className="size-3.5 animate-pulse" />
+                        <span>Stop & Log</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="size-3.5" />
+                        <span>Voice Log Parts</span>
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddManualItem}
+                    className="h-8 px-2.5 text-xs gap-1"
+                  >
+                    <Plus className="size-3" />
+                    <span>Add Item</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Live Listening Banner */}
+              {isListening && (
+                <div className="p-3 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 flex items-center justify-between gap-2 animate-in fade-in">
+                  <div className="flex items-center gap-2 text-xs text-red-700 dark:text-red-300">
+                    <span className="size-2 rounded-full bg-red-500 animate-ping" />
+                    <span className="font-medium">Listening:</span>
+                    <span className="italic">{speechTranscript || 'Speak parts used (e.g. "Used 45uF capacitor $45 and 30m extra pipe flushing labor $50")...'}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 text-xs px-2"
+                    onClick={() => handleVoiceWrapUp(speechTranscript)}
+                    disabled={!speechTranscript.trim()}
+                  >
+                    Done Speaking
+                  </Button>
+                </div>
+              )}
+
+              {/* Items Table / List */}
+              {lineItems.length > 0 ? (
+                <div className="space-y-2 mt-2">
+                  <div className="rounded-lg border border-border/80 bg-background overflow-hidden">
+                    <div className="grid grid-cols-12 gap-2 p-2 bg-muted/40 text-[11px] font-medium text-muted-foreground uppercase border-b border-border/60">
+                      <span className="col-span-5 sm:col-span-6">Item / Work</span>
+                      <span className="col-span-2 text-center">Qty</span>
+                      <span className="col-span-2 text-right">Price</span>
+                      <span className="col-span-2 text-right">Total</span>
+                      <span className="col-span-1 text-center"></span>
+                    </div>
+                    <div className="divide-y divide-border/40">
+                      {lineItems.map((item, idx) => (
+                        <div key={item.id || idx} className="grid grid-cols-12 gap-2 p-2 items-center text-xs">
+                          <div className="col-span-5 sm:col-span-6 flex items-center gap-1.5 min-w-0">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                'text-[9px] px-1 py-0 h-4 shrink-0',
+                                item.type === 'labor' ? 'border-blue-400 text-blue-600' : 'border-amber-400 text-amber-600'
+                              )}
+                            >
+                              {item.type === 'labor' ? 'Labor' : 'Part'}
+                            </Badge>
+                            <Input
+                              value={item.name}
+                              onChange={(e) => handleUpdateItem(idx, { name: e.target.value })}
+                              className="h-7 text-xs px-1.5"
+                              placeholder="Part name or work"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={item.quantity}
+                              onChange={(e) => handleUpdateItem(idx, { quantity: Number(e.target.value) || 1 })}
+                              className="h-7 text-xs px-1.5 text-center"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              value={item.rate}
+                              onChange={(e) => handleUpdateItem(idx, { rate: Number(e.target.value) || 0 })}
+                              className="h-7 text-xs px-1.5 text-right font-mono"
+                            />
+                          </div>
+                          <div className="col-span-2 text-right font-semibold font-mono text-emerald-600 dark:text-emerald-400">
+                            ${((item.quantity || 1) * (item.rate || 0)).toFixed(2)}
+                          </div>
+                          <div className="col-span-1 flex justify-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(idx)}
+                              className="text-muted-foreground hover:text-red-500 transition-colors p-1"
+                              title="Remove item"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Additional Total Badge */}
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs">
+                    <span className="font-medium text-emerald-800 dark:text-emerald-300">
+                      Total Added to Job Invoice ({lineItems.length} items):
+                    </span>
+                    <span className="font-bold text-sm font-mono text-emerald-700 dark:text-emerald-300">
+                      ${lineItems.reduce((acc, it) => acc + (Number(it.amount) || 0), 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4 border border-dashed border-border rounded-lg bg-background/50">
+                  <p className="text-xs text-muted-foreground">
+                    No extra hardware or labor added yet. Tap <span className="font-semibold text-emerald-600">Voice Log Parts</span> or speak what you used.
+                  </p>
+                </div>
+              )}
             </section>
 
             {/* Completion Notes */}

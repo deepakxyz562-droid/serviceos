@@ -71,15 +71,19 @@ function unwrap<T>(r: unknown, key?: string): T {
 
 const JOBS_PAGE_SIZE = 50;
 
-export function useEmployeeJobs(filter: 'all' | 'today' | 'scheduled' = 'all') {
+export function useEmployeeJobs(
+  filter: 'all' | 'today' | 'scheduled' = 'all',
+  scope: 'all' | 'assigned' | 'created' = 'all'
+) {
   return useQuery({
-    queryKey: ['jobs', 'employee', filter],
+    queryKey: ['jobs', 'employee', filter, scope],
     queryFn: async () => {
       // FIX: Use pagination (?limit=50) to avoid fetching ALL jobs at once.
       // The backend now supports ?limit=&offset= params. We fetch the first
       // page here; useLoadMoreJobs() below handles loading additional pages.
       const r = await api.get<unknown>('/api/employee/jobs', {
         filter,
+        scope,
         limit: JOBS_PAGE_SIZE,
         offset: 0,
       });
@@ -93,12 +97,16 @@ export function useEmployeeJobs(filter: 'all' | 'today' | 'scheduled' = 'all') {
  * Load additional pages of employee jobs (infinite-scroll / "Load More").
  * Uses the same query key prefix so the first page is shared.
  */
-export function useLoadMoreJobs(filter: 'all' | 'today' | 'scheduled' = 'all') {
+export function useLoadMoreJobs(
+  filter: 'all' | 'today' | 'scheduled' = 'all',
+  scope: 'all' | 'assigned' | 'created' = 'all'
+) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ offset }: { offset: number }) => {
       const r = await api.get<unknown>('/api/employee/jobs', {
         filter,
+        scope,
         limit: JOBS_PAGE_SIZE,
         offset,
       });
@@ -106,9 +114,11 @@ export function useLoadMoreJobs(filter: 'all' | 'today' | 'scheduled' = 'all') {
     },
     onSuccess: (newJobs, vars) => {
       // Append the new page to the existing cached list
-      qc.setQueryData(['jobs', 'employee', filter], (old: unknown) => {
+      qc.setQueryData(['jobs', 'employee', filter, scope], (old: unknown) => {
         const oldList = Array.isArray(old) ? old : [];
-        return [...oldList, ...newJobs];
+        const existingIds = new Set(oldList.map((j: Job) => j.id));
+        const deduped = newJobs.filter((j) => !existingIds.has(j.id));
+        return [...oldList, ...deduped];
       });
     },
   });

@@ -12,6 +12,9 @@ export interface ActionContext {
   workspaceId: string | null;
   userId?: string;
   userName?: string;
+  employeeId?: string | null;
+  employeeName?: string | null;
+  isEmployee?: boolean;
 }
 
 /**
@@ -43,8 +46,18 @@ export async function executeCreateJob(
     { phone: args.phone, email: args.email, address: args.address }
   );
 
-  // 2. Resolve Employee / Assignee
-  const employee = await resolveEmployee(tenantId, args.employeeName, workspaceId);
+  // 2. Resolve Employee / Assignee (supports self-assignment when technician says "me", "myself", or calls from mobile)
+  let employee: any = null;
+  const rawEmpName = (args.employeeName || '').trim().toLowerCase();
+  const isSelf = rawEmpName === 'me' || rawEmpName === 'myself' || rawEmpName === 'self' || rawEmpName === 'i';
+
+  if (isSelf || (!args.employeeName && ctx.isEmployee)) {
+    if (ctx.employeeId) {
+      employee = await db.employee.findUnique({ where: { id: ctx.employeeId } }).catch(() => null);
+    }
+  } else if (args.employeeName) {
+    employee = await resolveEmployee(tenantId, args.employeeName, workspaceId);
+  }
 
   // 3. Parse Date & Time
   const { scheduledAt, scheduledTimeString } = parseNaturalDateTime(
@@ -63,7 +76,15 @@ export async function executeCreateJob(
   const quotedAmount = typeof args.amount === 'number' && !isNaN(args.amount) ? args.amount : null;
   const jobNumber = `J-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  // 5. Create Job Record
+  // 5. Create Job Record with creator provenance metadata
+  const metadata = {
+    createdByType: ctx.isEmployee ? 'employee' : 'owner',
+    createdByEmployeeId: ctx.employeeId || null,
+    createdByEmployeeName: ctx.employeeName || ctx.userName || null,
+    createdByUserId: ctx.userId || null,
+    creationChannel: 'mobile_voice_ai',
+  };
+
   const newJob = await db.job.create({
     data: {
       jobNumber,
@@ -83,6 +104,9 @@ export async function executeCreateJob(
       assigneeId: employee?.id || null,
       assigneeName: employee?.name || null,
       assigneePhone: employee?.phone || null,
+      externalSource: 'mobile_voice_ai',
+      externalId: ctx.employeeId ? `employee:${ctx.employeeId}` : (ctx.userId ? `user:${ctx.userId}` : null),
+      metadataJson: JSON.stringify(metadata),
     },
   });
 
@@ -659,5 +683,142 @@ export async function executeGetMorningBriefing(ctx: ActionContext) {
       value: l.value,
     })),
     summary,
+  };
+}
+
+/**
+ * 7. WRAP UP JOB (Voice Materials & Extra Work Logging)
+ */
+export async function executeWrapUpJob(
+  ctx: ActionContext,
+  args: {
+    jobId?: string;
+    jobNumber?: string;
+    materialsUsed?: Array<{ name: string; quantity?: number; unitPrice?: number; total?: number }>;
+    extraLabor?: Array<{ description: string; amount?: number; durationMinutes?: number }>;
+    completionNotes?: string;
+  }
+) {
+  const { tenantId, workspaceId } = ctx;
+  if (!workspaceId) throw new Error('No active workspace found.');
+
+  // 1. Locate Job
+  let job: any = null;
+  if (args.jobId) {
+    job = await db.job.findUnique({ where: { id: args.jobId } });
+  } else if (args.jobNumber) {
+    job = await db.job.findFirst({
+      where: {
+        workspaceId,
+        jobNumber: { equals: args.jobNumber, mode: 'insensitive' },
+      },
+    });
+  } else if (ctx.employeeId) {
+    // If technician didn't specify job ID/number, look for their active working job
+    job = await db.job.findFirst({
+      where: {
+        workspaceId,
+        assigneeId: ctx.employeeId,
+        status: { in: ['in_progress', 'working', 'arrived', 'assigned'] },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  if (!job) {
+    throw new Error('Target job could not be found. Please specify the job ID or job number.');
+  }
+
+  // 2. Parse existing line items
+  let existingLineItems: any[] = [];
+  try {
+    existingLineItems = JSON.parse(job.lineItemsJson || '[]');
+    if (!Array.isArray(existingLineItems)) existingLineItems = [];
+  } catch {
+    existingLineItems = [];
+  }
+
+  // 3. Construct new line items
+  const newItems: any[] = [];
+  let additionalTotal = 0;
+
+  if (Array.isArray(args.materialsUsed)) {
+    for (const mat of args.materialsUsed) {
+      if (!mat || !mat.name) continue;
+      const qty = typeof mat.quantity === 'number' && mat.quantity > 0 ? mat.quantity : 1;
+      const rate = typeof mat.unitPrice === 'number' ? mat.unitPrice : (typeof mat.total === 'number' ? mat.total / qty : 0);
+      const amount = typeof mat.total === 'number' ? mat.total : qty * rate;
+      additionalTotal += amount;
+      newItems.push({
+        id: `mat_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        name: mat.name.trim(),
+        description: 'Hardware / material logged via voice',
+        quantity: qty,
+        rate,
+        amount,
+        type: 'material',
+      });
+    }
+  }
+
+  if (Array.isArray(args.extraLabor)) {
+    for (const lab of args.extraLabor) {
+      if (!lab || !lab.description) continue;
+      const amount = typeof lab.amount === 'number' ? lab.amount : 0;
+      additionalTotal += amount;
+      newItems.push({
+        id: `lab_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        name: lab.description.trim(),
+        description: lab.durationMinutes ? `Extra labor (${lab.durationMinutes} min)` : 'Additional field labor',
+        quantity: 1,
+        rate: amount,
+        amount,
+        type: 'labor',
+      });
+    }
+  }
+
+  const mergedLineItems = [...existingLineItems, ...newItems];
+  const newQuotedAmount = (job.quotedAmount || 0) + additionalTotal;
+
+  // 4. Update Job
+  const notesUpdate = args.completionNotes?.trim()
+    ? (job.notes ? `${job.notes}\n\n[Completion Notes]: ${args.completionNotes.trim()}` : args.completionNotes.trim())
+    : job.notes;
+
+  const updatedJob = await db.job.update({
+    where: { id: job.id },
+    data: {
+      lineItemsJson: JSON.stringify(mergedLineItems),
+      quotedAmount: newQuotedAmount,
+      notes: notesUpdate,
+      completionNotes: args.completionNotes?.trim() || job.completionNotes,
+    },
+  });
+
+  // 5. Log Activity
+  await logActivity({
+    tenantId,
+    actorId: ctx.userId || null,
+    actorName: ctx.userName || 'AI Copilot',
+    actorType: 'ai',
+    action: 'update',
+    entityType: 'job',
+    entityId: job.id,
+    entityName: job.title,
+    description: `Voice Wrap-up: Added ${newItems.length} items (+$${additionalTotal}) to Job #${job.jobNumber || job.id.slice(0, 8)}`,
+  }).catch(() => null);
+
+  return {
+    success: true,
+    action: 'wrapped_up_job',
+    jobId: job.id,
+    jobNumber: job.jobNumber,
+    jobTitle: job.title,
+    newItems,
+    additionalTotal,
+    newQuotedAmount,
+    completionNotes: args.completionNotes || '',
+    viewUrl: `/jobs/${job.id}`,
   };
 }

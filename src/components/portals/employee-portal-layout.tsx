@@ -46,6 +46,9 @@ import {
   BellRing,
   DoorOpen,
   RefreshCw,
+  Mic,
+  Sparkles,
+  Building2,
 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -87,6 +90,7 @@ import { authFetch } from '@/lib/client-auth';
 import { getVapidPublicKey, urlBase64ToUint8Array } from '@/lib/push-client';
 import { JobCompletionScreen } from '@/components/job/job-completion-screen';
 import { JobPinVerificationModal } from '@/components/job/job-pin-verification-modal';
+import { VoiceCreateJobModal } from '@/components/modals/voice-job-modal';
 // Product / Service (line items) + Expenses + Scheduled visits sections
 // — employees can add & edit these directly from the job detail sheet.
 import {
@@ -194,6 +198,11 @@ interface Job {
   // The mobile app splits this into Customer Notes + Internal Notes using
   // a delimiter; we do the same on the PWA for parity.
   notes?: string | null;
+  // AI Mobile Copilot & Creator provenance
+  isCreatedByMe?: boolean;
+  isAssignedToMe?: boolean;
+  creationChannel?: string;
+  lineItems?: any[];
 }
 
 // /api/employee/jobs returns a flat array of enriched job rows. This helper
@@ -229,6 +238,10 @@ interface EmployeeJobsApiResponseRow {
   linkedChecklistsJson?: string;
   lineItemsJson?: string | null;
   notes?: string | null;
+  isCreatedByMe?: boolean;
+  isAssignedToMe?: boolean;
+  creationChannel?: string;
+  lineItems?: any[];
 }
 
 function mapJobRow(row: EmployeeJobsApiResponseRow): Job {
@@ -260,6 +273,10 @@ function mapJobRow(row: EmployeeJobsApiResponseRow): Job {
     linkedChecklistsJson: row.linkedChecklistsJson,
     lineItemsJson: row.lineItemsJson ?? undefined,
     notes: row.notes ?? undefined,
+    isCreatedByMe: Boolean(row.isCreatedByMe),
+    isAssignedToMe: Boolean(row.isAssignedToMe),
+    creationChannel: row.creationChannel,
+    lineItems: row.lineItems,
   };
 }
 
@@ -1341,6 +1358,7 @@ function ErrorCard({ message, onRetry }: { message: string; onRetry?: () => void
 
 function HomeView({
   onViewChange,
+  onOpenVoiceJob,
   jobs,
   loading,
   error,
@@ -1349,6 +1367,7 @@ function HomeView({
   hasActiveShift,
 }: {
   onViewChange?: (view: EmployeeSubView) => void;
+  onOpenVoiceJob?: () => void;
   // Hoisted from the parent EmployeePortalLayout so HomeView, MyJobsView and
   // ScheduleView share a single /api/employee/jobs fetch (previously each view
   // fired its own parallel request — 3x the load on the API + triple the
@@ -1445,6 +1464,49 @@ function HomeView({
           so it shows across ALL sub-views (not just Home). Previously it was
           only visible here on Home, so employees who landed on My Jobs or
           Schedule first never saw the one-tap enable prompt. */}
+
+      {/* AI Mobile Field Copilot Quick Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-sky-500/10 border border-emerald-500/25 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="size-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Mic className="size-4.5 animate-pulse" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <span>AI Mobile Copilot</span>
+              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-0 text-[10px] h-4">
+                Hands-Free
+              </Badge>
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              Speak: &quot;Schedule AC service for Rahul tomorrow at 3 PM, assign to me&quot;
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {onOpenVoiceJob && (
+            <Button
+              size="sm"
+              onClick={onOpenVoiceJob}
+              className="h-8 px-3 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs gap-1.5"
+            >
+              <Mic className="size-3.5" />
+              <span>Voice New Job</span>
+            </Button>
+          )}
+          {onViewChange && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onViewChange('my-jobs')}
+              className="h-8 px-2.5 text-xs font-medium"
+            >
+              <Briefcase className="size-3.5 mr-1" />
+              <span>My Jobs ({jobs.length})</span>
+            </Button>
+          )}
+        </div>
+      </div>
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -2748,6 +2810,7 @@ function MyJobsView({
   error,
   refetch,
   hasActiveShift,
+  onOpenVoiceJob,
 }: {
   // Hoisted from EmployeePortalLayout — see HomeView for the rationale.
   jobs: Job[];
@@ -2756,23 +2819,26 @@ function MyJobsView({
   refetch: (opts?: { silent?: boolean }) => Promise<void> | void;
   // True when the employee has an active shift — passed to useJobDetailSheet.
   hasActiveShift: boolean;
+  onOpenVoiceJob?: () => void;
 }) {
   const [filter, setFilter] = useState<string>('all');
+  const [originFilter, setOriginFilter] = useState<'all' | 'assigned' | 'created'>('all');
   // Shared job-detail-sheet state machine (selectedJob + actionLoading +
   // handleLifecycleAction + the sync-from-jobs effect). Extracted so
   // HomeView can reuse the exact same behaviour.
   const { selectedJob, setSelectedJob, actionLoading, handleLifecycleAction } =
     useJobDetailSheet({ jobs, refetch, hasActiveShift });
 
-  const filteredJobs = filter === 'all'
-    ? jobs
-    : jobs.filter((j) => {
-        // V1.5: match against the resolved lifecycle stage first, falling back
-        // to legacy Job.status. This way both the new chips (accepted / working /
-        // paused / etc.) and the legacy chips (in_progress / pending) work.
-        const stage = resolveLifecycleStage(j);
-        return stage === filter || j.status === filter;
-      });
+  const filteredJobs = jobs.filter((j) => {
+    // 1. Origin filter
+    if (originFilter === 'assigned' && !j.isAssignedToMe) return false;
+    if (originFilter === 'created' && !j.isCreatedByMe) return false;
+
+    // 2. Status / lifecycle filter
+    if (filter === 'all') return true;
+    const stage = resolveLifecycleStage(j);
+    return stage === filter || j.status === filter;
+  });
 
   const filterOptions: { value: string; label: string }[] = [
     { value: 'all', label: 'All' },
@@ -2795,28 +2861,78 @@ function MyJobsView({
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <CardTitle className="text-base">Assigned Jobs</CardTitle>
-              <CardDescription>View and manage your current job assignments</CardDescription>
+              <CardTitle className="text-base flex items-center gap-2">
+                <span>My Field Jobs</span>
+                <Badge variant="outline" className="text-xs font-normal">
+                  {jobs.length} total
+                </Badge>
+              </CardTitle>
+              <CardDescription>View jobs assigned to you by dispatch or self-created via voice</CardDescription>
             </div>
-            <div className="flex gap-2 flex-wrap">
+            {onOpenVoiceJob && (
+              <Button
+                size="sm"
+                onClick={onOpenVoiceJob}
+                className="h-8 px-3 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs gap-1.5 shrink-0 self-start sm:self-auto"
+              >
+                <Mic className="size-3.5" />
+                <span>Voice New Job</span>
+              </Button>
+            )}
+          </div>
+
+          {/* Origin filter pills: All | From Dispatch | Created by Me */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-border/50">
+            <div className="flex items-center gap-1 p-1 bg-muted/60 dark:bg-muted/30 rounded-lg border border-border/40 text-xs">
+              <button
+                type="button"
+                onClick={() => setOriginFilter('all')}
+                className={cn(
+                  'px-2.5 py-1 rounded-md font-medium transition-all text-xs',
+                  originFilter === 'all'
+                    ? 'bg-background text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                All Jobs ({jobs.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setOriginFilter('assigned')}
+                className={cn(
+                  'px-2.5 py-1 rounded-md font-medium transition-all text-xs flex items-center gap-1',
+                  originFilter === 'assigned'
+                    ? 'bg-background text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Building2 className="size-3" />
+                <span>From Dispatch ({jobs.filter((j) => j.isAssignedToMe).length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setOriginFilter('created')}
+                className={cn(
+                  'px-2.5 py-1 rounded-md font-medium transition-all text-xs flex items-center gap-1',
+                  originFilter === 'created'
+                    ? 'bg-background text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Sparkles className="size-3 text-purple-600 dark:text-purple-400" />
+                <span>Created by Me ({jobs.filter((j) => j.isCreatedByMe).length})</span>
+              </button>
+            </div>
+
+            {/* Status lifecycle filter chips */}
+            <div className="flex gap-1.5 flex-wrap">
               {filterOptions.map((f) => (
                 <Button
                   key={f.value}
                   variant={filter === f.value ? 'default' : 'outline'}
                   size="sm"
-                  // Brand-color decision (PWA-TIERS T3.2):
-                  // The mobile app uses bg-primary-500 for the selected
-                  // filter chip; the PWA intentionally stays on emerald-600
-                  // because emerald is this project's canonical brand color
-                  // (see the style guide: "Do NOT use indigo or blue as
-                  // primary brand colors — Emerald is the brand"). The
-                  // mobile's `primary` token currently resolves to a
-                  // blue/indigo which we don't want to bring over to the PWA.
-                  // Keeping emerald here also matches the rest of the
-                  // employee portal's accent color (Accept/Start Work/
-                  // Resume buttons all use bg-emerald-600).
                   className={cn(
-                    'text-xs h-8',
+                    'text-xs h-7 px-2.5',
                     filter === f.value && 'bg-emerald-600 hover:bg-emerald-700 text-white'
                   )}
                   onClick={() => setFilter(f.value)}
@@ -2862,7 +2978,18 @@ function MyJobsView({
                       <span className="text-[10px] text-muted-foreground uppercase font-medium">{job.priority}</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{job.title}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-foreground truncate">{job.title}</p>
+                        {job.isCreatedByMe ? (
+                          <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border-0 text-[10px] h-4.5 gap-1 font-medium">
+                            <Sparkles className="size-2.5" /> Created by You
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground text-[10px] h-4.5 gap-1">
+                            <Building2 className="size-2.5" /> From Dispatch
+                          </Badge>
+                        )}
+                      </div>
                       {job.address && (
                         <div className="flex items-center gap-2 mt-1">
                           <MapPin className="size-3 text-muted-foreground shrink-0" />
@@ -4791,6 +4918,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
   }, [activeView]);
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
   const isMobile = useIsMobile();
   const { auth } = useAppStore();
 
@@ -5028,6 +5156,18 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
           {/* Right: action buttons. shrink-0 so they never get squeezed;
               gap-1 on mobile (gap-2 on sm+) keeps them compact. */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* AI Voice Job Creation Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setVoiceModalOpen(true)}
+              className="h-8 px-2 sm:px-3 text-xs gap-1.5 font-medium border-emerald-500/30 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 bg-emerald-500/5 shadow-xs shrink-0"
+              title="Create Job with AI Voice"
+            >
+              <Mic className="size-3.5 text-emerald-600 animate-pulse" />
+              <span className="hidden xs:inline sm:inline">Voice Job</span>
+            </Button>
+
             {/* Dark mode toggle */}
             <ThemeToggleButton />
 
@@ -5132,6 +5272,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
                 <div className={cn(activeView !== 'home' && 'hidden')}>
                   <HomeView
                     onViewChange={handleViewChange}
+                    onOpenVoiceJob={() => setVoiceModalOpen(true)}
                     jobs={jobs}
                     loading={jobsLoading}
                     error={jobsError}
@@ -5149,6 +5290,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
                     error={jobsError}
                     refetch={refetchJobs}
                     hasActiveShift={hasActiveShift}
+                    onOpenVoiceJob={() => setVoiceModalOpen(true)}
                   />
                 </div>
               )}
@@ -5190,6 +5332,15 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
 
       {/* Mobile bottom tab bar (phones only) */}
       <MobileBottomNav activeView={activeView} onViewChange={handleViewChange} />
+
+      {/* Voice Create Job Modal for Field Technicians */}
+      <VoiceCreateJobModal
+        open={voiceModalOpen}
+        onOpenChange={setVoiceModalOpen}
+        onJobCreated={() => {
+          refetchJobs({ silent: true });
+        }}
+      />
     </div>
     </GpsTrackingProvider>
   );
