@@ -45,6 +45,7 @@ type Call = {
   outcomeType?: string;
   endedReason?: string;
   leadId?: string | null;
+  lead?: { id: string; name: string; status: string; value: number } | null;
 };
 
 type CallStats = {
@@ -52,11 +53,32 @@ type CallStats = {
   todayCount: number;
   missedCount: number;
   convertedCount: number;
+  followupCount?: number;
 };
 
 type CallsResponse = {
   calls: Call[];
   stats: CallStats;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+type CallerLookup = {
+  matched: boolean;
+  type?: 'lead' | 'customer';
+  caller?: {
+    id: string;
+    name: string;
+    phone: string;
+    status?: string;
+    value?: number;
+    serviceType?: string;
+    isCustomer?: boolean;
+  };
 };
 
 export default function PhoneScreen() {
@@ -66,8 +88,8 @@ export default function PhoneScreen() {
   // Fetch calls & live stats
   const callsResource = useResource<CallsResponse>('/api/calls?limit=50');
 
-  const [activeTab, setActiveTab] = useState<'all' | 'missed' | 'converted' | 'dialpad'>('all');
-  React.useEffect(() => {
+  const [activeTab, setActiveTab] = useState<'all' | 'missed' | 'followup' | 'converted' | 'dialpad'>('all');
+  useEffect(() => {
     if (open === 'dialpad') {
       setActiveTab('dialpad');
       router.setParams({ open: '' });
@@ -80,19 +102,54 @@ export default function PhoneScreen() {
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [postCallPrompt, setPostCallPrompt] = useState<{ number: string; durationSec: number } | null>(null);
-  const pendingCallRef = useRef<{ number: string; startedAt: number } | null>(null);
+
+  // SalesTrail Caller ID Lookup on Dialpad
+  const [dialerCallerId, setDialerCallerId] = useState<CallerLookup | null>(null);
+
+  useEffect(() => {
+    const clean = dialNumber.replace(/\D/g, '');
+    if (clean.length >= 7) {
+      let active = true;
+      apiRequest<CallerLookup>(`/api/calls/lookup?phone=${encodeURIComponent(clean)}`)
+        .then((res) => {
+          if (active && res.matched) setDialerCallerId(res);
+          else if (active) setDialerCallerId(null);
+        })
+        .catch(() => {
+          if (active) setDialerCallerId(null);
+        });
+      return () => {
+        active = false;
+      };
+    } else {
+      setDialerCallerId(null);
+    }
+  }, [dialNumber]);
 
   // Post-Call prompt detector: triggers when returning to BGOS from native phone dialer
+  const [postCallPrompt, setPostCallPrompt] = useState<{
+    number: string;
+    callerInfo?: CallerLookup['caller'] | null;
+  } | null>(null);
+  const pendingCallRef = useRef<{ number: string; startedAt: number } | null>(null);
+
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active' && pendingCallRef.current) {
-        const elapsed = Math.round((Date.now() - pendingCallRef.current.startedAt) / 1000);
         const callInfo = pendingCallRef.current;
         pendingCallRef.current = null;
-        if (elapsed >= 1) {
-          setPostCallPrompt({ number: callInfo.number, durationSec: elapsed });
-        }
+
+        // Perform instant Caller ID resolution
+        apiRequest<CallerLookup>(`/api/calls/lookup?phone=${encodeURIComponent(callInfo.number)}`)
+          .then((res) => {
+            setPostCallPrompt({
+              number: callInfo.number,
+              callerInfo: res.matched && res.caller ? res.caller : null,
+            });
+          })
+          .catch(() => {
+            setPostCallPrompt({ number: callInfo.number, callerInfo: null });
+          });
       }
     });
     return () => {
@@ -104,7 +161,7 @@ export default function PhoneScreen() {
   const [logPhone, setLogPhone] = useState('');
   const [logType, setLogType] = useState<'inbound' | 'outbound' | 'missed'>('inbound');
   const [logDurationMin, setLogDurationMin] = useState('2');
-  const [logOutcome, setLogOutcome] = useState('interested');
+  const [logOutcome, setLogOutcome] = useState('connected');
   const [logNotes, setLogNotes] = useState('');
   const [logCreateLead, setLogCreateLead] = useState(true);
   const [logSubmitting, setLogSubmitting] = useState(false);
@@ -115,7 +172,12 @@ export default function PhoneScreen() {
   const calls = rawCalls.filter((c) => {
     const num = (c.customerPhone || c.fromNumber || c.toNumber || '').toLowerCase();
     const sum = (c.summary || '').toLowerCase();
-    const matchesSearch = !search || num.includes(search.toLowerCase()) || sum.includes(search.toLowerCase());
+    const leadName = (c.lead?.name || '').toLowerCase();
+    const matchesSearch =
+      !search ||
+      num.includes(search.toLowerCase()) ||
+      sum.includes(search.toLowerCase()) ||
+      leadName.includes(search.toLowerCase());
 
     if (!matchesSearch) return false;
 
@@ -123,8 +185,15 @@ export default function PhoneScreen() {
       return (
         c.callType === 'missed' ||
         c.status === 'missed' ||
-        c.durationSec === 0 ||
-        ['no-answer', 'busy', 'missed', 'rejected'].includes(c.endedReason || '')
+        ['no-answer', 'busy', 'missed', 'rejected', 'canceled'].includes(c.endedReason || '')
+      );
+    }
+    if (activeTab === 'followup') {
+      return (
+        c.outcomeType === 'followup' ||
+        c.endedReason === 'followup' ||
+        (c.summary || '').toLowerCase().includes('follow-up') ||
+        (c.summary || '').toLowerCase().includes('callback')
       );
     }
     if (activeTab === 'converted') {
@@ -178,13 +247,13 @@ export default function PhoneScreen() {
         method: 'POST',
         body: {
           callId: call.id,
-          name: `Caller ${phone.slice(-4)}`,
+          name: call.lead?.name || `Caller ${phone.slice(-4)}`,
           notes: call.summary || `Converted from ${call.callType} call (${call.durationSec || 0}s)`,
         },
       });
 
       if (res.success) {
-        setNotice(`Call converted to CRM Lead!`);
+        setNotice(`✓ Call converted to CRM Lead!`);
         setTimeout(() => setNotice(null), 4000);
         await callsResource.refresh();
       }
@@ -204,8 +273,8 @@ export default function PhoneScreen() {
 
     setLogSubmitting(true);
     try {
-      const durationSec = logType === 'missed' ? 0 : (parseInt(logDurationMin, 10) || 1) * 60;
-      await apiRequest('/api/calls', {
+      const durationSec = Math.max(0, (parseInt(logDurationMin, 10) || 0) * 60);
+      const res = await apiRequest<{ success: boolean; call: Call }>('/api/calls', {
         method: 'POST',
         body: {
           customerPhone: cleanPhone,
@@ -214,18 +283,24 @@ export default function PhoneScreen() {
           outcomeType: logOutcome,
           summary: logNotes.trim() || undefined,
           createLead: logCreateLead,
-          leadName: `Lead ${cleanPhone.slice(-4)}`,
+          leadName: `Caller ${cleanPhone.slice(-4)}`,
         },
       });
 
-      setLogModalOpen(false);
-      setLogPhone('');
-      setLogNotes('');
-      setNotice(logCreateLead ? 'Call logged and saved to CRM Leads!' : 'Call logged successfully.');
-      setTimeout(() => setNotice(null), 4000);
-      await callsResource.refresh();
+      if (res.success) {
+        setNotice(`✓ Call logged successfully${logCreateLead ? ' & added to CRM' : ''}!`);
+        setTimeout(() => setNotice(null), 4000);
+        setLogModalOpen(false);
+        // Reset form
+        setLogPhone('');
+        setLogNotes('');
+        setLogDurationMin('2');
+        setLogOutcome('connected');
+        setLogCreateLead(true);
+        await callsResource.refresh();
+      }
     } catch (e) {
-      Alert.alert('Save Failed', (e as Error).message || 'Could not log call.');
+      Alert.alert('Error', (e as Error).message || 'Could not save call log.');
     } finally {
       setLogSubmitting(false);
     }
@@ -259,32 +334,32 @@ export default function PhoneScreen() {
 
       {notice ? (
         <View style={{ backgroundColor: colors.successSoft, padding: 12, borderRadius: 12, marginBottom: 8 }}>
-          <Text style={{ color: colors.success, fontWeight: '700', fontSize: 13 }}>✓ {notice}</Text>
+          <Text style={{ color: colors.success, fontWeight: '700', fontSize: 13 }}>{notice}</Text>
         </View>
       ) : null}
 
       {/* TOP KPI CARDS */}
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
+      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 4 }}>
         {/* Today's Calls */}
         <View
           style={{
             flex: 1,
             backgroundColor: '#FFFFFF',
             borderRadius: 14,
-            padding: 12,
+            padding: 10,
             borderWidth: 1,
             borderColor: '#E2E8F0',
-            gap: 4,
+            gap: 2,
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted }}>Today</Text>
-            <MaterialIcons name="phone-in-talk" size={14} color={colors.brand} />
+            <Text style={{ fontSize: 10.5, fontWeight: '700', color: colors.muted }}>Today</Text>
+            <MaterialIcons name="phone-in-talk" size={13} color={colors.brand} />
           </View>
-          <Text style={{ fontSize: 22, fontWeight: '900', color: colors.ink }}>
+          <Text style={{ fontSize: 20, fontWeight: '900', color: colors.ink }}>
             {stats?.todayCount ?? rawCalls.length}
           </Text>
-          <Text style={{ fontSize: 10.5, color: colors.muted }}>Calls handled</Text>
+          <Text style={{ fontSize: 10, color: colors.muted }}>Calls</Text>
         </View>
 
         {/* Missed Calls */}
@@ -293,23 +368,49 @@ export default function PhoneScreen() {
             flex: 1,
             backgroundColor: (stats?.missedCount || 0) > 0 ? '#FFFBEB' : '#FFFFFF',
             borderRadius: 14,
-            padding: 12,
+            padding: 10,
             borderWidth: 1,
             borderColor: (stats?.missedCount || 0) > 0 ? '#FDE68A' : '#E2E8F0',
-            gap: 4,
+            gap: 2,
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: (stats?.missedCount || 0) > 0 ? '#B45309' : colors.muted }}>
+            <Text style={{ fontSize: 10.5, fontWeight: '700', color: (stats?.missedCount || 0) > 0 ? '#B45309' : colors.muted }}>
               Missed
             </Text>
-            <MaterialIcons name="call-missed" size={14} color={(stats?.missedCount || 0) > 0 ? '#D97706' : colors.muted} />
+            <MaterialIcons name="call-missed" size={13} color={(stats?.missedCount || 0) > 0 ? '#D97706' : colors.muted} />
           </View>
-          <Text style={{ fontSize: 22, fontWeight: '900', color: (stats?.missedCount || 0) > 0 ? '#B45309' : colors.ink }}>
+          <Text style={{ fontSize: 20, fontWeight: '900', color: (stats?.missedCount || 0) > 0 ? '#B45309' : colors.ink }}>
             {stats?.missedCount ?? 0}
           </Text>
-          <Text style={{ fontSize: 10.5, color: (stats?.missedCount || 0) > 0 ? '#D97706' : colors.muted }}>
-            {(stats?.missedCount || 0) > 0 ? 'Needs action' : 'All clear'}
+          <Text style={{ fontSize: 10, color: (stats?.missedCount || 0) > 0 ? '#D97706' : colors.muted }}>
+            Callback
+          </Text>
+        </View>
+
+        {/* Follow-up Queue */}
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: (stats?.followupCount || 0) > 0 ? '#EFF6FF' : '#FFFFFF',
+            borderRadius: 14,
+            padding: 10,
+            borderWidth: 1,
+            borderColor: (stats?.followupCount || 0) > 0 ? '#BFDBFE' : '#E2E8F0',
+            gap: 2,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ fontSize: 10.5, fontWeight: '700', color: (stats?.followupCount || 0) > 0 ? '#1D4ED8' : colors.muted }}>
+              Follow-up
+            </Text>
+            <MaterialIcons name="schedule" size={13} color={(stats?.followupCount || 0) > 0 ? '#2563EB' : colors.muted} />
+          </View>
+          <Text style={{ fontSize: 20, fontWeight: '900', color: (stats?.followupCount || 0) > 0 ? '#1D4ED8' : colors.ink }}>
+            {stats?.followupCount ?? 0}
+          </Text>
+          <Text style={{ fontSize: 10, color: (stats?.followupCount || 0) > 0 ? '#2563EB' : colors.muted }}>
+            Quotes/Call
           </Text>
         </View>
 
@@ -319,25 +420,25 @@ export default function PhoneScreen() {
             flex: 1,
             backgroundColor: '#F0FDF4',
             borderRadius: 14,
-            padding: 12,
+            padding: 10,
             borderWidth: 1,
             borderColor: '#BBF7D0',
-            gap: 4,
+            gap: 2,
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#166534' }}>Leads</Text>
-            <MaterialIcons name="person-add" size={14} color="#16a34a" />
+            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#166534' }}>Leads</Text>
+            <MaterialIcons name="person-add" size={13} color="#16a34a" />
           </View>
-          <Text style={{ fontSize: 22, fontWeight: '900', color: '#15803D' }}>
+          <Text style={{ fontSize: 20, fontWeight: '900', color: '#15803D' }}>
             {stats?.convertedCount ?? 0}
           </Text>
-          <Text style={{ fontSize: 10.5, color: '#16a34a' }}>Captured in CRM</Text>
+          <Text style={{ fontSize: 10, color: '#16a34a' }}>In CRM</Text>
         </View>
       </View>
 
-      {/* FILTER TABS */}
-      <View style={[ui.row, { justifyContent: 'space-between', gap: 6, marginVertical: 6 }]}>
+      {/* FILTER TABS (SalesTrail & CRM Workflow) */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginVertical: 6 }}>
         <Chip
           label="All Calls"
           count={rawCalls.length}
@@ -351,6 +452,12 @@ export default function PhoneScreen() {
           onPress={() => setActiveTab('missed')}
         />
         <Chip
+          label="Follow-up ⏳"
+          count={stats?.followupCount ?? 0}
+          selected={activeTab === 'followup'}
+          onPress={() => setActiveTab('followup')}
+        />
+        <Chip
           label="In CRM ✅"
           count={stats?.convertedCount ?? 0}
           selected={activeTab === 'converted'}
@@ -361,11 +468,38 @@ export default function PhoneScreen() {
           selected={activeTab === 'dialpad'}
           onPress={() => setActiveTab('dialpad')}
         />
-      </View>
+      </ScrollView>
 
       {/* KEYPAD TAB */}
       {activeTab === 'dialpad' && (
-        <Card style={{ paddingVertical: 18, gap: 18 }}>
+        <Card style={{ paddingVertical: 18, gap: 14 }}>
+          {/* Caller ID Match Banner */}
+          {dialerCallerId?.matched && dialerCallerId.caller ? (
+            <View
+              style={{
+                backgroundColor: '#DCFCE7',
+                padding: 10,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <MaterialIcons name="verified-user" size={18} color="#16A34A" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#166534' }}>
+                  {dialerCallerId.caller.name}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#15803D' }}>
+                  {dialerCallerId.caller.isCustomer
+                    ? 'Existing Client'
+                    : `CRM Lead: ${(dialerCallerId.caller.status || 'Active').toUpperCase()}`}
+                  {dialerCallerId.caller.value ? ` • \$${dialerCallerId.caller.value}` : ''}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
           <View style={{ alignItems: 'center', minHeight: 44, justifyContent: 'center' }}>
             <Text style={{ fontSize: 30, fontWeight: '800', color: colors.ink, letterSpacing: 1 }}>
               {dialNumber || 'Enter number'}
@@ -390,18 +524,26 @@ export default function PhoneScreen() {
       {activeTab !== 'dialpad' && (
         <>
           <Field
-            label="Search by number or notes"
+            label="Search by caller, number or notes"
             value={search}
             onChangeText={setSearch}
             keyboardType="default"
-            placeholder="Search phone number…"
+            placeholder="Search caller name or number…"
           />
 
           {callsResource.loading ? (
             <Loading />
           ) : !calls.length ? (
             <Empty
-              title={activeTab === 'missed' ? 'No missed calls 🎉' : activeTab === 'converted' ? 'No leads converted yet' : 'No calls recorded'}
+              title={
+                activeTab === 'missed'
+                  ? 'No missed calls 🎉'
+                  : activeTab === 'followup'
+                  ? 'No pending follow-ups'
+                  : activeTab === 'converted'
+                  ? 'No leads converted yet'
+                  : 'No calls recorded'
+              }
               detail="Every phone call you make, receive, or log appears here for instant follow-up."
               actionLabel="+ Log Call"
               onAction={() => setLogModalOpen(true)}
@@ -413,159 +555,165 @@ export default function PhoneScreen() {
                 const isMissed =
                   c.callType === 'missed' ||
                   c.status === 'missed' ||
-                  c.durationSec === 0 ||
-                  ['no-answer', 'busy', 'missed', 'rejected'].includes(c.endedReason || '');
+                  ['no-answer', 'busy', 'missed', 'rejected', 'canceled'].includes(c.endedReason || '');
                 const isOutbound = c.callType === 'outbound';
                 const isConverted = Boolean(c.leadId);
-
-                const durationLabel = isMissed
-                  ? 'Missed call'
-                  : c.durationSec
-                  ? `${Math.floor(c.durationSec / 60)}m ${c.durationSec % 60}s`
-                  : 'Connected';
-
-                const timeLabel = c.createdAt
-                  ? new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-                    ' · ' +
-                    new Date(c.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })
-                  : 'Recent';
+                const callerTitle = c.lead?.name || `Caller ${number.slice(-4)}`;
 
                 return (
-                  <Card key={c.id} style={{ padding: 14, gap: 10, borderRadius: 16 }}>
-                    {/* Header Row */}
+                  <View
+                    key={c.id}
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: isMissed ? '#FDE68A' : '#E2E8F0',
+                      padding: 14,
+                      gap: 10,
+                    }}
+                  >
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                        <View
-                          style={{
-                            width: 38,
-                            height: 38,
-                            borderRadius: 19,
-                            backgroundColor: isMissed ? '#FEF2F2' : isOutbound ? '#EFF6FF' : '#F0FDF4',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <MaterialIcons
-                            name={isMissed ? 'call-missed' : isOutbound ? 'call-made' : 'call-received'}
-                            size={18}
-                            color={isMissed ? '#DC2626' : isOutbound ? '#2563EB' : '#16A34A'}
-                          />
-                        </View>
+                        <Avatar name={c.lead?.name || number} size={38} />
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 15, fontWeight: '800', color: colors.ink }}>
-                            {number}
-                          </Text>
-                          <Text style={{ fontSize: 11.5, color: colors.muted, marginTop: 1 }}>
-                            {durationLabel} · {timeLabel}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink }} numberOfLines={1}>
+                              {callerTitle}
+                            </Text>
+                            {c.lead ? (
+                              <View
+                                style={{
+                                  backgroundColor: '#DCFCE7',
+                                  paddingHorizontal: 6,
+                                  paddingVertical: 2,
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#166534' }}>
+                                  CRM LEAD
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          <Text style={{ fontSize: 12, color: colors.muted }}>{number}</Text>
                         </View>
                       </View>
 
-                      {/* Status Badges */}
-                      <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                        {isConverted ? (
-                          <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#166534' }}>✓ In CRM</Text>
-                          </View>
-                        ) : isMissed ? (
-                          <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#991B1B' }}>⚠️ Missed</Text>
-                          </View>
-                        ) : null}
+                      {/* Call Type Pill */}
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 12,
+                          backgroundColor: isMissed ? '#FEF3C7' : isOutbound ? '#EFF6FF' : '#F0FDF4',
+                        }}
+                      >
+                        <MaterialIcons
+                          name={isMissed ? 'call-missed' : isOutbound ? 'call-made' : 'call-received'}
+                          size={13}
+                          color={isMissed ? '#D97706' : isOutbound ? '#2563EB' : '#16A34A'}
+                        />
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: '700',
+                            color: isMissed ? '#B45309' : isOutbound ? '#1D4ED8' : '#15803D',
+                          }}
+                        >
+                          {isMissed ? 'Missed' : isOutbound ? 'Outbound' : 'Inbound'}
+                        </Text>
                       </View>
                     </View>
 
-                    {/* Summary / Notes if any */}
+                    {/* Summary / Notes if present */}
                     {c.summary ? (
-                      <View style={{ backgroundColor: '#F8FAFC', padding: 8, borderRadius: 8 }}>
-                        <Text style={{ fontSize: 12, color: '#334155', fontStyle: 'italic' }}>
-                          "{c.summary}"
-                        </Text>
+                      <View style={{ backgroundColor: '#F8FAFC', padding: 8, borderRadius: 10 }}>
+                        <Text style={{ fontSize: 12, color: colors.ink, lineHeight: 16 }}>{c.summary}</Text>
                       </View>
                     ) : null}
 
-                    {/* Actions Row */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 }}>
-                      {!isConverted ? (
+                    {/* Metadata bar */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 11, color: colors.muted }}>
+                        {c.durationSec ? `${Math.round(c.durationSec)}s conversation` : 'No duration recorded'} •{' '}
+                        {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+
+                      {isConverted ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <MaterialIcons name="check-circle" size={13} color="#16A34A" />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#16A34A' }}>Lead Saved</Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    {/* Quick Action Buttons */}
+                    <View style={{ flexDirection: 'row', gap: 8, paddingTop: 4 }}>
+                      {!isConverted && (
                         <Pressable
                           accessibilityRole="button"
                           disabled={convertingId === c.id}
                           onPress={() => void handleConvertToLead(c)}
-                          style={{
-                            flex: 1.3,
+                          style={({ pressed }) => ({
+                            flex: 1,
+                            backgroundColor: colors.brandSoft,
+                            paddingVertical: 8,
+                            paddingHorizontal: 10,
+                            borderRadius: 10,
                             flexDirection: 'row',
                             alignItems: 'center',
                             justifyContent: 'center',
                             gap: 4,
-                            backgroundColor: colors.brand,
-                            paddingVertical: 7,
-                            borderRadius: 10,
-                            opacity: convertingId === c.id ? 0.6 : 1,
-                          }}
+                            opacity: convertingId === c.id ? 0.5 : pressed ? 0.8 : 1,
+                          })}
                         >
-                          <MaterialIcons name="person-add" size={14} color="#FFFFFF" />
-                          <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>
-                            {convertingId === c.id ? 'Converting…' : '+ Save Lead'}
-                          </Text>
-                        </Pressable>
-                      ) : (
-                        <Pressable
-                          accessibilityRole="button"
-                          onPress={() => router.push(`/leads?search=${encodeURIComponent(number)}` as any)}
-                          style={{
-                            flex: 1.3,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 4,
-                            backgroundColor: '#F1F5F9',
-                            paddingVertical: 7,
-                            borderRadius: 10,
-                          }}
-                        >
-                          <MaterialIcons name="launch" size={14} color="#334155" />
-                          <Text style={{ color: '#334155', fontSize: 11.5, fontWeight: '700' }}>
-                            View in Leads
+                          <MaterialIcons name="person-add" size={14} color={colors.brand} />
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: colors.brand }}>
+                            {convertingId === c.id ? 'Saving…' : '+ Save Lead'}
                           </Text>
                         </Pressable>
                       )}
 
-                      {/* WhatsApp Follow-up */}
                       <Pressable
                         accessibilityRole="button"
                         onPress={() => handleWhatsApp(number, isMissed)}
-                        style={{
+                        style={({ pressed }) => ({
                           flex: 1,
+                          backgroundColor: '#DCFCE7',
+                          paddingVertical: 8,
+                          paddingHorizontal: 10,
+                          borderRadius: 10,
                           flexDirection: 'row',
                           alignItems: 'center',
                           justifyContent: 'center',
                           gap: 4,
-                          backgroundColor: '#25D366',
-                          paddingVertical: 7,
-                          borderRadius: 10,
-                        }}
+                          opacity: pressed ? 0.8 : 1,
+                        })}
                       >
-                        <MaterialIcons name="chat" size={14} color="#FFFFFF" />
-                        <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>WhatsApp</Text>
+                        <MaterialIcons name="chat" size={14} color="#16A34A" />
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#166534' }}>WhatsApp</Text>
                       </Pressable>
 
-                      {/* Callback */}
                       <Pressable
                         accessibilityRole="button"
-                        onPress={() => handleStartCall(number)}
-                        style={{
+                        onPress={() => void handleStartCall(number)}
+                        style={({ pressed }) => ({
                           width: 36,
-                          height: 32,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: '#F1F5F9',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          backgroundColor: '#F1F5F9',
-                          borderRadius: 10,
-                        }}
+                          opacity: pressed ? 0.8 : 1,
+                        })}
                       >
-                        <MaterialIcons name="phone" size={16} color={colors.ink} />
+                        <MaterialIcons name="phone" size={18} color={colors.ink} />
                       </Pressable>
                     </View>
-                  </Card>
+                  </View>
                 );
               })}
             </View>
@@ -573,29 +721,29 @@ export default function PhoneScreen() {
         </>
       )}
 
-      {/* MANUAL LOG CALL MODAL */}
-      <Modal visible={logModalOpen} animationType="slide" transparent>
+      {/* MANUAL LOG MODAL */}
+      <Modal visible={logModalOpen} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: colors.ink }}>Log a Phone Call</Text>
-              <Pressable accessibilityRole="button" onPress={() => setLogModalOpen(false)}>
-                <MaterialIcons name="close" size={22} color={colors.muted} />
+              <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>Log a Phone Call</Text>
+              <Pressable onPress={() => setLogModalOpen(false)}>
+                <MaterialIcons name="close" size={20} color={colors.muted} />
               </Pressable>
             </View>
 
             <Field
-              label="Phone Number"
+              label="Customer Phone Number"
               value={logPhone}
               onChangeText={setLogPhone}
               keyboardType="phone-pad"
-              placeholder="+91 98765 43210"
+              placeholder="+1 555-0199"
             />
 
-            {/* Direction chips */}
-            <View style={{ gap: 4 }}>
-              <Text style={ui.label}>Call Direction</Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
+            {/* Call Direction */}
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>Direction</Text>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
                 {(['inbound', 'outbound', 'missed'] as const).map((t) => (
                   <Pressable
                     key={t}
@@ -608,8 +756,50 @@ export default function PhoneScreen() {
                       backgroundColor: logType === t ? colors.brand : '#F1F5F9',
                     }}
                   >
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: logType === t ? '#FFFFFF' : '#334155' }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: '700',
+                        color: logType === t ? '#FFFFFF' : colors.ink,
+                      }}
+                    >
                       {t.toUpperCase()}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Call Outcome */}
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>Outcome</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {[
+                  ['connected', 'Spoke / Interested'],
+                  ['followup', 'Follow-up Needed'],
+                  ['missed', 'No Answer'],
+                  ['cancelled', 'Cancelled / Busy'],
+                ].map(([val, lbl]) => (
+                  <Pressable
+                    key={val}
+                    onPress={() => setLogOutcome(val)}
+                    style={{
+                      paddingVertical: 6,
+                      paddingHorizontal: 10,
+                      borderRadius: 10,
+                      backgroundColor: logOutcome === val ? colors.brandSoft : '#F8FAFC',
+                      borderWidth: 1,
+                      borderColor: logOutcome === val ? colors.brand : '#E2E8F0',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11.5,
+                        fontWeight: '700',
+                        color: logOutcome === val ? colors.brand : colors.ink,
+                      }}
+                    >
+                      {lbl}
                     </Text>
                   </Pressable>
                 ))}
@@ -618,7 +808,7 @@ export default function PhoneScreen() {
 
             {logType !== 'missed' && (
               <Field
-                label="Duration (minutes)"
+                label="Approx. Duration (minutes)"
                 value={logDurationMin}
                 onChangeText={setLogDurationMin}
                 keyboardType="numeric"
@@ -657,7 +847,8 @@ export default function PhoneScreen() {
           </View>
         </View>
       </Modal>
-      {/* POST-CALL PROMPT MODAL (Salestrail / Grexa style post-call capture) */}
+
+      {/* SALES-TRAIL POST-CALL PROMPT MODAL */}
       <Modal visible={Boolean(postCallPrompt)} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
@@ -676,25 +867,41 @@ export default function PhoneScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>Call Ended</Text>
-                <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2 }}>
-                  {postCallPrompt?.number} • {postCallPrompt?.durationSec}s
+                <Text style={{ fontSize: 13, color: colors.muted, marginTop: 1 }}>
+                  {postCallPrompt?.number}
                 </Text>
               </View>
             </View>
 
-            <Text style={{ fontSize: 13, color: colors.ink, lineHeight: 18 }}>
-              Would you like to log this conversation as a CRM lead or send a quick WhatsApp follow-up?
+            {/* Caller ID Match Display */}
+            {postCallPrompt?.callerInfo ? (
+              <View style={{ backgroundColor: '#F0FDF4', padding: 10, borderRadius: 12, gap: 2 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#166534' }}>
+                  👤 {postCallPrompt.callerInfo.name}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#15803D' }}>
+                  {postCallPrompt.callerInfo.isCustomer
+                    ? 'Existing Client'
+                    : `CRM Lead: ${(postCallPrompt.callerInfo.status || 'Active').toUpperCase()}`}
+                  {postCallPrompt.callerInfo.value ? ` • \$${postCallPrompt.callerInfo.value}` : ''}
+                </Text>
+              </View>
+            ) : null}
+
+            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }}>
+              Did you speak with the customer?
             </Text>
 
-            <View style={{ gap: 8, marginTop: 4 }}>
+            {/* Honest Outcome Confirmation Options */}
+            <View style={{ gap: 8 }}>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => {
                   if (postCallPrompt) {
                     setLogPhone(postCallPrompt.number);
                     setLogType('outbound');
-                    setLogDurationMin(Math.max(1, Math.round(postCallPrompt.durationSec / 60)).toString());
-                    setLogOutcome('interested');
+                    setLogDurationMin('2');
+                    setLogOutcome('connected');
                     setLogCreateLead(true);
                     setPostCallPrompt(null);
                     setLogModalOpen(true);
@@ -702,18 +909,56 @@ export default function PhoneScreen() {
                 }}
                 style={({ pressed }) => ({
                   backgroundColor: colors.brand,
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
+                  paddingVertical: 11,
+                  paddingHorizontal: 14,
                   borderRadius: 12,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'center',
                   gap: 8,
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
-                <MaterialIcons name="person-add" size={18} color="#FFFFFF" />
-                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Save as CRM Lead</Text>
+                <MaterialIcons name="check-circle" size={18} color="#FFFFFF" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13.5 }}>
+                    Spoke with Customer
+                  </Text>
+                  <Text style={{ color: '#D1FAE5', fontSize: 11 }}>Save notes & add to CRM</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  if (postCallPrompt) {
+                    setLogPhone(postCallPrompt.number);
+                    setLogType('outbound');
+                    setLogDurationMin('2');
+                    setLogOutcome('followup');
+                    setLogNotes('Follow-up call needed');
+                    setLogCreateLead(true);
+                    setPostCallPrompt(null);
+                    setLogModalOpen(true);
+                  }
+                }}
+                style={({ pressed }) => ({
+                  backgroundColor: '#2563EB',
+                  paddingVertical: 11,
+                  paddingHorizontal: 14,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <MaterialIcons name="schedule" size={18} color="#FFFFFF" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13.5 }}>
+                    Callback / Follow-up Needed
+                  </Text>
+                  <Text style={{ color: '#DBEAFE', fontSize: 11 }}>Schedule reminder in queue</Text>
+                </View>
               </Pressable>
 
               <Pressable
@@ -722,36 +967,40 @@ export default function PhoneScreen() {
                   if (postCallPrompt) {
                     const num = postCallPrompt.number;
                     setPostCallPrompt(null);
-                    handleWhatsApp(num, false);
+                    handleWhatsApp(num, true);
                   }
                 }}
                 style={({ pressed }) => ({
                   backgroundColor: '#25D366',
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
+                  paddingVertical: 11,
+                  paddingHorizontal: 14,
                   borderRadius: 12,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'center',
                   gap: 8,
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
                 <MaterialIcons name="chat" size={18} color="#FFFFFF" />
-                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>WhatsApp Follow-up</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13.5 }}>
+                    Send WhatsApp Message
+                  </Text>
+                  <Text style={{ color: '#DCFCE7', fontSize: 11 }}>Send 1-tap template message</Text>
+                </View>
               </Pressable>
 
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setPostCallPrompt(null)}
                 style={({ pressed }) => ({
-                  paddingVertical: 10,
+                  paddingVertical: 8,
                   alignItems: 'center',
                   justifyContent: 'center',
                   opacity: pressed ? 0.6 : 1,
                 })}
               >
-                <Text style={{ color: colors.muted, fontWeight: '700', fontSize: 13 }}>Dismiss</Text>
+                <Text style={{ color: colors.muted, fontWeight: '700', fontSize: 12.5 }}>Dismiss</Text>
               </Pressable>
             </View>
           </View>

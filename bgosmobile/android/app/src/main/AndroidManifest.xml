@@ -2,6 +2,8 @@
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
+  <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+  <uses-permission android:name="android.permission.READ_CALL_LOG"/>
   <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove"/>
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" tools:node="remove"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
@@ -30,5 +32,14 @@
         <data android:scheme="bgos"/>
       </intent-filter>
     </activity>
+
+    <!-- BGOS Native Call Tracking Broadcast Receiver -->
+    <receiver
+      android:name=".calltracking.BgosCallReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.PHONE_STATE"/>
+      </intent-filter>
+    </receiver>
   </application>
 </manifest>

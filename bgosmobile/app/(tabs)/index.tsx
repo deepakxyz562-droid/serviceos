@@ -498,7 +498,7 @@ export default function HomeScreen() {
   dayEnd.setHours(23,59,59,999);
   const bookings = useResource<{ bookings: Booking[] }>(`/api/bookings?dateFrom=${dayStart.toISOString()}&dateTo=${dayEnd.toISOString()}&limit=100`);
   const leads = useResource<{ leads: unknown[]; pagination?: { total: number } }>('/api/leads?limit=1');
-  const calls = useResource<{ stats: { todayCount: number; total: number } | null }>('/api/vapi/calls?limit=1&stats=true');
+  const calls = useResource<{ stats: { todayCount: number; total: number; missedCount?: number } | null }>('/api/calls?limit=1');
   const reviews = useResource<{ reviews: Array<{ rating: number }> }>('/api/reviews?limit=5');
   const marketingScore = useResource<MarketingScoreResponse>('/api/gbp/marketing-score', 0, showInsights);
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');

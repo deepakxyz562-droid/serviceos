@@ -113,6 +113,7 @@ const AiAssistantView = lazy(() => import('@/components/views/ai-assistant-view'
 const ChatbotBuilderView = lazy(() => import('@/components/views/chatbot-builder-view').then(m => ({ default: m.ChatbotBuilderView })));
 
 // AI Receptionist (Vapi.ai BYOK)
+const CallTrackerView = lazy(() => import('@/components/views/call-tracker-view').then(m => ({ default: m.CallTrackerView })));
 const AiReceptionistView = lazy(() => import('@/components/ai-receptionist/ai-receptionist-settings').then(m => ({ default: m.AiReceptionistSettings })));
 const AiAgentsView = lazy(() => import('@/components/views/ai-agents-view').then(m => ({ default: m.AiAgentsView })));
 // (aiPhoneNumbers view removed — phone numbers now managed in Settings → Communication → Dedicated Phone Number.
@@ -285,7 +286,7 @@ const viewComponents: Record<string, any> = {
   // The main sidebar "AI Receptionist" now opens the new AiReceptionistSettings wrapper, which
   // shows the onboarding wizard (if not configured) or the permanent workspace (if active).
   // No BYOK, no Vapi API key, no "Configure AI Voice" — the tenant never sees provider credentials.
-  callTracker: AiCallHistoryView,
+  callTracker: CallTrackerView,
   aiReceptionist: AiReceptionistView,
   aiAgents: AiAgentsView,
   aiPhoneNumbers: SmsNumbersView, // redirect legacy deep links to the real phone numbers UI

@@ -31,7 +31,7 @@ export default ({ config }: ConfigContext): any => ({
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#009F50' },
     compileSdkVersion: 36,
     targetSdkVersion: 36,
-    permissions: ['POST_NOTIFICATIONS'],
+    permissions: ['POST_NOTIFICATIONS', 'READ_PHONE_STATE', 'READ_CALL_LOG'],
     blockedPermissions: [
       'android.permission.RECORD_AUDIO',
       'android.permission.SYSTEM_ALERT_WINDOW',

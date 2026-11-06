@@ -8,7 +8,11 @@ const safeDate = (d: unknown): string | null => {
   if (!d) return null;
   if (typeof d === 'string') return d;
   if (d instanceof Date) return d.toISOString();
-  try { return new Date(d as string).toISOString(); } catch { return null; }
+  try {
+    return new Date(d as string).toISOString();
+  } catch {
+    return null;
+  }
 };
 
 /**
@@ -33,31 +37,42 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const skip = (page - 1) * limit;
 
-    const where: any = {
-      tenantId: auth.tenantId,
-    };
+    // Use Prisma AND array so search and filters combine cleanly without overwriting
+    const andClauses: any[] = [{ tenantId: auth.tenantId }];
 
     if (search) {
-      where.OR = [
-        { customerPhone: { contains: search, mode: 'insensitive' } },
-        { fromNumber: { contains: search, mode: 'insensitive' } },
-        { toNumber: { contains: search, mode: 'insensitive' } },
-        { summary: { contains: search, mode: 'insensitive' } },
-      ];
+      andClauses.push({
+        OR: [
+          { customerPhone: { contains: search, mode: 'insensitive' } },
+          { fromNumber: { contains: search, mode: 'insensitive' } },
+          { toNumber: { contains: search, mode: 'insensitive' } },
+          { summary: { contains: search, mode: 'insensitive' } },
+        ],
+      });
     }
 
     if (filter === 'missed') {
-      where.OR = [
-        { status: 'missed' },
-        { callType: 'missed' },
-        { endedReason: { in: ['no-answer', 'busy', 'missed', 'rejected', 'canceled'] } },
-        { durationSec: 0, status: { not: 'in_progress' } },
-      ];
+      andClauses.push({
+        OR: [
+          { status: 'missed' },
+          { callType: 'missed' },
+          { endedReason: { in: ['no-answer', 'busy', 'missed', 'rejected', 'canceled', 'timeout'] } },
+        ],
+      });
     } else if (filter === 'converted') {
-      where.leadId = { not: null };
+      andClauses.push({ leadId: { not: null } });
     } else if (filter === 'followup') {
-      where.outcomeType = 'followup';
+      andClauses.push({
+        OR: [
+          { outcomeType: 'followup' },
+          { endedReason: 'followup' },
+          { summary: { contains: 'follow-up', mode: 'insensitive' } },
+          { summary: { contains: 'callback', mode: 'insensitive' } },
+        ],
+      });
     }
+
+    const where = { AND: andClauses };
 
     const [calls, totalCount] = await Promise.all([
       db.aiCall.findMany({
@@ -85,11 +100,22 @@ export async function GET(request: NextRequest) {
       db.aiCall.count({ where }),
     ]);
 
+    // Batch resolve attached Lead details for Caller ID
+    const leadIds = calls.map((c) => c.leadId).filter(Boolean) as string[];
+    const leadsMap = new Map<string, { id: string; name: string; status: string; value: number }>();
+    if (leadIds.length > 0) {
+      const leads = await db.lead.findMany({
+        where: { id: { in: leadIds }, tenantId: auth.tenantId },
+        select: { id: true, name: true, status: true, value: true },
+      });
+      leads.forEach((l) => leadsMap.set(l.id, l));
+    }
+
     // Compute top summary KPIs for today
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    const [todayCount, missedCount, convertedCount] = await Promise.all([
+    const [todayCount, missedCount, convertedCount, followupCount] = await Promise.all([
       db.aiCall.count({
         where: {
           tenantId: auth.tenantId,
@@ -103,8 +129,7 @@ export async function GET(request: NextRequest) {
           OR: [
             { status: 'missed' },
             { callType: 'missed' },
-            { endedReason: { in: ['no-answer', 'busy', 'missed', 'rejected', 'canceled'] } },
-            { durationSec: 0, status: { not: 'in_progress' } },
+            { endedReason: { in: ['no-answer', 'busy', 'missed', 'rejected', 'canceled', 'timeout'] } },
           ],
         },
       }),
@@ -115,11 +140,23 @@ export async function GET(request: NextRequest) {
           leadId: { not: null },
         },
       }),
+      db.aiCall.count({
+        where: {
+          tenantId: auth.tenantId,
+          OR: [
+            { outcomeType: 'followup' },
+            { endedReason: 'followup' },
+            { summary: { contains: 'follow-up', mode: 'insensitive' } },
+            { summary: { contains: 'callback', mode: 'insensitive' } },
+          ],
+        },
+      }),
     ]);
 
     return NextResponse.json({
       calls: calls.map((c) => ({
         ...c,
+        lead: c.leadId ? leadsMap.get(c.leadId) || null : null,
         startedAt: safeDate(c.startedAt),
         endedAt: safeDate(c.endedAt),
         createdAt: safeDate(c.createdAt),
@@ -129,6 +166,7 @@ export async function GET(request: NextRequest) {
         todayCount,
         missedCount,
         convertedCount,
+        followupCount,
       },
       pagination: {
         page,
@@ -146,15 +184,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/calls
  * Manually logs a call or records a SIM call from the mobile app.
- * Body:
- *   - customerPhone: string (required)
- *   - callType: 'inbound' | 'outbound' | 'missed'
- *   - durationSec: number
- *   - summary: string (optional notes)
- *   - outcomeType: string ('interested' | 'quote' | 'followup' | 'spam' | 'other')
- *   - createLead: boolean (optional — if true, auto-creates a CRM lead)
- *   - leadName: string (optional)
- *   - leadValue: number (optional)
+ * Uses db.$transaction for atomic CRM lead creation.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -172,58 +202,59 @@ export async function POST(request: NextRequest) {
     const callType = body.callType || (body.durationSec === 0 ? 'missed' : 'inbound');
     const durationSec = Math.max(0, parseInt(body.durationSec || '0', 10));
     const summary = body.summary || body.notes || null;
-    const outcomeType = body.outcomeType || null;
+    const outcomeType = body.outcomeType || (callType === 'missed' ? 'missed' : 'connected');
     const createLead = Boolean(body.createLead);
+    const leadName = (body.leadName || '').trim() || `Caller ${customerPhone.slice(-4)}`;
+    const leadValue = parseFloat(body.leadValue || '0') || 0;
 
-    let createdLeadId: string | null = null;
+    const initialNotes = summary
+      ? [{ author: auth.name || 'User', text: `Call log: ${summary}`, createdAt: new Date().toISOString() }]
+      : [{ author: auth.name || 'User', text: `Call recorded (${callType}, ${durationSec}s)`, createdAt: new Date().toISOString() }];
 
-    if (createLead) {
-      const leadName = (body.leadName || '').trim() || `Caller ${customerPhone.slice(-4)}`;
-      const leadValue = parseFloat(body.leadValue || '0') || 0;
-      const initialNotes = summary
-        ? [{ author: auth.name || 'User', text: `Logged via Call Tracker: ${summary}`, createdAt: new Date().toISOString() }]
-        : [{ author: auth.name || 'User', text: `Call captured (${callType}, ${durationSec}s)`, createdAt: new Date().toISOString() }];
+    const result = await db.$transaction(async (tx) => {
+      let createdLeadId: string | null = null;
 
-      const newLead = await db.lead.create({
+      if (createLead) {
+        const newLead = await tx.lead.create({
+          data: {
+            tenantId: auth.tenantId,
+            name: leadName,
+            phone: customerPhone,
+            source: 'phone_call',
+            status: 'new',
+            value: leadValue,
+            description: summary || `Call duration: ${durationSec}s · ${callType}`,
+            notesJson: JSON.stringify(initialNotes),
+          },
+        });
+        createdLeadId = newLead.id;
+      }
+
+      const call = await tx.aiCall.create({
         data: {
           tenantId: auth.tenantId,
-          name: leadName,
-          phone: customerPhone,
-          source: 'phone_call',
-          status: 'new',
-          value: leadValue,
-          description: summary || `Inbound call duration: ${durationSec}s`,
-          notesJson: JSON.stringify(initialNotes),
+          customerPhone,
+          fromNumber: callType === 'outbound' ? 'You' : customerPhone,
+          toNumber: callType === 'outbound' ? customerPhone : 'You',
+          callType,
+          status: callType === 'missed' ? 'missed' : 'ended',
+          durationSec,
+          summary,
+          outcomeType,
+          endedReason: callType === 'missed' ? 'no-answer' : outcomeType || 'completed',
+          leadId: createdLeadId,
+          startedAt: new Date(Date.now() - durationSec * 1000),
+          endedAt: new Date(),
         },
       });
-      createdLeadId = newLead.id;
-    }
 
-    const newCall = await db.aiCall.create({
-      data: {
-        tenantId: auth.tenantId,
-        customerPhone,
-        fromNumber: callType === 'inbound' ? customerPhone : undefined,
-        toNumber: callType === 'outbound' ? customerPhone : undefined,
-        callType,
-        status: callType === 'missed' ? 'missed' : 'ended',
-        durationSec,
-        summary,
-        outcomeType,
-        leadId: createdLeadId,
-        endedReason: callType === 'missed' ? 'no-answer' : 'customer_ended',
-        startedAt: new Date(Date.now() - durationSec * 1000),
-        endedAt: new Date(),
-      },
+      return { call, leadId: createdLeadId };
     });
 
     return NextResponse.json({
       success: true,
-      call: {
-        ...newCall,
-        createdAt: safeDate(newCall.createdAt),
-      },
-      leadId: createdLeadId,
+      call: result.call,
+      leadId: result.leadId,
     });
   } catch (error) {
     console.error('[Calls POST]', error);
