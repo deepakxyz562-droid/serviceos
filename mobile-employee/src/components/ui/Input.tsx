@@ -19,7 +19,7 @@ export function Input({ label, error, hint, className, ...props }: InputProps) {
       )}
       <TextInput
         className={cn(
-          'rounded-xl border bg-white px-4 py-3 text-base text-foreground',
+          'min-h-[48px] rounded-xl border bg-white px-4 py-3 text-base text-foreground',
           'placeholder:text-gray-400',
           error
             ? 'border-destructive'

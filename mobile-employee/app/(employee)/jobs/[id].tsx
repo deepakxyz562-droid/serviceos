@@ -64,6 +64,7 @@ import {
   Users,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { JobBrief } from '@/components/job/JobBrief';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -76,7 +77,7 @@ import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { useToast } from '@/components/ui/Toast';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
-import { useJob, useJobLifecycle, useJobChecklist } from '@/hooks/use-jobs';
+import { useJob, useJobLifecycle, useJobChecklist, useJobSignatures, useJobTimeEntries, useJobExpenses, useJobVisits } from '@/hooks/use-jobs';
 import { useLiveTracking } from '@/hooks/use-live-tracking';
 import { JobTeamChatModal } from '@/components/chat/JobTeamChatModal';
 import { COLORS, API_BASE_URL } from '@/lib/constants';
@@ -362,6 +363,10 @@ export default function JobDetailScreen() {
   });
 
   const checklistQuery = useJobChecklist(id);
+  const signaturesQuery = useJobSignatures(id);
+  const timeEntriesQuery = useJobTimeEntries(id);
+  const expensesQuery = useJobExpenses(id);
+  const visitsQuery = useJobVisits(id);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCopilotModal, setShowCopilotModal] = useState(false);
   const [showOnMyWayModal, setShowOnMyWayModal] = useState(false);
@@ -627,11 +632,13 @@ export default function JobDetailScreen() {
     job._counts?.photos ?? job.photos?.length ?? 0;
   const checklistItems = checklistQuery.data ?? job.checklist ?? [];
   const checklistDone = checklistItems.filter((c) => c.checked).length;
-  const signatureCount = job.signatures?.length ?? 0;
-  const timeEntryCount = job.timeEntries?.length ?? 0;
-  const expenseCount = job.expenses?.length ?? 0;
-  const visitCount = job.visits?.length ?? 0;
+  const signatureCount = signaturesQuery.data?.filter((signature) => signature.signatoryType === 'customer').length ?? job.signatures?.filter((signature) => signature.signatoryType === 'customer').length ?? 0;
+  const timeEntryCount = timeEntriesQuery.data?.length ?? job.timeEntries?.length ?? '—';
+  const expenseCount = expensesQuery.data?.length ?? job.expenses?.length ?? '—';
+  const visitCount = visitsQuery.data?.length ?? job.visits?.length ?? '—';
   const lineItems = job.lineItems ?? [];
+  const invoice = job.invoices?.[0];
+  const paymentSettled = invoice?.status === 'paid' || invoice?.status === 'void' || job.paymentStatus === 'collected' || job.paymentStatus === 'paid';
 
   const lifecycleTimestamps = job.lifecycleTimestamps ?? {};
   const timestampEntries = Object.entries(lifecycleTimestamps).filter(
@@ -737,14 +744,14 @@ export default function JobDetailScreen() {
                 <LifecycleBadge state={currentState} />
                 {currentState === 'assigned' ? (
                   <View className="rounded-full bg-amber-100 px-2 py-0.5">
-                    <Text className="text-[10px] font-semibold text-amber-700">
+                    <Text className="text-xs font-semibold text-amber-700">
                       Awaiting
                     </Text>
                   </View>
                 ) : null}
                 {currentState === 'paused' ? (
                   <View className="rounded-full bg-orange-100 px-2 py-0.5">
-                    <Text className="text-[10px] font-semibold text-orange-700">
+                    <Text className="text-xs font-semibold text-orange-700">
                       Paused
                     </Text>
                   </View>
@@ -756,13 +763,13 @@ export default function JobDetailScreen() {
               <View className="mt-2 flex-row items-center gap-2">
                 <View className="flex-row items-center gap-0.5">
                   <Camera size={11} color={COLORS.mutedForeground} />
-                  <Text className="text-[10px] text-muted-foreground">
+                  <Text className="text-xs text-muted-foreground">
                     {photoCount}
                   </Text>
                 </View>
                 <View className="flex-row items-center gap-0.5">
                   <PenLine size={11} color={COLORS.mutedForeground} />
-                  <Text className="text-[10px] text-muted-foreground">
+                  <Text className="text-xs text-muted-foreground">
                     {signatureCount}
                   </Text>
                 </View>
@@ -837,15 +844,12 @@ export default function JobDetailScreen() {
         {/* ─── TAB 1: OVERVIEW ─────────────────────────────────────────── */}
         {activeJobTab === 'overview' && (
           <View className="gap-3">
-            {/* V1.5 Lifecycle Progress — 7-stage pill row */}
-            <LifecycleProgress job={job} stage={currentState} />
-
             {/* Schedule & Address Card */}
             <Card className="mb-1">
               <DetailRow
                 icon={<Calendar size={16} color={COLORS.mutedForeground} />}
                 label="Scheduled"
-                value={formatDateTime(job.scheduledAt)}
+                value={job.scheduledTime && job.scheduledAt ? `${new Date(job.scheduledAt).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · ${job.scheduledTime}` : formatDateTime(job.scheduledAt)}
               />
               <View style={{ height: 12 }} />
               <DetailRow
@@ -883,6 +887,8 @@ export default function JobDetailScreen() {
                 </>
               ) : null}
             </Card>
+
+            <JobBrief job={job} />
 
             {/* Job Details Grid */}
             {(job.quotedAmount != null ||
@@ -962,7 +968,7 @@ export default function JobDetailScreen() {
                         >
                           <Text
                             style={{
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: '600',
                               color: getPriorityColors(job.priority).text,
                               textTransform: 'capitalize',
@@ -1009,7 +1015,7 @@ export default function JobDetailScreen() {
                 </View>
                 {job.notes ? (
                   <View className="mt-2">
-                    <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Customer Notes
                     </Text>
                     <Text className="mt-1 text-sm text-foreground">{job.notes}</Text>
@@ -1017,7 +1023,7 @@ export default function JobDetailScreen() {
                 ) : null}
                 {job.internalNotes ? (
                   <View className="mt-3 rounded-lg bg-amber-50 p-2.5">
-                    <Text className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                    <Text className="text-xs font-semibold uppercase tracking-wide text-amber-700">
                       Internal Notes
                     </Text>
                     <Text className="mt-1 text-sm text-foreground">
@@ -1052,6 +1058,7 @@ export default function JobDetailScreen() {
         {/* ─── TAB 2: WORK & TASKS ────────────────────────────────────────── */}
         {activeJobTab === 'work' && (
           <View className="gap-3">
+            <LifecycleProgress job={job} stage={currentState} />
             {/* Checklist Task Card */}
             <Card className="p-4">
               <View className="flex-row items-center justify-between mb-2.5">
@@ -1164,7 +1171,7 @@ export default function JobDetailScreen() {
                   <View>
                     <Text className="text-sm font-bold text-slate-900">Customer Signature</Text>
                     <Text className="text-xs text-muted-foreground">
-                      {signatureCount > 0 ? 'Signed by customer' : 'Customer sign-off on completion'}
+                      {signaturesQuery.isError ? 'Could not load signatures' : signaturesQuery.isLoading ? 'Checking signatures…' : signatureCount > 0 ? 'Signed by customer' : 'Customer sign-off on completion'}
                     </Text>
                   </View>
                 </View>
@@ -1181,7 +1188,7 @@ export default function JobDetailScreen() {
                       signatureCount > 0 ? 'text-emerald-700' : 'text-amber-700'
                     }`}
                   >
-                    {signatureCount > 0 ? 'Signed ✓' : 'Pending'}
+                    {signaturesQuery.isError || signaturesQuery.isLoading ? 'Unknown' : signatureCount > 0 ? 'Signed ✓' : 'Pending'}
                   </Text>
                 </View>
               </View>
@@ -1249,6 +1256,14 @@ export default function JobDetailScreen() {
         {/* ─── TAB 3: FINANCIALS ─────────────────────────────────────────── */}
         {activeJobTab === 'financials' && (
           <View className="gap-3">
+            <Card>
+              <Text className="text-base font-bold text-foreground">Invoice & payment</Text>
+              <Text className="mt-2 text-sm text-muted-foreground">{invoice ? `Invoice ${invoice.number} · ${invoice.status.replace(/_/g, ' ')}` : 'No invoice issued yet'}</Text>
+              {invoice && <Text className="mt-2 text-2xl font-bold text-foreground">{formatCurrency(invoice.total, invoice.currency || tenantCurrency)}</Text>}
+              {invoice?.dueDate && <Text className="mt-2 text-sm text-muted-foreground">Due {new Date(invoice.dueDate).toLocaleDateString()}</Text>}
+              <Text className="mt-2 text-sm text-muted-foreground">Payment: {job.paymentStatus?.replace(/_/g, ' ') || (invoice?.status === 'paid' ? 'Paid' : 'Not recorded')}</Text>
+              {job.amountCollected != null && <Text className="mt-2 text-sm text-foreground">Collected: {formatCurrency(job.amountCollected, tenantCurrency)}</Text>}
+            </Card>
             {/* Payment Collection Card */}
             <Card className="p-4 border-2 border-emerald-200 bg-emerald-50/20 shadow-xs">
               <View className="flex-row items-center justify-between mb-3">
@@ -1257,9 +1272,7 @@ export default function JobDetailScreen() {
                     Total Quoted
                   </Text>
                   <Text className="text-2xl font-black text-slate-900 mt-0.5">
-                    {job.quotedAmount
-                      ? formatCurrency(job.quotedAmount, tenantCurrency)
-                      : '$0.00'}
+                    {formatCurrency(job.quotedAmount ?? 0, tenantCurrency)}
                   </Text>
                 </View>
                 <View className="size-11 rounded-2xl bg-emerald-100 items-center justify-center">
@@ -1268,6 +1281,7 @@ export default function JobDetailScreen() {
               </View>
 
               <Button
+                disabled={paymentSettled}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
                   setShowPaymentModal(true);
@@ -1278,7 +1292,7 @@ export default function JobDetailScreen() {
                 <View className="flex-row items-center justify-center gap-1.5">
                   <Banknote size={16} color="#fff" />
                   <Text className="text-sm font-bold text-white">
-                    {currentState === 'invoice_generated' || currentState === 'completed'
+                    {paymentSettled ? 'No payment collection needed' : currentState === 'invoice_generated' || currentState === 'completed'
                       ? 'Process Card / Cash Payment'
                       : 'Collect Payment Now'}
                   </Text>
@@ -1544,7 +1558,7 @@ export default function JobDetailScreen() {
         jobId={job.id}
         invoiceId={(job as any).invoiceId || (job as any).invoice?.id}
         invoiceNumber={(job as any).invoiceNumber || (job as any).invoice?.number}
-        amount={Number(job.quotedAmount || (job as any).totalAmount || 0)}
+        amount={Number(invoice?.total ?? job.quotedAmount ?? 0)}
         customerName={job.customer?.name || 'Customer'}
         customerPhone={job.customer?.phone}
         onPaymentSuccess={() => {
@@ -1636,7 +1650,7 @@ export default function JobDetailScreen() {
                 <View className="flex-row items-center gap-1.5">
                   <Text className="text-sm font-bold text-slate-900">Team & Dispatch Chat</Text>
                   <View className="rounded bg-indigo-100 px-1.5 py-0.5">
-                    <Text className="text-[9px] font-black uppercase text-indigo-700">INTERNAL</Text>
+                    <Text className="text-xs font-black uppercase text-indigo-700">INTERNAL</Text>
                   </View>
                 </View>
                 <Text className="text-xs text-muted-foreground">
@@ -1765,7 +1779,7 @@ function LifecycleProgress({ job, stage }: { job: Job; stage: string }) {
 
   return (
     <Card className="mb-3">
-      <Text className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Lifecycle
       </Text>
       <View className="flex-row flex-wrap" style={{ gap: 6 }}>
@@ -1803,7 +1817,7 @@ function LifecycleProgress({ job, stage }: { job: Job; stage: string }) {
               ) : null}
               <Text
                 style={{
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: isCurrent ? '700' : '500',
                   color: isCurrent
                     ? '#ffffff'
@@ -1850,7 +1864,7 @@ function LifecycleProgress({ job, stage }: { job: Job; stage: string }) {
               >
                 <Text
                   style={{
-                    fontSize: 9,
+                    fontSize: 12,
                     fontWeight: '600',
                     textTransform: 'uppercase',
                     color: '#9ca3af',
@@ -1860,7 +1874,7 @@ function LifecycleProgress({ job, stage }: { job: Job; stage: string }) {
                 </Text>
                 <Text
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: '500',
                     color: COLORS.foreground,
                     marginTop: 1,
@@ -1927,7 +1941,7 @@ function TimeElapsedCard({
       <View style={{ flex: 1 }}>
         <Text
           style={{
-            fontSize: 11,
+            fontSize: 12,
             color: '#2563eb',
             fontWeight: '500',
           }}
@@ -1962,7 +1976,7 @@ function TimeElapsedCard({
           <AlertCircle size={11} color="#c2410c" />
           <Text
             style={{
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: '600',
               color: '#c2410c',
             }}

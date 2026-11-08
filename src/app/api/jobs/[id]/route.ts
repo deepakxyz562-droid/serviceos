@@ -12,7 +12,7 @@ import { bustPipelineCaches } from '@/lib/pipeline-cache-bust';
 import { withCrmTrace } from '@/lib/crm-perf-trace';
 import { shouldUseSupabaseDB } from '@/lib/supabase-db';
 import { getJobDetail, RpcFunctionNotFoundError } from '@/lib/supabase-rpc';
-import { canTransition } from '@/lib/job-lifecycle';
+import { canTransition, getLifecycleStage } from '@/lib/job-lifecycle';
 import { geocodeAddressOrNull } from '@/lib/geocode';
 import { canSeeJobVerificationPin } from '@/lib/auth/permissions';
 
@@ -474,25 +474,31 @@ export async function PUT(
     // If a caller needs a lifecycle transition, they MUST use:
     //   POST /api/jobs/[id]/lifecycle  { action: 'accept' | 'start_travel' | ... }
     if (body.status !== undefined && body.status !== existingJob.status) {
-      const action = STATUS_TO_ACTION[body.status];
-      if (!action) {
-        return NextResponse.json(
-          {
-            error: `Unknown target status '${body.status}'. Use POST /api/jobs/[id]/lifecycle with a valid action.`,
-          },
-          { status: 400 },
-        );
-      }
-      if (!canTransition(existingJob.status, action)) {
-        return NextResponse.json(
-          {
-            error: `Illegal status transition: '${existingJob.status}' → '${body.status}'. Use POST /api/jobs/[id]/lifecycle with action '${action}' (if allowed from the current state).`,
-            currentStatus: existingJob.status,
-            attemptedStatus: body.status,
-            hint: 'Use the lifecycle endpoint for state transitions.',
-          },
-          { status: 400 },
-        );
+      // If both statuses map to the same canonical lifecycle stage (e.g. 'in_progress' and 'working',
+      // or 'en_route' and 'travelling'), treat as a same-stage alias (no transition needed).
+      const currentStage = getLifecycleStage(existingJob.status).key;
+      const targetStage = getLifecycleStage(body.status).key;
+      if (currentStage !== targetStage) {
+        const action = STATUS_TO_ACTION[body.status];
+        if (!action) {
+          return NextResponse.json(
+            {
+              error: `Unknown target status '${body.status}'. Use POST /api/jobs/[id]/lifecycle with a valid action.`,
+            },
+            { status: 400 },
+          );
+        }
+        if (!canTransition(existingJob.status, action)) {
+          return NextResponse.json(
+            {
+              error: `Illegal status transition: '${existingJob.status}' → '${body.status}'. Use POST /api/jobs/[id]/lifecycle with action '${action}' (if allowed from the current state).`,
+              currentStatus: existingJob.status,
+              attemptedStatus: body.status,
+              hint: 'Use the lifecycle endpoint for state transitions.',
+            },
+            { status: 400 },
+          );
+        }
       }
     }
 

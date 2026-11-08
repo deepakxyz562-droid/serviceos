@@ -1,56 +1,5 @@
-/**
- * Job Completion Proof (Employee) — all-in-one rewrite (Q1-Phase-3).
- *
- * Mirrors the PWA's JobCompletionScreen: a single screen that captures every
- * piece of proof inline — before/after photos, customer + employee signatures,
- * checklist items, completion notes, customer-name confirmation — plus a sticky
- * validation chip row at the top and a sticky "Complete Job" footer at the
- * bottom.
- *
- * The dedicated sub-routes (/photos, /signature, /checklist, /expenses, /visits,
- * /time-entries, /notes) STILL EXIST and are still reachable from the job
- * detail screen's QuickAction grid. This inline screen is an ADDITIONAL capture
- * path — the most efficient one for the common "finish the job" flow.
- *
- * Layout (top → bottom):
- *   ┌──────────────────────────────────────────────┐
- *   │ Header                                       │
- *   ├──────────────────────────────────────────────┤
- *   │ Sticky chip row (5 chips, horizontal scroll) │
- *   │  · Before Photos  · After Photos             │
- *   │  · Checklist  · Customer Sig  · Employee Sig │
- *   ├──────────────────────────────────────────────┤
- *   │ ScrollView (flex-1)                          │
- *   │  ─ Before Photos section (InlinePhotoCapture)│
- *   │  ─ After Photos section  (InlinePhotoCapture)│
- *   │  ─ Checklist section     (InlineChecklist)   │
- *   │  ─ Customer Signature    (InlineSignaturePad)│
- *   │  ─ Employee Signature    (InlineSignaturePad)│
- *   │  ─ Completion Notes      (multiline Input)   │
- *   │  ─ Customer Name Confirmation (Input)        │
- *   ├──────────────────────────────────────────────┤
- *   │ Sticky footer (Complete Job button)          │
- *   └──────────────────────────────────────────────┘
- *
- * Submit flow:
- *   1. Photos + signatures are already uploaded inline (each capture fires its
- *      own mutation immediately). No batch upload needed at submit time.
- *   2. POST /api/jobs/[id]/complete-proof { photos, signature, notes, customerName }
- *      — records the denormalized completion snapshot on the Job row.
- *   3. POST /api/employee/jobs/[id]/lifecycle { action: 'complete' }
- *      — flips status to 'completed', auto-creates invoice, emits events.
- *   4. router.back() to the job detail screen.
- *
- * Validation chips (matches the PWA's pass/warn/fail semantics):
- *   - Before Photos: pass if ≥1 before photo, else fail
- *   - After Photos:  pass if ≥1 after photo,  else fail
- *   - Checklist:     pass if 100% complete OR no items (vacuous);
- *                    warn if 1-99% complete; fail if 0% with items
- *   - Customer Sig:  pass if customer signature exists, else fail
- *   - Employee Sig:  pass if employee signature exists, else fail
- *   - allPass = before pass && after pass && checklist !== fail && cust sig pass && emp sig pass
- *     (checklist 'warn' is non-blocking — matches PWA)
- */
+/** Guided completion: work, evidence, sign-off, then review. Proof is saved
+ * independently; a single lifecycle request completes the job after validation. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
@@ -64,6 +13,7 @@ import {
   Dimensions,
   ActivityIndicator,
   type ViewStyle,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -81,16 +31,22 @@ import {
   CircleCheck,
   Circle,
   CircleAlert,
-  CircleX,
   Trash2,
   Check,
   FileText,
   X,
   Wrench,
   Mic,
+  MicOff,
   Plus,
+  Minus,
+  Clock,
   Sparkles,
 } from 'lucide-react-native';
+import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
+import { Button } from '@/components/ui/Button';
+import { formatCurrency, currencyCode } from '@/lib/currency';
+import { hasLinkedChecklist, lineItemTotal } from '@/lib/job-presentation';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -102,13 +58,13 @@ import { useAuthStore } from '@/stores/auth-store';
 import {
   useJob,
   useJobChecklist,
+  useJobChecklistRecord,
   useJobPhotos,
   useJobSignatures,
   useUploadJobPhoto,
   useDeleteJobPhoto,
   useToggleChecklistItem,
   useUploadSignature,
-  useCompleteProof,
   useJobLifecycle,
 } from '@/hooks/use-jobs';
 import * as Haptics from 'expo-haptics';
@@ -116,7 +72,7 @@ import { api, assetUrl, ApiRequestError } from '@/lib/api';
 import { COLORS } from '@/lib/constants';
 import { captureGps } from '@/lib/gps';
 import { trackingManager } from '@/lib/tracking-manager';
-import { enqueueSignature, enqueueLifecycleAction } from '@/lib/offline-queue';
+import { enqueueSignature } from '@/lib/offline-queue';
 import {
   buildPhotoFormData,
   strokeToPath,
@@ -130,21 +86,26 @@ import type { JobPhoto, JobSignature, ChecklistItem, JobLineItem } from '@/types
 
 // ── Constants ───────────────────────────────────────────────────────
 
-type ChipState = 'pass' | 'warn' | 'fail';
-
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SIG_CANVAS_WIDTH = Math.min(SCREEN_WIDTH - 48, 460);
 const SIG_CANVAS_HEIGHT = 200;
 const PHOTO_THUMB_SIZE = 88;
 
-const CHIP_STYLES: Record<
-  ChipState,
-  { bg: string; border: string; text: string; icon: string }
-> = {
-  pass: { bg: '#ECFDF5', border: '#A7F3D0', text: '#047857', icon: '#059669' },
-  warn: { bg: '#FFFBEB', border: '#FDE68A', text: '#B45309', icon: '#D97706' },
-  fail: { bg: '#FEF2F2', border: '#FECACA', text: '#B91C1C', icon: '#DC2626' },
-};
+const TRADE_PRESETS: Array<{ name: string; rate: number; type: 'material' | 'labor' }> = [
+  { name: '45uF Capacitor', rate: 45, type: 'material' },
+  { name: 'Extra Labor 30m', rate: 50, type: 'labor' },
+  { name: 'Pipe Fitting 3/4"', rate: 25, type: 'material' },
+  { name: 'Refrigerant 2 lbs', rate: 85, type: 'material' },
+  { name: 'Flush Drain Line', rate: 40, type: 'labor' },
+  { name: 'Service Call Fee', rate: 75, type: 'labor' },
+];
+
+const VOICE_PRESET_PROMPTS = [
+  'Used 45uF capacitor $45 and 30m extra pipe flushing labor $50',
+  'Replaced blower fan motor $140, all work completed and tested',
+  'Installed 2 copper fittings $30, topped up refrigerant $85',
+  'Completed annual service, replaced air filters $35, ready to close',
+];
 
 // ── InlinePhotoCapture ──────────────────────────────────────────────
 
@@ -322,7 +283,7 @@ function InlinePhotoCapture({
                 <Camera size={22} color={accentColor} />
                 <Text
                   style={{
-                    fontSize: 10,
+                    fontSize: 12,
                     fontWeight: '600',
                     color: accentColor,
                     marginTop: 2,
@@ -354,7 +315,7 @@ function InlinePhotoCapture({
             <ImagePlus size={22} color={COLORS.mutedForeground} />
             <Text
               style={{
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: '600',
                 color: COLORS.mutedForeground,
                 marginTop: 2,
@@ -412,7 +373,7 @@ function InlinePhotoCapture({
         })}
       </ScrollView>
 
-      <Text className="mt-2 text-[11px] text-muted-foreground">
+      <Text className="mt-2 text-xs text-muted-foreground">
         {photos.length === 0
           ? `No ${photoType} photos yet — tap Camera to capture.`
           : `${photos.length} ${photoType} photo${photos.length > 1 ? 's' : ''} captured. Long-press a thumbnail to delete.`}
@@ -562,10 +523,11 @@ function InlineSignaturePad({
         show(`${defaultRole} signature saved.`, 'success');
         handleClear();
       } catch (uploadErr) {
-        // Offline / Basement fallback
+        if (!(uploadErr instanceof ApiRequestError) || uploadErr.statusCode !== 0) throw uploadErr;
+        // Only a connectivity failure may be queued; rejected uploads stay visible.
         console.warn('[completion] signature upload failed, queuing offline:', uploadErr);
         await enqueueSignature(jobId, savedUri, signerType, signerName, gps);
-        show(`${defaultRole} signature saved offline (Basement Mode) ✓`, 'info');
+        show(`${defaultRole} signature saved on this device; upload pending`, 'info');
         handleClear();
       }
     } catch (err) {
@@ -622,7 +584,7 @@ function InlineSignaturePad({
                 />
                 <Text
                   style={{
-                    fontSize: 10,
+                    fontSize: 12,
                     color: COLORS.mutedForeground,
                     padding: 4,
                   }}
@@ -719,7 +681,7 @@ function InlineSignaturePad({
               }}
               pointerEvents="none"
             >
-              <Text style={{ fontSize: 11, color: '#9CA3AF' }}>
+              <Text style={{ fontSize: 12, color: '#9CA3AF' }}>
                 Sign here
               </Text>
             </View>
@@ -868,7 +830,7 @@ function InlineChecklist({
         }}
       >
         <Text style={{ fontSize: 13, color: COLORS.mutedForeground, fontStyle: 'italic' }}>
-          No checklist linked to this job — proof of completion is not required.
+          No checklist items available. Photos and customer sign-off are checked separately.
         </Text>
       </View>
     );
@@ -877,7 +839,7 @@ function InlineChecklist({
   return (
     <View>
       {/* Mini progress bar */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
         <Text style={{ fontSize: 12, color: COLORS.mutedForeground, flex: 1 }}>
           {done} of {total} completed
         </Text>
@@ -959,47 +921,6 @@ function InlineChecklist({
 
 // ── ValidationChip ──────────────────────────────────────────────────
 
-function ValidationChip({
-  label,
-  state,
-}: {
-  label: string;
-  state: ChipState;
-}) {
-  const s = CHIP_STYLES[state];
-  const Icon =
-    state === 'pass' ? CircleCheck : state === 'warn' ? CircleAlert : CircleX;
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 6,
-        paddingHorizontal: 10,
-        borderRadius: 999,
-        backgroundColor: s.bg,
-        borderWidth: 1,
-        borderColor: s.border,
-        marginRight: 8,
-      }}
-      accessibilityLabel={`${label}: ${state}`}
-    >
-      <Icon size={14} color={s.icon} />
-      <Text
-        style={{
-          marginLeft: 5,
-          fontSize: 12,
-          fontWeight: '600',
-          color: s.text,
-        }}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 // ── SectionHeader ───────────────────────────────────────────────────
 
 function SectionHeader({
@@ -1017,7 +938,7 @@ function SectionHeader({
 }) {
   const Icon = icon;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
       <Icon size={16} color={iconColor} />
       <Text
         style={{
@@ -1041,7 +962,7 @@ function SectionHeader({
         >
           <Text
             style={{
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: '700',
               color: '#B91C1C',
               textTransform: 'uppercase',
@@ -1055,7 +976,7 @@ function SectionHeader({
         <Text
           style={{
             marginLeft: 8,
-            fontSize: 11,
+            fontSize: 12,
             color: COLORS.mutedForeground,
           }}
         >
@@ -1083,33 +1004,63 @@ export default function JobCompletionScreen() {
   const photosQuery = useJobPhotos(id);
   const signaturesQuery = useJobSignatures(id);
   const checklistQuery = useJobChecklist(id);
-  const completeProof = useCompleteProof();
+  const checklistRecord = useJobChecklistRecord(id);
   const lifecycle = useJobLifecycle();
 
   const user = useAuthStore((s) => s.user);
+  const tenantCurrency = useAuthStore((s) => s.tenant?.currency);
+  const [step, setStep] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [completed, setCompleted] = useState(false);
+  const [savingChecklist, setSavingChecklist] = useState(false);
+  const initializedJob = useRef<string | null>(null);
+  const initialItems = useRef('[]');
+  const savedQuotedTotal = useRef<number | null>(null);
+  const goToStep = (next: number) => { setStep(next); scrollRef.current?.scrollTo({ y: 0, animated: false }); };
   const [notes, setNotes] = useState('');
   const [lineItems, setLineItems] = useState<JobLineItem[]>([]);
   const [showWrapUpModal, setShowWrapUpModal] = useState(false);
   const [wrapUpTranscript, setWrapUpTranscript] = useState('');
   const [wrapUpLoading, setWrapUpLoading] = useState(false);
 
+  const {
+    isListening: isWrapUpListening,
+    setTranscript: setSpeechTranscript,
+    startListening: startWrapUpListening,
+    stopListening: stopWrapUpListening,
+    resetTranscript: resetWrapUpTranscript,
+  } = useSpeechRecognition({
+    onResult: (text) => {
+      setWrapUpTranscript(text);
+    },
+  });
+
+  // Automatically start listening when voice wrap up modal opens
+  useEffect(() => {
+    if (showWrapUpModal) {
+      const timer = setTimeout(() => {
+        startWrapUpListening();
+      }, 350);
+      return () => clearTimeout(timer);
+    } else {
+      stopWrapUpListening();
+    }
+  }, [showWrapUpModal, startWrapUpListening, stopWrapUpListening]);
+
   const job = jobQuery.data;
 
-  // Sync initial lineItems and notes from job query
+  // Refetches after photo/checklist uploads must not overwrite unsaved edits.
   useEffect(() => {
-    if (job) {
-      if (Array.isArray(job.lineItems) && job.lineItems.length > 0) {
-        setLineItems(job.lineItems);
-      } else if (job.lineItemsJson) {
-        try {
-          const parsed = typeof job.lineItemsJson === 'string' ? JSON.parse(job.lineItemsJson) : job.lineItemsJson;
-          if (Array.isArray(parsed)) setLineItems(parsed);
-        } catch {}
-      }
-      if (job.notes && !notes) {
-        setNotes(job.notes);
-      }
-    }
+    if (!job || initializedJob.current === job.id) return;
+    initializedJob.current = job.id;
+    const items = job.lineItems ?? [];
+    initialItems.current = JSON.stringify(items);
+    savedQuotedTotal.current = job.quotedAmount ?? null;
+    setLineItems(items);
+    setNotes(job.completionNotes || '');
   }, [job]);
 
   const handleVoiceWrapUp = async () => {
@@ -1119,6 +1070,7 @@ export default function JobCompletionScreen() {
       return;
     }
 
+    stopWrapUpListening();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setWrapUpLoading(true);
 
@@ -1145,6 +1097,7 @@ export default function JobCompletionScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       show(res.spokenFeedback || 'Materials & extra work logged!', 'success');
       setWrapUpTranscript('');
+      resetWrapUpTranscript();
       setShowWrapUpModal(false);
 
       if (res?.data?.newItems && Array.isArray(res.data.newItems)) {
@@ -1165,7 +1118,7 @@ export default function JobCompletionScreen() {
   const handleAddManualItem = () => {
     const newItem: JobLineItem = {
       id: `mat_${Date.now()}`,
-      name: 'New Part / Material',
+      name: '',
       description: 'Field material',
       quantity: 1,
       rate: 0,
@@ -1177,11 +1130,51 @@ export default function JobCompletionScreen() {
     setLineItems((prev) => [...prev, newItem]);
   };
 
+  const handleAddPresetItem = (name: string, rate: number, type: 'material' | 'labor') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const newItem: JobLineItem = {
+      id: `${type === 'labor' ? 'lab' : 'mat'}_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      name,
+      description: type === 'labor' ? 'Field labor' : 'Field part/material',
+      quantity: 1,
+      rate,
+      unitPrice: rate,
+      amount: rate,
+      total: rate,
+      type,
+    };
+    setLineItems((prev) => [...prev, newItem]);
+    show(`Added ${name} ($${rate})`, 'success');
+  };
+
+  const handleIncrementQty = (index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const current = lineItems[index];
+    const qty = (Number(current?.quantity) || 1) + 1;
+    handleUpdateItem(index, { quantity: qty });
+  };
+
+  const handleDecrementQty = (index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const current = lineItems[index];
+    const currentQty = Number(current?.quantity) || 1;
+    if (currentQty > 1) {
+      handleUpdateItem(index, { quantity: currentQty - 1 });
+    }
+  };
+
+  const handleToggleItemType = (index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const current = lineItems[index];
+    const newType = current?.type === 'labor' ? 'material' : 'labor';
+    handleUpdateItem(index, { type: newType });
+  };
+
   const handleUpdateItem = (index: number, updates: Partial<JobLineItem>) => {
     setLineItems((prev) => {
       const copy = [...prev];
       const current = { ...copy[index], ...updates };
-      const qty = Number(current.quantity) || 1;
+      const qty = Number(current.quantity);
       const rate = Number(current.rate ?? current.unitPrice ?? 0);
       const amt = qty * rate;
       current.quantity = qty;
@@ -1223,116 +1216,65 @@ export default function JobCompletionScreen() {
 
   const checklistTotal = checklistItems.length;
   const checklistDone = checklistItems.filter((c) => c.checked).length;
-  const checklistPercent =
-    checklistTotal > 0 ? (checklistDone / checklistTotal) * 100 : 0;
+  const checklistRequired = !!checklistRecord.data || hasLinkedChecklist(job?.linkedChecklistsJson);
+  const checklistReady = !checklistRequired || checklistRecord.data?.status === 'completed';
+  const proofLoading = photosQuery.isLoading || signaturesQuery.isLoading || checklistRecord.isLoading;
+  const proofError = photosQuery.isError || signaturesQuery.isError || checklistRecord.isError;
+  const requirements = [
+    { label: checklistRequired ? 'Complete the linked checklist' : 'Checklist not required', ready: checklistReady, step: 0 },
+    { label: 'Upload at least one before photo', ready: beforePhotos.length > 0, step: 1 },
+    { label: 'Upload at least one after photo', ready: afterPhotos.length > 0, step: 1 },
+    { label: 'Save the customer signature', ready: customerSigs.length > 0, step: 2 },
+  ];
+  const missing = requirements.filter((requirement) => !requirement.ready);
+  const allPass = !proofLoading && !proofError && missing.length === 0;
+  const total = lineItems.reduce((sum, item) => sum + lineItemTotal(item), 0);
+  const invalidItems = lineItems.some((item) => !(item.name || item.description)?.trim() ||
+    !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 ||
+    !Number.isFinite(lineItemTotal(item)) || lineItemTotal(item) < 0);
 
-  const beforePhotosChip: ChipState =
-    beforePhotos.length >= 1 ? 'pass' : 'fail';
-  const afterPhotosChip: ChipState = afterPhotos.length >= 1 ? 'pass' : 'fail';
-  const checklistChip: ChipState =
-    checklistTotal === 0
-      ? 'pass' // vacuously true — no checklist required
-      : checklistPercent === 100
-        ? 'pass'
-        : checklistPercent > 0
-          ? 'warn'
-          : 'fail';
-  const customerSigChip: ChipState =
-    customerSigs.length >= 1 ? 'pass' : 'fail';
-  const employeeSigChip: ChipState =
-    employeeSigs.length >= 1 ? 'pass' : 'fail';
-
-  // Checklist 'warn' is non-blocking (matches PWA); 'fail' blocks.
-  const allPass =
-    beforePhotosChip === 'pass' &&
-    afterPhotosChip === 'pass' &&
-    (checklistChip === 'pass' || checklistChip === 'warn') &&
-    customerSigChip === 'pass' &&
-    employeeSigChip === 'pass';
-
-  const customerSignature = customerSigs[customerSigs.length - 1];
-
-  // ── Submit ──────────────────────────────────────────────────────
-  const handleSubmit = useCallback(async () => {
-    if (!allPass || !id) return;
-    const resolvedCustomerName = (
-      customerSignature?.signatoryName ||
-      job?.customer?.name ||
-      'Customer'
-    ).trim();
-
+  const saveChecklist = async () => {
+    if (savingChecklist) return;
+    setSavingChecklist(true);
     try {
-      // 0. Sync any added/updated line items to the job so invoice has the updated items
-      if (lineItems.length > 0) {
-        const subtotal = lineItems.reduce((acc, it) => acc + (Number(it.amount ?? it.total ?? 0)), 0);
-        await api.put(`/api/jobs/${id}`, {
-          lineItemsJson: JSON.stringify(lineItems),
-          quotedAmount: subtotal > 0 ? subtotal : undefined,
-        }).catch(() => null);
+      await api.patch(`/api/jobs/${id}/checklist`, { status: 'completed' });
+      await checklistRecord.refetch();
+      show('Checklist completed.', 'success');
+    } catch (error) { show(error instanceof Error ? error.message : 'Could not complete checklist.', 'error'); }
+    finally { setSavingChecklist(false); }
+  };
+
+  const handleSubmit = async () => {
+    if (!allPass || !id || savingRef.current || invalidItems) return;
+    savingRef.current = true;
+    setSaving(true);
+    setSubmissionError(null);
+    try {
+      if (JSON.stringify(lineItems) !== initialItems.current) {
+        await api.put(`/api/jobs/${id}`, { lineItemsJson: JSON.stringify(lineItems), quotedAmount: total });
+        initialItems.current = JSON.stringify(lineItems);
+        savedQuotedTotal.current = total;
       }
-
-      // 1. Submit denormalized completion proof snapshot (photos + sig + notes
-      //    + customerName). Photos and signatures are already persisted as
-      //    proper JobPhoto / JobSignature rows from the inline captures — the
-      //    server's validateJobCompletionProof reads those rows, not this
-      //    payload. This call records the legacy snapshot fields on the Job
-      //    row for backward compatibility.
-      await completeProof.mutateAsync({
-        jobId: id,
-        payload: {
-          photos: allPhotos.map((p) => p.id),
-          signature: customerSignature?.id,
-          notes: notes.trim() || undefined,
-          customerName: resolvedCustomerName,
-        },
-      });
-
-      // 2. Advance the lifecycle — flips status to 'completed', runs the
-      //    server-side validateJobCompletionProof (before/after photos +
-      //    customer signature required), auto-creates the invoice, emits
-      //    job.completed event, sends WhatsApp notifications.
-      try {
-        await lifecycle.mutateAsync({ id, action: 'complete' });
-        // Deterministically stop background travel tracking if this was the active travelling job
-        if (trackingManager.getState()?.jobId === id) {
-          trackingManager.stopTravelling();
+      // The lifecycle endpoint validates persisted proof, closes time entries,
+      // stores notes and creates the invoice. Do not also call complete-proof.
+      await lifecycle.mutateAsync({ id, action: 'complete', completionNotes: notes.trim() });
+      if (trackingManager.getState()?.jobId === id) trackingManager.stopTravelling();
+      setCompleted(true);
+    } catch (error) {
+      if (error instanceof ApiRequestError && [0, 408].includes(error.statusCode)) {
+        // A lost response does not establish whether the server completed it.
+        const refreshed = await jobQuery.refetch();
+        if (['completed', 'invoice_generated', 'paid'].includes(refreshed.data?.status || '')) {
+          if (trackingManager.getState()?.jobId === id) trackingManager.stopTravelling();
+          setCompleted(true);
+        } else {
+          setSubmissionError('Completion could not be confirmed. Check your connection and retry. Your entries are still here; the job is not marked complete in this screen.');
         }
-      } catch (lcErr) {
-        // Proof was saved; lifecycle call may have failed because the job was
-        // already completed or the validation rejected it. Surface but don't
-        // fail the whole flow.
-        if (trackingManager.getState()?.jobId === id) {
-          trackingManager.stopTravelling();
-        }
-        await enqueueLifecycleAction(id, 'complete').catch(() => {});
-        show(
-          'Proof saved! Completion queued offline — will sync once reconnected ✓',
-          'info'
-        );
-        router.back();
-        return;
+      } else {
+        setSubmissionError(error instanceof Error ? error.message : 'Could not complete the job. Please try again.');
       }
-
-      show('Job completion submitted.', 'success');
-      router.back();
-    } catch (err) {
-      show(
-        err instanceof Error ? err.message : 'Submission failed. Please try again.',
-        'error'
-      );
-    }
-  }, [
-    allPass,
-    id,
-    job,
-    completeProof,
-    lifecycle,
-    allPhotos,
-    customerSignature,
-    notes,
-    lineItems,
-    show,
-  ]);
+    } finally { savingRef.current = false; setSaving(false); }
+  };
 
   // ── Loading + error states ──────────────────────────────────────
   if (jobQuery.isLoading && !job) {
@@ -1346,7 +1288,7 @@ export default function JobCompletionScreen() {
     );
   }
 
-  if (jobQuery.error || !job) {
+  if (!job) {
     return (
       <SafeAreaView edges={['top']} className="flex-1 bg-background">
         <Header onBack={() => router.back()} title="Completion Proof" />
@@ -1378,39 +1320,38 @@ export default function JobCompletionScreen() {
     paddingBottom: Math.max(12, insets.bottom),
   };
 
-  const submitting = completeProof.isPending || lifecycle.isPending;
+  const submitting = saving;
+
+  if (completed) return (
+    <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-background px-6">
+      <View className="flex-1 items-center justify-center">
+        <CircleCheck size={56} color={COLORS.primary} />
+        <Text className="mt-5 text-2xl font-bold text-foreground">Job completed</Text>
+        <Text className="mt-3 text-center text-base text-muted-foreground">{job.title || 'Your job'} is complete. Your evidence and completion notes have been saved.</Text>
+        <View className="mt-8 w-full"><Button fullWidth onPress={() => router.replace(`/(employee)/jobs/${id}`)}>Back to job details</Button></View>
+      </View>
+    </SafeAreaView>
+  );
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
-      <Header onBack={() => router.back()} title="Complete Job" />
+      <Header onBack={() => step > 0 ? goToStep(step - 1) : router.back()} title="Complete job" />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
-      {/* Sticky validation chip row — sits between the header and the
-          scrollable body so it's always visible while the user scrolls. */}
-      <View
-        style={{
-          backgroundColor: '#FFFFFF',
-          borderBottomWidth: 1,
-          borderBottomColor: COLORS.border,
-          paddingVertical: 10,
-          paddingLeft: 16,
-          paddingRight: 8,
-        }}
-      >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingRight: 8, alignItems: 'center' }}
-        >
-          <ValidationChip label="Before Photos" state={beforePhotosChip} />
-          <ValidationChip label="After Photos" state={afterPhotosChip} />
-          <ValidationChip label="Checklist" state={checklistChip} />
-          <ValidationChip label="Customer Sig" state={customerSigChip} />
-          <ValidationChip label="Employee Sig" state={employeeSigChip} />
-        </ScrollView>
+      <View className="border-b border-border bg-white px-4 pb-4">
+        <Text className="text-sm text-muted-foreground" numberOfLines={1}>{job.jobNumber ? `#${job.jobNumber} · ` : ''}{job.title || job.customer?.name}</Text>
+        <View className="mt-4 flex-row gap-2">
+          {['Work', 'Photos', 'Sign-off', 'Review'].map((label, index) => (
+            <Pressable key={label} accessibilityRole="tab" accessibilityState={{ selected: step === index }} onPress={() => goToStep(index)} className={`min-h-[48px] flex-1 items-center justify-center rounded-xl ${step === index ? 'bg-primary-700' : 'bg-muted'}`}>
+              <Text className={`text-xs font-semibold ${step === index ? 'text-white' : 'text-muted-foreground'}`}>{index + 1}. {label}</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
       {/* Scrollable body */}
       <ScrollView
+        ref={scrollRef}
         className="flex-1"
         contentContainerStyle={{
           paddingHorizontal: 16,
@@ -1420,11 +1361,14 @@ export default function JobCompletionScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Text className="mb-4 text-sm text-muted-foreground">
-          Capture all proof of work before completing this job. Each chip at
-          the top turns green as you satisfy its requirement.
-        </Text>
+        <Text className="mb-2 text-xl font-bold text-foreground">{['Review the work', 'Document the result', 'Customer sign-off', 'Ready to complete?'][step]}</Text>
+        <Text className="mb-5 text-sm leading-5 text-muted-foreground">{['Finish your checklist, review materials, and add a work summary.', 'Before and after photos must finish uploading before you can complete the job.', 'Collect customer approval. Employee signature is optional.', 'Review the saved evidence and charges before submitting.'][step]}</Text>
+        {(proofError || proofLoading) && <Card className="mb-4">
+          <Text className="text-sm text-muted-foreground">{proofLoading ? 'Checking saved evidence…' : 'Could not verify saved evidence. Completion is unavailable until this loads.'}</Text>
+          {proofError && <Button variant="outline" onPress={() => { photosQuery.refetch(); signaturesQuery.refetch(); checklistRecord.refetch(); }}>Retry evidence</Button>}
+        </Card>}
 
+        <View style={{ display: step === 1 ? 'flex' : 'none' }}>
         {/* Before Photos */}
         <Card className="mb-4">
           <SectionHeader
@@ -1457,6 +1401,38 @@ export default function JobCompletionScreen() {
           />
         </Card>
 
+        </View>
+        <View style={{ display: step === 0 ? 'flex' : 'none' }}>
+        {/* AI Voice Wrap-Up Hero Card */}
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+            setShowWrapUpModal(true);
+          }}
+          className="mb-4 p-4 rounded-2xl border border-emerald-500/30 bg-emerald-600 active:opacity-95 shadow-sm"
+          style={{ backgroundColor: '#059669' }}
+        >
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1 pr-3">
+              <View className="flex-row items-center gap-1.5 mb-1">
+                <Sparkles size={13} color="#D1FAE5" />
+                <Text className="text-[11px] font-black text-emerald-100 uppercase tracking-wider">
+                  AI Field Copilot
+                </Text>
+              </View>
+              <Text className="text-base font-bold text-white">
+                Speak to log parts, extra work & wrap up
+              </Text>
+              <Text className="text-xs text-emerald-100/90 mt-0.5" numberOfLines={1}>
+                Tap to speak: "Used 45uF capacitor $45 and 30m extra labor $50"
+              </Text>
+            </View>
+            <View className="size-11 rounded-full bg-white/20 items-center justify-center border border-white/30">
+              <Mic size={20} color="#FFFFFF" />
+            </View>
+          </View>
+        </Pressable>
+
         {/* Checklist */}
         <Card className="mb-4">
           <SectionHeader
@@ -1470,8 +1446,14 @@ export default function JobCompletionScreen() {
             }
           />
           <InlineChecklist jobId={id} />
+          {checklistRequired && <View className="mt-4">
+            <Text className="mb-3 text-sm text-muted-foreground">{checklistReady ? 'Checklist saved as completed.' : checklistTotal ? 'Check every item, then save the checklist as complete.' : 'A checklist is required but its items are unavailable. Contact dispatch to resolve it.'}</Text>
+            {!checklistReady && <Button disabled={checklistTotal === 0 || checklistDone !== checklistTotal} loading={savingChecklist} onPress={saveChecklist}>Save completed checklist</Button>}
+          </View>}
         </Card>
 
+        </View>
+        <View style={{ display: step === 2 ? 'flex' : 'none' }}>
         {/* Customer Signature */}
         <Card className="mb-4">
           <SectionHeader
@@ -1500,11 +1482,10 @@ export default function JobCompletionScreen() {
             icon={PenLine}
             iconColor="#3B82F6"
             title="Employee Signature"
-            required
             badge={
               employeeSigs.length > 0
-                ? `(${employeeSigs.length} collected)`
-                : undefined
+                ? `Optional · ${employeeSigs.length} saved`
+                : 'Optional'
             }
           />
           <InlineSignaturePad
@@ -1516,127 +1497,183 @@ export default function JobCompletionScreen() {
           />
         </Card>
 
+        </View>
+        <View style={{ display: step === 0 ? 'flex' : 'none' }}>
         {/* Materials, Hardware & Extra Work (Voice AI) */}
-        <Card className="mb-4 bg-emerald-50/40 border-emerald-500/20">
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <SectionHeader
-                icon={Wrench}
-                iconColor="#059669"
-                title="Materials & Extra Work"
-              />
-              <View className="bg-emerald-100 px-1.5 py-0.5 rounded-full">
-                <Text className="text-[10px] font-bold text-emerald-800">Voice AI</Text>
+        <Card className="mb-4 bg-white border border-border shadow-xs">
+          {/* Header */}
+          <View className="flex-row items-center justify-between pb-3 border-b border-border/60">
+            <View className="flex-row items-center gap-2">
+              <View className="size-8 rounded-lg bg-emerald-600 items-center justify-center">
+                <Wrench size={16} color="#FFFFFF" />
+              </View>
+              <View>
+                <View className="flex-row items-center gap-1.5">
+                  <Text className="text-base font-bold text-foreground">Materials & Extra Work</Text>
+                  <View className="bg-emerald-100 px-2 py-0.5 rounded-full">
+                    <Text className="text-[10px] font-black text-emerald-800">VOICE AI</Text>
+                  </View>
+                </View>
+                <Text className="text-xs text-muted-foreground">Parts used and extra labor on site</Text>
               </View>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View className="flex-row items-center gap-2">
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
                   setShowWrapUpModal(true);
                 }}
-                className="h-8 px-2.5 rounded-lg bg-emerald-600 flex-row items-center gap-1 active:bg-emerald-700 shadow-xs"
+                className="h-9 px-3 rounded-xl bg-emerald-600 flex-row items-center gap-1.5 active:bg-emerald-700 shadow-xs"
               >
-                <Mic size={13} color="#FFFFFF" />
-                <Text className="text-xs font-bold text-white">Voice Log</Text>
+                <Mic size={14} color="#FFFFFF" />
+                <Text className="text-xs font-bold text-white">Voice</Text>
               </Pressable>
 
               <Pressable
                 onPress={handleAddManualItem}
-                className="h-8 px-2 rounded-lg bg-white border border-border flex-row items-center gap-1 active:bg-muted"
+                className="h-9 px-3 rounded-xl bg-muted/60 border border-border flex-row items-center gap-1 active:bg-muted"
               >
-                <Plus size={13} color={COLORS.foreground} />
-                <Text className="text-xs font-medium text-foreground">Add</Text>
+                <Plus size={14} color={COLORS.foreground} />
+                <Text className="text-xs font-semibold text-foreground">Custom</Text>
               </Pressable>
             </View>
           </View>
 
-          <Text className="text-xs text-muted-foreground mb-2.5">
-            Log extra hardware, parts, or labor to automatically invoice the customer.
-          </Text>
+          {/* Quick Trade Presets Ribbon */}
+          <View className="py-2.5">
+            <Text className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Quick Add Presets (1-Tap):
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              {TRADE_PRESETS.map((preset) => (
+                <Pressable
+                  key={preset.name}
+                  onPress={() => handleAddPresetItem(preset.name, preset.rate, preset.type)}
+                  className="px-2.5 py-1.5 rounded-lg bg-muted/50 border border-border/80 flex-row items-center gap-1.5 active:bg-emerald-50 active:border-emerald-300"
+                >
+                  <Plus size={11} color={COLORS.mutedForeground} />
+                  <Text className="text-xs font-medium text-foreground">{preset.name}</Text>
+                  <Text className="text-xs font-bold text-emerald-700">${preset.rate}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
 
+          {/* Items List */}
           {lineItems.length > 0 ? (
-            <View className="space-y-2">
-              <View className="rounded-xl border border-border bg-white overflow-hidden divide-y divide-border/60">
-                {lineItems.map((item, idx) => (
-                  <View key={item.id || idx} className="p-2.5 flex-row items-center justify-between gap-2">
-                    <View className="flex-1">
-                      <View className="flex-row items-center gap-1.5 mb-1">
-                        <View
-                          className={`px-1.5 py-0.2 rounded ${
-                            item.type === 'labor' ? 'bg-blue-100' : 'bg-amber-100'
-                          }`}
-                        >
-                          <Text
-                            className={`text-[9px] font-bold uppercase ${
-                              item.type === 'labor' ? 'text-blue-800' : 'text-amber-800'
-                            }`}
+            <View className="space-y-3 pt-1">
+              {lineItems.map((item, idx) => {
+                const isLabor = item.type === 'labor';
+                const itemTotal = (Number(item.quantity) || 1) * (Number(item.rate ?? item.unitPrice ?? 0));
+                return (
+                  <View
+                    key={item.id || idx}
+                    className="p-3 rounded-xl border border-border/80 bg-muted/10 space-y-2.5"
+                  >
+                    {/* Row 1: Type badge + Name + Trash */}
+                    <View className="flex-row items-center justify-between gap-2">
+                      <Pressable
+                        onPress={() => handleToggleItemType(idx)}
+                        className={`px-2 py-1 rounded-md flex-row items-center gap-1 ${
+                          isLabor ? 'bg-blue-100 border border-blue-200' : 'bg-amber-100 border border-amber-200'
+                        }`}
+                      >
+                        {isLabor ? <Clock size={11} color="#1D4ED8" /> : <Wrench size={11} color="#B45309" />}
+                        <Text className={`text-[10px] font-bold uppercase ${isLabor ? 'text-blue-800' : 'text-amber-800'}`}>
+                          {isLabor ? 'Labor' : 'Part'}
+                        </Text>
+                      </Pressable>
+
+                      <TextInput
+                        value={item.name || item.description}
+                        onChangeText={(text) => handleUpdateItem(idx, { name: text, description: text })}
+                        className="flex-1 text-sm font-bold text-foreground py-1 px-1 bg-transparent"
+                        placeholder="Item name (e.g. 45uF capacitor)"
+                        placeholderTextColor="#9CA3AF"
+                      />
+
+                      <Pressable
+                        onPress={() => handleRemoveItem(idx)}
+                        hitSlop={8}
+                        className="p-1 rounded-md active:bg-red-50"
+                      >
+                        <Trash2 size={15} color="#EF4444" />
+                      </Pressable>
+                    </View>
+
+                    {/* Row 2: Quantity Stepper + Unit Rate + Total */}
+                    <View className="flex-row items-center justify-between pt-1 border-t border-border/40">
+                      {/* Quantity Stepper */}
+                      <View className="flex-row items-center gap-1.5">
+                        <Text className="text-xs text-muted-foreground font-medium">Qty:</Text>
+                        <View className="flex-row items-center rounded-lg border border-border bg-white overflow-hidden">
+                          <Pressable
+                            onPress={() => handleDecrementQty(idx)}
+                            className="size-7 items-center justify-center active:bg-muted"
                           >
-                            {item.type === 'labor' ? 'Labor' : 'Part'}
+                            <Minus size={12} color={COLORS.foreground} />
+                          </Pressable>
+                          <Text className="min-w-[28px] text-center text-xs font-bold text-foreground">
+                            {item.quantity ?? 1}
                           </Text>
+                          <Pressable
+                            onPress={() => handleIncrementQty(idx)}
+                            className="size-7 items-center justify-center active:bg-muted"
+                          >
+                            <Plus size={12} color={COLORS.foreground} />
+                          </Pressable>
                         </View>
-                        <TextInput
-                          value={item.name || item.description}
-                          onChangeText={(text) => handleUpdateItem(idx, { name: text, description: text })}
-                          className="flex-1 text-xs font-bold text-foreground py-0"
-                          placeholder="Item name"
-                        />
                       </View>
 
-                      <View className="flex-row items-center gap-3">
-                        <View className="flex-row items-center gap-1">
-                          <Text className="text-[11px] text-muted-foreground">Qty:</Text>
-                          <TextInput
-                            keyboardType="numeric"
-                            value={String(item.quantity || 1)}
-                            onChangeText={(text) => handleUpdateItem(idx, { quantity: Number(text) || 1 })}
-                            className="h-6 px-1.5 text-xs font-semibold bg-muted/40 rounded border border-border/60 text-center min-w-[32px]"
-                          />
-                        </View>
-
-                        <View className="flex-row items-center gap-1">
-                          <Text className="text-[11px] text-muted-foreground">Rate: $</Text>
+                      {/* Unit Rate */}
+                      <View className="flex-row items-center gap-1.5">
+                        <Text className="text-xs text-muted-foreground font-medium">Rate:</Text>
+                        <View className="flex-row items-center px-2 h-7 rounded-lg border border-border bg-white">
+                          <Text className="text-xs text-muted-foreground font-medium mr-0.5">$</Text>
                           <TextInput
                             keyboardType="numeric"
                             value={String(item.rate ?? item.unitPrice ?? 0)}
                             onChangeText={(text) => handleUpdateItem(idx, { rate: Number(text) || 0, unitPrice: Number(text) || 0 })}
-                            className="h-6 px-1.5 text-xs font-semibold bg-muted/40 rounded border border-border/60 text-right min-w-[48px]"
+                            className="text-xs font-bold text-foreground min-w-[42px] text-right py-0"
                           />
                         </View>
                       </View>
-                    </View>
 
-                    <View className="items-end gap-1.5">
-                      <Text className="text-xs font-extrabold text-emerald-600 font-mono">
-                        ${((item.quantity || 1) * (item.rate ?? item.unitPrice ?? 0)).toFixed(2)}
+                      {/* Line Item Total */}
+                      <Text className="text-sm font-black font-mono text-emerald-600">
+                        ${itemTotal.toFixed(2)}
                       </Text>
-                      <Pressable
-                        onPress={() => handleRemoveItem(idx)}
-                        hitSlop={6}
-                        className="p-1 rounded active:bg-red-50"
-                      >
-                        <Trash2 size={13} color="#DC2626" />
-                      </Pressable>
                     </View>
                   </View>
-                ))}
-              </View>
+                );
+              })}
 
               {/* Total Banner */}
-              <View className="flex-row items-center justify-between p-2.5 rounded-xl bg-emerald-100/60 border border-emerald-300">
-                <Text className="text-xs font-bold text-emerald-900">
-                  Total Added to Invoice ({lineItems.length} items):
-                </Text>
-                <Text className="text-sm font-black font-mono text-emerald-800">
-                  ${lineItems.reduce((acc, it) => acc + (Number(it.amount ?? it.total ?? 0)), 0).toFixed(2)}
+              <View className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex-row items-center justify-between">
+                <View>
+                  <Text className="text-xs font-bold text-emerald-950">
+                    Added to Invoice ({lineItems.length} items):
+                  </Text>
+                  <Text className="text-[11px] text-emerald-700">
+                    Includes parts & extra labor logged on site
+                  </Text>
+                </View>
+                <Text className="text-base font-black font-mono text-emerald-800">
+                  {formatCurrency(total, tenantCurrency)}
                 </Text>
               </View>
             </View>
           ) : (
-            <View className="p-3 rounded-xl border border-dashed border-border items-center justify-center bg-white/60">
-              <Text className="text-xs text-muted-foreground text-center">
-                No parts or extra labor logged yet. Tap <Text className="font-bold text-emerald-700">Voice Log</Text> or speak parts used.
+            <View className="p-4 rounded-xl border border-dashed border-border/80 items-center justify-center bg-muted/20 my-1">
+              <View className="size-10 rounded-full bg-emerald-100 items-center justify-center mb-1.5">
+                <Sparkles size={18} color="#059669" />
+              </View>
+              <Text className="text-xs font-bold text-foreground text-center">
+                No extra materials or labor logged
+              </Text>
+              <Text className="text-xs text-muted-foreground text-center mt-0.5 max-w-[260px]">
+                Tap <Text className="font-bold text-emerald-700">Voice</Text> to speak parts, or tap any quick-add preset chip above.
               </Text>
             </View>
           )}
@@ -1679,111 +1716,210 @@ export default function JobCompletionScreen() {
             }}
             maxLength={2000}
           />
-          <Text style={{ marginTop: 4, fontSize: 11, color: COLORS.mutedForeground }}>
+          <Text style={{ marginTop: 4, fontSize: 12, color: COLORS.mutedForeground }}>
             {notes.length}/2000 characters
           </Text>
         </Card>
 
-        {!allPass ? (
-          <Text
-            style={{
-              fontSize: 12,
-              color: COLORS.mutedForeground,
-              textAlign: 'center',
-              marginTop: 4,
-              marginBottom: 8,
-            }}
-          >
-            Resolve the red chips above to enable submission.
-          </Text>
-        ) : null}
+        </View>
+        {step === 3 && <View className="gap-4">
+          <Card>
+            <Text className="mb-3 text-base font-bold text-foreground">Completion requirements</Text>
+            {requirements.map((requirement) => <Pressable key={requirement.label} accessibilityRole="button" onPress={() => goToStep(requirement.step)} className="min-h-[52px] flex-row items-center gap-3 border-b border-border py-3">
+              {requirement.ready ? <CircleCheck size={20} color={COLORS.primary} /> : <CircleAlert size={20} color="#B45309" />}
+              <Text className="flex-1 text-sm text-foreground">{requirement.label}</Text>
+              <Text className="text-xs font-semibold text-primary-700">{requirement.ready ? 'View' : 'Add'}</Text>
+            </Pressable>)}
+          </Card>
+          <Card>
+            <Text className="text-base font-bold text-foreground">Work summary</Text>
+            <Text className="mt-2 text-sm leading-6 text-muted-foreground">{notes.trim() || 'No completion notes added.'}</Text>
+            <Text className="mt-4 text-base font-semibold text-foreground">Charges</Text>
+            {lineItems.map((item, index) => <View key={item.id || index} className="mt-3 flex-row items-start gap-3">
+              <Text className="flex-1 text-sm text-muted-foreground">{item.quantity ?? 1} × {item.name || item.description}</Text>
+              <Text className="text-sm text-foreground">{formatCurrency(lineItemTotal(item), tenantCurrency)}</Text>
+            </View>)}
+            <Text className="mt-4 text-sm font-semibold text-foreground">Quoted total: {formatCurrency(JSON.stringify(lineItems) !== initialItems.current ? total : (savedQuotedTotal.current ?? job.quotedAmount ?? total), tenantCurrency)}</Text>
+            <Text className="mt-2 text-sm text-muted-foreground">{beforePhotos.length} before photos · {afterPhotos.length} after photos</Text>
+            <Text className="mt-2 text-sm text-muted-foreground">Customer: {customerSigs.at(-1)?.signatoryName || job.customer?.name || 'Not provided'}</Text>
+            <Button variant="ghost" onPress={() => goToStep(0)}>Edit work summary</Button>
+          </Card>
+          {invalidItems && <Text className="text-sm text-destructive">Check material names, quantities, and rates before completing.</Text>}
+          {submissionError && <Card className="border-red-200 bg-red-50"><Text accessibilityRole="alert" className="text-sm text-red-800">{submissionError}</Text></Card>}
+        </View>}
       </ScrollView>
 
-      {/* Sticky footer — Complete Job button */}
       <View style={footerStyle}>
-        <Pressable
-          onPress={handleSubmit}
-          disabled={!allPass || submitting}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingVertical: 14,
-            borderRadius: 12,
-            backgroundColor: '#059669',
-            opacity: !allPass || submitting ? 0.5 : 1,
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Complete job"
-          accessibilityState={{ disabled: !allPass || submitting }}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
-          ) : (
-            <CircleCheck size={18} color="#FFFFFF" />
-          )}
-          <Text
-            style={{
-              marginLeft: 8,
-              fontSize: 16,
-              fontWeight: '700',
-              color: '#FFFFFF',
-            }}
-          >
-            {submitting ? 'Submitting…' : 'Complete Job'}
-          </Text>
-        </Pressable>
+        <Text className="mb-3 text-sm text-muted-foreground">Step {step + 1} of 4 · {missing.length === 0 ? 'Evidence ready' : `${missing.length} requirements remaining`}</Text>
+        {step < 3 ? <Button fullWidth onPress={() => goToStep(step + 1)}>Continue to {['', 'photos', 'sign-off', 'review'][step + 1]}</Button> :
+          <Button fullWidth loading={submitting} disabled={!allPass || invalidItems} onPress={handleSubmit}>Confirm & complete job</Button>}
       </View>
+      </KeyboardAvoidingView>
 
       {/* Submit overlay — blocks the whole screen while the lifecycle + proof
           calls are in flight. Per-section upload spinners are inline. */}
       <LoadingOverlay
         visible={submitting}
-        message={completeProof.isPending ? 'Submitting proof…' : 'Completing job…'}
+        message="Saving work and completing job…"
       />
 
       {/* Voice Wrap-Up Modal */}
-      <Modal visible={showWrapUpModal} onClose={() => setShowWrapUpModal(false)} position="bottom">
-        <View className="p-4">
+      <Modal visible={showWrapUpModal} onClose={() => { stopWrapUpListening(); setShowWrapUpModal(false); }} position="bottom">
+        <View className="p-5">
+          {/* Header */}
           <View className="flex-row items-center justify-between mb-3">
-            <View className="flex-row items-center gap-2">
-              <View className="size-8 rounded-lg bg-emerald-600 items-center justify-center">
-                <Mic size={16} color="#FFFFFF" />
+            <View className="flex-row items-center gap-2.5">
+              <View className="size-10 rounded-xl bg-emerald-600 items-center justify-center shadow-xs">
+                <Sparkles size={20} color="#FFFFFF" />
               </View>
               <View>
-                <Text className="text-base font-black text-foreground">Voice Wrap-Up</Text>
-                <Text className="text-xs text-muted-foreground">Log hardware, parts & extra labor</Text>
+                <View className="flex-row items-center gap-1.5">
+                  <Text className="text-base font-black text-foreground">AI Voice Wrap-Up</Text>
+                  <View className="bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-full">
+                    <Text className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
+                      HANDS-FREE
+                    </Text>
+                  </View>
+                </View>
+                <Text className="text-xs text-muted-foreground">Speak into mic — auto-types words live</Text>
               </View>
             </View>
-            <Pressable onPress={() => setShowWrapUpModal(false)} hitSlop={8}>
-              <X size={16} color={COLORS.mutedForeground} />
+            <Pressable
+              onPress={() => {
+                stopWrapUpListening();
+                setShowWrapUpModal(false);
+              }}
+              hitSlop={10}
+              className="p-1 rounded-full bg-muted"
+            >
+              <X size={16} color={COLORS.foreground} />
             </Pressable>
           </View>
 
-          <TextInput
-            value={wrapUpTranscript}
-            onChangeText={setWrapUpTranscript}
-            placeholder='e.g. "Used 45uF capacitor $45 and 30m extra pipe flushing labor $50"'
-            placeholderTextColor={COLORS.mutedForeground}
-            multiline
-            numberOfLines={3}
-            className="w-full min-h-[85px] p-3 text-sm text-foreground bg-muted/40 rounded-xl border border-border/80 mb-3"
-            style={{ textAlignVertical: 'top' }}
-          />
+          {/* Central Pulsating Microphone Button */}
+          <View className="items-center justify-center py-3">
+            <View className="relative items-center justify-center">
+              {isWrapUpListening && (
+                <View className="absolute size-24 rounded-full bg-red-500/20" />
+              )}
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                  if (isWrapUpListening) {
+                    stopWrapUpListening();
+                  } else {
+                    startWrapUpListening();
+                  }
+                }}
+                disabled={wrapUpLoading}
+                className={`size-20 rounded-full items-center justify-center shadow-lg active:scale-95 ${
+                  isWrapUpListening
+                    ? 'bg-red-500 border-4 border-red-300'
+                    : 'bg-emerald-600 border-4 border-emerald-400/30'
+                }`}
+              >
+                {isWrapUpListening ? (
+                  <Mic size={32} color="#FFFFFF" />
+                ) : (
+                  <MicOff size={28} color="#FFFFFF" />
+                )}
+              </Pressable>
+            </View>
 
+            <View className="flex-row items-center gap-1.5 mt-2.5">
+              {isWrapUpListening ? (
+                <>
+                  <View className="size-2 rounded-full bg-red-500" />
+                  <Text className="text-xs font-bold text-red-600 dark:text-red-400">
+                    Listening... Speak parts & extra work (auto-typing)
+                  </Text>
+                </>
+              ) : (
+                <Text className="text-xs font-medium text-muted-foreground">
+                  Tap mic to start auto-typing spoken work
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {/* Auto-typed Dictation Input */}
+          <View className="relative mb-3">
+            <View className="flex-row items-center justify-between mb-1 px-1">
+              <Text className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Auto-Typed Work & Materials
+              </Text>
+              {wrapUpTranscript.length > 0 && !wrapUpLoading && (
+                <Pressable
+                  onPress={() => {
+                    setWrapUpTranscript('');
+                    resetWrapUpTranscript();
+                  }}
+                  hitSlop={6}
+                  className="flex-row items-center gap-1"
+                >
+                  <X size={12} color={COLORS.mutedForeground} />
+                  <Text className="text-[11px] text-muted-foreground">Clear</Text>
+                </Pressable>
+              )}
+            </View>
+            <TextInput
+              value={wrapUpTranscript}
+              onChangeText={(txt) => {
+                setWrapUpTranscript(txt);
+                setSpeechTranscript(txt);
+              }}
+              placeholder='Speak now — e.g. "Used 45uF capacitor $45 and 30m extra pipe flushing labor $50"'
+              placeholderTextColor="#9CA3AF"
+              multiline
+              numberOfLines={3}
+              className={`w-full min-h-[85px] p-3 text-sm text-foreground rounded-2xl border text-left ${
+                isWrapUpListening
+                  ? 'bg-red-500/5 border-red-400'
+                  : 'bg-muted/30 border-border'
+              }`}
+              style={{ textAlignVertical: 'top' }}
+            />
+          </View>
+
+          {/* Preset Prompts Carousel */}
+          <Text className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Or Tap An Example Prompt:
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }} className="mb-3">
+            {VOICE_PRESET_PROMPTS.map((prompt, i) => (
+              <Pressable
+                key={i}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  setWrapUpTranscript(prompt);
+                  setSpeechTranscript(prompt);
+                }}
+                className="max-w-[260px] p-2.5 rounded-xl bg-muted/60 border border-border/80 active:bg-emerald-50 active:border-emerald-300"
+              >
+                <Text className="text-xs text-foreground font-medium" numberOfLines={2}>
+                  &quot;{prompt}&quot;
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          {/* Submit Action */}
           <Pressable
             onPress={handleVoiceWrapUp}
             disabled={wrapUpLoading || !wrapUpTranscript.trim()}
-            className={`h-11 rounded-xl flex-row items-center justify-center gap-2 ${
+            className={`h-12 rounded-xl flex-row items-center justify-center gap-2 shadow-xs ${
               !wrapUpTranscript.trim() || wrapUpLoading ? 'bg-emerald-600/50' : 'bg-emerald-600 active:bg-emerald-700'
             }`}
           >
             {wrapUpLoading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <View className="flex-row items-center gap-2">
+                <ActivityIndicator size="small" color="#FFFFFF" />
+                <Text className="text-xs font-bold text-white">AI analyzing work & updating invoice...</Text>
+              </View>
             ) : (
               <>
-                <Mic size={15} color="#FFFFFF" />
-                <Text className="text-xs font-bold text-white">Log Parts & Notes with AI</Text>
+                <Sparkles size={16} color="#FFFFFF" />
+                <Text className="text-sm font-bold text-white">Log Parts, Labor & Notes with AI</Text>
               </>
             )}
           </Pressable>

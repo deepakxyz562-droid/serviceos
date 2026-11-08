@@ -452,7 +452,7 @@ export default function ShiftScreen() {
               <Text
                 style={{
                   color: 'rgba(255,255,255,0.7)',
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: '600',
                   textTransform: 'uppercase',
                   letterSpacing: 0.5,
@@ -720,7 +720,7 @@ export default function ShiftScreen() {
                         <View className="mt-1 flex-row items-center">
                           <MapPin size={11} color={COLORS.mutedForeground} />
                           <Text
-                            className="ml-1 text-[11px] text-muted-foreground"
+                            className="ml-1 text-xs text-muted-foreground"
                             numberOfLines={1}
                           >
                             {s.location}
@@ -747,7 +747,7 @@ export default function ShiftScreen() {
                           />
                           <Text
                             className={cn(
-                              'text-[10px] font-semibold uppercase',
+                              'text-xs font-semibold uppercase',
                               onBreak ? 'text-amber-700' : 'text-primary-700'
                             )}
                           >
@@ -755,7 +755,7 @@ export default function ShiftScreen() {
                           </Text>
                         </View>
                       ) : (
-                        <Text className="mt-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                        <Text className="mt-0.5 text-xs font-semibold uppercase text-muted-foreground">
                           {statusLabel(s)}
                         </Text>
                       )}
@@ -796,7 +796,7 @@ function StatCard({
     <View className="flex-1 rounded-xl border border-border bg-white p-3">
       <View className="mb-1.5 flex-row items-center">{icon}</View>
       <Text className="text-lg font-bold text-foreground">{value}</Text>
-      <Text className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <Text className="mt-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </Text>
     </View>

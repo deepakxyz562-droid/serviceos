@@ -123,13 +123,14 @@ SUPPORTED ACTIONS:
    - description: string
 
 2. wrapup_job:
-   Use when a technician mentions completing/wrapping up a job, logging hardware, parts, materials, or extra labor/overtime:
+   Use when a technician mentions completing or wrapping up a job, logging hardware, parts, materials, or extra labor/overtime, or stating they finished the work:
    Parameters:
    - jobId: string (optional, defaults to active job context if provided)
    - jobNumber: string (optional, e.g. "J-102")
-   - materialsUsed: array of { name: string, quantity: number, unitPrice: number, total: number } (e.g. capacitor, valves, filters, pipe fittings)
-   - extraLabor: array of { description: string, amount: number, durationMinutes: number } (e.g. extra diagnostic time, pipe flushing)
+   - materialsUsed: array of { name: string, quantity: number, unitPrice: number, total: number } (e.g. capacitor, valves, filters, pipe fittings, breakers)
+   - extraLabor: array of { description: string, amount: number, durationMinutes: number } (e.g. extra diagnostic time, pipe flushing, wiring labor)
    - completionNotes: string (professional summary of work performed to record in job completion notes)
+   - readyToComplete: boolean (set to true if technician stated they finished, completed, or are wrapping up/closing the job)
 
 3. create_invoice:
    Parameters:
@@ -239,6 +240,7 @@ OUTPUT RULES:
           materialsUsed: params.materialsUsed,
           extraLabor: params.extraLabor,
           completionNotes: params.completionNotes,
+          readyToComplete: Boolean(params.readyToComplete),
         });
         break;
       }

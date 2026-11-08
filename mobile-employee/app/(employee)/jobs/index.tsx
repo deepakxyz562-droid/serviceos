@@ -17,7 +17,7 @@ import {
   View,
   Text,
   Pressable,
-  FlatList,
+  SectionList,
   TextInput,
   RefreshControl,
   Linking,
@@ -39,16 +39,16 @@ import {
   ShieldAlert,
   ChevronRight,
   Filter,
-  Mic,
   Sparkles,
 } from 'lucide-react-native';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { InlineSpinner } from '@/components/ui/Spinner';
 import { SosModal } from '@/components/safety/SosModal';
-import { VoiceJobModal } from '@/components/ai/VoiceJobModal';
 import { OfflineStatusBar } from '@/components/ui/OfflineStatusBar';
 import { useEmployeeJobs, useLoadMoreJobs } from '@/hooks/use-jobs';
 import { useAuthStore } from '@/stores/auth-store';
@@ -70,11 +70,11 @@ export default function JobsListScreen() {
   const tenantCurrency = useAuthStore((s) => s.tenant?.currency ?? 'USD');
 
   const [activeTab, setActiveTab] = useState<MasterTab>('active');
+  const [filtersVisible, setFiltersVisible] = useState(false);
   const [originFilter, setOriginFilter] = useState<'all' | 'assigned' | 'created'>('all');
   const [subFilter, setSubFilter] = useState<string>('all');
   const [searchInput, setSearchInput] = useState('');
   const [showSosModal, setShowSosModal] = useState(false);
-  const [showVoiceModal, setShowVoiceModal] = useState(false);
 
   const { data, isLoading, isRefetching, refetch, error } = useEmployeeJobs('all');
   const loadMore = useLoadMoreJobs('all');
@@ -171,7 +171,7 @@ export default function JobsListScreen() {
       const service = j.service?.name?.toLowerCase() ?? '';
       return title.includes(q) || name.includes(q) || address.includes(q) || service.includes(q);
     });
-  }, [activeTab, subFilter, searchInput, activeJobsRaw, upcomingJobsRaw, historyJobsRaw]);
+  }, [activeTab, originFilter, subFilter, searchInput, activeJobsRaw, upcomingJobsRaw, historyJobsRaw]);
 
   // Section Grouping for 500+ jobs scalability
   const groupedSections = useMemo<DateGroupedSection[]>(() => {
@@ -192,10 +192,10 @@ export default function JobsListScreen() {
 
       const sections: DateGroupedSection[] = [];
       if (inProgress.length > 0) {
-        sections.push({ title: '⚡ In Progress & On-Site', count: inProgress.length, data: inProgress });
+        sections.push({ title: 'In progress', count: inProgress.length, data: inProgress });
       }
       if (scheduledToday.length > 0) {
-        sections.push({ title: "📅 Today's Queue", count: scheduledToday.length, data: scheduledToday });
+        sections.push({ title: 'Ready to start', count: scheduledToday.length, data: scheduledToday });
       }
       return sections.length > 0 ? sections : [{ title: 'Active Jobs', count: currentTabJobs.length, data: currentTabJobs }];
     }
@@ -299,14 +299,14 @@ export default function JobsListScreen() {
                   {item.isCreatedByMe ? (
                     <View className="bg-purple-100 px-1.5 py-0.5 rounded-full flex-row items-center gap-0.5">
                       <Sparkles size={9} color="#7C3AED" />
-                      <Text className="text-[9px] font-bold text-purple-700">
+                      <Text className="text-xs font-bold text-purple-700">
                         Created by You
                       </Text>
                     </View>
                   ) : (
                     <View className="bg-slate-100 px-1.5 py-0.5 rounded-full flex-row items-center gap-0.5">
                       <Briefcase size={8} color="#64748B" />
-                      <Text className="text-[9px] font-medium text-slate-600">
+                      <Text className="text-xs font-medium text-slate-600">
                         Dispatch
                       </Text>
                     </View>
@@ -322,7 +322,7 @@ export default function JobsListScreen() {
               <View className="flex-row items-center gap-1.5">
                 {item.quotedAmount != null && item.quotedAmount > 0 ? (
                   <View className="rounded-md bg-emerald-50 px-2 py-0.5 border border-emerald-200">
-                    <Text className="text-[11px] font-bold text-emerald-800">
+                    <Text className="text-xs font-bold text-emerald-800">
                       {formatCurrency(item.quotedAmount, tenantCurrency)}
                     </Text>
                   </View>
@@ -335,7 +335,7 @@ export default function JobsListScreen() {
             {item.service?.name ? (
               <View className="mt-1 flex-row items-center">
                 <View className="rounded bg-primary-50 px-1.5 py-0.5">
-                  <Text className="text-[10px] font-bold uppercase tracking-wider text-primary-700">
+                  <Text className="text-xs font-bold uppercase tracking-wider text-primary-700">
                     {item.service.name}
                   </Text>
                 </View>
@@ -381,7 +381,7 @@ export default function JobsListScreen() {
                   className="flex-row items-center rounded-lg bg-slate-100 px-2 py-1 active:bg-slate-200"
                 >
                   <Navigation size={11} color="#475569" />
-                  <Text className="ml-1 text-[11px] font-semibold text-slate-700">Map</Text>
+                  <Text className="ml-1 text-xs font-semibold text-slate-700">Map</Text>
                 </Pressable>
               </View>
             ) : null}
@@ -405,20 +405,6 @@ export default function JobsListScreen() {
 
         {/* Right header actions: Voice Job + SOS */}
         <View className="flex-row items-center gap-2">
-          {/* Voice Job Button */}
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-              setShowVoiceModal(true);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Create Job via AI Voice"
-            className="flex-row items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 border border-emerald-300 shadow-xs active:bg-emerald-100"
-          >
-            <Mic size={14} color="#059669" />
-            <Text className="text-xs font-bold text-emerald-700">Voice Job</Text>
-          </Pressable>
-
           {/* SOS Emergency Button */}
           <Pressable
             onPress={() => {
@@ -427,7 +413,7 @@ export default function JobsListScreen() {
             }}
             accessibilityRole="button"
             accessibilityLabel="Emergency SOS Distress Signal"
-            className="flex-row items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 border border-red-300 shadow-xs active:bg-red-100"
+            className="flex-row items-center gap-1.5 rounded-full bg-red-50 px-3 min-h-[44px] justify-center border border-red-300 shadow-xs active:bg-red-100"
           >
             <ShieldAlert size={16} color="#DC2626" />
             <Text className="text-xs font-black text-red-600 tracking-wider">SOS</Text>
@@ -443,7 +429,7 @@ export default function JobsListScreen() {
             setActiveTab('active');
             setSubFilter('all');
           }}
-          className={`flex-1 items-center justify-center py-2 rounded-xl flex-row gap-1.5 ${
+          className={`flex-1 items-center justify-center min-h-[44px] py-2 rounded-xl flex-row gap-1.5 ${
             activeTab === 'active' ? 'bg-white shadow-xs' : ''
           }`}
         >
@@ -460,7 +446,7 @@ export default function JobsListScreen() {
             }`}
           >
             <Text
-              className={`text-[10px] font-bold ${
+              className={`text-xs font-bold ${
                 activeTab === 'active' ? 'text-primary-800' : 'text-slate-600'
               }`}
             >
@@ -475,7 +461,7 @@ export default function JobsListScreen() {
             setActiveTab('upcoming');
             setSubFilter('all');
           }}
-          className={`flex-1 items-center justify-center py-2 rounded-xl flex-row gap-1.5 ${
+          className={`flex-1 items-center justify-center min-h-[44px] py-2 rounded-xl flex-row gap-1.5 ${
             activeTab === 'upcoming' ? 'bg-white shadow-xs' : ''
           }`}
         >
@@ -492,7 +478,7 @@ export default function JobsListScreen() {
             }`}
           >
             <Text
-              className={`text-[10px] font-bold ${
+              className={`text-xs font-bold ${
                 activeTab === 'upcoming' ? 'text-primary-800' : 'text-slate-600'
               }`}
             >
@@ -507,7 +493,7 @@ export default function JobsListScreen() {
             setActiveTab('history');
             setSubFilter('all');
           }}
-          className={`flex-1 items-center justify-center py-2 rounded-xl flex-row gap-1.5 ${
+          className={`flex-1 items-center justify-center min-h-[44px] py-2 rounded-xl flex-row gap-1.5 ${
             activeTab === 'history' ? 'bg-white shadow-xs' : ''
           }`}
         >
@@ -524,72 +510,13 @@ export default function JobsListScreen() {
             }`}
           >
             <Text
-              className={`text-[10px] font-bold ${
+              className={`text-xs font-bold ${
                 activeTab === 'history' ? 'text-primary-800' : 'text-slate-600'
               }`}
             >
               {historyJobsRaw.length}
             </Text>
           </View>
-        </Pressable>
-      </View>
-
-      {/* Origin Filter Segment: All | From Dispatch | Created by Me */}
-      <View className="flex-row rounded-xl bg-slate-100 p-1 border border-border/50 mb-2.5">
-        <Pressable
-          onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
-            setOriginFilter('all');
-          }}
-          className={`flex-1 items-center justify-center py-1.5 rounded-lg flex-row gap-1 ${
-            originFilter === 'all' ? 'bg-white shadow-xs' : ''
-          }`}
-        >
-          <Text
-            className={`text-xs font-bold ${
-              originFilter === 'all' ? 'text-slate-900' : 'text-slate-500'
-            }`}
-          >
-            All ({data?.length ?? 0})
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
-            setOriginFilter('assigned');
-          }}
-          className={`flex-1 items-center justify-center py-1.5 rounded-lg flex-row gap-1 ${
-            originFilter === 'assigned' ? 'bg-white shadow-xs' : ''
-          }`}
-        >
-          <Briefcase size={11} color={originFilter === 'assigned' ? '#0F172A' : '#64748B'} />
-          <Text
-            className={`text-xs font-bold ${
-              originFilter === 'assigned' ? 'text-slate-900' : 'text-slate-500'
-            }`}
-          >
-            Dispatch ({data?.filter((j) => j.isAssignedToMe !== false && !j.isCreatedByMe).length ?? 0})
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
-            setOriginFilter('created');
-          }}
-          className={`flex-1 items-center justify-center py-1.5 rounded-lg flex-row gap-1 ${
-            originFilter === 'created' ? 'bg-white shadow-xs' : ''
-          }`}
-        >
-          <Sparkles size={11} color={originFilter === 'created' ? '#7C3AED' : '#64748B'} />
-          <Text
-            className={`text-xs font-bold ${
-              originFilter === 'created' ? 'text-purple-700' : 'text-slate-500'
-            }`}
-          >
-            Created ({data?.filter((j) => j.isCreatedByMe).length ?? 0})
-          </Text>
         </Pressable>
       </View>
 
@@ -601,7 +528,7 @@ export default function JobsListScreen() {
           onChangeText={setSearchInput}
           placeholder={
             activeTab === 'history'
-              ? 'Search 500+ history by customer, service...'
+              ? 'Search job history…'
               : 'Search customer, service, address...'
           }
           placeholderTextColor="#9CA3AF"
@@ -616,73 +543,12 @@ export default function JobsListScreen() {
         ) : null}
       </View>
 
-      {/* Sub-filter chips */}
-      {activeTab === 'active' && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row py-1">
-          {[
-            { key: 'all', label: 'All Active' },
-            { key: 'working', label: 'Working' },
-            { key: 'travelling', label: 'Travelling' },
-            { key: 'arrived', label: 'Arrived' },
-            { key: 'assigned', label: 'Assigned' },
-            { key: 'paused', label: 'Paused' },
-          ].map((chip) => {
-            const selected = subFilter === chip.key;
-            return (
-              <Pressable
-                key={chip.key}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setSubFilter(chip.key);
-                }}
-                className={`mr-2 rounded-full px-3 py-1 border ${
-                  selected ? 'bg-primary-600 border-primary-600' : 'bg-white border-border'
-                }`}
-              >
-                <Text
-                  className={`text-xs font-semibold ${
-                    selected ? 'text-white' : 'text-muted-foreground'
-                  }`}
-                >
-                  {chip.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      )}
+      <Pressable onPress={() => setFiltersVisible(true)} accessibilityRole="button" className="min-h-[44px] flex-row items-center gap-2 self-start px-1">
+        <Filter size={18} color={COLORS.primary} />
+        <Text className="text-sm font-semibold text-primary-700">Filters{originFilter !== 'all' || subFilter !== 'all' ? ' · Applied' : ''}</Text>
+        <Text className="text-sm text-muted-foreground">· {currentTabJobs.length} results</Text>
+      </Pressable>
 
-      {activeTab === 'history' && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row py-1">
-          {[
-            { key: 'all', label: 'All History' },
-            { key: 'this_month', label: 'This Month' },
-            { key: 'last_month', label: 'Last Month' },
-          ].map((chip) => {
-            const selected = subFilter === chip.key;
-            return (
-              <Pressable
-                key={chip.key}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setSubFilter(chip.key);
-                }}
-                className={`mr-2 rounded-full px-3 py-1 border ${
-                  selected ? 'bg-primary-600 border-primary-600' : 'bg-white border-border'
-                }`}
-              >
-                <Text
-                  className={`text-xs font-semibold ${
-                    selected ? 'text-white' : 'text-muted-foreground'
-                  }`}
-                >
-                  {chip.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      )}
     </View>
   );
 
@@ -713,9 +579,10 @@ export default function JobsListScreen() {
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
-      <FlatList
-        data={groupedSections}
-        keyExtractor={(sec) => sec.title}
+      <SectionList
+        sections={groupedSections}
+        stickySectionHeadersEnabled={false}
+        keyExtractor={(job) => job.id}
         ListHeaderComponent={renderHeader}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
@@ -727,22 +594,11 @@ export default function JobsListScreen() {
             tintColor={COLORS.primary}
           />
         }
-        renderItem={({ item: section }) => (
-          <View className="mb-4">
-            {/* Section Header */}
-            <View className="mb-2 flex-row items-center justify-between">
-              <Text className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
-                {section.title}
-              </Text>
-              <View className="rounded-full bg-slate-100 px-2 py-0.5">
-                <Text className="text-[10px] font-bold text-slate-600">
-                  {section.count} {section.count === 1 ? 'job' : 'jobs'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Job Cards */}
-            {section.data.map(renderJobCard)}
+        renderItem={({ item }) => renderJobCard(item)}
+        renderSectionHeader={({ section }) => (
+          <View className="mb-3 mt-4 flex-row items-center justify-between">
+            <Text className="text-sm font-semibold text-muted-foreground">{section.title}</Text>
+            <Text className="text-sm text-muted-foreground">{section.count} jobs</Text>
           </View>
         )}
         ListEmptyComponent={
@@ -796,15 +652,149 @@ export default function JobsListScreen() {
         }
       />
 
+      <Modal visible={filtersVisible} onClose={() => setFiltersVisible(false)}>
+        <ScrollView className="px-5 pb-2 pt-3" keyboardShouldPersistTaps="handled">
+          <Text className="mb-5 text-xl font-bold text-foreground">Filter jobs</Text>
+          <Text className="mb-2 text-sm font-semibold text-muted-foreground">Assignment</Text>
+      {/* Origin Filter Segment: All | From Dispatch | Created by Me */}
+      <View className="gap-1 rounded-xl bg-slate-100 p-1 border border-border/50 mb-2.5">
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => {});
+            setOriginFilter('all');
+          }}
+          className={`items-center justify-start px-3 min-h-[48px] py-2 rounded-lg flex-row gap-1 ${
+            originFilter === 'all' ? 'bg-white shadow-xs' : ''
+          }`}
+        >
+          <Text
+            className={`text-sm font-semibold ${
+              originFilter === 'all' ? 'text-slate-900' : 'text-slate-500'
+            }`}
+          >
+            All ({data?.length ?? 0})
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => {});
+            setOriginFilter('assigned');
+          }}
+          className={`items-center justify-start px-3 min-h-[48px] py-2 rounded-lg flex-row gap-1 ${
+            originFilter === 'assigned' ? 'bg-white shadow-xs' : ''
+          }`}
+        >
+          <Briefcase size={11} color={originFilter === 'assigned' ? '#0F172A' : '#64748B'} />
+          <Text
+            className={`text-sm font-semibold ${
+              originFilter === 'assigned' ? 'text-slate-900' : 'text-slate-500'
+            }`}
+          >
+            Dispatch ({data?.filter((j) => j.isAssignedToMe !== false && !j.isCreatedByMe).length ?? 0})
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => {});
+            setOriginFilter('created');
+          }}
+          className={`items-center justify-start px-3 min-h-[48px] py-2 rounded-lg flex-row gap-1 ${
+            originFilter === 'created' ? 'bg-white shadow-xs' : ''
+          }`}
+        >
+          <Sparkles size={11} color={originFilter === 'created' ? '#7C3AED' : '#64748B'} />
+          <Text
+            className={`text-sm font-semibold ${
+              originFilter === 'created' ? 'text-purple-700' : 'text-slate-500'
+            }`}
+          >
+            Created ({data?.filter((j) => j.isCreatedByMe).length ?? 0})
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Sub-filter chips */}
+      {activeTab === 'active' && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row py-1">
+          {[
+            { key: 'all', label: 'All Active' },
+            { key: 'working', label: 'Working' },
+            { key: 'travelling', label: 'Travelling' },
+            { key: 'arrived', label: 'Arrived' },
+            { key: 'assigned', label: 'Assigned' },
+            { key: 'paused', label: 'Paused' },
+          ].map((chip) => {
+            const selected = subFilter === chip.key;
+            return (
+              <Pressable
+                key={chip.key}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setSubFilter(chip.key);
+                }}
+                className={`mr-2 rounded-full min-h-[44px] justify-center px-3 py-2 border ${
+                  selected ? 'bg-primary-600 border-primary-600' : 'bg-white border-border'
+                }`}
+              >
+                <Text
+                  className={`text-xs font-semibold ${
+                    selected ? 'text-white' : 'text-muted-foreground'
+                  }`}
+                >
+                  {chip.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {activeTab === 'history' && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row py-1">
+          {[
+            { key: 'all', label: 'All History' },
+            { key: 'this_month', label: 'This Month' },
+            { key: 'last_month', label: 'Last Month' },
+          ].map((chip) => {
+            const selected = subFilter === chip.key;
+            return (
+              <Pressable
+                key={chip.key}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setSubFilter(chip.key);
+                }}
+                className={`mr-2 rounded-full min-h-[44px] justify-center px-3 py-2 border ${
+                  selected ? 'bg-primary-600 border-primary-600' : 'bg-white border-border'
+                }`}
+              >
+                <Text
+                  className={`text-xs font-semibold ${
+                    selected ? 'text-white' : 'text-muted-foreground'
+                  }`}
+                >
+                  {chip.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+          <View className="mt-5 gap-2">
+            <Button onPress={() => setFiltersVisible(false)} fullWidth>Show {currentTabJobs.length} jobs</Button>
+            <Button variant="ghost" onPress={() => { setOriginFilter('all'); setSubFilter('all'); }}>Reset filters</Button>
+          </View>
+        </ScrollView>
+      </Modal>
+
       <SosModal
         visible={showSosModal}
         onClose={() => setShowSosModal(false)}
       />
 
-      <VoiceJobModal
-        visible={showVoiceModal}
-        onClose={() => setShowVoiceModal(false)}
-      />
+
     </SafeAreaView>
   );
 }

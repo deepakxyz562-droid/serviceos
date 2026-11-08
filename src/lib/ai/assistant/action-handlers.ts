@@ -697,6 +697,7 @@ export async function executeWrapUpJob(
     materialsUsed?: Array<{ name: string; quantity?: number; unitPrice?: number; total?: number }>;
     extraLabor?: Array<{ description: string; amount?: number; durationMinutes?: number }>;
     completionNotes?: string;
+    readyToComplete?: boolean;
   }
 ) {
   const { tenantId, workspaceId } = ctx;
@@ -819,6 +820,7 @@ export async function executeWrapUpJob(
     additionalTotal,
     newQuotedAmount,
     completionNotes: args.completionNotes || '',
+    readyToComplete: Boolean(args.readyToComplete),
     viewUrl: `/jobs/${job.id}`,
   };
 }

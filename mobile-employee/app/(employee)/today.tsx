@@ -45,9 +45,8 @@ import {
   Navigation,
   Phone,
   ShieldCheck,
-  Sparkles,
   ShieldAlert,
-  Mic,
+  Sparkles,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -56,8 +55,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { FieldCopilotModal } from '@/components/ai/FieldCopilotModal';
-import { VoiceJobModal } from '@/components/ai/VoiceJobModal';
 import { SosModal } from '@/components/safety/SosModal';
 import { DailyPrestartModal } from '@/components/safety/DailyPrestartModal';
 import { OnMyWayModal } from '@/components/job/OnMyWayModal';
@@ -169,8 +166,6 @@ export default function TodayScreen() {
   const user = useAuthStore((s) => s.user);
   const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
   const [ownerScope, setOwnerScope] = useState<'my' | 'all'>('my');
-  const [showCopilot, setShowCopilot] = useState(false);
-  const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [showSosModal, setShowSosModal] = useState(false);
   const [onMyWayJob, setOnMyWayJob] = useState<Job | null>(null);
 
@@ -439,7 +434,7 @@ export default function TodayScreen() {
                 {item.isCreatedByMe && (
                   <View className="bg-purple-100 px-1.5 py-0.5 rounded-full flex-row items-center gap-0.5">
                     <Sparkles size={8} color="#7C3AED" />
-                    <Text className="text-[9px] font-bold text-purple-700">
+                    <Text className="text-xs font-bold text-purple-700">
                       Created by You
                     </Text>
                   </View>
@@ -453,9 +448,9 @@ export default function TodayScreen() {
             <StatusBadge status={item.lifecycleState || item.status} />
           </View>
 
-          {item.service ? (
-            <Text className="mt-1.5 text-xs font-medium text-primary-700">
-              {item.service.name}
+          {item.title || item.service ? (
+            <Text className="mt-1.5 text-sm text-muted-foreground">
+              {item.title || item.service?.name}
             </Text>
           ) : null}
 
@@ -522,43 +517,6 @@ export default function TodayScreen() {
               </View>
 
               <View className="flex-row items-center gap-1.5">
-                {/* Pre-Start Safety Checklist Badge */}
-                <Pressable
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    setShowPrestartModal(true);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Daily Pre-Start Safety Checklist"
-                  className={`flex-row items-center gap-1 h-9 px-2.5 rounded-full border shadow-xs ${
-                    prestartDone
-                      ? 'bg-emerald-50 border-emerald-300 active:bg-emerald-100'
-                      : 'bg-amber-50 border-amber-300 active:bg-amber-100'
-                  }`}
-                >
-                  <ShieldCheck size={13} color={prestartDone ? '#059669' : '#D97706'} />
-                  <Text
-                    className={`text-[11px] font-bold ${
-                      prestartDone ? 'text-emerald-800' : 'text-amber-800'
-                    }`}
-                  >
-                    {prestartDone ? 'Safety ✓' : 'Safety !'}
-                  </Text>
-                </Pressable>
-
-                {/* AI Copilot shortcut icon */}
-                <Pressable
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                    setShowCopilot(true);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Field AI Copilot"
-                  className="h-9 w-9 items-center justify-center rounded-full bg-emerald-50 border border-emerald-200 active:bg-emerald-100 shadow-xs"
-                >
-                  <Sparkles size={16} color="#059669" />
-                </Pressable>
-
                 {/* SOS Emergency button */}
                 <Pressable
                   onPress={() => {
@@ -567,7 +525,7 @@ export default function TodayScreen() {
                   }}
                   accessibilityRole="button"
                   accessibilityLabel="Emergency SOS Distress Signal"
-                  className="h-9 w-9 items-center justify-center rounded-full bg-red-50 border border-red-200 active:bg-red-100 shadow-xs"
+                  className="h-11 w-11 items-center justify-center rounded-full bg-red-50 border border-red-200 active:bg-red-100 shadow-xs"
                 >
                   <ShieldAlert size={16} color="#DC2626" />
                 </Pressable>
@@ -578,18 +536,49 @@ export default function TodayScreen() {
                   hitSlop={8}
                   accessibilityRole="button"
                   accessibilityLabel="Notifications"
-                  className="relative h-9 w-9 items-center justify-center rounded-full bg-slate-100 border border-slate-200 active:bg-slate-200"
+                  className="relative h-11 w-11 items-center justify-center rounded-full bg-slate-100 border border-slate-200 active:bg-slate-200"
                 >
                   <Bell size={16} color={COLORS.foreground} />
                   {unread.data ? (
                     <View className="absolute -right-1 -top-1 min-w-[16px] h-[16px] px-0.5 items-center justify-center rounded-full bg-destructive">
-                      <Text className="text-[9px] font-bold text-white">
+                      <Text className="text-xs font-bold text-white">
                         {unread.data > 99 ? '99+' : unread.data}
                       </Text>
                     </View>
                   ) : null}
                 </Pressable>
               </View>
+            </View>
+
+            <View className="mb-4 flex-row items-center justify-between">
+                {/* Pre-Start Safety Checklist Badge */}
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    setShowPrestartModal(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Daily Pre-Start Safety Checklist"
+                  className={`flex-row items-center gap-1 h-11 px-2.5 rounded-full border shadow-xs ${
+                    prestartDone
+                      ? 'bg-emerald-50 border-emerald-300 active:bg-emerald-100'
+                      : 'bg-amber-50 border-amber-300 active:bg-amber-100'
+                  }`}
+                >
+                  <ShieldCheck size={13} color={prestartDone ? '#059669' : '#D97706'} />
+                  <Text
+                    className={`text-xs font-bold ${
+                      prestartDone ? 'text-emerald-800' : 'text-amber-800'
+                    }`}
+                  >
+                    {prestartDone ? 'Safety ✓' : 'Safety !'}
+                  </Text>
+                </Pressable>
+
+              <Pressable onPress={() => router.push('/(employee)/shift')} accessibilityRole="button" className="min-h-[44px] flex-row items-center px-3">
+                <Text className="text-sm font-semibold text-primary-700">Shift & attendance</Text>
+                <ChevronRight size={16} color={COLORS.primary} />
+              </Pressable>
             </View>
 
             {/* Smart Shift & Attendance Action Bar */}
@@ -611,7 +600,7 @@ export default function TodayScreen() {
                       </Text>
                     ) : null}
                   </View>
-                  <Text className="mt-0.5 text-[11px] text-muted-foreground">
+                  <Text className="mt-0.5 text-xs text-muted-foreground">
                     {isClockedIn && shift
                       ? `Started at ${formatTime(shift.startTime)}`
                       : 'Clock in to log hours & start jobs'}
@@ -624,13 +613,13 @@ export default function TodayScreen() {
                       <Pressable
                         onPress={handleReportSick}
                         hitSlop={8}
-                        className="h-8 px-2.5 items-center justify-center rounded-xl bg-slate-100 active:bg-slate-200"
+                        className="h-11 px-2.5 items-center justify-center rounded-xl bg-slate-100 active:bg-slate-200"
                       >
-                        <Text className="text-[11px] font-medium text-slate-600">Sick</Text>
+                        <Text className="text-xs font-medium text-slate-600">Sick</Text>
                       </Pressable>
                       <Pressable
                         onPress={handleClockOut}
-                        className="h-8 px-3 flex-row items-center justify-center gap-1.5 rounded-xl bg-red-600 active:bg-red-700 shadow-xs"
+                        className="h-11 px-3 flex-row items-center justify-center gap-1.5 rounded-xl bg-red-600 active:bg-red-700 shadow-xs"
                       >
                         <LogOut size={13} color="#fff" />
                         <Text className="text-xs font-bold text-white">Clock Out</Text>
@@ -639,7 +628,7 @@ export default function TodayScreen() {
                   ) : (
                     <Pressable
                       onPress={handleClockIn}
-                      className="h-8 px-3.5 flex-row items-center justify-center gap-1.5 rounded-xl bg-emerald-600 active:bg-emerald-700 shadow-xs"
+                      className="h-11 px-3.5 flex-row items-center justify-center gap-1.5 rounded-xl bg-emerald-600 active:bg-emerald-700 shadow-xs"
                     >
                       <LogIn size={13} color="#fff" />
                       <Text className="text-xs font-bold text-white">Clock In</Text>
@@ -647,95 +636,6 @@ export default function TodayScreen() {
                   )}
                 </View>
               </View>
-            </View>
-
-            {/* AI Field Copilot Quick Action Bar */}
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                setShowVoiceModal(true);
-              }}
-              className="mb-3 rounded-2xl border border-emerald-500/30 bg-emerald-50/70 p-3 shadow-xs active:bg-emerald-100/70"
-            >
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center gap-2.5 flex-1 pr-2">
-                  <View className="size-9 rounded-xl bg-emerald-600 items-center justify-center shadow-xs">
-                    <Mic size={18} color="#FFFFFF" />
-                  </View>
-                  <View className="flex-1">
-                    <View className="flex-row items-center gap-1.5">
-                      <Text className="text-xs font-bold text-slate-900">
-                        AI Field Copilot
-                      </Text>
-                      <View className="bg-emerald-200/80 px-1.5 py-0.2 rounded-full">
-                        <Text className="text-[9px] font-extrabold text-emerald-900">
-                          HANDS-FREE
-                        </Text>
-                      </View>
-                    </View>
-                    <Text className="mt-0.5 text-[11px] text-muted-foreground" numberOfLines={1}>
-                      Speak to create a job & self-assign on the spot
-                    </Text>
-                  </View>
-                </View>
-
-                <View className="h-8 px-2.5 rounded-lg bg-emerald-600 flex-row items-center justify-center gap-1">
-                  <Mic size={12} color="#FFFFFF" />
-                  <Text className="text-xs font-bold text-white">Voice Job</Text>
-                </View>
-              </View>
-            </Pressable>
-
-            {/* 7-Day Date Scroller Ribbon (Calendar Navigator) */}
-            <View className="mb-3">
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: 2, gap: 8 }}
-              >
-                {dateStrip.map((item) => {
-                  const isSelected = selectedDateKey === item.dateKey;
-                  const count = jobCountsByDate[item.dateKey] || 0;
-                  return (
-                    <Pressable
-                      key={item.dateKey}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                        setSelectedDateKey(item.dateKey);
-                      }}
-                      className={`min-w-[54px] items-center justify-center rounded-2xl py-2 px-1.5 border transition-all ${
-                        isSelected
-                          ? 'bg-emerald-600 border-emerald-600 shadow-sm'
-                          : 'bg-white border-slate-200'
-                      }`}
-                    >
-                      <Text
-                        className={`text-[10px] font-bold uppercase tracking-wider ${
-                          isSelected ? 'text-emerald-100' : 'text-muted-foreground'
-                        }`}
-                      >
-                        {item.dayAbbr}
-                      </Text>
-                      <Text
-                        className={`text-base font-extrabold mt-0.5 ${
-                          isSelected ? 'text-white' : 'text-slate-900'
-                        }`}
-                      >
-                        {item.dayNum}
-                      </Text>
-                      {count > 0 ? (
-                        <View
-                          className={`mt-1 size-1.5 rounded-full ${
-                            isSelected ? 'bg-white' : 'bg-emerald-600'
-                          }`}
-                        />
-                      ) : (
-                        <View className="mt-1 size-1.5" />
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
             </View>
 
             {/* Owner / Admin Workspace Scope Toggle */}
@@ -781,11 +681,11 @@ export default function TodayScreen() {
 
             {/* "Next Up / Active Job" Hero Card (Housecall Pro Style) */}
             {activeJob ? (
-              <Card className="mb-3 border-2 border-emerald-300 bg-emerald-50/30 p-4 shadow-sm">
+              <Card className="mb-3 border border-emerald-200 bg-white p-5">
                 <View className="mb-2 flex-row items-center justify-between">
                   <View className="flex-row items-center rounded-full bg-emerald-100 px-2.5 py-0.5">
                     <Zap size={12} color="#059669" />
-                    <Text className="ml-1 text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                    <Text className="ml-1 text-xs font-bold uppercase tracking-wider text-emerald-800">
                       {activeJob.lifecycleState === 'working'
                         ? 'In Progress Now'
                         : activeJob.lifecycleState === 'travelling'
@@ -798,13 +698,13 @@ export default function TodayScreen() {
                   <StatusBadge status={activeJob.lifecycleState || activeJob.status} />
                 </View>
 
-                <Text className="text-lg font-extrabold text-foreground" numberOfLines={1}>
-                  {activeJob.customer?.name || activeJob.title}
+                <Text className="text-lg font-bold text-foreground" numberOfLines={2}>
+                  {activeJob.title || activeJob.service?.name || activeJob.customer?.name}
                 </Text>
 
-                {activeJob.service ? (
-                  <Text className="mt-0.5 text-xs font-semibold text-emerald-700">
-                    {activeJob.service.name}
+                {activeJob.customer?.name ? (
+                  <Text className="mt-1 text-sm text-muted-foreground">
+                    {activeJob.customer.name}
                   </Text>
                 ) : null}
 
@@ -918,26 +818,56 @@ export default function TodayScreen() {
               </Card>
             ) : null}
 
-            {/* Consolidated 4-Metric Stats Bar */}
-            <View className="mb-3 flex-row rounded-2xl border border-slate-200 bg-white p-2.5 shadow-xs justify-between">
-              <View className="flex-1 items-center border-r border-slate-100">
-                <Text className="text-base font-extrabold text-slate-900">{todaysJobs.length}</Text>
-                <Text className="text-[10px] font-semibold uppercase text-muted-foreground">Today</Text>
-              </View>
-              <View className="flex-1 items-center border-r border-slate-100">
-                <Text className="text-base font-extrabold text-emerald-600">
-                  {completedToday.length > 0 ? completedToday.length : completedJobs.length}
-                </Text>
-                <Text className="text-[10px] font-semibold uppercase text-muted-foreground">Done</Text>
-              </View>
-              <View className="flex-1 items-center border-r border-slate-100">
-                <Text className="text-base font-extrabold text-amber-600">{pending.length}</Text>
-                <Text className="text-[10px] font-semibold uppercase text-muted-foreground">Pending</Text>
-              </View>
-              <View className="flex-1 items-center">
-                <Text className="text-base font-extrabold text-blue-600">{weekHours.toFixed(1)}h</Text>
-                <Text className="text-[10px] font-semibold uppercase text-muted-foreground">Week</Text>
-              </View>
+            {/* 7-Day Date Scroller Ribbon (Calendar Navigator) */}
+            <View className="mb-3">
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 2, gap: 8 }}
+              >
+                {dateStrip.map((item) => {
+                  const isSelected = selectedDateKey === item.dateKey;
+                  const count = jobCountsByDate[item.dateKey] || 0;
+                  return (
+                    <Pressable
+                      key={item.dateKey}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setSelectedDateKey(item.dateKey);
+                      }}
+                      className={`min-w-[54px] items-center justify-center rounded-2xl py-2 px-1.5 border transition-all ${
+                        isSelected
+                          ? 'bg-emerald-600 border-emerald-600 shadow-sm'
+                          : 'bg-white border-slate-200'
+                      }`}
+                    >
+                      <Text
+                        className={`text-xs font-bold uppercase tracking-wider ${
+                          isSelected ? 'text-emerald-100' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {item.dayAbbr}
+                      </Text>
+                      <Text
+                        className={`text-base font-extrabold mt-0.5 ${
+                          isSelected ? 'text-white' : 'text-slate-900'
+                        }`}
+                      >
+                        {item.dayNum}
+                      </Text>
+                      {count > 0 ? (
+                        <View
+                          className={`mt-1 size-1.5 rounded-full ${
+                            isSelected ? 'bg-white' : 'bg-emerald-600'
+                          }`}
+                        />
+                      ) : (
+                        <View className="mt-1 size-1.5" />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
             </View>
 
             {/* Today's Jobs Section Header */}
@@ -947,7 +877,7 @@ export default function TodayScreen() {
                   Today's Jobs
                 </Text>
                 <View className="rounded-full bg-slate-100 px-2 py-0.5">
-                  <Text className="text-[11px] font-bold text-slate-600">
+                  <Text className="text-xs font-bold text-slate-600">
                     {displayJobs.length}
                   </Text>
                 </View>
@@ -967,9 +897,35 @@ export default function TodayScreen() {
             </View>
           </View>
         }
+        ListFooterComponent={<View className="mt-5">
+            {/* Consolidated 4-Metric Stats Bar */}
+            <View className="mb-3 flex-row rounded-2xl border border-slate-200 bg-white p-2.5 shadow-xs justify-between">
+              <View className="flex-1 items-center border-r border-slate-100">
+                <Text className="text-base font-extrabold text-slate-900">{todaysJobs.length}</Text>
+                <Text className="text-xs font-semibold uppercase text-muted-foreground">Today</Text>
+              </View>
+              <View className="flex-1 items-center border-r border-slate-100">
+                <Text className="text-base font-extrabold text-emerald-600">
+                  {completedToday.length > 0 ? completedToday.length : completedJobs.length}
+                </Text>
+                <Text className="text-xs font-semibold uppercase text-muted-foreground">Done</Text>
+              </View>
+              <View className="flex-1 items-center border-r border-slate-100">
+                <Text className="text-base font-extrabold text-amber-600">{pending.length}</Text>
+                <Text className="text-xs font-semibold uppercase text-muted-foreground">Pending</Text>
+              </View>
+              <View className="flex-1 items-center">
+                <Text className="text-base font-extrabold text-blue-600">{weekHours.toFixed(1)}h</Text>
+                <Text className="text-xs font-semibold uppercase text-muted-foreground">Week</Text>
+              </View>
+            </View>
+
+        </View>}
         ListEmptyComponent={
           isLoading ? (
             <SkeletonList count={3} />
+          ) : todayJobs.isError || allJobs.isError ? (
+            <EmptyState title="Couldn't load your jobs" description="Check your connection and try again." actionLabel="Try again" onAction={() => refreshAll()} />
           ) : completedJobs.length > 0 ? (
             <View className="py-2">
               <View className="items-center rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5">
@@ -1036,10 +992,7 @@ export default function TodayScreen() {
         dateKey={todayDateKey}
       />
 
-      <FieldCopilotModal
-        visible={showCopilot}
-        onClose={() => setShowCopilot(false)}
-      />
+
 
       <SosModal
         visible={showSosModal}
@@ -1048,10 +1001,7 @@ export default function TodayScreen() {
         activeJobAddress={activeJob?.address}
       />
 
-      <VoiceJobModal
-        visible={showVoiceModal}
-        onClose={() => setShowVoiceModal(false)}
-      />
+
 
       {onMyWayJob ? (
         <OnMyWayModal

@@ -59,12 +59,17 @@ export async function POST(
 
     const { id: jobId } = await params;
     const body = await request.json();
-    const { action, latitude, longitude, pin } = body as {
+    const { action, latitude, longitude, pin, completionNotes } = body as {
       action: string;
       latitude?: number;
       longitude?: number;
       pin?: string;
+      completionNotes?: string;
     };
+
+    if (completionNotes !== undefined && (typeof completionNotes !== 'string' || completionNotes.length > 2000)) {
+      return NextResponse.json({ error: 'Completion notes must be text of at most 2000 characters.' }, { status: 400 });
+    }
 
     const validActions = [
       'accept',
@@ -91,6 +96,11 @@ export async function POST(
         { error: 'This job is not assigned to you' },
         { status: 403 },
       );
+    }
+
+    // A retry after a lost response must not repeat completion side effects.
+    if (action === 'complete' && ['completed', 'invoice_generated', 'paid'].includes(job.status)) {
+      return NextResponse.json({ job });
     }
 
     const now = new Date();
@@ -571,6 +581,7 @@ export async function POST(
           where: { id: jobId },
           data: {
             status: 'completed',
+            ...(completionNotes !== undefined ? { completionNotes: completionNotes.trim() || null } : {}),
             actualEndTime: now,
             completedAt: now,
             checkOutLat: typeof latitude === 'number' ? latitude : job.checkOutLat,

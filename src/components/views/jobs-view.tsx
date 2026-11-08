@@ -1489,7 +1489,13 @@ export function JobsView() {
         lineItemsJson: JSON.stringify(jobForm.lineItems),
         estimatedDuration: jobForm.estimatedDuration ? Number(jobForm.estimatedDuration) : undefined,
         quotedAmount: subtotal > 0 ? subtotal : (editingJob?.quotedAmount ? editingJob.quotedAmount : undefined),
-        status: assignee ? 'assigned' : 'pending',
+        status: editingJob
+          ? (editingJob.status === 'pending' && assignee
+              ? 'assigned'
+              : editingJob.status === 'assigned' && !assignee
+                ? 'pending'
+                : undefined)
+          : (assignee ? 'assigned' : 'pending'),
         // ── "#job" Customize / Attach files & photos / Linked checklists / Link to related ──
         customFieldsJson: JSON.stringify(jobForm.customFields),
         attachmentsJson: JSON.stringify(jobForm.attachments),

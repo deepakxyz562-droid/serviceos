@@ -22,6 +22,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { normalizeJob, parseJobArray } from '@/lib/job-presentation';
 import type {
   Job,
   JobPhoto,
@@ -130,7 +131,7 @@ export function useJob(id: string | undefined) {
     queryKey: ['job', id],
     queryFn: async () => {
       const r = await api.get<unknown>(`/api/jobs/${id}`);
-      return unwrap<Job>(r, 'job');
+      return normalizeJob(unwrap<Job>(r, 'job'));
     },
     enabled: !!id,
     staleTime: 1000 * 60 * 2, // 2 minutes
@@ -162,6 +163,7 @@ export function useJobLifecycle() {
       latitude,
       longitude,
       etaMinutes,
+      completionNotes,
     }: {
       id: string;
       action: string;
@@ -173,11 +175,13 @@ export function useJobLifecycle() {
       latitude?: number;
       longitude?: number;
       etaMinutes?: number;
+      completionNotes?: string;
     }) =>
       api.post<{ job?: Job; id?: string; status?: string; lifecycleState?: string }>(
         `/api/employee/jobs/${id}/lifecycle`,
         {
           action,
+          ...(completionNotes !== undefined ? { completionNotes } : {}),
           ...(pin !== undefined ? { pin } : {}),
           ...(latitude !== undefined ? { latitude } : {}),
           ...(longitude !== undefined ? { longitude } : {}),
@@ -274,32 +278,22 @@ export function useDeleteJobPhoto() {
 
 // ── Checklist ───────────────────────────────────────────────────────
 
-export function useJobChecklist(jobId: string | undefined) {
-  return useQuery({
+interface ChecklistRecord { id: string; status: string; itemsJson: string; name?: string }
+function checklistOptions(jobId: string | undefined) {
+  return {
     queryKey: ['job', jobId, 'checklist'],
-    queryFn: async () => {
-      const r = await api.get<unknown>(`/api/jobs/${jobId}/checklist`);
-      // Response shape: { jobChecklist: { itemsJson: "[...]", ... } } | { jobChecklist: null }
-      // The PWA extracts jobChecklist and parses itemsJson — we do the same here.
-      if (r && typeof r === 'object') {
-        const obj = r as Record<string, unknown>;
-        const jc = obj.jobChecklist;
-        if (jc && typeof jc === 'object') {
-          const jcObj = jc as Record<string, unknown>;
-          if (typeof jcObj.itemsJson === 'string') {
-            try {
-              const items = JSON.parse(jcObj.itemsJson);
-              if (Array.isArray(items)) return items as ChecklistItem[];
-            } catch {
-              // itemsJson is malformed — return empty
-            }
-          }
-        }
-      }
-      return [];
+    queryFn: async (): Promise<ChecklistRecord | null> => {
+      const response = await api.get<{ jobChecklist: ChecklistRecord | null }>(`/api/jobs/${jobId}/checklist`);
+      return response.jobChecklist;
     },
     enabled: !!jobId,
-  });
+  };
+}
+export function useJobChecklistRecord(jobId: string | undefined) {
+  return useQuery(checklistOptions(jobId));
+}
+export function useJobChecklist(jobId: string | undefined) {
+  return useQuery({ ...checklistOptions(jobId), select: (record) => parseJobArray<ChecklistItem>(record?.itemsJson) });
 }
 
 export function useToggleChecklistItem() {

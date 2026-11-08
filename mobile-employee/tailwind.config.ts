@@ -9,7 +9,7 @@ const config: Config = {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#10B981',
+          DEFAULT: '#047857',
           foreground: '#FFFFFF',
           50: '#ECFDF5',
           100: '#D1FAE5',
@@ -26,17 +26,17 @@ const config: Config = {
           DEFAULT: '#F59E0B',
           foreground: '#FFFFFF',
         },
-        background: '#FFFFFF',
-        foreground: '#1F2937',
+        background: '#F8FAFC',
+        foreground: '#0F172A',
         muted: {
-          DEFAULT: '#F3F4F6',
-          foreground: '#6B7280',
+          DEFAULT: '#F1F5F9',
+          foreground: '#64748B',
         },
         card: {
           DEFAULT: '#FFFFFF',
-          foreground: '#1F2937',
+          foreground: '#0F172A',
         },
-        border: '#E5E7EB',
+        border: '#E2E8F0',
         destructive: {
           DEFAULT: '#EF4444',
           foreground: '#FFFFFF',
@@ -49,11 +49,6 @@ const config: Config = {
           DEFAULT: '#F59E0B',
           foreground: '#FFFFFF',
         },
-      },
-      fontFamily: {
-        sans: ['Poppins', 'System'],
-        bold: ['Poppins-Bold', 'System'],
-        medium: ['Poppins-Medium', 'System'],
       },
       borderRadius: {
         lg: '12',

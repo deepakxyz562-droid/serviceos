@@ -187,6 +187,23 @@ export interface Booking {
 // ── Jobs (Employee) ──────────────────────────────────────────────────
 
 export interface Job {
+  description?: string | null;
+  visitInstructions?: string | null;
+  scheduledTime?: string | null;
+  completionNotes?: string | null;
+  linkedChecklistsJson?: string | null;
+  customFieldsJson?: string | null;
+  attachmentsJson?: string | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  assigneeName?: string | null;
+  assigneePhone?: string | null;
+  assignee?: { id: string; name: string; phone?: string | null } | null;
+  invoices?: Array<{ id: string; number: string; status: string; total: number; currency: string; dueDate?: string | null; paidAt?: string | null }>;
+  paymentStatus?: string | null;
+  amountCollected?: number | null;
   id: string;
   status: string;
   lifecycleState?: string | null;

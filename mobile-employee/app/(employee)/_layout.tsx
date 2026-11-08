@@ -1,6 +1,6 @@
 /**
  * Employee Tab Layout — 5 bottom tabs matching the PWA employee portal.
- * Today | Jobs | Schedule | Shift | Profile
+ * Today | Jobs | Voice action | Schedule | Profile
  *
  * IMPORTANT (fix): headerShown is now `false` for ALL tab screens. Each
  * screen renders its own in-page title at the top edge (with safe-area
@@ -15,9 +15,10 @@
  *   2. The broken back button — tabs have no "back"; Stacks do.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Tabs } from 'expo-router';
-import { AppState, AppStateStatus } from 'react-native';
-import { Home, Briefcase, CalendarDays, Clock, User } from 'lucide-react-native';
+import { Tabs, usePathname } from 'expo-router';
+import { AppState, AppStateStatus, Pressable, View, Text } from 'react-native';
+import { VoiceJobModal } from '@/components/ai/VoiceJobModal';
+import { Home, Briefcase, CalendarDays, Mic, User } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/stores/auth-store';
 import { API_BASE_URL, COLORS } from '@/lib/constants';
@@ -28,6 +29,11 @@ import { useLiveTracking } from '@/hooks/use-live-tracking';
 
 export default function EmployeeLayout() {
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
+  const [voiceVisible, setVoiceVisible] = useState(false);
+  const focusedWorkflow = /\/(completion|signature)$/.test(pathname);
+
+  useEffect(() => { setVoiceVisible(false); }, [pathname]);
   const employeeId = useAuthStore((s) => s.user?.employeeId ?? null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -122,19 +128,22 @@ export default function EmployeeLayout() {
   }, [employeeId]);
 
   return (
+    <>
     <Tabs
+      initialRouteName="today"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarInactiveTintColor: COLORS.mutedForeground,
         tabBarStyle: {
           backgroundColor: '#fff',
           borderTopColor: '#E5E7EB',
-          paddingTop: 4,
-          height: 56 + insets.bottom,
-          paddingBottom: insets.bottom,
+          paddingTop: 8,
+          height: 68 + Math.max(insets.bottom, 8),
+          paddingBottom: Math.max(insets.bottom, 8),
+          display: focusedWorkflow ? 'none' : 'flex',
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '500' },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
       }}
     >
       <Tabs.Screen
@@ -154,19 +163,32 @@ export default function EmployeeLayout() {
         }}
       />
       <Tabs.Screen
+        name="voice"
+        listeners={{ tabPress: (event) => { event.preventDefault(); setVoiceVisible(true); } }}
+        options={{
+          title: 'Voice',
+          tabBarButton: () => (
+            <Pressable
+              onPress={() => setVoiceVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Open Voice AI assistant"
+              accessibilityHint="Opens a sheet to dictate or type a job command"
+              style={({ pressed }) => ({ flex: 1, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.75 : 1 })}
+            >
+              <View style={{ width: 52, height: 52, marginTop: -20, borderRadius: 26, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: '#fff' }}>
+                <Mic size={24} color="#fff" />
+              </View>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginTop: 2 }}>Voice</Text>
+            </Pressable>
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="schedule"
         options={{
           title: 'Schedule',
           tabBarLabel: 'Schedule',
           tabBarIcon: ({ color }) => <CalendarDays size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="shift"
-        options={{
-          title: 'Shift',
-          tabBarLabel: 'Shift',
-          tabBarIcon: ({ color }) => <Clock size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -188,10 +210,13 @@ export default function EmployeeLayout() {
           _layout.tsx (nested Stack). If they are NOT explicitly declared
           here with href:null, Expo Router auto-discovers them and shows
           them as extra tabs in the bottom bar. */}
+      <Tabs.Screen name="shift" options={{ href: null }} />
       <Tabs.Screen name="inbox" options={{ href: null }} />
       <Tabs.Screen name="inventory" options={{ href: null }} />
       <Tabs.Screen name="notifications" options={{ href: null }} />
       <Tabs.Screen name="performance" options={{ href: null }} />
     </Tabs>
+    <VoiceJobModal visible={voiceVisible && !focusedWorkflow} onClose={() => setVoiceVisible(false)} />
+    </>
   );
 }

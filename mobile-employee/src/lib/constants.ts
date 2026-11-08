@@ -72,11 +72,11 @@ export const API_PATHS = {
 } as const;
 
 export const COLORS = {
-  primary: '#10B981',
+  primary: '#047857',
   primaryDark: '#059669',
   primaryLight: '#ECFDF5',
   accent: '#F59E0B',
-  background: '#FFFFFF',
+  background: '#F8FAFC',
   foreground: '#0F172A',
   muted: '#F8FAFC',
   mutedForeground: '#64748B',

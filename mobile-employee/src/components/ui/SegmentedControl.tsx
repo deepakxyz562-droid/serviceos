@@ -19,7 +19,7 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   className,
-  activeColor = '#10B981',
+  activeColor = '#047857',
 }: SegmentedControlProps<T>) {
   return (
     <View
@@ -30,9 +30,12 @@ export function SegmentedControl<T extends string>({
         return (
           <Pressable
             key={opt.value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
             onPress={() => onChange(opt.value)}
             style={{
               flex: 1,
+              minHeight: 44,
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',

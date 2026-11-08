@@ -1,12 +1,13 @@
 /**
  * VoiceJobModal (Native Employee Mobile App)
  * ==========================================
- * Hands-free AI Mobile Field Copilot for field technicians.
+ * Hands-Free AI Mobile Copilot for field employees.
  *
- * Allows technicians to speak or dictate job details in the field,
- * auto-assigning to themselves with provenance stamped in metadata.
+ * Employees speak into the microphone; words are auto-typed in real time
+ * without any manual keyboard entry. The AI Assistant then parses the
+ * intent and automatically assigns the job to the logged-in technician.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -22,6 +23,7 @@ import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Mic,
+  MicOff,
   Sparkles,
   X,
   CheckCircle2,
@@ -30,12 +32,14 @@ import {
   User,
   ArrowRight,
   RotateCcw,
+  Volume2,
 } from 'lucide-react-native';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { useAuthStore } from '@/stores/auth-store';
 import { api } from '@/lib/api';
 import { COLORS } from '@/lib/constants';
+import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 
 interface VoiceJobModalProps {
   visible: boolean;
@@ -58,24 +62,61 @@ export function VoiceJobModal({
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
 
-  const [transcript, setTranscript] = useState('');
+  const [reviewing, setReviewing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resultJob, setResultJob] = useState<any>(null);
 
+  const {
+    isListening,
+    transcript,
+    setTranscript,
+    isSupported,
+    startListening,
+    stopListening,
+    toggleListening,
+    resetTranscript,
+  } = useSpeechRecognition();
+
+  // Auto-start listening when modal opens to provide true hands-free assistant experience
+  useEffect(() => {
+    if (visible && isSupported && !resultJob) {
+      const timer = setTimeout(() => {
+        startListening();
+      }, 350);
+      return () => clearTimeout(timer);
+    } else {
+      stopListening();
+    }
+  }, [visible, isSupported, resultJob, startListening, stopListening]);
+
   const handleClose = () => {
-    setTranscript('');
+    if (loading) return;
+    stopListening();
+    setReviewing(false);
+    resetTranscript();
     setResultJob(null);
     setLoading(false);
     onClose();
   };
 
+  const handleToggleMic = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
   const handleExecute = async (commandToRun?: string) => {
+    if (loading) return;
     const text = (commandToRun || transcript).trim();
     if (!text) {
       show('Please speak or type a command first.', 'warning');
       return;
     }
 
+    stopListening();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setLoading(true);
     setResultJob(null);
@@ -126,27 +167,27 @@ export function VoiceJobModal({
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 }}
         >
           {/* Header */}
           <View className="flex-row items-center justify-between mb-3">
-            <View className="flex-row items-center gap-2">
+            <View className="flex-1 flex-row items-center gap-2">
               <View className="size-9 rounded-xl bg-emerald-600 items-center justify-center shadow-xs">
-                <Mic size={18} color="#FFFFFF" />
+                <Sparkles size={18} color="#FFFFFF" />
               </View>
-              <View>
-                <View className="flex-row items-center gap-1.5">
+              <View className="flex-1">
+                <View className="flex-row flex-wrap items-center gap-1.5">
                   <Text className="text-base font-black text-foreground">
-                    Voice Field Copilot
+                    AI Employee Assistant
                   </Text>
-                  <View className="bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded-full">
+                  <View className="bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-full flex-row items-center gap-1">
                     <Text className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
-                      AI Powered
+                      HANDS-FREE
                     </Text>
                   </View>
                 </View>
                 <Text className="text-xs text-muted-foreground">
-                  Speak to schedule & self-assign jobs in seconds
+                  Speak into the mic — automatically types as you speak
                 </Text>
               </View>
             </View>
@@ -154,7 +195,10 @@ export function VoiceJobModal({
             <Pressable
               onPress={handleClose}
               hitSlop={8}
-              className="size-8 rounded-full bg-muted items-center justify-center active:bg-muted/80"
+              accessibilityRole="button"
+              accessibilityLabel="Close voice assistant"
+              disabled={loading}
+              className="size-10 rounded-full bg-muted items-center justify-center active:bg-muted/80"
             >
               <X size={16} color={COLORS.mutedForeground} />
             </Pressable>
@@ -170,15 +214,15 @@ export function VoiceJobModal({
                 </Text>
               </View>
 
-              <View className="bg-background/90 p-3 rounded-xl border border-border/60">
+              <View className="bg-background/90 p-3.5 rounded-xl border border-border/60">
                 <View className="flex-row items-center justify-between mb-1.5">
                   <Text className="text-xs font-mono font-bold text-emerald-700">
                     #{resultJob.jobNumber || 'NEW'}
                   </Text>
                   <View className="bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 rounded-full flex-row items-center gap-1">
                     <Sparkles size={10} color="#7C3AED" />
-                    <Text className="text-[10px] font-bold text-purple-700 dark:text-purple-300">
-                      Created by You
+                    <Text className="text-xs font-bold text-purple-700 dark:text-purple-300">
+                      Auto-Assigned to You
                     </Text>
                   </View>
                 </View>
@@ -223,7 +267,7 @@ export function VoiceJobModal({
                       router.push(`/(employee)/jobs/${resultJob.id}`);
                     }
                   }}
-                  className="flex-1 h-10 rounded-xl bg-emerald-600 flex-row items-center justify-center gap-1.5 active:bg-emerald-700"
+                  className="flex-1 h-11 rounded-xl bg-emerald-600 flex-row items-center justify-center gap-1.5 active:bg-emerald-700"
                 >
                   <Text className="text-xs font-bold text-white">View Job</Text>
                   <ArrowRight size={14} color="#FFFFFF" />
@@ -232,9 +276,10 @@ export function VoiceJobModal({
                 <Pressable
                   onPress={() => {
                     setResultJob(null);
-                    setTranscript('');
+                    setReviewing(false);
+                    resetTranscript();
                   }}
-                  className="h-10 px-3 rounded-xl bg-background border border-border flex-row items-center justify-center gap-1 active:bg-muted"
+                  className="h-11 px-3.5 rounded-xl bg-background border border-border flex-row items-center justify-center gap-1 active:bg-muted"
                 >
                   <RotateCcw size={13} color={COLORS.foreground} />
                   <Text className="text-xs font-semibold text-foreground">New Command</Text>
@@ -243,63 +288,139 @@ export function VoiceJobModal({
             </View>
           ) : (
             <>
-              {/* Spoken Transcript Input */}
-              <View className="relative mb-3">
-                <TextInput
-                  value={transcript}
-                  onChangeText={setTranscript}
-                  placeholder='Tap mic on keyboard or type: "AC deep cleaning for Rahul tomorrow at 3 PM, assign to me"'
-                  placeholderTextColor={COLORS.mutedForeground}
-                  multiline
-                  numberOfLines={3}
-                  className="w-full min-h-[90px] p-3 text-sm text-foreground bg-muted/40 rounded-xl border border-border/80 text-left"
-                  style={{ textAlignVertical: 'top' }}
-                />
-                {transcript.length > 0 && (
+              {/* Central Pulsating Microphone Button */}
+              <View className="items-center justify-center py-4">
+                <View className="relative items-center justify-center">
+                  {isListening && (
+                    <View className="absolute size-24 rounded-full bg-red-500/20" />
+                  )}
                   <Pressable
-                    onPress={() => setTranscript('')}
-                    hitSlop={6}
-                    className="absolute top-2 right-2 size-6 rounded-full bg-slate-200 dark:bg-slate-700 items-center justify-center"
+                    onPress={handleToggleMic}
+                    disabled={loading}
+                    className={`size-20 rounded-full items-center justify-center shadow-lg active:scale-95 ${
+                      isListening
+                        ? 'bg-red-500 border-4 border-red-300'
+                        : 'bg-emerald-600 border-4 border-emerald-400/30'
+                    }`}
                   >
-                    <X size={12} color="#475569" />
+                    {isListening ? (
+                      <Mic size={32} color="#FFFFFF" />
+                    ) : (
+                      <MicOff size={28} color="#FFFFFF" />
+                    )}
                   </Pressable>
-                )}
-              </View>
+                </View>
 
-              {/* Technician Self-Assign Badge */}
-              <View className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 mb-3">
-                <Sparkles size={12} color="#059669" />
-                <Text className="text-[11px] text-emerald-800 dark:text-emerald-300 font-medium">
-                  Logged as <Text className="font-bold">{user?.name || 'Technician'}</Text> · Saying &quot;for me&quot; or omitting assignee auto-assigns to you.
-                </Text>
-              </View>
-
-              {/* Presets Chips */}
-              <View className="mb-4">
-                <Text className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-                  Or Try An Example
-                </Text>
-                <View className="gap-1.5">
-                  {VOICE_PRESETS.map((preset, idx) => (
-                    <Pressable
-                      key={idx}
-                      onPress={() => {
-                        Haptics.selectionAsync().catch(() => {});
-                        setTranscript(preset.slice(2)); // strip leading emoji
-                      }}
-                      className="p-2 rounded-lg bg-muted/60 border border-border/40 active:bg-muted"
-                    >
-                      <Text className="text-xs text-foreground font-medium">
-                        {preset}
+                {/* Status Indicator text */}
+                <View className="flex-row items-center gap-1.5 mt-3">
+                  {isListening ? (
+                    <>
+                      <View className="size-2.5 rounded-full bg-red-500" />
+                      <Text className="text-xs font-bold text-red-600 dark:text-red-400">
+                        Listening... Speak now (auto-typing live)
                       </Text>
-                    </Pressable>
-                  ))}
+                    </>
+                  ) : (
+                    <Text className="text-xs font-medium text-muted-foreground">
+                      Tap mic to start auto-typing voice command
+                    </Text>
+                  )}
                 </View>
               </View>
 
+              {/* Real-time Auto-typed Transcript Box */}
+              <View className="relative mb-3">
+                <View className="flex-row items-center justify-between mb-1 px-1">
+                  <Text className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Auto-Typed Voice Command
+                  </Text>
+                  {transcript.length > 0 && !loading && (
+                    <Pressable
+                      onPress={resetTranscript}
+                      hitSlop={6}
+                      className="flex-row items-center gap-1"
+                    >
+                      <X size={12} color={COLORS.mutedForeground} />
+                      <Text className="text-[11px] text-muted-foreground">Clear</Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                <TextInput
+                  accessibilityLabel="Auto-typed job command"
+                  editable={!loading && !reviewing}
+                  value={transcript}
+                  onChangeText={setTranscript}
+                  placeholder='Speak now — e.g. "AC repair for Rahul tomorrow at 3 PM, assign to me"'
+                  placeholderTextColor={COLORS.mutedForeground}
+                  multiline
+                  numberOfLines={3}
+                  className={`w-full min-h-[90px] p-3 text-sm text-foreground rounded-xl border text-left ${
+                    isListening
+                      ? 'bg-red-500/5 border-red-400'
+                      : 'bg-muted/40 border-border/80'
+                  }`}
+                  style={{ textAlignVertical: 'top' }}
+                />
+              </View>
+
+              {/* Technician Self-Assign Badge */}
+              <View className="flex-row items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 mb-3">
+                <Sparkles size={13} color="#059669" />
+                <Text className="text-xs text-emerald-800 dark:text-emerald-300 font-medium">
+                  Logged as <Text className="font-bold">{user?.name || 'Technician'}</Text> · Any job you dictate will automatically be assigned to you.
+                </Text>
+              </View>
+
+              {/* Example Prompts */}
+              {!reviewing && (
+                <View className="mb-4">
+                  <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                    Or Tap An Example Prompt
+                  </Text>
+                  <View className="gap-1.5">
+                    {VOICE_PRESETS.map((preset, idx) => (
+                      <Pressable
+                        key={idx}
+                        disabled={loading || reviewing}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setTranscript(preset.replace(/^\S+\s+/, ''));
+                        }}
+                        className="p-2.5 rounded-lg bg-muted/60 border border-border/40 active:bg-emerald-50 active:border-emerald-300"
+                      >
+                        <Text className="text-xs text-foreground font-medium">
+                          {preset}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Review Confirmation Prompt */}
+              {reviewing && (
+                <View className="mb-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 p-3.5 border border-amber-200 dark:border-amber-900/50">
+                  <Text className="text-sm font-bold text-foreground">Confirm your voice command</Text>
+                  <Text className="mt-1 text-xs text-muted-foreground">
+                    &quot;{transcript}&quot;
+                  </Text>
+                  <Pressable
+                    disabled={loading}
+                    onPress={() => setReviewing(false)}
+                    accessibilityRole="button"
+                    className="mt-2"
+                  >
+                    <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                      Edit or re-speak
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+
               {/* Submit Button */}
               <Pressable
-                onPress={() => handleExecute()}
+                onPress={() => (reviewing ? void handleExecute() : setReviewing(true))}
                 disabled={loading || !transcript.trim()}
                 className={`h-12 rounded-xl flex-row items-center justify-center gap-2 shadow-xs mb-2 ${
                   !transcript.trim() || loading
@@ -311,14 +432,14 @@ export function VoiceJobModal({
                   <>
                     <ActivityIndicator size="small" color="#FFFFFF" />
                     <Text className="text-sm font-bold text-white">
-                      Processing AI Command...
+                      AI is creating & assigning job...
                     </Text>
                   </>
                 ) : (
                   <>
-                    <Mic size={16} color="#FFFFFF" />
+                    <Sparkles size={16} color="#FFFFFF" />
                     <Text className="text-sm font-bold text-white">
-                      Create Job with AI
+                      {reviewing ? 'Confirm & Create Job' : 'Send to AI Assistant'}
                     </Text>
                   </>
                 )}

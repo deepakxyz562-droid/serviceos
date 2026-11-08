@@ -380,6 +380,14 @@ export default function ProfileScreen() {
           </View>
         </Card>
 
+        <Pressable onPress={() => router.push('/(employee)/shift')} accessibilityRole="button" className="mb-4 flex-row items-center rounded-2xl border border-border bg-white p-4">
+          <View className="flex-1">
+            <Text className="text-base font-semibold text-foreground">Shift & attendance</Text>
+            <Text className="mt-1 text-sm text-muted-foreground">Manage your shift and view logged hours</Text>
+          </View>
+          <ChevronRight size={20} color={COLORS.mutedForeground} />
+        </Pressable>
+
         {/* Emergency contact card */}
         <Card className="mb-4">
           <View className="flex-row items-center">
@@ -571,7 +579,7 @@ export default function ProfileScreen() {
         <Text className="mt-6 text-center text-xs text-muted-foreground">
           {BRAND.name} v{APP_VERSION}
         </Text>
-        <Text className="mt-1 text-center text-[10px] text-muted-foreground">
+        <Text className="mt-1 text-center text-xs text-muted-foreground">
           {BRAND.tagline}
         </Text>
       </ScrollView>

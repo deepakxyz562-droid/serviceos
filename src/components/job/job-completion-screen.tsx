@@ -14,6 +14,7 @@ import {
   MicOff,
   Sparkles,
   Plus,
+  Minus,
   Trash2,
   Wrench,
   Clock,
@@ -46,6 +47,15 @@ interface WrapUpLineItem {
   amount: number;
   type?: 'material' | 'labor' | 'service';
 }
+
+const TRADE_PRESETS: Array<{ name: string; rate: number; type: 'material' | 'labor' }> = [
+  { name: '45uF Capacitor', rate: 45, type: 'material' },
+  { name: 'Extra Labor 30m', rate: 50, type: 'labor' },
+  { name: 'Pipe Fitting 3/4"', rate: 25, type: 'material' },
+  { name: 'Refrigerant 2 lbs', rate: 85, type: 'material' },
+  { name: 'Flush Drain Line', rate: 40, type: 'labor' },
+  { name: 'Service Call Fee', rate: 75, type: 'labor' },
+];
 
 interface JobCompletionScreenProps {
   open: boolean;
@@ -268,13 +278,46 @@ export function JobCompletionScreen({
   const handleAddManualItem = () => {
     const newItem: WrapUpLineItem = {
       id: `item_${Date.now()}`,
-      name: 'Extra Material / Part',
+      name: '',
       quantity: 1,
       rate: 0,
       amount: 0,
       type: 'material',
     };
     setLineItems((prev) => [...prev, newItem]);
+  };
+
+  const handleAddPresetItem = (name: string, rate: number, type: 'material' | 'labor') => {
+    const newItem: WrapUpLineItem = {
+      id: `${type === 'labor' ? 'lab' : 'mat'}_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      name,
+      quantity: 1,
+      rate,
+      amount: rate,
+      type,
+    };
+    setLineItems((prev) => [...prev, newItem]);
+    toast.success(`Added ${name} ($${rate})`);
+  };
+
+  const handleIncrementQty = (index: number) => {
+    const current = lineItems[index];
+    const qty = (Number(current?.quantity) || 1) + 1;
+    handleUpdateItem(index, { quantity: qty });
+  };
+
+  const handleDecrementQty = (index: number) => {
+    const current = lineItems[index];
+    const currentQty = Number(current?.quantity) || 1;
+    if (currentQty > 1) {
+      handleUpdateItem(index, { quantity: currentQty - 1 });
+    }
+  };
+
+  const handleToggleItemType = (index: number) => {
+    const current = lineItems[index];
+    const newType = current?.type === 'labor' ? 'material' : 'labor';
+    handleUpdateItem(index, { type: newType });
   };
 
   const handleUpdateItem = (index: number, updates: Partial<WrapUpLineItem>) => {
@@ -516,6 +559,49 @@ export function JobCompletionScreen({
             }
           `}</style>
           <div className="px-6 py-5 space-y-6">
+            {/* AI Voice Wrap-Up Hero Card */}
+            <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-600 text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="size-4 text-emerald-200" />
+                  <span className="text-[11px] font-black tracking-wider uppercase text-emerald-100">
+                    AI Field Copilot · One-Tap Wrap-Up
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-white">
+                  Speak to log parts, extra work & wrap up
+                </h3>
+                <p className="text-xs text-emerald-100/90">
+                  Say: "Used 45uF capacitor $45 and 30m extra labor $50, completed and tested"
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                variant={isListening ? 'destructive' : 'secondary'}
+                onClick={toggleListening}
+                disabled={isProcessingVoice}
+                className="h-10 px-4 text-xs font-bold gap-2 shrink-0 bg-white text-emerald-900 hover:bg-emerald-50 shadow-sm"
+              >
+                {isProcessingVoice ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin text-emerald-700" />
+                    <span>AI Processing...</span>
+                  </>
+                ) : isListening ? (
+                  <>
+                    <MicOff className="size-4 animate-pulse text-red-600" />
+                    <span>Stop & Log Work</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="size-4 text-emerald-700" />
+                    <span>Voice Wrap-Up</span>
+                  </>
+                )}
+              </Button>
+            </div>
+
             {/* Before Photos */}
             <section className="space-y-2">
               <div className="flex items-center gap-2">
@@ -738,6 +824,27 @@ export function JobCompletionScreen({
                 </div>
               </div>
 
+              {/* Quick Add Presets Ribbon */}
+              <div className="space-y-1.5 pt-1">
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                  Quick Add Presets (1-Click):
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {TRADE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      onClick={() => handleAddPresetItem(preset.name, preset.rate, preset.type)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border border-border/80 bg-background hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:border-emerald-300 transition-colors shadow-2xs"
+                    >
+                      <Plus className="size-3 text-muted-foreground" />
+                      <span>{preset.name}</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">${preset.rate}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Live Listening Banner */}
               {isListening && (
                 <div className="p-3 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 flex items-center justify-between gap-2 animate-in fade-in">
@@ -765,24 +872,31 @@ export function JobCompletionScreen({
                   <div className="rounded-lg border border-border/80 bg-background overflow-hidden">
                     <div className="grid grid-cols-12 gap-2 p-2 bg-muted/40 text-[11px] font-medium text-muted-foreground uppercase border-b border-border/60">
                       <span className="col-span-5 sm:col-span-6">Item / Work</span>
-                      <span className="col-span-2 text-center">Qty</span>
+                      <span className="col-span-3 sm:col-span-2 text-center">Qty</span>
                       <span className="col-span-2 text-right">Price</span>
-                      <span className="col-span-2 text-right">Total</span>
+                      <span className="col-span-2 sm:col-span-1 text-right">Total</span>
                       <span className="col-span-1 text-center"></span>
                     </div>
                     <div className="divide-y divide-border/40">
                       {lineItems.map((item, idx) => (
                         <div key={item.id || idx} className="grid grid-cols-12 gap-2 p-2 items-center text-xs">
                           <div className="col-span-5 sm:col-span-6 flex items-center gap-1.5 min-w-0">
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                'text-[9px] px-1 py-0 h-4 shrink-0',
-                                item.type === 'labor' ? 'border-blue-400 text-blue-600' : 'border-amber-400 text-amber-600'
-                              )}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleItemType(idx)}
+                              title="Click to toggle between Part and Labor"
+                              className="shrink-0"
                             >
-                              {item.type === 'labor' ? 'Labor' : 'Part'}
-                            </Badge>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'text-[9px] px-1 py-0 h-4 cursor-pointer hover:opacity-80 transition-opacity',
+                                  item.type === 'labor' ? 'border-blue-400 text-blue-600 bg-blue-50/50' : 'border-amber-400 text-amber-600 bg-amber-50/50'
+                                )}
+                              >
+                                {item.type === 'labor' ? 'Labor' : 'Part'}
+                              </Badge>
+                            </button>
                             <Input
                               value={item.name}
                               onChange={(e) => handleUpdateItem(idx, { name: e.target.value })}
@@ -790,14 +904,22 @@ export function JobCompletionScreen({
                               placeholder="Part name or work"
                             />
                           </div>
-                          <div className="col-span-2">
-                            <Input
-                              type="number"
-                              min={1}
-                              value={item.quantity}
-                              onChange={(e) => handleUpdateItem(idx, { quantity: Number(e.target.value) || 1 })}
-                              className="h-7 text-xs px-1.5 text-center"
-                            />
+                          <div className="col-span-3 sm:col-span-2 flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleDecrementQty(idx)}
+                              className="size-6 flex items-center justify-center rounded bg-muted hover:bg-muted/80 text-foreground transition-colors"
+                            >
+                              <Minus className="size-3" />
+                            </button>
+                            <span className="min-w-[20px] text-center font-bold text-xs">{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleIncrementQty(idx)}
+                              className="size-6 flex items-center justify-center rounded bg-muted hover:bg-muted/80 text-foreground transition-colors"
+                            >
+                              <Plus className="size-3" />
+                            </button>
                           </div>
                           <div className="col-span-2">
                             <Input
@@ -808,7 +930,7 @@ export function JobCompletionScreen({
                               className="h-7 text-xs px-1.5 text-right font-mono"
                             />
                           </div>
-                          <div className="col-span-2 text-right font-semibold font-mono text-emerald-600 dark:text-emerald-400">
+                          <div className="col-span-2 sm:col-span-1 text-right font-semibold font-mono text-emerald-600 dark:text-emerald-400">
                             ${((item.quantity || 1) * (item.rate || 0)).toFixed(2)}
                           </div>
                           <div className="col-span-1 flex justify-center">
