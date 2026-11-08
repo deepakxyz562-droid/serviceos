@@ -138,6 +138,7 @@ export async function ensureAdaptersLoaded(): Promise<void> {
       ['linkedin', import('@/lib/social/adapters/linkedin').catch(() => ({}))],
       ['pinterest', import('@/lib/social/adapters/pinterest').catch(() => ({}))],
       ['twitter', import('@/lib/social/adapters/twitter').catch(() => ({}))],
+      ['threads', import('@/lib/social/adapters/threads').catch(() => ({}))],
     ];
 
     const results = await Promise.allSettled(platformImports.map(([, p]) => p));

@@ -38,7 +38,8 @@ export type SocialPlatform =
   | 'googlebusiness'
   | 'linkedin'
   | 'pinterest'
-  | 'twitter';
+  | 'twitter'
+  | 'threads';
 
 // ─── Per-target publish lifecycle ──────────────────────────────────────────
 

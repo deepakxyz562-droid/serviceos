@@ -11,7 +11,15 @@ export type PublishingTarget = {
   socialAccountId: string;
 };
 
-export const SUPPORTED_PUBLISHING_PLATFORMS = ['googlebusiness', 'facebook', 'instagram'] as const;
+export const SUPPORTED_PUBLISHING_PLATFORMS = [
+  'googlebusiness',
+  'facebook',
+  'instagram',
+  'linkedin',
+  'pinterest',
+  'twitter',
+  'threads',
+] as const;
 
 /**
  * Filter accounts down to active, user-selected targets.

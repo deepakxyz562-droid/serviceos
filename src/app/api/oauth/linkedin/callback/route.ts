@@ -153,47 +153,75 @@ export async function GET(request: NextRequest) {
   );
   const scopes = tokenResponse.scope || meta.scopes;
 
-  // 5. Fetch the user's personal profile.
+  // 5. Fetch the user's personal profile (supports modern OpenID Connect & legacy /v2/me).
   interface LinkedinProfile {
     id: string;
     localizedFirstName?: string;
     localizedLastName?: string;
+    name?: string;
+    sub?: string;
+    picture?: string;
   }
-  let profile: LinkedinProfile;
+  let profile: LinkedinProfile = { id: '' };
+
   try {
-    const res = await fetch(
-      'https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName)',
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'X-Restli-Protocol-Version': '2.0.0',
-        },
-      },
-    );
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '<no body>');
-      console.error(
-        '[oauth/linkedin/callback] /v2/me failed:',
-        res.status,
-        errText,
-      );
-      return renderOAuthErrorPage({
-        provider: 'linkedin',
-        message: `Failed to fetch LinkedIn profile (${res.status}).`,
-      });
-    }
-    profile = await res.json() as LinkedinProfile;
-    if (!profile?.id) {
-      return renderOAuthErrorPage({
-        provider: 'linkedin',
-        message: 'LinkedIn profile response missing id.',
-      });
+    // 5a. Try modern OpenID Connect userinfo endpoint (available with 'Sign In with LinkedIn using OpenID Connect')
+    const userInfoRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (userInfoRes.ok) {
+      const data = (await userInfoRes.json()) as {
+        sub?: string;
+        name?: string;
+        given_name?: string;
+        family_name?: string;
+        picture?: string;
+      };
+      if (data.sub) {
+        profile = {
+          id: data.sub,
+          localizedFirstName: data.given_name || '',
+          localizedLastName: data.family_name || '',
+          name: data.name || '',
+          picture: data.picture,
+        };
+      }
     }
   } catch (err) {
-    console.error('[oauth/linkedin/callback] /v2/me error:', err);
+    console.warn('[oauth/linkedin/callback] /v2/userinfo attempt failed:', err);
+  }
+
+  // 5b. Fallback to legacy /v2/me if OpenID userinfo did not resolve
+  if (!profile.id) {
+    try {
+      const res = await fetch(
+        'https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName)',
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'X-Restli-Protocol-Version': '2.0.0',
+          },
+        },
+      );
+      if (res.ok) {
+        const legacyData = (await res.json()) as LinkedinProfile;
+        if (legacyData?.id) {
+          profile = {
+            id: legacyData.id,
+            localizedFirstName: legacyData.localizedFirstName || '',
+            localizedLastName: legacyData.localizedLastName || '',
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[oauth/linkedin/callback] /v2/me error:', err);
+    }
+  }
+
+  if (!profile.id) {
     return renderOAuthErrorPage({
       provider: 'linkedin',
-      message: 'Network error fetching LinkedIn profile.',
+      message: 'Failed to retrieve LinkedIn user profile. Please ensure OpenID Connect and Share on LinkedIn are enabled.',
     });
   }
 
@@ -248,7 +276,7 @@ export async function GET(request: NextRequest) {
 
   const firstName = profile.localizedFirstName || '';
   const lastName = profile.localizedLastName || '';
-  const personalName = `${firstName} ${lastName}`.trim() || `LinkedIn user ${profile.id}`;
+  const personalName = profile.name || `${firstName} ${lastName}`.trim() || `LinkedIn user ${profile.id}`;
 
   const encryptedAccess = encryptToken(accessToken);
   const encryptedRefresh = refreshToken ? encryptToken(refreshToken) : null;

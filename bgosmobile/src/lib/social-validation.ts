@@ -28,9 +28,20 @@ export function validateSocialPost(
     if (platforms.includes('instagram') && !mediaUrls.length) {
       return 'Instagram requires an image or video. Add media or remove Instagram.';
     }
+    if (platforms.includes('pinterest') && !mediaUrls.length) {
+      return 'Pinterest requires an image pin. Add media or select poster mode.';
+    }
   }
 
-  const limits: Record<string, number> = { twitter: 280, instagram: 2200, googlebusiness: 1500, linkedin: 3000, facebook: 5000 };
+  const limits: Record<string, number> = {
+    twitter: 280,
+    threads: 500,
+    pinterest: 500,
+    googlebusiness: 1500,
+    instagram: 2200,
+    linkedin: 3000,
+    facebook: 5000,
+  };
   const limit = Math.min(...platforms.map((p) => limits[p] || 5000));
   if (content.length > limit) {
     return `Keep the caption within ${limit} characters for the selected channels.`;

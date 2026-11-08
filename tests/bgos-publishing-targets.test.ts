@@ -34,6 +34,27 @@ describe('BGOS Publishing Targets & Account Selection', () => {
       accountName: 'Old Clinic',
       isActive: false,
     },
+    {
+      id: 'acc_li_1',
+      platform: 'linkedin',
+      accountName: 'Downtown Dental LinkedIn',
+      accountId: 'urn:li:organization:123',
+      isActive: true,
+    },
+    {
+      id: 'acc_pin_1',
+      platform: 'pinterest',
+      accountName: 'Dental Care Pins',
+      accountId: 'pin_456',
+      isActive: true,
+    },
+    {
+      id: 'acc_th_1',
+      platform: 'threads',
+      accountName: '@downtowndental',
+      accountId: 'th_789',
+      isActive: true,
+    },
   ];
 
   it('defaults to pre-selecting the active Google Business Profile account when manual selection is null', () => {
@@ -72,5 +93,16 @@ describe('BGOS Publishing Targets & Account Selection', () => {
   it('returns empty targets when no accounts are selected', () => {
     const targets = publishingTargets(mockAccounts, []);
     expect(targets).toEqual([]);
+  });
+
+  it('correctly dispatches targets for LinkedIn, Pinterest, and Threads accounts', () => {
+    const selected = ['acc_li_1', 'acc_pin_1', 'acc_th_1'];
+    const targets = publishingTargets(mockAccounts, selected);
+
+    expect(targets).toEqual([
+      { platform: 'linkedin', socialAccountId: 'acc_li_1' },
+      { platform: 'pinterest', socialAccountId: 'acc_pin_1' },
+      { platform: 'threads', socialAccountId: 'acc_th_1' },
+    ]);
   });
 });

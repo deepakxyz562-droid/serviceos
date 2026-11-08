@@ -314,8 +314,8 @@ export const OAUTH_PROVIDERS: Record<
   linkedin: {
     authUrl: 'https://www.linkedin.com/oauth/v2/authorization',
     tokenUrl: 'https://www.linkedin.com/oauth/v2/accessToken',
-    // LinkedIn scopes are SPACE-separated in the URL.
-    scopes: 'w_member_social rw_organization r_organization_social r_member_social',
+    // LinkedIn scopes are SPACE-separated in the URL (OpenID Connect + Share on LinkedIn).
+    scopes: 'openid profile email w_member_social',
     displayName: 'LinkedIn',
     docsUrl: 'https://learn.microsoft.com/linkedin/marketing/integrations/community-management/ugc-posts-api',
   },
@@ -334,6 +334,14 @@ export const OAUTH_PROVIDERS: Record<
     scopes: 'tweet.read tweet.write users.read offline.access',
     displayName: 'X (Twitter)',
     docsUrl: 'https://developer.twitter.com/en/docs/twitter-api',
+  },
+  threads: {
+    authUrl: 'https://threads.net/oauth/authorize',
+    tokenUrl: 'https://graph.threads.net/oauth/access_token',
+    // Threads scopes are COMMA-separated.
+    scopes: 'threads_basic,threads_content_publish',
+    displayName: 'Threads',
+    docsUrl: 'https://developers.facebook.com/docs/threads',
   },
   apollo: {
     authUrl: 'https://app.apollo.io',
@@ -384,4 +392,5 @@ export const SOCIAL_PUBLISHING_PLATFORMS = new Set([
   'linkedin',
   'pinterest',
   'twitter',
-])
+  'threads',
+]);

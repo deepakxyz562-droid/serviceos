@@ -40,6 +40,33 @@ const PLATFORMS_META = [
     activeBg: '#FDF2F8',
     activeBorder: '#FBCFE8',
   },
+  {
+    key: 'linkedin',
+    label: 'LinkedIn',
+    fullName: 'LinkedIn Profile / Page',
+    iconName: 'business-center' as const,
+    color: '#0A66C2',
+    activeBg: '#EFF6FF',
+    activeBorder: '#BFDBFE',
+  },
+  {
+    key: 'pinterest',
+    label: 'Pinterest',
+    fullName: 'Pinterest Boards',
+    iconName: 'push-pin' as const,
+    color: '#E60023',
+    activeBg: '#FEF2F2',
+    activeBorder: '#FECACA',
+  },
+  {
+    key: 'threads',
+    label: 'Threads',
+    fullName: 'Meta Threads',
+    iconName: 'alternate-email' as const,
+    color: '#111827',
+    activeBg: '#F3F4F6',
+    activeBorder: '#D1D5DB',
+  },
 ] as const;
 
 export function PublishingAccountPicker({

@@ -43,6 +43,7 @@ async function getZai(): Promise<{ zai: any; error?: string } | null> {
 
 const PLATFORM_LIMITS: Record<string, number> = {
   twitter: 280,
+  threads: 500,
   instagram: 2200,
   facebook: 5000,
   linkedin: 3000,

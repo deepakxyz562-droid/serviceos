@@ -29,9 +29,24 @@ export function StayActiveSocialMediaCard() {
   const accounts = accountsRes.data?.data || [];
   const fbAccount = accounts.find((a) => a.platform === 'facebook' && a.isActive);
   const igAccount = accounts.find((a) => a.platform === 'instagram' && a.isActive);
+  const liAccount = accounts.find((a) => a.platform === 'linkedin' && a.isActive);
+  const pinAccount = accounts.find((a) => a.platform === 'pinterest' && a.isActive);
+  const thAccount = accounts.find((a) => a.platform === 'threads' && a.isActive);
 
-  async function handleConnect(platform: 'facebook' | 'instagram') {
-    const platformLabel = platform === 'facebook' ? 'Facebook' : 'Instagram';
+  const connectedAccounts = [fbAccount, igAccount, liAccount, pinAccount, thAccount].filter(Boolean) as SocialAccount[];
+  const connectedCount = connectedAccounts.length;
+
+  type SupportedConnectPlatform = 'facebook' | 'instagram' | 'linkedin' | 'pinterest' | 'threads';
+
+  async function handleConnect(platform: SupportedConnectPlatform) {
+    const platformLabels: Record<SupportedConnectPlatform, string> = {
+      facebook: 'Facebook',
+      instagram: 'Instagram',
+      linkedin: 'LinkedIn',
+      pinterest: 'Pinterest',
+      threads: 'Threads',
+    };
+    const platformLabel = platformLabels[platform] || platform;
     setConnectingKey(platform);
     try {
       let ticket = '';
@@ -62,30 +77,30 @@ export function StayActiveSocialMediaCard() {
     }
   }
 
-  const allConnected = Boolean(fbAccount && igAccount);
-  const anyConnected = Boolean(fbAccount || igAccount);
-
   // ── When accounts are connected: show a sleek compact status strip (no giant buttons) ──
-  if (allConnected) {
+  if (connectedCount >= 2) {
+    const summary = connectedAccounts.map((a) => a.accountName || a.platform).slice(0, 3).join(', ');
     return (
       <View style={styles.compactConnectedStrip}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
           <View style={styles.greenDot} />
           <Text style={styles.compactConnectedText} numberOfLines={1}>
-            Facebook & Instagram Active ({fbAccount?.accountName || 'Connected'})
+            {connectedCount} Channels Active ({summary})
           </Text>
         </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Manage Connected Accounts"
           onPress={() => {
+            const list = connectedAccounts.map((a) => `• ${a.platform.toUpperCase()}: ${a.accountName || 'Active'}`).join('\n');
             Alert.alert(
-              'Connected Social Accounts',
-              `• Facebook: ${fbAccount?.accountName || 'Active'}\n• Instagram: ${igAccount?.accountName || 'Active'}`,
+              'Connected Social Channels',
+              list,
               [
                 { text: 'Done' },
-                { text: 'Reconnect Facebook', onPress: () => handleConnect('facebook') },
-                { text: 'Reconnect Instagram', onPress: () => handleConnect('instagram') },
+                { text: '+ Connect LinkedIn', onPress: () => handleConnect('linkedin') },
+                { text: '+ Connect Pinterest', onPress: () => handleConnect('pinterest') },
+                { text: '+ Connect Threads', onPress: () => handleConnect('threads') },
               ]
             );
           }}
@@ -97,37 +112,39 @@ export function StayActiveSocialMediaCard() {
     );
   }
 
-  if (anyConnected) {
-    const connectedName = fbAccount ? 'Facebook' : 'Instagram';
-    const missingKey = fbAccount ? 'instagram' : 'facebook';
-    const missingName = fbAccount ? 'Instagram' : 'Facebook';
-    const busy = connectingKey === missingKey;
+  if (connectedCount === 1) {
+    const single = connectedAccounts[0];
+    const singleName = single.platform.charAt(0).toUpperCase() + single.platform.slice(1);
 
     return (
       <View style={styles.compactConnectedStrip}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
           <View style={styles.greenDot} />
           <Text style={styles.compactConnectedText} numberOfLines={1}>
-            {connectedName} Active · Connect {missingName}
+            {singleName} Active · Connect More Channels
           </Text>
         </View>
         <Pressable
           accessibilityRole="button"
-          disabled={busy}
-          onPress={() => handleConnect(missingKey)}
+          onPress={() => {
+            Alert.alert('Connect Next Channel', 'Choose a channel to add:', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'LinkedIn', onPress: () => handleConnect('linkedin') },
+              { text: 'Pinterest', onPress: () => handleConnect('pinterest') },
+              { text: 'Threads', onPress: () => handleConnect('threads') },
+              { text: 'Instagram', onPress: () => handleConnect('instagram') },
+              { text: 'Facebook', onPress: () => handleConnect('facebook') },
+            ]);
+          }}
           style={styles.connectPill}
         >
-          {busy ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.connectPillText}>+ {missingName}</Text>
-          )}
+          <Text style={styles.connectPillText}>+ Connect</Text>
         </Pressable>
       </View>
     );
   }
 
-  // ── When none are connected: show the connect card ──
+  // ── When none are connected: show the connect card with all 5 channels ──
   const channels = [
     {
       key: 'facebook' as const,
@@ -135,7 +152,7 @@ export function StayActiveSocialMediaCard() {
       badge: 'f',
       badgeBg: '#1877F2',
       account: fbAccount,
-      description: 'Auto-share daily Google posts to Facebook Page',
+      description: 'Auto-share daily updates to Facebook Page',
     },
     {
       key: 'instagram' as const,
@@ -144,6 +161,30 @@ export function StayActiveSocialMediaCard() {
       badgeBg: '#E1306C',
       account: igAccount,
       description: 'Auto-publish promotional photo cards to Instagram',
+    },
+    {
+      key: 'linkedin' as const,
+      name: 'LinkedIn',
+      badge: 'in',
+      badgeBg: '#0A66C2',
+      account: liAccount,
+      description: 'Auto-share B2B articles and service milestones',
+    },
+    {
+      key: 'pinterest' as const,
+      name: 'Pinterest',
+      badge: 'P',
+      badgeBg: '#E60023',
+      account: pinAccount,
+      description: 'Pin promotional product flyers and offer posters',
+    },
+    {
+      key: 'threads' as const,
+      name: 'Threads',
+      badge: '@',
+      badgeBg: '#111827',
+      account: thAccount,
+      description: 'Post micro-updates & engage local community',
     },
   ];
 

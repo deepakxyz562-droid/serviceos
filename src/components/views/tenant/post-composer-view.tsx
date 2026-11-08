@@ -64,6 +64,22 @@ import { cn } from '@/lib/utils';
 
 // ─── Platform metadata ─────────────────────────────────────────────────────
 
+function PinterestIcon({ className }: { className?: string }) {
+  return (
+    <svg className={cn('size-4', className)} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 0a12 12 0 0 0-4.37 23.18c-.05-.98-.1-2.48.02-3.55.11-.98.74-6.3 0.74-6.3s-.19-.38-.19-.94c0-.88.51-1.54 1.15-1.54.54 0 .8.41.8.9 0 .55-.35 1.37-.53 2.13-.15.64.32 1.16.95 1.16 1.14 0 2.02-1.2 2.02-2.93 0-1.53-1.1-2.6-2.67-2.6-1.82 0-2.89 1.36-2.89 2.77 0 .55.21 1.14.48 1.46.05.06.06.12.04.18-.05.2-.16.65-.18.74-.03.11-.09.13-.21.08-1-.46-1.62-1.92-1.62-3.1 0-2.52 1.83-4.84 5.29-4.84 2.78 0 4.93 1.98 4.93 4.63 0 2.76-1.74 4.99-4.16 4.99-.81 0-1.58-.42-1.84-.92l-.5 1.91c-.18.7-.67 1.57-1 2.1A12 12 0 1 0 12 0z"/>
+    </svg>
+  );
+}
+
+function ThreadsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={cn('size-4', className)} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12.186 20.548c-4.484 0-7.85-3.187-7.85-7.868 0-4.633 3.39-7.982 8.04-7.982 4.417 0 7.426 3.037 7.426 7.218 0 4.97-3.93 7.824-7.538 7.824-2.274 0-3.953-1.077-4.444-2.146l1.32-.825c.34.73 1.597 1.481 3.124 1.481 2.825 0 5.928-2.18 5.928-6.334 0-3.375-2.29-5.728-5.816-5.728-3.791 0-6.425 2.766-6.425 6.496 0 3.844 2.733 6.368 6.235 6.368 1.83 0 3.256-.582 4.095-1.39l.99 1.18c-1.08 1.054-2.868 1.708-5.085 1.708z"/>
+    </svg>
+  );
+}
+
 interface PlatformMeta {
   key: string;
   label: string;
@@ -77,6 +93,8 @@ const PLATFORMS: PlatformMeta[] = [
   { key: 'facebook', label: 'Facebook Page', icon: Facebook, color: 'bg-blue-600', charLimit: 5000 },
   { key: 'instagram', label: 'Instagram Business', icon: Instagram, color: 'bg-pink-600', charLimit: 2200 },
   { key: 'linkedin', label: 'LinkedIn', icon: Linkedin, color: 'bg-sky-700', charLimit: 3000 },
+  { key: 'pinterest', label: 'Pinterest', icon: PinterestIcon, color: 'bg-red-600', charLimit: 500 },
+  { key: 'threads', label: 'Threads', icon: ThreadsIcon, color: 'bg-zinc-900', charLimit: 500 },
   { key: 'twitter', label: 'X (Twitter)', icon: Twitter, color: 'bg-zinc-900', charLimit: 280 },
 ];
 
@@ -133,6 +151,10 @@ interface SocialAccount {
   accountName: string;
   accountId: string;
   isActive: boolean;
+  metadata?: {
+    defaultBoardId?: string;
+    boards?: Array<{ id: string; name: string }>;
+  } | null;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────
@@ -237,6 +259,26 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
   const hasGbp = selectedPlatforms.includes('googlebusiness');
   const hasInstagram = selectedPlatforms.includes('instagram');
   const hasPinterest = selectedPlatforms.includes('pinterest');
+
+  const availablePinterestBoards = useMemo(() => {
+    const pAccounts = accounts.filter(
+      (a) => a.platform === 'pinterest' && selectedAccountIds.includes(a.id),
+    );
+    const boards: Array<{ id: string; name: string }> = [];
+    for (const acc of pAccounts) {
+      if (acc.metadata?.boards && Array.isArray(acc.metadata.boards)) {
+        boards.push(...acc.metadata.boards);
+      }
+    }
+    return boards;
+  }, [accounts, selectedAccountIds]);
+
+  // Pre-select first Pinterest board if none selected
+  useEffect(() => {
+    if (hasPinterest && !pinterestBoard && availablePinterestBoards.length > 0) {
+      setPinterestBoard(availablePinterestBoards[0].id);
+    }
+  }, [hasPinterest, pinterestBoard, availablePinterestBoards]);
 
   const selectedAccountObject = useMemo(() => {
     return accounts.find((a) => selectedAccountIds.includes(a.id));
@@ -377,6 +419,9 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
       if (!content.trim()) return 'Post text is required.';
       if (hasInstagram) {
         return 'Instagram requires a photo or video. Switch format to "Image with Text", "Image Only", or "Video" to post to Instagram.';
+      }
+      if (hasPinterest) {
+        return 'Pinterest requires an image pin. Switch format to "Image with Text" or "Image Only" to pin to Pinterest.';
       }
     }
 
@@ -1088,6 +1133,47 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Pinterest Board Options */}
+          {hasPinterest && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <PinterestIcon className="size-4 text-red-600" />
+                  Pinterest Board Options
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Target Board</Label>
+                  {availablePinterestBoards.length > 0 ? (
+                    <Select value={pinterestBoard || availablePinterestBoards[0]?.id} onValueChange={setPinterestBoard}>
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue placeholder="Choose a board" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availablePinterestBoards.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={pinterestBoard}
+                      onChange={(e) => setPinterestBoard(e.target.value)}
+                      placeholder="Enter Pinterest Board ID or Name"
+                      className="h-8 text-xs"
+                    />
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    Pins must be attached to a board. Select an existing board or specify a Board ID.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           )}

@@ -34,6 +34,7 @@ const VALID_PLATFORMS: SocialPlatform[] = [
   'linkedin',
   'pinterest',
   'twitter',
+  'threads',
 ];
 
 function isValidPlatform(p: string): p is SocialPlatform {

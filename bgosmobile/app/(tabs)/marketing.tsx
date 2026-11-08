@@ -2559,7 +2559,7 @@ export default function MarketingScreen() {
 
           <Card><Text style={{fontWeight:'700'}}>Publishing accounts</Text>
             <Text>Choose exactly where your daily posts will appear.</Text>
-            {apAccounts.filter(a=>['googlebusiness','facebook','instagram'].includes(a.platform)).map(account=>{
+            {apAccounts.filter(a=>['googlebusiness','facebook','instagram','linkedin','pinterest','threads'].includes(a.platform)).map(account=>{
               const selected=(apConfig.accountIds || []).includes(account.id);
               return <Pressable key={account.id} disabled={apLoading} accessibilityRole="checkbox" accessibilityState={{checked:selected}} onPress={()=>{
                 const ids=selected?(apConfig.accountIds || []).filter(id=>id!==account.id):[...(apConfig.accountIds || []),account.id];
