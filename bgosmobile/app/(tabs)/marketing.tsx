@@ -64,6 +64,7 @@ import { PostsBoard } from '../../src/components/gbp/posts-list';
 import { SocialCalendarView } from '../../src/components/gbp/social-calendar';
 import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
 import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
+import { UpcomingPostsCarousel } from '../../src/components/gbp/upcoming-posts-carousel';
 
 const TIME_SLOTS = [
   { label: '08:00 AM (Early Rush)', value: '08:00' },
@@ -1844,6 +1845,29 @@ export default function MarketingScreen() {
       if(!uploaded.url)throw new Error('Upload was not confirmed. Please retry.');
       handleCustomDesignChange({...design,layers:design.layers.map(l=>l.id==='bg_photo'?{...l,src:uploaded.url,assetId:uploaded.assetId}:l)});
       setCustomPosterUri(uploaded.url);setBgPhotoUrl(uploaded.url);
+
+      // Auto-generate caption, headline and details from AI immediately upon upload
+      try {
+        const aiRes = await apiRequest<{ caption: string }>('/api/social/ai-caption', {
+          method: 'POST',
+          body: {
+            topic: `${effectiveBusinessName} showcase: comfort, quality service & serene atmosphere`,
+            platforms: ['googlebusiness', 'instagram', 'facebook'],
+          },
+        });
+        if (aiRes?.caption && epoch === generationEpoch.current) {
+          setCaption(aiRes.caption);
+          const firstSentence = aiRes.caption.split('\n')[0]?.replace(/^[#*•\s]+/, '').slice(0, 65);
+          if (firstSentence) {
+            setHeadline(firstSentence);
+            setAlternativeHeadlines([
+              firstSentence,
+              `Experience Comfort & Excellence at ${effectiveBusinessName}`,
+              `Your Ideal Destination for Peace & Quality`,
+            ]);
+          }
+        }
+      } catch {}
     }catch(e){if(epoch===generationEpoch.current)setError(e instanceof Error?e.message:'Upload failed. Your design is unchanged.');}
     finally{if(epoch===generationEpoch.current)setBusy(false);}
   }
@@ -2531,7 +2555,13 @@ export default function MarketingScreen() {
                 return (
                   <Pressable
                     key={src.id}
-                    onPress={() => saveAutopilot({ contentSource: src.id as any })}
+                    onPress={() => {
+                      if (src.id !== 'ai_generated' && !(apConfig.templateIds || []).length) {
+                        void loadApTemplates();
+                        setDraftPickerOpen(true);
+                      }
+                      saveAutopilot({ contentSource: src.id as any });
+                    }}
                     style={{
                       padding: 11,
                       borderRadius: 10,
@@ -2595,6 +2625,15 @@ export default function MarketingScreen() {
           ══════════════════════════════════════════════════════════════════════ */}
       {activeMode === 'posts' && (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 90 }}>
+          {/* Grexa Benchmark: Upcoming Posts Carousel (Screenshot 2) */}
+          <UpcomingPostsCarousel
+            businessName={effectiveBusinessName}
+            onCreateWithAi={() => {
+              setActiveMode('studio');
+              setStudioStep(1);
+            }}
+          />
+
           {/* Connected Social Accounts Header */}
           <StayActiveSocialMediaCard />
 
@@ -3342,6 +3381,39 @@ export default function MarketingScreen() {
                   </Pressable>
                 </View>}
 
+                {/* Dynamic Prompt Suggestion Chips */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: 4, gap: 6, marginBottom: 8 }}
+                >
+                  {[
+                    '✨ Weekend Special Offer',
+                    '🌟 5-Star Customer Review',
+                    '🎉 Festival Announcement',
+                    '🔥 Limited Time Deal',
+                    '💡 Pro Tip & Guide',
+                    '🚀 New Service Launch',
+                  ].map((chip) => (
+                    <Pressable
+                      key={chip}
+                      onPress={() => setPromptInput(chip)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 4.5,
+                        borderRadius: 14,
+                        backgroundColor: '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#334155' }}>
+                        {chip}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+
                 {/* Floating Composer */}
                 <View style={styles.promptInputRow}>
                   {/* Smart Campaign Helper Button */}
@@ -3989,6 +4061,30 @@ export default function MarketingScreen() {
                     placeholder="e.g. SPECIAL OFFER, 30% OFF"
                     style={styles.configInput}
                   />
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 6, marginTop: 4, marginBottom: 8 }}
+                  >
+                    {['SPECIAL OFFER', '30% OFF', 'FLAT ₹500 OFF', 'LIMITED SEATS', 'WEEKEND ONLY', 'BEST SELLER'].map((b) => (
+                      <Pressable
+                        key={b}
+                        onPress={() => handleUpdateDiscountBadge(b)}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 6,
+                          backgroundColor: discountBadge === b ? '#EFF6FF' : '#F1F5F9',
+                          borderWidth: 1,
+                          borderColor: discountBadge === b ? '#3B82F6' : '#E2E8F0',
+                        }}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: discountBadge === b ? '#2563EB' : '#475569' }}>
+                          {b}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
 
                   <Text style={styles.modalInputLabel}>Subtitle / Description</Text>
                   <TextInput
@@ -4005,6 +4101,30 @@ export default function MarketingScreen() {
                     placeholder="e.g. Book Now, Claim Deal"
                     style={styles.configInput}
                   />
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 6, marginTop: 4, marginBottom: 8 }}
+                  >
+                    {['Book Now', 'Order Online', 'Call Us', 'Claim Deal', 'Visit Store', 'Get Directions'].map((c) => (
+                      <Pressable
+                        key={c}
+                        onPress={() => handleUpdateCtaText(c)}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 6,
+                          backgroundColor: ctaText === c ? '#EFF6FF' : '#F1F5F9',
+                          borderWidth: 1,
+                          borderColor: ctaText === c ? '#3B82F6' : '#E2E8F0',
+                        }}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: ctaText === c ? '#2563EB' : '#475569' }}>
+                          {c}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
 
                   {/* ── Section: Footer Link & Contact ── */}
                   <View style={{ marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>

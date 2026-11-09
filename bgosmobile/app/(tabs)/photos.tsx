@@ -1,10 +1,13 @@
-import React from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { Screen, colors } from '../../src/components/ui';
+import { Screen, Loading } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
-import { PhotosBoard } from '../../src/components/gbp/photos-grid';
+import { apiRequest } from '../../src/lib/api';
+import { uploadFileToStorage } from '../../src/lib/upload';
+import { ScheduledPhotosTimeline } from '../../src/components/gbp/scheduled-photos-timeline';
 import type { GbpPlaceResult, PhotosResponse } from '../../src/components/gbp/types';
 
 interface DiscoverResponse {
@@ -15,113 +18,140 @@ interface DiscoverResponse {
 }
 
 /**
- * Photos tab — matches Dhanda AI benchmark (Screenshot 3).
- * Outer segmented track with Scheduled / Uploaded / Not Posted,
- * upload destination notice banner, calendar empty state, and bottom action.
+ * Photos Screen — Benchmark matching Grexa Screenshot 3.
+ * Clean, single-page layout with large portrait carousel, 1-tap "Add Photos & Videos"
+ * button with real cloud upload, and a vertical "Scheduled Photos & Videos" drip timeline.
  */
 export default function PhotosScreen() {
   const router = useRouter();
   const photosRes = useResource<PhotosResponse>('/api/social/photos');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
+  const [isUploading, setIsUploading] = useState(false);
 
   const activeProfile = discover.data?.activeProfile;
-  const shortId = activeProfile?.shortId || (gbpPlace.data?.place?.locationId ? `#${gbpPlace.data.place.locationId.slice(-4)}` : '');
-  const phone = discover.data?.phone || gbpPlace.data?.place?.phone || '';
-  const version = discover.data?.version || 'v2.83';
+  const profileName = activeProfile?.name || gbpPlace.data?.place?.title || 'Delhi Farm';
 
+  const handleUpload = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission Needed', 'Please allow photo gallery access to pick photos for your Google Business Profile.');
+        return;
+      }
+
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        quality: 0.85,
+      });
+
+      if (res.canceled || !res.assets?.length) return;
+
+      setIsUploading(true);
+      const uploadedUrls: string[] = [];
+
+      for (const asset of res.assets) {
+        const cloudUrl = await uploadFileToStorage({
+          uri: asset.uri,
+          name: asset.fileName || `photo-${Date.now()}.jpg`,
+          mimeType: asset.mimeType || 'image/jpeg',
+        });
+        if (cloudUrl) uploadedUrls.push(cloudUrl);
+      }
+
+      if (uploadedUrls.length > 0) {
+        // Auto-generate on-brand caption with AI
+        let autoCaption = `Lush, scenic spaces and exceptional hospitality at ${profileName}.`;
+        try {
+          const aiRes = await apiRequest<{ caption: string }>('/api/social/ai-caption', {
+            method: 'POST',
+            body: {
+              topic: `${profileName} new photo showcase`,
+              platforms: ['googlebusiness'],
+            },
+          });
+          if (aiRes?.caption) autoCaption = aiRes.caption;
+        } catch {}
+
+        await apiRequest('/api/social/photos', {
+          method: 'POST',
+          body: {
+            photos: uploadedUrls,
+            scheduleMode: 'daily',
+            description: autoCaption,
+          },
+        });
+
+        await photosRes.refresh();
+        Alert.alert(
+          'Media Scheduled',
+          `${uploadedUrls.length} photo${uploadedUrls.length > 1 ? 's' : ''} queued for daily AI drip publishing to Google Business Profile.`
+        );
+      }
+    } catch (e: any) {
+      Alert.alert('Upload Error', e?.message || 'Could not upload photos. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const rightHelpAction = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Help"
+      onPress={() =>
+        Alert.alert(
+          'Photos & Media Help',
+          'Publishing photos to your Google Business Profile improves visibility on Google Maps and search. Our AI agent schedules daily drips so your profile stays active.'
+        )
+      }
+      style={styles.helpButton}
+    >
+      <Text style={styles.helpButtonText}>Help</Text>
+    </Pressable>
+  );
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={styles.screenWrapper}>
       <Screen
-        title="Google Media"
-        subtitle={[phone, shortId.replace('#', ''), version].filter(Boolean).join(' | ')}
+        title="Photos"
+        subtitle={profileName}
         onRefresh={async () => {
           await Promise.all([photosRes.refresh(), gbpPlace.refresh(), discover.refresh()]).catch(() => {});
         }}
-        rightAction={
-          <Pressable
-            accessibilityRole="button"
-            onPress={() =>
-              Alert.alert(
-                'Google Media Info',
-                'Upload and schedule photos to publish directly to your Google Business Profile. Regular photo updates improve search discovery and local SEO rank.'
-              )
-            }
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 17,
-              backgroundColor: '#F1F5F9',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <MaterialIcons name="help-outline" size={20} color="#64748B" />
-          </Pressable>
-        }
+        rightAction={rightHelpAction}
       >
-        {/* Destination notice banner (Screenshot 3) */}
-        <Pressable
-          onPress={() =>
-            Alert.alert(
-              'Where it will upload?',
-              `Photos will be published directly to your Google Business Profile: ${activeProfile?.name || gbpPlace.data?.place?.title || 'Deepak Chandra'} (${shortId}).`
-            )
-          }
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 14,
-            paddingHorizontal: 16,
-            paddingVertical: 12,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            borderWidth: 1,
-            borderColor: '#E2E8F0',
-            marginBottom: 10,
-          }}
-        >
-          <Text style={{ fontSize: 13, color: '#334155', fontWeight: '600' }}>Where it will upload?</Text>
-          <Text style={{ fontSize: 13, color: '#2563EB', fontWeight: '700' }}>Click here to know</Text>
-        </Pressable>
-
-        <PhotosBoard
-          data={photosRes.data}
-          loading={photosRes.loading}
-          error={photosRes.error}
-          refresh={photosRes.refresh}
-          connected={Boolean(gbpPlace.data?.isConnected)}
-          onNeedConnect={() => router.push('/(tabs)/growth')}
-          variant="dhanda"
-        />
+        {photosRes.loading && !photosRes.data ? (
+          <Loading />
+        ) : (
+          <ScheduledPhotosTimeline
+            photos={photosRes.data?.photos?.filter((p) => p.source === 'google' || !p.scheduledFor)}
+            scheduledPhotos={photosRes.data?.photos?.filter((p) => p.source === 'queue' || Boolean(p.scheduledFor))}
+            businessName={profileName}
+            onUploadPress={handleUpload}
+            isUploading={isUploading}
+          />
+        )}
       </Screen>
-
-      {/* Floating voice assistant mic (Screenshot 3 benchmark) */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Voice assistant"
-        onPress={() => Alert.alert('Voice Assistant', 'Say "Upload media" or "Schedule photo for tomorrow"…')}
-        style={({ pressed }) => ({
-          position: 'absolute',
-          right: 16,
-          bottom: 24,
-          width: 52,
-          height: 52,
-          borderRadius: 26,
-          backgroundColor: '#0F172A',
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: pressed ? 0.85 : 1,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.25,
-          shadowRadius: 6,
-          elevation: 8,
-        })}
-      >
-        <MaterialIcons name="mic" size={24} color="#FFFFFF" />
-      </Pressable>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screenWrapper: {
+    flex: 1,
+    backgroundColor: '#0F172A', // Sleek dark mode theme matching Benchmark Screenshot 3
+  },
+  helpButton: {
+    backgroundColor: '#009F50', // BGOS Emerald green pill matching benchmark
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+  },
+  helpButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+});

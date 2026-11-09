@@ -111,7 +111,9 @@ export async function POST(request: NextRequest) {
       ? body.photos
       : body.photoUrl
         ? [body.photoUrl]
-        : [];
+        : body.url
+          ? [body.url]
+          : [];
 
     if (!photos.length) {
       return NextResponse.json({ error: 'No photos provided for upload.' }, { status: 400 });

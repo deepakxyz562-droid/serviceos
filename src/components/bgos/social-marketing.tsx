@@ -139,6 +139,8 @@ const BrandBrainView = lazy(() =>
 // ─── Types & constants ──────────────────────────────────────────────────────
 
 import { AutopilotStudio } from './autopilot-studio';
+import { UrgentReviewCard } from '@/components/bgos/urgent-review-card';
+import { UpcomingPostsCarousel } from '@/components/bgos/upcoming-posts-carousel';
 
 type SocialTab =
   | 'overview'
@@ -3385,9 +3387,15 @@ export function SocialMediaView({
 
       {/* ─── TAB: Posts (drilldown, single posts list) ──────────────────── */}
       {activeTab === 'posts' && (
-        <Suspense fallback={<TabLoader />}>
-          <PostsListView embedded />
-        </Suspense>
+        <div className="space-y-6">
+          <UpcomingPostsCarousel
+            businessName={businessName}
+            onCreateWithAi={() => setActiveTab('composer')}
+          />
+          <Suspense fallback={<TabLoader />}>
+            <PostsListView embedded />
+          </Suspense>
+        </div>
       )}
 
       {/* ─── TAB: Analytics (drilldown) ─────────────────────────────────── */}
@@ -3428,6 +3436,30 @@ export function SocialMediaView({
               Start @ ₹999/-
             </button>
           </div>
+
+          {/* Grexa Benchmark: Urgent Review Engine Card (Screenshot 4) */}
+          <UrgentReviewCard
+            businessName={businessName}
+            reviewUrl={
+              placeData?.place?.reviewUrl ||
+              (placeData?.place?.placeId
+                ? `https://search.google.com/local/writereview?placeid=${placeData.place.placeId}`
+                : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                    businessName || 'Google Business'
+                  )}`)
+            }
+            lastReviewDays={69}
+            totalReviews={reviews.length}
+            onOpenBulk={() => setActiveTab('review-replies')}
+            onOpenQr={() => {
+              const url =
+                placeData?.place?.reviewUrl ||
+                (placeData?.place?.placeId
+                  ? `https://search.google.com/local/writereview?placeid=${placeData.place.placeId}`
+                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(businessName)}`);
+              window.open(url, '_blank');
+            }}
+          />
 
           {/* Dhanda AI Benchmark Grid (Score carousel + Performance + Competitors) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-5 items-stretch">

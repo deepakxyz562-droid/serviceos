@@ -62,6 +62,43 @@ export default function ManageGoogleProfileScreen() {
   const [editAddress, setEditAddress] = useState('');
   const [editWebsite, setEditWebsite] = useState('');
   const [savingBasics, setSavingBasics] = useState(false);
+  const [aiAutoFilling, setAiAutoFilling] = useState(false);
+
+  async function handleAiAutoFillProfile() {
+    setAiAutoFilling(true);
+    try {
+      const res = await apiRequest<{
+        suggestion?: {
+          businessName?: string;
+          industry?: string;
+          location?: string;
+          website?: string;
+          services?: string[];
+          keywords?: string[];
+        };
+      }>('/api/brand-profile/ai-generate', {
+        method: 'POST',
+        body: {
+          businessName: title,
+          category: editCategory || category,
+          location: editAddress || address,
+          websiteUrl: editWebsite || website,
+        },
+      });
+
+      if (res.suggestion) {
+        if (res.suggestion.industry && !editCategory) setEditCategory(res.suggestion.industry);
+        if (res.suggestion.services && res.suggestion.services.length > 0) {
+          setEditAdditionalCategories(res.suggestion.services.slice(0, 4).join(', '));
+        }
+        Alert.alert('AI Suggestions Applied', 'Categories and services suggestions have been auto-populated from AI.');
+      }
+    } catch {
+      Alert.alert('Notice', 'Could not generate AI suggestions. Please enter details manually.');
+    } finally {
+      setAiAutoFilling(false);
+    }
+  }
 
   // Edit Hours State
   const [hoursModalOpen, setHoursModalOpen] = useState(false);
@@ -790,6 +827,35 @@ export default function ManageGoogleProfileScreen() {
               </Pressable>
             </View>
 
+            {/* AI Auto-Complete Button */}
+            <Pressable
+              disabled={aiAutoFilling}
+              onPress={handleAiAutoFillProfile}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                backgroundColor: '#F5F3FF',
+                borderWidth: 1,
+                borderColor: '#DDD6FE',
+                borderRadius: 10,
+                paddingVertical: 8,
+                marginBottom: 12,
+              }}
+            >
+              {aiAutoFilling ? (
+                <ActivityIndicator size="small" color="#7C3AED" />
+              ) : (
+                <>
+                  <MaterialIcons name="auto-awesome" size={16} color="#7C3AED" />
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#7C3AED' }}>
+                    Auto-Suggest Details with AI
+                  </Text>
+                </>
+              )}
+            </Pressable>
+
             <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
               <View style={{ gap: 10 }}>
                 <View>
@@ -811,6 +877,30 @@ export default function ManageGoogleProfileScreen() {
                     style={[ui.input, { marginTop: 4 }]}
                     placeholder="Software company"
                   />
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 6, marginTop: 4 }}
+                  >
+                    {['Software company', 'Farmhouse / Resort', 'Cafe & Restaurant', 'Dental Clinic', 'Fitness Center', 'Salon & Spa', 'Real Estate'].map((c) => (
+                      <Pressable
+                        key={c}
+                        onPress={() => setEditCategory(c)}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 6,
+                          backgroundColor: editCategory === c ? '#EFF6FF' : '#F1F5F9',
+                          borderWidth: 1,
+                          borderColor: editCategory === c ? '#3B82F6' : '#E2E8F0',
+                        }}
+                      >
+                        <Text style={{ fontSize: 10.5, fontWeight: '600', color: editCategory === c ? '#2563EB' : '#475569' }}>
+                          {c}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
                 </View>
 
                 <View>
@@ -821,6 +911,35 @@ export default function ManageGoogleProfileScreen() {
                     style={[ui.input, { marginTop: 4 }]}
                     placeholder="Web design, IT consulting"
                   />
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 6, marginTop: 4 }}
+                  >
+                    {['Marketing Agency', 'Web Design', 'Event Venue', 'Catering Service', 'IT Consulting'].map((ac) => (
+                      <Pressable
+                        key={ac}
+                        onPress={() => {
+                          const existing = editAdditionalCategories ? editAdditionalCategories.split(',').map((x) => x.trim()).filter(Boolean) : [];
+                          if (!existing.includes(ac)) {
+                            setEditAdditionalCategories([...existing, ac].join(', '));
+                          }
+                        }}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 6,
+                          backgroundColor: '#F1F5F9',
+                          borderWidth: 1,
+                          borderColor: '#E2E8F0',
+                        }}
+                      >
+                        <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#475569' }}>
+                          + {ac}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
                 </View>
 
                 <View>

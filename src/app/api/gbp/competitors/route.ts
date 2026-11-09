@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { isMissingTableError } from '@/lib/gbp/marketing-score';
+import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
+import { fetchGoogleBusinessPlaceDetails } from '@/lib/social/adapters/googlebusiness';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,10 +43,11 @@ function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
  * Uses Google Places API (New) (places.googleapis.com/v1/places:searchText)
  * with locationBias circle (radius: 5,000m) and exact Haversine distance.
  *
- * Automatically resolves business location and category from:
+ * Automatically resolves business location and category dynamically from:
  * 1) Query params (?city=...&category=...)
- * 2) Tenant's verified address / coordinates
- * 3) Connected Google Business Profile metadata
+ * 2) Connected Google Business Profile verified primary category & place coordinates
+ * 3) Tenant's BrandProfile (industry & location)
+ * 4) Tenant's verified address / coordinates
  */
 export async function GET(request: NextRequest) {
   try {
@@ -54,7 +57,7 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const refresh = searchParams.get('refresh') === '1';
+    const refresh = searchParams.get('refresh') === '1' || searchParams.get('refresh') === 'true';
     const cityParam = searchParams.get('city');
     const categoryParam = searchParams.get('category');
 
@@ -74,8 +77,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // If we have stored rows and user didn't request a refresh, serve stored rows
-    if (storedRows.length > 0 && !refresh && !cityParam && !categoryParam) {
+    // Check if stored rows contain legacy hardcoded defaults (e.g. Patna IT companies for a non-software business)
+    const isLegacyCorrupt = storedRows.length > 0 && storedRows.some((r) =>
+      r.address?.toLowerCase().includes('patna') ||
+      r.name?.toLowerCase().includes('mlm software') ||
+      r.name?.toLowerCase().includes('wetsoft infotech')
+    );
+
+    // If we have clean stored rows and user didn't request a refresh, serve stored rows
+    if (storedRows.length > 0 && !refresh && !cityParam && !categoryParam && !isLegacyCorrupt) {
       return NextResponse.json({
         competitors: storedRows,
         source: storedRows.some((r) => r.source === 'places') ? 'places' : 'manual',
@@ -84,7 +94,14 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Otherwise, fetch live from Google Places (New)
+    // If refreshing or clearing corrupt cache, delete stale competitor records
+    if (refresh || isLegacyCorrupt) {
+      try {
+        await db.competitor.deleteMany({ where: { tenantId: user.tenantId } });
+      } catch {}
+    }
+
+    // Fetch live from Google Places (New) with dynamic GBP & Brand Profile resolution
     const liveResults = await fetchFromPlacesNew(user.tenantId, {
       city: cityParam,
       category: categoryParam,
@@ -134,8 +151,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fallback: If live fetch returned nothing but we had stored rows, use them
-    if (storedRows.length > 0) {
+    // Fallback: If live fetch returned nothing but we had stored rows (and not corrupt), use them
+    if (storedRows.length > 0 && !isLegacyCorrupt) {
       return NextResponse.json({
         competitors: storedRows,
         source: 'manual',
@@ -229,7 +246,7 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-// ── Google Places API (New) ─────────────────────────────────────────────────
+// ── Google Places API (New) with Dynamic Multi-Source Resolution ─────────────
 
 const PLACES_NEW_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText';
 
@@ -240,7 +257,7 @@ async function fetchFromPlacesNew(
   const apiKey = process.env.GOOGLE_MAPS_SERVER_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) return [];
 
-  // 1. Resolve business location and category from tenant
+  // 1. Resolve business information from tenant
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
     select: {
@@ -251,31 +268,118 @@ async function fetchFromPlacesNew(
       country: true,
       latitude: true,
       longitude: true,
+      googlePlaceId: true,
     },
   });
 
-  // Resolve City
-  let queryCity = opts?.city?.trim() || tenant?.city?.trim() || '';
-  if (!queryCity && tenant?.address) {
-    // If city is missing, use address or parse last parts
-    const parts = tenant.address.split(',').map((s) => s.trim());
-    queryCity = parts.length > 2 ? parts[parts.length - 2] : tenant.address;
-  }
-  if (!queryCity) {
-    queryCity = 'Patna, Bihar';
+  // 2. Resolve from BrandProfile (Tone, Story, Industry, Location)
+  const brandProfile = await db.brandProfile.findUnique({
+    where: { tenantId },
+    select: {
+      businessName: true,
+      industry: true,
+      location: true,
+      serviceArea: true,
+    },
+  }).catch(() => null);
+
+  // 3. Resolve from connected Google Business Profile
+  let gbpCategory: string | null = null;
+  let gbpAddress: string | null = null;
+  let gbpPlaceId: string | null = tenant?.googlePlaceId || null;
+  let gbpTitle: string | null = null;
+
+  try {
+    const googleAccount = await prepareGoogleAccount(tenantId);
+    if (googleAccount) {
+      const placeDetails = await fetchGoogleBusinessPlaceDetails(googleAccount);
+      if (placeDetails) {
+        if (placeDetails.category && placeDetails.category !== 'Professional Services') {
+          gbpCategory = placeDetails.category;
+        }
+        if (placeDetails.address) gbpAddress = placeDetails.address;
+        if (placeDetails.placeId) gbpPlaceId = placeDetails.placeId;
+        if (placeDetails.title) gbpTitle = placeDetails.title;
+      }
+    }
+  } catch (err) {
+    console.warn('[competitors] prepareGoogleAccount lookup warning:', err);
   }
 
-  // Resolve Category / Query term
-  let industry = opts?.category?.trim() || tenant?.industry?.trim() || '';
-  if (!industry || industry.toLowerCase() === 'home services') {
-    industry = 'Software Company';
+  // 4. Resolve Category / Query term
+  let industry =
+    opts?.category?.trim() ||
+    gbpCategory?.trim() ||
+    brandProfile?.industry?.trim() ||
+    tenant?.industry?.trim() ||
+    '';
+
+  // If generic 'home services' or empty, intelligently derive from business title
+  if (!industry || industry.toLowerCase() === 'home services' || industry.toLowerCase() === 'professional services') {
+    const nameToCheck = (gbpTitle || brandProfile?.businessName || tenant?.name || '').toLowerCase();
+    if (nameToCheck.includes('farm') || nameToCheck.includes('resort')) industry = 'Farmhouse Resort';
+    else if (nameToCheck.includes('pool') || nameToCheck.includes('swim')) industry = 'Swimming Pool';
+    else if (nameToCheck.includes('salon') || nameToCheck.includes('hair') || nameToCheck.includes('beauty')) industry = 'Beauty Salon';
+    else if (nameToCheck.includes('dental') || nameToCheck.includes('clinic')) industry = 'Dental Clinic';
+    else if (nameToCheck.includes('hvac') || nameToCheck.includes('air')) industry = 'HVAC Service';
+    else if (nameToCheck.includes('clean')) industry = 'Cleaning Service';
+    else if (nameToCheck.includes('plumb')) industry = 'Plumber';
+    else if (nameToCheck.includes('restaurant') || nameToCheck.includes('cafe')) industry = 'Restaurant';
+    else industry = 'Local Business';
   }
 
-  // Coordinates
-  const userLat = tenant?.latitude && tenant.latitude !== 0 ? tenant.latitude : 25.6136;
-  const userLng = tenant?.longitude && tenant.longitude !== 0 ? tenant.longitude : 85.0805;
+  // 5. Resolve Coordinates (Strictly accurate)
+  let userLat = tenant?.latitude && tenant.latitude !== 0 ? tenant.latitude : null;
+  let userLng = tenant?.longitude && tenant.longitude !== 0 ? tenant.longitude : null;
 
-  const query = `${industry} near ${queryCity}`.trim();
+  // If coordinates are missing, resolve from placeId using Google Places API
+  if ((userLat == null || userLng == null) && gbpPlaceId) {
+    try {
+      const placeRes = await fetch(
+        `https://places.googleapis.com/v1/places/${gbpPlaceId}`,
+        {
+          headers: {
+            'X-Goog-Api-Key': apiKey,
+            'X-Goog-FieldMask': 'location,formattedAddress,primaryTypeDisplayName',
+          },
+          signal: AbortSignal.timeout(6000),
+        }
+      );
+      if (placeRes.ok) {
+        const placeData = await placeRes.json();
+        if (placeData.location?.latitude && placeData.location?.longitude) {
+          userLat = placeData.location.latitude;
+          userLng = placeData.location.longitude;
+          if (!gbpAddress && placeData.formattedAddress) {
+            gbpAddress = placeData.formattedAddress;
+          }
+          // Persist coordinates to tenant so future calls are instantaneous
+          await db.tenant.update({
+            where: { id: tenantId },
+            data: { latitude: userLat, longitude: userLng },
+          }).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn('[competitors] Place ID coordinate lookup failed:', err);
+    }
+  }
+
+  // 6. Resolve City / Search Area
+  let queryCity =
+    opts?.city?.trim() ||
+    brandProfile?.location?.trim() ||
+    tenant?.city?.trim() ||
+    '';
+
+  if (!queryCity && (gbpAddress || tenant?.address)) {
+    const rawAddr = gbpAddress || tenant?.address || '';
+    const parts = rawAddr.split(',').map((s) => s.trim());
+    queryCity = parts.length > 2 ? parts[parts.length - 2] : rawAddr;
+  }
+
+  // Build high-intent local query (never defaults to Patna!)
+  const query = queryCity ? `${industry} in ${queryCity}`.trim() : `${industry} near me`.trim();
 
   try {
     const payload: any = {
@@ -313,12 +417,13 @@ async function fetchFromPlacesNew(
     const rawPlaces: any[] = Array.isArray(data?.places) ? data.places : [];
 
     const computed: CompetitorRow[] = [];
+    const selfName = (gbpTitle || brandProfile?.businessName || tenant?.name || '').toLowerCase();
 
     for (const p of rawPlaces) {
       const name = p.displayName?.text;
       if (!name) continue;
       // Skip self
-      if (tenant?.name && name.toLowerCase().includes(tenant.name.toLowerCase())) continue;
+      if (selfName && name.toLowerCase().includes(selfName)) continue;
 
       let distanceKm: number | null = null;
       if (userLat != null && userLng != null && p.location?.latitude != null && p.location?.longitude != null) {

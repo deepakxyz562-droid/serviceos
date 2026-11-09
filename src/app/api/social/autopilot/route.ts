@@ -113,18 +113,34 @@ export async function POST(request: NextRequest) {
       if (selected.length !== new Set(selectedIds).size || ((enabled || triggerPostNow) && !selected.length))
         return NextResponse.json({error:'Select connected publishing accounts for this workspace'},{status:400});
     }
-    if (templateIds !== undefined) {
-      const templates = await db.socialPost.findMany({where:{tenantId:user.tenantId,id:{in:templateIds},NOT:{designJson:{equals:null}}},select:{id:true}});
-      if (templates.length !== new Set(templateIds).size) return NextResponse.json({error:'A selected poster is unavailable'},{status:400});
+    let effectiveTemplateIds = templateIds !== undefined ? templateIds : current.templateIds;
+    const effectiveContentSource = contentSource !== undefined ? contentSource : current.contentSource;
+
+    if (effectiveContentSource !== 'ai_generated' && (!effectiveTemplateIds || !effectiveTemplateIds.length)) {
+      // Auto-fallback: check if the tenant has any existing saved poster drafts
+      const existingDrafts = await db.socialPost.findMany({
+        where: { tenantId: user.tenantId, NOT: { designJson: { equals: null } } },
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+        select: { id: true },
+      });
+      if (existingDrafts.length > 0) {
+        effectiveTemplateIds = existingDrafts.map((d) => d.id);
+      } else {
+        return NextResponse.json({ error: 'Select at least one saved poster for this content source' }, { status: 400 });
+      }
     }
-    if ((contentSource ?? current.contentSource) !== 'ai_generated' && !(templateIds ?? current.templateIds)?.length)
-      return NextResponse.json({error:'Select at least one saved poster for this content source'},{status:400});
+
+    if (effectiveTemplateIds !== undefined && effectiveTemplateIds.length > 0) {
+      const templates = await db.socialPost.findMany({where:{tenantId:user.tenantId,id:{in:effectiveTemplateIds},NOT:{designJson:{equals:null}}},select:{id:true}});
+      if (templates.length !== new Set(effectiveTemplateIds).size) return NextResponse.json({error:'A selected poster is unavailable'},{status:400});
+    }
     if (customDays !== undefined && (!Number.isInteger(customDays) || customDays < 1 || customDays > 365)) return NextResponse.json({error:'Choose 1–365 days'},{status:400});
     for (const date of [startDate,endDate]) if (date !== undefined && !Number.isFinite(Date.parse(date))) return NextResponse.json({error:'Invalid campaign date'},{status:400});
     if (startDate && endDate && Date.parse(endDate) <= Date.parse(startDate)) return NextResponse.json({error:'End date must follow start date'},{status:400});
     const updates: Record<string, any> = {};
     if (accountIds !== undefined) updates.accountIds = [...new Set(accountIds)];
-    if (templateIds !== undefined) updates.templateIds = [...new Set(templateIds)];
+    if (effectiveTemplateIds !== undefined) updates.templateIds = [...new Set(effectiveTemplateIds)];
     if (typeof timeZone === 'string') updates.timeZone = timeZone;
     if (typeof enabled === 'boolean') updates.enabled = enabled;
     if (duration) updates.duration = duration;

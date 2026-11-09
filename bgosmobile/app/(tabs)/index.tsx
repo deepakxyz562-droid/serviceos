@@ -15,6 +15,9 @@ import { SidebarDrawer } from '../../src/components/navigation/sidebar-drawer';
 import { PushPromptModal } from '../../src/components/notifications/push-prompt';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import { GrowthActionSheet } from '../../src/components/gbp/growth-action-sheet';
+import { UrgentReviewCard } from '../../src/components/gbp/urgent-review-card';
+import { AiAgentUpdatesSheet } from '../../src/components/gbp/ai-agent-updates-sheet';
+import { HomeStoryBubblesStrip, GbpAiAgentHomeCard } from '../../src/components/gbp/ai-agent-home-card';
 import type { GbpPlaceResult } from '../../src/components/gbp/types';
 import type { BgosConversation, BgosWorkspace } from '../../src/types/bgos-contracts';
 
@@ -485,6 +488,7 @@ export default function HomeScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [growthModalOpen, setGrowthModalOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [seoUpdatesOpen, setSeoUpdatesOpen] = useState(false);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [expandedCompetitor, setExpandedCompetitor] = useState<string | null>(null);
   const { width, fontScale } = useWindowDimensions();
@@ -499,7 +503,7 @@ export default function HomeScreen() {
   const bookings = useResource<{ bookings: Booking[] }>(`/api/bookings?dateFrom=${dayStart.toISOString()}&dateTo=${dayEnd.toISOString()}&limit=100`);
   const leads = useResource<{ leads: unknown[]; pagination?: { total: number } }>('/api/leads?limit=1');
   const calls = useResource<{ stats: { todayCount: number; total: number; missedCount?: number } | null }>('/api/calls?limit=1');
-  const reviews = useResource<{ reviews: Array<{ rating: number }> }>('/api/reviews?limit=5');
+  const reviews = useResource<{ reviews: Array<{ id?: string; rating?: number; createdAt?: string; createTime?: string; publishedAt?: string }> }>('/api/reviews?limit=30');
   const marketingScore = useResource<MarketingScoreResponse>('/api/gbp/marketing-score', 0, showInsights);
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const competitors = useResource<CompetitorsResponse>('/api/gbp/competitors', 0, showInsights);
@@ -545,6 +549,28 @@ export default function HomeScreen() {
   const reviewDetail = avgRating
     ? `${avgRating} ★ rating · Ask customers via WhatsApp`
     : 'Ask customers for Google reviews via WhatsApp';
+
+  const thisWeekReviewsCount = useMemo(() => {
+    const list = reviews.data?.reviews || [];
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return list.filter((r) => {
+      const raw = r.createdAt || r.createTime || r.publishedAt;
+      if (!raw) return false;
+      const t = new Date(raw).getTime();
+      return !isNaN(t) && t >= sevenDaysAgo;
+    }).length;
+  }, [reviews.data?.reviews]);
+
+  const lastReviewDate = useMemo(() => {
+    const list = reviews.data?.reviews || [];
+    if (!list.length) return null;
+    const sorted = [...list].sort((a, b) => {
+      const tA = new Date(a.createdAt || a.createTime || a.publishedAt || 0).getTime();
+      const tB = new Date(b.createdAt || b.createTime || b.publishedAt || 0).getTime();
+      return tB - tA;
+    });
+    return sorted[0]?.createdAt || sorted[0]?.createTime || sorted[0]?.publishedAt || null;
+  }, [reviews.data?.reviews]);
   const perfCells = useMemo(
     () => [
       { label: 'Profile Views', value: perf ? (perf.searchImpressions || 0) + (perf.mapsImpressions || 0) : null },
@@ -824,6 +850,41 @@ export default function HomeScreen() {
       />
 
       <GrowthCockpitQuickStrip />
+
+      {/* Benchmark Action Story Bubbles (Screenshot 2) */}
+      <HomeStoryBubblesStrip
+        onAddPhotos={() => router.push('/(tabs)/photos')}
+        onOpenPosts={() => router.push('/(tabs)/marketing')}
+        onOpenReviews={() => setReviewModalOpen(true)}
+        onPhotoBoost={() => router.push('/(tabs)/photos')}
+      />
+
+      {/* Grexa Benchmark: Urgent Review Engine Card (Screenshot 2 & 4) */}
+      <UrgentReviewCard
+        businessName={profileName || workspace.data?.name || 'My Business'}
+        reviewUrl={
+          gbpPlace.data?.place?.reviewUrl ||
+          (gbpPlace.data?.place?.placeId
+            ? `https://search.google.com/local/writereview?placeid=${gbpPlace.data.place.placeId}`
+            : gbpPlace.data?.place?.mapsUrl ||
+              `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                profileName || workspace.data?.name || 'Google Business'
+              )}`)
+        }
+        totalReviews={reviews.data?.reviews?.length || 0}
+        thisWeekCount={thisWeekReviewsCount}
+        lastReviewDate={lastReviewDate}
+        onOpenQr={() => router.push('/qr-standee')}
+        onOpenBulk={() => setReviewModalOpen(true)}
+        onOpenSeoUpdates={() => setSeoUpdatesOpen(true)}
+      />
+
+      {/* Grexa Benchmark: Active GBP AI Agent Checklist Card (Screenshot 2) */}
+      <GbpAiAgentHomeCard
+        businessName={profileName || workspace.data?.name || 'My Business'}
+        onOpenSeoUpdates={() => setSeoUpdatesOpen(true)}
+        onAddPhotos={() => router.push('/(tabs)/photos')}
+      />
 
       <Card style={{padding:14, gap:10}}>
         <Text style={ui.heading}>Quick Actions</Text>
@@ -1285,6 +1346,13 @@ export default function HomeScreen() {
 
       {/* Half-Screen Slide-Over Sidebar Drawer (Screenshot 08.55 benchmark, no Growth & Marketing) */}
       <SidebarDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
+
+      {/* GBP AI Agent Profile SEO Updates Sheet (Grexa Benchmark Screenshot 6) */}
+      <AiAgentUpdatesSheet
+        visible={seoUpdatesOpen}
+        onClose={() => setSeoUpdatesOpen(false)}
+        businessName={profileName || workspace.data?.name || 'My Business'}
+      />
 
       {/* Push Notification First-Launch Prompt */}
       <PushPromptModal />

@@ -17,6 +17,9 @@ import {
   Plug,
   Copy,
   Check,
+  Linkedin,
+  AtSign,
+  Pin,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,7 +58,10 @@ type PlatformKey =
   | 'googlebusiness'
   | 'whatsapp'
   | 'facebook'
-  | 'instagram';
+  | 'instagram'
+  | 'threads'
+  | 'linkedin'
+  | 'pinterest';
 
 interface PlatformMeta {
   key: PlatformKey;
@@ -90,6 +96,30 @@ const PLATFORMS: PlatformMeta[] = [
     color: 'bg-pink-600',
     description: 'Publish visual posts, branded graphics, and reels to your Instagram Business account.',
     oauthScopes: 'instagram_basic,instagram_content_publish,pages_show_list',
+  },
+  {
+    key: 'threads',
+    label: 'Meta Threads',
+    icon: AtSign,
+    color: 'bg-slate-900',
+    description: 'Publish text-first updates, announcements, and converse with followers on Threads.',
+    oauthScopes: 'threads_basic,threads_content_publish',
+  },
+  {
+    key: 'linkedin',
+    label: 'LinkedIn',
+    icon: Linkedin,
+    color: 'bg-blue-700',
+    description: 'Publish updates and articles to your LinkedIn professional Company Page or profile.',
+    oauthScopes: 'w_member_social,openid,profile',
+  },
+  {
+    key: 'pinterest',
+    label: 'Pinterest',
+    icon: Pin,
+    color: 'bg-rose-600',
+    description: 'Create and schedule visual Pins and boards to drive high-intent discovery traffic.',
+    oauthScopes: 'boards:read,boards:write,pins:read,pins:write',
   },
   {
     key: 'whatsapp',
@@ -204,7 +234,7 @@ export function SocialAccountsView({ embedded = false }: { embedded?: boolean } 
     const connectUrl = `/api/oauth/${platform.key}?originHost=${encodeURIComponent(origin)}&product=bgos&returnView=socialMedia${authParam}`;
 
     // 1-Click direct authorization for supported platforms
-    if (['facebook', 'instagram', 'googlebusiness'].includes(platform.key)) {
+    if (['facebook', 'instagram', 'googlebusiness', 'threads', 'linkedin', 'pinterest'].includes(platform.key)) {
       toast.loading(`Redirecting to ${platform.label}...`);
       window.location.href = connectUrl;
       return;

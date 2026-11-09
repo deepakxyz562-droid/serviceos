@@ -140,6 +140,53 @@ export default function SetupScreen() {
   const [uploadedPdfName, setUploadedPdfName] = useState<string | null>(null);
   const [uploadedPdfSize, setUploadedPdfSize] = useState<string | null>(null);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [aiFilling, setAiFilling] = useState(false);
+
+  async function handleAiAutoFillProfile() {
+    setAiFilling(true);
+    try {
+      const res = await apiRequest<{
+        suggestion?: {
+          businessName?: string;
+          industry?: string;
+          location?: string;
+          website?: string;
+          services?: string[];
+          keywords?: string[];
+          voiceDescription?: string;
+        };
+      }>('/api/brand-profile/ai-generate', {
+        method: 'POST',
+        body: {
+          businessName: locationName || data?.businessName,
+          category: locationCategory || data?.industry,
+          location: locationAddress || data?.activeLocation?.address,
+          websiteUrl: locationWebsite || data?.website,
+        },
+      });
+
+      if (res.suggestion) {
+        if (res.suggestion.industry) setLocationCategory(res.suggestion.industry);
+        if (res.suggestion.services && res.suggestion.services.length > 0) {
+          setOfferingsList((prev) => Array.from(new Set([...prev, ...res.suggestion!.services!])));
+        }
+        if (res.suggestion.keywords && res.suggestion.keywords.length > 0) {
+          setSelectedKeywords((prev) => Array.from(new Set([...prev, ...res.suggestion!.keywords!])));
+        }
+        if (res.suggestion.voiceDescription) {
+          setAboutText(res.suggestion.voiceDescription);
+        }
+        Alert.alert(
+          '✨ Profile Auto-Completed with AI',
+          'Industry category, services, keywords, and description have been generated and pre-filled!'
+        );
+      }
+    } catch {
+      Alert.alert('Notice', 'Could not generate AI suggestions. Please enter details manually.');
+    } finally {
+      setAiFilling(false);
+    }
+  }
 
   // Category-based AI offerings
   const aiSuggestedOfferings = useMemo(() => {
@@ -820,6 +867,35 @@ export default function SetupScreen() {
               </Text>
             </View>
 
+            {/* AI Auto-Complete Profile Button */}
+            <Pressable
+              disabled={aiFilling}
+              onPress={handleAiAutoFillProfile}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                backgroundColor: '#F5F3FF',
+                borderWidth: 1,
+                borderColor: '#DDD6FE',
+                borderRadius: 12,
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+              }}
+            >
+              {aiFilling ? (
+                <ActivityIndicator size="small" color="#7C3AED" />
+              ) : (
+                <>
+                  <MaterialIcons name="auto-awesome" size={18} color="#7C3AED" />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#7C3AED' }}>
+                    ✨ Auto-Complete Profile & Services with AI
+                  </Text>
+                </>
+              )}
+            </Pressable>
+
             <Field
               label="Business Name"
               value={locationName}
@@ -861,6 +937,32 @@ export default function SetupScreen() {
                 />
               </View>
             </View>
+
+            {/* Service Type Quick Suggestion Chips */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 6, marginTop: -8 }}
+            >
+              {['Cafe & Restaurant', 'Farmhouse & Resort', 'Salon & Spa', 'Dental Clinic', 'Fitness Center', 'Software & IT', 'Real Estate', 'Home Service'].map((cat) => (
+                <Pressable
+                  key={cat}
+                  onPress={() => setLocationCategory(cat)}
+                  style={{
+                    paddingHorizontal: 9,
+                    paddingVertical: 4,
+                    borderRadius: 8,
+                    backgroundColor: locationCategory === cat ? '#EFF6FF' : '#F1F5F9',
+                    borderWidth: 1,
+                    borderColor: locationCategory === cat ? '#3B82F6' : '#E2E8F0',
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: locationCategory === cat ? '#2563EB' : '#475569' }}>
+                    {cat}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
 
             <Field
               label="Business Website (Optional)"

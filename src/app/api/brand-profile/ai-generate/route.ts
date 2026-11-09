@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
+import { db } from '@/lib/db';
 
 /**
  * Brand Brain — AI Assist
@@ -34,6 +35,10 @@ import { getAuthUser } from '@/lib/auth';
 
 interface AiGenerateBody {
   website?: string;
+  businessName?: string;
+  industry?: string;
+  category?: string;
+  location?: string;
 }
 
 interface BrandProfileSuggestion {
@@ -272,47 +277,35 @@ export async function POST(request: NextRequest) {
     }
 
     const websiteUrl = normaliseUrl(body.website || '');
-    if (!websiteUrl) {
+    let pageSignals = '';
+
+    if (websiteUrl) {
+      const html = await fetchHtml(websiteUrl);
+      if (html) {
+        pageSignals = extractPageSignals(html);
+      }
+    }
+
+    const tenant = await db.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { name: true, city: true },
+    });
+
+    const businessName = body.businessName?.trim() || tenant?.name || '';
+    const industry = body.industry?.trim() || body.category?.trim() || 'Professional Services';
+    const location = body.location?.trim() || tenant?.city || '';
+
+    if (!websiteUrl && !businessName) {
       return NextResponse.json(
-        { error: 'A valid website URL is required.' },
+        { error: 'Please provide a business name or website URL to generate profile suggestions.' },
         { status: 400 },
       );
     }
 
-    // 1. Scrape the homepage.
-    const html = await fetchHtml(websiteUrl);
-    if (!html) {
-      return NextResponse.json(
-        {
-          error:
-            'Could not fetch the website. Check the URL is correct and publicly reachable, then try again.',
-        },
-        { status: 502 },
-      );
-    }
-
-    // 2. Extract the signal we'll feed to the LLM.
-    const pageSignals = extractPageSignals(html);
-    if (pageSignals.replace(/\s/g, '').length < 50) {
-      return NextResponse.json(
-        {
-          error:
-            'The website returned almost no readable content (it may be a JS-only app or a login wall). Try entering the brand details manually.',
-        },
-        { status: 422 },
-      );
-    }
-
-    // 3. Ask the LLM to synthesise a BrandProfile from the page signals.
-    const ZAI = (await import('z-ai-web-dev-sdk')).default;
-    const zai = await ZAI.create();
-
     const systemPrompt =
-      'You are a brand analyst. Given the homepage content of a business website, infer a complete ' +
+      'You are a brand analyst and local business growth expert. Given business details (and homepage content if available), infer or synthesise a complete ' +
       'brand profile the business can use as a starting point for AI-generated marketing content. ' +
-      'Be specific but conservative: only populate fields you can justify from the page content. ' +
-      'Use an empty string for fields you cannot infer. Do NOT invent specific prices, phone numbers, ' +
-      'or competitor URLs that are not present on the page. ' +
+      'Populate realistic, attractive local services, USPs, promotional offers, and customer pain points tailored to their category and location. ' +
       'Tone MUST be one of: Professional, Friendly, Casual, Luxury, Playful, Authoritative. ' +
       'List fields (services, products, forbiddenPhrases, competitors) MUST be JSON arrays of strings. ' +
       'Return ONLY a valid JSON object with this exact shape — no markdown, no prose, no code fences:\n' +
@@ -335,17 +328,46 @@ export async function POST(request: NextRequest) {
       '  "competitors": string[]\n' +
       '}';
 
-    const userPrompt = `Website URL: ${websiteUrl}\n\nHomepage content:\n${pageSignals}\n\nReturn the JSON brand profile now.`;
+    const userPrompt = `Business Name: ${businessName || 'Local Business'}\nIndustry/Category: ${industry}\nLocation: ${location || 'Local'}\nWebsite URL: ${websiteUrl || 'None'}\n\n${pageSignals ? `Homepage content:\n${pageSignals}` : 'Synthesize realistic services, USPs, attractive seasonal offers, and localized keywords for this business.'}\n\nReturn the JSON brand profile now.`;
 
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      thinking: { type: 'disabled' },
-    });
+    let rawJson = '';
 
-    const rawText = completion?.choices?.[0]?.message?.content?.trim() || '';
+    // Tier 1: Multi-provider callAI
+    try {
+      const { callAI } = await import('@/lib/ai-client');
+      const aiRes = await callAI({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.6,
+      });
+      if (aiRes?.content) {
+        rawJson = aiRes.content;
+      }
+    } catch (e) {
+      console.warn('[ai-generate] callAI failed, trying ZAI fallback:', e);
+    }
+
+    // Tier 2: ZAI fallback
+    if (!rawJson) {
+      try {
+        const ZAI = (await import('z-ai-web-dev-sdk')).default;
+        const zai = await ZAI.create();
+        const completion = await zai.chat.completions.create({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          thinking: { type: 'disabled' },
+        });
+        rawJson = completion.choices[0]?.message?.content?.trim() || '';
+      } catch (e) {
+        console.warn('[ai-generate] ZAI fallback failed:', e);
+      }
+    }
+
+    const rawText = rawJson.trim();
 
     // Extract JSON from the response (handles markdown code fences + stray prose).
     let jsonStr = rawText;
