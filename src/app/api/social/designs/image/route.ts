@@ -1,10 +1,23 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { runDesignJob } from '@/lib/designs/jobs';
 import { isUnsafeReferenceHostname } from '@/lib/designs/image-provider';
+import { requireBgosEntitled } from '@/lib/bgos-entitlement';
 
 export const maxDuration = 180;
+
+function scheduleDesignJob(id: string, source: string) {
+  const exec = () =>
+    Promise.resolve(runDesignJob(id)).catch((err) => {
+      console.error(`[/api/social/designs/image ${source}] background runDesignJob error:`, err);
+    });
+  try {
+    after(exec);
+  } catch {
+    void exec();
+  }
+}
 
 const VALID_ASPECT_RATIOS = new Set(['1:1', '4:5', '9:16', '16:9']);
 
@@ -89,6 +102,8 @@ function parseCompletedJobResult(raw: unknown): Record<string, unknown> | null {
 export async function POST(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user?.tenantId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  const gate = await requireBgosEntitled(user);
+  if (!gate.ok) return gate.response;
   try {
     const body = await request.json().catch(() => ({}));
     if (!/^[-a-zA-Z0-9]{16,80}$/.test(body.requestId || '')) {
@@ -198,9 +213,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Request ID already used with different content' }, { status: 409 });
       }
       if (existing.status === 'queued') {
-        void Promise.resolve(runDesignJob(id)).catch((err) => {
-          console.error('[/api/social/designs/image POST] existing job run error:', err);
-        });
+        scheduleDesignJob(id, 'POST-existing');
       }
       return NextResponse.json({ jobId: id, status: existing.status }, { status: 202 });
     }
@@ -216,10 +229,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Execute immediately in Node.js event loop
-    void Promise.resolve(runDesignJob(id)).catch((err) => {
-      console.error('[/api/social/designs/image POST] background runDesignJob error:', err);
-    });
+    // Schedule via Next 16 after() so Node/serverless runtimes keep the job alive past response
+    scheduleDesignJob(id, 'POST');
 
     return NextResponse.json({ jobId: id, status: 'queued' }, { status: 202 });
   } catch (err) {
@@ -251,9 +262,7 @@ export async function GET(request: NextRequest) {
     // Kick off queued work non-blockingly so polling GET never blocks up to 150s
     // and never hits mobile 30s or proxy 100s timeouts.
     if (job.status === 'queued' && !job.cancelRequested) {
-      void Promise.resolve(runDesignJob(job.id)).catch((err) => {
-        console.error('[/api/social/designs/image GET] background runDesignJob error:', err);
-      });
+      scheduleDesignJob(job.id, 'GET');
     }
 
     const completedResult = job.status === 'completed' ? parseCompletedJobResult(job.resultJson) : null;

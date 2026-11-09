@@ -90,8 +90,10 @@ export async function apiRequest<T = any>(
     }
   }
 
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  const hasJsonBody = body !== undefined && body !== null && !isFormData;
   const reqHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(hasJsonBody ? { 'Content-Type': 'application/json' } : {}),
     ...headers,
   };
 
@@ -113,7 +115,7 @@ export async function apiRequest<T = any>(
     response = await fetch(url, {
       method,
       headers: reqHeaders,
-      body: body ? JSON.stringify(body) : undefined,
+      body: hasJsonBody ? JSON.stringify(body) : isFormData ? body : undefined,
       signal: controller.signal,
     });
   } catch (error) {

@@ -1,11 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Platform, Pressable, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Action, Card, Empty, ErrorNotice, Loading, colors } from '../ui';
 import { normalizePendingUpload, type PendingUpload } from '../../lib/upload';
+import { useMediaUploadStore } from '../../stores/media-upload-store';
 import { gbpColors, shortDate } from './bits';
 import { MediaMetadataSheet } from './media-metadata-sheet';
+import { MediaPreviewModal, isVideoMediaAsset } from './media-preview-modal';
 import type { GbpConnectionState, GbpPhoto, PhotosResponse } from './types';
 
 type TabKey = 'soon' | 'published' | 'unposted';
@@ -22,16 +24,14 @@ function PhotoCell({
   unposted?: boolean;
   onPress?: () => void;
 }) {
-  const isVideo =
-    photo.mediaFormat === 'VIDEO' ||
-    /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(photo.url || '');
-  const editable = photo.source === 'queue' && Boolean(onPress);
+  const isVideo = isVideoMediaAsset(photo);
+  const clickable = Boolean(onPress);
 
   return (
     <Pressable
-      disabled={!editable}
+      disabled={!clickable}
       onPress={onPress}
-      accessibilityRole={editable ? 'button' : 'image'}
+      accessibilityRole={clickable ? 'button' : 'image'}
       accessibilityLabel={photo.title || photo.caption || 'Google Business Profile media'}
       style={({ pressed }) => ({
         flex: 1,
@@ -41,25 +41,46 @@ function PhotoCell({
         backgroundColor: colors.soft,
         borderWidth: 1,
         borderColor: colors.line,
-        opacity: pressed && editable ? 0.85 : 1,
+        opacity: pressed && clickable ? 0.85 : 1,
       })}
     >
-      {isVideo && !photo.thumbnailUrl ? (
-        <View
-          style={{
-            width: '100%',
-            height: '100%',
-            backgroundColor: '#0F172A',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 4,
-          }}
-        >
-          <MaterialIcons name="videocam" size={28} color="#34D399" />
-          <Text style={{ color: '#E2E8F0', fontSize: 10, fontWeight: '800', letterSpacing: 0.6 }}>
-            VIDEO
-          </Text>
-        </View>
+      {isVideo ? (
+        photo.thumbnailUrl ? (
+          <Image
+            source={{ uri: photo.thumbnailUrl }}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+            accessibilityIgnoresInvertColors
+            accessibilityLabel={photo.title || photo.caption || 'Video thumbnail'}
+            alt={photo.title || photo.caption || 'Video thumbnail'}
+          />
+        ) : Platform.OS === 'web' && photo.url ? (
+          <View style={{ width: '100%', height: '100%', backgroundColor: '#0F172A' }}>
+            {React.createElement('video', {
+              src: photo.url,
+              muted: true,
+              playsInline: true,
+              preload: 'metadata',
+              style: { width: '100%', height: '100%', objectFit: 'cover' },
+            })}
+          </View>
+        ) : (
+          <View
+            style={{
+              width: '100%',
+              height: '100%',
+              backgroundColor: '#0F172A',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+            }}
+          >
+            <MaterialIcons name="play-circle-filled" size={30} color="#34D399" />
+            <Text style={{ color: '#E2E8F0', fontSize: 10, fontWeight: '800', letterSpacing: 0.6 }}>
+              VIDEO
+            </Text>
+          </View>
+        )
       ) : (
         <Image
           source={{ uri: photo.thumbnailUrl || photo.url }}
@@ -70,6 +91,27 @@ function PhotoCell({
           alt={photo.title || photo.caption || 'Google Business Profile media'}
         />
       )}
+
+      {isVideo && (photo.thumbnailUrl || Platform.OS === 'web') ? (
+        <View
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: [{ translateX: -16 }, { translateY: -16 }],
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: 'rgba(0,0,0,0.62)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1.5,
+            borderColor: 'rgba(255,255,255,0.65)',
+          }}
+        >
+          <MaterialIcons name="play-arrow" size={20} color="#FFFFFF" />
+        </View>
+      ) : null}
 
       {isVideo ? (
         <View
@@ -208,13 +250,13 @@ function Grid({
   scheduled,
   unposted,
   onAdd,
-  onEdit,
+  onPreview,
 }: {
   photos: GbpPhoto[];
   scheduled: boolean;
   unposted?: boolean;
   onAdd: () => void;
-  onEdit?: (photo: GbpPhoto) => void;
+  onPreview: (photo: GbpPhoto) => void;
 }) {
   const firstRow = photos.slice(0, 2);
   const rest = photos.slice(2);
@@ -231,7 +273,7 @@ function Grid({
             photo={p}
             scheduled={scheduled}
             unposted={unposted}
-            onPress={p.source === 'queue' && onEdit ? () => onEdit(p) : undefined}
+            onPress={() => onPreview(p)}
           />
         ))}
         {Array.from({ length: Math.max(0, 2 - firstRow.length) }).map((_, i) => (
@@ -246,7 +288,7 @@ function Grid({
               photo={p}
               scheduled={scheduled}
               unposted={unposted}
-              onPress={p.source === 'queue' && onEdit ? () => onEdit(p) : undefined}
+              onPress={() => onPreview(p)}
             />
           ))}
           {Array.from({ length: Math.max(0, 3 - row.length) }).map((_, i) => (
@@ -291,8 +333,20 @@ export function PhotosBoard({
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerMode, setComposerMode] = useState<'upload' | 'ai_generate'>('upload');
   const [editingItem, setEditingItem] = useState<GbpPhoto | null>(null);
+  const [previewItem, setPreviewItem] = useState<GbpPhoto | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const lastCompletionSeq = useMediaUploadStore((s) => s.lastCompletionSeq);
+  const lastCompletedJob = useMediaUploadStore((s) => s.lastCompletedJob);
+  useEffect(() => {
+    if (lastCompletionSeq > 0) {
+      if (lastCompletedJob?.message) {
+        setNotice(lastCompletedJob.message);
+      }
+      void refresh();
+    }
+  }, [lastCompletionSeq]);
 
   const all = useMemo(() => data?.photos || [], [data]);
   const published = useMemo(
@@ -601,10 +655,18 @@ export function PhotosBoard({
             scheduled={tab === 'soon'}
             unposted={tab === 'unposted'}
             onAdd={pickPhotos}
-            onEdit={openEditModal}
+            onPreview={(p) => setPreviewItem(p)}
           />
         </View>
       )}
+
+      <MediaPreviewModal
+        visible={Boolean(previewItem)}
+        item={previewItem}
+        onClose={() => setPreviewItem(null)}
+        onEdit={openEditModal}
+        businessName={businessName}
+      />
 
       <MediaMetadataSheet
         visible={composerOpen}

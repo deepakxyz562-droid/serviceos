@@ -62,6 +62,8 @@ export interface PublishTarget {
   socialAccountId: string;
   /** Platform-assigned post ID, populated after a successful publish. */
   externalPostId?: string;
+  /** Direct platform URL (e.g. Google Business searchUrl / mapsUri) once published. */
+  permalink?: string;
   status: PublishTargetStatus;
   /** Human-readable error message if status==='failed'. */
   error?: string;
@@ -102,6 +104,7 @@ export interface PublishResult {
   platform: SocialPlatform;
   socialAccountId: string;
   externalPostId?: string;
+  permalink?: string;
   success: boolean;
   error?: string;
 }
@@ -201,7 +204,7 @@ export interface PlatformAdapter {
   publish(
     account: SocialAccountData,
     params: PublishParams,
-  ): Promise<{ externalPostId: string }>;
+  ): Promise<{ externalPostId: string; permalink?: string }>;
   refreshToken?(
     account: SocialAccountData,
   ): Promise<{

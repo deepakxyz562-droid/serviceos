@@ -12,9 +12,9 @@ import { getAuthUser } from '@/lib/auth';
  *
  * Response: NotificationPreference (the Prisma model shape).
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
@@ -78,7 +78,7 @@ export async function GET() {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
@@ -94,10 +94,11 @@ export async function PUT(request: NextRequest) {
       smsEnabled,
       whatsappEnabled,
       typePrefsJson,
+      dailyGrowthTips,
       quietHoursStart,
       quietHoursEnd,
       quietHoursTz,
-    } = body;
+    } = body as Record<string, unknown>;
 
     // Build the patch — only fields that were actually provided.
     const data: Record<string, unknown> = {};
@@ -106,18 +107,37 @@ export async function PUT(request: NextRequest) {
     if (typeof emailEnabled === 'boolean') data.emailEnabled = emailEnabled;
     if (typeof smsEnabled === 'boolean') data.smsEnabled = smsEnabled;
     if (typeof whatsappEnabled === 'boolean') data.whatsappEnabled = whatsappEnabled;
+
+    let parsedTypePrefsPatch: Record<string, unknown> | null = null;
     if (typeof typePrefsJson === 'string') {
-      // Validate JSON before storing.
       try {
-        JSON.parse(typePrefsJson);
+        const parsed = JSON.parse(typePrefsJson);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          return NextResponse.json(
+            { error: 'typePrefsJson must be a JSON object' },
+            { status: 400 }
+          );
+        }
         data.typePrefsJson = typePrefsJson;
+        parsedTypePrefsPatch = parsed as Record<string, unknown>;
       } catch {
         return NextResponse.json(
           { error: 'typePrefsJson must be valid JSON' },
           { status: 400 }
         );
       }
+    } else if (typePrefsJson && typeof typePrefsJson === 'object' && !Array.isArray(typePrefsJson)) {
+      parsedTypePrefsPatch = typePrefsJson as Record<string, unknown>;
+      data.typePrefsJson = JSON.stringify(parsedTypePrefsPatch);
     }
+
+    if (typeof dailyGrowthTips === 'boolean') {
+      data.typePrefsJson = JSON.stringify({
+        ...(parsedTypePrefsPatch || {}),
+        daily_growth_tips: dailyGrowthTips,
+      });
+    }
+
     if (typeof quietHoursStart === 'string') data.quietHoursStart = quietHoursStart || null;
     if (typeof quietHoursEnd === 'string') data.quietHoursEnd = quietHoursEnd || null;
     if (typeof quietHoursTz === 'string') data.quietHoursTz = quietHoursTz;
@@ -161,6 +181,19 @@ export async function PUT(request: NextRequest) {
           throw e;
         }
       }
+    }
+
+    // Preserve existing typePrefs keys when only `dailyGrowthTips` shorthand is sent
+    if (typeof dailyGrowthTips === 'boolean' && !parsedTypePrefsPatch && existing.typePrefsJson) {
+      try {
+        const currentPrefs = JSON.parse(existing.typePrefsJson);
+        if (currentPrefs && typeof currentPrefs === 'object' && !Array.isArray(currentPrefs)) {
+          data.typePrefsJson = JSON.stringify({
+            ...(currentPrefs as Record<string, unknown>),
+            daily_growth_tips: dailyGrowthTips,
+          });
+        }
+      } catch {}
     }
 
     const updated = await db.notificationPreference.update({

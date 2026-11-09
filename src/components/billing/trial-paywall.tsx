@@ -107,13 +107,18 @@ export function useTrialStatus(): TrialStatus {
       if (document.hidden) stop();
       else { refresh(); start(); }
     };
+    const onBillingUpdated = () => {
+      void refresh();
+    };
     start();
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('bgos:billing-updated', onBillingUpdated);
 
     return () => {
       cancelled = true;
       stop();
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('bgos:billing-updated', onBillingUpdated);
     };
   }, [refresh, shouldPoll]);
 
@@ -155,17 +160,17 @@ export function TrialPaywallOverlay({ trialStatus }: { trialStatus: TrialStatus 
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
         </div>
-        <h2 className="text-2xl font-bold tracking-tight">Your trial has expired</h2>
+        <h2 className="text-2xl font-bold tracking-tight">Your 7-day trial has ended</h2>
         <p className="text-muted-foreground text-sm">
-          Access to your dashboard, leads, jobs, and workflows is paused. Add a
-          payment method and choose a plan to instantly restore full access.
-          Your data is preserved for 30 days.
+          You enjoyed full feature access during your 7-day trial. Complete payment
+          via Razorpay (India) or Creem (International) to continue using AI studio,
+          reviews, marketing, leads, and automations. Your data is safely preserved.
         </p>
         <button
           onClick={() => setCurrentView('billing')}
           className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-white font-semibold hover:bg-emerald-700 transition-colors"
         >
-          Choose a plan to continue
+          Complete payment to continue
         </button>
         <p className="text-xs text-muted-foreground">
           Questions? Reply to your trial emails or contact support.

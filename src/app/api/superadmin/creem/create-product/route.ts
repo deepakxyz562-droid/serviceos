@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
-import { createCreemProduct } from '@/lib/creem';
+import { BGOS_CREEM_PLANS, createCreemProduct } from '@/lib/creem';
 
 /**
  * POST /api/superadmin/creem/create-product
@@ -99,26 +99,35 @@ export async function POST(request: NextRequest) {
         );
       }
     } else if (planCode) {
-      const plan = await db.plan.findUnique({ where: { code: planCode } });
-      if (!plan) {
-        return NextResponse.json(
-          { error: `Plan "${planCode}" not found in catalog.` },
-          { status: 404 }
-        );
-      }
-      const cycleLabel = cycle === 'yearly' ? 'Yearly' : 'Monthly';
-      name = `Fieseros ${plan.name} — ${cycleLabel}`;
-      description =
-        plan.description || `Fieseros ${plan.name} plan, ${cycle} subscription`;
-      price = cycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
-      currency = plan.currency || 'USD';
-      if (!price || price <= 0) {
-        return NextResponse.json(
-          {
-            error: `Plan "${planCode}" has no ${cycle} price (free / contact-sales). Nothing to create in Creem.`,
-          },
-          { status: 400 }
-        );
+      const bgosPlan = BGOS_CREEM_PLANS[planCode];
+      if (bgosPlan) {
+        const cycleLabel = cycle === 'yearly' ? 'Yearly' : 'Monthly';
+        name = `${bgosPlan.name} — ${cycleLabel}`;
+        description = bgosPlan.description;
+        price = cycle === 'yearly' ? bgosPlan.yearlyPrice : bgosPlan.monthlyPrice;
+        currency = bgosPlan.currency || 'USD';
+      } else {
+        const plan = await db.plan.findUnique({ where: { code: planCode } });
+        if (!plan) {
+          return NextResponse.json(
+            { error: `Plan "${planCode}" not found in catalog.` },
+            { status: 404 }
+          );
+        }
+        const cycleLabel = cycle === 'yearly' ? 'Yearly' : 'Monthly';
+        name = `Fieseros ${plan.name} — ${cycleLabel}`;
+        description =
+          plan.description || `Fieseros ${plan.name} plan, ${cycle} subscription`;
+        price = cycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+        currency = plan.currency || 'USD';
+        if (!price || price <= 0) {
+          return NextResponse.json(
+            {
+              error: `Plan "${planCode}" has no ${cycle} price (free / contact-sales). Nothing to create in Creem.`,
+            },
+            { status: 400 }
+          );
+        }
       }
     } else {
       return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });

@@ -94,6 +94,10 @@ import {
   type WebMediaItem,
   type WebScheduleMode,
 } from '@/components/bgos/media-metadata-dialog';
+import {
+  WebMediaThumb,
+  WebMediaPreviewDialog,
+} from '@/components/bgos/web-media-preview-dialog';
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -390,6 +394,7 @@ export function ReviewsView({
   const [mediaModalMode, setMediaModalMode] = useState<'upload' | 'ai_generate'>('upload');
   const [pendingMediaFiles, setPendingMediaFiles] = useState<File[]>([]);
   const [editingMediaItem, setEditingMediaItem] = useState<WebMediaItem | null>(null);
+  const [previewMediaItem, setPreviewMediaItem] = useState<WebMediaItem | null>(null);
   const [mediaModalDefaultMode, setMediaModalDefaultMode] = useState<WebScheduleMode>('daily');
 
   // Automate Review Requests state (persisted in tenant settingsJson.reviewAutomation)
@@ -4481,41 +4486,19 @@ export function ReviewsView({
             {!photosLoading &&
             (photosList.length > 0
               ? photosList.map((item, i) => {
-                  const isVideo =
-                    item.mediaFormat === 'VIDEO' ||
-                    /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(item.url || '');
                   const isEditable = item.source === 'queue' && Boolean(item.postId || item.id);
                   const dateIso = item.scheduledFor || item.createdAt;
                   return (
                     <div
                       key={item.id || i}
-                      onClick={
-                        isEditable
-                          ? () => {
-                              setPendingMediaFiles([]);
-                              setEditingMediaItem(item);
-                              setMediaModalMode('upload');
-                              setMediaModalOpen(true);
-                            }
-                          : undefined
-                      }
-                      className={cn(
-                        'relative rounded-2xl overflow-hidden group border border-slate-200 dark:border-slate-800 bg-slate-100 h-40',
-                        isEditable && 'cursor-pointer hover:ring-2 hover:ring-[#009F50]/50 transition',
-                      )}
+                      onClick={() => setPreviewMediaItem(item)}
+                      className="relative rounded-2xl overflow-hidden group border border-slate-200 dark:border-slate-800 bg-slate-100 h-40 cursor-pointer hover:ring-2 hover:ring-[#009F50]/50 transition"
                     >
-                      {isVideo ? (
-                        <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center gap-1 text-white">
-                          <Film className="size-7 text-emerald-400" />
-                          <span className="text-[10px] font-bold uppercase tracking-wider">Video</span>
-                        </div>
-                      ) : (
-                        <img
-                          src={item.thumbnailUrl || item.url}
-                          alt={item.title || `Business media ${i + 1}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      )}
+                      <WebMediaThumb
+                        item={item}
+                        alt={item.title || `Business media ${i + 1}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
                       {item.source === 'queue' ? (
                         <span
                           className={cn(
@@ -4539,9 +4522,19 @@ export function ReviewsView({
                         </span>
                       )}
                       {isEditable && (
-                        <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px] font-semibold">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPendingMediaFiles([]);
+                            setEditingMediaItem(item);
+                            setMediaModalMode('upload');
+                            setMediaModalOpen(true);
+                          }}
+                          className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/60 hover:bg-black/80 text-white text-[10px] font-semibold"
+                        >
                           Edit
-                        </span>
+                        </button>
                       )}
                       {(item.title || (item.tags && item.tags.length > 0)) && (
                         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/45 to-transparent p-2 text-white">
@@ -4986,6 +4979,18 @@ export function ReviewsView({
         initialMode={mediaModalMode}
         onSaved={() => {
           loadPhotos();
+        }}
+      />
+      <WebMediaPreviewDialog
+        item={previewMediaItem}
+        open={Boolean(previewMediaItem)}
+        onOpenChange={(v) => { if (!v) setPreviewMediaItem(null); }}
+        businessName={profileTitle || businessName}
+        onEdit={(item) => {
+          setPendingMediaFiles([]);
+          setEditingMediaItem(item);
+          setMediaModalMode('upload');
+          setMediaModalOpen(true);
         }}
       />
     </div>

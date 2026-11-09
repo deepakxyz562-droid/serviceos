@@ -143,6 +143,7 @@ import { AutopilotStudio } from './autopilot-studio';
 import { UrgentReviewCard } from '@/components/bgos/urgent-review-card';
 import { UpcomingPostsCarousel } from '@/components/bgos/upcoming-posts-carousel';
 import { WebMediaMetadataDialog, type WebMediaItem } from '@/components/bgos/media-metadata-dialog';
+import { WebMediaThumb, WebMediaPreviewDialog } from '@/components/bgos/web-media-preview-dialog';
 
 type SocialTab =
   | 'overview'
@@ -742,7 +743,10 @@ interface SocialPostDto {
   publishedAt?: string | null;
   failureReason?: string | null;
   createdAt?: string;
-  targets?: Array<{ platform?: string }>;
+  permalink?: string | null;
+  googleUrl?: string | null;
+  targets?: Array<{ platform?: string; permalink?: string }>;
+  publishTargets?: Array<{ platform?: string; permalink?: string }>;
 }
 
 interface ReviewDto {
@@ -1940,6 +1944,9 @@ export function SocialMediaView({
   const [mediaDialogMode, setMediaDialogMode] = useState<'upload' | 'ai_generate'>('upload');
   const [selectedMediaFiles, setSelectedMediaFiles] = useState<File[]>([]);
   const [editingMediaItem, setEditingMediaItem] = useState<WebMediaItem | null>(null);
+  const [previewMediaItem, setPreviewMediaItem] = useState<WebMediaItem | null>(null);
+  const [pendingFocusMediaId, setPendingFocusMediaId] = useState<string | null>(null);
+  const [pendingFocusPostId, setPendingFocusPostId] = useState<string | null>(null);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
 
   const toggleChannel = (channelName: string) => {
@@ -2899,11 +2906,12 @@ export function SocialMediaView({
       const res = await authFetch(`/api/reviews/${reviewId}/reply`, {
         method: 'DELETE',
       });
+      const json = await res.json().catch(() => ({}));
       if (res.ok) {
-        toast.success('Reply reset! Review is now back in Pending.');
+        toast.success(json.message || 'Reply reset! Review is now back in Pending.');
         await fetchReviews();
       } else {
-        toast.error('Failed to reset review reply.');
+        toast.error(json.error || json.message || 'Failed to reset review reply.');
       }
     } catch {
       toast.error('Network error resetting review reply.');
@@ -3220,6 +3228,43 @@ export function SocialMediaView({
     () => (Array.isArray(photosData?.photos) ? photosData!.photos : []),
     [photosData]
   );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const qs = new URLSearchParams(window.location.search);
+    const socialTab = qs.get('socialTab') || qs.get('tab');
+    const mediaId = qs.get('mediaId') || qs.get('photoId');
+    const mediaTab = qs.get('mediaTab');
+    const postId = qs.get('postId');
+    if (socialTab === 'google-media' || mediaId) {
+      setActiveTab('google-media');
+      if (mediaTab === 'uploaded' || mediaTab === 'scheduled' || mediaTab === 'not_posted') {
+        setMediaFilter(mediaTab);
+      }
+      if (mediaId) setPendingFocusMediaId(mediaId);
+    } else if (socialTab === 'posts' || postId) {
+      setActiveTab('posts');
+      if (postId) setPendingFocusPostId(postId);
+    } else if (socialTab === 'google-post') {
+      setActiveTab('google-post');
+    } else if (socialTab === 'ai-content') {
+      setActiveTab('ai-content');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!pendingFocusMediaId || !mediaPhotos.length) return;
+    const match = mediaPhotos.find(
+      (p) => p.id === pendingFocusMediaId || p.postId === pendingFocusMediaId || p.url === pendingFocusMediaId,
+    );
+    if (match) {
+      if (match.source === 'google') setMediaFilter('uploaded');
+      else if (match.status === 'scheduled' || match.status === 'publishing') setMediaFilter('scheduled');
+      else setMediaFilter('not_posted');
+      setPreviewMediaItem(match as WebMediaItem);
+      setPendingFocusMediaId(null);
+    }
+  }, [pendingFocusMediaId, mediaPhotos]);
   const uploadedCount =
     photosData?.liveCount ?? mediaPhotos.filter((p) => p.source === 'google').length;
   const scheduledMediaCount = mediaPhotos.filter(
@@ -3404,7 +3449,11 @@ export function SocialMediaView({
             onCreateWithAi={() => setActiveTab('composer')}
           />
           <Suspense fallback={<TabLoader />}>
-            <PostsListView embedded />
+            <PostsListView
+              embedded
+              focusedPostId={pendingFocusPostId}
+              onClearFocusedPost={() => setPendingFocusPostId(null)}
+            />
           </Suspense>
         </div>
       )}
@@ -4583,6 +4632,24 @@ export function SocialMediaView({
                           {dateLabel && (
                             <span className="text-[10px] text-muted-foreground">{dateLabel}</span>
                           )}
+                          {(post.googleUrl ||
+                            post.publishTargets?.find((t) => t.platform === 'googlebusiness')?.permalink ||
+                            (post.permalink && post.permalink.includes('google.') ? post.permalink : null)) && (
+                            <a
+                              href={
+                                post.googleUrl ||
+                                post.publishTargets?.find((t) => t.platform === 'googlebusiness')?.permalink ||
+                                post.permalink ||
+                                '#'
+                              }
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary hover:underline"
+                            >
+                              <ExternalLink className="size-3" />
+                              <span>View on Google</span>
+                            </a>
+                          )}
                         </div>
                       </div>
                       {isPendingApproval && (
@@ -5540,6 +5607,24 @@ export function SocialMediaView({
                               {relativeTime(dateStr)}
                             </span>
                           )}
+                          {(post.googleUrl ||
+                            post.publishTargets?.find((t) => t.platform === 'googlebusiness')?.permalink ||
+                            (post.permalink && post.permalink.includes('google.') ? post.permalink : null)) && (
+                            <a
+                              href={
+                                post.googleUrl ||
+                                post.publishTargets?.find((t) => t.platform === 'googlebusiness')?.permalink ||
+                                post.permalink ||
+                                '#'
+                              }
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary hover:underline"
+                            >
+                              <ExternalLink className="size-3" />
+                              <span>View on Google</span>
+                            </a>
+                          )}
                         </div>
                       </div>
                     );
@@ -5668,31 +5753,14 @@ export function SocialMediaView({
                   return (
                     <div
                       key={photo.id}
-                      onClick={() => {
-                        if (isEditable) {
-                          setSelectedMediaFiles([]);
-                          setEditingMediaItem(photo);
-                          setMediaDialogMode('upload');
-                          setMediaDialogOpen(true);
-                        }
-                      }}
-                      className={`space-y-1.5 ${isEditable ? 'cursor-pointer group' : ''}`}
+                      onClick={() => setPreviewMediaItem(photo as WebMediaItem)}
+                      className="space-y-1.5 cursor-pointer group"
                     >
                       <div className="relative aspect-square rounded-xl overflow-hidden border border-border bg-muted">
-                        {isVideo && !photo.thumbnailUrl ? (
-                          <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center gap-1 text-white">
-                            <Film className="size-7 text-emerald-400" />
-                            <span className="text-[10px] font-extrabold tracking-wider text-slate-200">VIDEO</span>
-                          </div>
-                        ) : (
-                          /* Remote storage/data URLs — not local /public assets, plain img is intentional */
-                          <img
-                            src={photo.thumbnailUrl || photo.url}
-                            alt={photo.title || photo.caption || 'Google Business media'}
-                            loading="lazy"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          />
-                        )}
+                        <WebMediaThumb
+                          item={photo}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
                         {isVideo && (
                           <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/75 text-white text-[9px] font-bold">
                             VIDEO
@@ -5715,7 +5783,19 @@ export function SocialMediaView({
                               : photo.gbpCategory || photo.category || (photo.source === 'google' ? 'Live' : 'Draft')}
                           </span>
                           {isEditable && (
-                            <span className="text-[10px] font-bold text-primary">Edit</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedMediaFiles([]);
+                                setEditingMediaItem(photo as WebMediaItem);
+                                setMediaDialogMode('upload');
+                                setMediaDialogOpen(true);
+                              }}
+                              className="text-[10px] font-bold text-primary hover:underline"
+                            >
+                              Edit
+                            </button>
                           )}
                         </div>
                       </div>
@@ -6268,11 +6348,30 @@ export function SocialMediaView({
         editingItem={editingMediaItem}
         defaultScheduleMode="daily"
         initialMode={mediaDialogMode}
-        onSaved={(_msg, mode) => {
+        onViewMedia={(mediaId, mediaTab) => {
+          setActiveTab('google-media');
+          if (mediaTab) setMediaFilter(mediaTab);
+          if (mediaId) setPendingFocusMediaId(mediaId);
+          fetchPhotos();
+        }}
+        onSaved={(_msg, mode, mediaId) => {
           if (mode === 'instant') setMediaFilter('uploaded');
           else if (mode === 'draft') setMediaFilter('not_posted');
           else if (mode === 'daily' || mode === 'weekly') setMediaFilter('scheduled');
+          if (mediaId) setPendingFocusMediaId(mediaId);
           fetchPhotos();
+        }}
+      />
+      <WebMediaPreviewDialog
+        item={previewMediaItem}
+        open={Boolean(previewMediaItem)}
+        onOpenChange={(v) => { if (!v) setPreviewMediaItem(null); }}
+        businessName={businessName}
+        onEdit={(item) => {
+          setSelectedMediaFiles([]);
+          setEditingMediaItem(item);
+          setMediaDialogMode('upload');
+          setMediaDialogOpen(true);
         }}
       />
     </div>

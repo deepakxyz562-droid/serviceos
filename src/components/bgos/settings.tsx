@@ -298,6 +298,8 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
   const [dailyDigest, setDailyDigest] = useState(true);
   const [bgosProductNudges, setBgosProductNudges] = useState(true);
   const [bgosMarketingEmails, setBgosMarketingEmails] = useState(true);
+  const [dailyGrowthTips, setDailyGrowthTips] = useState(true);
+  const [rawTypePrefs, setRawTypePrefs] = useState<Record<string, unknown>>({});
   const [autoAssignLeads, setAutoAssignLeads] = useState(true);
   const [instantReviewDrafts, setInstantReviewDrafts] = useState(true);
   const [timezone, setTimezone] = useState('Australia/Brisbane (AEST, UTC+10:00)');
@@ -408,6 +410,22 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
       } catch {
         // preserve standard defaults
       }
+      try {
+        const prefRes = await authFetch('/api/notifications/preferences');
+        if (prefRes.ok && isMounted) {
+          const prefJson = await prefRes.json();
+          if (typeof prefJson?.typePrefsJson === 'string') {
+            const parsed = JSON.parse(prefJson.typePrefsJson);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              const rec = parsed as Record<string, unknown>;
+              setRawTypePrefs(rec);
+              setDailyGrowthTips(rec.daily_growth_tips !== false);
+            }
+          }
+        }
+      } catch {
+        // preserve defaults
+      }
     }
     fetchSettings();
     return () => {
@@ -479,6 +497,18 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
         }),
       });
       if (res.ok) {
+        const mergedTypePrefs = {
+          ...rawTypePrefs,
+          daily_growth_tips: dailyGrowthTips,
+        };
+        setRawTypePrefs(mergedTypePrefs);
+        await authFetch('/api/notifications/preferences', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            typePrefsJson: JSON.stringify(mergedTypePrefs),
+          }),
+        }).catch(() => null);
         setSavedToast(true);
         toast.success('Business settings saved to database!');
       } else {
@@ -1799,6 +1829,32 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
                   type="checkbox"
                   checked={bgosMarketingEmails}
                   onChange={(e) => setBgosMarketingEmails(e.target.checked)}
+                  className="size-4 accent-[#009F50]"
+                />
+              </label>
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Daily Post &amp; Promo Push Reminders</p>
+                  <p className="text-xs text-slate-500">
+                    Morning push reminder in your local timezone when no Google post or promo is scheduled yet today.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={dailyGrowthTips}
+                  onChange={(e) => {
+                    const nextVal = e.target.checked;
+                    setDailyGrowthTips(nextVal);
+                    const mergedTypePrefs = { ...rawTypePrefs, daily_growth_tips: nextVal };
+                    setRawTypePrefs(mergedTypePrefs);
+                    void authFetch('/api/notifications/preferences', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        typePrefsJson: JSON.stringify(mergedTypePrefs),
+                      }),
+                    }).catch(() => {});
+                  }}
                   className="size-4 accent-[#009F50]"
                 />
               </label>

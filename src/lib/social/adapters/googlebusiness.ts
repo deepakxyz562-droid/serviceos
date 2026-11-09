@@ -140,6 +140,7 @@ export async function extractLocationRef(account: SocialAccountData): Promise<{
     try {
       const accRes = await fetch('https://mybusinessaccountmanagement.googleapis.com/v1/accounts', {
         headers: { Authorization: `Bearer ${account.accessToken}` },
+        signal: AbortSignal.timeout(15000),
       });
       if (accRes.ok) {
         const accData = await accRes.json();
@@ -151,6 +152,7 @@ export async function extractLocationRef(account: SocialAccountData): Promise<{
             `https://mybusinessbusinessinformation.googleapis.com/v1/${a.name}/locations?readMask=name,title,storefrontAddress,metadata,categories`,
             {
               headers: { Authorization: `Bearer ${account.accessToken}` },
+              signal: AbortSignal.timeout(15000),
             },
           );
           if (locRes.ok) {
@@ -456,9 +458,9 @@ export const googleBusinessAdapter: PlatformAdapter = {
 
     await assertOk(res, 'publish');
 
-    let json: { name?: string } | null = null;
+    let json: { name?: string; searchUrl?: string } | null = null;
     try {
-      json = (await res.json()) as { name?: string };
+      json = (await res.json()) as { name?: string; searchUrl?: string };
     } catch {
       // GBP should always return JSON — if it didn't, the response is unusable.
     }
@@ -467,7 +469,17 @@ export const googleBusinessAdapter: PlatformAdapter = {
         'GBP publish returned 2xx but no `name` field — cannot record externalPostId.',
       );
     }
-    return { externalPostId: json.name };
+    const meta = (account.metadata || {}) as Record<string, unknown>;
+    const permalink =
+      (typeof json.searchUrl === 'string' && json.searchUrl.trim() ? json.searchUrl.trim() : undefined) ||
+      (typeof meta.mapsUri === 'string' && meta.mapsUri.trim() ? meta.mapsUri.trim() : undefined) ||
+      (typeof meta.placeId === 'string' && meta.placeId.trim()
+        ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(meta.placeId.trim())}`
+        : undefined);
+    return {
+      externalPostId: json.name,
+      ...(permalink ? { permalink } : {}),
+    };
   },
 
   /**
@@ -726,8 +738,13 @@ export async function replyToGoogleBusinessReview(
   comment: string,
 ): Promise<{ comment: string; updateTime: string; reviewReplyState?: string; policyViolation?: string }> {
   const { accountName, locationId } = await extractLocationRef(account);
-  const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
-  const cleanReviewId = reviewId.includes('/') ? reviewId.split('/').pop()! : reviewId;
+  const fullReviewMatch = reviewId.match(/^(accounts\/[^/]+)\/locations\/([^/]+)\/reviews\/([^/]+)$/);
+  const normalizedAccount = fullReviewMatch && fullReviewMatch[2] === String(locationId)
+    ? fullReviewMatch[1]
+    : accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
+  const cleanReviewId = fullReviewMatch
+    ? fullReviewMatch[3]
+    : (reviewId.includes('/') ? reviewId.split('/').pop()! : reviewId);
   const reviewLocation = reviewId.match(/(?:^|\/)locations\/([^/]+)\/reviews\/[^/]+$/)?.[1];
   if (reviewLocation && reviewLocation !== String(locationId)) {
     throw new Error('The review belongs to a different Google Business location.');
@@ -739,14 +756,20 @@ export async function replyToGoogleBusinessReview(
 
   const url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/reviews/${cleanReviewId}/reply`;
 
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${account.accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ comment: comment.trim() }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${account.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ comment: comment.trim() }),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (err) {
+    throw new Error(`GBP reply to review network error: ${errorMessage(err, 'request timed out')}`);
+  }
 
   await assertOk(res, 'reply to review');
   const data = (await res.json().catch(() => ({}))) as { comment?: string; updateTime?: string; reviewReplyState?: string; policyViolation?: string };
@@ -768,8 +791,13 @@ export async function deleteGoogleBusinessReviewReply(
   reviewId: string,
 ): Promise<boolean> {
   const { accountName, locationId } = await extractLocationRef(account);
-  const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
-  const cleanReviewId = reviewId.includes('/') ? reviewId.split('/').pop()! : reviewId;
+  const fullReviewMatch = reviewId.match(/^(accounts\/[^/]+)\/locations\/([^/]+)\/reviews\/([^/]+)$/);
+  const normalizedAccount = fullReviewMatch && fullReviewMatch[2] === String(locationId)
+    ? fullReviewMatch[1]
+    : accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
+  const cleanReviewId = fullReviewMatch
+    ? fullReviewMatch[3]
+    : (reviewId.includes('/') ? reviewId.split('/').pop()! : reviewId);
   const reviewLocation = reviewId.match(/(?:^|\/)locations\/([^/]+)\/reviews\/[^/]+$/)?.[1];
   if (reviewLocation && reviewLocation !== String(locationId)) {
     throw new Error('The review belongs to a different Google Business location.');
@@ -781,12 +809,18 @@ export async function deleteGoogleBusinessReviewReply(
 
   const url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/reviews/${cleanReviewId}/reply`;
 
-  const res = await fetch(url, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${account.accessToken}`,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${account.accessToken}`,
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (err) {
+    throw new Error(`GBP delete review reply network error: ${errorMessage(err, 'request timed out')}`);
+  }
 
   // 404 NOT_FOUND means there is no active reply on Google (already deleted
   // in Google Business Profile / Maps or never published to Google).

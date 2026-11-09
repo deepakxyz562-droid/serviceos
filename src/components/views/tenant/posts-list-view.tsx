@@ -64,6 +64,7 @@ interface PublishTarget {
   platform: string;
   socialAccountId: string;
   externalPostId?: string;
+  permalink?: string;
   status: 'pending' | 'publishing' | 'published' | 'failed';
   error?: string;
   publishedAt?: string;
@@ -76,6 +77,8 @@ export interface SocialPost {
   content: string;
   mediaUrls: string[];
   linkUrl: string | null;
+  permalink?: string | null;
+  googleUrl?: string | null;
   publishTargets: PublishTarget[];
   scheduledAt: string | null;
   publishedAt: string | null;
@@ -83,6 +86,25 @@ export interface SocialPost {
   createdAt: string;
   updatedAt: string;
   _count?: { metrics: number };
+}
+
+function getGooglePostUrl(post: SocialPost): string | null {
+  if (typeof post.googleUrl === 'string' && post.googleUrl.trim()) {
+    return post.googleUrl.trim();
+  }
+  const gbpTarget = Array.isArray(post.publishTargets)
+    ? post.publishTargets.find(
+        (t) =>
+          t.platform === 'googlebusiness' &&
+          typeof t.permalink === 'string' &&
+          t.permalink.trim().length > 0,
+      )
+    : null;
+  if (gbpTarget?.permalink) return gbpTarget.permalink.trim();
+  if (typeof post.permalink === 'string' && post.permalink.trim() && post.permalink.includes('google.')) {
+    return post.permalink.trim();
+  }
+  return null;
 }
 
 interface Pagination {
@@ -136,7 +158,15 @@ const PLATFORM_COLORS: Record<string, string> = {
   twitter: 'bg-zinc-900',
 };
 
-export function PostsListView({ embedded = false }: { embedded?: boolean } = {}) {
+export function PostsListView({
+  embedded = false,
+  focusedPostId = null,
+  onClearFocusedPost,
+}: {
+  embedded?: boolean;
+  focusedPostId?: string | null;
+  onClearFocusedPost?: () => void;
+} = {}) {
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -148,6 +178,34 @@ export function PostsListView({ embedded = false }: { embedded?: boolean } = {})
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [viewPost, setViewPost] = useState<SocialPost | null>(null);
   const [actingOnId, setActingOnId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const targetId =
+      focusedPostId ||
+      (typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('postId')
+        : null);
+    if (!targetId) return;
+    const localMatch = posts.find((p) => p.id === targetId);
+    if (localMatch) {
+      setViewPost(localMatch);
+      onClearFocusedPost?.();
+      return;
+    }
+    let cancelled = false;
+    authFetch(`/api/social/posts/${encodeURIComponent(targetId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!cancelled && json?.data) {
+          setViewPost(json.data);
+          onClearFocusedPost?.();
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [focusedPostId, posts, onClearFocusedPost]);
 
   const loadPosts = useCallback(async () => {
     setIsLoading(true);
@@ -408,6 +466,7 @@ export function PostsListView({ embedded = false }: { embedded?: boolean } = {})
           {posts.map((post) => {
             const platforms = platformsInPost(post);
             const mediaUrl = post.mediaUrls?.[0];
+            const googleLink = getGooglePostUrl(post);
             const isPendingApproval = post.approvalStatus === 'pending';
             const isApproved = post.approvalStatus === 'approved';
             const isRejected = post.approvalStatus === 'rejected';
@@ -540,6 +599,17 @@ export function PostsListView({ embedded = false }: { embedded?: boolean } = {})
                     >
                       <Trash2 className="size-3.5" />
                     </Button>
+                    {googleLink && (post.status === 'published' || post.status === 'partial') && (
+                      <a
+                        href={googleLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                      >
+                        <ExternalLink className="size-3" />
+                        <span>View on Google</span>
+                      </a>
+                    )}
                   </div>
 
                   {/* Contextual Action Button */}
@@ -716,6 +786,18 @@ export function PostsListView({ embedded = false }: { embedded?: boolean } = {})
                     {viewPost.linkUrl}
                   </a>
                 </div>
+              )}
+
+              {getGooglePostUrl(viewPost) && (
+                <a
+                  href={getGooglePostUrl(viewPost)!}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 px-3 transition-colors"
+                >
+                  <ExternalLink className="size-3.5" />
+                  <span>View Post on Google</span>
+                </a>
               )}
 
               {/* Delivery Breakdown Per Channel */}

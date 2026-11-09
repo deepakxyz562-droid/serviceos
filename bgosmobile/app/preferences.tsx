@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -56,9 +57,16 @@ interface BrandBrainApiResponse {
   };
 }
 
+interface NotificationPrefApiResponse {
+  inAppEnabled?: boolean;
+  pushEnabled?: boolean;
+  typePrefsJson?: string;
+}
+
 export default function PreferencesScreen() {
   const router = useRouter();
   const prefRes = useResource<BrandBrainApiResponse>('/api/brand-profile');
+  const notifPrefRes = useResource<NotificationPrefApiResponse>('/api/notifications/preferences');
 
   const [activeTab, setActiveTab] = useState<PrefTab>('selling');
   const [saving, setSaving] = useState(false);
@@ -87,6 +95,47 @@ export default function PreferencesScreen() {
   const [weeklyPosts, setWeeklyPosts] = useState('2');
   const [weeklyPhotos, setWeeklyPhotos] = useState('3');
   const [forbiddenPhrases, setForbiddenPhrases] = useState('');
+  const [dailyGrowthTips, setDailyGrowthTips] = useState(true);
+  const [rawTypePrefs, setRawTypePrefs] = useState<Record<string, unknown>>({});
+  const [savingDailyToggle, setSavingDailyToggle] = useState(false);
+
+  useEffect(() => {
+    const raw = notifPrefRes.data?.typePrefsJson;
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const rec = parsed as Record<string, unknown>;
+        setRawTypePrefs(rec);
+        setDailyGrowthTips(rec.daily_growth_tips !== false);
+      }
+    } catch {}
+  }, [notifPrefRes.data]);
+
+  async function handleToggleDailyGrowthTips(nextVal: boolean) {
+    const prev = dailyGrowthTips;
+    setDailyGrowthTips(nextVal);
+    setSavingDailyToggle(true);
+    try {
+      const merged = { ...rawTypePrefs, daily_growth_tips: nextVal };
+      setRawTypePrefs(merged);
+      await apiRequest('/api/notifications/preferences', {
+        method: 'PUT',
+        body: {
+          pushEnabled: true,
+          typePrefsJson: JSON.stringify(merged),
+        },
+      });
+    } catch (err) {
+      setDailyGrowthTips(prev);
+      Alert.alert(
+        'Could not save notification preference',
+        err instanceof Error ? err.message : 'Please try again.',
+      );
+    } finally {
+      setSavingDailyToggle(false);
+    }
+  }
 
   useEffect(() => {
     if (prefRes.data) {
@@ -179,7 +228,18 @@ export default function PreferencesScreen() {
         },
       });
 
-      await prefRes.refresh();
+      await apiRequest('/api/notifications/preferences', {
+        method: 'PUT',
+        body: {
+          pushEnabled: true,
+          typePrefsJson: JSON.stringify({
+            ...rawTypePrefs,
+            daily_growth_tips: dailyGrowthTips,
+          }),
+        },
+      });
+
+      await Promise.all([prefRes.refresh(), notifPrefRes.refresh()]);
       Alert.alert('Success', 'Brand Brain preferences saved successfully.');
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to save preferences');
@@ -548,6 +608,34 @@ export default function PreferencesScreen() {
             <Text style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
               Deterministic filter blocks these phrases before any post reaches approval.
             </Text>
+          </View>
+
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              paddingTop: 12,
+              borderTopWidth: 1,
+              borderTopColor: colors.line,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13.5, fontWeight: '700', color: colors.ink }}>
+                Daily Post & Promo Reminders
+              </Text>
+              <Text style={{ fontSize: 11.5, color: colors.muted, marginTop: 2 }}>
+                Morning push notification with a post or promotion idea when nothing is scheduled yet today.
+              </Text>
+            </View>
+            <Switch
+              value={dailyGrowthTips}
+              disabled={savingDailyToggle}
+              onValueChange={(val) => void handleToggleDailyGrowthTips(val)}
+              trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+              thumbColor={dailyGrowthTips ? '#009F50' : '#F8FAFC'}
+            />
           </View>
         </Card>
       )}

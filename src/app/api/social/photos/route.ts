@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { requireBgosEntitled } from '@/lib/bgos-entitlement';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { resolveGoogleConnectionState } from '@/lib/social/google-connection-state';
 import {
@@ -26,6 +27,7 @@ type GbpMediaCategory =
 
 interface PhotoInputItem {
   url: string;
+  thumbnailUrl?: string;
   title?: string;
   description?: string;
   tags?: string[];
@@ -36,6 +38,7 @@ interface PhotoInputItem {
 interface StoredMediaMeta {
   gbpPostType?: string;
   title?: string;
+  thumbnailUrl?: string;
   tags?: string[];
   category?: string;
   mediaFormat?: 'PHOTO' | 'VIDEO';
@@ -53,6 +56,7 @@ function parseOfferMeta(raw: string | null | undefined): StoredMediaMeta {
       return {
         gbpPostType: typeof parsed.gbpPostType === 'string' ? parsed.gbpPostType : undefined,
         title: typeof parsed.title === 'string' ? parsed.title : undefined,
+        thumbnailUrl: typeof parsed.thumbnailUrl === 'string' ? parsed.thumbnailUrl : undefined,
         tags: Array.isArray(parsed.tags)
           ? parsed.tags.filter((t: unknown): t is string => typeof t === 'string')
           : undefined,
@@ -90,6 +94,7 @@ function parseMediaMetaFromTargets(raw: string | null | undefined): StoredMediaM
       return {
         gbpPostType: typeof mm.gbpPostType === 'string' ? mm.gbpPostType : undefined,
         title: typeof mm.title === 'string' ? mm.title : undefined,
+        thumbnailUrl: typeof mm.thumbnailUrl === 'string' ? mm.thumbnailUrl : undefined,
         tags: Array.isArray(mm.tags)
           ? mm.tags.filter((t: unknown): t is string => typeof t === 'string')
           : undefined,
@@ -159,6 +164,28 @@ function inferMediaFormat(url: string, explicit?: string): 'PHOTO' | 'VIDEO' {
     return 'VIDEO';
   }
   return 'PHOTO';
+}
+
+function isVideoFileUrl(url?: string | null): boolean {
+  return Boolean(url && /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(url));
+}
+
+function resolveValidThumbnailUrl(
+  rawThumb: unknown,
+  mediaUrl: string,
+  mediaFormat: 'PHOTO' | 'VIDEO',
+  request: NextRequest,
+): string | undefined {
+  if (typeof rawThumb !== 'string') return undefined;
+  const trimmed = rawThumb.trim();
+  if (!trimmed) return undefined;
+  if (!/^https?:\/\//i.test(trimmed) && !trimmed.startsWith('/')) {
+    return undefined;
+  }
+  const publicThumb = toPublicMediaUrl(trimmed, request);
+  if (isVideoFileUrl(publicThumb)) return undefined;
+  if (mediaFormat === 'VIDEO' && publicThumb === mediaUrl) return undefined;
+  return publicThumb;
 }
 
 function resolvePublicOrigin(request: NextRequest): string | null {
@@ -265,16 +292,26 @@ export async function GET(request: NextRequest) {
     if (googleAccount) {
       try {
         const mediaRes = await listGoogleBusinessMedia(googleAccount);
-        livePhotos = (mediaRes.mediaItems || []).map((m, idx) => ({
-          id: m.name || `gmedia-${idx}`,
-          url: m.googleUrl,
-          thumbnailUrl: m.thumbnailUrl || m.googleUrl,
-          category: m.category || 'ADDITIONAL',
-          createdAt: m.createTime,
-          source: 'google' as const,
-          mediaFormat: (m as { mediaFormat?: string }).mediaFormat || inferMediaFormat(m.googleUrl),
-          caption: m.category ? `Google Business Profile · ${m.category}` : undefined,
-        }));
+        livePhotos = (mediaRes.mediaItems || []).map((m, idx) => {
+          const mediaFormat =
+            (m as { mediaFormat?: string }).mediaFormat || inferMediaFormat(m.googleUrl);
+          const validLiveThumb =
+            m.thumbnailUrl &&
+            !isVideoFileUrl(m.thumbnailUrl) &&
+            (mediaFormat !== 'VIDEO' || m.thumbnailUrl !== m.googleUrl)
+              ? m.thumbnailUrl
+              : undefined;
+          return {
+            id: m.name || `gmedia-${idx}`,
+            url: m.googleUrl,
+            thumbnailUrl: validLiveThumb || (mediaFormat === 'VIDEO' ? undefined : m.googleUrl),
+            category: m.category || 'ADDITIONAL',
+            createdAt: m.createTime,
+            source: 'google' as const,
+            mediaFormat,
+            caption: m.category ? `Google Business Profile · ${m.category}` : undefined,
+          };
+        });
       } catch (err: unknown) {
         console.warn('[social/photos] Google media list warning:', err instanceof Error ? err.message : err);
       }
@@ -324,16 +361,23 @@ export async function GET(request: NextRequest) {
           const createdAtIso = toIsoStringSafe(p.createdAt);
           return urls.map((rawUrl: string, idx: number) => {
             const publicUrl = toPublicMediaUrl(rawUrl, request);
+            const mediaFormat = meta.mediaFormat || inferMediaFormat(publicUrl);
+            const resolvedThumb = resolveValidThumbnailUrl(
+              meta.thumbnailUrl,
+              publicUrl,
+              mediaFormat,
+              request,
+            );
             return {
               id: urls.length === 1 ? p.id : `${p.id}-${idx}`,
               postId: p.id,
               url: publicUrl,
-              thumbnailUrl: publicUrl,
+              thumbnailUrl: resolvedThumb || (mediaFormat === 'VIDEO' ? undefined : publicUrl),
               title: meta.title || undefined,
               tags: meta.tags || [],
               category: meta.category || 'SCHEDULED',
               gbpCategory: meta.category || 'ADDITIONAL',
-              mediaFormat: meta.mediaFormat || inferMediaFormat(publicUrl),
+              mediaFormat,
               createdAt: scheduledForIso || createdAtIso || new Date().toISOString(),
               scheduledFor: scheduledForIso,
               source: 'queue' as const,
@@ -387,6 +431,8 @@ export async function POST(request: NextRequest) {
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const gate = await requireBgosEntitled(user);
+    if (!gate.ok) return gate.response;
 
     const body = await request.json().catch(() => ({}));
     const rawItems: PhotoInputItem[] = Array.isArray(body.items)
@@ -413,15 +459,20 @@ export async function POST(request: NextRequest) {
 
     const items: PhotoInputItem[] =
       rawItems.length > 0
-        ? rawItems.map((it) => ({
-            url: it.url.trim(),
-            title: (typeof it.title === 'string' ? it.title.trim() : '') || sharedTitle,
-            description:
-              (typeof it.description === 'string' ? it.description.trim() : '') || sharedDescription,
-            tags: normalizeTags(it.tags).length > 0 ? normalizeTags(it.tags) : sharedTags,
-            category: (it.category || sharedCategory) as GbpMediaCategory,
-            mediaFormat: inferMediaFormat(it.url, it.mediaFormat),
-          }))
+        ? rawItems.map((it) => {
+            const fmt = inferMediaFormat(it.url, it.mediaFormat);
+            const publicUrl = toPublicMediaUrl(it.url, request);
+            return {
+              url: it.url.trim(),
+              thumbnailUrl: resolveValidThumbnailUrl(it.thumbnailUrl, publicUrl, fmt, request),
+              title: (typeof it.title === 'string' ? it.title.trim() : '') || sharedTitle,
+              description:
+                (typeof it.description === 'string' ? it.description.trim() : '') || sharedDescription,
+              tags: normalizeTags(it.tags).length > 0 ? normalizeTags(it.tags) : sharedTags,
+              category: (it.category || sharedCategory) as GbpMediaCategory,
+              mediaFormat: fmt,
+            };
+          })
         : fallbackUrls.map((url) => ({
             url,
             title: sharedTitle,
@@ -459,6 +510,7 @@ export async function POST(request: NextRequest) {
     const uploadedPhotos: Array<{
       id?: string;
       url: string;
+      thumbnailUrl?: string;
       status: string;
       scheduledAt?: string;
       title?: string;
@@ -495,6 +547,7 @@ export async function POST(request: NextRequest) {
         const mediaMetaObj: StoredMediaMeta = {
           gbpPostType: 'photo_media',
           title: item.title || `${businessName} Showcase`,
+          ...(item.thumbnailUrl ? { thumbnailUrl: item.thumbnailUrl } : {}),
           tags: item.tags || [],
           category: item.category || 'ADDITIONAL',
           mediaFormat: item.mediaFormat || 'PHOTO',
@@ -510,7 +563,9 @@ export async function POST(request: NextRequest) {
               description: effectiveDescription,
             });
             uploadedPhotos.push({
+              id: uploaded.name || uploaded.googleUrl || publicItemUrl,
               url: uploaded.googleUrl,
+              thumbnailUrl: uploaded.thumbnailUrl || item.thumbnailUrl,
               status: 'published',
               title: item.title,
               tags: item.tags,
@@ -544,6 +599,7 @@ export async function POST(request: NextRequest) {
             uploadedPhotos.push({
               id: savedDraft.id,
               url: publicItemUrl,
+              thumbnailUrl: item.thumbnailUrl,
               status: `saved_locally: ${msg}`,
               title: item.title,
               tags: item.tags,
@@ -573,6 +629,7 @@ export async function POST(request: NextRequest) {
           uploadedPhotos.push({
             id: savedDraft.id,
             url: publicItemUrl,
+            thumbnailUrl: item.thumbnailUrl,
             status: 'saved_locally (Google account not connected)',
             title: item.title,
             tags: item.tags,
@@ -590,6 +647,7 @@ export async function POST(request: NextRequest) {
         const mediaMetaObj: StoredMediaMeta = {
           gbpPostType: 'photo_media',
           title: item.title || `${businessName} Media`,
+          ...(item.thumbnailUrl ? { thumbnailUrl: item.thumbnailUrl } : {}),
           tags: item.tags || [],
           category: item.category || 'ADDITIONAL',
           mediaFormat: item.mediaFormat || 'PHOTO',
@@ -612,6 +670,7 @@ export async function POST(request: NextRequest) {
             gbpPostType: 'photo_media',
             gbpOfferData: JSON.stringify({
               title: mediaMetaObj.title,
+              ...(mediaMetaObj.thumbnailUrl ? { thumbnailUrl: mediaMetaObj.thumbnailUrl } : {}),
               tags: mediaMetaObj.tags,
               category: mediaMetaObj.category,
               mediaFormat: mediaMetaObj.mediaFormat,
@@ -622,6 +681,7 @@ export async function POST(request: NextRequest) {
         uploadedPhotos.push({
           id: created.id,
           url: publicItemUrl,
+          thumbnailUrl: item.thumbnailUrl,
           status: 'draft',
           title: item.title,
           tags: item.tags,
@@ -661,6 +721,7 @@ export async function POST(request: NextRequest) {
         const mediaMetaObj: StoredMediaMeta = {
           gbpPostType: 'photo_media',
           title: item.title || `${businessName} Showcase`,
+          ...(item.thumbnailUrl ? { thumbnailUrl: item.thumbnailUrl } : {}),
           tags: item.tags || [],
           category: item.category || 'ADDITIONAL',
           mediaFormat: item.mediaFormat || 'PHOTO',
@@ -689,6 +750,7 @@ export async function POST(request: NextRequest) {
             gbpPostType: 'photo_media',
             gbpOfferData: JSON.stringify({
               title: mediaMetaObj.title,
+              ...(mediaMetaObj.thumbnailUrl ? { thumbnailUrl: mediaMetaObj.thumbnailUrl } : {}),
               tags: mediaMetaObj.tags,
               category: mediaMetaObj.category,
               mediaFormat: mediaMetaObj.mediaFormat,
@@ -702,6 +764,7 @@ export async function POST(request: NextRequest) {
         uploadedPhotos.push({
           id: created.id,
           url: publicItemUrl,
+          thumbnailUrl: item.thumbnailUrl,
           status: 'scheduled',
           scheduledAt: scheduledTime.toISOString(),
           title: item.title,
@@ -747,6 +810,8 @@ export async function PATCH(request: NextRequest) {
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const gate = await requireBgosEntitled(user);
+    if (!gate.ok) return gate.response;
 
     const body = await request.json().catch(() => ({}));
     const rawId = typeof body.postId === 'string' ? body.postId : typeof body.id === 'string' ? body.id : '';
@@ -865,6 +930,8 @@ export async function DELETE(request: NextRequest) {
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const deleteGate = await requireBgosEntitled(user);
+    if (!deleteGate.ok) return deleteGate.response;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id')?.trim();

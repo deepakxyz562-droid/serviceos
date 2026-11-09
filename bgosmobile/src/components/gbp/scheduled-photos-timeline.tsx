@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,15 +12,10 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../ui';
 import { detectDeviceCountryAndTimezone, getTimeZoneShortLabel } from '../../lib/country-codes';
+import { MediaPreviewModal, isVideoMediaAsset } from './media-preview-modal';
 import type { GbpConnectionState, GbpPhoto } from './types';
 
-type MediaTabKey = 'scheduled' | 'uploaded' | 'unposted';
-
-const VIDEO_URL_RE = /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i;
-
-function isVideoMediaItem(item: GbpPhoto): boolean {
-  return item.mediaFormat === 'VIDEO' || VIDEO_URL_RE.test(item.url || '');
-}
+export type MediaTabKey = 'scheduled' | 'uploaded' | 'unposted';
 
 interface ScheduledPhotosTimelineProps {
   photos?: GbpPhoto[];
@@ -35,6 +31,9 @@ interface ScheduledPhotosTimelineProps {
   isUploading?: boolean;
   timeZone?: string;
   locale?: string;
+  initialTab?: MediaTabKey;
+  focusedMediaId?: string | null;
+  onClearFocus?: () => void;
 }
 
 export function ScheduledPhotosTimeline({
@@ -51,10 +50,40 @@ export function ScheduledPhotosTimeline({
   isUploading = false,
   timeZone,
   locale,
+  initialTab,
+  focusedMediaId,
+  onClearFocus,
 }: ScheduledPhotosTimelineProps) {
-  const [activeTab, setActiveTab] = useState<MediaTabKey>('scheduled');
+  const [activeTab, setActiveTab] = useState<MediaTabKey>(initialTab || 'scheduled');
   const [whyModalOpen, setWhyModalOpen] = useState(false);
   const [viewAllOpen, setViewAllOpen] = useState(false);
+  const [previewItem, setPreviewItem] = useState<GbpPhoto | null>(null);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (!focusedMediaId) return;
+    const matchIn = (arr: GbpPhoto[]) =>
+      arr.find(
+        (p) =>
+          p.id === focusedMediaId ||
+          p.postId === focusedMediaId ||
+          p.url === focusedMediaId,
+      );
+    const inSched = matchIn(scheduledPhotos);
+    const inLive = matchIn(photos);
+    const inDraft = matchIn(draftPhotos);
+    const found = inSched || inLive || inDraft;
+    if (found) {
+      setActiveTab(inSched ? 'scheduled' : inLive ? 'uploaded' : 'unposted');
+      setPreviewItem(found);
+      onClearFocus?.();
+    }
+  }, [focusedMediaId, scheduledPhotos, photos, draftPhotos, onClearFocus]);
 
   const detectedTz = detectDeviceCountryAndTimezone().timeZone;
   const activeTimeZone = timeZone || detectedTz;
@@ -104,6 +133,60 @@ export function ScheduledPhotosTimeline({
         ? 'Reconnect'
         : 'Connect Google';
 
+  const renderThumbnail = (item: GbpPhoto, boxStyle: any, large = false) => {
+    const isVideo = isVideoMediaAsset(item);
+    if (!isVideo) {
+      return (
+        <Image
+          source={{ uri: item.thumbnailUrl || item.url }}
+          style={boxStyle}
+          resizeMode="cover"
+          alt={item.title || 'Google Business media'}
+        />
+      );
+    }
+
+    if (item.thumbnailUrl) {
+      return (
+        <View style={[boxStyle, { overflow: 'hidden', position: 'relative' }]}>
+          <Image
+            source={{ uri: item.thumbnailUrl }}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+            alt={item.title || 'Video thumbnail'}
+          />
+          <View style={styles.playOverlayBadge}>
+            <MaterialIcons name="play-arrow" size={large ? 28 : 18} color="#FFFFFF" />
+          </View>
+        </View>
+      );
+    }
+
+    if (Platform.OS === 'web' && item.url) {
+      return (
+        <View style={[boxStyle, { overflow: 'hidden', position: 'relative', backgroundColor: '#0F172A' }]}>
+          {React.createElement('video', {
+            src: item.url,
+            muted: true,
+            playsInline: true,
+            preload: 'metadata',
+            style: { width: '100%', height: '100%', objectFit: 'cover' },
+          })}
+          <View style={styles.playOverlayBadge}>
+            <MaterialIcons name="play-arrow" size={large ? 28 : 18} color="#FFFFFF" />
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={[boxStyle, styles.videoTileDark]}>
+        <MaterialIcons name="play-circle-filled" size={large ? 34 : 26} color="#34D399" />
+        <Text style={styles.videoTileLabel}>VIDEO</Text>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {!isConnected ? (
@@ -144,56 +227,37 @@ export function ScheduledPhotosTimeline({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.portraitPhotosTrack}
         >
-          {galleryPhotos.map((item, idx) => {
-            const videoNoThumb = isVideoMediaItem(item) && !item.thumbnailUrl;
-            return (
-              <Pressable
-                key={item.id || `photo-${idx}`}
-                onPress={() => {
-                  if (item.source === 'queue' && onEditItem) {
-                    onEditItem(item);
-                  }
-                }}
-                style={styles.portraitCard}
-              >
-                {videoNoThumb ? (
-                  <View style={[styles.portraitImage, styles.videoTileDark]}>
-                    <MaterialIcons name="videocam" size={30} color="#34D399" />
-                    <Text style={styles.videoTileLabel}>VIDEO</Text>
-                  </View>
-                ) : (
-                  <Image
-                    source={{ uri: item.thumbnailUrl || item.url }}
-                    style={styles.portraitImage}
-                    resizeMode="cover"
-                    alt={item.title || 'Google Business photo'}
-                  />
-                )}
-                {isVideoMediaItem(item) ? (
-                  <View
-                    style={{
-                      position: 'absolute',
-                      top: 6,
-                      right: 6,
-                      width: 24,
-                      height: 24,
-                      borderRadius: 12,
-                      backgroundColor: 'rgba(7,11,45,0.72)',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <MaterialIcons name="videocam" size={14} color="#FFFFFF" />
-                  </View>
-                ) : null}
-                <View style={styles.portraitOverlay}>
-                  <Text style={styles.portraitTitle} numberOfLines={1}>
-                    {item.title || item.category || (item.source === 'google' ? 'Google Live' : 'Queued')}
-                  </Text>
+          {galleryPhotos.map((item, idx) => (
+            <Pressable
+              key={item.id || `photo-${idx}`}
+              onPress={() => setPreviewItem(item)}
+              style={styles.portraitCard}
+            >
+              {renderThumbnail(item, styles.portraitImage, true)}
+              {isVideoMediaAsset(item) ? (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 6,
+                    right: 6,
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    backgroundColor: 'rgba(7,11,45,0.72)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialIcons name="videocam" size={14} color="#FFFFFF" />
                 </View>
-              </Pressable>
-            );
-          })}
+              ) : null}
+              <View style={styles.portraitOverlay}>
+                <Text style={styles.portraitTitle} numberOfLines={1}>
+                  {item.title || item.category || (item.source === 'google' ? 'Google Live' : 'Queued')}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
         </ScrollView>
       ) : (
         <View style={styles.emptyHeroCard}>
@@ -340,23 +404,10 @@ export function ScheduledPhotosTimeline({
             return (
               <Pressable
                 key={item.id || `slot-${index}`}
-                disabled={!isEditable}
-                onPress={() => isEditable && onEditItem?.(item)}
+                onPress={() => setPreviewItem(item)}
                 style={styles.timelineRow}
               >
-                {isVideoMediaItem(item) && !item.thumbnailUrl ? (
-                  <View style={[styles.slotThumbnail, styles.videoTileDark]}>
-                    <MaterialIcons name="videocam" size={24} color="#34D399" />
-                    <Text style={styles.videoTileLabel}>VIDEO</Text>
-                  </View>
-                ) : (
-                  <Image
-                    source={{ uri: item.thumbnailUrl || item.url }}
-                    style={styles.slotThumbnail}
-                    resizeMode="cover"
-                    alt={item.title || 'Scheduled media thumbnail'}
-                  />
-                )}
+                {renderThumbnail(item, styles.slotThumbnail, false)}
 
                 <View style={styles.timelineInfo}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
@@ -418,7 +469,15 @@ export function ScheduledPhotosTimeline({
                       </Text>
                     </View>
                     {isEditable ? (
-                      <Text style={styles.editHintLink}>Edit ✎</Text>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          onEditItem?.(item);
+                        }}
+                        hitSlop={6}
+                      >
+                        <Text style={styles.editHintLink}>Edit ✎</Text>
+                      </Pressable>
                     ) : null}
                   </View>
 
@@ -520,33 +579,29 @@ export function ScheduledPhotosTimeline({
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-            {galleryPhotos.map((item, i) =>
-              isVideoMediaItem(item) && !item.thumbnailUrl ? (
-                <View
-                  key={item.id || `gallery-${i}`}
-                  style={[styles.videoTileDark, { width: '48%', height: 160, borderRadius: 12 }]}
-                >
-                  <MaterialIcons name="videocam" size={32} color="#34D399" />
-                  <Text style={styles.videoTileLabel}>VIDEO</Text>
-                  {item.title ? (
-                    <Text style={{ color: '#CBD5E1', fontSize: 11, fontWeight: '700', paddingHorizontal: 8 }} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                  ) : null}
-                </View>
-              ) : (
-                <Image
-                  key={item.id || `gallery-${i}`}
-                  source={{ uri: item.thumbnailUrl || item.url }}
-                  style={{ width: '48%', height: 160, borderRadius: 12, backgroundColor: colors.soft }}
-                  resizeMode="cover"
-                  alt={item.title || 'Gallery photo'}
-                />
-              ),
-            )}
+            {galleryPhotos.map((item, i) => (
+              <Pressable
+                key={item.id || `gallery-${i}`}
+                onPress={() => {
+                  setViewAllOpen(false);
+                  setPreviewItem(item);
+                }}
+                style={{ width: '48%', height: 160, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.soft }}
+              >
+                {renderThumbnail(item, { width: '100%', height: '100%' }, true)}
+              </Pressable>
+            ))}
           </ScrollView>
         </View>
       </Modal>
+
+      <MediaPreviewModal
+        visible={Boolean(previewItem)}
+        item={previewItem}
+        onClose={() => setPreviewItem(null)}
+        onEdit={onEditItem}
+        businessName={businessName}
+      />
     </View>
   );
 }
@@ -955,6 +1010,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
+  },
+  playOverlayBadge: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -18 }, { translateY: -18 }],
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.65)',
   },
   videoTileLabel: {
     color: '#E2E8F0',

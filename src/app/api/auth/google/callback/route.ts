@@ -59,14 +59,15 @@ async function createTenantForGoogleUser(
 
   const defaultSignupPlan = await resolveSignupDefaultPlan();
   const validPlans = ['standalone_starter', 'standalone_business', 'starter', 'professional', 'growth', 'launch_special', 'enterprise'];
-  const bgosPlans = ['free', 'starter', 'growth', 'business'];
+  const bgosPlans = ['starter', 'growth', 'business'];
   const signupPlan = isBgos
     ? (requestedPlan && bgosPlans.includes(requestedPlan) ? requestedPlan : 'starter')
     : (isStandalone || isChatbotly)
       ? (requestedPlan && (requestedPlan === 'standalone_business' || requestedPlan === 'standalone_starter') ? requestedPlan : 'standalone_starter')
       : (requestedPlan && validPlans.includes(requestedPlan) ? requestedPlan : defaultSignupPlan);
 
-  const isFreePlan = isBgos && signupPlan === 'free';
+  // Every BGOS account receives a full-feature 7-day trial upon signup; payment is required once it ends.
+  const isFreePlan = false;
   const isListing = requestedSignupMode === 'listing_only';
   const isExplicitMode = isBgos || !!requestedSignupMode || !!(requestedPlan && validPlans.includes(requestedPlan)) || isBosHost || isChatbotlyHost || isQuoteFlowHost;
 

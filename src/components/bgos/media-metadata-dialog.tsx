@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
-  Film,
   Image as ImageIcon,
   Loader2,
   Plus,
@@ -130,6 +129,99 @@ function inferMimeFromFile(file: File): string {
   return 'image/jpeg';
 }
 
+function extractWebVideoPosterFile(file: File): Promise<File | null> {
+  if (typeof document === 'undefined' || typeof URL === 'undefined') {
+    return Promise.resolve(null);
+  }
+  const objectUrl = URL.createObjectURL(file);
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    let finished = false;
+    const done = (result: File | null) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      video.removeAttribute('src');
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      resolve(result);
+    };
+    const timer = setTimeout(() => done(null), 5000);
+    video.onerror = () => done(null);
+    video.onloadedmetadata = () => {
+      try {
+        const seekTo =
+          Number.isFinite(video.duration) && video.duration > 0.2
+            ? Math.min(0.6, video.duration / 4)
+            : 0;
+        video.currentTime = seekTo;
+      } catch {
+        done(null);
+      }
+    };
+    video.onseeked = () => {
+      try {
+        const vw = video.videoWidth || 640;
+        const vh = video.videoHeight || 360;
+        const maxW = 640;
+        const scale = vw > maxW ? maxW / vw : 1;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(16, Math.round(vw * scale));
+        canvas.height = Math.max(16, Math.round(vh * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return done(null);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return done(null);
+            done(new File([blob], `thumb-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+          },
+          'image/jpeg',
+          0.82,
+        );
+      } catch {
+        done(null);
+      }
+    };
+    video.src = objectUrl;
+  });
+}
+
+function notifyWebUploadCompletion(params: {
+  title: string;
+  body: string;
+  mediaId?: string;
+  mediaTab?: 'scheduled' | 'uploaded' | 'not_posted';
+  onView?: (mediaId?: string, tab?: 'scheduled' | 'uploaded' | 'not_posted') => void;
+}) {
+  if (typeof window !== 'undefined' && 'Notification' in window) {
+    try {
+      if (window.Notification.permission === 'granted') {
+        const notif = new window.Notification(params.title, { body: params.body });
+        notif.onclick = () => {
+          try {
+            window.focus();
+            if (params.onView) {
+              params.onView(params.mediaId, params.mediaTab);
+            } else {
+              const qs = new URLSearchParams({
+                product: 'bgos',
+                view: 'socialMedia',
+                socialTab: 'google-media',
+                ...(params.mediaId ? { mediaId: params.mediaId } : {}),
+                ...(params.mediaTab ? { mediaTab: params.mediaTab } : {}),
+              }).toString();
+              window.location.href = `/app?${qs}`;
+            }
+          } catch {}
+        };
+      }
+    } catch {}
+  }
+}
+
 interface AiMetadataApiResponse {
   success?: boolean;
   title?: string;
@@ -149,6 +241,7 @@ export function WebMediaMetadataDialog({
   defaultScheduleMode = 'daily',
   initialMode = 'upload',
   onSaved,
+  onViewMedia,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -157,7 +250,8 @@ export function WebMediaMetadataDialog({
   editingItem?: WebMediaItem | null;
   defaultScheduleMode?: WebScheduleMode;
   initialMode?: WebComposerMode;
-  onSaved: (message: string, mode?: WebScheduleMode) => void;
+  onSaved: (message: string, mode?: WebScheduleMode, mediaId?: string) => void;
+  onViewMedia?: (mediaId?: string, mediaTab?: 'scheduled' | 'uploaded' | 'not_posted') => void;
 }) {
   const isEditMode = Boolean(editingItem && (editingItem.postId || editingItem.id));
 
@@ -201,6 +295,9 @@ export function WebMediaMetadataDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const refFileInputRef = useRef<HTMLInputElement>(null);
   const sessionRef = useRef(0);
+  const saveJobRef = useRef(0);
+  const openRef = useRef(open);
+  openRef.current = open;
   const lastInitKeyRef = useRef<string | null>(null);
 
   const previews = useMemo(() => {
@@ -707,10 +804,22 @@ export function WebMediaMetadataDialog({
       return;
     }
 
+    const myJobId = ++saveJobRef.current;
+    const filesSnapshot = [...files];
+    const titleSnapshot = title.trim();
+    const descSnapshot = description.trim() || undefined;
+    const tagsSnapshot = [...tags];
+    const categorySnapshot = category;
+    const scheduleModeSnapshot = scheduleMode;
+    const preferredTimeSnapshot = preferredTime;
+    const tzSnapshot = localTimeZone;
+    const bizSnapshot = businessName;
+
     setSubmitting(true);
     try {
       const uploadedItems: Array<{
         url: string;
+        thumbnailUrl?: string;
         title: string;
         description?: string;
         tags: string[];
@@ -718,57 +827,112 @@ export function WebMediaMetadataDialog({
         mediaFormat: 'PHOTO' | 'VIDEO';
       }> = [];
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        setUploadProgress(`Uploading ${i + 1}/${files.length} (${file.name})…`);
-        const uploadedUrl = await uploadSingleFile(file);
+      for (let i = 0; i < filesSnapshot.length; i++) {
+        const file = filesSnapshot[i];
+        if (saveJobRef.current === myJobId) {
+          setUploadProgress(`Uploading ${i + 1}/${filesSnapshot.length} (${file.name})…`);
+        }
         const isVideo =
           file.type.startsWith('video/') || VIDEO_FILE_RE.test(file.name || '');
+
+        let thumbnailUrl: string | undefined;
+        if (isVideo) {
+          const posterFile = await extractWebVideoPosterFile(file).catch(() => null);
+          if (posterFile) {
+            thumbnailUrl = await uploadSingleFile(posterFile).catch(() => undefined);
+          }
+        }
+
+        const uploadedUrl = await uploadSingleFile(file);
         uploadedItems.push({
           url: uploadedUrl,
+          thumbnailUrl,
           title:
-            files.length > 1 && title.trim()
-              ? `${title.trim()} (${i + 1})`
-              : title.trim() || `${businessName} Showcase`,
-          description: description.trim() || undefined,
-          tags,
-          category,
+            filesSnapshot.length > 1 && titleSnapshot
+              ? `${titleSnapshot} (${i + 1})`
+              : titleSnapshot || `${bizSnapshot} Showcase`,
+          description: descSnapshot,
+          tags: tagsSnapshot,
+          category: categorySnapshot,
           mediaFormat: isVideo ? 'VIDEO' : 'PHOTO',
         });
       }
 
-      setUploadProgress('Saving media & AI metadata…');
+      if (saveJobRef.current === myJobId) {
+        setUploadProgress('Saving media & AI metadata…');
+      }
       const res = await authFetch('/api/social/photos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: uploadedItems,
           photos: uploadedItems.map((i) => i.url),
-          title: title.trim(),
-          description: description.trim() || undefined,
-          tags,
-          category,
-          scheduleMode,
-          preferredTime,
-          timeZone: localTimeZone,
+          title: titleSnapshot,
+          description: descSnapshot,
+          tags: tagsSnapshot,
+          category: categorySnapshot,
+          scheduleMode: scheduleModeSnapshot,
+          preferredTime: preferredTimeSnapshot,
+          timeZone: tzSnapshot,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         success?: boolean;
         message?: string;
         error?: string;
+        results?: Array<{ id?: string; url: string; status?: string }>;
       };
       if (!res.ok || !data.success) throw new Error(data.error || 'Could not save media.');
 
+      const firstRes = Array.isArray(data.results) ? data.results[0] : undefined;
+      const firstMediaId = firstRes?.id || firstRes?.url || uploadedItems[0]?.url;
+      const targetTab: 'scheduled' | 'uploaded' | 'not_posted' =
+        firstRes?.status === 'published' || scheduleModeSnapshot === 'instant'
+          ? 'uploaded'
+          : scheduleModeSnapshot === 'draft' || String(firstRes?.status || '').includes('draft')
+            ? 'not_posted'
+            : 'scheduled';
       const msg = data.message || 'Media saved successfully.';
-      toast.success(msg);
-      onOpenChange(false);
-      onSaved(msg, scheduleMode);
+
+      toast.success(msg, {
+        action: firstMediaId
+          ? {
+              label: 'Preview',
+              onClick: () => {
+                if (onViewMedia) {
+                  onViewMedia(firstMediaId, targetTab);
+                } else if (typeof window !== 'undefined') {
+                  const qs = new URLSearchParams({
+                    product: 'bgos',
+                    view: 'socialMedia',
+                    socialTab: 'google-media',
+                    mediaId: firstMediaId,
+                    mediaTab: targetTab,
+                  }).toString();
+                  window.location.href = `/app?${qs}`;
+                }
+              },
+            }
+          : undefined,
+      });
+      notifyWebUploadCompletion({
+        title: 'Media Upload Complete',
+        body: `${titleSnapshot || 'Your media'} is ready. Click to view.`,
+        mediaId: firstMediaId,
+        mediaTab: targetTab,
+        onView: onViewMedia,
+      });
+      if (openRef.current && saveJobRef.current === myJobId) {
+        onOpenChange(false);
+      }
+      onSaved(msg, scheduleModeSnapshot, firstMediaId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Media upload failed');
     } finally {
-      setSubmitting(false);
-      setUploadProgress(null);
+      if (saveJobRef.current === myJobId) {
+        setSubmitting(false);
+        setUploadProgress(null);
+      }
     }
   };
 
@@ -808,7 +972,15 @@ export function WebMediaMetadataDialog({
       : files.length > 0;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!submitting) onOpenChange(v); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v && submitting) {
+          toast.info('Upload continues in background — we will notify you once complete.');
+        }
+        onOpenChange(v);
+      }}
+    >
       <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col p-0 overflow-hidden bg-card text-foreground border-border">
         <DialogHeader className="p-5 pb-3 border-b border-border text-left">
           <div className="flex items-center justify-between gap-2 pr-6">
@@ -890,10 +1062,13 @@ export function WebMediaMetadataDialog({
           {isEditMode && editingItem ? (
             <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border">
               {editingIsVideoNoThumb ? (
-                <div className="size-16 rounded-lg bg-slate-900 text-white flex flex-col items-center justify-center shrink-0 border border-border">
-                  <Film className="size-5 text-emerald-400" />
-                  <span className="text-[9px] font-extrabold tracking-wider mt-0.5 text-slate-200">VIDEO</span>
-                </div>
+                <video
+                  src={editingItem.url}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="size-16 rounded-lg object-cover border border-border bg-slate-900 shrink-0"
+                />
               ) : (
                 <img
                   src={editingItem.thumbnailUrl || editingItem.url}
@@ -1121,9 +1296,17 @@ export function WebMediaMetadataDialog({
                       className="relative size-16 rounded-xl overflow-hidden border border-border bg-muted shrink-0"
                     >
                       {p.isVideo ? (
-                        <div className="size-full flex flex-col items-center justify-center bg-slate-900 text-white text-[10px] p-1">
-                          <Film className="size-4 text-emerald-400 mb-0.5" />
-                          <span className="truncate w-full text-center font-bold">VIDEO</span>
+                        <div className="relative size-full bg-slate-900">
+                          <video
+                            src={p.url}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            className="size-full object-cover"
+                          />
+                          <span className="absolute bottom-1 right-1 px-1 py-0.5 rounded bg-black/75 text-white text-[8px] font-bold">
+                            VIDEO
+                          </span>
                         </div>
                       ) : (
                         <img src={p.url} alt={p.file.name} className="size-full object-cover" />
@@ -1378,16 +1561,31 @@ export function WebMediaMetadataDialog({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={submitting}
-              onClick={() => onOpenChange(false)}
-              className="rounded-xl text-xs"
-            >
-              Cancel
-            </Button>
+            {submitting && !isEditMode ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  toast.info('Upload continues in background — we will notify you once complete.');
+                  onOpenChange(false);
+                }}
+                className="rounded-xl text-xs font-semibold"
+              >
+                Upload in Background
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={submitting}
+                onClick={() => onOpenChange(false)}
+                className="rounded-xl text-xs"
+              >
+                Cancel
+              </Button>
+            )}
             <Button
               type="button"
               size="sm"

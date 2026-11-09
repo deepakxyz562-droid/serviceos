@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Linking,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -15,6 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { Brand, colors } from '../ui';
 import { useResource } from '../../hooks/use-resource';
+import { apiRequest } from '../../lib/api';
 import { getToken } from '../../lib/auth';
 import { useAuthStore } from '../../stores/auth-store';
 import { WEB_URL } from '../../lib/constants';
@@ -26,6 +27,20 @@ interface BillingResponse {
     trialEndsAt?: string | null;
     currentPeriodEnd?: string | null;
   };
+  entitlement?: {
+    entitled: boolean;
+    isTrial: boolean;
+    isPaid: boolean;
+    trialExpired: boolean;
+    trialDaysLeft: number;
+    status: string;
+    plan: string;
+  };
+  defaultRegion?: 'india' | 'international';
+  gateways?: {
+    razorpay: boolean;
+    creem: boolean;
+  };
 }
 
 const PLANS = [
@@ -33,6 +48,7 @@ const PLANS = [
     code: 'starter',
     name: 'Starter Plan',
     priceInr: 499,
+    priceUsd: 9,
     badge: 'Solo Business',
     highlight: false,
     features: [
@@ -46,6 +62,7 @@ const PLANS = [
     code: 'growth',
     name: 'Growth Plan',
     priceInr: 1499,
+    priceUsd: 29,
     badge: '⭐ Most Popular',
     highlight: true,
     features: [
@@ -61,6 +78,7 @@ const PLANS = [
     code: 'business',
     name: 'Business Plan',
     priceInr: 3999,
+    priceUsd: 79,
     badge: 'Multi-Location',
     highlight: false,
     features: [
@@ -80,40 +98,70 @@ interface PaywallGateProps {
 export function PaywallGate({ children }: PaywallGateProps) {
   const billingRes = useResource<BillingResponse>('/api/bgos/billing');
   const [activatingPlan, setActivatingPlan] = useState<string | null>(null);
+  const [region, setRegion] = useState<'india' | 'international'>('india');
+  const regionInitRef = useRef(false);
   const { logout } = useAuthStore();
 
-  const sub = billingRes.data?.subscription;
+  useEffect(() => {
+    if (!regionInitRef.current && billingRes.data?.defaultRegion) {
+      regionInitRef.current = true;
+      setRegion(billingRes.data.defaultRegion);
+    }
+  }, [billingRes.data?.defaultRegion]);
 
-  // If billing is still loading on first mount, or no data yet, let children render
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void billingRes.refresh();
+      }
+    });
+    return () => sub.remove();
+  }, [billingRes.refresh]);
+
+  const sub = billingRes.data?.subscription;
+  const ent = billingRes.data?.entitlement;
+
+  // If billing is still loading on first mount, let children render briefly until check completes
   if (billingRes.loading && !billingRes.data) {
     return <>{children}</>;
   }
 
-  // Active paid subscription allows access
-  if (sub?.status === 'active') {
-    return <>{children}</>;
+  // Strictly obey backend entitlement when present
+  if (ent) {
+    if (ent.entitled) {
+      return <>{children}</>;
+    }
+  } else {
+    // Fallback strict check: active non-free subscription OR active trial with valid future trialEndsAt
+    const status = String(sub?.status || '').toLowerCase();
+    const plan = String(sub?.plan || '').toLowerCase();
+    const isActivePaid = status === 'active' && plan !== 'free';
+    const trialEndsMs = sub?.trialEndsAt ? new Date(sub.trialEndsAt).getTime() : 0;
+    const isValidTrial = status === 'trial' && Number.isFinite(trialEndsMs) && trialEndsMs > Date.now();
+    if (isActivePaid || isValidTrial) {
+      return <>{children}</>;
+    }
   }
 
-  const isTrial = sub?.status === 'trial';
-  const trialDaysLeft = sub?.trialEndsAt
-    ? Math.max(0, Math.ceil((new Date(sub.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-    : 7;
-
-  // Active trial with days remaining allows access
-  if (isTrial && trialDaysLeft > 0) {
-    return <>{children}</>;
-  }
-
-  // If status is not active and trial days are 0 (or expired/cancelled), gate access completely
-  const isExpired = (isTrial && trialDaysLeft <= 0) || sub?.status === 'expired' || sub?.status === 'cancelled';
-
-  if (!isExpired) {
-    return <>{children}</>;
-  }
-
-  async function handlePayWithRazorpay(planCode: string) {
+  async function handleCheckout(planCode: string) {
     setActivatingPlan(planCode);
     try {
+      if (region === 'international') {
+        const res = await apiRequest<{ url?: string; error?: string }>('/api/bgos/billing', {
+          method: 'POST',
+          body: { plan: planCode, gateway: 'creem' },
+        });
+        if (!res?.url) {
+          throw new Error(res?.error || 'Could not start Creem international checkout.');
+        }
+        await WebBrowser.openBrowserAsync(res.url, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+          controlsColor: colors.brand,
+        });
+        await billingRes.refresh();
+        return;
+      }
+
       const token = await getToken();
       const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
       const checkoutUrl = `${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos${tokenParam}`;
@@ -124,15 +172,19 @@ export function PaywallGate({ children }: PaywallGateProps) {
       });
 
       await billingRes.refresh();
-    } catch {
-      try {
-        await Linking.openURL(`${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos`);
-      } catch {
-        Alert.alert(
-          'Checkout Notice',
-          'Could not launch payment screen. Please check your internet connection.'
-        );
+    } catch (err: any) {
+      if (region === 'india') {
+        try {
+          await Linking.openURL(`${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos`);
+          return;
+        } catch {
+          // fall through
+        }
       }
+      Alert.alert(
+        'Checkout Notice',
+        err?.message || 'Could not launch payment screen. Please check your internet connection.',
+      );
     } finally {
       setActivatingPlan(null);
     }
@@ -147,19 +199,49 @@ export function PaywallGate({ children }: PaywallGateProps) {
           <View style={styles.badgeRow}>
             <View style={styles.expiredBadge}>
               <MaterialIcons name="lock" size={14} color="#BA3547" />
-              <Text style={styles.expiredBadgeText}>7-Day Free Trial Expired</Text>
+              <Text style={styles.expiredBadgeText}>7-Day Free Trial Ended</Text>
             </View>
           </View>
-          <Text style={styles.title}>Unlock BGOS Growth Engine</Text>
+          <Text style={styles.title}>Complete Payment to Continue</Text>
           <Text style={styles.subtitle}>
-            Your 7-day trial period has ended. Subscribe to an active plan to continue using AI Marketing Studio, Google Review Automation, Autopilot, and Lead Generation.
+            Your 7-day full-access trial has ended. Subscribe via Razorpay (India) or Creem (International) to unlock all BGOS features.
           </Text>
+        </View>
+
+        {/* Region / Gateway Switcher */}
+        <View style={styles.regionSwitcher}>
+          <Pressable
+            onPress={() => setRegion('india')}
+            style={[styles.regionBtn, region === 'india' && styles.regionBtnActive]}
+          >
+            <Text style={[styles.regionBtnText, region === 'india' && styles.regionBtnTextActive]}>
+              🇮🇳 India (Razorpay · ₹)
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setRegion('international')}
+            style={[styles.regionBtn, region === 'international' && styles.regionBtnActive]}
+          >
+            <Text
+              style={[styles.regionBtnText, region === 'international' && styles.regionBtnTextActive]}
+            >
+              🌐 International (Creem · $)
+            </Text>
+          </Pressable>
         </View>
 
         {/* Pricing Cards */}
         <View style={styles.cardsContainer}>
           {PLANS.map((plan) => {
             const isBusy = activatingPlan === plan.code;
+            const priceText =
+              region === 'india' ? `₹${plan.priceInr.toLocaleString('en-IN')}` : `$${plan.priceUsd}`;
+            const gatewayLabel = region === 'india' ? 'Razorpay' : 'Creem';
+            const gatewayReady =
+              region === 'india'
+                ? billingRes.data?.gateways?.razorpay !== false
+                : billingRes.data?.gateways?.creem !== false;
+
             return (
               <View
                 key={plan.code}
@@ -180,8 +262,10 @@ export function PaywallGate({ children }: PaywallGateProps) {
                     <Text style={styles.planBadge}>{plan.badge}</Text>
                   </View>
                   <View style={styles.priceContainer}>
-                    <Text style={styles.priceText}>₹{plan.priceInr.toLocaleString('en-IN')}</Text>
-                    <Text style={styles.periodText}>/ month</Text>
+                    <Text style={styles.priceText}>{priceText}</Text>
+                    <Text style={styles.periodText}>
+                      {region === 'india' ? '/ month' : 'USD / month'}
+                    </Text>
                   </View>
                 </View>
 
@@ -195,15 +279,14 @@ export function PaywallGate({ children }: PaywallGateProps) {
                   ))}
                 </View>
 
-                {/* Direct Razorpay Checkout Action */}
                 <Pressable
                   style={[
                     styles.payButton,
                     plan.highlight && styles.payButtonHighlight,
-                    isBusy && styles.payButtonDisabled,
+                    (isBusy || !gatewayReady) && styles.payButtonDisabled,
                   ]}
-                  disabled={isBusy}
-                  onPress={() => handlePayWithRazorpay(plan.code)}
+                  disabled={isBusy || !gatewayReady}
+                  onPress={() => void handleCheckout(plan.code)}
                 >
                   {isBusy ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
@@ -211,7 +294,9 @@ export function PaywallGate({ children }: PaywallGateProps) {
                     <View style={styles.buttonInner}>
                       <MaterialIcons name="payment" size={18} color="#FFFFFF" />
                       <Text style={styles.payButtonText}>
-                        Pay ₹{plan.priceInr.toLocaleString('en-IN')} with Razorpay
+                        {gatewayReady
+                          ? `Pay ${priceText} with ${gatewayLabel}`
+                          : `${gatewayLabel} Unavailable`}
                       </Text>
                     </View>
                   )}
@@ -221,12 +306,20 @@ export function PaywallGate({ children }: PaywallGateProps) {
           })}
         </View>
 
-        {/* Security & Sign Out Footer */}
+        {/* Security & Actions Footer */}
         <View style={styles.footer}>
+          <Pressable
+            style={styles.refreshButton}
+            onPress={() => void billingRes.refresh()}
+          >
+            <Text style={styles.refreshText}>Already paid? Refresh subscription status</Text>
+          </Pressable>
           <View style={styles.trustBadge}>
             <MaterialIcons name="security" size={16} color={colors.muted} />
             <Text style={styles.trustText}>
-              Secured by Razorpay · UPI, QR, Netbanking & Cards
+              {region === 'india'
+                ? 'Secured by Razorpay · UPI, QR, Netbanking & Cards'
+                : 'Secured by Creem · Global Cards, Apple Pay & Google Pay'}
             </Text>
           </View>
           <Pressable
@@ -254,7 +347,45 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     gap: 10,
-    marginBottom: 24,
+    marginBottom: 18,
+  },
+  regionSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+    marginBottom: 18,
+  },
+  regionBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 9,
+    alignItems: 'center',
+  },
+  regionBtnActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  regionBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  regionBtnTextActive: {
+    color: '#047857',
+  },
+  refreshButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  refreshText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#047857',
   },
   badgeRow: {
     marginTop: 8,

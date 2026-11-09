@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
+import { getAuthUser, getProductAppUrl } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,11 +49,13 @@ export async function POST(request: NextRequest) {
     // Ensure amount is integer paise
     amount = Math.round(amount);
 
+    const authUser = await getAuthUser(request).catch(() => null);
     const currency = (body.currency || 'INR').toUpperCase();
     const receipt = body.receipt || `rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const notes = {
       ...(body.notes || {}),
-      planCode: body.planCode || body.plan || '',
+      planCode: body.planCode || body.plan || body.notes?.planCode || '',
+      ...(authUser?.tenantId && !body.notes?.tenantId ? { tenantId: authUser.tenantId } : {}),
     };
 
     const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
@@ -93,7 +96,10 @@ export async function POST(request: NextRequest) {
     // Generate a Razorpay Hosted Payment Link for 100% reliable mobile failover (works without JS / iframes)
     let paymentLinkUrl: string | null = null;
     try {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com';
+      const appUrl = getProductAppUrl(
+        request,
+        body?.product === 'bgos' || body?.notes?.product === 'bgos' ? 'bgos' : undefined
+      );
       const plinkRes = await fetch('https://api.razorpay.com/v1/payment_links', {
         method: 'POST',
         headers: {

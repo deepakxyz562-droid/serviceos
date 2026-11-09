@@ -2392,6 +2392,75 @@ class SupabaseModel {
     if (this.isMissingTable) return { count: 0 };
 
     const { where, data } = options;
+
+    // Handle Prisma atomic operators ({ increment }, { decrement }, { multiply },
+    // { divide }) per matching row so PostgREST receives computed numeric values
+    // rather than trying to apply an increment relative to 0 or failing JSON parsing.
+    const hasAtomicOp = Object.values(data).some(
+      (v) =>
+        v !== null &&
+        typeof v === 'object' &&
+        !Array.isArray(v) &&
+        !(v instanceof Date) &&
+        Object.keys(v as Record<string, unknown>).length === 1 &&
+        ('increment' in (v as Record<string, unknown>) ||
+          'decrement' in (v as Record<string, unknown>) ||
+          'multiply' in (v as Record<string, unknown>) ||
+          'divide' in (v as Record<string, unknown>)),
+    );
+
+    if (hasAtomicOp) {
+      const fetchQuery = this.client.from(this.tableName).select('*');
+      if (where) applyWhereFilters(fetchQuery, where);
+      const { data: rows, error: fetchError } = await fetchQuery;
+      if (fetchError) {
+        console.error(`[SupabaseDB] updateMany pre-fetch error on ${this.tableName}:`, fetchError.message);
+        return { count: 0 };
+      }
+      const list = (rows || []) as Record<string, unknown>[];
+      if (list.length === 0) return { count: 0 };
+
+      let updatedCount = 0;
+      for (const row of list) {
+        const serializedRow = serializeData(data, row);
+        let rowQuery = this.client.from(this.tableName).update(serializedRow, { count: 'exact' });
+        if (row.id !== undefined) {
+          rowQuery = rowQuery.eq('id', row.id as string | number);
+        }
+        if (where) applyWhereFilters(rowQuery, where);
+
+        let { count: rowCount, error: rowError } = await rowQuery;
+        let retryCount = 0;
+        while (rowError && retryCount < 4) {
+          const msg = rowError.message || '';
+          const missingColMatch = msg.match(
+            /(?:Could not find the (?:column )?['`"]?(\w+)['`"]?(?: column)? of|column ['`"]?(\w+)['`"]? of relation|column ['`"]?(\w+)['`"]? does not exist)/i
+          );
+          if (!missingColMatch) break;
+          const badCol = missingColMatch[1] || missingColMatch[2] || missingColMatch[3];
+          if (!badCol || !(badCol in serializedRow)) break;
+          delete serializedRow[badCol];
+          retryCount++;
+          let retryRowQuery = this.client.from(this.tableName).update(serializedRow, { count: 'exact' });
+          if (row.id !== undefined) {
+            retryRowQuery = retryRowQuery.eq('id', row.id as string | number);
+          }
+          if (where) applyWhereFilters(retryRowQuery, where);
+          const retry = await retryRowQuery;
+          rowCount = retry.count;
+          rowError = retry.error;
+        }
+
+        if (rowError) {
+          console.error(`[SupabaseDB] updateMany atomic row error on ${this.tableName}:`, rowError.message);
+          continue;
+        }
+        updatedCount += rowCount ?? 0;
+      }
+
+      return { count: updatedCount };
+    }
+
     const serialized = serializeData(data);
 
     let query = this.client.from(this.tableName).update(serialized, { count: 'exact' });

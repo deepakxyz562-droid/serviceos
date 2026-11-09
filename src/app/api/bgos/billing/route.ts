@@ -1,26 +1,41 @@
 import { leadUsage } from '@/lib/bgos-usage';
 import { NextRequest, NextResponse } from 'next/server';
-import Razorpay from 'razorpay';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, getProductAppUrl } from '@/lib/auth';
 import { resolveProductAccess, activateProductWorkspace } from '@/lib/product-access';
-import { bgosStripe, bgosPrice, validateBgosPrice } from '@/lib/bgos-billing';
-import { BGOS_PLANS, isBgosPlan } from '../../../../../shared/bgos-plans';
+import {
+  BGOS_PLANS,
+  BGOS_USD_PRICES,
+  isBgosPlan,
+  resolveBgosBillingRegion,
+  type BgosPlan,
+} from '@/lib/bgos-billing';
+import {
+  activateBgosSubscription,
+  getTenantBgosEntitlement,
+} from '@/lib/bgos-entitlement';
 import { db } from '@/lib/db';
 import { isCreemConfigured, createCreemCheckoutSession } from '@/lib/creem';
 
-async function getOrProvisionBgosAccess(user: { id: string; tenantId: string; workspaceId?: string | null; role?: string }) {
+async function getOrProvisionBgosAccess(user: {
+  id: string;
+  tenantId: string;
+  workspaceId?: string | null;
+  role?: string;
+}) {
   try {
     return await resolveProductAccess(user.id, 'bgos', user.workspaceId || undefined);
   } catch (err: any) {
     const tenant = await db.tenant.findUnique({ where: { id: user.tenantId } });
     if (!tenant) throw err;
 
-    // Try auto-activating the workspace for this tenant
     try {
-      const workspaceId = await activateProductWorkspace(user.id, 'bgos', tenant.name || 'BGOS Workspace');
+      const workspaceId = await activateProductWorkspace(
+        user.id,
+        'bgos',
+        tenant.name || 'BGOS Workspace',
+      );
       return await resolveProductAccess(user.id, 'bgos', workspaceId);
     } catch {
-      // Fallback: If RPC/activation is not present in DB, build tenant-backed effective access object
       const tenantSub = await db.subscription.findFirst({
         where: { tenantId: user.tenantId },
         orderBy: { createdAt: 'desc' },
@@ -40,12 +55,12 @@ async function getOrProvisionBgosAccess(user: { id: string; tenantId: string; wo
           status: 'active' as const,
         },
         subscription: {
-          plan: tenantSub?.plan || tenant.plan || 'free',
+          plan: tenantSub?.plan || tenant.plan || 'starter',
           status: tenantSub?.status || tenant.planStatus || 'trial',
           trialEndsAt: tenantSub?.trialEndsAt || tenant.trialEndsAt,
           currentPeriodEnd: tenantSub?.endDate || tenant.planEndsAt,
           billingSource: 'legacy' as const,
-          provider: 'razorpay',
+          provider: tenantSub?.paymentProvider || 'none',
           providerSubscriptionId: null,
         },
         tenant,
@@ -55,87 +70,169 @@ async function getOrProvisionBgosAccess(user: { id: string; tenantId: string; wo
   }
 }
 
-export async function GET() {
-  const user = await getAuthUser();
-  if (!user?.tenantId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+export async function GET(request: NextRequest) {
+  const user = await getAuthUser(request);
+  if (!user?.tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
   try {
-    const access = await getOrProvisionBgosAccess(user);
+    const access = await getOrProvisionBgosAccess(user as any);
+    const { entitlement } = await getTenantBgosEntitlement(user.tenantId);
+
     const usedLeadCredits = await leadUsage(access.workspace.workspaceId).catch(() => 0);
     const contacts = await db.contact.count({ where: { tenantId: user.tenantId } });
     const forms = await db.form.count({ where: { tenantId: user.tenantId, status: 'active' } });
 
     const hasRazorpay = !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);
     const hasCreem = await isCreemConfigured().catch(() => false);
-    const hasStripe = !!(process.env.BGOS_STRIPE_SECRET_KEY && process.env.BGOS_STRIPE_WEBHOOK_SECRET);
+    const defaultRegion = resolveBgosBillingRegion(access.tenant?.country);
 
-    return NextResponse.json({
-      subscription: {
-        plan: access.subscription.plan,
-        status: access.subscription.status,
-        trialEndsAt: access.subscription.trialEndsAt,
-        currentPeriodEnd: access.subscription.currentPeriodEnd,
-        legacy: access.subscription.billingSource === 'legacy',
+    return NextResponse.json(
+      {
+        subscription: {
+          plan: entitlement.plan || access.subscription.plan,
+          status: entitlement.status || access.subscription.status,
+          trialEndsAt: entitlement.trialEndsAt ?? access.subscription.trialEndsAt,
+          currentPeriodEnd:
+            entitlement.currentPeriodEnd ?? access.subscription.currentPeriodEnd,
+          legacy: access.subscription.billingSource === 'legacy',
+          provider: access.subscription.provider || null,
+        },
+        entitlement,
+        defaultRegion,
+        usage: {
+          contacts,
+          forms,
+          usedLeadCredits,
+          leadCreditLimit:
+            (entitlement.plan || access.subscription.plan) === 'business' ? 2500 : 0,
+        },
+        plans: Object.entries(BGOS_PLANS).map(([code, plan]) => ({
+          code,
+          ...plan,
+          priceUsd: BGOS_USD_PRICES[code as BgosPlan] ?? 0,
+          checkoutEnabled: hasRazorpay || hasCreem,
+        })),
+        gateways: {
+          razorpay: hasRazorpay,
+          creem: hasCreem,
+        },
+        portalEnabled: false,
       },
-      usage: {
-        contacts,
-        forms,
-        usedLeadCredits,
-        leadCreditLimit: access.subscription.plan === 'business' ? 2500 : 0,
-      },
-      plans: Object.entries(BGOS_PLANS).map(([code, plan]) => ({
-        code,
-        ...plan,
-        checkoutEnabled: hasRazorpay || hasCreem || (hasStripe && !!bgosPrice(code as keyof typeof BGOS_PLANS)),
-      })),
-      gateways: {
-        razorpay: hasRazorpay,
-        creem: hasCreem,
-        stripe: hasStripe,
-      },
-      portalEnabled: access.subscription.provider === 'stripe' && !!access.subscription.providerSubscriptionId,
-    }, { headers: { 'Cache-Control': 'private, no-store' } });
+      { headers: { 'Cache-Control': 'private, no-store' } },
+    );
   } catch (err: any) {
     console.error('[/api/bgos/billing GET] Error:', err);
-    return NextResponse.json({ error: 'Billing requires an active BGOS workspace. Complete workspace setup or contact your administrator.' }, { status: 409 });
+    return NextResponse.json(
+      {
+        error:
+          'Billing requires an active BGOS workspace. Complete workspace setup or contact your administrator.',
+      },
+      { status: 409 },
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getAuthUser();
-  if (!user?.tenantId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  const user = await getAuthUser(request);
+  if (!user?.tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
   try {
-    const access = await getOrProvisionBgosAccess(user);
-    if (!['owner','admin'].includes(access.membership.role)) return NextResponse.json({ error: 'Workspace owner access required' }, { status: 403 });
-    const body = await request.json();
-    const base = process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com';
+    const access = await getOrProvisionBgosAccess(user as any);
+    if (!['owner', 'admin'].includes(access.membership.role)) {
+      return NextResponse.json({ error: 'Workspace owner access required' }, { status: 403 });
+    }
 
-    if (body.action === 'portal') {
-      if (access.subscription.provider !== 'stripe' || !access.subscription.providerSubscriptionId) {
-        return NextResponse.json({ error: 'No Stripe subscription is connected' }, { status: 409 });
-      }
-      const stripe = bgosStripe();
-      const subscription = await stripe.subscriptions.retrieve(access.subscription.providerSubscriptionId);
-      const session = await stripe.billingPortal.sessions.create({
-        customer: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id,
-        return_url: `${base}/app?view=billing`,
-      });
-      return NextResponse.json({ url: session.url });
+    const body = await request.json().catch(() => ({}));
+    if (body.action === 'portal' || body.gateway === 'stripe') {
+      return NextResponse.json(
+        { error: 'Stripe is disabled for BGOS. Choose Razorpay (India) or Creem (International).' },
+        { status: 410 },
+      );
     }
 
     if (!isBgosPlan(body.plan) || body.plan === 'free') {
       return NextResponse.json({ error: 'Choose a paid BGOS plan' }, { status: 400 });
     }
 
-    const chosenPlan = BGOS_PLANS[body.plan as keyof typeof BGOS_PLANS];
+    const planCode = body.plan as Exclude<BgosPlan, 'free'>;
+    const chosenPlan = BGOS_PLANS[planCode];
+    const billingCycle = body.billingCycle === 'yearly' ? 'yearly' : 'monthly';
+    const appBaseUrl = getProductAppUrl(request, 'bgos') || process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com';
 
-    // ── 1. Razorpay Order Creation (for Indian users · UPI, Netbanking, Cards in INR) ──
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
-    if (body.gateway === 'razorpay' || (!body.gateway && body.action !== 'activate' && keyId && keySecret)) {
-      if (chosenPlan && chosenPlan.priceInr > 0) {
-        const amountPaise = chosenPlan.priceInr * 100;
-        const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-        const orderRes = await fetch('https://api.razorpay.com/v1/orders', {
+    const hasRazorpay = !!(keyId && keySecret);
+    const hasCreem = await isCreemConfigured().catch(() => false);
+
+    // ── 1. Creem International Checkout (Global Cards / Apple Pay / Google Pay in USD) ──
+    if (body.gateway === 'creem') {
+      if (!hasCreem) {
+        return NextResponse.json(
+          { error: 'Creem international billing is not configured yet.' },
+          { status: 503 },
+        );
+      }
+      const session = await createCreemCheckoutSession({
+        planCode: `bgos_${planCode}`,
+        billingCycle,
+        tenantId: user.tenantId,
+        userEmail: user.email,
+        successUrl: `${appBaseUrl}/app?view=billing&creem=success&plan=${encodeURIComponent(planCode)}`,
+        cancelUrl: `${appBaseUrl}/app?view=billing&creem=cancelled`,
+      });
+      return NextResponse.json({
+        gateway: 'creem',
+        url: session.checkoutUrl,
+        sessionId: session.sessionId,
+      });
+    }
+
+    // ── 2. Razorpay India Order + Payment Link (UPI / Netbanking / Cards in INR) ──
+    if (body.gateway === 'razorpay' || (!body.gateway && body.action !== 'activate' && hasRazorpay)) {
+      if (!hasRazorpay) {
+        return NextResponse.json(
+          { error: 'Razorpay billing is not configured on the server.' },
+          { status: 503 },
+        );
+      }
+
+      const inrMajor = billingCycle === 'yearly' ? chosenPlan.priceInr * 10 : chosenPlan.priceInr;
+      const amountPaise = inrMajor * 100;
+      const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+      const notes = {
+        tenantId: user.tenantId,
+        planCode,
+        plan: planCode,
+        billingCycle,
+        platform: 'bgos',
+      };
+
+      const orderRes = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${auth}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: amountPaise,
+          currency: 'INR',
+          receipt: `bgos_${planCode}_${Date.now()}`,
+          notes,
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      const order = await orderRes.json().catch(() => ({}));
+      if (!orderRes.ok) {
+        const errDesc = order?.error?.description || 'Razorpay order creation failed';
+        return NextResponse.json({ error: errDesc }, { status: orderRes.status });
+      }
+
+      let paymentLinkUrl: string | null = null;
+      try {
+        const plinkRes = await fetch('https://api.razorpay.com/v1/payment_links', {
           method: 'POST',
           headers: {
             Authorization: `Basic ${auth}`,
@@ -144,124 +241,64 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify({
             amount: amountPaise,
             currency: 'INR',
-            receipt: `bgos_${body.plan}_${Date.now()}`,
-            notes: {
-              tenantId: user.tenantId,
-              plan: body.plan,
-              platform: 'bgos',
-            },
+            description: `BGOS ${chosenPlan.name} (${billingCycle}) Plan`,
+            notes,
+            callback_url: `${appBaseUrl}/checkout/razorpay?plan=${encodeURIComponent(planCode)}&billingCycle=${encodeURIComponent(billingCycle)}&status=success`,
+            callback_method: 'get',
           }),
+          signal: AbortSignal.timeout(10_000),
         });
-
-        const order = await orderRes.json();
-        if (!orderRes.ok) {
-          const errDesc = order?.error?.description || 'Razorpay order creation failed';
-          return NextResponse.json({ error: errDesc }, { status: orderRes.status });
+        if (plinkRes.ok) {
+          const plinkData = await plinkRes.json().catch(() => ({}));
+          paymentLinkUrl = plinkData?.short_url || null;
         }
-
-        return NextResponse.json({
-          gateway: 'razorpay',
-          order_id: order.id,
-          amount: order.amount,
-          currency: order.currency,
-          key_id: keyId,
-          plan: body.plan,
-          planName: chosenPlan.name,
-        });
+      } catch {
+        // non-fatal mobile fallback
       }
+
+      return NextResponse.json({
+        gateway: 'razorpay',
+        order_id: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        key_id: keyId,
+        plan: planCode,
+        planName: chosenPlan.name,
+        payment_link_url: paymentLinkUrl,
+      });
     }
 
-    // ── 2. Creem Checkout Session (for International users · Global Cards, Apple/Google Pay in USD) ──
-    if (body.gateway === 'creem') {
-      const creemActive = await isCreemConfigured();
-      if (creemActive) {
-        const session = await createCreemCheckoutSession({
-          planCode: body.plan,
-          billingCycle: 'monthly',
-          tenantId: user.tenantId,
-          userEmail: user.email,
-          successUrl: `${base}/app?view=billing&creem=success`,
-          cancelUrl: `${base}/app?view=billing&creem=cancelled`,
-        });
-        return NextResponse.json({
-          gateway: 'creem',
-          url: session.checkoutUrl,
-        });
-      }
+    // ── 3. Local dev test bypass ONLY when non-production AND neither gateway is configured ──
+    if (
+      body.action === 'activate' &&
+      process.env.NODE_ENV !== 'production' &&
+      !hasRazorpay &&
+      !hasCreem
+    ) {
+      await activateBgosSubscription({
+        tenantId: user.tenantId,
+        planCode,
+        provider: 'razorpay',
+        billingCycle,
+        currency: 'INR',
+        payerEmail: user.email,
+        description: `Dev sandbox activation for BGOS ${chosenPlan.name}`,
+      });
+
+      return NextResponse.json({
+        success: true,
+        activated: true,
+        plan: planCode,
+        message: `${chosenPlan.name} plan activated in local test mode!`,
+      });
     }
 
-    // ── 3. Direct in-app activation mode (only permitted in local test sandbox when no keys configured) ──
-    if ((body.action === 'activate' && !keyId && !process.env.BGOS_STRIPE_WEBHOOK_SECRET) || (!process.env.BGOS_STRIPE_WEBHOOK_SECRET && !keyId)) {
-      if (chosenPlan) {
-        const now = new Date();
-        const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-        await db.subscription.updateMany({
-          where: { tenantId: user.tenantId },
-          data: {
-            plan: body.plan,
-            status: 'active',
-            trialEndsAt: null,
-            startDate: now,
-            endDate: nextMonth,
-          },
-        });
-
-        await db.tenant.update({
-          where: { id: user.tenantId },
-          data: {
-            plan: body.plan,
-            planStatus: 'active',
-            trialEndsAt: null,
-            planStartedAt: now,
-            planEndsAt: nextMonth,
-          },
-        });
-
-        try {
-          await db.productSubscription.updateMany({
-            where: { workspaceId: access.workspace.workspaceId },
-            data: {
-              plan: body.plan,
-              status: 'active',
-              trialEndsAt: null,
-              currentPeriodEnd: nextMonth,
-            },
-          });
-        } catch {
-          // non-fatal
-        }
-
-        return NextResponse.json({
-          success: true,
-          activated: true,
-          plan: body.plan,
-          message: `${chosenPlan.name} plan activated successfully!`,
-        });
-      }
-    }
-
-    // ── 4. Stripe fallback ──
-    if (process.env.BGOS_STRIPE_WEBHOOK_SECRET && process.env.BGOS_STRIPE_SECRET_KEY) {
-      const stripe = bgosStripe();
-      const price = await validateBgosPrice(stripe, body.plan);
-      const session = await stripe.checkout.sessions.create({
-        mode: 'subscription',
-        client_reference_id: access.workspace.workspaceId,
-        customer_email: user.email,
-        line_items: [{ price, quantity: 1 }],
-        subscription_data: { metadata: { bgosWorkspaceId: access.workspace.workspaceId } },
-        success_url: `${base}/app?view=billing&checkout=complete`,
-        cancel_url: `${base}/app?view=billing`,
-        expires_at: Math.floor(Date.now() / 1000) + 1800,
-      }, { idempotencyKey: `bgos:${access.workspace.workspaceId}:${body.plan}:${Math.floor(Date.now()/1800000)}` });
-      return NextResponse.json({ url: session.url });
-    }
-
-    return NextResponse.json({ error: 'No active payment gateway configured' }, { status: 503 });
+    return NextResponse.json(
+      { error: 'Please complete checkout via Razorpay (India) or Creem (International).' },
+      { status: 503 },
+    );
   } catch (err: any) {
     console.error('[bgos/billing] Error:', err);
     return NextResponse.json({ error: err?.message || 'Billing could not be opened.' }, { status: 500 });
   }
 }
-

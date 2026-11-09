@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { cache } from '@/lib/cache';
 import {
+  BGOS_CREEM_PLANS,
   getCreemConfig,
   verifyCreemWebhookSignature,
 } from '@/lib/creem';
+import { activateBgosSubscription } from '@/lib/bgos-entitlement';
 import { logBillingEvent } from '@/lib/billing-events';
 import { firePaymentFailureAlerts } from '@/lib/platform-alerts';
 import {
@@ -260,6 +262,38 @@ function invalidateCache(tenantId: string) {
   }
 }
 
+/** Keep BGOS ProductSubscription rows synchronized with Creem subscription lifecycle events. */
+async function syncBgosProductSubscriptions(
+  tenantId: string,
+  data: {
+    plan?: string;
+    status?: string;
+    trialEndsAt?: Date | null;
+    currentPeriodEnd?: Date | null;
+    providerSubscriptionId?: string | null;
+  },
+) {
+  try {
+    const bgosPws = await db.productWorkspace.findMany({
+      where: { tenantId, product: 'bgos' },
+      select: { workspaceId: true },
+    });
+    const wsIds = bgosPws.map((pw: { workspaceId: string }) => pw.workspaceId).filter(Boolean);
+    if (wsIds.length === 0) return;
+
+    await db.productSubscription.updateMany({
+      where: { workspaceId: { in: wsIds } },
+      data: {
+        ...data,
+        provider: 'creem',
+        billingSource: 'product',
+      },
+    });
+  } catch {
+    // non-fatal
+  }
+}
+
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
 /**
@@ -397,7 +431,35 @@ async function handleCheckoutCompleted(event: NormalisedEvent) {
     return;
   }
 
-  // Validate plan exists
+  const creemSubId =
+    (event.object.subscription as string | undefined) ||
+    (event.object.subscription_id as string | undefined) ||
+    (event.object.id as string | undefined) ||
+    '';
+
+  const bgosPlanDef = BGOS_CREEM_PLANS[planCode];
+  if (bgosPlanDef || planCode.startsWith('bgos_') || event.metadata.product === 'bgos') {
+    const amount = bgosPlanDef
+      ? billingCycle === 'yearly'
+        ? bgosPlanDef.yearlyPrice
+        : bgosPlanDef.monthlyPrice
+      : undefined;
+    await activateBgosSubscription({
+      tenantId,
+      planCode,
+      provider: 'creem',
+      billingCycle,
+      currency: 'USD',
+      amount,
+      providerSubscriptionId: creemSubId || null,
+      providerOrderId: (event.object.id as string) || null,
+      payerEmail: (event.object.customer_email as string | undefined) || null,
+      description: `Creem subscription activated: ${bgosPlanDef?.name || planCode} (${billingCycle})`,
+    });
+    return;
+  }
+
+  // Validate plan exists in CRM Plan catalog
   const plan = await db.plan.findUnique({ where: { code: planCode } });
   if (!plan) {
     console.error('[creem/webhook] unknown plan code:', planCode);
@@ -405,11 +467,6 @@ async function handleCheckoutCompleted(event: NormalisedEvent) {
   }
 
   const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
-  const creemSubId =
-    (event.object.subscription as string | undefined) ||
-    (event.object.subscription_id as string | undefined) ||
-    (event.object.id as string | undefined) ||
-    '';
 
   const endDate = computeEndDate(billingCycle);
 
@@ -549,6 +606,10 @@ async function handleSubscriptionActivated(event: NormalisedEvent) {
     where: { id: local.tenantId },
     data: { planStatus: 'active' },
   });
+  await syncBgosProductSubscriptions(local.tenantId, {
+    status: 'active',
+    ...(creemSubId ? { providerSubscriptionId: creemSubId } : {}),
+  });
   invalidateCache(local.tenantId);
 }
 
@@ -615,6 +676,12 @@ async function handleSubscriptionUpdated(event: NormalisedEvent) {
       data: { planStatus: newTenantStatus },
     });
   }
+  await syncBgosProductSubscriptions(local.tenantId, {
+    status: newStatus,
+    ...(newEndDate && !Number.isNaN(newEndDate.getTime())
+      ? { currentPeriodEnd: newEndDate }
+      : {}),
+  });
   invalidateCache(local.tenantId);
 }
 
@@ -641,6 +708,7 @@ async function handleSubscriptionCanceled(event: NormalisedEvent) {
     where: { id: local.tenantId },
     data: { planStatus: 'cancelled' },
   });
+  await syncBgosProductSubscriptions(local.tenantId, { status: 'cancelled' });
   invalidateCache(local.tenantId);
 
   await logBillingEvent({
@@ -678,6 +746,7 @@ async function handleSubscriptionPastDue(event: NormalisedEvent) {
     where: { id: local.tenantId },
     data: { planStatus: 'past_due' },
   });
+  await syncBgosProductSubscriptions(local.tenantId, { status: 'past_due' });
   invalidateCache(local.tenantId);
 
   await logBillingEvent({

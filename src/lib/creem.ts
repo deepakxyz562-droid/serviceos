@@ -93,6 +93,44 @@ const CREEM_FEATURE_KEY = 'creem_billing';
 const CREEM_BASE_URL = 'https://api.creem.io';
 const CREEM_TEST_BASE_URL = 'https://test-api.creem.io';
 
+/**
+ * BGOS International USD plan catalog for Creem checkout.
+ * Kept strictly separate from CRM `db.plan` rows ($29/$79/$149) so BGOS
+ * international users are billed at BGOS USD prices ($9/$29/$79).
+ */
+export const BGOS_CREEM_PLANS: Record<
+  string,
+  {
+    name: string;
+    description: string;
+    monthlyPrice: number;
+    yearlyPrice: number;
+    currency: string;
+  }
+> = {
+  bgos_starter: {
+    name: 'BGOS Starter',
+    description: 'BGOS Starter — Google Business OS plan for solo local businesses ($9/mo)',
+    monthlyPrice: 9,
+    yearlyPrice: 90,
+    currency: 'USD',
+  },
+  bgos_growth: {
+    name: 'BGOS Growth',
+    description: 'BGOS Growth — Google Business OS SEO, Reviews & Autopilot plan ($29/mo)',
+    monthlyPrice: 29,
+    yearlyPrice: 290,
+    currency: 'USD',
+  },
+  bgos_business: {
+    name: 'BGOS Business',
+    description: 'BGOS Business — Multi-location operations & 2,500 B2B lead credits ($79/mo)',
+    monthlyPrice: 79,
+    yearlyPrice: 790,
+    currency: 'USD',
+  },
+};
+
 // ─── Config resolution ───────────────────────────────────────────────────────
 
 /**
@@ -188,26 +226,31 @@ export async function createCreemCheckoutSession(
     throw new Error('Creem is not configured. Ask the platform admin to add a Creem API key.');
   }
 
-  // Phase 9.8: Look up the plan from BOTH the main Plan table AND the AddonPlan table.
-  // This lets the same checkout function serve SaaS subscriptions AND addon purchases.
-  const plan = await getPlanByCode(input.planCode);
+  // Phase 9.8 + BGOS: Check BGOS Creem USD catalog first, then DB Plan catalog, then AddonPlan.
+  const bgosPlan = BGOS_CREEM_PLANS[input.planCode];
   let monthlyPrice = 0;
   let yearlyPrice = 0;
 
-  if (plan) {
-    monthlyPrice = plan.monthlyPrice;
-    yearlyPrice = plan.yearlyPrice;
+  if (bgosPlan) {
+    monthlyPrice = bgosPlan.monthlyPrice;
+    yearlyPrice = bgosPlan.yearlyPrice;
   } else {
-    // Try AddonPlan (AI Receptionist, AI Phone Number, etc.)
-    const addonPlan = await db.addonPlan.findUnique({
-      where: { code: input.planCode },
-      select: { price: true, billingCycle: true },
-    });
-    if (addonPlan) {
-      monthlyPrice = addonPlan.price;
-      yearlyPrice = addonPlan.price * 12; // approximate yearly price
+    const plan = await getPlanByCode(input.planCode);
+    if (plan) {
+      monthlyPrice = plan.monthlyPrice;
+      yearlyPrice = plan.yearlyPrice;
     } else {
-      throw new Error(`Plan "${input.planCode}" not found in the plan catalog or addon catalog.`);
+      // Try AddonPlan (AI Receptionist, AI Phone Number, etc.)
+      const addonPlan = await db.addonPlan.findUnique({
+        where: { code: input.planCode },
+        select: { price: true, billingCycle: true },
+      });
+      if (addonPlan) {
+        monthlyPrice = addonPlan.price;
+        yearlyPrice = addonPlan.price * 12; // approximate yearly price
+      } else {
+        throw new Error(`Plan "${input.planCode}" not found in the plan catalog or addon catalog.`);
+      }
     }
   }
 
@@ -217,10 +260,52 @@ export async function createCreemCheckoutSession(
     throw new Error('Free plans do not require a Creem checkout session.');
   }
 
-  // Creem requires a pre-created product for every checkout — there is NO
-  // ad-hoc / inline-pricing mode. The superadmin must map each plan × cycle
-  // to a Creem product_id in the admin panel (stored in config.products).
+  // Creem requires a pre-created product for every checkout — check config.products first,
+  // and auto-create BGOS USD products on demand if the superadmin hasn't pre-created them yet.
   let productId = cfg.products?.[input.planCode]?.[cycle];
+  if (!productId && bgosPlan) {
+    try {
+      const cycleLabel = cycle === 'yearly' ? 'Yearly' : 'Monthly';
+      const created = await createCreemProduct({
+        name: `${bgosPlan.name} — ${cycleLabel}`,
+        description: bgosPlan.description,
+        billingType: 'recurring',
+        billingPeriod: cycle === 'yearly' ? 'every-year' : 'every-month',
+        priceInDollars: amount,
+        currency: bgosPlan.currency,
+        idempotencyKey: `${input.planCode}-${cycle}-${Date.now()}`,
+      });
+      productId = created.productId;
+
+      const toggle = await db.revenueFeatureToggle.findUnique({
+        where: { featureKey: CREEM_FEATURE_KEY },
+      });
+      if (toggle) {
+        let nextConfig: Record<string, unknown> = {};
+        try {
+          nextConfig = JSON.parse(toggle.configJson || '{}');
+        } catch {
+          nextConfig = {};
+        }
+        const prevProducts =
+          (nextConfig.products as Record<string, { monthly?: string; yearly?: string }> | undefined) || {};
+        nextConfig.products = {
+          ...prevProducts,
+          [input.planCode]: {
+            ...(prevProducts[input.planCode] || {}),
+            [cycle]: productId,
+          },
+        };
+        await db.revenueFeatureToggle.update({
+          where: { featureKey: CREEM_FEATURE_KEY },
+          data: { configJson: JSON.stringify(nextConfig) },
+        });
+      }
+    } catch (autoCreateErr) {
+      logger.warn({ err: autoCreateErr }, '[creem] BGOS product auto-create fallback failed');
+    }
+  }
+
   if (!productId) {
     throw new Error(
       `No Creem product_id mapped for plan "${input.planCode}" (${cycle}). ` +
@@ -291,6 +376,7 @@ export async function createCreemCheckoutSession(
       tenantId: input.tenantId,
       planCode: input.planCode,
       billingCycle: cycle,
+      ...(bgosPlan ? { product: 'bgos' } : {}),
       source: 'fieseros-billing',
     },
   };
@@ -804,6 +890,43 @@ export async function createAllCreemProducts(): Promise<CreateAllProductsResult>
         cycle,
         error: err instanceof Error ? err.message : String(err),
       });
+    }
+  }
+
+  // ── BGOS International USD plans ($9 / $29 / $79) ────────────────────────
+  for (const [planCode, bgosPlan] of Object.entries(BGOS_CREEM_PLANS)) {
+    for (const cycle of ['monthly', 'yearly'] as const) {
+      const price = cycle === 'yearly' ? bgosPlan.yearlyPrice : bgosPlan.monthlyPrice;
+      const billingPeriod: CreemBillingPeriod =
+        cycle === 'yearly' ? 'every-year' : 'every-month';
+      const cycleLabel = cycle === 'yearly' ? 'Yearly' : 'Monthly';
+      const name = `${bgosPlan.name} — ${cycleLabel}`;
+
+      try {
+        const result = await createCreemProduct({
+          name,
+          description: bgosPlan.description,
+          billingType: 'recurring',
+          billingPeriod,
+          priceInDollars: price,
+          currency: bgosPlan.currency,
+          idempotencyKey: `${planCode}-${cycle}-${Date.now()}`,
+        });
+        created.push({
+          key: `${planCode}_${cycle}`,
+          planCode,
+          cycle,
+          productId: result.productId,
+          name,
+        });
+      } catch (err) {
+        failed.push({
+          key: `${planCode}_${cycle}`,
+          planCode,
+          cycle,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 

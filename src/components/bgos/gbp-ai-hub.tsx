@@ -94,6 +94,10 @@ import {
   WebMediaMetadataDialog,
   type WebMediaItem,
 } from '@/components/bgos/media-metadata-dialog';
+import {
+  WebMediaThumb,
+  WebMediaPreviewDialog,
+} from '@/components/bgos/web-media-preview-dialog';
 
 // ─── API response types (mirrors of live route contracts) ────────────────────
 
@@ -1392,6 +1396,7 @@ function PhotosTab({
   const [mediaModalMode, setMediaModalMode] = useState<'upload' | 'ai_generate'>('upload');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [editingItem, setEditingItem] = useState<WebMediaItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<WebMediaItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const allPhotos = photos?.photos || [];
@@ -1566,34 +1571,14 @@ function PhotosTab({
               <figure
                 key={p.id}
                 role="listitem"
-                onClick={
-                  isEditable
-                    ? () => {
-                        setPendingFiles([]);
-                        setEditingItem(p);
-                        setMediaModalMode('upload');
-                        setMetadataModalOpen(true);
-                      }
-                    : undefined
-                }
-                className={cn(
-                  'group relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-100',
-                  isEditable && 'cursor-pointer hover:ring-2 hover:ring-primary/50 transition',
-                )}
+                onClick={() => setPreviewItem(p as WebMediaItem)}
+                className="group relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-100 cursor-pointer hover:ring-2 hover:ring-primary/50 transition"
               >
-                {isVideo ? (
-                  <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-slate-900 text-white">
-                    <Film className="size-7 text-emerald-400" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-200">Video</span>
-                  </div>
-                ) : (
-                  <img
-                    src={p.thumbnailUrl || p.url}
-                    alt={displayTitle ? `GBP media: ${displayTitle.slice(0, 60)}` : 'Google Business media'}
-                    className="size-full object-cover"
-                    loading="lazy"
-                  />
-                )}
+                <WebMediaThumb
+                  item={p}
+                  alt={displayTitle ? `GBP media: ${displayTitle.slice(0, 60)}` : 'Google Business media'}
+                  className="size-full object-cover"
+                />
 
                 <div className="absolute left-1.5 top-1.5 flex items-center gap-1">
                   {p.source === 'google' ? (
@@ -1613,12 +1598,27 @@ function PhotosTab({
                       QUEUED
                     </span>
                   )}
+                  {isVideo && (
+                    <span className="rounded-full bg-black/75 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                      VIDEO
+                    </span>
+                  )}
                 </div>
 
                 {isEditable && (
-                  <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-semibold text-white">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPendingFiles([]);
+                      setEditingItem(p as WebMediaItem);
+                      setMediaModalMode('upload');
+                      setMetadataModalOpen(true);
+                    }}
+                    className="absolute right-1.5 top-1.5 rounded-full bg-black/60 hover:bg-black/80 px-2 py-0.5 text-[9px] font-semibold text-white"
+                  >
                     Edit
-                  </span>
+                  </button>
                 )}
 
                 <figcaption className="absolute inset-x-1.5 bottom-1.5 rounded-lg bg-black/70 px-2 py-1 text-left text-white backdrop-blur-xs">
@@ -1664,6 +1664,18 @@ function PhotosTab({
           else if (mode === 'draft') setView('not_posted');
           else if (mode === 'daily' || mode === 'weekly') setView('queue');
           onPhotosChanged();
+        }}
+      />
+      <WebMediaPreviewDialog
+        item={previewItem}
+        open={Boolean(previewItem)}
+        onOpenChange={(v) => { if (!v) setPreviewItem(null); }}
+        businessName={businessName}
+        onEdit={(item) => {
+          setPendingFiles([]);
+          setEditingItem(item);
+          setMediaModalMode('upload');
+          setMetadataModalOpen(true);
         }}
       />
     </div>

@@ -23,6 +23,11 @@ import {
   type PendingUpload,
 } from '../../lib/upload';
 import {
+  useMediaUploadStore,
+  type BackgroundScheduleMode,
+  type MediaJobSaveConfig,
+} from '../../stores/media-upload-store';
+import {
   COUNTRIES,
   detectDeviceCountryAndTimezone,
   getCountryByCode,
@@ -44,6 +49,7 @@ export type AiMediaIntent = 'local_seo' | 'showcase' | 'behind_the_scenes' | 'te
 interface UploadedMediaState {
   local: PendingUpload;
   cloudUrl?: string;
+  thumbnailUrl?: string;
   uploading: boolean;
   progress?: number;
   error?: string;
@@ -158,8 +164,31 @@ export function MediaMetadataSheet({
 }) {
   const detected = detectDeviceCountryAndTimezone();
   const [composerMode, setComposerMode] = useState<'upload' | 'ai_generate'>(initialMode);
-  const [uploads, setUploads] = useState<UploadedMediaState[]>([]);
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
+  const [aiUploads, setAiUploads] = useState<UploadedMediaState[]>([]);
   const [videoWarning, setVideoWarning] = useState<string | null>(null);
+
+  const activeBatches = useMediaUploadStore((s) => s.activeBatches);
+  const batchWarnings = useMediaUploadStore((s) => s.batchWarnings);
+  const startBatch = useMediaUploadStore((s) => s.startBatch);
+  const retryBatchFile = useMediaUploadStore((s) => s.retryBatchFile);
+  const submitBatchJob = useMediaUploadStore((s) => s.submitBatchJob);
+
+  const uploads: UploadedMediaState[] =
+    composerMode === 'ai_generate'
+      ? aiUploads
+      : activeBatchId && activeBatches[activeBatchId]
+        ? activeBatches[activeBatchId].map((b) => ({
+            local: b.local,
+            cloudUrl: b.cloudUrl,
+            thumbnailUrl: b.thumbnailUrl,
+            uploading: b.uploading,
+            progress: b.progress,
+            error: b.error,
+          }))
+        : [];
+  const effectiveVideoWarning =
+    (activeBatchId ? batchWarnings[activeBatchId] : null) || videoWarning;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -196,6 +225,7 @@ export function MediaMetadataSheet({
 
   const sessionKeyRef = useRef(0);
   const lastInitKeyRef = useRef('');
+  const handedOffBatchRef = useRef<string | null>(null);
   const isEditMode = Boolean(editingItem && (editingItem.postId || editingItem.id));
 
   async function loadAiImageIdeas(topic?: string) {
@@ -260,17 +290,15 @@ export function MediaMetadataSheet({
     }
   }
 
-  function startBatchUploads(normalized: PendingUpload[], reqKey: number) {
+  function startBatchUploads(normalized: PendingUpload[], _reqKey: number) {
     if (!normalized.length) {
-      setUploads([]);
+      setActiveBatchId(null);
+      setAiUploads([]);
       return;
     }
-    const initialState: UploadedMediaState[] = normalized.map((local) => ({
-      local,
-      uploading: true,
-      progress: 0,
-    }));
-    setUploads(initialState);
+    handedOffBatchRef.current = null;
+    const batchId = startBatch(normalized);
+    setActiveBatchId(batchId);
 
     const hasVideo = normalized.some((n) => n.mediaType === 'video');
     void runAiMetadata(
@@ -278,36 +306,6 @@ export function MediaMetadataSheet({
       intent,
       hasVideo ? 'video' : 'photo',
     );
-
-    normalized.forEach(async (item, idx) => {
-      try {
-        const cloudUrl = await uploadFileToStorage(item, {
-          folder: 'gbp-media',
-          visibility: 'public',
-          onWarning: (w) => {
-            if (reqKey === sessionKeyRef.current) setVideoWarning(w);
-          },
-          onProgress: (pct) => {
-            if (reqKey !== sessionKeyRef.current) return;
-            setUploads((prev) =>
-              prev.map((row, rIdx) => (rIdx === idx ? { ...row, progress: pct } : row)),
-            );
-          },
-        });
-        if (reqKey !== sessionKeyRef.current) return;
-        setUploads((prev) =>
-          prev.map((row, rIdx) =>
-            rIdx === idx ? { ...row, cloudUrl, uploading: false, progress: 100, error: undefined } : row,
-          ),
-        );
-      } catch (err: unknown) {
-        if (reqKey !== sessionKeyRef.current) return;
-        const message = err instanceof Error ? err.message : 'Upload failed';
-        setUploads((prev) =>
-          prev.map((row, rIdx) => (rIdx === idx ? { ...row, uploading: false, error: message } : row)),
-        );
-      }
-    });
   }
 
   useEffect(() => {
@@ -322,6 +320,7 @@ export function MediaMetadataSheet({
 
     sessionKeyRef.current += 1;
     const reqKey = sessionKeyRef.current;
+    handedOffBatchRef.current = null;
     setErrorMsg(null);
     setVideoWarning(null);
     setTagInput('');
@@ -336,7 +335,8 @@ export function MediaMetadataSheet({
 
     if (editingItem) {
       setComposerMode('upload');
-      setUploads([]);
+      setActiveBatchId(null);
+      setAiUploads([]);
       setTitle(editingItem.title || `${businessName} Showcase`);
       setDescription(editingItem.description || editingItem.caption || '');
       setTags(Array.isArray(editingItem.tags) ? editingItem.tags : []);
@@ -547,7 +547,8 @@ export function MediaMetadataSheet({
         mimeType: 'image/png',
         mediaType: 'image',
       });
-      setUploads([
+      setActiveBatchId(null);
+      setAiUploads([
         {
           local: localItem,
           cloudUrl: generated,
@@ -571,10 +572,14 @@ export function MediaMetadataSheet({
   }
 
   async function retrySingleUpload(index: number) {
-    const target = uploads[index];
-    if (!target) return;
     setErrorMsg(null);
-    setUploads((prev) =>
+    if (composerMode !== 'ai_generate' && activeBatchId) {
+      retryBatchFile(activeBatchId, index);
+      return;
+    }
+    const target = aiUploads[index];
+    if (!target) return;
+    setAiUploads((prev) =>
       prev.map((row, i) => (i === index ? { ...row, uploading: true, progress: 0, error: undefined } : row)),
     );
     try {
@@ -583,18 +588,18 @@ export function MediaMetadataSheet({
         visibility: 'public',
         onWarning: (w) => setVideoWarning(w),
         onProgress: (pct) => {
-          setUploads((prev) =>
+          setAiUploads((prev) =>
             prev.map((row, i) => (i === index ? { ...row, progress: pct } : row)),
           );
         },
       });
-      setUploads((prev) =>
+      setAiUploads((prev) =>
         prev.map((row, i) =>
           i === index ? { ...row, cloudUrl, uploading: false, progress: 100, error: undefined } : row,
         ),
       );
     } catch (err: unknown) {
-      setUploads((prev) =>
+      setAiUploads((prev) =>
         prev.map((row, i) =>
           i === index
             ? { ...row, uploading: false, error: err instanceof Error ? err.message : 'Retry failed' }
@@ -625,6 +630,37 @@ export function MediaMetadataSheet({
   const readyUrls = uploads.filter((u) => Boolean(u.cloudUrl));
   const failedUploads = uploads.filter((u) => Boolean(u.error));
 
+  function buildJobConfig(): MediaJobSaveConfig {
+    return {
+      title: title.trim() || `${businessName} Media`,
+      description: description.trim() || undefined,
+      tags,
+      category,
+      scheduleMode: scheduleMode as BackgroundScheduleMode,
+      preferredTime,
+      country: selectedCountry.code,
+      timeZone: selectedTimeZone,
+      businessName,
+    };
+  }
+
+  function handleRequestClose() {
+    if (
+      !isEditMode &&
+      composerMode !== 'ai_generate' &&
+      activeBatchId &&
+      stillUploading &&
+      handedOffBatchRef.current !== activeBatchId
+    ) {
+      handedOffBatchRef.current = activeBatchId;
+      void submitBatchJob(activeBatchId, buildJobConfig()).catch(() => {});
+      void Promise.resolve(
+        onSaved('Upload continues in background — we will notify you once complete.'),
+      );
+    }
+    onClose();
+  }
+
   async function handleSubmit() {
     setErrorMsg(null);
     if (isEditMode && editingItem) {
@@ -652,16 +688,48 @@ export function MediaMetadataSheet({
       return;
     }
 
+    if (composerMode !== 'ai_generate') {
+      if (!activeBatchId || !uploads.length) {
+        setErrorMsg('Select at least one photo or video to upload first.');
+        return;
+      }
+      if (!stillUploading && !readyUrls.length) {
+        setErrorMsg(
+          failedUploads[0]?.error ||
+            'Select at least one photo or video to upload, or tap Retry on failed files.',
+        );
+        return;
+      }
+
+      if (stillUploading) {
+        handedOffBatchRef.current = activeBatchId;
+        void submitBatchJob(activeBatchId, buildJobConfig()).catch(() => {});
+        await onSaved('Uploading in background — we will notify you once complete.');
+        onClose();
+        return;
+      }
+
+      setSubmitting(true);
+      handedOffBatchRef.current = activeBatchId;
+      try {
+        const finished = await submitBatchJob(activeBatchId, buildJobConfig());
+        await onSaved(finished.message || 'Media saved & scheduled successfully.');
+        onClose();
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : 'Could not save media. Please try again.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     if (stillUploading) {
       setErrorMsg('Please wait for your selected media upload(s) to finish.');
       return;
     }
     if (!readyUrls.length) {
       setErrorMsg(
-        failedUploads[0]?.error ||
-          (composerMode === 'ai_generate'
-            ? 'Tap Auto-Create or Generate Image first before saving.'
-            : 'Select at least one photo or video to upload, or tap Retry on failed files.'),
+        failedUploads[0]?.error || 'Tap Auto-Create or Generate Image first before saving.',
       );
       return;
     }
@@ -670,6 +738,7 @@ export function MediaMetadataSheet({
     try {
       const items = readyUrls.map((u, idx) => ({
         url: u.cloudUrl as string,
+        thumbnailUrl: u.thumbnailUrl,
         title:
           readyUrls.length > 1 && title.trim()
             ? `${title.trim()} (${idx + 1})`
@@ -731,7 +800,7 @@ export function MediaMetadataSheet({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleRequestClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.root}
@@ -741,7 +810,7 @@ export function MediaMetadataSheet({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close media composer"
-            onPress={onClose}
+            onPress={handleRequestClose}
             style={styles.closeBtn}
             hitSlop={8}
           >
@@ -836,11 +905,38 @@ export function MediaMetadataSheet({
           {/* Media Thumbnails & Cloud Upload Progress / Reference-Aware AI Generator */}
           {isEditMode && editingItem ? (
             <View style={styles.editPreviewCard}>
-              {isVideoPhotoItem(editingItem) && !editingItem.thumbnailUrl ? (
-                <View style={[styles.editPreviewImg, styles.videoTileDark]}>
-                  <MaterialIcons name="videocam" size={24} color="#34D399" />
-                  <Text style={styles.videoTileLabel}>VIDEO</Text>
-                </View>
+              {isVideoPhotoItem(editingItem) ? (
+                editingItem.thumbnailUrl ? (
+                  <View style={[styles.editPreviewImg, { overflow: 'hidden', position: 'relative' }]}>
+                    <Image
+                      source={{ uri: editingItem.thumbnailUrl }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                      alt={editingItem.title || 'Selected video preview'}
+                    />
+                    <View style={styles.videoPill}>
+                      <MaterialIcons name="play-arrow" size={12} color="#FFFFFF" />
+                    </View>
+                  </View>
+                ) : Platform.OS === 'web' && editingItem.url ? (
+                  <View style={[styles.editPreviewImg, { overflow: 'hidden', position: 'relative', backgroundColor: '#0F172A' }]}>
+                    {React.createElement('video', {
+                      src: editingItem.url,
+                      muted: true,
+                      playsInline: true,
+                      preload: 'metadata',
+                      style: { width: '100%', height: '100%', objectFit: 'cover' },
+                    })}
+                    <View style={styles.videoPill}>
+                      <MaterialIcons name="play-arrow" size={12} color="#FFFFFF" />
+                    </View>
+                  </View>
+                ) : (
+                  <View style={[styles.editPreviewImg, styles.videoTileDark]}>
+                    <MaterialIcons name="videocam" size={24} color="#34D399" />
+                    <Text style={styles.videoTileLabel}>VIDEO</Text>
+                  </View>
+                )
               ) : (
                 <Image
                   source={{ uri: editingItem.thumbnailUrl || editingItem.url }}
@@ -1050,10 +1146,37 @@ export function MediaMetadataSheet({
                   {uploads.map((item, idx) => (
                     <View key={`${item.local.uri}-${idx}`} style={styles.thumbCard}>
                       {item.local.mediaType === 'video' ? (
-                        <View style={[styles.thumbImage, styles.videoTileDark]}>
-                          <MaterialIcons name="videocam" size={24} color="#34D399" />
-                          <Text style={styles.videoTileLabel}>VIDEO</Text>
-                        </View>
+                        item.thumbnailUrl ? (
+                          <View style={[styles.thumbImage, { position: 'relative' }]}>
+                            <Image
+                              source={{ uri: item.thumbnailUrl }}
+                              style={styles.thumbImage}
+                              resizeMode="cover"
+                              alt={item.local.name || 'Video thumbnail'}
+                            />
+                            <View style={styles.videoPill}>
+                              <MaterialIcons name="play-arrow" size={12} color="#FFFFFF" />
+                            </View>
+                          </View>
+                        ) : Platform.OS === 'web' && item.local.uri ? (
+                          <View style={[styles.thumbImage, { position: 'relative', backgroundColor: '#0F172A' }]}>
+                            {React.createElement('video', {
+                              src: item.local.uri,
+                              muted: true,
+                              playsInline: true,
+                              preload: 'metadata',
+                              style: { width: '100%', height: '100%', objectFit: 'cover' },
+                            })}
+                            <View style={styles.videoPill}>
+                              <MaterialIcons name="play-arrow" size={12} color="#FFFFFF" />
+                            </View>
+                          </View>
+                        ) : (
+                          <View style={[styles.thumbImage, styles.videoTileDark]}>
+                            <MaterialIcons name="videocam" size={24} color="#34D399" />
+                            <Text style={styles.videoTileLabel}>VIDEO</Text>
+                          </View>
+                        )
                       ) : (
                         <Image
                           source={{ uri: item.local.uri }}
@@ -1091,11 +1214,14 @@ export function MediaMetadataSheet({
                 </ScrollView>
               )}
 
-              {(videoWarning || uploads.some((u) => u.local.mediaType === 'video')) ? (
+              {(effectiveVideoWarning || uploads.some((u) => u.local.mediaType === 'video') || stillUploading) ? (
                 <View style={styles.videoNoticeBanner}>
                   <MaterialIcons name="videocam" size={15} color={colors.noteText} />
                   <Text style={styles.videoNoticeText}>
-                    {videoWarning || 'Google Business Profile works best with MP4/MOV videos under 75MB (up to 30s at 1080p).'}
+                    {stillUploading
+                      ? 'Upload running — tap Save & Upload in Background or close this screen and we will finish in the background & notify you.'
+                      : effectiveVideoWarning ||
+                        'Google Business Profile works best with MP4/MOV videos under 75MB (up to 30s at 1080p).'}
                   </Text>
                 </View>
               ) : null}
@@ -1376,10 +1502,10 @@ export function MediaMetadataSheet({
           <Pressable
             accessibilityRole="button"
             onPress={() => void handleSubmit()}
-            disabled={submitting || (!isEditMode && stillUploading)}
+            disabled={submitting}
             style={({ pressed }) => [
               styles.saveBtn,
-              (submitting || (!isEditMode && stillUploading)) && { opacity: 0.65 },
+              submitting && { opacity: 0.65 },
               pressed && { opacity: 0.9 },
             ]}
           >
@@ -1394,7 +1520,7 @@ export function MediaMetadataSheet({
                 : isEditMode
                   ? 'Save Changes'
                   : stillUploading
-                    ? 'Uploading Media…'
+                    ? 'Save & Upload in Background'
                     : scheduleMode === 'instant'
                       ? 'Publish to Google Now'
                       : scheduleMode === 'draft'

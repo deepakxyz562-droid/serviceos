@@ -5,6 +5,8 @@ import { isSuperAdminUser } from '@/lib/admin-auth';
 import { seedPlans, getActivePlans, getPlanByCode } from '@/lib/billing-seed';
 import { cache } from '@/lib/cache';
 import { cachedJson } from '@/lib/cache-headers';
+import { getTenantBgosEntitlement } from '@/lib/bgos-entitlement';
+import { toValidDate } from '@/lib/safe-date';
 
 // 30s cache — this endpoint is polled every 60s. Caching cuts DB load in half
 // and eliminates redundant seedPlans() writes.
@@ -119,17 +121,16 @@ export async function GET() {
     // Settings → Billing tab can still render current-plan + trial info.
     const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
 
-    // Check if trial has expired
-    const trialEndsAt = subscription?.trialEndsAt ?? tenant?.trialEndsAt ?? null;
-    let isTrialExpired = false;
-    const trialStatus = subscription?.status ?? tenant?.planStatus ?? 'trial';
-    if (trialStatus === 'trial' && trialEndsAt) {
-      isTrialExpired = new Date() > trialEndsAt;
-    }
-
+    // Evaluate unified entitlement & trial expiry using safe Date parsing
+    // (handles PostgREST ISO/space timestamps, null trialEndsAt, expired/cancelled,
+    // and unpaid free tier once the 7-day trial ends).
+    const { entitlement } = await getTenantBgosEntitlement(tenantId);
+    const trialEndsAt = toValidDate(subscription?.trialEndsAt ?? tenant?.trialEndsAt ?? entitlement.trialEndsAt);
     const plan = subscription?.plan ?? tenant?.plan ?? 'starter';
     const billingCycle = subscription?.billingCycle ?? 'monthly';
     const status = subscription?.status ?? tenant?.planStatus ?? 'trial';
+    const trialStatus = String(status).toLowerCase();
+    const isTrialExpired = entitlement.trialExpired;
     const isStandalone = (tenant as any)?.signupMode === 'standalone' || plan.startsWith('standalone');
     const tenantSignupMode = (tenant as any)?.signupMode ?? 'standard';
 
@@ -364,10 +365,13 @@ export async function GET() {
       paypalPayerEmail,
       billingHistory,
       isTrialExpired,
+      entitlement,
       daysRemainingInTrial:
-        trialStatus === 'trial' && trialEndsAt
-          ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-          : null,
+        entitlement.isTrial
+          ? entitlement.trialDaysLeft
+          : trialStatus === 'trial' && trialEndsAt
+            ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+            : null,
       // Phase 2 + 3 additions:
       pendingDowngrade, // { plan, effectiveAt, billingCycle } | null
       billingEvents, // last 10 audit-log entries

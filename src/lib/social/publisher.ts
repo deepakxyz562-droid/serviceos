@@ -31,6 +31,8 @@
  * This module is server-only (imports db + crypto + registry + token-refresh).
  */
 import { db } from '@/lib/db';
+import { createNotification, shouldDeliverNotification } from '@/lib/notifications';
+import { sendWebPushToUser } from '@/lib/web-push-send';
 import { decryptToken } from '@/lib/social/crypto';
 import { ensureAdaptersLoaded, getAdapter } from '@/lib/social/registry';
 import { normalizeDate, refreshExpiredToken } from '@/lib/social/token-refresh';
@@ -223,6 +225,7 @@ export async function publishPost(postId: string): Promise<void> {
         id: true,
         tenantId: true,
         status: true,
+        scheduledAt: true,
         content: true,
         mediaUrls: true,
         designJson: true,
@@ -299,13 +302,22 @@ export async function publishPost(postId: string): Promise<void> {
     }
 
     if (targets.length === 0) {
-      await finalizePost(
-        postId,
-        [],
-        isMediaPost
-          ? 'Google Business Profile not connected yet — connect Google to publish this scheduled media.'
-          : 'No publish targets defined for this post.',
-      );
+      const noTargetReason = isMediaPost
+        ? 'Google Business Profile not connected yet — connect Google to publish this scheduled media.'
+        : 'No publish targets defined for this post.';
+      await finalizePost(postId, [], noTargetReason);
+      const isMediaOnlyPost =
+        publishParams.gbpPostType === 'photo_media' || publishParams.gbpPostType === 'media';
+      if (post.status === 'scheduled' && !isMediaOnlyPost) {
+        await notifyScheduledPostCompleted({
+          postId,
+          tenantId: post.tenantId,
+          content: post.content,
+          results: [],
+          finalStatus: 'failed',
+          failureReason: noTargetReason,
+        });
+      }
       return;
     }
   } else {
@@ -398,6 +410,20 @@ export async function publishPost(postId: string): Promise<void> {
   }
 
   await finalizePost(postId, results, finalStatus === 'failed' ? failureReason : null, finalStatus);
+
+  // Notify tenant team when a scheduled post finishes publishing so the user can view/verify it on Google.
+  const isMediaOnlyPost =
+    publishParams.gbpPostType === 'photo_media' || publishParams.gbpPostType === 'media';
+  if (post.status === 'scheduled' && !isMediaOnlyPost) {
+    await notifyScheduledPostCompleted({
+      postId,
+      tenantId: post.tenantId,
+      content: post.content,
+      results,
+      finalStatus,
+      failureReason,
+    });
+  }
 }
 
 // ─── Single-target publish ─────────────────────────────────────────────────
@@ -467,6 +493,12 @@ async function publishSingleTarget(
     const result = await adapter.publish(refreshedAccount, params);
 
     updated.externalPostId = result.externalPostId;
+    if (typeof (result as { permalink?: string }).permalink === 'string') {
+      const trimmedPermalink = (result as { permalink?: string }).permalink!.trim();
+      if (trimmedPermalink) {
+        updated.permalink = trimmedPermalink;
+      }
+    }
     updated.status = 'published';
     updated.publishedAt = new Date().toISOString();
     updated.error = undefined;
@@ -527,5 +559,162 @@ async function finalizePost(
     } catch {
       // give up — logged, not crashed
     }
+  }
+}
+
+// ─── Scheduled post completion notifications ───────────────────────────────
+
+async function resolveGooglePostUrlForNotification(
+  tenantId: string,
+  results: PublishTarget[],
+  finalStatus: 'published' | 'partial' | 'failed',
+): Promise<string | null> {
+  const gbpTarget = results.find(
+    (r) => r.platform === 'googlebusiness' && r.status === 'published' && typeof r.permalink === 'string' && r.permalink.trim(),
+  );
+  if (gbpTarget?.permalink) return gbpTarget.permalink.trim();
+
+  const anyTarget = results.find(
+    (r) => r.status === 'published' && typeof r.permalink === 'string' && r.permalink.trim(),
+  );
+  if (anyTarget?.permalink) return anyTarget.permalink.trim();
+
+  if (finalStatus === 'failed') return null;
+
+  try {
+    if (typeof (db as any).socialAccount?.findFirst === 'function') {
+      const gbpAccount = await db.socialAccount.findFirst({
+        where: { tenantId, platform: 'googlebusiness', isActive: true },
+        select: { metadata: true },
+      });
+      if (gbpAccount?.metadata) {
+        try {
+          const meta = JSON.parse(gbpAccount.metadata) as Record<string, unknown>;
+          if (typeof meta.mapsUri === 'string' && meta.mapsUri.trim()) {
+            return meta.mapsUri.trim();
+          }
+          if (typeof meta.placeId === 'string' && meta.placeId.trim()) {
+            return `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(meta.placeId.trim())}`;
+          }
+        } catch {}
+      }
+    }
+    if (typeof (db as any).tenant?.findUnique === 'function') {
+      const tenant = await db.tenant.findUnique({
+        where: { id: tenantId },
+        select: { googleBusinessProfileUrl: true, googlePlaceId: true },
+      });
+      if (tenant?.googleBusinessProfileUrl) return tenant.googleBusinessProfileUrl;
+      if (tenant?.googlePlaceId) {
+        return `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(tenant.googlePlaceId)}`;
+      }
+    }
+  } catch {
+    // non-fatal
+  }
+
+  return null;
+}
+
+async function notifyScheduledPostCompleted(params: {
+  postId: string;
+  tenantId: string;
+  content: string;
+  results: PublishTarget[];
+  finalStatus: 'published' | 'partial' | 'failed';
+  failureReason: string | null;
+}): Promise<void> {
+  try {
+    if (typeof (db as any).user?.findMany !== 'function') {
+      return;
+    }
+
+    const recipients = await db.user.findMany({
+      where: {
+        tenantId: params.tenantId,
+        isActive: true,
+        role: { not: 'customer' },
+      },
+      select: { id: true },
+      take: 10,
+    });
+
+    if (!Array.isArray(recipients) || recipients.length === 0) {
+      return;
+    }
+
+    const googleUrl = await resolveGooglePostUrlForNotification(
+      params.tenantId,
+      params.results,
+      params.finalStatus,
+    );
+
+    const cleanSnippet = (params.content || 'Scheduled post').replace(/\s+/g, ' ').trim().slice(0, 75);
+    const title =
+      params.finalStatus === 'published'
+        ? 'Scheduled post published'
+        : params.finalStatus === 'partial'
+        ? 'Scheduled post partially published'
+        : 'Scheduled post failed to publish';
+
+    const message =
+      params.finalStatus === 'published'
+        ? googleUrl
+          ? `"${cleanSnippet}" is now live on Google. Tap to view your post.`
+          : `"${cleanSnippet}" has been published successfully.`
+        : params.finalStatus === 'partial'
+        ? `"${cleanSnippet}" published to some channels with errors.`
+        : `Could not publish "${cleanSnippet}": ${(params.failureReason || 'Check connected channels').slice(0, 110)}`;
+
+    const actionUrl = `/app?product=bgos&view=socialMedia&socialTab=posts&postId=${encodeURIComponent(params.postId)}`;
+    const metadataJson = JSON.stringify({
+      postId: params.postId,
+      status: params.finalStatus,
+      googleUrl: googleUrl || null,
+      url: actionUrl,
+    });
+
+    const canCreateNotif = typeof (db as any).appNotification?.create === 'function';
+    const canCheckPref = typeof (db as any).notificationPreference?.findFirst === 'function';
+    const canPush = typeof (db as any).pushSubscription?.findMany === 'function';
+
+    for (const recipient of recipients) {
+      const allowed = canCheckPref
+        ? await shouldDeliverNotification(recipient.id, 'social_post', 'normal').catch(() => true)
+        : true;
+
+      if (canCreateNotif) {
+        await createNotification({
+          tenantId: params.tenantId,
+          recipientId: recipient.id,
+          type: 'social_post',
+          category: 'workflow',
+          title,
+          message,
+          actionUrl,
+          actionLabel: googleUrl ? 'View Post on Google' : 'View Post',
+          priority: params.finalStatus === 'failed' ? 'high' : 'normal',
+          metadataJson,
+        }).catch(() => {});
+      }
+
+      if (allowed && canPush) {
+        await sendWebPushToUser(recipient.id, params.tenantId, {
+          title,
+          body: message,
+          url: actionUrl,
+          tag: `social-post-${params.postId}`,
+          data: {
+            route: '/(tabs)/marketing',
+            mode: 'posts',
+            pill: params.finalStatus === 'failed' ? 'failed' : 'posted',
+            postId: params.postId,
+            ...(googleUrl ? { googleUrl } : {}),
+          },
+        }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn('[social/publisher] Notification dispatch warning:', err);
   }
 }

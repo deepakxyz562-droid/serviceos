@@ -73,12 +73,56 @@ export async function GET(
     }
 
     const metricsList = Array.isArray(post.metrics) ? post.metrics : [];
+    const parsedTargets = safeJsonArray(post.publishTargets);
+    let gbpPermalink: string | null = null;
+    let anyPermalink: string | null = null;
+    let targetsGbp = false;
+    for (const item of parsedTargets) {
+      if (!item || typeof item !== 'object') continue;
+      const t = item as Record<string, unknown>;
+      if (t.platform === 'googlebusiness') targetsGbp = true;
+      const link = typeof t.permalink === 'string' && t.permalink.trim() ? t.permalink.trim() : null;
+      if (!link) continue;
+      if (t.platform === 'googlebusiness' && !gbpPermalink) gbpPermalink = link;
+      else if (!anyPermalink) anyPermalink = link;
+    }
+    let googleUrl: string | null = gbpPermalink;
+    const isPublished = post.status === 'published' || post.status === 'partial';
+    if (!googleUrl && isPublished && targetsGbp) {
+      try {
+        if (typeof (db as any).socialAccount?.findFirst === 'function') {
+          const gbpAcc = await db.socialAccount.findFirst({
+            where: { tenantId, platform: 'googlebusiness', isActive: true },
+            select: { metadata: true },
+          });
+          const gbpMeta = safeJsonObject(gbpAcc?.metadata ?? null);
+          if (typeof gbpMeta?.mapsUri === 'string' && gbpMeta.mapsUri.trim()) {
+            googleUrl = gbpMeta.mapsUri.trim();
+          } else if (typeof gbpMeta?.placeId === 'string' && gbpMeta.placeId.trim()) {
+            googleUrl = `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(gbpMeta.placeId.trim())}`;
+          }
+        }
+        if (!googleUrl && typeof (db as any).tenant?.findUnique === 'function') {
+          const tRow = await db.tenant.findUnique({
+            where: { id: tenantId },
+            select: { googleBusinessProfileUrl: true, googlePlaceId: true },
+          });
+          if (tRow?.googleBusinessProfileUrl) googleUrl = tRow.googleBusinessProfileUrl;
+          else if (tRow?.googlePlaceId) {
+            googleUrl = `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(tRow.googlePlaceId)}`;
+          }
+        }
+      } catch {}
+    }
+    const permalink = gbpPermalink || anyPermalink;
 
     return NextResponse.json({
       data: {
         ...post,
         mediaUrls: safeJsonArray(post.mediaUrls),
-        publishTargets: safeJsonArray(post.publishTargets),
+        publishTargets: parsedTargets,
+        permalink,
+        googleUrl,
         gbpOfferData: safeJsonObject(post.gbpOfferData),
         metrics: metricsList.map((m) => ({
           ...m,

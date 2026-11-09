@@ -7,6 +7,7 @@ import { colors } from '../../src/components/ui';
 import { usePendingReplies } from '../../src/hooks/use-pending-replies';
 import { useAuthStore } from '../../src/stores/auth-store';
 import { PaywallGate } from '../../src/components/billing/paywall-gate';
+import { GlobalUploadBanner } from '../../src/components/gbp/global-upload-banner';
 
 /**
  * Bottom Navigation — BGOS Growth Employee bar:
@@ -59,6 +60,7 @@ export default function TabLayout() {
 
   return (
     <PaywallGate>
+      <View style={{ flex: 1 }}>
       <Tabs
         screenOptions={{
         headerShown: false,
@@ -118,6 +120,8 @@ export default function TabLayout() {
         <Tabs.Screen key={name} name={name} options={{ href: null }} />
       ))}
     </Tabs>
+      <GlobalUploadBanner bottomOffset={(tabHeight ?? 66) + 10} />
+      </View>
     </PaywallGate>
   );
 }

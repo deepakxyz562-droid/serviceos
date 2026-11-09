@@ -1,11 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Screen, Loading, ErrorNotice, colors } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { normalizePendingUpload, type PendingUpload } from '../../src/lib/upload';
-import { ScheduledPhotosTimeline } from '../../src/components/gbp/scheduled-photos-timeline';
+import { useMediaUploadStore } from '../../src/stores/media-upload-store';
+import { ScheduledPhotosTimeline, type MediaTabKey } from '../../src/components/gbp/scheduled-photos-timeline';
 import { MediaMetadataSheet } from '../../src/components/gbp/media-metadata-sheet';
 import type {
   GbpConnectionState,
@@ -29,6 +30,7 @@ interface DiscoverResponse {
  */
 export default function PhotosScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ mediaId?: string; photoId?: string; tab?: string }>();
   const photosRes = useResource<PhotosResponse>('/api/social/photos');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
@@ -38,6 +40,39 @@ export default function PhotosScreen() {
   const [composerMode, setComposerMode] = useState<'upload' | 'ai_generate'>('upload');
   const [editingItem, setEditingItem] = useState<GbpPhoto | null>(null);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
+  const [focusedMediaId, setFocusedMediaId] = useState<string | null>(
+    params.mediaId || params.photoId || null,
+  );
+  const refreshedForFocusRef = useRef<string | null>(null);
+
+  const initialTab: MediaTabKey | undefined = useMemo(() => {
+    const raw = String(params.tab || '').toLowerCase().trim();
+    if (raw === 'published' || raw === 'uploaded') return 'uploaded';
+    if (raw === 'drafts' || raw === 'draft' || raw === 'unposted' || raw === 'not_posted') {
+      return 'unposted';
+    }
+    if (raw === 'scheduled') return 'scheduled';
+    return undefined;
+  }, [params.tab]);
+
+  const lastCompletionSeq = useMediaUploadStore((s) => s.lastCompletionSeq);
+  const lastCompletedJob = useMediaUploadStore((s) => s.lastCompletedJob);
+
+  useEffect(() => {
+    const nextId = params.mediaId || params.photoId || null;
+    if (nextId) {
+      setFocusedMediaId(nextId);
+    }
+  }, [params.mediaId, params.photoId]);
+
+  useEffect(() => {
+    if (lastCompletionSeq > 0) {
+      if (lastCompletedJob?.message) {
+        setStatusBanner(lastCompletedJob.message);
+      }
+      void photosRes.refresh();
+    }
+  }, [lastCompletionSeq]);
 
   const activeProfile = discover.data?.activeProfile;
   const profileName = activeProfile?.name || gbpPlace.data?.place?.title || 'My Business';
@@ -67,6 +102,17 @@ export default function PhotosScreen() {
     hasConnectionErrorOnly || isInitialLoading ? true : Boolean(rawConnected);
 
   const allPhotos = useMemo(() => photosRes.data?.photos || [], [photosRes.data]);
+
+  useEffect(() => {
+    if (!focusedMediaId || photosRes.loading) return;
+    const exists = allPhotos.some(
+      (p) => p.id === focusedMediaId || p.postId === focusedMediaId || p.url === focusedMediaId,
+    );
+    if (!exists && refreshedForFocusRef.current !== focusedMediaId) {
+      refreshedForFocusRef.current = focusedMediaId;
+      void photosRes.refresh();
+    }
+  }, [focusedMediaId, allPhotos, photosRes.loading]);
   const publishedPhotos = useMemo(
     () => allPhotos.filter((p) => p.source === 'google'),
     [allPhotos],
@@ -203,6 +249,9 @@ export default function PhotosScreen() {
             onUploadPress={handleUpload}
             onAiCreatePress={handleAiCreate}
             onEditItem={handleEditItem}
+            initialTab={initialTab}
+            focusedMediaId={focusedMediaId}
+            onClearFocus={() => setFocusedMediaId(null)}
           />
         )}
       </Screen>

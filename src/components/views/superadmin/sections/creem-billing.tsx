@@ -112,6 +112,12 @@ const PRODUCT_INPUT_DEFS: Array<{
   { planCode: 'growth', planName: 'Professional', cycle: 'yearly', cycleLabel: 'Yearly' },
   { planCode: 'business', planName: 'Business', cycle: 'monthly', cycleLabel: 'Monthly' },
   { planCode: 'business', planName: 'Business', cycle: 'yearly', cycleLabel: 'Yearly' },
+  { planCode: 'bgos_starter', planName: 'BGOS Starter ($9)', cycle: 'monthly', cycleLabel: 'Monthly' },
+  { planCode: 'bgos_starter', planName: 'BGOS Starter ($90)', cycle: 'yearly', cycleLabel: 'Yearly' },
+  { planCode: 'bgos_growth', planName: 'BGOS Growth ($29)', cycle: 'monthly', cycleLabel: 'Monthly' },
+  { planCode: 'bgos_growth', planName: 'BGOS Growth ($290)', cycle: 'yearly', cycleLabel: 'Yearly' },
+  { planCode: 'bgos_business', planName: 'BGOS Business ($79)', cycle: 'monthly', cycleLabel: 'Monthly' },
+  { planCode: 'bgos_business', planName: 'BGOS Business ($790)', cycle: 'yearly', cycleLabel: 'Yearly' },
   { planCode: 'enterprise', planName: 'Enterprise', cycle: 'monthly', cycleLabel: 'Monthly' },
   { planCode: 'enterprise', planName: 'Enterprise', cycle: 'yearly', cycleLabel: 'Yearly' },
 ];

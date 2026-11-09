@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createHash } from 'node:crypto';
 import { getAuthUser } from '@/lib/auth';
+import { requireBgosEntitled } from '@/lib/bgos-entitlement';
 import { db } from '@/lib/db';
 import { publishPost } from '@/lib/social/publisher';
 import { logActivity } from '@/lib/activity-log';
@@ -174,6 +175,36 @@ export async function GET(request: NextRequest) {
       db.socialPost.count({ where }),
     ]);
 
+    // Resolve optional fallback GBP profile URL for published posts missing target permalink
+    let fallbackGbpUrl: string | null = null;
+    try {
+      const needsFallback = posts.some((p) => p.status === 'published' || p.status === 'partial');
+      if (needsFallback) {
+        if (typeof (db as any).socialAccount?.findFirst === 'function') {
+          const gbpAcc = await db.socialAccount.findFirst({
+            where: { tenantId, platform: 'googlebusiness', isActive: true },
+            select: { metadata: true },
+          });
+          const gbpMeta = safeJsonObject(gbpAcc?.metadata ?? null);
+          if (typeof gbpMeta?.mapsUri === 'string' && gbpMeta.mapsUri.trim()) {
+            fallbackGbpUrl = gbpMeta.mapsUri.trim();
+          } else if (typeof gbpMeta?.placeId === 'string' && gbpMeta.placeId.trim()) {
+            fallbackGbpUrl = `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(gbpMeta.placeId.trim())}`;
+          }
+        }
+        if (!fallbackGbpUrl && typeof (db as any).tenant?.findUnique === 'function') {
+          const tRow = await db.tenant.findUnique({
+            where: { id: tenantId },
+            select: { googleBusinessProfileUrl: true, googlePlaceId: true },
+          });
+          if (tRow?.googleBusinessProfileUrl) fallbackGbpUrl = tRow.googleBusinessProfileUrl;
+          else if (tRow?.googlePlaceId) {
+            fallbackGbpUrl = `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(tRow.googlePlaceId)}`;
+          }
+        }
+      }
+    } catch {}
+
     // Parse JSON fields and resolve approvalStatus for client convenience.
     let data = posts.map((p) => {
       const offerData = safeJsonObject(p.gbpOfferData);
@@ -184,6 +215,8 @@ export async function GET(request: NextRequest) {
       if (!resolvedApproval && p.status === 'draft') {
         resolvedApproval = 'pending';
       }
+      const parsedTargets = safeJsonArray(p.publishTargets);
+      const { permalink, googleUrl } = resolvePostLinks(parsedTargets, p.status, fallbackGbpUrl);
       return {
         ...p,
         scheduledAt: toIsoUtc(p.scheduledAt),
@@ -192,7 +225,9 @@ export async function GET(request: NextRequest) {
         updatedAt: toIsoUtc(p.updatedAt),
         approvalStatus: resolvedApproval,
         mediaUrls: safeJsonArray(p.mediaUrls),
-        publishTargets: safeJsonArray(p.publishTargets),
+        publishTargets: parsedTargets,
+        permalink,
+        googleUrl,
       };
     });
 
@@ -234,6 +269,32 @@ function safeJsonObject(raw: string | null | unknown): Record<string, unknown> |
   }
 }
 
+function resolvePostLinks(
+  targets: unknown[],
+  status: string,
+  fallbackGbpUrl: string | null,
+): { permalink: string | null; googleUrl: string | null } {
+  let gbpPermalink: string | null = null;
+  let anyPermalink: string | null = null;
+  let targetsGbp = false;
+  for (const item of targets) {
+    if (!item || typeof item !== 'object') continue;
+    const t = item as Record<string, unknown>;
+    if (t.platform === 'googlebusiness') targetsGbp = true;
+    const link = typeof t.permalink === 'string' && t.permalink.trim() ? t.permalink.trim() : null;
+    if (!link) continue;
+    if (t.platform === 'googlebusiness' && !gbpPermalink) gbpPermalink = link;
+    else if (!anyPermalink) anyPermalink = link;
+  }
+  const permalink = gbpPermalink || anyPermalink;
+  const isPublished = status === 'published' || status === 'partial';
+  const googleUrl =
+    gbpPermalink ||
+    (isPublished && targetsGbp ? fallbackGbpUrl : null) ||
+    (permalink && permalink.includes('google.') ? permalink : null);
+  return { permalink, googleUrl };
+}
+
 // ─── POST — create ─────────────────────────────────────────────────────────
 
 interface CreatePostBody {
@@ -265,6 +326,8 @@ export async function POST(request: NextRequest) {
     if (!tenantId) {
       return NextResponse.json({ error: 'Could not resolve tenant.' }, { status: 400 });
     }
+    const gate = await requireBgosEntitled(user);
+    if (!gate.ok) return gate.response;
 
     const body = (await request.json()) as CreatePostBody;
     const isDraft = (body?.status || 'draft') === 'draft';

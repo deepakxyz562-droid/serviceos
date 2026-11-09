@@ -86,6 +86,7 @@ function loadRazorpayScript(): Promise<boolean> {
 function RazorpayCheckoutContent() {
   const searchParams = useSearchParams();
   const planCode = (searchParams.get('plan') || 'starter').toLowerCase();
+  const billingCycle = searchParams.get('billingCycle') === 'yearly' ? 'yearly' : 'monthly';
   const token = searchParams.get('token');
   const customAmount = Number(searchParams.get('amount'));
 
@@ -96,31 +97,93 @@ function RazorpayCheckoutContent() {
     features: ['Instant activation', 'Full system features included'],
   };
 
-  const finalPriceInr = customAmount > 0 ? customAmount : plan.priceInr;
+  const finalPriceInr =
+    customAmount > 0
+      ? customAmount
+      : billingCycle === 'yearly'
+        ? plan.priceInr * 10
+        : plan.priceInr;
   const amountPaise = Math.round(finalPriceInr * 100);
 
   const [busy, setBusy] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState<any>(null);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
 
-  // Detect payment return callback (?status=success)
+  const authHeaders: Record<string, string> = React.useMemo(
+    () => ({
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }),
+    [token],
+  );
+
+  // Detect Razorpay callback (?status=success) and ALWAYS verify signature server-side first
   useEffect(() => {
-    if (searchParams.get('status') === 'success') {
-      const paymentId =
-        searchParams.get('razorpay_payment_id') ||
-        searchParams.get('payment_id') ||
-        `pay_verified_${Date.now()}`;
-      const orderId =
-        searchParams.get('razorpay_order_id') ||
-        searchParams.get('order_id') ||
-        'Verified Order';
-      setPaymentSuccess({
-        razorpay_payment_id: paymentId,
-        razorpay_order_id: orderId,
-      });
+    if (searchParams.get('status') !== 'success') return;
+
+    const paymentId =
+      searchParams.get('razorpay_payment_id') || searchParams.get('payment_id') || '';
+    const orderId =
+      searchParams.get('razorpay_order_id') || searchParams.get('order_id') || '';
+    const paymentLinkId = searchParams.get('razorpay_payment_link_id') || '';
+    const paymentLinkRefId = searchParams.get('razorpay_payment_link_reference_id') ?? '';
+    const paymentLinkStatus = searchParams.get('razorpay_payment_link_status') || '';
+    const signature = searchParams.get('razorpay_signature') || '';
+
+    if (!paymentId || !signature || (!orderId && !paymentLinkId)) {
+      setError('Payment verification parameters are missing from the callback URL. Please complete checkout below.');
+      return;
     }
-  }, [searchParams]);
+
+    let cancelled = false;
+    setVerifying(true);
+    setError(null);
+
+    fetch('/api/verify-payment', {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        ...(orderId ? { razorpay_order_id: orderId } : {}),
+        ...(paymentLinkId
+          ? {
+              razorpay_payment_link_id: paymentLinkId,
+              razorpay_payment_link_reference_id: paymentLinkRefId,
+              razorpay_payment_link_status: paymentLinkStatus || 'paid',
+            }
+          : {}),
+        razorpay_payment_id: paymentId,
+        razorpay_signature: signature,
+        planCode,
+        billingCycle,
+      }),
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && data.success) {
+          setPaymentSuccess({
+            razorpay_payment_id: paymentId,
+            razorpay_order_id: data.order_id || orderId || paymentLinkId,
+          });
+        } else {
+          setError(data.error || 'Razorpay signature verification failed. Please retry.');
+        }
+      })
+      .catch((err: any) => {
+        if (!cancelled) {
+          setError(err?.message || 'Unable to verify payment with the server.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setVerifying(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, authHeaders, planCode, billingCycle]);
 
   const userPrefill = React.useMemo(() => {
     let email = searchParams.get('email') || '';
@@ -138,11 +201,6 @@ function RazorpayCheckoutContent() {
     }
     return { name, email, phone };
   }, [token, searchParams]);
-
-  const authHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
 
   async function startCheckout() {
     setBusy(true);
@@ -164,6 +222,8 @@ function RazorpayCheckoutContent() {
           planCode,
           notes: {
             plan: planCode,
+            planCode,
+            billingCycle,
             product: 'bgos',
           },
         }),
@@ -192,6 +252,7 @@ function RazorpayCheckoutContent() {
             razorpay_payment_id: simPaymentId,
             razorpay_signature: 'sandbox_verified',
             planCode,
+            billingCycle,
           }),
         });
         const verifyData = await verifyRes.json();
@@ -255,6 +316,7 @@ function RazorpayCheckoutContent() {
                 razorpay_payment_id: resp.razorpay_payment_id,
                 razorpay_signature: resp.razorpay_signature,
                 planCode,
+                billingCycle,
               }),
             });
 
@@ -303,7 +365,15 @@ function RazorpayCheckoutContent() {
 
         {/* Content Body */}
         <div className="p-6 space-y-5">
-          {paymentSuccess ? (
+          {verifying ? (
+            <div className="text-center space-y-3 py-8">
+              <Loader2 className="size-10 mx-auto animate-spin text-[#009F50]" />
+              <p className="text-base font-bold text-slate-900">Verifying Razorpay Payment…</p>
+              <p className="text-xs text-slate-500">
+                Confirming payment signature and activating your BGOS plan.
+              </p>
+            </div>
+          ) : paymentSuccess ? (
             <div className="text-center space-y-4 py-4">
               <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
                 <CheckCircle2 className="size-10" />
@@ -338,7 +408,7 @@ function RazorpayCheckoutContent() {
                       if (window.opener) {
                         window.close();
                       } else {
-                        window.location.assign('/app?product=bgos&view=billing');
+                        window.location.assign('/app?product=bgos&view=billing&razorpay=success');
                       }
                     }, 400);
                   }}

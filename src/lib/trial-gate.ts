@@ -1,32 +1,19 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { toValidDate } from '@/lib/safe-date';
 
 /**
- * Trial-period gate for feature locking.
+ * Trial-period & post-expiry payment gate for feature routes.
  *
- * Returns:
- *   - { ok: true } if the user is allowed to use the feature
- *     (superadmin, OR paid plan, OR feature explicitly enabled via FeatureFlag)
- *   - { ok: false, response } if the user is on trial and the feature is
- *     locked — `response` is a ready-to-return 403 NextResponse.
- *
- * Usage in API routes (mutating handlers only — GET handlers stay open so
- * trial users can still view):
- *
- *   const gate = await requireNotTrial('template_studio');
- *   if (!gate.ok) return gate.response;
- *
- *   const gate = await requireNotTrial('auto_reply_offline');
- *   if (!gate.ok) return gate.response;
- *
- * The 403 error message is built dynamically from `featureKey` (humanized):
- *   - 'template_studio'    → "Template Studio is locked during trial. Upgrade to unlock."
- *   - 'auto_reply_offline' → "Auto Reply Offline is locked during trial. Upgrade to unlock."
- *
- * Mirrors the existing pattern in `src/app/api/vapi/phone-numbers/route.ts`
- * (db.featureFlag check + planStatus fallback) so the gating rules stay
- * consistent with the rest of the platform.
+ * Policy:
+ *   - During an active 7-day trial (`planStatus === 'trial'` with future `trialEndsAt`),
+ *     ALL features are unlocked.
+ *   - Active paid subscriptions (`planStatus === 'active'` and non-free plan) unlock ALL features.
+ *   - Explicitly enabled `FeatureFlag` overrides unlock the feature.
+ *   - Once the 7-day trial expires unpaid (or `expired` / `cancelled` / `past_due` / `free`
+ *     without an active trial), ALL gated features return HTTP 402 (`PAYMENT_REQUIRED`)
+ *     until payment is completed.
  */
 export interface TrialGateResult {
   ok: boolean;
@@ -35,12 +22,6 @@ export interface TrialGateResult {
   tenantId?: string;
 }
 
-/**
- * Convert a snake_case feature key into a human-readable display name for
- * error messages. e.g. 'template_studio' → 'Template Studio',
- * 'auto_reply_offline' → 'Auto Reply Offline'. Falls back to the raw key
- * if it can't be split.
- */
 function humanizeFeatureKey(featureKey: string): string {
   if (!featureKey) return 'This feature';
   return featureKey
@@ -71,7 +52,7 @@ export async function requireNotTrial(featureKey: string): Promise<TrialGateResu
     };
   }
 
-  // Check if the feature is explicitly enabled for this tenant (opt-in override).
+  // Opt-in feature flag override.
   const flag = await db.featureFlag.findUnique({
     where: { tenantId_featureKey: { tenantId: user.tenantId, featureKey } },
     select: { enabled: true },
@@ -80,10 +61,9 @@ export async function requireNotTrial(featureKey: string): Promise<TrialGateResu
     return { ok: true, userId: user.id, tenantId: user.tenantId };
   }
 
-  // Check tenant plan status — if on trial, lock the feature.
   const tenant = await db.tenant.findUnique({
     where: { id: user.tenantId },
-    select: { planStatus: true, trialEndsAt: true },
+    select: { plan: true, planStatus: true, trialEndsAt: true, planEndsAt: true },
   });
 
   if (!tenant) {
@@ -93,26 +73,37 @@ export async function requireNotTrial(featureKey: string): Promise<TrialGateResu
     };
   }
 
-  const isTrial = tenant.planStatus === 'trial';
-  const trialExpired =
-    isTrial && tenant.trialEndsAt ? new Date(tenant.trialEndsAt) < new Date() : false;
+  const now = new Date();
+  const status = String(tenant.planStatus || '').toLowerCase();
+  const plan = String(tenant.plan || '').toLowerCase();
+  const trialEnd = toValidDate(tenant.trialEndsAt);
+  const planEnd = toValidDate(tenant.planEndsAt);
 
-  if (isTrial) {
-    const displayName = humanizeFeatureKey(featureKey);
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: trialExpired
-            ? `Your trial has expired. Upgrade to unlock ${displayName}.`
-            : `${displayName} is locked during trial. Upgrade to unlock.`,
-          code: 'TRIAL_LOCKED',
-          featureKey,
-        },
-        { status: 403 }
-      ),
-    };
+  // 1. Active 7-day trial → full access to all features
+  if (status === 'trial' && trialEnd && trialEnd.getTime() > now.getTime()) {
+    return { ok: true, userId: user.id, tenantId: user.tenantId };
   }
 
-  return { ok: true, userId: user.id, tenantId: user.tenantId };
+  // 2. Active paid subscription → full access
+  if (
+    status === 'active' &&
+    plan !== 'free' &&
+    (!planEnd || planEnd.getTime() > now.getTime())
+  ) {
+    return { ok: true, userId: user.id, tenantId: user.tenantId };
+  }
+
+  // 3. Expired trial or unpaid account → block until payment
+  const displayName = humanizeFeatureKey(featureKey);
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: `Your 7-day trial has ended. Complete payment to unlock ${displayName}.`,
+        code: 'PAYMENT_REQUIRED',
+        featureKey,
+      },
+      { status: 402 },
+    ),
+  };
 }

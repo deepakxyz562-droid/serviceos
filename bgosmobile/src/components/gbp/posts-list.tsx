@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -15,7 +16,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { Card, Empty, ErrorNotice, colors, ui } from '../ui';
 import { apiRequest } from '../../lib/api';
+import { getGooglePostUrl } from '../../lib/social-links';
 import { relativeDate } from './bits';
+
+export { getGooglePostUrl };
 
 export type PostPill =
   | 'scheduled'
@@ -36,10 +40,26 @@ export type SocialPostRow = {
   failureReason?: string | null;
   mediaUrls?: string[];
   gbpPostType?: string | null;
-  publishTargets?: { platform: string; status: string; error?: string }[];
+  permalink?: string | null;
+  googleUrl?: string | null;
+  publishTargets?: {
+    platform: string;
+    status: string;
+    error?: string;
+    externalPostId?: string;
+    permalink?: string;
+  }[];
   createdAt?: string;
   updatedAt?: string;
 };
+
+async function openGooglePostLink(url: string) {
+  try {
+    await Linking.openURL(url);
+  } catch {
+    Alert.alert('Unable to open link', 'Could not open the Google Business post link.');
+  }
+}
 
 export const MODERN_PILLS: { key: PostPill; label: string; icon: string }[] = [
   { key: 'pending', label: 'Pending Review', icon: 'pending-actions' },
@@ -223,6 +243,7 @@ export function PostCard({
   const snippet = lines.length > 1 ? lines.slice(1).join(' ') : lines[0] || 'No description';
 
   const targets = post.publishTargets || [];
+  const googlePostUrl = getGooglePostUrl(post);
 
   return (
     <Pressable
@@ -286,6 +307,20 @@ export function PostCard({
           </View>
         </View>
       </View>
+
+      {googlePostUrl && (post.status === 'published' || post.status === 'partial') ? (
+        <Pressable
+          accessibilityRole="link"
+          onPress={(e) => {
+            e.stopPropagation?.();
+            void openGooglePostLink(googlePostUrl);
+          }}
+          style={styles.googleLinkBtn}
+        >
+          <MaterialIcons name="open-in-new" size={14} color="#009F50" />
+          <Text style={styles.googleLinkBtnText}>View Post on Google</Text>
+        </Pressable>
+      ) : null}
 
       {/* Failure banner & retry button */}
       {(post.status === 'failed' || post.failureReason) && (
@@ -377,6 +412,7 @@ export function PostDetailModal({
   if (!post) return null;
   const badge = statusBadge(post);
   const media = post.mediaUrls?.[0];
+  const googlePostUrl = getGooglePostUrl(post);
 
   const handleCopyCaption = async () => {
     try {
@@ -516,6 +552,17 @@ export function PostDetailModal({
                 <Text style={styles.modalApproveText}>Retry Publishing</Text>
               </Pressable>
             </View>
+          ) : googlePostUrl ? (
+            <View style={styles.modalFooter}>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => void openGooglePostLink(googlePostUrl)}
+                style={[styles.modalActionBtn, styles.modalApproveBtn]}
+              >
+                <MaterialIcons name="open-in-new" size={18} color="#FFFFFF" />
+                <Text style={styles.modalApproveText}>View Post on Google</Text>
+              </Pressable>
+            </View>
           ) : null}
         </View>
       </View>
@@ -529,18 +576,55 @@ export function PostDetailModal({
 export function PostsBoard({
   refreshKey = 0,
   platform,
+  initialPill,
+  focusedPostId,
+  onClearFocusedPost,
   onNeedCompose,
 }: {
   refreshKey?: number;
   platform?: string;
+  initialPill?: PostPill;
+  focusedPostId?: string | null;
+  onClearFocusedPost?: () => void;
   onNeedCompose?: () => void;
 }) {
-  const [pill, setPill] = useState<PostPill>('pending');
+  const [pill, setPill] = useState<PostPill>(initialPill || 'pending');
   const [selectedChannel, setSelectedChannel] = useState<string>(platform || 'all');
   const board = usePillPosts(pill, selectedChannel === 'all' ? undefined : selectedChannel);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
   const [inspectPost, setInspectPost] = useState<SocialPostRow | null>(null);
+
+  useEffect(() => {
+    if (initialPill && initialPill !== pill) {
+      setPill(initialPill);
+    }
+  }, [initialPill]);
+
+  useEffect(() => {
+    if (!focusedPostId) return;
+    const match = board.rows?.find((r) => r.id === focusedPostId);
+    if (match) {
+      setInspectPost(match);
+      onClearFocusedPost?.();
+      return;
+    }
+    let cancelled = false;
+    apiRequest<{ data: SocialPostRow }>(`/api/social/posts/${encodeURIComponent(focusedPostId)}`)
+      .then((res) => {
+        if (cancelled || !res?.data) return;
+        const p = res.data;
+        if (p.status === 'published' || p.status === 'partial') setPill('posted');
+        else if (p.status === 'failed') setPill('failed');
+        else if (p.status === 'scheduled') setPill('scheduled');
+        setInspectPost(p);
+        onClearFocusedPost?.();
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [focusedPostId, board.rows, onClearFocusedPost]);
 
   useEffect(() => {
     if (refreshKey > 0) void board.reload();
@@ -885,6 +969,23 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     color: '#475569',
+  },
+  googleLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  googleLinkBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#009F50',
   },
   failureBox: {
     backgroundColor: '#FEF2F2',

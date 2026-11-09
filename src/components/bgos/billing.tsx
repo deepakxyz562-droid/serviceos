@@ -1,11 +1,23 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Check, CreditCard, Loader2, Globe } from 'lucide-react';
+import { AlertTriangle, Check, Loader2, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
+
+type BgosEntitlement = {
+  entitled: boolean;
+  isTrial: boolean;
+  isPaid: boolean;
+  trialExpired: boolean;
+  trialDaysLeft: number;
+  status: string;
+  plan: string;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+};
 
 type Billing = {
   subscription: {
@@ -15,6 +27,8 @@ type Billing = {
     legacy: boolean;
     currentPeriodEnd: string | null;
   };
+  entitlement?: BgosEntitlement;
+  defaultRegion?: 'india' | 'international';
   usage: {
     contacts: number;
     forms: number;
@@ -26,13 +40,13 @@ type Billing = {
     code: string;
     name: string;
     priceInr: number;
+    priceUsd?: number;
     features: string[];
     checkoutEnabled: boolean;
   }[];
   gateways?: {
     razorpay: boolean;
     creem: boolean;
-    stripe: boolean;
   };
 };
 
@@ -66,6 +80,7 @@ export function BgosBilling() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [region, setRegion] = useState<'india' | 'international'>('india');
+  const regionInitializedRef = useRef(false);
 
   const query = useQuery({
     queryKey: ['bgos', 'billing'],
@@ -76,6 +91,38 @@ export function BgosBilling() {
       return data;
     },
   });
+
+  useEffect(() => {
+    if (!regionInitializedRef.current && query.data?.defaultRegion) {
+      regionInitializedRef.current = true;
+      setRegion(query.data.defaultRegion);
+    }
+  }, [query.data?.defaultRegion]);
+
+  const refetchBilling = query.refetch;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const creemStatus = params.get('creem');
+    const razorpayStatus = params.get('razorpay');
+
+    if (creemStatus === 'success' || razorpayStatus === 'success') {
+      toast.success('Payment received! Refreshing your subscription status…');
+      void refetchBilling().then(() => {
+        window.dispatchEvent(new Event('bgos:billing-updated'));
+      });
+      params.delete('creem');
+      params.delete('razorpay');
+      params.delete('plan');
+      const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`;
+      window.history.replaceState({}, '', nextUrl);
+    } else if (creemStatus === 'cancelled') {
+      toast.info('Creem checkout was cancelled.');
+      params.delete('creem');
+      const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`;
+      window.history.replaceState({}, '', nextUrl);
+    }
+  }, [refetchBilling]);
 
   async function handleCheckout(planCode: string) {
     setBusy(true);
@@ -133,6 +180,9 @@ export function BgosBilling() {
               if (verifyRes.ok && verifyData.success) {
                 toast.success('Payment verified! Plan activated successfully.');
                 await query.refetch();
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new Event('bgos:billing-updated'));
+                }
               } else {
                 toast.error(verifyData.error || 'Payment verification failed');
               }
@@ -149,16 +199,19 @@ export function BgosBilling() {
         return;
       }
 
-      // ── 2. Creem or external URL redirect (International / Stripe) ───────────
+      // ── 2. Creem International Checkout redirect ───────────────────────────
       if (data.url) {
         window.location.assign(data.url);
         return;
       }
 
-      // ── 3. Direct activation response ──────────────────────────────────────
+      // ── 3. Direct local dev activation response ────────────────────────────
       if (data.activated || data.success) {
         toast.success(data.message || 'Plan activated successfully!');
         await query.refetch();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('bgos:billing-updated'));
+        }
         setBusy(false);
         return;
       }
@@ -172,10 +225,15 @@ export function BgosBilling() {
   }
 
   const sub = query.data?.subscription;
-  const isTrial = sub?.status === 'trial';
-  const trialDaysLeft = sub?.trialEndsAt
-    ? Math.max(0, Math.ceil((new Date(sub.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-    : 7;
+  const ent = query.data?.entitlement;
+  const isTrial = ent ? ent.isTrial : sub?.status === 'trial';
+  const trialExpired = ent ? ent.trialExpired : false;
+  const isPaid = ent ? ent.isPaid : sub?.status === 'active' && sub?.plan !== 'free';
+  const trialDaysLeft = ent
+    ? ent.trialDaysLeft
+    : sub?.trialEndsAt
+      ? Math.max(0, Math.ceil((new Date(sub.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+      : 0;
 
   return (
     <div className="w-full space-y-6 p-4 sm:p-8">
@@ -234,6 +292,21 @@ export function BgosBilling() {
 
       {query.data && (
         <>
+          {trialExpired && (
+            <div
+              role="alert"
+              className="flex items-start gap-3 rounded-2xl border border-rose-300 bg-rose-50 dark:bg-rose-950/40 dark:border-rose-900 p-4 text-sm text-rose-900 dark:text-rose-100"
+            >
+              <AlertTriangle className="size-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Your 7-day free trial has ended</p>
+                <p className="text-xs mt-0.5 text-rose-800 dark:text-rose-200">
+                  Complete payment using Razorpay (India · ₹) or Creem (International · $) below to unlock all BGOS features.
+                </p>
+              </div>
+            </div>
+          )}
+
           <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card p-6 shadow-sm">
             <div>
               <div className="flex items-center gap-2">
@@ -241,6 +314,16 @@ export function BgosBilling() {
                 {isTrial && (
                   <span className="rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-bold text-amber-600 border border-amber-500/30">
                     7-Day Trial · {trialDaysLeft} day{trialDaysLeft === 1 ? '' : 's'} remaining
+                  </span>
+                )}
+                {trialExpired && (
+                  <span className="rounded-full bg-rose-500/10 px-2.5 py-0.5 text-xs font-bold text-rose-600 border border-rose-500/30">
+                    Trial Expired · Payment Required
+                  </span>
+                )}
+                {isPaid && (
+                  <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-bold text-emerald-600 border border-emerald-500/30">
+                    Active Paid Plan
                   </span>
                 )}
               </div>
@@ -254,38 +337,17 @@ export function BgosBilling() {
                 </p>
               )}
             </div>
-            {query.data.portalEnabled && (
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    const res = await authFetch('/api/bgos/billing', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ action: 'portal' }),
-                    });
-                    const d = await res.json();
-                    if (d.url) window.location.assign(d.url);
-                  } catch (e: any) {
-                    toast.error(e.message);
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                <CreditCard className="mr-2 size-4" />
-                Manage subscription
-              </Button>
-            )}
           </section>
 
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {query.data.plans.map((plan) => {
               const inrPrice = plan.priceInr;
-              const usdPrice = USD_PRICES[plan.code] ?? Math.round(inrPrice / 50);
-              const isCurrent = query.data.subscription.plan === plan.code;
+              const usdPrice = plan.priceUsd ?? USD_PRICES[plan.code] ?? Math.round(inrPrice / 50);
+              const isCurrentPaid = isPaid && sub?.plan === plan.code;
+              const isGatewayReady =
+                region === 'india'
+                  ? query.data.gateways?.razorpay !== false
+                  : query.data.gateways?.creem !== false;
 
               return (
                 <div key={plan.code} className="flex flex-col rounded-2xl border bg-card p-6 shadow-sm">
@@ -326,21 +388,21 @@ export function BgosBilling() {
                   </ul>
 
                   <Button
-                    disabled={busy || !plan.checkoutEnabled || isCurrent}
+                    disabled={busy || !plan.checkoutEnabled || !isGatewayReady || isCurrentPaid || plan.code === 'free'}
                     variant={plan.code === 'growth' ? 'default' : 'outline'}
                     className={plan.code === 'growth' ? 'bg-[#009F50] hover:bg-[#008A45] text-white font-bold' : ''}
                     onClick={() => handleCheckout(plan.code)}
                   >
                     {busy ? (
                       <Loader2 className="size-4 animate-spin" />
-                    ) : isCurrent ? (
-                      'Current plan'
+                    ) : isCurrentPaid ? (
+                      'Current active plan'
                     ) : plan.code === 'free' ? (
-                      'Included at signup'
-                    ) : !plan.checkoutEnabled ? (
-                      'Checkout not configured'
+                      'Included in 7-day trial'
+                    ) : !isGatewayReady ? (
+                      `${region === 'india' ? 'Razorpay' : 'Creem'} not configured`
                     ) : (
-                      `Choose ${plan.name} (${region === 'india' ? 'Razorpay' : 'Creem'})`
+                      `Pay with ${region === 'india' ? `Razorpay (₹${inrPrice})` : `Creem ($${usdPrice})`}`
                     )}
                   </Button>
                 </div>

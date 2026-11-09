@@ -35,14 +35,42 @@ const ALLOWED_DIRECT_ROUTES = [
   '/my-plan',
 ];
 
+const PASSTHROUGH_PARAMS = [
+  'mediaId',
+  'photoId',
+  'tab',
+  'postId',
+  'mode',
+  'pill',
+  'googleUrl',
+] as const;
+
+function buildDestinationQuery(
+  data: Record<string, unknown>,
+  existing?: URLSearchParams,
+): string {
+  const qs = new URLSearchParams(existing || undefined);
+  for (const key of PASSTHROUGH_PARAMS) {
+    const val = data[key];
+    if (typeof val === 'string' && val.trim() && !qs.has(key)) {
+      qs.set(key, val.trim());
+    }
+  }
+  const str = qs.toString();
+  return str ? `?${str}` : '';
+}
+
 export function notificationDestination(data: Record<string, unknown>): string | null {
   if (!data || typeof data !== 'object') return null;
 
-  // 1. Direct route property support (e.g. data: { route: '/(tabs)/reviews' })
+  // 1. Direct route property support (supports query string & data param passthrough)
   if (typeof data.route === 'string') {
-    const route = data.route.trim();
-    if (ALLOWED_DIRECT_ROUTES.includes(route)) {
-      return route;
+    const rawRoute = data.route.trim();
+    const qIdx = rawRoute.indexOf('?');
+    const basePath = qIdx >= 0 ? rawRoute.slice(0, qIdx) : rawRoute;
+    const existingQs = qIdx >= 0 ? new URLSearchParams(rawRoute.slice(qIdx + 1)) : undefined;
+    if (ALLOWED_DIRECT_ROUTES.includes(basePath)) {
+      return `${basePath}${buildDestinationQuery(data, existingQs)}`;
     }
   }
 
@@ -53,14 +81,20 @@ export function notificationDestination(data: Record<string, unknown>): string |
       const url = new URL(data.url, 'https://bgos.invalid');
       const view = url.searchParams.get('view') || url.pathname.split('/').pop() || '';
       if (view in destinations) {
-        return destinations[view as keyof typeof destinations];
+        return `${destinations[view as keyof typeof destinations]}${buildDestinationQuery(data)}`;
       }
     } catch {
       return null;
     }
   }
 
-  // 3. Entity-based fallback (e.g. data: { reviewId: '...' } or data: { leadId: '...' })
+  // 3. Entity-based fallback
+  if (data.mediaId || data.photoId) return `/(tabs)/photos${buildDestinationQuery(data)}`;
+  if (data.postId) {
+    const extra = new URLSearchParams();
+    if (!data.mode) extra.set('mode', 'posts');
+    return `/(tabs)/marketing${buildDestinationQuery(data, extra)}`;
+  }
   if (data.reviewId) return '/(tabs)/reviews';
   if (data.leadId) return '/(tabs)/leads';
   if (data.appointmentId || data.bookingId) return '/(tabs)/appointments';

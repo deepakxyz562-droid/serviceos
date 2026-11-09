@@ -1,22 +1,32 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
+  AppState,
   Linking,
   Pressable,
-  ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Screen, Card, Action, Badge, Loading, colors, ui } from '../src/components/ui';
+import { Screen, Card, Action, Badge, colors } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
 import { getToken } from '../src/lib/auth';
 import { WEB_URL } from '../src/lib/constants';
 import * as WebBrowser from 'expo-web-browser';
+
+interface BgosEntitlement {
+  entitled: boolean;
+  isTrial: boolean;
+  isPaid: boolean;
+  trialExpired: boolean;
+  trialDaysLeft: number;
+  status: string;
+  plan: string;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+}
 
 interface BillingResponse {
   subscription: {
@@ -24,6 +34,12 @@ interface BillingResponse {
     status: string;
     trialEndsAt?: string | null;
     currentPeriodEnd?: string | null;
+  };
+  entitlement?: BgosEntitlement;
+  defaultRegion?: 'india' | 'international';
+  gateways?: {
+    razorpay: boolean;
+    creem: boolean;
   };
   usage: {
     contacts: number;
@@ -36,6 +52,7 @@ interface BillingResponse {
     code: string;
     name: string;
     priceInr: number;
+    priceUsd?: number;
     features: string[];
     checkoutEnabled: boolean;
   }[];
@@ -46,6 +63,7 @@ const BGOS_DEFAULT_PLANS = [
     code: 'starter',
     name: 'Starter',
     priceInr: 499,
+    priceUsd: 9,
     badge: 'Popular for solo shops',
     features: [
       'AI chatbot & shared customer inbox',
@@ -58,6 +76,7 @@ const BGOS_DEFAULT_PLANS = [
     code: 'growth',
     name: 'Growth',
     priceInr: 1499,
+    priceUsd: 29,
     badge: 'Most Popular · Recommended',
     highlight: true,
     features: [
@@ -73,6 +92,7 @@ const BGOS_DEFAULT_PLANS = [
     code: 'business',
     name: 'Business',
     priceInr: 3999,
+    priceUsd: 79,
     badge: 'Multi-location & enterprise',
     features: [
       'Everything in Growth',
@@ -88,76 +108,83 @@ export default function MyPlanScreen() {
   const router = useRouter();
   const billingRes = useResource<BillingResponse>('/api/bgos/billing');
   const [activatingPlan, setActivatingPlan] = useState<string | null>(null);
+  const [region, setRegion] = useState<'india' | 'international'>('india');
+  const regionInitRef = useRef(false);
+
+  useEffect(() => {
+    if (!regionInitRef.current && billingRes.data?.defaultRegion) {
+      regionInitRef.current = true;
+      setRegion(billingRes.data.defaultRegion);
+    }
+  }, [billingRes.data?.defaultRegion]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void billingRes.refresh();
+      }
+    });
+    return () => sub.remove();
+  }, [billingRes.refresh]);
 
   const sub = billingRes.data?.subscription;
-  const isTrial = sub?.status === 'trial';
-  const trialDaysLeft = sub?.trialEndsAt
-    ? Math.max(0, Math.ceil((new Date(sub.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-    : 7;
-
-  async function handleDirectInAppActivate(planCode: string) {
-    const selected = BGOS_DEFAULT_PLANS.find((p) => p.code === planCode);
-    const planName = selected?.name || planCode.toUpperCase();
-    setActivatingPlan(planCode);
-    try {
-      const res = await apiRequest<{ success: boolean; message?: string }>('/api/bgos/billing', {
-        method: 'POST',
-        body: { action: 'activate', plan: planCode },
-      });
-      if (res?.success) {
-        Alert.alert('Plan Activated!', `✨ ${planName} plan has been activated successfully.`);
-        await billingRes.refresh();
-      } else {
-        Alert.alert('Activation Notice', 'Could not activate plan directly.');
-      }
-    } catch (err: any) {
-      Alert.alert('Activation Notice', err?.message || 'Could not complete plan activation.');
-    } finally {
-      setActivatingPlan(null);
-    }
-  }
+  const ent = billingRes.data?.entitlement;
+  const isTrial = ent ? ent.isTrial : sub?.status === 'trial';
+  const trialExpired = ent ? ent.trialExpired : false;
+  const isPaid = ent ? ent.isPaid : sub?.status === 'active' && sub?.plan !== 'free';
+  const trialDaysLeft = ent
+    ? ent.trialDaysLeft
+    : sub?.trialEndsAt
+      ? Math.max(0, Math.ceil((new Date(sub.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+      : 0;
 
   async function handleActivatePlan(planCode: string) {
     setActivatingPlan(planCode);
     try {
+      if (region === 'international') {
+        const res = await apiRequest<{ url?: string; gateway?: string; error?: string }>(
+          '/api/bgos/billing',
+          {
+            method: 'POST',
+            body: { plan: planCode, gateway: 'creem' },
+          },
+        );
+        if (!res?.url) {
+          throw new Error(res?.error || 'Could not start Creem international checkout.');
+        }
+        await WebBrowser.openBrowserAsync(res.url, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+          controlsColor: colors.brand,
+        });
+        await billingRes.refresh();
+        return;
+      }
+
       const token = await getToken();
       const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
       const checkoutUrl = `${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos${tokenParam}`;
 
-      // Open Razorpay Standard Checkout in-app sheet directly
       await WebBrowser.openBrowserAsync(checkoutUrl, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
         controlsColor: colors.brand,
       });
 
       await billingRes.refresh();
-    } catch {
-      try {
-        await Linking.openURL(`${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos`);
-      } catch {
-        Alert.alert(
-          'Checkout Notice',
-          'Could not launch payment screen. Please check your internet connection.'
-        );
+    } catch (err: any) {
+      if (region === 'india') {
+        try {
+          await Linking.openURL(`${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos`);
+          return;
+        } catch {
+          // fall through to alert
+        }
       }
+      Alert.alert(
+        'Checkout Notice',
+        err?.message || 'Could not launch payment screen. Please check your internet connection.',
+      );
     } finally {
       setActivatingPlan(null);
-    }
-  }
-
-  async function handleManageSubscription() {
-    try {
-      const res = await apiRequest<{ url: string }>('/api/bgos/billing', {
-        method: 'POST',
-        body: { action: 'portal' },
-      });
-      if (res?.url) {
-        await WebBrowser.openBrowserAsync(res.url);
-      } else {
-        await WebBrowser.openBrowserAsync(`${WEB_URL}/app?product=bgos&view=billing`);
-      }
-    } catch {
-      await WebBrowser.openBrowserAsync(`${WEB_URL}/app?product=bgos&view=billing`);
     }
   }
 
@@ -181,9 +208,18 @@ export default function MyPlanScreen() {
             </Text>
           </View>
           <Badge
-            label={isTrial ? `Trial · ${trialDaysLeft}d left` : sub?.status === 'active' ? 'Active' : 'Free Tier'}
-            success={sub?.status === 'active'}
+            label={
+              isTrial
+                ? `Trial · ${trialDaysLeft}d left`
+                : isPaid
+                  ? 'Active'
+                  : trialExpired
+                    ? 'Trial Expired'
+                    : 'Payment Required'
+            }
+            success={isPaid}
             accent={isTrial}
+            danger={trialExpired && !isPaid}
           />
         </View>
 
@@ -201,11 +237,34 @@ export default function MyPlanScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <MaterialIcons name="timer" size={18} color="#D97706" />
               <Text style={{ fontSize: 13, fontWeight: '800', color: '#92400E' }}>
-                7-Day Free Trial Active ({trialDaysLeft} days remaining)
+                7-Day Free Trial Active ({trialDaysLeft} day{trialDaysLeft === 1 ? '' : 's'} remaining)
               </Text>
             </View>
             <Text style={{ fontSize: 11.5, color: '#B45309', lineHeight: 16 }}>
-              Enjoy full unrestricted access to Google SEO tools, 1-Tap WhatsApp Reviews, and AI marketing. Activate a paid plan anytime to keep growing without interruption.
+              Enjoy full unrestricted access during your 7-day trial. Activate a paid plan anytime via Razorpay (India) or Creem (International) to continue uninterrupted.
+            </Text>
+          </View>
+        ) : null}
+
+        {trialExpired && !isPaid ? (
+          <View
+            style={{
+              backgroundColor: '#FEE2E2',
+              borderColor: '#FECACA',
+              borderWidth: 1,
+              borderRadius: 12,
+              padding: 12,
+              gap: 4,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <MaterialIcons name="lock" size={18} color="#B91C1C" />
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#991B1B' }}>
+                7-Day Free Trial Expired — Payment Required
+              </Text>
+            </View>
+            <Text style={{ fontSize: 11.5, color: '#991B1B', lineHeight: 16 }}>
+              Your 7-day trial has ended. Select a plan below using Razorpay (India · ₹) or Creem (International · $) to unlock all BGOS features.
             </Text>
           </View>
         ) : null}
@@ -231,26 +290,65 @@ export default function MyPlanScreen() {
             </Text>
           </View>
         </View>
-
-        {billingRes.data?.portalEnabled ? (
-          <Action
-            secondary
-            label="Manage Payment & Invoices"
-            icon="credit-card"
-            onPress={handleManageSubscription}
-          />
-        ) : null}
       </Card>
 
-      {/* 2. Choose Plan Section */}
+      {/* 2. Gateway Switcher + Plans Section */}
       <View style={{ gap: 14 }}>
+        <View style={{ flexDirection: 'row', backgroundColor: '#E2E8F0', borderRadius: 12, padding: 4, gap: 4 }}>
+          <Pressable
+            onPress={() => setRegion('india')}
+            style={{
+              flex: 1,
+              paddingVertical: 9,
+              borderRadius: 9,
+              alignItems: 'center',
+              backgroundColor: region === 'india' ? '#FFFFFF' : 'transparent',
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '800',
+                color: region === 'india' ? '#047857' : '#475569',
+              }}
+            >
+              🇮🇳 India (Razorpay · ₹)
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setRegion('international')}
+            style={{
+              flex: 1,
+              paddingVertical: 9,
+              borderRadius: 9,
+              alignItems: 'center',
+              backgroundColor: region === 'international' ? '#FFFFFF' : 'transparent',
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '800',
+                color: region === 'international' ? '#047857' : '#475569',
+              }}
+            >
+              🌐 International (Creem · $)
+            </Text>
+          </Pressable>
+        </View>
+
         <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }}>
           Upgrade or Activate Your Plan
         </Text>
 
         {BGOS_DEFAULT_PLANS.map((plan) => {
-          const isCurrent = sub?.plan?.toLowerCase() === plan.code;
+          const isCurrentPaid = isPaid && (ent?.plan || sub?.plan)?.toLowerCase() === plan.code;
           const isBusy = activatingPlan === plan.code;
+          const priceDisplay = region === 'india' ? `₹${plan.priceInr.toLocaleString('en-IN')}` : `$${plan.priceUsd}`;
+          const gatewayReady =
+            region === 'india'
+              ? billingRes.data?.gateways?.razorpay !== false
+              : billingRes.data?.gateways?.creem !== false;
 
           return (
             <Card
@@ -274,10 +372,10 @@ export default function MyPlanScreen() {
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={{ fontSize: 24, fontWeight: '900', color: colors.ink }}>
-                    ₹{plan.priceInr.toLocaleString('en-IN')}
+                    {priceDisplay}
                   </Text>
                   <Text style={{ fontSize: 10, color: colors.muted, fontWeight: '600' }}>
-                    per month
+                    {region === 'india' ? 'per month · Razorpay' : 'USD / mo · Creem'}
                   </Text>
                 </View>
               </View>
@@ -296,11 +394,13 @@ export default function MyPlanScreen() {
                 label={
                   isBusy
                     ? 'Opening Secure Checkout…'
-                    : isCurrent && !isTrial
-                    ? 'Current Active Plan'
-                    : `Activate ${plan.name} (₹${plan.priceInr}/mo)`
+                    : isCurrentPaid
+                      ? 'Current Active Plan'
+                      : !gatewayReady
+                        ? `${region === 'india' ? 'Razorpay' : 'Creem'} Unavailable`
+                        : `Pay ${priceDisplay}/mo via ${region === 'india' ? 'Razorpay' : 'Creem'}`
                 }
-                disabled={isBusy || (isCurrent && !isTrial)}
+                disabled={isBusy || isCurrentPaid || !gatewayReady}
                 icon={plan.highlight ? 'flash-on' : 'check'}
                 onPress={() => handleActivatePlan(plan.code)}
               />

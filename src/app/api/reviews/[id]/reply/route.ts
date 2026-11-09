@@ -3,11 +3,51 @@ import { reviewLocationId } from '@/lib/social/google-review-scope';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { requireBgosEntitled } from '@/lib/bgos-entitlement';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import {
   replyToGoogleBusinessReview,
   deleteGoogleBusinessReviewReply,
 } from '@/lib/social/adapters/googlebusiness';
+import { encryptToken } from '@/lib/social/crypto';
+import type { SocialAccountData } from '@/lib/social/types';
+
+async function forceRefreshGoogleAccount(account: SocialAccountData): Promise<SocialAccountData | null> {
+  if (!account.refreshToken) return null;
+  try {
+    const adapterMod = await import('@/lib/social/adapters/googlebusiness');
+    const refreshFn = adapterMod.googleBusinessAdapter?.refreshToken;
+    if (typeof refreshFn !== 'function') return null;
+    const refreshed = await refreshFn(account);
+    if (!refreshed?.accessToken) return null;
+
+    if (account.id && typeof (db as any).socialAccount?.update === 'function') {
+      try {
+        await (db as any).socialAccount.update({
+          where: { id: account.id },
+          data: {
+            accessToken: encryptToken(refreshed.accessToken),
+            ...(refreshed.refreshToken ? { refreshToken: encryptToken(refreshed.refreshToken) } : {}),
+            ...(refreshed.tokenExpiry ? { tokenExpiry: refreshed.tokenExpiry } : {}),
+            isActive: true,
+          },
+        });
+      } catch (persistErr) {
+        console.warn('[reviews/reply] Failed persisting refreshed Google token:', persistErr);
+      }
+    }
+
+    return {
+      ...account,
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken ?? account.refreshToken,
+      tokenExpiry: refreshed.tokenExpiry ?? account.tokenExpiry,
+    };
+  } catch (err) {
+    console.warn('[reviews/reply] Forced Google token refresh failed:', err);
+    return null;
+  }
+}
 
 /**
  * POST /api/reviews/[id]/reply
@@ -22,6 +62,8 @@ export async function POST(
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const gate = await requireBgosEntitled(user);
+    if (!gate.ok) return gate.response;
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
@@ -71,17 +113,36 @@ export async function POST(
     // If review is linked to Google Business, attempt publishing to Google
     if (review.googleReviewId) {
       if (googleAccount) {
+        const executeReply = async (acct: SocialAccountData) => {
+          const result = await replyToGoogleBusinessReview(acct, review.googleReviewId!, replyText);
+          moderationState = result.reviewReplyState;
+          policyViolation = result.policyViolation;
+          publishedToGoogle = googleReplyState(moderationState).publishedToGoogle;
+        };
         try {
-          const result=await replyToGoogleBusinessReview(googleAccount, review.googleReviewId, replyText);
-          moderationState=result.reviewReplyState;policyViolation=result.policyViolation;
-          publishedToGoogle=googleReplyState(moderationState).publishedToGoogle;
+          await executeReply(googleAccount);
         } catch (err: unknown) {
+          let finalErr = err;
           const errMsg = err instanceof Error ? err.message : String(err);
-          console.warn(`[reviews/reply] Google Business Profile reply sync warning for review ${id}:`, errMsg);
-          if (errMsg.includes('NOT_FOUND') || errMsg.includes('404')) {
-            googleError = 'Google has not yet publicly published this review on Google Maps (reviews from connected or personal accounts typically take 24–72 hours to clear Google Maps moderation before replies can be synced). Your reply is safely saved in BGOS.';
-          } else {
-            googleError = errMsg;
+          if (/401|unauthenticated|expired|revoked/i.test(errMsg) && googleAccount.refreshToken) {
+            const refreshedAcct = await forceRefreshGoogleAccount(googleAccount);
+            if (refreshedAcct) {
+              try {
+                await executeReply(refreshedAcct);
+                finalErr = null;
+              } catch (retryErr) {
+                finalErr = retryErr;
+              }
+            }
+          }
+          if (finalErr) {
+            const finalMsg = finalErr instanceof Error ? finalErr.message : String(finalErr);
+            console.warn(`[reviews/reply] Google Business Profile reply sync warning for review ${id}:`, finalMsg);
+            if (finalMsg.includes('NOT_FOUND') || finalMsg.includes('404')) {
+              googleError = 'Google has not yet publicly published this review on Google Maps (reviews from connected or personal accounts typically take 24–72 hours to clear Google Maps moderation before replies can be synced). Your reply is safely saved in BGOS.';
+            } else {
+              googleError = finalMsg;
+            }
           }
         }
       } else {
@@ -153,6 +214,8 @@ export async function DELETE(
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const gate = await requireBgosEntitled(user);
+    if (!gate.ok) return gate.response;
 
     const { id } = await params;
     const review = await db.review.findFirst({
@@ -205,27 +268,49 @@ export async function DELETE(
     let googleErrorCategory: 'disconnected' | 'auth' | 'rate_limit' | 'upstream' | null = null;
 
     if (review.googleReviewId && !isSampleGoogleId) {
+      const targetGoogleReviewId =
+        typeof existingReply.googleReviewName === 'string' && existingReply.googleReviewName.startsWith('accounts/')
+          ? existingReply.googleReviewName
+          : review.googleReviewId;
       const googleAccount = await prepareGoogleAccount(user.tenantId, reviewLocationId(review.googleReviewId));
       if (googleAccount) {
-        try {
-          const deleted = await deleteGoogleBusinessReviewReply(googleAccount, review.googleReviewId);
+        const executeDelete = async (acct: SocialAccountData) => {
+          const deleted = await deleteGoogleBusinessReviewReply(acct, targetGoogleReviewId);
           if (deleted) {
             deletedFromGoogle = true;
           } else {
             alreadyAbsentOnGoogle = true;
           }
+        };
+        try {
+          await executeDelete(googleAccount);
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          googleError = msg;
-          if (/not_found|\(http 404\)|does not exist|sample review/i.test(msg)) {
-            alreadyAbsentOnGoogle = true;
-            googleError = null;
-          } else if (/401|403|unauthenticated|permission|reconnect|token|expired|scope/i.test(msg)) {
-            googleErrorCategory = 'auth';
-          } else if (/429|quota|rate limit/i.test(msg)) {
-            googleErrorCategory = 'rate_limit';
-          } else {
-            googleErrorCategory = 'upstream';
+          let finalErr: unknown = err;
+          const initialMsg = err instanceof Error ? err.message : String(err);
+          if (/401|unauthenticated|expired|revoked/i.test(initialMsg) && googleAccount.refreshToken) {
+            const refreshedAcct = await forceRefreshGoogleAccount(googleAccount);
+            if (refreshedAcct) {
+              try {
+                await executeDelete(refreshedAcct);
+                finalErr = null;
+              } catch (retryErr) {
+                finalErr = retryErr;
+              }
+            }
+          }
+          if (finalErr) {
+            const msg = finalErr instanceof Error ? finalErr.message : String(finalErr);
+            googleError = msg;
+            if (/not_found|\(http 404\)|does not exist|sample review/i.test(msg)) {
+              alreadyAbsentOnGoogle = true;
+              googleError = null;
+            } else if (/401|403|unauthenticated|permission|reconnect|token|expired|scope/i.test(msg)) {
+              googleErrorCategory = 'auth';
+            } else if (/429|quota|rate limit/i.test(msg)) {
+              googleErrorCategory = 'rate_limit';
+            } else {
+              googleErrorCategory = 'upstream';
+            }
           }
         }
       } else {

@@ -70,17 +70,19 @@ export async function POST(request: NextRequest) {
     const defaultSignupPlan = await resolveSignupDefaultPlan();
     const validPlans = ['standalone_starter', 'standalone_business', 'starter', 'professional', 'growth', 'launch_special', 'enterprise', 'free'];
 
-    // PL1.5: Support free plan signup (100 lifetime jobs + free forms)
-    // When plan='free', user gets the free ecosystem: Forms + Leads + 100 Jobs
-    const signupPlan = requestedPlan && validPlans.includes(requestedPlan)
+    const rawRequestedPlan = requestedPlan && validPlans.includes(requestedPlan)
       ? requestedPlan
       : defaultSignupPlan;
 
-    // Free plan: no trial, no expiration, 100 lifetime jobs
-    const isFreePlan = signupPlan === 'free';
-    const isStandalone = signupPlan === 'standalone_starter' || signupPlan === 'standalone_business' || requestedMode === 'standalone';
+    const isStandalone = rawRequestedPlan === 'standalone_starter' || rawRequestedPlan === 'standalone_business' || requestedMode === 'standalone';
     const reqHost = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').toLowerCase();
     const isBgos = !isStandalone && (body.product === 'bgos' || reqHost.includes('bgos.'));
+
+    // For BGOS, every new signup gets an automatic 7-day full-feature trial
+    // (no permanent free tier bypass — after 7 days payment is required).
+    const signupPlan = isBgos && rawRequestedPlan === 'free' ? 'starter' : rawRequestedPlan;
+    // Free plan (CRM only): no trial, no expiration, 100 lifetime jobs
+    const isFreePlan = !isBgos && signupPlan === 'free';
 
     const tenant = await db.tenant.create({
       data: {

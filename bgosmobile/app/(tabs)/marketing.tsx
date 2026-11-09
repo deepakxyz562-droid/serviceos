@@ -60,7 +60,7 @@ import { WEB_URL } from '../../src/lib/constants';
 import { validateSocialPost } from '../../src/lib/social-validation';
 import { futureLocalTime } from '../../src/lib/dates';
 import { loadJson, saveJson } from '../../src/lib/device-storage';
-import { PostsBoard } from '../../src/components/gbp/posts-list';
+import { PostsBoard, type PostPill } from '../../src/components/gbp/posts-list';
 import { SocialCalendarView } from '../../src/components/gbp/social-calendar';
 import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
 import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
@@ -642,7 +642,14 @@ function AutoBrandedPosterCard({
 
 export default function MarketingScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ generate?: string; mode?: string; view?: string; date?: string }>();
+  const params = useLocalSearchParams<{
+    generate?: string;
+    mode?: string;
+    view?: string;
+    date?: string;
+    pill?: string;
+    postId?: string;
+  }>();
   const [postSubView, setPostSubView] = useState<'list' | 'calendar'>(
     params.view === 'calendar' ? 'calendar' : 'list'
   );
@@ -651,8 +658,35 @@ export default function MarketingScreen() {
   const saving = useRef(false);
 
   const [activeMode, setActiveMode] = useState<'studio' | 'autopilot' | 'posts'>(
-    params.mode === 'posts' ? 'posts' : params.mode === 'autopilot' ? 'autopilot' : 'studio'
+    params.mode === 'posts' || params.postId ? 'posts' : params.mode === 'autopilot' ? 'autopilot' : 'studio'
   );
+  const [focusedPostId, setFocusedPostId] = useState<string | null>(
+    typeof params.postId === 'string' && params.postId ? params.postId : null
+  );
+  const resolvedInitialPill: PostPill | undefined =
+    params.pill === 'posted' ||
+    params.pill === 'scheduled' ||
+    params.pill === 'failed' ||
+    params.pill === 'pending' ||
+    params.pill === 'approved' ||
+    params.pill === 'rejected' ||
+    params.pill === 'not_posted'
+      ? params.pill
+      : undefined;
+
+  useEffect(() => {
+    if (params.mode === 'posts' || params.postId) {
+      setActiveMode('posts');
+      if (params.view !== 'calendar') setPostSubView('list');
+    } else if (params.mode === 'autopilot') {
+      setActiveMode('autopilot');
+    } else if (params.mode === 'studio') {
+      setActiveMode('studio');
+    }
+    if (typeof params.postId === 'string' && params.postId) {
+      setFocusedPostId(params.postId);
+    }
+  }, [params.mode, params.postId, params.view]);
   const [studioStep, setStudioStep] = useState<1 | 2 | 3>(1);
   const [showCreationOptions,setShowCreationOptions] = useState(false);
   const [templateSearchOpen, setTemplateSearchOpen] = useState(false);
@@ -2827,6 +2861,9 @@ export default function MarketingScreen() {
               {/* Shared Modern Posts Board */}
               <PostsBoard
                 refreshKey={boardRefresh}
+                initialPill={resolvedInitialPill}
+                focusedPostId={focusedPostId}
+                onClearFocusedPost={() => setFocusedPostId(null)}
                 onNeedCompose={() => setActiveMode('studio')}
               />
             </>

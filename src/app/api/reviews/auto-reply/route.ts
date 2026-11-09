@@ -2,6 +2,7 @@ import { googleReplyState } from '@/lib/social/review-state';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { requireBgosEntitled } from '@/lib/bgos-entitlement';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { replyToGoogleBusinessReview } from '@/lib/social/adapters/googlebusiness';
 import { buildReviewReplyPrompt } from '@/lib/reviews/reply-prompt';
@@ -135,6 +136,8 @@ export async function POST(request: NextRequest) {
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const gate = await requireBgosEntitled(user);
+    if (!gate.ok) return gate.response;
 
     const body = await request.json().catch(() => ({}));
     const targetReviewId = body.reviewId as string | undefined;

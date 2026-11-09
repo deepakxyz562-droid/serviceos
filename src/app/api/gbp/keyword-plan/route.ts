@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
+import { requireBgosEntitled } from '@/lib/bgos-entitlement';
 import { db } from '@/lib/db';
 import { isMissingTableError } from '@/lib/gbp/marketing-score';
 
@@ -91,6 +92,8 @@ export async function POST(request: NextRequest) {
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const gate = await requireBgosEntitled(user);
+    if (!gate.ok) return gate.response;
 
     const body = await request.json().catch(() => ({}));
     const keyword = String(body?.keyword || '').trim().toLowerCase();
@@ -181,6 +184,8 @@ export async function DELETE(request: NextRequest) {
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const gate = await requireBgosEntitled(user);
+    if (!gate.ok) return gate.response;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
