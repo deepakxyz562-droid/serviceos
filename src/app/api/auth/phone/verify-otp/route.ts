@@ -8,6 +8,7 @@ import {
   getRefreshSessionMetadata,
   setAuthCookies,
 } from '@/lib/auth';
+import { resolveBestPhoneUser, findUserByEmailInsensitive } from '@/lib/phone-account-lookup';
 
 async function findOtpRecord(where: Record<string, unknown>) {
   try {
@@ -106,45 +107,27 @@ export async function POST(request: NextRequest) {
     // Mark as verified
     await updateOtpRecord(otpRecord.id, { verified: true, verifiedAt: new Date() });
 
-    // 1. Find User by phone
-    let user = await db.user.findFirst({
-      where: {
-        OR: [
-          { phone: normalizedPhone },
-          { phone: withPlus },
-          { phone: tenDigit },
-        ],
-      },
-      include: { tenant: true, workspace: true },
+    // 1. Resolve highest-priority business User by phone
+    const phoneLookup = await resolveBestPhoneUser({
+      phoneNumber: withPlus,
+      includeSocialFallback: false,
     });
 
-    // Fallback: check Employee or Tenant phone to find linked owner
-    if (!user) {
-      const emp = await db.employee.findFirst({
-        where: {
-          OR: [
-            { phone: normalizedPhone },
-            { phone: withPlus },
-            { phone: tenDigit },
-          ],
-        },
-        include: { user: { include: { tenant: true, workspace: true } } },
-      });
-      if (emp?.user) {
-        user = emp.user;
-      }
+    if (phoneLookup.hasOnlyInactiveMatches) {
+      return NextResponse.json(
+        { error: 'Your account has been deactivated. Please contact support.' },
+        { status: 403 }
+      );
     }
 
+    let user = phoneLookup.user;
     let isNewUser = false;
 
     // 2. If User doesn't exist, auto-provision merchant account
     if (!user) {
-      const syntheticEmail = `${normalizedPhone}@merchant.bos.local`;
+      const syntheticEmail = `${normalizedPhone}@merchant.bos.local`.toLowerCase();
 
-      user = await db.user.findUnique({
-        where: { email: syntheticEmail },
-        include: { tenant: true, workspace: true },
-      });
+      user = await findUserByEmailInsensitive(syntheticEmail, { tenant: true, workspace: true });
 
       if (!user) {
         user = await db.user.create({
@@ -163,7 +146,7 @@ export async function POST(request: NextRequest) {
       } else if (!user.phone) {
         user = await db.user.update({
           where: { id: user.id },
-          data: { phone: withPlus, authProvider: 'phone_otp' },
+          data: { phone: withPlus, authProvider: user.authProvider || 'phone_otp' },
           include: { tenant: true, workspace: true },
         });
       }

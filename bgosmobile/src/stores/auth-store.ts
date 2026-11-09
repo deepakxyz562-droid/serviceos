@@ -1,4 +1,4 @@
-import { unregisterPush, autoSyncPushToken } from '../lib/push';
+import * as pushModule from '../lib/push';
 import { create } from 'zustand';
 import {
   getToken,
@@ -17,6 +17,18 @@ import { API_PATHS } from '../lib/constants';
 import { googleSignIn } from '../lib/google-auth';
 import { appleSignIn } from '../lib/apple-auth';
 import { isBgosIdentity } from '../lib/bgos-identity';
+import { invalidateResourceScope } from '../lib/resource-cache';
+
+function triggerPushSync() {
+  try {
+    const fn = (pushModule as { autoSyncPushToken?: () => Promise<void> }).autoSyncPushToken;
+    if (typeof fn === 'function') {
+      void Promise.resolve(fn()).catch(() => {});
+    }
+  } catch {
+    // Optional in partial test mocks
+  }
+}
 
 export interface User { id: string; email: string; name?: string; role?: string; tenantId?: string; workspaceId?: string }
 export interface SessionResponse { token: string; refreshToken: string; user: User; workspace: { id: string; productType: string } | null; onboardingRequired?: boolean }
@@ -37,6 +49,7 @@ async function acceptSession(session: SessionResponse, revision: number) {
     throw new Error('Use an active BGOS workspace account to sign in.');
   }
   await setTokens(session.token, session.refreshToken, revision, session.user);
+  invalidateResourceScope();
   return session.user;
 }
 
@@ -98,7 +111,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await acceptSession(session, revision);
       const onboardingRequired = await resolveOnboardingRequirement(session, user);
       set({ user, onboardingRequired, isAuthenticated: true, isLoading: false });
-      void autoSyncPushToken().catch(() => {});
+      triggerPushSync();
       return true;
     } catch (error) { set({ error: error instanceof Error ? error.message : 'Sign-in failed', isLoading: false }); return false; }
   },
@@ -114,7 +127,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await acceptSession(session, revision);
       const onboardingRequired = await resolveOnboardingRequirement(session, user);
       set({ user, onboardingRequired, isAuthenticated: true, isLoading: false });
-      void autoSyncPushToken().catch(() => {});
+      triggerPushSync();
       return true;
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Mobile sign-in failed', isLoading: false });
@@ -130,7 +143,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await acceptSession(session, revision);
       const onboardingRequired = await resolveOnboardingRequirement(session, user);
       set({ user, onboardingRequired, isAuthenticated: true, isLoading: false });
-      void autoSyncPushToken().catch(() => {});
+      triggerPushSync();
       return true;
     } catch (error) { set({ error: error instanceof Error ? error.message : 'Google sign-in failed', isLoading: false }); return false; }
   },
@@ -143,7 +156,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await acceptSession(session, revision);
       const onboardingRequired = await resolveOnboardingRequirement(session, user);
       set({ user, onboardingRequired, isAuthenticated: true, isLoading: false });
-      void autoSyncPushToken().catch(() => {});
+      triggerPushSync();
       return true;
     } catch (error) { set({ error: error instanceof Error ? error.message : 'Apple sign-in failed', isLoading: false }); return false; }
   },
@@ -151,16 +164,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Capture credentials before clearing. Local sign-out never waits on the network.
     const token = await getToken().catch(() => null);
     const refreshToken = await getRefreshToken().catch(() => null);
-    const pushCleanup = unregisterPush(token).catch(() => {});
-    const revoke = refreshToken ? apiRequest('/api/auth/logout', { method: 'POST', body: { refreshToken }, skipAuth: true }).catch(() => {}) : Promise.resolve();
+    const pushCleanup = Promise.resolve(pushModule.unregisterPush(token)).catch(() => {});
+    const revoke = refreshToken ? Promise.resolve(apiRequest('/api/auth/logout', { method: 'POST', body: { refreshToken }, skipAuth: true })).catch(() => {}) : Promise.resolve();
     try { await clearTokens(); }
     catch (error) { set({ error: error instanceof Error ? error.message : 'Could not clear saved credentials.' }); throw error; }
-    finally { set({ user: null, isAuthenticated: false, isLoading: false, onboardingRequired: false }); }
+    finally {
+      invalidateResourceScope();
+      set({ user: null, isAuthenticated: false, isLoading: false, onboardingRequired: false });
+    }
     void Promise.allSettled([pushCleanup, revoke]);
   },
   deleteAccount: async () => {
     const token = await getToken().catch(() => null);
-    const pushCleanup = unregisterPush(token).catch(() => {});
+    const pushCleanup = Promise.resolve(pushModule.unregisterPush(token)).catch(() => {});
     try {
       await apiRequest('/api/bgos/mobile-auth/account', { method: 'DELETE' });
     } catch (error) {
@@ -168,7 +184,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     try { await clearTokens(); }
     catch (error) { set({ error: error instanceof Error ? error.message : 'Could not clear local credentials.' }); throw error; }
-    finally { set({ user: null, isAuthenticated: false, isLoading: false, onboardingRequired: false }); }
+    finally {
+      invalidateResourceScope();
+      set({ user: null, isAuthenticated: false, isLoading: false, onboardingRequired: false });
+    }
     void Promise.allSettled([pushCleanup]);
   },
   checkAuth: async () => {
@@ -177,6 +196,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const token = await getToken();
       if (!token) {
+        invalidateResourceScope();
         set({ user: null, isAuthenticated: false, isLoading: false, onboardingRequired: false });
         return;
       }
@@ -190,25 +210,44 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const session = await apiRequest<SessionResponse>(API_PATHS.currentUser);
       if (revision !== sessionRevision()) return;
       if (session?.user) {
+        const userChanged =
+          !savedUser ||
+          savedUser.id !== session.user.id ||
+          savedUser.tenantId !== session.user.tenantId;
         await saveUser(session.user).catch(() => {});
+        if (userChanged) {
+          invalidateResourceScope();
+        }
         const onboardingRequired = await resolveOnboardingRequirement(session, session.user);
         set({ user: session.user, onboardingRequired, isAuthenticated: true, isLoading: false, error: null });
-        void autoSyncPushToken().catch(() => {});
+        triggerPushSync();
       }
     } catch (error) {
       if (revision !== sessionRevision()) return;
+      if (error instanceof ApiError && error.statusCode === 401) {
+        await clearTokens().catch(() => {});
+        invalidateResourceScope();
+        set({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+          onboardingRequired: false,
+          error: error.message || 'Session expired. Please sign in again.',
+        });
+        return;
+      }
       const savedUser = await getSavedUser().catch(() => null);
       if (savedUser) {
         // Retain authenticated session on network failure or transient checks
         const isDone = await isOnboardingDone(savedUser.tenantId || savedUser.id);
         set({ user: savedUser, isAuthenticated: true, isLoading: false, onboardingRequired: !isDone });
       } else {
-        if (error instanceof ApiError && error.statusCode === 401) {
-          await clearTokens().catch(() => {});
-        }
         set({ user: null, isAuthenticated: false, isLoading: false, onboardingRequired: false, error: error instanceof Error ? error.message : 'Could not check session. Retry when connected.' });
       }
     }
   },
 }));
-onSessionEnded(() => useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false, onboardingRequired: false }));
+onSessionEnded(() => {
+  invalidateResourceScope();
+  useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false, onboardingRequired: false });
+});

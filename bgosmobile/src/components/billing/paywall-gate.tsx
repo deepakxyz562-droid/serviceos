@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -97,7 +97,7 @@ interface PaywallGateProps {
 }
 
 export function PaywallGate({ children }: PaywallGateProps) {
-  const billingRes = useResource<BillingResponse>('/api/bgos/billing');
+  const billingRes = useResource<BillingResponse>('/api/bgos/billing', 0, true, 15000);
   const [activatingPlan, setActivatingPlan] = useState<string | null>(null);
   const [region, setRegion] = useState<'india' | 'international'>(() => {
     try {
@@ -106,12 +106,11 @@ export function PaywallGate({ children }: PaywallGateProps) {
       return 'india';
     }
   });
-  const regionInitRef = useRef(false);
-  const { logout } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
 
   useEffect(() => {
-    if (!regionInitRef.current && billingRes.data?.defaultRegion) {
-      regionInitRef.current = true;
+    if (billingRes.data?.defaultRegion) {
       setRegion(billingRes.data.defaultRegion);
     }
   }, [billingRes.data?.defaultRegion]);
@@ -131,6 +130,51 @@ export function PaywallGate({ children }: PaywallGateProps) {
   // If billing is still loading on first mount, let children render briefly until check completes
   if (billingRes.loading && !billingRes.data) {
     return <>{children}</>;
+  }
+
+  // Never show "Complete Payment to Continue" when billing could not be fetched/verified
+  if (!billingRes.data) {
+    return (
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.header}>
+            <Brand large />
+            <View style={styles.badgeRow}>
+              <View style={styles.errorBadge}>
+                <MaterialIcons name="wifi-off" size={14} color="#92400E" />
+                <Text style={styles.errorBadgeText}>Subscription Check Failed</Text>
+              </View>
+            </View>
+            <Text style={styles.title}>Could not verify subscription</Text>
+            <Text style={styles.subtitle}>
+              {billingRes.error || 'Unable to verify your subscription status right now. Please try again.'}
+            </Text>
+            {user?.email ? (
+              <Text style={styles.accountBadge}>Signed in as: {user.email}</Text>
+            ) : null}
+          </View>
+
+          <View style={styles.errorActions}>
+            <Pressable
+              style={[styles.payButton, styles.payButtonHighlight]}
+              onPress={() => void billingRes.refresh()}
+            >
+              <View style={styles.buttonInner}>
+                <MaterialIcons name="refresh" size={18} color="#FFFFFF" />
+                <Text style={styles.payButtonText}>Retry Verification</Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              style={styles.signOutButton}
+              onPress={() => void logout()}
+            >
+              <Text style={styles.signOutText}>Sign Out / Switch Account</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </View>
+    );
   }
 
   // Strictly obey backend entitlement when present
@@ -213,6 +257,9 @@ export function PaywallGate({ children }: PaywallGateProps) {
           <Text style={styles.subtitle}>
             Your 7-day full-access trial has ended. Choose a plan below to unlock all BGOS features.
           </Text>
+          {user?.email ? (
+            <Text style={styles.accountBadge}>Signed in as: {user.email}</Text>
+          ) : null}
         </View>
 
         {/* Pricing Cards */}
@@ -365,6 +412,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.2,
+  },
+  errorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  errorBadgeText: {
+    color: '#92400E',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  accountBadge: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  errorActions: {
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 12,
   },
   title: {
     fontSize: 22,

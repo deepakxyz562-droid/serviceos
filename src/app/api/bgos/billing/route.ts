@@ -1,7 +1,7 @@
 import { leadUsage } from '@/lib/bgos-usage';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser, getProductAppUrl } from '@/lib/auth';
-import { resolveProductAccess, activateProductWorkspace } from '@/lib/product-access';
+import { resolveProductAccess, activateProductWorkspace, ProductAccessError } from '@/lib/product-access';
 import {
   BGOS_PLANS,
   BGOS_USD_PRICES,
@@ -26,7 +26,9 @@ async function getOrProvisionBgosAccess(user: {
     return await resolveProductAccess(user.id, 'bgos', user.workspaceId || undefined);
   } catch (err: any) {
     const tenant = await db.tenant.findUnique({ where: { id: user.tenantId } });
-    if (!tenant) throw err;
+    if (!tenant || tenant.suspendedAt) {
+      throw new ProductAccessError(tenant ? 'TENANT_UNAVAILABLE' : 'TENANT_NOT_FOUND', tenant ? 403 : 404);
+    }
 
     try {
       const workspaceId = await activateProductWorkspace(
@@ -135,12 +137,20 @@ export async function GET(request: NextRequest) {
     );
   } catch (err: any) {
     console.error('[/api/bgos/billing GET] Error:', err);
+    if (err instanceof ProductAccessError) {
+      return NextResponse.json(
+        {
+          error:
+            'Billing requires an active BGOS workspace. Complete workspace setup or contact your administrator.',
+        },
+        { status: err.status === 401 || err.status === 403 || err.status === 404 ? err.status : 409 },
+      );
+    }
     return NextResponse.json(
       {
-        error:
-          'Billing requires an active BGOS workspace. Complete workspace setup or contact your administrator.',
+        error: 'Billing service temporarily unavailable. Please retry.',
       },
-      { status: 409 },
+      { status: 503 },
     );
   }
 }

@@ -756,6 +756,7 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
 type WhereValue = string | number | boolean | null | Date | WhereValue[];
 type WhereOperator = {
   equals?: WhereValue;
+  mode?: 'default' | 'insensitive';
   not?: WhereValue;
   in?: WhereValue[];
   notIn?: WhereValue[];
@@ -923,7 +924,10 @@ export function buildOrConditionPart(cond: WhereInput): string | null {
         parts.push(`${fieldName}.ilike.${formatPostgrestOrValue(`%${op.endsWith}`)}`);
       } else if (op.equals !== undefined) {
         if (op.equals === null) parts.push(`${orField}.is.null`);
-        else parts.push(`${orField}.eq.${toOrLiteral(op.equals)}`);
+        else if (op.mode === 'insensitive' && typeof op.equals === 'string') {
+          const escaped = op.equals.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+          parts.push(`${orField}.ilike.${formatPostgrestOrValue(escaped)}`);
+        } else parts.push(`${orField}.eq.${toOrLiteral(op.equals)}`);
       } else if (op.gt !== undefined) {
         parts.push(`${orField}.gt.${toOrLiteral(op.gt)}`);
       } else if (op.gte !== undefined) {
@@ -1085,6 +1089,10 @@ export function applyWhereFilters(
       // `periodStart` onward with no upper bound on the Supabase adapter.
       if (op.equals !== undefined) {
         if (op.equals === null) { query.is(field, null); }
+        else if (op.mode === 'insensitive' && typeof op.equals === 'string') {
+          const escaped = op.equals.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+          query.ilike(field, escaped);
+        }
         else { query.eq(field, op.equals as string | number | boolean); }
       }
       if (op.not !== undefined) {

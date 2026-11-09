@@ -12,6 +12,7 @@ import { resolveSignupDefaultPlan } from '@/lib/billing-seed';
 import { getOrCreateBusinessForUser } from '@/lib/quote-flow-session';
 import { MOBILE_COOKIE, MOBILE_RETURN, readMobileState, sealMobileState } from '@/lib/bgos-mobile-auth';
 import { getBgosAiQuotaForPlan, resolveInstallCountryAndBilling } from '@/lib/bgos-billing';
+import { findUserByEmailInsensitive } from '@/lib/phone-account-lookup';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -689,11 +690,8 @@ export async function GET(request: NextRequest) {
     }
 
     // ─── PRO / BUSINESS / ADMIN FLOW ───
-    // Check if user already exists
-    const existingUser = await db.user.findUnique({
-      where: { email: userInfo.email },
-      include: { tenant: true },
-    });
+    // Check if user already exists (case-insensitive)
+    const existingUser = await findUserByEmailInsensitive(normalizedEmail, { tenant: true });
 
     if (existingUser) {
       // ─── EXISTING USER: Log them in ───
@@ -806,7 +804,7 @@ export async function GET(request: NextRequest) {
     // ─── NEW USER: Create user + tenant immediately ───
     const tempUser = await db.user.create({
       data: {
-        email: userInfo.email,
+        email: normalizedEmail,
         name: userInfo.name || userInfo.given_name || 'Google User',
         avatar: userInfo.picture || null,
         role: 'owner',
@@ -821,7 +819,7 @@ export async function GET(request: NextRequest) {
 
     const { tenant, workspace } = await createTenantForGoogleUser(
       tempUser.id,
-      userInfo.email,
+      normalizedEmail,
       userInfo.name || userInfo.given_name || '',
       state.plan,
       state.signupMode,

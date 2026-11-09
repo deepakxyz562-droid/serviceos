@@ -7,6 +7,7 @@ import { callbackUrl, challengeFor, readMobileState } from '@/lib/bgos-mobile-au
 import { verifyGoogleToken } from '@/lib/quote-flow-google-auth';
 import { ensureBgosTenantAndWorkspace, resolveBgosMobileAccount } from '@/lib/bgos-mobile-account';
 import { ProductAccessError } from '@/lib/product-access';
+import { findUserByEmailInsensitive } from '@/lib/phone-account-lookup';
 
 const input = z.object({ ticket: z.string().max(12000), verifier: z.string().regex(/^[\w-]{43,128}$/) });
 
@@ -38,13 +39,14 @@ export async function POST(request: NextRequest) {
     const google = await verifyGoogleToken(googleTokens.id_token);
     if (!google) return NextResponse.json({ error: 'Could not verify Google identity' }, { status: 401 });
 
-    let user = await db.user.findUnique({ where: { email: google.email }, include: { workspace: true } });
+    const normalizedEmail = google.email.trim().toLowerCase();
+    let user = await findUserByEmailInsensitive(normalizedEmail, { workspace: true });
     if (!user) {
       try {
         user = await db.user.create({
           data: {
-            email: google.email,
-            name: google.name || google.email.split('@')[0],
+            email: normalizedEmail,
+            name: google.name || normalizedEmail.split('@')[0],
             avatar: google.picture,
             role: 'owner',
             authProvider: 'google',
@@ -56,7 +58,7 @@ export async function POST(request: NextRequest) {
           include: { workspace: true },
         });
       } catch (error) {
-        user = await db.user.findUnique({ where: { email: google.email }, include: { workspace: true } });
+        user = await findUserByEmailInsensitive(normalizedEmail, { workspace: true });
         if (!user) throw error;
       }
     }

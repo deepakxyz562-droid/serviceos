@@ -8,6 +8,7 @@ import {
   setAuthCookies,
 } from '@/lib/auth';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
+import { resolveBestPhoneUser, findUserByEmailInsensitive } from '@/lib/phone-account-lookup';
 
 const FIREBASE_API_KEY =
   process.env.FIREBASE_WEB_API_KEY ||
@@ -102,48 +103,29 @@ export async function POST(request: NextRequest) {
     const tenDigit = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
     const withPlus = rawPhone.startsWith('+') ? rawPhone : `+${digits}`;
 
-    // 2. Find existing User by phone
-    let user = await db.user.findFirst({
-      where: {
-        OR: [
-          { phone: rawPhone },
-          { phone: withPlus },
-          { phone: digits },
-          { phone: tenDigit },
-        ],
-      },
-      include: { tenant: true, workspace: true },
+    // 2. Find highest-priority business User by phone / employee / tenant
+    const phoneLookup = await resolveBestPhoneUser({
+      phoneNumber: rawPhone,
+      firebaseUid: firebaseUser.localId,
+      includeSocialFallback: false,
     });
 
-    // Fallback: check Employee or Tenant phone to find linked owner
-    if (!user) {
-      const emp = await db.employee.findFirst({
-        where: {
-          OR: [
-            { phone: rawPhone },
-            { phone: withPlus },
-            { phone: digits },
-            { phone: tenDigit },
-          ],
-        },
-        include: { user: { include: { tenant: true, workspace: true } } },
-      });
-      if (emp?.user) {
-        user = emp.user;
-      }
+    if (phoneLookup.hasOnlyInactiveMatches) {
+      return NextResponse.json(
+        { error: 'Your account has been deactivated. Please contact support.' },
+        { status: 403 }
+      );
     }
 
+    let user = phoneLookup.user;
     let isNewUser = false;
 
     // 3. If User doesn't exist, auto-provision merchant account
     if (!user) {
-      const syntheticEmail = firebaseUser.email || `${digits}@merchant.bos.local`;
+      const syntheticEmail = (firebaseUser.email || `${digits}@merchant.bos.local`).trim().toLowerCase();
 
-      // Check if user exists by email
-      user = await db.user.findUnique({
-        where: { email: syntheticEmail },
-        include: { tenant: true, workspace: true },
-      });
+      // Check if user exists by email (case-insensitive)
+      user = await findUserByEmailInsensitive(syntheticEmail, { tenant: true, workspace: true });
 
       if (!user) {
         user = await db.user.create({
@@ -163,7 +145,11 @@ export async function POST(request: NextRequest) {
       } else if (!user.phone) {
         user = await db.user.update({
           where: { id: user.id },
-          data: { phone: withPlus, authProvider: 'firebase_phone' },
+          data: {
+            phone: withPlus,
+            authProvider: user.authProvider || 'firebase_phone',
+            authProviderId: user.authProviderId || firebaseUser.localId || null,
+          },
           include: { tenant: true, workspace: true },
         });
       }

@@ -312,6 +312,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
       const res = await fetch('/api/bgos/mobile-auth/phone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ idToken: verifyData.idToken, phoneNumber: loginPhone, product: 'bgos' }),
       });
       const data = await res.json();
@@ -319,9 +320,23 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
         toast.error(data.error || 'Failed to sign in with phone.');
         return;
       }
-      setToken(data.token);
+      if (data.token) {
+        setToken(data.token);
+      }
+      const resolvedTenant =
+        data.tenant ||
+        data.workspace?.tenant ||
+        { id: data.user.tenantId, name: data.workspace?.name };
+      localStorage.setItem('fieseros_auth', JSON.stringify({
+        isAuthenticated: true,
+        user: data.user,
+        tenant: resolvedTenant,
+        workspace: data.workspace || null,
+        token: data.token,
+        refreshToken: data.refreshToken,
+      }));
       toast.success('Signed in successfully!');
-      onAuthSuccess(data.user, data.workspace?.tenant || { id: data.user.tenantId, name: data.workspace?.name }, data.workspace);
+      onAuthSuccess(data.user, resolvedTenant, data.workspace);
     } catch {
       toast.error('Sign-in failed. Please try again.');
     } finally {

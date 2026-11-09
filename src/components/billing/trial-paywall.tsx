@@ -20,6 +20,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '@/store/app-store';
+import { authFetch } from '@/lib/client-auth';
 
 export interface TrialStatus {
   isTrialExpired: boolean;
@@ -54,8 +55,11 @@ export function useTrialStatus(): TrialStatus {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/subscriptions');
-      if (!res.ok) return;
+      const res = await authFetch('/api/subscriptions');
+      if (!res.ok) {
+        setState((prev) => ({ ...prev, loading: false }));
+        return;
+      }
       const json = await res.json();
       setState({
         isTrialExpired: json.isTrialExpired === true,

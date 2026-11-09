@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { issueAuthTokens, getRefreshSessionMetadata } from '@/lib/auth';
+import { issueAuthTokens, getRefreshSessionMetadata, setAuthCookies } from '@/lib/auth';
 import { applyRateLimit, oauthLimiter, rateLimitResponse, getClientIp } from '@/lib/rate-limit';
 import { ensureBgosTenantAndWorkspace, resolveBgosMobileAccount } from '@/lib/bgos-mobile-account';
+import { buildPhoneVariants, resolveBestPhoneUser } from '@/lib/phone-account-lookup';
+import { ProductAccessError } from '@/lib/product-access';
+import { invalidateAuthCache } from '@/lib/auth-me-cache';
 
 const phoneInputSchema = z.object({
   idToken: z.string().min(10),
@@ -117,127 +120,24 @@ export async function POST(request: NextRequest) {
 
   const { uid, phoneNumber } = verified;
 
-  // Normalize phone variations (E.164, raw 10 digits, with/without country code)
-  const cleanDigits = phoneNumber.replace(/\D/g, '');
-  const tenDigits = cleanDigits.slice(-10);
-  const countryCodeDigits = cleanDigits.length > 10 ? cleanDigits : `91${tenDigits}`;
-  const e164 = `+${countryCodeDigits}`;
-  const spacedNational =
-    tenDigits.length === 10
-      ? `+91 ${tenDigits.slice(0, 5)} ${tenDigits.slice(5)}`
-      : `+${countryCodeDigits}`;
+  const { tenDigits, e164 } = buildPhoneVariants(phoneNumber);
 
   try {
-    // 1. Look up existing User by Firebase sub OR any phone format variant
-    let user = await db.user.findFirst({
-      where: {
-        OR: [
-          { authProvider: 'firebase_phone', authProviderId: uid },
-          { phone: phoneNumber },
-          { phone: e164 },
-          { phone: tenDigits },
-          { phone: countryCodeDigits },
-          { phone: spacedNational },
-          { phone: { contains: tenDigits } },
-        ],
-      },
-      include: { workspace: true, tenant: true },
+    // 1. Resolve the highest-priority business account matching this verified phone
+    //    (prefers non-suspended, active paid/trial entitlement, owner role, real email)
+    const lookup = await resolveBestPhoneUser({
+      phoneNumber,
+      firebaseUid: uid,
+      includeSocialFallback: true,
     });
 
-    // 2. If user not found OR user belongs to an empty/uncompleted tenant,
-    // look for an established Tenant that has this phone number saved from
-    // onboarding, business profile settings, WhatsApp, or Google Business Profile.
-    const isEstablishedUser = Boolean(user && user.tenant?.onboardingCompleted);
-
-    if (!isEstablishedUser) {
-      // Find candidate tenants matching any phone representation
-      const candidateTenants = await db.tenant.findMany({
-        where: {
-          OR: [
-            { phone: phoneNumber },
-            { phone: e164 },
-            { phone: tenDigits },
-            { phone: countryCodeDigits },
-            { phone: spacedNational },
-            { phone: { contains: tenDigits } },
-            { whatsappPhone: phoneNumber },
-            { whatsappPhone: e164 },
-            { whatsappPhone: tenDigits },
-            { whatsappPhone: countryCodeDigits },
-            { whatsappPhone: { contains: tenDigits } },
-            { settingsJson: { contains: tenDigits } },
-          ],
-        },
-        orderBy: [
-          { onboardingCompleted: 'desc' },
-          { createdAt: 'desc' },
-        ],
-        include: {
-          users: true,
-          socialAccounts: {
-            where: { platform: 'googlebusiness', isActive: true },
-          },
-        },
-      });
-
-      let matchedTenant = candidateTenants[0] || null;
-
-      // If still not matched, check SocialAccounts directly
-      if (!matchedTenant) {
-        const sa = await db.socialAccount.findFirst({
-          where: {
-            platform: 'googlebusiness',
-            metadata: { contains: tenDigits },
-          },
-          include: {
-            tenant: {
-              include: {
-                users: true,
-                socialAccounts: {
-                  where: { platform: 'googlebusiness', isActive: true },
-                },
-              },
-            },
-          },
-        });
-        if (sa?.tenant) {
-          matchedTenant = sa.tenant;
-        }
-      }
-
-      // If an established business tenant was found, link the verified phone & Firebase UID
-      // directly to this tenant's primary owner
-      if (matchedTenant) {
-        const establishedOwner =
-          matchedTenant.users.find((u) => u.role === 'owner' && u.isActive) ||
-          matchedTenant.users.find((u) => u.isActive) ||
-          matchedTenant.users[0];
-
-        if (establishedOwner) {
-          user = await db.user.update({
-            where: { id: establishedOwner.id },
-            data: {
-              phone: establishedOwner.phone || e164,
-              authProviderId: establishedOwner.authProviderId || uid,
-              emailVerified: true,
-              emailVerifiedAt: establishedOwner.emailVerifiedAt || new Date(),
-              lastLoginAt: new Date(),
-            },
-            include: { workspace: true, tenant: true },
-          });
-
-          // Ensure tenant has standard phone saved
-          if (!matchedTenant.phone) {
-            await db.tenant.update({
-              where: { id: matchedTenant.id },
-              data: { phone: e164 },
-            }).catch(() => {});
-          }
-        }
-      }
+    if (lookup.hasOnlyInactiveMatches) {
+      return NextResponse.json({ error: 'Account unavailable.' }, { status: 403 });
     }
 
-    // 3. If user doesn't exist, auto-create business owner account
+    let user = lookup.user;
+
+    // 2. If user doesn't exist, auto-create business owner account
     if (!user) {
       const displayName = fullName || `Owner ${tenDigits.slice(-4)}`;
       // Deterministic synthetic email to satisfy unique constraint
@@ -260,16 +160,17 @@ export async function POST(request: NextRequest) {
         });
       } catch (err) {
         // Handle race condition where user was created concurrently
-        user = await db.user.findFirst({
-          where: {
-            OR: [
-              { authProvider: 'firebase_phone', authProviderId: uid },
-              { phone: e164 },
-              { email: syntheticEmail },
-            ],
-          },
-          include: { workspace: true, tenant: true },
+        const retry = await resolveBestPhoneUser({
+          phoneNumber,
+          firebaseUid: uid,
+          includeSocialFallback: false,
         });
+        user =
+          retry.user ||
+          (await db.user.findUnique({
+            where: { email: syntheticEmail },
+            include: { workspace: true, tenant: true },
+          }));
         if (!user) throw err;
       }
     }
@@ -278,7 +179,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Account unavailable.' }, { status: 403 });
     }
 
-    // Link Firebase Phone credentials & update last login
+    // Link Firebase Phone credentials & update last login without clobbering Google auth bindings
     await db.user.update({
       where: { id: user.id },
       data: {
@@ -290,12 +191,20 @@ export async function POST(request: NextRequest) {
         lastLoginAt: new Date(),
       },
     });
+    if (user.tenantId && !user.tenant?.phone) {
+      await db.tenant.update({
+        where: { id: user.tenantId },
+        data: { phone: e164 },
+      }).catch(() => {});
+    }
+    invalidateAuthCache(user.id);
 
     // Ensure tenant and workspace are provisioned for seamless 1-tap mobile sign-in
-    await ensureBgosTenantAndWorkspace(user.id, { request, phone: e164 });
+    const provisioned = await ensureBgosTenantAndWorkspace(user.id, { request, phone: e164 });
 
     // Resolve BGOS mobile account context
     const account = await resolveBgosMobileAccount(user.id);
+    const resolvedTenant = account.user?.tenant || provisioned.tenant || user.tenant || null;
     const authUser = {
       id: user.id,
       email: user.email,
@@ -310,14 +219,37 @@ export async function POST(request: NextRequest) {
     const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
     oauthLimiter.reset(getClientIp(request));
 
-    return NextResponse.json({
-      token: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      user: authUser,
-      workspace: account.workspace,
-      onboardingRequired: account.onboardingRequired,
-    });
+    const response = NextResponse.json(
+      {
+        token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        user: authUser,
+        workspace: account.workspace,
+        tenant: resolvedTenant
+          ? {
+              id: resolvedTenant.id,
+              name: resolvedTenant.name,
+              slug: resolvedTenant.slug,
+              plan: resolvedTenant.plan,
+              planStatus: resolvedTenant.planStatus,
+              trialEndsAt: resolvedTenant.trialEndsAt,
+              onboardingCompleted: resolvedTenant.onboardingCompleted,
+              signupMode: resolvedTenant.signupMode,
+            }
+          : null,
+        onboardingRequired: account.onboardingRequired,
+      },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+    setAuthCookies(response.cookies, tokens);
+    return response;
   } catch (error) {
+    if (error instanceof ProductAccessError) {
+      return NextResponse.json(
+        { error: 'An active BGOS workspace is required.', code: error.code },
+        { status: error.status },
+      );
+    }
     console.error('[Firebase Phone Auth] Error during user provisioning:', error);
     return NextResponse.json(
       { error: 'Failed to complete mobile sign-in. Please try again.' },
