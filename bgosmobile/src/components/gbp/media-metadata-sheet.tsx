@@ -497,19 +497,41 @@ export function MediaMetadataSheet({
       const jobId = startRes?.jobId || requestId;
       const pollStart = Date.now();
       let generated: string | null = null;
-      while (Date.now() - pollStart < 60000) {
+      let transientPollErrors = 0;
+      while (Date.now() - pollStart < 75000) {
         if (reqKey !== sessionKeyRef.current) return;
-        const statusRes = await apiRequest<{
+        let statusRes: {
           status: string;
           error?: string;
           result?: { url?: string; assetId?: string } | null;
-        }>(`/api/social/designs/image?id=${encodeURIComponent(jobId)}`);
+        };
+        try {
+          statusRes = await apiRequest<{
+            status: string;
+            error?: string;
+            result?: { url?: string; assetId?: string } | null;
+          }>(`/api/social/designs/image?id=${encodeURIComponent(jobId)}`);
+          transientPollErrors = 0;
+        } catch (pollErr: unknown) {
+          const statusCode =
+            typeof (pollErr as { statusCode?: unknown })?.statusCode === 'number'
+              ? (pollErr as { statusCode: number }).statusCode
+              : 0;
+          if (statusCode === 0 || statusCode === 408 || statusCode === 503 || statusCode === 504) {
+            transientPollErrors += 1;
+            if (transientPollErrors <= 2) {
+              await new Promise((r) => setTimeout(r, 2000));
+              continue;
+            }
+          }
+          throw pollErr;
+        }
         if (reqKey !== sessionKeyRef.current) return;
         if (statusRes?.status === 'completed' && statusRes.result?.url) {
           generated = statusRes.result.url;
           break;
         }
-        if (statusRes?.status === 'failed' || statusRes?.status === 'cancelled') {
+        if (statusRes?.status === 'failed' || statusRes?.status === 'cancelled' || statusRes?.status === 'uncertain') {
           throw new Error(statusRes.error || 'AI image generation failed.');
         }
         await new Promise((r) => setTimeout(r, 2000));

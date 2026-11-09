@@ -175,7 +175,7 @@ async function callCloudflareImage(
   const key = await db.aiProviderKey.findFirst({
     where: { provider: 'cloudflare', isActive: true },
     orderBy: { priority: 'asc' },
-  });
+  }).catch(() => null);
 
   if (key) {
     keyRowId = key.id;
@@ -559,6 +559,8 @@ function parseProviderImageResponse(
   return typeof encoded === 'string' && encoded.length <= 11_000_000 ? encoded : null;
 }
 
+class UnsupportedImagePayloadError extends Error {}
+
 async function callGeminiOrOpenRouterImage(params: {
   provider: 'gemini' | 'openrouter';
   promptText: string;
@@ -634,7 +636,7 @@ async function callGeminiOrOpenRouterImage(params: {
   const data = await response.json();
   const encoded = parseProviderImageResponse(params.provider, data);
   if (!encoded) {
-    throw new Error('The provider did not return a supported image');
+    throw new UnsupportedImagePayloadError('The provider did not return a supported image');
   }
 
   if (cred.keyRowId) {
@@ -714,6 +716,9 @@ export async function generateDesignImage(
       signal,
     });
   } catch (primaryErr) {
+    if (primaryErr instanceof UnsupportedImagePayloadError) {
+      throw primaryErr;
+    }
     try {
       return await callCloudflareImage(`${text}${aspectHint}`, signal);
     } catch {

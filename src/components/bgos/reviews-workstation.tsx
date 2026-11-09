@@ -3501,7 +3501,11 @@ export function ReviewsView({
                                 }
                                 if (!confirm('Are you sure you want to delete this reply?')) return;
                                 try {
-                                  await authFetch(`/api/reviews/${selectedReview.id}/reply`, { method: 'DELETE' });
+                                  const res = await authFetch(`/api/reviews/${selectedReview.id}/reply`, { method: 'DELETE' });
+                                  if (!res.ok) {
+                                    const errBody = await res.json().catch(() => null);
+                                    throw new Error(errBody?.error || errBody?.message || 'Failed to delete reply');
+                                  }
                                   toast.success('Reply deleted');
                                   setReviewsList(prev => prev.map(r => r.id === selectedReview.id ? { ...r, replied: false, replyText: undefined, replyKeywords: undefined } : r));
                                   setReplyDraft('');

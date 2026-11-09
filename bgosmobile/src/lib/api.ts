@@ -132,17 +132,67 @@ export async function apiRequest<T = any>(
     if (!latest || latest === requestToken) await refreshSession();
     return apiRequest<T>(path, { ...options, retryAuth: false });
   }
+  const contentType = response.headers?.get?.('content-type') || '';
+  let rawText = '';
+  let hasRawText = false;
+  if (typeof response.text === 'function') {
+    rawText = await response.text().catch(() => '');
+    hasRawText = true;
+  }
+
   if (!response.ok) {
-    let errorData: any;
-    try {
-      errorData = await response.json();
-    } catch {
-      errorData = { message: response.statusText };
+    let errorData: any = null;
+    if (hasRawText && rawText) {
+      try {
+        errorData = JSON.parse(rawText);
+      } catch {
+        errorData = null;
+      }
+    } else if (!hasRawText && typeof response.json === 'function') {
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = null;
+      }
     }
-    throw new ApiError(errorData?.error || errorData?.message || 'Request failed', response.status, errorData);
+
+    const isHtml =
+      (hasRawText && /<html|<!doctype/i.test(rawText)) || contentType.includes('text/html');
+    const fallbackMessage =
+      response.status === 502 || response.status === 503 || response.status === 504
+        ? `Server gateway error (HTTP ${response.status}). Please try again in a moment.`
+        : response.status === 404
+          ? 'API endpoint was not found on the server (HTTP 404). Update or retry shortly.'
+          : isHtml
+            ? `Server returned an unexpected HTML error page (HTTP ${response.status}).`
+            : rawText.trim().slice(0, 180) || response.statusText || 'Request failed';
+    throw new ApiError(
+      errorData?.error || errorData?.message || fallbackMessage,
+      response.status,
+      errorData,
+    );
   }
 
   if (response.status === 204) return undefined as T;
-  try { return (await response.json()) as T; }
-  catch { throw new ApiError('The server returned an invalid response. Refresh before retrying changes.', 502); }
+  if (hasRawText) {
+    if (!rawText.trim()) {
+      throw new ApiError('The server returned an invalid response (empty body). Refresh before retrying changes.', 502);
+    }
+    try {
+      return JSON.parse(rawText) as T;
+    } catch {
+      const isHtml = /<html|<!doctype/i.test(rawText) || contentType.includes('text/html');
+      throw new ApiError(
+        isHtml
+          ? 'The server returned an invalid response (HTML instead of JSON). Please deploy the latest server update or retry.'
+          : 'The server returned an invalid response. Refresh before retrying changes.',
+        502,
+      );
+    }
+  }
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new ApiError('The server returned an invalid response. Refresh before retrying changes.', 502);
+  }
 }

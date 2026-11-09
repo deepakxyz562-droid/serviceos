@@ -788,6 +788,12 @@ export async function deleteGoogleBusinessReviewReply(
     },
   });
 
+  // 404 NOT_FOUND means there is no active reply on Google (already deleted
+  // in Google Business Profile / Maps or never published to Google).
+  if (res.status === 404) {
+    return false;
+  }
+
   await assertOk(res, 'delete review reply');
   return true;
 }

@@ -106,6 +106,16 @@ import {
 export const revalidate = 300
 export const dynamicParams = true
 
+const RESERVED_ROOT_SEGMENTS = new Set([
+  'api',
+  '_next',
+  'static',
+  'assets',
+  'favicon.ico',
+  'robots.txt',
+  'sitemap.xml',
+])
+
 // ── Metadata ────────────────────────────────────────────────────────────────
 
 export async function generateMetadata({
@@ -114,6 +124,12 @@ export async function generateMetadata({
   params: Promise<{ companySlug: string; city: string; slug: string }>
 }): Promise<Metadata> {
   const { companySlug: industry, city, slug } = await params
+  if (RESERVED_ROOT_SEGMENTS.has(industry.toLowerCase())) {
+    return {
+      title: 'Not Found',
+      robots: { index: false, follow: false },
+    }
+  }
   const { business } = await getPublicBusinessByUrl(industry, city, slug)
 
   if (!business) {
@@ -194,6 +210,9 @@ export default async function PublicBusinessHubPage({
   params: Promise<{ companySlug: string; city: string; slug: string }>
 }) {
   const { companySlug: industry, city, slug } = await params
+  if (RESERVED_ROOT_SEGMENTS.has(industry.toLowerCase())) {
+    notFound()
+  }
 
   // ── Singular → Plural canonical redirect ───────────────────────────────
   // The canonical URL scheme is now /{pluralIndustry}/{city}/{slug} (e.g.

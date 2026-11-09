@@ -74,6 +74,18 @@ function buildAutoBusinessPrompt(params: {
   return `Photorealistic commercial showcase for ${name} (${category})${offerings ? ` highlighting ${offerings}` : ''}, authentic inviting atmosphere and crisp lighting.`;
 }
 
+function parseCompletedJobResult(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    if ('__pendingMeta' in parsed && !('url' in parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user?.tenantId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -186,7 +198,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Request ID already used with different content' }, { status: 409 });
       }
       if (existing.status === 'queued') {
-        void runDesignJob(id);
+        void Promise.resolve(runDesignJob(id)).catch((err) => {
+          console.error('[/api/social/designs/image POST] existing job run error:', err);
+        });
       }
       return NextResponse.json({ jobId: id, status: existing.status }, { status: 202 });
     }
@@ -203,7 +217,9 @@ export async function POST(request: NextRequest) {
     });
 
     // Execute immediately in Node.js event loop
-    void runDesignJob(id);
+    void Promise.resolve(runDesignJob(id)).catch((err) => {
+      console.error('[/api/social/designs/image POST] background runDesignJob error:', err);
+    });
 
     return NextResponse.json({ jobId: id, status: 'queued' }, { status: 202 });
   } catch (err) {
@@ -215,50 +231,74 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user?.tenantId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-  const id = request.nextUrl.searchParams.get('id');
-  const possibleIds = id
-    ? id.includes(':')
-      ? [id]
-      : [id, `${user.tenantId}:${id}`]
-    : undefined;
+  try {
+    const id = request.nextUrl.searchParams.get('id');
+    const possibleIds = id
+      ? id.includes(':')
+        ? [id]
+        : [id, `${user.tenantId}:${id}`]
+      : undefined;
 
-  let job = await db.designGenerationJob.findFirst({
-    where: {
-      tenantId: user.tenantId,
-      ...(possibleIds ? { id: { in: possibleIds } } : {}),
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-  if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    const job = await db.designGenerationJob.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        ...(possibleIds ? { id: { in: possibleIds } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 });
 
-  // Self-healing: if job is queued and not cancelled, run and await completion directly
-  if (job.status === 'queued' && !job.cancelRequested) {
-    await runDesignJob(job.id);
-    const refreshed = await db.designGenerationJob.findUnique({ where: { id: job.id } });
-    if (refreshed) job = refreshed;
+    // Kick off queued work non-blockingly so polling GET never blocks up to 150s
+    // and never hits mobile 30s or proxy 100s timeouts.
+    if (job.status === 'queued' && !job.cancelRequested) {
+      void Promise.resolve(runDesignJob(job.id)).catch((err) => {
+        console.error('[/api/social/designs/image GET] background runDesignJob error:', err);
+      });
+    }
+
+    const completedResult = job.status === 'completed' ? parseCompletedJobResult(job.resultJson) : null;
+    if (job.status === 'completed' && !completedResult) {
+      return NextResponse.json({
+        jobId: job.id,
+        status: 'failed',
+        error: job.error || 'Generated image result could not be loaded cleanly. Please try again.',
+        result: null,
+      });
+    }
+
+    return NextResponse.json({
+      jobId: job.id,
+      status: job.status,
+      error: job.error || null,
+      result: completedResult,
+    });
+  } catch (err) {
+    console.error('[/api/social/designs/image GET] error:', err);
+    return NextResponse.json(
+      { error: 'Could not retrieve image generation status. Please retry.' },
+      { status: 500 },
+    );
   }
-
-  return NextResponse.json({
-    jobId: job.id,
-    status: job.status,
-    error: job.error,
-    result: job.status === 'completed' && job.resultJson ? JSON.parse(job.resultJson) : null,
-  });
 }
 export async function DELETE(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user?.tenantId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-  const id = request.nextUrl.searchParams.get('id');
-  if (!id) return NextResponse.json({ error: 'Job ID required' }, { status: 400 });
-  const possibleIds = id.includes(':') ? [id] : [id, `${user.tenantId}:${id}`];
+  try {
+    const id = request.nextUrl.searchParams.get('id');
+    if (!id) return NextResponse.json({ error: 'Job ID required' }, { status: 400 });
+    const possibleIds = id.includes(':') ? [id] : [id, `${user.tenantId}:${id}`];
 
-  await db.designGenerationJob.updateMany({
-    where: { id: { in: possibleIds }, tenantId: user.tenantId, status: 'queued' },
-    data: { status: 'cancelled', cancelRequested: true, finishedAt: new Date() },
-  });
-  await db.designGenerationJob.updateMany({
-    where: { id: { in: possibleIds }, tenantId: user.tenantId, status: 'running' },
-    data: { cancelRequested: true },
-  });
-  return NextResponse.json({ message: 'Cancellation requested. Already-started provider work may still be charged.' });
+    await db.designGenerationJob.updateMany({
+      where: { id: { in: possibleIds }, tenantId: user.tenantId, status: 'queued' },
+      data: { status: 'cancelled', cancelRequested: true, finishedAt: new Date() },
+    });
+    await db.designGenerationJob.updateMany({
+      where: { id: { in: possibleIds }, tenantId: user.tenantId, status: 'running' },
+      data: { cancelRequested: true },
+    });
+    return NextResponse.json({ message: 'Cancellation requested. Already-started provider work may still be charged.' });
+  } catch (err) {
+    console.error('[/api/social/designs/image DELETE] error:', err);
+    return NextResponse.json({ error: 'Could not cancel image generation job.' }, { status: 500 });
+  }
 }

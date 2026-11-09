@@ -309,9 +309,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  const topic = request.nextUrl.searchParams.get('topic') || undefined;
-  const payload = await gatherContextAndPhotos(request, user.tenantId, topic);
-  return NextResponse.json(payload);
+  try {
+    const topic = request.nextUrl.searchParams.get('topic') || undefined;
+    const payload = await gatherContextAndPhotos(request, user.tenantId, topic);
+    return NextResponse.json(payload);
+  } catch (err) {
+    console.error('[/api/social/ai-image-ideas GET] error:', err);
+    return NextResponse.json(
+      { error: 'Could not load AI image ideas right now.' },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -320,8 +328,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  const body = await request.json().catch(() => ({}));
-  const topic = typeof body.topic === 'string' ? body.topic.trim() : undefined;
-  const payload = await gatherContextAndPhotos(request, user.tenantId, topic);
-  return NextResponse.json(payload);
+  try {
+    const body = await request.json().catch(() => ({}));
+    const topic = typeof body.topic === 'string' ? body.topic.trim() : undefined;
+    const payload = await gatherContextAndPhotos(request, user.tenantId, topic);
+    return NextResponse.json(payload);
+  } catch (err) {
+    console.error('[/api/social/ai-image-ideas POST] error:', err);
+    return NextResponse.json(
+      { error: 'Could not generate AI image ideas right now.' },
+      { status: 500 },
+    );
+  }
 }

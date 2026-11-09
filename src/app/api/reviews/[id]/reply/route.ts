@@ -174,30 +174,114 @@ export async function DELETE(
       );
     }
 
-    if (review.googleReviewId && !reviewLocationId(review.googleReviewId)) {
+    let existingReply: Record<string, unknown> = {};
+    if (review.responseJson) {
+      try {
+        const parsed = JSON.parse(review.responseJson);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          existingReply = parsed as Record<string, unknown>;
+        }
+      } catch {}
+    }
+
+    const cleanGoogleId = review.googleReviewId
+      ? (review.googleReviewId.includes('/') ? review.googleReviewId.split('/').pop()! : review.googleReviewId)
+      : '';
+    const isSampleGoogleId = Boolean(
+      cleanGoogleId && /^(goog_rev_|sim_|mock_|test_)/.test(cleanGoogleId),
+    );
+    const isLocalOnlyReply =
+      existingReply.publishedToGoogle === false ||
+      Boolean(existingReply.googleError) ||
+      (!existingReply.text && !existingReply.replyText);
+
+    if (review.googleReviewId && !isSampleGoogleId && !reviewLocationId(review.googleReviewId)) {
       return NextResponse.json({ error: 'Sync this review from Google to verify its location before deleting its reply.' }, { status: 409 });
     }
-    let deletedFromGoogle = false;
-    let googleError: string | null = null;
 
-    if (review.googleReviewId) {
+    let deletedFromGoogle = false;
+    let alreadyAbsentOnGoogle = false;
+    let googleError: string | null = null;
+    let googleErrorCategory: 'disconnected' | 'auth' | 'rate_limit' | 'upstream' | null = null;
+
+    if (review.googleReviewId && !isSampleGoogleId) {
       const googleAccount = await prepareGoogleAccount(user.tenantId, reviewLocationId(review.googleReviewId));
       if (googleAccount) {
         try {
-          await deleteGoogleBusinessReviewReply(googleAccount, review.googleReviewId);
-          deletedFromGoogle = true;
+          const deleted = await deleteGoogleBusinessReviewReply(googleAccount, review.googleReviewId);
+          if (deleted) {
+            deletedFromGoogle = true;
+          } else {
+            alreadyAbsentOnGoogle = true;
+          }
         } catch (err: unknown) {
-          googleError = err instanceof Error ? err.message : String(err);
+          const msg = err instanceof Error ? err.message : String(err);
+          googleError = msg;
+          if (/not_found|\(http 404\)|does not exist|sample review/i.test(msg)) {
+            alreadyAbsentOnGoogle = true;
+            googleError = null;
+          } else if (/401|403|unauthenticated|permission|reconnect|token|expired|scope/i.test(msg)) {
+            googleErrorCategory = 'auth';
+          } else if (/429|quota|rate limit/i.test(msg)) {
+            googleErrorCategory = 'rate_limit';
+          } else {
+            googleErrorCategory = 'upstream';
+          }
         }
+      } else {
+        googleErrorCategory = 'disconnected';
+        googleError = 'No active Google Business Profile account connected.';
       }
     }
 
-    if (review.googleReviewId && !deletedFromGoogle) return NextResponse.json({ error: googleError || 'Google reply deletion was not confirmed.' }, { status: 502 });
+    const canClearLocal =
+      !review.googleReviewId ||
+      isSampleGoogleId ||
+      deletedFromGoogle ||
+      alreadyAbsentOnGoogle ||
+      isLocalOnlyReply;
+
+    if (!canClearLocal) {
+      if (googleErrorCategory === 'disconnected' || googleErrorCategory === 'auth') {
+        return NextResponse.json(
+          {
+            error:
+              googleErrorCategory === 'disconnected'
+                ? 'Google Business Profile is disconnected. Reconnect your Google profile in Social Accounts before removing a live Google reply.'
+                : `Google Business Profile authorization needs attention before removing this live reply: ${googleError || 'please reconnect GBP in Social Accounts.'}`,
+          },
+          { status: 409 },
+        );
+      }
+      if (googleErrorCategory === 'rate_limit') {
+        return NextResponse.json(
+          { error: googleError || 'Google Business Profile rate limit reached. Please wait a moment and try again.' },
+          { status: 429 },
+        );
+      }
+      return NextResponse.json(
+        {
+          error:
+            googleError ||
+            'Could not confirm live reply deletion with Google Business Profile. Please retry in a moment.',
+        },
+        { status: 503 },
+      );
+    }
+
+    const clearedPayload: Record<string, unknown> = {};
+    if (typeof existingReply.googleCreateTime === 'string' && existingReply.googleCreateTime) {
+      clearedPayload.googleCreateTime = existingReply.googleCreateTime;
+    }
+    if (typeof existingReply.googleUpdateTime === 'string' && existingReply.googleUpdateTime) {
+      clearedPayload.googleUpdateTime = existingReply.googleUpdateTime;
+    }
 
     const updatedReview = await db.review.update({
       where: { id },
       data: {
-        responseJson: '{}',
+        responseJson: Object.keys(clearedPayload).length > 0 ? JSON.stringify(clearedPayload) : '{}',
+        ...(review.status === 'hidden' ? { status: 'published' } : {}),
       },
     });
 
@@ -205,7 +289,15 @@ export async function DELETE(
       success: true,
       review: updatedReview,
       deletedFromGoogle,
+      alreadyAbsentOnGoogle,
       googleError,
+      message: deletedFromGoogle
+        ? 'Reply deleted from Google Business Profile and BGOS.'
+        : alreadyAbsentOnGoogle
+          ? 'Reply removed (no active reply was found on Google).'
+          : isLocalOnlyReply || isSampleGoogleId
+            ? 'Local BGOS reply removed.'
+            : 'Reply removed.',
     });
   } catch (error: unknown) {
     console.error('Error deleting review reply:', error);

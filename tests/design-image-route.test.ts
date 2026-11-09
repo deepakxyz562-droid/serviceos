@@ -77,3 +77,51 @@ it('returns 404 when job does not exist', async () => {
   const res = await GET(req);
   expect(res.status).toBe(404);
 });
+
+it('returns queued status without blocking GET while background job runs', async () => {
+  const { runDesignJob } = await import('@/lib/designs/jobs');
+  let resolved = false;
+  vi.mocked(runDesignJob).mockImplementation(
+    () => new Promise<void>((resolve) => setTimeout(() => { resolved = true; resolve(); }, 50)),
+  );
+  m.findFirst.mockResolvedValue({
+    id: 'tenant-123:queued-job-1',
+    tenantId: 'tenant-123',
+    status: 'queued',
+    cancelRequested: false,
+    resultJson: JSON.stringify({ __pendingMeta: { autoFromBusiness: true } }),
+  });
+
+  const req = new NextRequest('http://localhost/api/social/designs/image?id=queued-job-1');
+  const res = await GET(req);
+  expect(res.status).toBe(200);
+  expect(resolved).toBe(false);
+  const json = await res.json();
+  expect(json.status).toBe('queued');
+  expect(json.result).toBeNull();
+});
+
+it('handles malformed resultJson on completed jobs without throwing HTML 500', async () => {
+  m.findFirst.mockResolvedValue({
+    id: 'tenant-123:bad-json-job',
+    tenantId: 'tenant-123',
+    status: 'completed',
+    resultJson: '{corrupted-json',
+  });
+
+  const req = new NextRequest('http://localhost/api/social/designs/image?id=bad-json-job');
+  const res = await GET(req);
+  expect(res.status).toBe(200);
+  const json = await res.json();
+  expect(json.status).toBe('failed');
+  expect(json.result).toBeNull();
+});
+
+it('returns 500 JSON when GET encounters a database error', async () => {
+  m.findFirst.mockRejectedValue(new Error('DB connection dropped'));
+  const req = new NextRequest('http://localhost/api/social/designs/image?id=any');
+  const res = await GET(req);
+  expect(res.status).toBe(500);
+  const json = await res.json();
+  expect(json.error).toContain('Could not retrieve');
+});

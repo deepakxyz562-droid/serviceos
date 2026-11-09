@@ -1489,19 +1489,20 @@ export default function MarketingScreen() {
               });
               setSuccessNotice('✨ Fresh commercial photo background generated!');
               setTimeout(() => setSuccessNotice(null), 3500);
-            } else if (check?.status === 'failed' || check?.status === 'cancelled') {
+            } else if (check?.status === 'failed' || check?.status === 'cancelled' || check?.status === 'uncertain') {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
               const reason = check?.error || 'Image generation could not be completed.';
               setError(`${reason} You can retry with another provider or select a template photo.`);
-            } else if (Date.now() - pollStart > 45000) {
+            } else if (Date.now() - pollStart > 75000) {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
-              setError('Image generation timed out after 45s. Your existing design is unchanged.');
+              setError('Image generation timed out after 75s. Your existing design is unchanged.');
             }
-          } catch {
+          } catch (pollErr: unknown) {
             clearInterval(pollInterval);
             setIsGeneratingImage(false);
+            setError((pollErr as Error)?.message || 'Could not check image generation status. Please try again.');
           } finally { checking=false; }
         }, 2000);
       } else {
@@ -2061,14 +2062,15 @@ export default function MarketingScreen() {
                   ),
                 };
               });
-            } else if (check?.status === 'failed' || check?.status === 'cancelled' || Date.now() - pollStart > 45000) {
+            } else if (check?.status === 'failed' || check?.status === 'cancelled' || check?.status === 'uncertain' || Date.now() - pollStart > 75000) {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
-              setError('The image did not complete. Your editable design and copy are preserved.');
+              setError((check as { error?: string } | undefined)?.error || 'The image did not complete. Your editable design and copy are preserved.');
             }
-          } catch {
+          } catch (pollErr: unknown) {
             clearInterval(pollInterval);
             setIsGeneratingImage(false);
+            setError((pollErr as Error)?.message || 'The image check failed. Your editable design and copy are preserved.');
           } finally { checking=false; }
         }, 2000);
       } else {
