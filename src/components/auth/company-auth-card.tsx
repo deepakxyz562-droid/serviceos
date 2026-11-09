@@ -28,6 +28,7 @@ export interface CompanyAuthCardProps {
   onBack?: () => void;
   /** Hide the default "Back to home" link (e.g. when caller renders its own). */
   hideBackLink?: boolean;
+  isBgos?: boolean;
   className?: string;
 }
 
@@ -109,6 +110,7 @@ export function CompanyAuthCard({
   children,
   onBack,
   hideBackLink,
+  isBgos,
   className,
 }: CompanyAuthCardProps) {
   const cfg = ROLE_CONFIG[role];
@@ -228,7 +230,7 @@ export function CompanyAuthCard({
             href="/"
             className="font-medium text-foreground hover:underline underline-offset-2"
           >
-            Fieseros
+            {isBgos ? 'BGOS' : 'Fieseros'}
           </a>
         </p>
       </motion.div>

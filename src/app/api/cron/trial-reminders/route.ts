@@ -6,6 +6,7 @@ import {
   getDaysRemaining,
 } from '@/lib/trial-lifecycle'
 import { verifyCronAuth } from '@/lib/cron-auth'
+import { isBgosContext } from '@/lib/emails/bgos/sender'
 
 /**
  * POST /api/cron/trial-reminders
@@ -54,6 +55,19 @@ export async function POST(request: NextRequest) {
     startOfTodayUtc.setUTCHours(0, 0, 0, 0)
 
     for (const tenant of threeDayTenants) {
+      // BGOS-only tenants follow the 7-day BGOS trial cadence in /api/cron/bgos-lifecycle
+      const { isBgosOnly } = await isBgosContext({ tenantId: tenant.id })
+      if (isBgosOnly) {
+        results.push({
+          tenantId: tenant.id,
+          tenantName: tenant.name,
+          sent: false,
+          skipped: true,
+          reason: 'BGOS tenant handled by bgos-lifecycle',
+        })
+        continue
+      }
+
       // ── Dedup check ──────────────────────────────────────────────────
       try {
         const alreadySentToday = await db.billingEvent.findFirst({

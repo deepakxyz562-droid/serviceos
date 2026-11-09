@@ -28,7 +28,9 @@ import {
   issueAuthTokens,
   getRefreshSessionMetadata,
   setAuthCookies,
+  getProductAppUrl,
 } from '@/lib/auth';
+import { isBgosContext, sendBgosWelcomeEmail } from '@/lib/emails/bgos/sender';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,7 +67,7 @@ export async function GET(request: NextRequest) {
     // Fetch full user and tenant for auto-login
     const user = await db.user.findUnique({
       where: { id: result.userId },
-      include: { tenant: true },
+      include: { tenant: true, workspace: true },
     });
 
     if (!user) {
@@ -107,18 +109,35 @@ export async function GET(request: NextRequest) {
     // at once BEFORE they'd even verified. Now it fires here, only after
     // emailVerified is confirmed true. Best-effort: never fails the verification.
     try {
-      const { sendWelcomeEmailTo } = await import('@/lib/emails/welcome-email');
-      const appUrl =
-        process.env.NEXT_PUBLIC_APP_URL ||
-        process.env.APP_URL ||
-        new URL(request.url).origin;
-      await sendWelcomeEmailTo(user.email, {
-        ownerName: user.name || user.email.split('@')[0],
-        businessName: user.tenant?.name || user.name || user.email.split('@')[0],
-        appUrl,
-        tenantSlug: user.tenant?.slug || '',
-        marketplaceOptIn: user.tenant?.marketplaceOptIn || false,
-      });
+      const reqHost = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').toLowerCase();
+      const bgosCtx = await isBgosContext({ tenantId: user.tenantId, workspaceId: user.workspaceId });
+      const isBgos =
+        searchParams.get('product') === 'bgos' ||
+        reqHost.includes('bgos.') ||
+        bgosCtx.isBgos;
+
+      if (isBgos) {
+        const bgosUrl = getProductAppUrl(request, 'bgos');
+        const trialDays = user.tenant?.plan === 'free' ? 0 : 7;
+        await sendBgosWelcomeEmail({
+          to: user.email,
+          ownerName: user.name,
+          businessName: user.tenant?.name || user.name || user.email.split('@')[0],
+          tenantId: user.tenantId,
+          trialDays,
+          appUrl: bgosUrl,
+        });
+      } else {
+        const { sendWelcomeEmailTo } = await import('@/lib/emails/welcome-email');
+        const appUrl = getProductAppUrl(request);
+        await sendWelcomeEmailTo(user.email, {
+          ownerName: user.name || user.email.split('@')[0],
+          businessName: user.tenant?.name || user.name || user.email.split('@')[0],
+          appUrl,
+          tenantSlug: user.tenant?.slug || '',
+          marketplaceOptIn: user.tenant?.marketplaceOptIn || false,
+        });
+      }
     } catch (welcomeErr) {
       console.warn('[verify-email] Failed to send welcome email:', welcomeErr);
     }
@@ -130,6 +149,7 @@ export async function GET(request: NextRequest) {
       refreshToken: tokens.refreshToken,
       user: authUser,
       tenant: user.tenant,
+      workspace: user.workspace || null,
     });
 
     // Set auth cookie — MUST use the same pattern as the login route

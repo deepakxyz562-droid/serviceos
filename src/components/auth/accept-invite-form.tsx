@@ -32,6 +32,7 @@ export interface AcceptInviteInvitation {
   tenantSlug?: string | null;
   tenantLogo?: string | null;
   isCustomer?: boolean;
+  isBgos?: boolean;
 }
 
 export interface AcceptInviteFormProps {
@@ -40,6 +41,7 @@ export interface AcceptInviteFormProps {
   mode: 'activate' | 'reset';
   /** Slug resolved from the URL (used to build the "Continue to login" link). */
   slug: string;
+  isBgos?: boolean;
   /** Called after a successful accept (before the success-screen CTA is shown). */
   onSuccess?: (user: any, tenant: any) => void;
 }
@@ -100,17 +102,18 @@ export function AcceptInviteForm({
   invitation,
   mode,
   slug,
+  isBgos: isBgosProp,
   onSuccess,
 }: AcceptInviteFormProps) {
   const isReset = mode === 'reset';
   const isCustomer = invitation.isCustomer || invitation.role === 'customer';
   const isEmployee = invitation.role === 'employee';
+  const isBgos = Boolean(isBgosProp || invitation.isBgos);
 
   // Resolve which login page to send the user to after success.
-  // Customers no longer have a dedicated login page — after activating their
-  // account they're already authenticated, so we send them straight to `/`
-  // where the CustomerPortalLayout takes over (no login page needed).
-  const postAcceptHref = isCustomer
+  // Customers and BGOS users are already authenticated via cookie/localStorage,
+  // so route straight to `/`.
+  const postAcceptHref = (isCustomer || isBgos)
     ? '/'
     : isEmployee
       ? `/${slug}/employee`
@@ -186,6 +189,7 @@ export function AcceptInviteForm({
             isAuthenticated: true,
             user: data.user,
             tenant: data.tenant || null,
+            token: data.token || undefined,
             isCustomer,
           })
         );
@@ -238,7 +242,7 @@ export function AcceptInviteForm({
         <div className="space-y-2">
           <Button asChild className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white">
             <Link href={postAcceptHref}>
-              {isCustomer ? 'Continue to portal' : 'Continue to login'}
+              {isCustomer ? 'Continue to portal' : isBgos ? 'Continue to BGOS' : 'Continue to login'}
             </Link>
           </Button>
           <Button asChild variant="outline" className="w-full h-10">
@@ -437,7 +441,7 @@ export function AcceptInviteForm({
 
         <div className="pt-1 flex justify-center">
           <Link
-            href={`/${slug}/login`}
+            href={isBgos ? '/' : `/${slug}/login`}
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="size-3.5" />

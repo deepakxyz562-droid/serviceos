@@ -395,6 +395,37 @@ export function getAppUrl(request?: { headers: { get(name: string): string | nul
   return 'https://fieseros.com';
 }
 
+/**
+ * Product-aware application base URL.
+ * Unlike `getAppUrl()` (which is pinned to `NEXT_PUBLIC_APP_URL` for Google OAuth
+ * canonical callback URIs), emails and user-facing links for BGOS should target
+ * `https://bgos.fieseros.com` (or localhost in local dev).
+ */
+export function getProductAppUrl(
+  request?: { headers: { get(name: string): string | null } },
+  product?: string | null,
+): string {
+  const rawHost =
+    request?.headers?.get('x-forwarded-host') ||
+    request?.headers?.get('host') ||
+    '';
+  const host = rawHost.toLowerCase();
+  const proto =
+    request?.headers?.get('x-forwarded-proto') ||
+    (host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
+
+  if (host.includes('bgos.')) {
+    return `${proto}://${rawHost}`.replace(/\/+$/, '');
+  }
+  if (product === 'bgos') {
+    if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) {
+      return `${proto}://${rawHost}`.replace(/\/+$/, '');
+    }
+    return (process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com').replace(/\/+$/, '');
+  }
+  return getAppUrl(request);
+}
+
 // In HTTPS-through-proxy setups, Node sees HTTP internally,
 // so the secure flag would prevent cookies from being set.
 // Caddy handles HTTPS termination, so cookies are still secure in transit.

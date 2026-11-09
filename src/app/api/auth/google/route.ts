@@ -36,13 +36,14 @@ export async function GET(request: NextRequest) {
   const plan = searchParams.get('plan') || '';
   const signupMode = searchParams.get('signupMode') || '';
   const rawApp = searchParams.get('app') || '';
+  const rawProduct = searchParams.get('product') || '';
 
   const rawHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || '';
   const host = rawHost.toLowerCase().split(':')[0];
   const originProto = request.headers.get('x-forwarded-proto') || (request.url.startsWith('https') ? 'https' : 'http');
   const originHost = host ? `${originProto}://${rawHost}` : getAppUrl();
 
-  // Infer target Fieseros app surface (customer | pro | admin | bos | business)
+  // Infer target Fieseros app surface (customer | pro | admin | bgos | bos | business)
   const inferredApp =
     rawApp ||
     (redirectTo.startsWith('/app') || redirectTo.startsWith('fieseros://') || host.startsWith('app.')
@@ -51,9 +52,11 @@ export async function GET(request: NextRequest) {
         ? 'pro'
         : redirectTo.startsWith('/admin') || host.startsWith('admin.')
           ? 'admin'
-          : redirectTo.includes('app=true') || redirectTo.startsWith('/bos') || host.startsWith('bos.')
-            ? 'bos'
-            : 'business');
+          : rawProduct === 'bgos' || host.startsWith('bgos.') || host.includes('bgos.')
+            ? 'bgos'
+            : redirectTo.includes('app=true') || redirectTo.startsWith('/bos') || host.startsWith('bos.')
+              ? 'bos'
+              : 'business');
 
   if (!GOOGLE_CLIENT_ID) {
     console.error('Google OAuth: GOOGLE_CLIENT_ID is not configured');

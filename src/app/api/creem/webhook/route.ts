@@ -462,9 +462,32 @@ async function handleCheckoutCompleted(event: NormalisedEvent) {
     data: {
       plan: planCode,
       planStatus: 'active',
+      trialEndsAt: null,
       planEndsAt: endDate,
     },
   });
+
+  try {
+    const bgosPws = await db.productWorkspace.findMany({
+      where: { tenantId, product: 'bgos' },
+      select: { workspaceId: true },
+    });
+    const wsIds = bgosPws.map((pw) => pw.workspaceId).filter(Boolean);
+    if (wsIds.length > 0) {
+      await db.productSubscription.updateMany({
+        where: { workspaceId: { in: wsIds } },
+        data: {
+          plan: planCode,
+          status: 'active',
+          trialEndsAt: null,
+          currentPeriodEnd: endDate,
+          provider: 'creem',
+        },
+      });
+    }
+  } catch {
+    // non-fatal
+  }
 
   invalidateCache(tenantId);
 

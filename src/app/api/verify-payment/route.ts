@@ -90,8 +90,35 @@ export async function POST(request: NextRequest) {
         });
         await db.tenant.update({
           where: { id: authUser.tenantId },
-          data: { plan: planCode },
+          data: {
+            plan: planCode,
+            planStatus: 'active',
+            trialEndsAt: null,
+            planStartedAt: now,
+            planEndsAt: nextMonth,
+          },
         });
+        try {
+          const bgosPws = await db.productWorkspace.findMany({
+            where: { tenantId: authUser.tenantId, product: 'bgos' },
+            select: { workspaceId: true },
+          });
+          const wsIds = bgosPws.map((pw) => pw.workspaceId).filter(Boolean);
+          if (wsIds.length > 0) {
+            await db.productSubscription.updateMany({
+              where: { workspaceId: { in: wsIds } },
+              data: {
+                plan: planCode,
+                status: 'active',
+                trialEndsAt: null,
+                currentPeriodEnd: nextMonth,
+                provider: 'razorpay',
+              },
+            });
+          }
+        } catch {
+          // non-fatal
+        }
         planActivated = true;
       }
     } catch {

@@ -24,6 +24,18 @@ export async function POST(request: NextRequest) {
     const previous = await db.productSubscription.findUnique({ where: { workspaceId } });
     if (previous?.providerSubscriptionId && previous.providerSubscriptionId !== subscription.id) return NextResponse.json({ error: 'Another subscription is already connected' }, { status: 409 });
     await db.productSubscription.update({ where: { workspaceId }, data: { plan, status: subscription.status === 'trialing' ? 'trial' : subscription.status === 'canceled' ? 'cancelled' : subscription.status, provider: 'stripe', providerSubscriptionId: subscription.id, billingSource: 'product', currentPeriodEnd: item?.current_period_end ? new Date(item.current_period_end * 1000) : null, trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null } });
+    if (workspace.tenantId) {
+      const mappedStatus = subscription.status === 'trialing' ? 'trial' : subscription.status === 'canceled' ? 'cancelled' : subscription.status;
+      await db.tenant.update({
+        where: { id: workspace.tenantId },
+        data: {
+          plan,
+          planStatus: mappedStatus,
+          trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+          planEndsAt: item?.current_period_end ? new Date(item.current_period_end * 1000) : null,
+        },
+      }).catch(() => {});
+    }
     return NextResponse.json({ received: true });
   } catch { return NextResponse.json({ error: 'Could not reconcile billing; retry required' }, { status: 503 }); }
 }

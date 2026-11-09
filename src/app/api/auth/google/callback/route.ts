@@ -35,7 +35,8 @@ async function createTenantForGoogleUser(
   userName: string,
   requestedPlan?: string,
   requestedSignupMode?: string,
-  originHost?: string
+  originHost?: string,
+  requestedApp?: string
 ) {
   // Use the Google user's name as the initial business name.
   const businessName = `${userName || userEmail.split('@')[0]}'s Workspace`;
@@ -48,7 +49,8 @@ async function createTenantForGoogleUser(
   }
 
   const hostStr = (originHost || '').toLowerCase();
-  const isBosHost = hostStr.includes('bos.');
+  const isBgos = requestedApp === 'bgos' || hostStr.includes('bgos.');
+  const isBosHost = !isBgos && hostStr.includes('bos.');
   const isChatbotlyHost = hostStr.includes('chatbotly.');
   const isQuoteFlowHost = hostStr.includes('quoteflow.');
 
@@ -57,23 +59,30 @@ async function createTenantForGoogleUser(
 
   const defaultSignupPlan = await resolveSignupDefaultPlan();
   const validPlans = ['standalone_starter', 'standalone_business', 'starter', 'professional', 'growth', 'launch_special', 'enterprise'];
-  const signupPlan = (isStandalone || isChatbotly)
-    ? (requestedPlan && (requestedPlan === 'standalone_business' || requestedPlan === 'standalone_starter') ? requestedPlan : 'standalone_starter')
-    : (requestedPlan && validPlans.includes(requestedPlan) ? requestedPlan : defaultSignupPlan);
+  const bgosPlans = ['free', 'starter', 'growth', 'business'];
+  const signupPlan = isBgos
+    ? (requestedPlan && bgosPlans.includes(requestedPlan) ? requestedPlan : 'starter')
+    : (isStandalone || isChatbotly)
+      ? (requestedPlan && (requestedPlan === 'standalone_business' || requestedPlan === 'standalone_starter') ? requestedPlan : 'standalone_starter')
+      : (requestedPlan && validPlans.includes(requestedPlan) ? requestedPlan : defaultSignupPlan);
 
+  const isFreePlan = isBgos && signupPlan === 'free';
   const isListing = requestedSignupMode === 'listing_only';
-  const isExplicitMode = !!requestedSignupMode || !!(requestedPlan && validPlans.includes(requestedPlan)) || isBosHost || isChatbotlyHost || isQuoteFlowHost;
+  const isExplicitMode = isBgos || !!requestedSignupMode || !!(requestedPlan && validPlans.includes(requestedPlan)) || isBosHost || isChatbotlyHost || isQuoteFlowHost;
 
-  const signupMode = isStandalone
-    ? 'standalone'
-    : (isChatbotly
-      ? 'forms_standalone'
-      : (isListing
-        ? 'listing_only'
-        : (isExplicitMode ? 'crm_trial' : null)));
-  const onboardingCompleted = false;
+  const signupMode = isBgos
+    ? 'bgos'
+    : (isStandalone
+      ? 'standalone'
+      : (isChatbotly
+        ? 'forms_standalone'
+        : (isListing
+          ? 'listing_only'
+          : (isExplicitMode ? 'crm_trial' : null))));
+  const onboardingCompleted = isFreePlan;
 
-  const productType = isBosHost ? 'bos' : (isChatbotly ? 'chatbotly' : (isQuoteFlowHost ? 'quoteflow' : (isStandalone ? 'forms' : 'crm')));
+  const productType = isBgos ? 'bgos' : (isBosHost ? 'bos' : (isChatbotly ? 'chatbotly' : (isQuoteFlowHost ? 'quoteflow' : (isStandalone ? 'forms' : 'crm'))));
+  const trialEndsAt = isFreePlan ? null : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   const tenant = await db.tenant.create({
     data: {
@@ -81,16 +90,16 @@ async function createTenantForGoogleUser(
       slug,
       email: userEmail,
       plan: signupPlan,
-      planStatus: 'trial',
-      trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7-day trial
+      planStatus: isFreePlan ? 'active' : 'trial',
+      trialEndsAt, // 7-day trial (null for free)
       onboardingCompleted,
-      onboardingStep: 1,
+      onboardingStep: isFreePlan ? 4 : 1,
       claimed: isStandalone ? false : true,
       listingTier: isStandalone ? 'none' : 'claimed',
       signupMode,
       marketplaceOptIn: false,
       marketplaceTermsAcceptedAt: null,
-      publicProfileEnabled: isStandalone ? false : true,
+      publicProfileEnabled: (isStandalone || isBgos) ? false : true,
     },
   });
 
@@ -114,7 +123,42 @@ async function createTenantForGoogleUser(
     },
   });
 
-  // Create default subscription (starter / standalone plan, 14-day trial).
+  if (isBgos) {
+    try {
+      await db.productWorkspace.create({
+        data: {
+          workspaceId: workspace.id,
+          tenantId: tenant.id,
+          product: 'bgos',
+          status: 'active',
+          onboardingCompleted: isFreePlan,
+          onboardingStep: isFreePlan ? 4 : 0,
+        },
+      });
+      await db.productMembership.create({
+        data: {
+          id: `pm_${userId}_${workspace.id}`,
+          workspaceId: workspace.id,
+          userId,
+          role: 'owner',
+          status: 'active',
+        },
+      });
+      await db.productSubscription.create({
+        data: {
+          workspaceId: workspace.id,
+          plan: signupPlan,
+          status: isFreePlan ? 'active' : 'trial',
+          trialEndsAt,
+          billingSource: 'product',
+        },
+      });
+    } catch (pwErr) {
+      console.warn('[Google Callback] BGOS ProductWorkspace setup notice:', pwErr);
+    }
+  }
+
+  // Create default subscription (starter / standalone plan, 7-day trial).
   const existingSub = await db.subscription.findFirst({
     where: { tenantId: tenant.id },
   });
@@ -123,11 +167,11 @@ async function createTenantForGoogleUser(
       data: {
         tenantId: tenant.id,
         plan: signupPlan,
-        status: 'trial',
+        status: isFreePlan ? 'active' : 'trial',
         amount: signupPlan === 'standalone_business' ? 19 : (signupPlan === 'standalone_starter' ? 10 : 0),
         currency: 'USD',
         billingCycle: 'monthly',
-        trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        trialEndsAt,
         maxUsers: signupPlan === 'standalone_business' ? 10 : (signupPlan === 'standalone_starter' ? 3 : 5),
         maxJobs: 200,
         maxWorkflows: 10,
@@ -165,6 +209,23 @@ async function createTenantForGoogleUser(
     console.log(`[Google Callback] Auto-seeded public hub for tenant ${tenant.id}`);
   } catch (seedErr) {
     console.warn('[Google Callback] Failed to auto-seed public business hub:', seedErr);
+  }
+
+  // Send Day-0 BGOS Welcome email (best-effort, idempotent).
+  if (isBgos) {
+    try {
+      const { sendBgosWelcomeEmail } = await import('@/lib/emails/bgos/sender');
+      await sendBgosWelcomeEmail({
+        to: userEmail,
+        ownerName: userName || userEmail.split('@')[0],
+        businessName,
+        tenantId: tenant.id,
+        trialDays: isFreePlan ? 0 : 7,
+        appUrl: originHost && originHost.toLowerCase().includes('bgos.') ? originHost : undefined,
+      });
+    } catch (welcomeErr) {
+      console.warn('[Google Callback] Failed to send BGOS welcome email:', welcomeErr);
+    }
   }
 
   return { tenant, workspace };
@@ -340,11 +401,15 @@ export async function GET(request: NextRequest) {
       redirectParam.startsWith('/admin') ||
       originHostLower.includes('://admin.');
 
+    const isBgosApp =
+      state.app === 'bos' ? false : (state.app === 'bgos' || originHostLower.includes('bgos.'));
+
     const isBosApp =
-      state.app === 'bos' ||
+      !isBgosApp &&
+      (state.app === 'bos' ||
       redirectParam.includes('app=true') ||
       redirectParam.startsWith('/bos') ||
-      originHostLower.includes('://bos.');
+      originHostLower.includes('://bos.'));
 
     const isMobileMode =
       state.mode === 'mobile' ||
@@ -434,6 +499,9 @@ export async function GET(request: NextRequest) {
         const targetPath = state.redirect && state.redirect.startsWith('/') ? state.redirect : '/admin';
         const sep = targetPath.includes('?') ? '&' : '?';
         return `${baseUrl}${targetPath}${sep}google_login=success`;
+      }
+      if (isBgosApp) {
+        return `${baseUrl}/?google_login=success`;
       }
       if (isBosApp) {
         const targetPath = state.redirect && state.redirect.startsWith('/') ? state.redirect : '/?app=true';
@@ -662,7 +730,8 @@ export async function GET(request: NextRequest) {
           userInfo.name || userInfo.given_name || '',
           state.plan,
           state.signupMode,
-          state.originHost
+          state.originHost,
+          state.app
         );
         const tokens = await issueAuthTokens({
           ...authUser,
@@ -745,7 +814,8 @@ export async function GET(request: NextRequest) {
       userInfo.name || userInfo.given_name || '',
       state.plan,
       state.signupMode,
-      state.originHost
+      state.originHost,
+      state.app
     );
 
     const authUser = {

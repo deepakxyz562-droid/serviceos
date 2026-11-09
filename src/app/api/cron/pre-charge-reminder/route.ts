@@ -7,6 +7,7 @@ import {
 } from '@/lib/trial-lifecycle';
 import { logBillingEvent } from '@/lib/billing-events';
 import { verifyCronAuth } from '@/lib/cron-auth';
+import { isBgosContext } from '@/lib/emails/bgos/sender';
 
 /**
  * POST /api/cron/pre-charge-reminder
@@ -54,6 +55,21 @@ export async function POST(request: NextRequest) {
     }> = [];
 
     for (const tenant of tenants) {
+      // BGOS-only tenants follow BGOS trial lifecycle & pricing in /api/cron/bgos-lifecycle
+      const { isBgosOnly } = await isBgosContext({ tenantId: tenant.id });
+      if (isBgosOnly) {
+        results.push({
+          tenantId: tenant.id,
+          tenantName: tenant.name,
+          sent: false,
+          skipped: true,
+          reason: 'BGOS tenant handled by bgos-lifecycle',
+          planName: 'BGOS',
+          planPrice: '',
+        });
+        continue;
+      }
+
       // ── Dedup check ──────────────────────────────────────────────────
       try {
         const alreadySentToday = await db.billingEvent.findFirst({

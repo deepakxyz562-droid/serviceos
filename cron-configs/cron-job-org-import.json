@@ -127,6 +127,8 @@
     "trial-expire (expire trials past trialEndsAt)",
     "renewal (downgrades, PayPal sync, expired subs)",
     "past-due-escalation (1d/3d/7d escalation + daily digest to platform owner)",
+    "data-retention (archives or deletes old data per tenant config)",
+    "bgos-lifecycle (BGOS review 0->5 nudges, trial ending/expired, post-trial unpaid inactivity rescue & win-back)",
     "sitemap-regeneration (incremental \u2014 only dirty files)"
   ],
   "_hourly_standalone_crons": [

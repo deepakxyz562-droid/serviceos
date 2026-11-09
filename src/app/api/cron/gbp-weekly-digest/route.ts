@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { sendEmail } from '@/lib/email-send';
+import { verifyCronAuth } from '@/lib/cron-auth';
+import {
+  buildGoogleReviewLink,
+  escapeHtml,
+  isDeliverableEmail,
+  resolveBgosBaseUrl,
+} from '@/lib/emails/bgos/templates';
+import { isEmailSuppressed, parseBgosEmailPrefs } from '@/lib/emails/bgos/sender';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * GET/POST /api/cron/gbp-weekly-digest
  * Triggered every Monday morning:
  * Compiles Google Business Profile performance, reviews received, auto-replies published,
- * and upcoming scheduled posts, emailing an executive summary to business owners.
+ * and upcoming scheduled posts, emailing an executive summary to opted-in business owners.
  */
 export async function GET(request: NextRequest) {
   return handleDigest(request);
@@ -20,28 +28,17 @@ export async function POST(request: NextRequest) {
 
 async function handleDigest(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-    // Allow cron secret or query param for manual test
-    const { searchParams } = new URL(request.url);
-    const secretParam = searchParams.get('secret');
+    const auth = verifyCronAuth(request);
+    if (!auth.ok) return auth.response;
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}` && secretParam !== cronSecret) {
-      // In dev allow, in prod guard if CRON_SECRET is set
-      if (process.env.NODE_ENV === 'production') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    }
-
-    // Only email tenants who explicitly opted in via the GBP AI Agents hub
-    // (settingsJson.gbpSummaryConfig.enabled === true — see /api/gbp/summary-settings).
-    // Safe-by-default: no opt-in record → no email (never spam tenants).
     const tenants = await db.tenant.findMany({
       select: {
         id: true,
         name: true,
         email: true,
         settingsJson: true,
+        googlePlaceId: true,
+        googleBusinessProfileUrl: true,
       },
       take: 500,
     });
@@ -49,9 +46,10 @@ async function handleDigest(request: NextRequest) {
     let sentCount = 0;
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const bgosUrl = resolveBgosBaseUrl();
 
     for (const tenant of tenants) {
-      // ── Opt-in gate (read settingsJson.gbpSummaryConfig) ──
+      // Opt-in + unsubscribe gate (respects both gbpSummaryConfig & bgosEmailPrefs)
       let summaryConfig: { enabled?: boolean; email?: string } = {};
       try {
         const parsed = JSON.parse(tenant.settingsJson || '{}');
@@ -61,12 +59,17 @@ async function handleDigest(request: NextRequest) {
       } catch {
         summaryConfig = {};
       }
-      if (summaryConfig.enabled !== true) continue; // not opted in → skip
+      if (summaryConfig.enabled !== true) continue;
+
+      const prefs = parseBgosEmailPrefs(tenant.settingsJson);
+      if (!prefs.weeklyDigest) continue;
+
       const recipientEmail =
         (typeof summaryConfig.email === 'string' && summaryConfig.email.trim()) || tenant.email;
-      if (!recipientEmail) continue;
+      if (!isDeliverableEmail(recipientEmail)) continue;
+      if (await isEmailSuppressed(recipientEmail!, tenant.id)) continue;
 
-      const [newReviews, totalReviews, postsThisWeek] = await Promise.all([
+      const [newReviews, totalReviews, postsThisWeek, gbpAccount] = await Promise.all([
         db.review.findMany({
           where: {
             tenantId: tenant.id,
@@ -82,10 +85,13 @@ async function handleDigest(request: NextRequest) {
             createdAt: { gte: sevenDaysAgo },
           },
         }),
+        db.socialAccount.findFirst({
+          where: { tenantId: tenant.id, platform: 'googlebusiness', isActive: true },
+          select: { metadata: true },
+        }),
       ]);
 
       const newReviewsCount = newReviews.length;
-      // Honest average — never fabricate a 5.0 when there were no reviews this week.
       const avgNewRating =
         newReviewsCount > 0
           ? (newReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / newReviewsCount).toFixed(1)
@@ -103,7 +109,21 @@ async function handleDigest(request: NextRequest) {
       const responseRate = newReviewsCount > 0 ? Math.round((repliedCount / newReviewsCount) * 100) : 0;
       const totalReviewsCount = totalReviews as number;
 
-      // Honest activity line — reflects ONLY what actually happened this week.
+      let gbpMeta: Record<string, unknown> = {};
+      try {
+        gbpMeta = JSON.parse(gbpAccount?.metadata || '{}') as Record<string, unknown>;
+      } catch {
+        gbpMeta = {};
+      }
+      const resolvedPlaceId =
+        (typeof gbpMeta.placeId === 'string' && gbpMeta.placeId) ||
+        tenant.googlePlaceId ||
+        null;
+      const directReviewLink =
+        (typeof gbpMeta.newReviewUri === 'string' && gbpMeta.newReviewUri) ||
+        tenant.googleBusinessProfileUrl ||
+        buildGoogleReviewLink(resolvedPlaceId);
+
       const activityBits: string[] = [];
       if (newReviewsCount > 0) {
         activityBits.push(
@@ -120,6 +140,25 @@ async function handleDigest(request: NextRequest) {
           ? `This week: ${activityBits.join(' • ')}.`
           : 'No new reviews or posts this week — your AI agents keep monitoring your profile 24/7.';
 
+      const reviewMilestoneBox =
+        totalReviewsCount < 5
+          ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;margin-top:18px;">
+               <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#00665D;">Go from ${totalReviewsCount} to more than 5 reviews</p>
+               <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#1e293b;">
+                 Business Profiles like yours with 5 or more reviews can get up to twice as many customers.
+               </p>
+               ${
+                 directReviewLink
+                   ? `<p style="margin:0;font-size:12px;word-break:break-all;font-family:monospace;">
+                        Share your review link: <a href="${escapeHtml(directReviewLink)}" style="color:#009F50;text-decoration:underline;">${escapeHtml(directReviewLink)}</a>
+                      </p>`
+                   : ''
+               }
+             </div>`
+          : '';
+
+      const safeName = escapeHtml(tenant.name);
+      const safeActivityLine = escapeHtml(activityLine);
       const htmlBody = `
 <!DOCTYPE html>
 <html>
@@ -146,7 +185,7 @@ async function handleDigest(request: NextRequest) {
   <div class="card">
     <div class="header">
       <h1>Weekly Google Business Profile Digest</h1>
-      <p>Performance report for ${tenant.name}</p>
+      <p>Performance report for ${safeName}</p>
     </div>
     <div class="content">
       <div style="text-align: center; margin-bottom: 20px;">
@@ -168,20 +207,24 @@ async function handleDigest(request: NextRequest) {
         </div>
         <div class="stat-box">
           <div class="stat-value">${postsThisWeek} Published</div>
-          <div class="stat-label">GBP Posts & Photos</div>
+          <div class="stat-label">GBP Posts &amp; Photos</div>
         </div>
       </div>
 
       <p style="font-size: 13px; line-height: 1.6; color: #475569;">
-        ${
-          activityLine
-        }
+        ${safeActivityLine}
       </p>
 
-      <a href="https://bgos.fieseros.com" class="cta-btn">View Live BGOS Dashboard</a>
+      ${reviewMilestoneBox}
+
+      <a href="${escapeHtml(bgosUrl)}" class="cta-btn">View Live BGOS Dashboard</a>
     </div>
     <div class="footer">
-      Delivered automatically by BGOS • Business Growth Operating System
+      Delivered automatically by BGOS &bull; Business Growth Operating System
+      <br/>
+      <a href="{{unsubscribe_url}}" style="color:#64748b;text-decoration:underline;">Unsubscribe</a>
+      &nbsp;&middot;&nbsp;
+      <a href="${escapeHtml(bgosUrl)}/app?product=bgos&amp;view=settings" style="color:#64748b;text-decoration:underline;">Email Preferences</a>
     </div>
   </div>
 </body>
@@ -189,14 +232,19 @@ async function handleDigest(request: NextRequest) {
 `;
 
       try {
-        await sendEmail({
-          to: recipientEmail,
-          subject: `📊 Weekly Google Business Report: ${tenant.name} (${newReviewsCount} new reviews, ${responseRate}% response rate)`,
+        const res = await sendEmail({
+          to: recipientEmail!,
+          subject: `Weekly Google Business Report: ${tenant.name} (${newReviewsCount} new reviews, ${responseRate}% response rate)`,
           html: htmlBody,
           tenantId: tenant.id,
-          usageType: 'transactional',
+          usageType: 'marketing',
+          platformMarketing: true,
+          skipTenantQuota: true,
+          trackingBaseUrl: bgosUrl,
+          campaignId: 'bgos_weekly_digest',
+          recipientSource: 'bgos_user',
         });
-        sentCount++;
+        if (res.success) sentCount++;
       } catch (emailErr) {
         console.warn(`[gbp-weekly-digest] Failed to send email to ${recipientEmail}:`, emailErr);
       }

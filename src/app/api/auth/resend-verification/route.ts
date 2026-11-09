@@ -20,9 +20,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getAppUrl } from '@/lib/auth';
+import { getProductAppUrl } from '@/lib/auth';
 import { RateLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { issueVerificationToken, sendVerificationEmail } from '@/lib/emails/verification-email';
+import { isBgosContext } from '@/lib/emails/bgos/sender';
 import { logger } from '@/lib/logger';
 
 // 3 requests per hour per IP. Tight enough to prevent abuse, lenient enough
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
     // not the user exists (or is already verified) to prevent enumeration.
     const user = await db.user.findUnique({
       where: { email },
-      select: { id: true, name: true, emailVerified: true },
+      select: { id: true, name: true, emailVerified: true, tenantId: true, workspaceId: true },
     });
 
     if (!user || user.emailVerified) {
@@ -69,14 +70,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const reqHost = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').toLowerCase();
+    const bgosCtx = await isBgosContext({ tenantId: user.tenantId, workspaceId: user.workspaceId });
+    const isBgos = body?.product === 'bgos' || reqHost.includes('bgos.') || bgosCtx.isBgos;
+
     // Issue a new token (replaces any existing pending token) + send the email.
     const rawToken = await issueVerificationToken(user.id);
-    const appUrl = getAppUrl(request);
+    const appUrl = getProductAppUrl(request, isBgos ? 'bgos' : undefined);
     await sendVerificationEmail({
       to: email,
       name: user.name,
       rawToken,
       appUrl,
+      product: isBgos ? 'bgos' : 'fieseros',
+      tenantId: user.tenantId,
     });
 
     logger.info(

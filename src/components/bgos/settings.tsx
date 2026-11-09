@@ -296,6 +296,8 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [whatsappAlerts, setWhatsappAlerts] = useState(true);
   const [dailyDigest, setDailyDigest] = useState(true);
+  const [bgosProductNudges, setBgosProductNudges] = useState(true);
+  const [bgosMarketingEmails, setBgosMarketingEmails] = useState(true);
   const [autoAssignLeads, setAutoAssignLeads] = useState(true);
   const [instantReviewDrafts, setInstantReviewDrafts] = useState(true);
   const [timezone, setTimezone] = useState('Australia/Brisbane (AEST, UTC+10:00)');
@@ -367,6 +369,10 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
             if (typeof data.notifications.emailNotifications === 'boolean') setEmailNotifications(data.notifications.emailNotifications);
             if (typeof data.notifications.whatsappAlerts === 'boolean') setWhatsappAlerts(data.notifications.whatsappAlerts);
             if (typeof data.notifications.dailyDigest === 'boolean') setDailyDigest(data.notifications.dailyDigest);
+          }
+          if (data?.bgosEmailPrefs) {
+            if (typeof data.bgosEmailPrefs.productNudges === 'boolean') setBgosProductNudges(data.bgosEmailPrefs.productNudges);
+            if (typeof data.bgosEmailPrefs.marketing === 'boolean') setBgosMarketingEmails(data.bgosEmailPrefs.marketing);
           }
           if (data?.automation) {
             if (typeof data.automation.autoAssignLeads === 'boolean') setAutoAssignLeads(data.automation.autoAssignLeads);
@@ -450,6 +456,10 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
             emailNotifications,
             whatsappAlerts,
             dailyDigest,
+          },
+          bgosEmailPrefs: {
+            productNudges: bgosProductNudges,
+            marketing: bgosMarketingEmails,
           },
           automation: {
             autoAssignLeads,
@@ -1761,6 +1771,34 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
                   type="checkbox"
                   checked={dailyDigest}
                   onChange={(e) => setDailyDigest(e.target.checked)}
+                  className="size-4 accent-[#009F50]"
+                />
+              </label>
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">BGOS Growth Tips &amp; Review Nudges</p>
+                  <p className="text-xs text-slate-500">
+                    Helpful emails to reach 5+ Google reviews, reply to pending feedback, and publish updates.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={bgosProductNudges}
+                  onChange={(e) => setBgosProductNudges(e.target.checked)}
+                  className="size-4 accent-[#009F50]"
+                />
+              </label>
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">BGOS Product Updates &amp; Promotional Offers</p>
+                  <p className="text-xs text-slate-500">
+                    Occasional new-feature spotlights, AI Studio guides, and plan promotions.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={bgosMarketingEmails}
+                  onChange={(e) => setBgosMarketingEmails(e.target.checked)}
                   className="size-4 accent-[#009F50]"
                 />
               </label>

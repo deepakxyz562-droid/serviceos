@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { isBgosContext } from '@/lib/emails/bgos/sender';
 
 // GET /api/invitations/verify?token=xxx
 // Verify an invitation/activation token (public, no auth required).
@@ -61,6 +62,12 @@ export async function GET(request: NextRequest) {
         });
       }
 
+      const reqHost = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').toLowerCase();
+      const bgosCtx = await isBgosContext({
+        tenantId: invitation.tenantId,
+        workspaceId: invitation.workspaceId,
+      });
+
       return NextResponse.json({
         valid: true,
         invitation: {
@@ -70,6 +77,7 @@ export async function GET(request: NextRequest) {
           role: invitation.role,
           tenantName: invitation.tenant?.name,
           tenantSlug: invitation.tenant?.slug,
+          isBgos: reqHost.includes('bgos.') || bgosCtx.isBgos,
         },
       });
     }

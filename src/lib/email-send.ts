@@ -45,6 +45,19 @@ export interface SendEmailOptions {
   campaignId?: string
   recipientRefId?: string
   recipientSource?: string
+  /**
+   * Set true for platform-to-registered-user lifecycle/promotional emails
+   * (e.g. BGOS growth nudges, trial win-back). Uses active `isPlatform: true`
+   * providers instead of requiring a tenant-owned marketing SMTP.
+   */
+  platformMarketing?: boolean
+  /**
+   * Skip tenant monthly emailQuota gate and emailUsageCount increment even when
+   * `tenantId` is provided for EmailUnsubscribeToken attribution.
+   */
+  skipTenantQuota?: boolean
+  /** Override base URL for unsubscribe / tracking links (e.g. https://bgos.fieseros.com). */
+  trackingBaseUrl?: string
 }
 
 export interface SendEmailResult {
@@ -227,9 +240,15 @@ export function emailProviderToSmtpConfig(
  * 5. Any legacy Credential with type='smtp'
  */
 export async function resolveSmtpConfig(
-  options: { providerId?: string; credentialId?: string; usageType?: 'transactional' | 'marketing'; tenantId?: string } = {}
+  options: {
+    providerId?: string
+    credentialId?: string
+    usageType?: 'transactional' | 'marketing'
+    tenantId?: string
+    platformMarketing?: boolean
+  } = {}
 ): Promise<{ config: SmtpConfig | null; source: string; providerId?: string; marketingProviderRequired?: boolean }> {
-  const { providerId, credentialId, usageType, tenantId } = options
+  const { providerId, credentialId, usageType, tenantId, platformMarketing } = options
 
   // 1. Specific EmailProvider by ID
   if (providerId) {
@@ -284,16 +303,17 @@ export async function resolveSmtpConfig(
   }
 
   // ── Platform vs. Customer provider separation ──────────────────────────
-  //  - transactional: prefer isPlatform=true providers (system email managed by the platform)
-  //  - marketing:     ONLY non-platform providers (the customer's own connection).
-  //                   We must never silently route bulk campaigns through the shared
-  //                   platform domain — that would damage deliverability for everyone.
-  const requireCustomerProvider = usageType === 'marketing'
+  //  - transactional:     prefer isPlatform=true providers (system email managed by the platform)
+  //  - platformMarketing: platform's own marketing/lifecycle emails to registered users (isPlatform=true)
+  //  - marketing:         ONLY non-platform providers (the customer's own connection).
+  //                       We must never silently route tenant bulk campaigns through the shared
+  //                       platform domain — that would damage deliverability for everyone.
+  const requireCustomerProvider = usageType === 'marketing' && !platformMarketing
 
   // Helper: build the base where clause for provider lookups.
-  const tenantWhere = tenantId ? { tenantId } : {}
+  const tenantWhere = tenantId && !platformMarketing ? { tenantId } : {}
 
-  console.log(`[resolveSmtpConfig] usageType=${usageType || 'none'}, tenantId=${tenantId || 'none'}`)
+  console.log(`[resolveSmtpConfig] usageType=${usageType || 'none'}, platformMarketing=${Boolean(platformMarketing)}, tenantId=${tenantId || 'none'}`)
 
   // 3 & 4. Find an EmailProvider with valid SMTP config from the database.
   //
@@ -314,6 +334,13 @@ export async function resolveSmtpConfig(
         { where: { status: 'active', usageType: { in: ['transactional', 'both'] } }, orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }], label: '3c2:txBoth' },
         { where: { status: 'active', ...tenantWhere }, orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }], label: '3c3:anyActive+tenant' },
         { where: { status: 'active' }, orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }], label: '3c4:anyActive' },
+      )
+    } else if (usageType === 'marketing' && platformMarketing) {
+      candidateQueries.push(
+        { where: { status: 'active', isPlatform: true, isDefaultMarketing: true }, orderBy: { updatedAt: 'desc' }, label: '3pm:defaultMkt+platform' },
+        { where: { status: 'active', isPlatform: true, usageType: { in: ['marketing', 'both'] } }, orderBy: [{ isDefaultMarketing: 'desc' }, { updatedAt: 'desc' }], label: '3pm2:mktBoth+platform' },
+        { where: { status: 'active', isPlatform: true, isDefaultTransactional: true }, orderBy: { updatedAt: 'desc' }, label: '3pm3:defaultTx+platform' },
+        { where: { status: 'active', isPlatform: true }, orderBy: [{ isDefaultMarketing: 'desc' }, { isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }], label: '3pm4:anyPlatform' },
       )
     } else if (usageType === 'marketing') {
       candidateQueries.push(
@@ -336,23 +363,25 @@ export async function resolveSmtpConfig(
       }
     }
 
-    // Step 4 queries: broader fallbacks (only for non-marketing)
+    // Step 4 queries: broader fallbacks (only for non-customer-strict marketing)
     if (!requireCustomerProvider) {
       candidateQueries.push(
         { where: { status: 'active', isPlatform: true, ...tenantWhere }, orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }], label: '4:platform+tenant' },
       )
-      if (tenantId) {
+      if (tenantId && !platformMarketing) {
         candidateQueries.push(
           { where: { status: 'active', isPlatform: true }, orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }], label: '4b:platform' },
         )
       }
-      candidateQueries.push(
-        { where: { status: 'active', ...tenantWhere }, orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }], label: '4c:any+tenant' },
-      )
-      if (tenantId) {
+      if (!platformMarketing) {
         candidateQueries.push(
-          { where: { status: 'active' }, orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }], label: '4d:any' },
+          { where: { status: 'active', ...tenantWhere }, orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }], label: '4c:any+tenant' },
         )
+        if (tenantId) {
+          candidateQueries.push(
+            { where: { status: 'active' }, orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }], label: '4d:any' },
+          )
+        }
       }
     } else {
       // Marketing fallbacks: non-platform marketing/both providers
@@ -423,6 +452,9 @@ export async function resolveSmtpConfig(
   if (requireCustomerProvider) {
     return { config: null, source: 'none', marketingProviderRequired: true }
   }
+  if (platformMarketing) {
+    return { config: null, source: 'none' }
+  }
 
   // 5. Legacy: any Credential with type='smtp'
   try {
@@ -473,15 +505,18 @@ export async function resolveSmtpConfig(
  * Send an email via SMTP. Returns simulated success if no provider configured.
  */
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
-  const { to, subject, html, text, providerId, credentialId, usageType, tenantId,
-          campaignId, recipientRefId, recipientSource } = options
+  const {
+    to, subject, html, text, providerId, credentialId, usageType, tenantId,
+    campaignId, recipientRefId, recipientSource,
+    platformMarketing, skipTenantQuota, trackingBaseUrl,
+  } = options
 
   if (!to || !subject) {
     return { success: false, error: 'to and subject are required' }
   }
 
   // ── Operational email quota gate ────────────────────────────────────────
-  if (tenantId && usageType !== 'marketing') {
+  if (tenantId && usageType !== 'marketing' && !skipTenantQuota) {
     try {
       const subscription = await db.subscription.findFirst({
         where: { tenantId },
@@ -515,6 +550,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
     credentialId,
     usageType,
     tenantId,
+    platformMarketing,
   })
 
   // Marketing enforcement: refuse to send bulk/campaign email without a
@@ -585,6 +621,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
     //    Transactional emails are sent as-is — no unsubscribe header, no pixel.
     let trackingToken: string | null = null
     let finalHtml = html || text
+    let finalText = text
     const mailHeaders: Record<string, string> = {}
 
     if (usageType === 'marketing') {
@@ -596,7 +633,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
           recipientSource,
           tenantId,
         })
-        const unsubUrl = unsubscribeUrl(trackingToken)
+        const unsubUrl = unsubscribeUrl(trackingToken, trackingBaseUrl)
         // Resolve the {{unsubscribe_url}} / {{preferences_url}} merge tags now
         // that we have a per-recipient token. injectTracking (next) will then
         // wrap outbound links but skip the unsubscribe link itself.
@@ -605,7 +642,12 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
             .replace(/\{\{\s*unsubscribe_url\s*\}\}/gi, unsubUrl)
             .replace(/\{\{\s*preferences_url\s*\}\}/gi, unsubUrl)
         }
-        finalHtml = finalHtml ? injectTracking(finalHtml, trackingToken) : finalHtml
+        if (finalText) {
+          finalText = finalText
+            .replace(/\{\{\s*unsubscribe_url\s*\}\}/gi, unsubUrl)
+            .replace(/\{\{\s*preferences_url\s*\}\}/gi, unsubUrl)
+        }
+        finalHtml = finalHtml ? injectTracking(finalHtml, trackingToken, trackingBaseUrl) : finalHtml
         const unsubMailto = `mailto:${config.fromEmail}?subject=Unsubscribe`
         mailHeaders['List-Unsubscribe'] = `<${unsubMailto}>, <${unsubUrl}>`
         mailHeaders['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
@@ -619,8 +661,8 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
       from: `"${config.fromName}" <${config.fromEmail}>`,
       to,
       subject,
-      html: finalHtml || text,
-      text: text || undefined,
+      html: finalHtml || finalText,
+      text: finalText || undefined,
       replyTo: config.replyTo,
       ...(Object.keys(mailHeaders).length ? { headers: mailHeaders } : {}),
     })
@@ -639,8 +681,8 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
       } catch { /* ignore stats errors */ }
     }
 
-    // Update tenant email usage count (for quota tracking)
-    if (tenantId) {
+    // Update tenant email usage count (for quota tracking — skip for platform outreach/lifecycle emails)
+    if (tenantId && !skipTenantQuota) {
       try {
         const subscription = await db.subscription.findFirst({
           where: { tenantId },

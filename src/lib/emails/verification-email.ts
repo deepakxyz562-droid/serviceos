@@ -386,9 +386,35 @@ export async function sendVerificationEmail(params: {
   name?: string | null;
   rawToken: string;
   appUrl: string;
+  product?: string | null;
+  tenantId?: string | null;
 }): Promise<void> {
-  const { to, name, rawToken, appUrl } = params;
+  const { to, name, rawToken, appUrl, product, tenantId } = params;
   const verifyLink = `${appUrl}/?verify=email&token=${rawToken}`;
+
+  if (product === 'bgos') {
+    const { sendBgosVerificationEmail } = await import('@/lib/emails/bgos/sender');
+    const bgosRes = await sendBgosVerificationEmail({
+      to,
+      ownerName: name,
+      verifyLink,
+      appUrl,
+      tenantId,
+    });
+    if (!bgosRes.sent && !bgosRes.skipped) {
+      logger.error(
+        { component: 'email-verification', to, error: bgosRes.error },
+        'Failed to send BGOS verification email',
+      );
+    } else if (bgosRes.sent) {
+      logger.info(
+        { component: 'email-verification', to, product: 'bgos' },
+        'BGOS verification email sent',
+      );
+    }
+    return;
+  }
+
   const displayName = name || 'there';
   const footer = renderPromotionalFooter({ appUrl, existingUser: false });
 

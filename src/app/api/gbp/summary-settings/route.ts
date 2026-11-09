@@ -129,6 +129,15 @@ export async function POST(request: NextRequest) {
     const settings = readSettingsJson(tenant.settingsJson);
     settings.gbpSummaryConfig = { enabled, email } satisfies GbpSummaryConfig;
 
+    if (settings.bgosEmailPrefs && typeof settings.bgosEmailPrefs === 'object') {
+      const prevPrefs = settings.bgosEmailPrefs as Record<string, unknown>;
+      settings.bgosEmailPrefs = {
+        ...prevPrefs,
+        weeklyDigest: enabled,
+        ...(enabled ? { unsubscribedAt: null, unsubscribeSource: null } : {}),
+      };
+    }
+
     // Automation flags (safe-by-default: absent keys keep their current value;
     // booleans must be explicitly provided to change anything).
     if (body.automations && typeof body.automations === 'object') {

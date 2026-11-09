@@ -4,6 +4,12 @@ import { getAppUrl } from '@/lib/auth';
 import crypto from 'crypto';
 import { sendEmail } from '@/lib/email-send';
 import { passwordResetLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
+import { isBgosContext, sendBgosPasswordResetEmail } from '@/lib/emails/bgos/sender';
+import {
+  isSyntheticPlaceholderEmail,
+  renderFieserosPasswordResetEmail,
+  resolveBgosBaseUrl,
+} from '@/lib/emails/bgos/templates';
 
 /**
  * POST /api/auth/request-reset
@@ -29,6 +35,13 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
+
+    if (isSyntheticPlaceholderEmail(normalizedEmail)) {
+      return NextResponse.json({
+        success: true,
+        message: 'If an account exists for that email, a reset link has been sent.',
+      });
+    }
 
     // Try to find a User (admin/employee) by email
     const userAccount = await db.user.findUnique({
@@ -66,6 +79,7 @@ export async function POST(request: NextRequest) {
       : null;
 
     // Invalidate prior tokens for this entity
+    let employeeId: string | null = null;
     if (isCustomer) {
       await db.invitation.updateMany({
         where: { customerId: customer!.id, status: 'pending' },
@@ -77,6 +91,7 @@ export async function POST(request: NextRequest) {
         select: { id: true },
       });
       if (employee) {
+        employeeId = employee.id;
         await db.invitation.updateMany({
           where: { employeeId: employee.id, status: 'pending' },
           data: { status: 'cancelled' },
@@ -98,23 +113,54 @@ export async function POST(request: NextRequest) {
         tenantId: tenantId || null,
         workspaceId: workspaceId || null,
         customerId: isCustomer ? customer!.id : null,
-        employeeId: !isCustomer
-          ? (await db.employee.findFirst({ where: { userId: userAccount!.id }, select: { id: true } }))?.id || null
-          : null,
+        employeeId,
         expiresAt,
       },
     });
 
-    const appUrl = getAppUrl();
-    const resolvedSlug = encodeURIComponent(tenant?.slug || 'default');
-    const resetUrl = `${appUrl}/${resolvedSlug}/accept-invite?token=${token}&mode=reset`;
+    const reqHost = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').toLowerCase();
+    const bgosCtx = await isBgosContext({ tenantId, workspaceId });
+    const isBgos = !isCustomer && (body?.product === 'bgos' || reqHost.includes('bgos.') || bgosCtx.isBgos);
 
-    const delivery = await sendEmail({ to: normalizedEmail, usageType: 'transactional',
-      subject: 'Reset your password', text: `Use this link to reset your password: ${resetUrl}\n\nThis link expires in 24 hours. If you did not request it, you can ignore this email.` }).catch(() => ({ success: false, simulated: false }));
-    if (!delivery.success || delivery.simulated) {
-      // Keep the public response independent of whether the address exists.
-      // Operations must monitor provider failures; never return a reset token.
-      console.error('[Request Reset] Transactional email delivery unavailable');
+    const proto = request.headers.get('x-forwarded-proto') || (reqHost.startsWith('localhost') ? 'http' : 'https');
+    const appUrl = isBgos
+      ? resolveBgosBaseUrl(reqHost ? `${proto}://${reqHost}` : null)
+      : getAppUrl(request);
+    const resolvedSlug = encodeURIComponent(tenant?.slug || 'default');
+    const resetUrl = `${appUrl}/${resolvedSlug}/accept-invite?token=${token}&mode=reset${isBgos ? '&product=bgos' : ''}`;
+
+    if (isBgos) {
+      const outcome = await sendBgosPasswordResetEmail({
+        to: normalizedEmail,
+        ownerName: entity.name,
+        businessName: tenant?.name || null,
+        resetUrl,
+        appUrl,
+        tenantId: tenantId || null,
+      }).catch((err) => ({ sent: false, skipped: false, error: err instanceof Error ? err.message : 'send_failed' }));
+      if (!outcome.sent && !outcome.skipped) {
+        console.error('[Request Reset] BGOS password reset delivery failed:', outcome.error);
+      }
+    } else {
+      const rendered = renderFieserosPasswordResetEmail({
+        ownerName: entity.name,
+        businessName: tenant?.name || null,
+        resetUrl,
+        appUrl,
+      });
+      const delivery = await sendEmail({
+        to: normalizedEmail,
+        usageType: 'transactional',
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        skipTenantQuota: true,
+      }).catch(() => ({ success: false, simulated: false }));
+      if (!delivery.success || delivery.simulated) {
+        // Keep the public response independent of whether the address exists.
+        // Operations must monitor provider failures; never return a reset token.
+        console.error('[Request Reset] Transactional email delivery unavailable');
+      }
     }
     return NextResponse.json({
       success: true,

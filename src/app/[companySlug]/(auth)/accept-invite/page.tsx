@@ -76,6 +76,13 @@ function AcceptInvitePageInner() {
   const slug = (params?.companySlug ?? '').toString();
   const token = (searchParams?.get('token') ?? '').toString();
   const isReset = searchParams?.get('mode') === 'reset';
+  const [isBgos, setIsBgos] = useState(() => searchParams?.get('product') === 'bgos');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('bgos.')) {
+      setIsBgos(true);
+    }
+  }, []);
 
   const [state, setState] = useState<VerifyState>({ status: 'loading' });
 
@@ -118,7 +125,11 @@ function AcceptInvitePageInner() {
         tenantSlug: data.invitation.tenantSlug ?? slug,
         tenantLogo: data.invitation.tenantLogo ?? null,
         isCustomer: data.invitation.isCustomer ?? data.invitation.role === 'customer',
+        isBgos: Boolean(data.invitation.isBgos),
       };
+      if (data.invitation.isBgos) {
+        setIsBgos(true);
+      }
 
       const role = mapRoleToAuthRole(inv.role);
       const company: CompanyAuthCompany = {
@@ -185,6 +196,7 @@ function AcceptInvitePageInner() {
           'This invitation link is invalid, has already been used, or was cancelled.'
         }
         slug={slug}
+        isBgos={isBgos}
         showFinder
       />
     );
@@ -201,6 +213,7 @@ function AcceptInvitePageInner() {
           'This invitation link has expired. Please request a new one.'
         }
         slug={slug}
+        isBgos={isBgos}
         showRequestReset
       />
     );
@@ -209,11 +222,13 @@ function AcceptInvitePageInner() {
   // ─── Valid ────────────────────────────────────────────────────────────────
   const { invitation, company, role } = state;
   const cfg = ROLE_CONFIG[role];
+  const effectiveIsBgos = isBgos || Boolean(invitation.isBgos);
 
   return (
     <CompanyAuthCard
       company={company}
       role={role}
+      isBgos={effectiveIsBgos}
       title={isReset ? 'Reset your password' : 'Activate your account'}
       subtitle={
         isReset
@@ -233,6 +248,7 @@ function AcceptInvitePageInner() {
         invitation={invitation}
         mode={isReset ? 'reset' : 'activate'}
         slug={company.slug}
+        isBgos={effectiveIsBgos}
         onSuccess={() => {
           toast.success(
             isReset ? 'Password updated.' : 'Account activated.',
@@ -252,6 +268,7 @@ function ErrorScreen({
   title,
   message,
   slug,
+  isBgos,
   showFinder,
   showRequestReset,
 }: {
@@ -259,9 +276,11 @@ function ErrorScreen({
   title: string;
   message: string;
   slug: string;
+  isBgos?: boolean;
   showFinder?: boolean;
   showRequestReset?: boolean;
 }) {
+  const loginHref = isBgos ? '/' : `/${slug || ''}/login`;
   return (
     <div className="min-h-[100dvh] flex items-center justify-center bg-gradient-to-b from-background to-muted/30 px-4 py-10">
       <motion.div
@@ -302,7 +321,7 @@ function ErrorScreen({
                   size="sm"
                   className="w-full h-8 border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-950/50"
                 >
-                  <Link href={`/${slug || ''}/login`}>
+                  <Link href={loginHref}>
                     <KeyRound className="size-3.5" />
                     Request new link
                   </Link>
@@ -311,9 +330,9 @@ function ErrorScreen({
             ) : null}
 
             <div className="flex flex-col gap-2 pt-1">
-              {slug ? (
+              {slug || isBgos ? (
                 <Button asChild variant="outline" className="w-full h-10">
-                  <Link href={`/${slug}/login`}>
+                  <Link href={loginHref}>
                     <ArrowLeft className="size-4" />
                     Go to login
                   </Link>
@@ -332,7 +351,7 @@ function ErrorScreen({
             href="/"
             className="font-medium text-foreground hover:underline underline-offset-2"
           >
-            Fieseros
+            {isBgos ? 'BGOS' : 'Fieseros'}
           </a>
         </p>
       </motion.div>

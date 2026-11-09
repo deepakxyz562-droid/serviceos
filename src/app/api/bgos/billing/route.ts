@@ -209,8 +209,28 @@ export async function POST(request: NextRequest) {
 
         await db.tenant.update({
           where: { id: user.tenantId },
-          data: { plan: body.plan },
+          data: {
+            plan: body.plan,
+            planStatus: 'active',
+            trialEndsAt: null,
+            planStartedAt: now,
+            planEndsAt: nextMonth,
+          },
         });
+
+        try {
+          await db.productSubscription.updateMany({
+            where: { workspaceId: access.workspace.workspaceId },
+            data: {
+              plan: body.plan,
+              status: 'active',
+              trialEndsAt: null,
+              currentPeriodEnd: nextMonth,
+            },
+          });
+        } catch {
+          // non-fatal
+        }
 
         return NextResponse.json({
           success: true,

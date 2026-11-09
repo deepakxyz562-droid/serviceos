@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { hashPassword, generateSlug, getAppUrl } from '@/lib/auth';
+import { hashPassword, generateSlug, getProductAppUrl } from '@/lib/auth';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { issueVerificationToken, sendVerificationEmail } from '@/lib/emails/verification-email';
 import { resolveSignupDefaultPlan } from '@/lib/billing-seed';
@@ -79,6 +79,8 @@ export async function POST(request: NextRequest) {
     // Free plan: no trial, no expiration, 100 lifetime jobs
     const isFreePlan = signupPlan === 'free';
     const isStandalone = signupPlan === 'standalone_starter' || signupPlan === 'standalone_business' || requestedMode === 'standalone';
+    const reqHost = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').toLowerCase();
+    const isBgos = !isStandalone && (body.product === 'bgos' || reqHost.includes('bgos.'));
 
     const tenant = await db.tenant.create({
       data: {
@@ -127,7 +129,7 @@ export async function POST(request: NextRequest) {
         industry: industry || null,
         ownerId: '', // Will update after user creation
         tenantId: tenant.id,
-        productType: isStandalone ? 'forms' : 'crm',
+        productType: isStandalone ? 'forms' : (isBgos ? 'bgos' : 'crm'),
       },
     });
 
@@ -161,6 +163,42 @@ export async function POST(request: NextRequest) {
         claimedAt: new Date(),
       },
     });
+
+    // Ensure ProductWorkspace/Membership/Subscription entries for BGOS accounts
+    if (isBgos) {
+      try {
+        await db.productWorkspace.create({
+          data: {
+            workspaceId: workspace.id,
+            tenantId: tenant.id,
+            product: 'bgos',
+            status: 'active',
+            onboardingCompleted: isFreePlan,
+            onboardingStep: isFreePlan ? 4 : 0,
+          },
+        });
+        await db.productMembership.create({
+          data: {
+            id: `pm_${user.id}_${workspace.id}`,
+            workspaceId: workspace.id,
+            userId: user.id,
+            role: 'owner',
+            status: 'active',
+          },
+        });
+        await db.productSubscription.create({
+          data: {
+            workspaceId: workspace.id,
+            plan: signupPlan,
+            status: isFreePlan ? 'active' : 'trial',
+            trialEndsAt: tenant.trialEndsAt,
+            billingSource: 'product',
+          },
+        });
+      } catch (pwErr) {
+        console.warn('[Register] BGOS ProductWorkspace setup notice:', pwErr);
+      }
+    }
 
     // Auto-create initial employee record for the owner so they appear in scheduling,
     // dispatch, and team member management with role: 'owner'
@@ -271,7 +309,7 @@ export async function POST(request: NextRequest) {
     //
     // We do NOT auto-login the user here (no JWT cookie set). The frontend
     // will show a "Check your email" screen and redirect to /login.
-    const appUrl = getAppUrl(request);
+    const appUrl = getProductAppUrl(request, isBgos ? 'bgos' : undefined);
     try {
       const rawToken = await issueVerificationToken(user.id);
       await sendVerificationEmail({
@@ -279,6 +317,8 @@ export async function POST(request: NextRequest) {
         name: user.name,
         rawToken,
         appUrl,
+        product: isBgos ? 'bgos' : 'fieseros',
+        tenantId: tenant.id,
       });
     } catch (verifyErr) {
       // Non-blocking — the user can request a resend from the login page.
@@ -313,7 +353,7 @@ export async function POST(request: NextRequest) {
             userId: admin.id,
             tenantId: tenant.id, // link to the new tenant for one-click navigation
             title: 'New business registered',
-            message: `${tenant.name} (${email}) just signed up for a 14-day trial.`,
+            message: `${tenant.name} (${email}) just signed up${isBgos ? ' on BGOS' : ''} for a 7-day trial.`,
             type: 'info',
           })),
         });

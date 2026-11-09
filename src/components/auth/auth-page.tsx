@@ -141,6 +141,9 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
   const [loginMethod, setLoginMethod] = useState<'email' | 'phone'>('email');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSent, setResetSent] = useState(false);
   const [loginPhone, setLoginPhone] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
@@ -185,7 +188,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                 fetch('/api/auth/resend-verification?XTransformPort=3000', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ email: loginEmail }),
+                  body: JSON.stringify({ email: loginEmail, product: isBgos ? 'bgos' : undefined }),
                 })
                   .then(async response => { if (!response.ok) throw new Error('RESEND_FAILED'); toast.success('Verification link resent. Please check your inbox.'); })
                   .catch(() => toast.error('Failed to resend verification email.'));
@@ -209,6 +212,38 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
       }));
       toast.success('Welcome back!');
       onAuthSuccess(data.user, data.tenant, data.workspace);
+    } catch {
+      toast.error('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ─── Forgot Password Handler ───
+  const handleRequestPasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = resetEmail.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/auth/request-reset?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          product: isBgos ? 'bgos' : undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'Could not send reset email. Please try again.');
+        return;
+      }
+      setResetSent(true);
+      toast.success(data.message || 'If an account exists for that email, a reset link has been sent.');
     } catch {
       toast.error('Something went wrong. Please try again.');
     } finally {
@@ -318,6 +353,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
           industry: regIndustry,
           phone: regPhone,
           plan: selectedPlan || undefined,
+          product: isBgos ? 'bgos' : undefined,
         }),
       });
       const data = await res.json();
@@ -362,7 +398,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
       {/* Business Tabs: Sign In / Create Account */}
       <div className="flex mb-6 bg-slate-100 rounded-lg p-[3px] h-10">
         <button
-          onClick={() => setBusinessTab('login')}
+          onClick={() => { setBusinessTab('login'); setShowForgotPassword(false); }}
           className={`flex-1 h-[34px] text-sm rounded-md font-medium transition-all cursor-pointer ${
             businessTab === 'login'
               ? 'bg-white shadow-sm text-slate-900'
@@ -372,7 +408,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
           Sign In
         </button>
         <button
-          onClick={() => setBusinessTab('register')}
+          onClick={() => { setBusinessTab('register'); setShowForgotPassword(false); }}
           className={`flex-1 h-[34px] text-sm rounded-md font-medium transition-all cursor-pointer ${
             businessTab === 'register'
               ? 'bg-white shadow-sm text-slate-900'
@@ -396,7 +432,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
             <div className="flex items-center justify-center p-1 bg-slate-100 rounded-lg mb-4">
               <button
                 type="button"
-                onClick={() => setLoginMethod('email')}
+                onClick={() => { setLoginMethod('email'); }}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                   loginMethod === 'email' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                 }`}
@@ -405,7 +441,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
               </button>
               <button
                 type="button"
-                onClick={() => setLoginMethod('phone')}
+                onClick={() => { setLoginMethod('phone'); setShowForgotPassword(false); }}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                   loginMethod === 'phone' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                 }`}
@@ -414,6 +450,60 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
               </button>
             </div>
 
+            {loginMethod === 'email' && showForgotPassword ? (
+              <form onSubmit={handleRequestPasswordReset} className="space-y-4">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5 space-y-1">
+                  <p className="text-sm font-semibold text-slate-900">Reset your password</p>
+                  <p className="text-xs text-slate-500">
+                    Enter your registered email and we&apos;ll send you a one-time reset link.
+                  </p>
+                </div>
+
+                {resetSent ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3.5 text-xs text-emerald-900 space-y-1.5">
+                    <p className="font-semibold">Check your inbox</p>
+                    <p>
+                      If an account exists for <span className="font-medium">{resetEmail}</span>, a password reset link has been sent (valid for 24 hours).
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <Label htmlFor="reset-email" className="text-slate-700">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input
+                      id="reset-email"
+                      type="email"
+                      placeholder="you@company.com"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+                      autoComplete="email"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer"
+                >
+                  {isLoading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Sending reset link...</>
+                  ) : (resetSent ? 'Resend Reset Link' : 'Send Reset Link')}
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => { setShowForgotPassword(false); setResetSent(false); }}
+                  className="w-full text-center text-xs text-slate-500 hover:text-slate-700 font-medium cursor-pointer"
+                >
+                  &larr; Back to sign in
+                </button>
+              </form>
+            ) : (
             <form onSubmit={loginMethod === 'phone' ? (otpSent ? handleVerifyWebOtp : handleSendWebOtp) : handleBusinessLogin} className="space-y-4">
               {loginMethod === 'email' ? (
                 <>
@@ -436,7 +526,15 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                   <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label htmlFor="login-password" className="text-slate-700">Password</Label>
-                      <button type="button" className="text-xs text-emerald-600 hover:text-emerald-700 font-medium hover:underline transition-colors">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResetEmail(loginEmail);
+                          setResetSent(false);
+                          setShowForgotPassword(true);
+                        }}
+                        className="text-xs text-emerald-600 hover:text-emerald-700 font-medium hover:underline transition-colors cursor-pointer"
+                      >
                         Forgot Password?
                       </button>
                     </div>
@@ -572,7 +670,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                     // (canonical app URL) so login always round-trips through
                     // fieseros.com, even if the user is browsing on a stale
                     // serviceos.cc link or a parked alias domain.
-                    window.location.href = `/api/auth/google?mode=login&XTransformPort=3000`;
+                    window.location.href = `/api/auth/google?mode=login${isBgos ? '&app=bgos' : ''}&XTransformPort=3000`;
                   }}
                 >
                   <GoogleIcon />
@@ -589,6 +687,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                 </p>
               </motion.div>
             </form>
+            )}
           </motion.div>
         ) : (
           <motion.div
@@ -681,7 +780,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                   onClick={() => {
                     // Do NOT pass `window.location.origin` here — see comment
                     // on the login button above.
-                    window.location.href = `/api/auth/google?mode=register&XTransformPort=3000`;
+                    window.location.href = `/api/auth/google?mode=register${isBgos ? '&app=bgos' : ''}&XTransformPort=3000`;
                   }}
                 >
                   <GoogleIcon />

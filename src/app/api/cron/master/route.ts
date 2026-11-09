@@ -115,6 +115,11 @@ const DAILY_CRONS: Array<{ name: string; path: string; description: string }> = 
     path: '/api/cron/data-retention',
     description: 'Enforces data retention policies — archives or deletes old data per tenant config',
   },
+  {
+    name: 'bgos-lifecycle',
+    path: '/api/cron/bgos-lifecycle',
+    description: 'Evaluates BGOS registered tenants and sends trial, review-growth, and post-trial inactivity rescue emails',
+  },
 ]
 
 // ── Monthly cron (only runs on the 1st of each month) ────────────────────

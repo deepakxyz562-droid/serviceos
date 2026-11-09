@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getBrandContextRaw } from '@/lib/brand-context';
+import { parseBgosEmailPrefs } from '@/lib/emails/bgos/sender';
 
 /**
  * Brand Brain — Engine 4
@@ -64,6 +65,11 @@ interface BrandProfileInput {
   preferences?: {
     timezone?: string;
     currency?: string;
+  };
+  bgosEmailPrefs?: {
+    productNudges?: boolean;
+    marketing?: boolean;
+    weeklyDigest?: boolean;
   };
   // Allow caller to skip the (slow) AI summary regeneration.
   skipAiSummary?: boolean;
@@ -223,6 +229,8 @@ export async function GET(request: NextRequest) {
       } catch {}
     }
 
+    const bgosEmailPrefs = parseBgosEmailPrefs(tenant?.settingsJson);
+
     return NextResponse.json({
       profile,
       hours,
@@ -238,6 +246,7 @@ export async function GET(request: NextRequest) {
       notifications,
       automation,
       preferences,
+      bgosEmailPrefs,
       brandDetails,
       sellingItems,
       marketingTargets,
@@ -353,6 +362,7 @@ export async function PUT(request: NextRequest) {
       body.notifications !== undefined ||
       body.automation !== undefined ||
       body.preferences !== undefined ||
+      body.bgosEmailPrefs !== undefined ||
       hasBrandBrainUpdate
     ) {
       const hasSettingsUpdate =
@@ -362,6 +372,7 @@ export async function PUT(request: NextRequest) {
         body.notifications !== undefined ||
         body.automation !== undefined ||
         body.preferences !== undefined ||
+        body.bgosEmailPrefs !== undefined ||
         hasBrandBrainUpdate;
 
       let settingsJson: string | undefined = undefined;
@@ -398,6 +409,36 @@ export async function PUT(request: NextRequest) {
           ...((body as any).faqs !== undefined ? { faqs: (body as any).faqs } : {}),
         };
 
+        let mergedBgosEmailPrefs: unknown = existingSettings.bgosEmailPrefs;
+        if (body.bgosEmailPrefs && typeof body.bgosEmailPrefs === 'object') {
+          const existingPrefs = parseBgosEmailPrefs(existingTenant?.settingsJson);
+          const nextProductNudges =
+            typeof body.bgosEmailPrefs.productNudges === 'boolean'
+              ? body.bgosEmailPrefs.productNudges
+              : existingPrefs.productNudges;
+          const nextMarketing =
+            typeof body.bgosEmailPrefs.marketing === 'boolean'
+              ? body.bgosEmailPrefs.marketing
+              : existingPrefs.marketing;
+          const nextWeeklyDigest =
+            typeof body.bgosEmailPrefs.weeklyDigest === 'boolean'
+              ? body.bgosEmailPrefs.weeklyDigest
+              : existingPrefs.weeklyDigest;
+
+          const anyEnabled = nextProductNudges || nextMarketing || nextWeeklyDigest;
+          mergedBgosEmailPrefs = {
+            productNudges: nextProductNudges,
+            marketing: nextMarketing,
+            weeklyDigest: nextWeeklyDigest,
+            unsubscribedAt: anyEnabled
+              ? null
+              : existingPrefs.unsubscribedAt || new Date().toISOString(),
+            unsubscribeSource: anyEnabled
+              ? null
+              : existingPrefs.unsubscribeSource || 'settings_ui',
+          };
+        }
+
         settingsJson = JSON.stringify({
           ...existingSettings,
           taxCompliance: mergedTaxCompliance,
@@ -405,6 +446,7 @@ export async function PUT(request: NextRequest) {
           ...(body.notifications !== undefined ? { notifications: body.notifications } : {}),
           ...(body.automation !== undefined ? { automation: body.automation } : {}),
           ...(body.preferences !== undefined ? { preferences: body.preferences } : {}),
+          ...(mergedBgosEmailPrefs !== undefined ? { bgosEmailPrefs: mergedBgosEmailPrefs } : {}),
         });
       }
 

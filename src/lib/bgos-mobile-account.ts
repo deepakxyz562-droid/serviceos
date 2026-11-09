@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { generateSlug } from '@/lib/auth';
 import { ProductAccessError, resolveProductAccess } from '@/lib/product-access';
 import { isBgosIdentity } from '../../shared/bgos-identity';
+import { isDeliverableEmail } from '@/lib/emails/bgos/templates';
 
 /**
  * Auto-provision Tenant + Workspace + Subscription for mobile users
@@ -16,6 +17,7 @@ export async function ensureBgosTenantAndWorkspace(userId: string) {
 
   let tenant = user.tenant;
   let tenantId = user.tenantId;
+  let didCreateTenant = false;
 
   // 1. Ensure Tenant exists
   if (!tenantId || !tenant) {
@@ -46,6 +48,7 @@ export async function ensureBgosTenantAndWorkspace(userId: string) {
       },
     });
     tenantId = tenant.id;
+    didCreateTenant = true;
 
     // Default Subscription
     await db.subscription.create({
@@ -144,6 +147,21 @@ export async function ensureBgosTenantAndWorkspace(userId: string) {
     }
   } catch (err) {
     console.warn('[ensureBgosTenantAndWorkspace] ProductWorkspace upsert notice:', err);
+  }
+
+  if (didCreateTenant && tenant && isDeliverableEmail(user.email)) {
+    try {
+      const { sendBgosWelcomeEmail } = await import('@/lib/emails/bgos/sender');
+      await sendBgosWelcomeEmail({
+        to: user.email,
+        ownerName: user.name,
+        businessName: tenant.name || user.name || 'your business',
+        tenantId: tenant.id,
+        trialDays: 7,
+      });
+    } catch (welcomeErr) {
+      console.warn('[ensureBgosTenantAndWorkspace] BGOS welcome email skipped:', welcomeErr);
+    }
   }
 
   return { tenant, workspace };

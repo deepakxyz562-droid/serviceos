@@ -113,8 +113,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'lookup failed' }, { status: 500 })
   }
 
-  // Apply the opt-out across Contact + Customer tables.
-  await applyUnsubscribe(recipientEmail, 'unsubscribe_page')
+  // Apply the opt-out across Contact + Customer + BGOS Tenant preferences tables.
+  await applyUnsubscribe(recipientEmail, 'unsubscribe_page', tenantId)
 
   // Record the engagement event.
   await recordEmailEvent({

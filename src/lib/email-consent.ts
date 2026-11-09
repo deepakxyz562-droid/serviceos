@@ -20,7 +20,10 @@ import { randomBytes } from 'crypto'
 import { db } from '@/lib/db'
 
 /** Resolve the externally-visible base URL for links embedded in email bodies. */
-export function publicBaseUrl(): string {
+export function publicBaseUrl(override?: string | null): string {
+  if (override && typeof override === 'string' && /^https?:\/\//i.test(override.trim())) {
+    return override.trim().replace(/\/$/, '')
+  }
   const url =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.VERCEL_URL ||
@@ -55,18 +58,18 @@ export async function createUnsubscribeToken(
 }
 
 /** Landing-page URL for the List-Unsubscribe header + email footer. */
-export function unsubscribeUrl(token: string): string {
-  return `${publicBaseUrl()}/api/public/unsubscribe?t=${token}`
+export function unsubscribeUrl(token: string, baseUrl?: string | null): string {
+  return `${publicBaseUrl(baseUrl)}/api/public/unsubscribe?t=${token}`
 }
 
 /** 1x1 transparent pixel URL (GET returns image/png). */
-export function openPixelUrl(token: string): string {
-  return `${publicBaseUrl()}/api/email/open/${token}/pixel.png`
+export function openPixelUrl(token: string, baseUrl?: string | null): string {
+  return `${publicBaseUrl(baseUrl)}/api/email/open/${token}/pixel.png`
 }
 
 /** Click-redirect URL that wraps an outbound link. */
-export function clickRedirectUrl(token: string, destination: string): string {
-  return `${publicBaseUrl()}/api/email/click/${token}?u=${encodeURIComponent(destination)}`
+export function clickRedirectUrl(token: string, destination: string, baseUrl?: string | null): string {
+  return `${publicBaseUrl(baseUrl)}/api/email/click/${token}?u=${encodeURIComponent(destination)}`
 }
 
 /**
@@ -74,7 +77,7 @@ export function clickRedirectUrl(token: string, destination: string): string {
  * click-redirect endpoint, and append a hidden open-pixel <img> before
  * </body> (or at the end of the document). Only call for marketing emails.
  */
-export function injectTracking(html: string, token: string): string {
+export function injectTracking(html: string, token: string, baseUrl?: string | null): string {
   if (!html) return html
   let out = html
   // Rewrite anchor hrefs pointing to absolute http(s) URLs. Skip the
@@ -86,10 +89,10 @@ export function injectTracking(html: string, token: string): string {
       if (url.includes('/api/public/unsubscribe') || url.includes('/api/public/preferences')) {
         return match
       }
-      return `${prefix}${clickRedirectUrl(token, url)}`
+      return `${prefix}${clickRedirectUrl(token, url, baseUrl)}`
     },
   )
-  const pixel = `<img src="${openPixelUrl(token)}" width="1" height="1" alt="" style="display:none !important;border:0;outline:none;width:1px;height:1px;"/>`
+  const pixel = `<img src="${openPixelUrl(token, baseUrl)}" width="1" height="1" alt="" style="display:none !important;border:0;outline:none;width:1px;height:1px;"/>`
   if (/<\/body>/i.test(out)) {
     out = out.replace(/<\/body>/i, `${pixel}</body>`)
   } else {
@@ -136,16 +139,18 @@ export function hasMarketingConsent(input: ConsentInput): boolean {
 export async function applyUnsubscribe(
   email: string,
   source: string,
+  tenantId?: string | null,
 ): Promise<void> {
   if (!email) return
-  const lower = email.trim().toLowerCase()
+  const trimmed = email.trim()
+  const lower = trimmed.toLowerCase()
   const now = new Date()
 
   try {
     // SQLite is case-sensitive by default; compare against the lowercased
     // value AND the original to catch records stored with mixed case.
     await db.contact.updateMany({
-      where: { OR: [{ email: lower }, { email: email.trim() }] },
+      where: { OR: [{ email: lower }, { email: trimmed }] },
       data: {
         status: 'unsubscribed',
         marketingConsent: false,
@@ -159,7 +164,7 @@ export async function applyUnsubscribe(
 
   try {
     await db.customer.updateMany({
-      where: { OR: [{ email: lower }, { email: email.trim() }] },
+      where: { OR: [{ email: lower }, { email: trimmed }] },
       data: {
         marketingConsent: false,
         unsubscribedAt: now,
@@ -168,6 +173,70 @@ export async function applyUnsubscribe(
     })
   } catch {
     /* ignore */
+  }
+
+  // Also persist opt-out onto matching SaaS Tenant records (for BGOS owner lifecycle & promo emails).
+  try {
+    const tenantIdsToUpdate = new Set<string>()
+    if (tenantId) tenantIdsToUpdate.add(tenantId)
+
+    const [matchingUsers, matchingTenants] = await Promise.all([
+      db.user.findMany({
+        where: { OR: [{ email: lower }, { email: trimmed }] },
+        select: { tenantId: true },
+      }),
+      db.tenant.findMany({
+        where: { OR: [{ email: lower }, { email: trimmed }] },
+        select: { id: true },
+      }),
+    ])
+
+    for (const u of matchingUsers) {
+      if (u.tenantId) tenantIdsToUpdate.add(u.tenantId)
+    }
+    for (const t of matchingTenants) {
+      if (t.id) tenantIdsToUpdate.add(t.id)
+    }
+
+    if (tenantIdsToUpdate.size > 0) {
+      const targetTenants = await db.tenant.findMany({
+        where: { id: { in: Array.from(tenantIdsToUpdate) } },
+        select: { id: true, settingsJson: true },
+      })
+      for (const t of targetTenants) {
+        let parsed: Record<string, unknown> = {}
+        try {
+          parsed = JSON.parse(t.settingsJson || '{}') as Record<string, unknown>
+          if (!parsed || typeof parsed !== 'object') parsed = {}
+        } catch {
+          parsed = {}
+        }
+        const existingPrefs =
+          parsed.bgosEmailPrefs && typeof parsed.bgosEmailPrefs === 'object'
+            ? (parsed.bgosEmailPrefs as Record<string, unknown>)
+            : {}
+        parsed.bgosEmailPrefs = {
+          ...existingPrefs,
+          marketing: false,
+          productNudges: false,
+          weeklyDigest: false,
+          unsubscribedAt: now.toISOString(),
+          unsubscribeSource: source,
+        }
+        if (parsed.gbpSummaryConfig && typeof parsed.gbpSummaryConfig === 'object') {
+          parsed.gbpSummaryConfig = {
+            ...(parsed.gbpSummaryConfig as Record<string, unknown>),
+            enabled: false,
+          }
+        }
+        await db.tenant.update({
+          where: { id: t.id },
+          data: { settingsJson: JSON.stringify(parsed) },
+        })
+      }
+    }
+  } catch {
+    /* non-fatal — Contact/Customer opt-outs already saved */
   }
 
   // Audit-log entry (best-effort). Survives even if the Customer/Contact
@@ -179,7 +248,7 @@ export async function applyUnsubscribe(
         action: 'opt_out',
         source,
         recipientEmail: lower,
-        tenantId: null,
+        tenantId: tenantId || null,
         metadataJson: JSON.stringify({ triggeredBy: source, at: now.toISOString() }),
       },
     })
