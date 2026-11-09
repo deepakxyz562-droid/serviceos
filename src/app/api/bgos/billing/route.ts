@@ -6,7 +6,7 @@ import {
   BGOS_PLANS,
   BGOS_USD_PRICES,
   isBgosPlan,
-  resolveBgosBillingRegion,
+  resolveInstallCountryAndBilling,
   type BgosPlan,
 } from '@/lib/bgos-billing';
 import {
@@ -85,7 +85,11 @@ export async function GET(request: NextRequest) {
 
     const hasRazorpay = !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);
     const hasCreem = await isCreemConfigured().catch(() => false);
-    const defaultRegion = resolveBgosBillingRegion(access.tenant?.country);
+    const locationBilling = await resolveInstallCountryAndBilling({
+      request,
+      tenant: access.tenant,
+    });
+    const defaultRegion = locationBilling.defaultRegion;
 
     return NextResponse.json(
       {
@@ -100,6 +104,9 @@ export async function GET(request: NextRequest) {
         },
         entitlement,
         defaultRegion,
+        billingCountry: locationBilling.countryCode,
+        currency: locationBilling.currency,
+        startingPriceLabel: locationBilling.startingPriceLabel,
         usage: {
           contacts,
           forms,
@@ -111,6 +118,11 @@ export async function GET(request: NextRequest) {
           code,
           ...plan,
           priceUsd: BGOS_USD_PRICES[code as BgosPlan] ?? 0,
+          price:
+            locationBilling.currency === 'INR'
+              ? plan.priceInr
+              : (BGOS_USD_PRICES[code as BgosPlan] ?? 0),
+          currency: locationBilling.currency,
           checkoutEnabled: hasRazorpay || hasCreem,
         })),
         gateways: {
@@ -147,7 +159,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     if (body.action === 'portal' || body.gateway === 'stripe') {
       return NextResponse.json(
-        { error: 'Stripe is disabled for BGOS. Choose Razorpay (India) or Creem (International).' },
+        { error: 'Please select a supported plan on your billing page.' },
         { status: 410 },
       );
     }
@@ -166,11 +178,46 @@ export async function POST(request: NextRequest) {
     const hasRazorpay = !!(keyId && keySecret);
     const hasCreem = await isCreemConfigured().catch(() => false);
 
+    const locationBilling = await resolveInstallCountryAndBilling({
+      request,
+      tenant: access.tenant,
+    });
+    const explicitGateway =
+      body.gateway === 'creem' || body.gateway === 'razorpay' ? body.gateway : null;
+    const resolvedGateway: 'razorpay' | 'creem' =
+      explicitGateway ??
+      (locationBilling.defaultRegion === 'international' ? 'creem' : 'razorpay');
+
+    // Local dev test bypass ONLY when non-production AND neither gateway is configured
+    if (
+      body.action === 'activate' &&
+      process.env.NODE_ENV !== 'production' &&
+      !hasRazorpay &&
+      !hasCreem
+    ) {
+      await activateBgosSubscription({
+        tenantId: user.tenantId,
+        planCode,
+        provider: resolvedGateway,
+        billingCycle,
+        currency: resolvedGateway === 'creem' ? 'USD' : 'INR',
+        payerEmail: user.email,
+        description: `Dev sandbox activation for BGOS ${chosenPlan.name}`,
+      });
+
+      return NextResponse.json({
+        success: true,
+        activated: true,
+        plan: planCode,
+        message: `${chosenPlan.name} plan activated in local test mode!`,
+      });
+    }
+
     // ── 1. Creem International Checkout (Global Cards / Apple Pay / Google Pay in USD) ──
-    if (body.gateway === 'creem') {
+    if (resolvedGateway === 'creem') {
       if (!hasCreem) {
         return NextResponse.json(
-          { error: 'Creem international billing is not configured yet.' },
+          { error: 'Online checkout is temporarily unavailable for your region.' },
           { status: 503 },
         );
       }
@@ -179,8 +226,8 @@ export async function POST(request: NextRequest) {
         billingCycle,
         tenantId: user.tenantId,
         userEmail: user.email,
-        successUrl: `${appBaseUrl}/app?view=billing&creem=success&plan=${encodeURIComponent(planCode)}`,
-        cancelUrl: `${appBaseUrl}/app?view=billing&creem=cancelled`,
+        successUrl: `${appBaseUrl}/app?view=billing&checkout=success&plan=${encodeURIComponent(planCode)}`,
+        cancelUrl: `${appBaseUrl}/app?view=billing&checkout=cancelled`,
       });
       return NextResponse.json({
         gateway: 'creem',
@@ -190,10 +237,10 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 2. Razorpay India Order + Payment Link (UPI / Netbanking / Cards in INR) ──
-    if (body.gateway === 'razorpay' || (!body.gateway && body.action !== 'activate' && hasRazorpay)) {
+    if (resolvedGateway === 'razorpay') {
       if (!hasRazorpay) {
         return NextResponse.json(
-          { error: 'Razorpay billing is not configured on the server.' },
+          { error: 'Online checkout is temporarily unavailable for your region.' },
           { status: 503 },
         );
       }
@@ -226,7 +273,7 @@ export async function POST(request: NextRequest) {
 
       const order = await orderRes.json().catch(() => ({}));
       if (!orderRes.ok) {
-        const errDesc = order?.error?.description || 'Razorpay order creation failed';
+        const errDesc = order?.error?.description || 'Could not initialize checkout. Please try again.';
         return NextResponse.json({ error: errDesc }, { status: orderRes.status });
       }
 
@@ -268,33 +315,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── 3. Local dev test bypass ONLY when non-production AND neither gateway is configured ──
-    if (
-      body.action === 'activate' &&
-      process.env.NODE_ENV !== 'production' &&
-      !hasRazorpay &&
-      !hasCreem
-    ) {
-      await activateBgosSubscription({
-        tenantId: user.tenantId,
-        planCode,
-        provider: 'razorpay',
-        billingCycle,
-        currency: 'INR',
-        payerEmail: user.email,
-        description: `Dev sandbox activation for BGOS ${chosenPlan.name}`,
-      });
-
-      return NextResponse.json({
-        success: true,
-        activated: true,
-        plan: planCode,
-        message: `${chosenPlan.name} plan activated in local test mode!`,
-      });
-    }
-
     return NextResponse.json(
-      { error: 'Please complete checkout via Razorpay (India) or Creem (International).' },
+      { error: 'Online checkout is temporarily unavailable. Please try again shortly.' },
       { status: 503 },
     );
   } catch (err: any) {

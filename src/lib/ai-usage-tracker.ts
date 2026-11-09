@@ -17,6 +17,7 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { db } from '@/lib/db';
+import { getBgosAiQuotaForPlan } from '@/lib/bgos-billing';
 
 export interface QuotaCheckResult {
   ok: boolean;
@@ -68,14 +69,25 @@ export function estimateTextLlmCostUsd(meta: AiTextUsageMeta): number | null {
 
 export async function checkAiQuota(tenantId: string): Promise<QuotaCheckResult> {
   try {
-    const subscription = await db.subscription.findFirst({
-      where: { tenantId },
-      orderBy: { createdAt: 'desc' },
-      select: { aiQuota: true, aiUsageCount: true },
-    });
+    const [subscription, tenant] = await Promise.all([
+      db.subscription.findFirst({
+        where: { tenantId },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, plan: true, aiQuota: true, aiUsageCount: true },
+      }),
+      typeof (db as any).tenant?.findUnique === 'function'
+        ? (db as any).tenant.findUnique({ where: { id: tenantId }, select: { plan: true } }).catch(() => null)
+        : Promise.resolve(null),
+    ]);
     if (!subscription) return { ok: true };
+    if (subscription.aiQuota === -1) return { ok: true };
 
-    const quota = subscription.aiQuota ?? 100;
+    const rawQuota = subscription.aiQuota ?? 100;
+    const planQuota = Math.max(
+      getBgosAiQuotaForPlan(tenant?.plan),
+      getBgosAiQuotaForPlan(subscription.plan),
+    );
+    const quota = Math.max(rawQuota, planQuota);
     const used = subscription.aiUsageCount ?? 0;
 
     if (used >= quota) {

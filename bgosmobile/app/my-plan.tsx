@@ -3,7 +3,6 @@ import {
   Alert,
   AppState,
   Linking,
-  Pressable,
   Text,
   View,
 } from 'react-native';
@@ -14,6 +13,7 @@ import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
 import { getToken } from '../src/lib/auth';
 import { WEB_URL } from '../src/lib/constants';
+import { detectDeviceCountryAndTimezone } from '../src/lib/country-codes';
 import * as WebBrowser from 'expo-web-browser';
 
 interface BgosEntitlement {
@@ -108,7 +108,13 @@ export default function MyPlanScreen() {
   const router = useRouter();
   const billingRes = useResource<BillingResponse>('/api/bgos/billing');
   const [activatingPlan, setActivatingPlan] = useState<string | null>(null);
-  const [region, setRegion] = useState<'india' | 'international'>('india');
+  const [region, setRegion] = useState<'india' | 'international'>(() => {
+    try {
+      return detectDeviceCountryAndTimezone().country.code === 'IN' ? 'india' : 'international';
+    } catch {
+      return 'india';
+    }
+  });
   const regionInitRef = useRef(false);
 
   useEffect(() => {
@@ -142,15 +148,15 @@ export default function MyPlanScreen() {
     setActivatingPlan(planCode);
     try {
       if (region === 'international') {
-        const res = await apiRequest<{ url?: string; gateway?: string; error?: string }>(
+        const res = await apiRequest<{ url?: string; error?: string }>(
           '/api/bgos/billing',
           {
             method: 'POST',
-            body: { plan: planCode, gateway: 'creem' },
+            body: { plan: planCode },
           },
         );
         if (!res?.url) {
-          throw new Error(res?.error || 'Could not start Creem international checkout.');
+          throw new Error(res?.error || 'Could not start online checkout. Please try again.');
         }
         await WebBrowser.openBrowserAsync(res.url, {
           presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
@@ -241,7 +247,7 @@ export default function MyPlanScreen() {
               </Text>
             </View>
             <Text style={{ fontSize: 11.5, color: '#B45309', lineHeight: 16 }}>
-              Enjoy full unrestricted access during your 7-day trial. Activate a paid plan anytime via Razorpay (India) or Creem (International) to continue uninterrupted.
+              Enjoy full unrestricted access during your 7-day trial. Activate a paid plan anytime to continue uninterrupted.
             </Text>
           </View>
         ) : null}
@@ -264,7 +270,7 @@ export default function MyPlanScreen() {
               </Text>
             </View>
             <Text style={{ fontSize: 11.5, color: '#991B1B', lineHeight: 16 }}>
-              Your 7-day trial has ended. Select a plan below using Razorpay (India · ₹) or Creem (International · $) to unlock all BGOS features.
+              Your 7-day trial has ended. Choose a plan below to unlock all BGOS features.
             </Text>
           </View>
         ) : null}
@@ -292,51 +298,8 @@ export default function MyPlanScreen() {
         </View>
       </Card>
 
-      {/* 2. Gateway Switcher + Plans Section */}
+      {/* 2. Plans Section (currency & pricing automatically matched to installation region) */}
       <View style={{ gap: 14 }}>
-        <View style={{ flexDirection: 'row', backgroundColor: '#E2E8F0', borderRadius: 12, padding: 4, gap: 4 }}>
-          <Pressable
-            onPress={() => setRegion('india')}
-            style={{
-              flex: 1,
-              paddingVertical: 9,
-              borderRadius: 9,
-              alignItems: 'center',
-              backgroundColor: region === 'india' ? '#FFFFFF' : 'transparent',
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: '800',
-                color: region === 'india' ? '#047857' : '#475569',
-              }}
-            >
-              🇮🇳 India (Razorpay · ₹)
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setRegion('international')}
-            style={{
-              flex: 1,
-              paddingVertical: 9,
-              borderRadius: 9,
-              alignItems: 'center',
-              backgroundColor: region === 'international' ? '#FFFFFF' : 'transparent',
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: '800',
-                color: region === 'international' ? '#047857' : '#475569',
-              }}
-            >
-              🌐 International (Creem · $)
-            </Text>
-          </Pressable>
-        </View>
-
         <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }}>
           Upgrade or Activate Your Plan
         </Text>
@@ -375,7 +338,7 @@ export default function MyPlanScreen() {
                     {priceDisplay}
                   </Text>
                   <Text style={{ fontSize: 10, color: colors.muted, fontWeight: '600' }}>
-                    {region === 'india' ? 'per month · Razorpay' : 'USD / mo · Creem'}
+                    {region === 'india' ? 'per month' : 'USD / month'}
                   </Text>
                 </View>
               </View>
@@ -397,8 +360,8 @@ export default function MyPlanScreen() {
                     : isCurrentPaid
                       ? 'Current Active Plan'
                       : !gatewayReady
-                        ? `${region === 'india' ? 'Razorpay' : 'Creem'} Unavailable`
-                        : `Pay ${priceDisplay}/mo via ${region === 'india' ? 'Razorpay' : 'Creem'}`
+                        ? 'Checkout Unavailable'
+                        : `Subscribe ${priceDisplay}/mo`
                 }
                 disabled={isBusy || isCurrentPaid || !gatewayReady}
                 icon={plan.highlight ? 'flash-on' : 'check'}

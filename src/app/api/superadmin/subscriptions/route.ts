@@ -3,6 +3,9 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { cache } from '@/lib/cache';
+import { getBgosAiQuotaForPlan, normalizeBgosPlanCode } from '@/lib/bgos-billing';
+import { syncSuperadminPlanState } from '@/lib/bgos-entitlement';
+import { toValidDate } from '@/lib/safe-date';
 
 // GET: List all subscriptions with tenant info, filters, and usage data
 export async function GET(request: NextRequest) {
@@ -196,16 +199,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
+    const normalizedPlan = normalizeBgosPlanCode(plan) || plan;
+    const effectiveStatus = String(status || 'trial').trim().toLowerCase();
+    const parsedQuota =
+      aiQuota !== undefined && aiQuota !== null && aiQuota !== '' && Number.isFinite(Number(aiQuota))
+        ? Number(aiQuota)
+        : getBgosAiQuotaForPlan(normalizedPlan);
+
     const subscription = await db.subscription.create({
       data: {
         tenantId,
-        plan,
-        status: status || 'trial',
+        plan: normalizedPlan,
+        status: effectiveStatus,
         amount: Number(amount) || 0,
         currency: body.currency || 'USD',
         billingCycle: billingCycle || 'monthly',
         seatCount: Number(seatCount) || 1,
-        aiQuota: Number(aiQuota) || 100,
+        aiQuota: parsedQuota,
+        aiUsageCount: 0,
+        trialEndsAt: effectiveStatus === 'active' ? null : undefined,
         whatsappQuota: Number(whatsappQuota) || 1000,
         emailQuota: Number(emailQuota) || 5000,
         smsQuota: Number(smsQuota) || 500,
@@ -216,8 +228,29 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const tenantUpdate: Record<string, unknown> = {
+      plan: normalizedPlan,
+      planStatus: effectiveStatus,
+    };
+    if (effectiveStatus === 'active' && normalizedPlan !== 'free') {
+      tenantUpdate.trialEndsAt = null;
+      const tenantEnd = toValidDate(tenant.planEndsAt);
+      if (tenantEnd && tenantEnd.getTime() <= Date.now()) {
+        tenantUpdate.planEndsAt = null;
+      }
+    }
+    await db.tenant.update({ where: { id: tenantId }, data: tenantUpdate }).catch(() => {});
+    await syncSuperadminPlanState({
+      tenantId,
+      plan: normalizedPlan,
+      planStatus: effectiveStatus,
+      aiQuota: parsedQuota,
+      endDate: 'planEndsAt' in tenantUpdate ? (tenantUpdate.planEndsAt as Date | null) : undefined,
+    });
+
     // Invalidate caches
     cache.invalidateByPrefix('superadmin:');
+    cache.invalidateByPrefix(`subscription:${tenantId}`);
 
     return NextResponse.json({ subscription }, { status: 201 });
   } catch (error) {
@@ -261,6 +294,28 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    if (updateData.plan) {
+      updateData.plan = normalizeBgosPlanCode(String(updateData.plan)) || updateData.plan;
+      if (updateFields.aiQuota === undefined) {
+        const planQuota = getBgosAiQuotaForPlan(String(updateData.plan));
+        if (typeof existing.aiQuota !== 'number' || (existing.aiQuota >= 0 && existing.aiQuota < planQuota)) {
+          updateData.aiQuota = planQuota;
+        }
+      }
+    }
+
+    const nextPlan = String(updateData.plan ?? existing.plan ?? 'starter').toLowerCase();
+    const nextStatus = String(updateData.status ?? existing.status ?? 'trial').toLowerCase();
+    if (nextStatus === 'active' && nextPlan !== 'free') {
+      updateData.trialEndsAt = null;
+      if (updateFields.endDate === undefined) {
+        const oldEnd = toValidDate(existing.endDate);
+        if (oldEnd && oldEnd.getTime() <= Date.now()) {
+          updateData.endDate = null;
+        }
+      }
+    }
+
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
@@ -270,20 +325,30 @@ export async function PUT(request: NextRequest) {
       data: updateData,
     });
 
-    // If plan changed, also update the tenant's plan
-    if (updateData.plan) {
-      try {
-        await db.tenant.update({
-          where: { id: (subscription as Record<string, unknown>).tenantId as string },
-          data: { plan: updateData.plan },
-        });
-      } catch {
-        // Tenant update is optional
+    const subTenantId = (subscription as Record<string, unknown>).tenantId as string;
+    if (subTenantId && (updateData.plan || updateData.status || 'endDate' in updateData)) {
+      const tenantSync: Record<string, unknown> = {};
+      if (updateData.plan) tenantSync.plan = updateData.plan;
+      if (updateData.status) tenantSync.planStatus = updateData.status;
+      if (nextStatus === 'active' && nextPlan !== 'free') {
+        tenantSync.trialEndsAt = null;
+        if ('endDate' in updateData) tenantSync.planEndsAt = updateData.endDate;
       }
+      if (Object.keys(tenantSync).length > 0) {
+        await db.tenant.update({ where: { id: subTenantId }, data: tenantSync }).catch(() => {});
+      }
+      await syncSuperadminPlanState({
+        tenantId: subTenantId,
+        plan: nextPlan,
+        planStatus: nextStatus,
+        aiQuota: typeof updateData.aiQuota === 'number' ? updateData.aiQuota : undefined,
+        endDate: 'endDate' in updateData ? (updateData.endDate as any) : undefined,
+      });
     }
 
     // Invalidate caches
     cache.invalidateByPrefix('superadmin:');
+    if (subTenantId) cache.invalidateByPrefix(`subscription:${subTenantId}`);
 
     return NextResponse.json({ subscription });
   } catch (error) {
@@ -328,27 +393,62 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (action === 'resume') {
+      const existingSub = await db.subscription.findUnique({ where: { id: subscriptionId } }).catch(() => null);
+      const existingEnd = toValidDate(existingSub?.endDate);
+      const clearStaleEnd = existingEnd && existingEnd.getTime() <= Date.now();
       const subscription = await db.subscription.update({
         where: { id: subscriptionId },
         data: {
           status: 'active',
           pausedAt: null,
           pauseReason: null,
+          trialEndsAt: null,
+          ...(clearStaleEnd ? { endDate: null } : {}),
         },
       });
+      const subTenantId = (subscription as Record<string, unknown>).tenantId as string;
+      if (subTenantId) {
+        await db.tenant.update({
+          where: { id: subTenantId },
+          data: {
+            planStatus: 'active',
+            trialEndsAt: null,
+            ...(clearStaleEnd ? { planEndsAt: null } : {}),
+          },
+        }).catch(() => {});
+        await syncSuperadminPlanState({
+          tenantId: subTenantId,
+          plan: (subscription as Record<string, unknown>).plan as string,
+          planStatus: 'active',
+          endDate: clearStaleEnd ? null : undefined,
+        });
+      }
 
       cache.invalidateByPrefix('superadmin:');
       return NextResponse.json({ subscription });
     }
 
     if (action === 'cancel') {
+      const nowEnd = new Date().toISOString();
       const subscription = await db.subscription.update({
         where: { id: subscriptionId },
         data: {
           status: 'cancelled',
-          endDate: new Date().toISOString(),
+          endDate: nowEnd,
         },
       });
+      const subTenantId = (subscription as Record<string, unknown>).tenantId as string;
+      if (subTenantId) {
+        await db.tenant.update({
+          where: { id: subTenantId },
+          data: { planStatus: 'cancelled', planEndsAt: nowEnd },
+        }).catch(() => {});
+        await syncSuperadminPlanState({
+          tenantId: subTenantId,
+          planStatus: 'cancelled',
+          endDate: nowEnd,
+        });
+      }
 
       cache.invalidateByPrefix('superadmin:');
       return NextResponse.json({ subscription });
@@ -358,6 +458,8 @@ export async function PATCH(request: NextRequest) {
       if (!newPlan) {
         return NextResponse.json({ error: 'New plan is required' }, { status: 400 });
       }
+      const normalizedNewPlan = normalizeBgosPlanCode(newPlan) || newPlan;
+      const nextQuota = getBgosAiQuotaForPlan(normalizedNewPlan);
 
       // Look up the plan's monthly price from the Plan catalog so the
       // subscription amount stays in sync with the seeded prices
@@ -367,7 +469,7 @@ export async function PATCH(request: NextRequest) {
       let planAmount = 0;
       try {
         const plan = await db.plan.findUnique({
-          where: { code: newPlan },
+          where: { code: normalizedNewPlan },
           select: { monthlyPrice: true },
         });
         if (plan?.monthlyPrice !== undefined && plan?.monthlyPrice !== null) {
@@ -380,19 +482,28 @@ export async function PATCH(request: NextRequest) {
       const subscription = await db.subscription.update({
         where: { id: subscriptionId },
         data: {
-          plan: newPlan,
+          plan: normalizedNewPlan,
           amount: planAmount,
+          aiQuota: nextQuota,
         },
       });
 
-      // Also update the tenant's plan
+      // Also update the tenant's plan & product subscription
+      const subTenantId = (subscription as Record<string, unknown>).tenantId as string;
       try {
         await db.tenant.update({
-          where: { id: (subscription as Record<string, unknown>).tenantId as string },
-          data: { plan: newPlan },
+          where: { id: subTenantId },
+          data: { plan: normalizedNewPlan },
         });
       } catch {
         // Tenant update is optional
+      }
+      if (subTenantId) {
+        await syncSuperadminPlanState({
+          tenantId: subTenantId,
+          plan: normalizedNewPlan,
+          aiQuota: nextQuota,
+        });
       }
 
       cache.invalidateByPrefix('superadmin:');

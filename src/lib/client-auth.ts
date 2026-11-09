@@ -7,6 +7,52 @@
 
 const TOKEN_KEY = 'fieseros_token';
 
+const CLIENT_TZ_COUNTRY_RULES: Array<{ prefix: string; code: string }> = [
+  { prefix: 'Asia/Kolkata', code: 'IN' },
+  { prefix: 'Asia/Calcutta', code: 'IN' },
+  { prefix: 'Asia/Dubai', code: 'AE' },
+  { prefix: 'Asia/Riyadh', code: 'SA' },
+  { prefix: 'Asia/Singapore', code: 'SG' },
+  { prefix: 'Asia/Kathmandu', code: 'NP' },
+  { prefix: 'Asia/Katmandu', code: 'NP' },
+  { prefix: 'Asia/Dhaka', code: 'BD' },
+  { prefix: 'Asia/Kuala_Lumpur', code: 'MY' },
+  { prefix: 'Asia/Manila', code: 'PH' },
+  { prefix: 'Europe/London', code: 'GB' },
+  { prefix: 'Europe/Berlin', code: 'DE' },
+  { prefix: 'Europe/Paris', code: 'FR' },
+  { prefix: 'Australia/', code: 'AU' },
+  { prefix: 'Pacific/Auckland', code: 'NZ' },
+  { prefix: 'Africa/Johannesburg', code: 'ZA' },
+  { prefix: 'America/Toronto', code: 'CA' },
+  { prefix: 'America/Vancouver', code: 'CA' },
+  { prefix: 'America/Montreal', code: 'CA' },
+  { prefix: 'America/', code: 'US' },
+];
+
+export function detectClientDeviceLocale(): { timeZone: string | null; countryCode: string | null } {
+  if (typeof window === 'undefined') return { timeZone: null, countryCode: null };
+  try {
+    const resolved = Intl.DateTimeFormat().resolvedOptions();
+    const tz = resolved?.timeZone?.trim() || null;
+    if (tz) {
+      for (const rule of CLIENT_TZ_COUNTRY_RULES) {
+        if (tz.startsWith(rule.prefix)) {
+          return { timeZone: tz, countryCode: rule.code };
+        }
+      }
+    }
+    const lang = resolved?.locale || (typeof navigator !== 'undefined' ? navigator.language : '') || '';
+    const regionMatch = lang.match(/[-_]([A-Z]{2})\b/i);
+    return {
+      timeZone: tz,
+      countryCode: regionMatch ? regionMatch[1].toUpperCase() : null,
+    };
+  } catch {
+    return { timeZone: null, countryCode: null };
+  }
+}
+
 /**
  * Store the JWT token in localStorage.
  */
@@ -78,7 +124,10 @@ export async function performClientLogout(): Promise<void> {
  * Includes the Bearer token if available, plus any custom headers.
  */
 export function authHeaders(custom?: Record<string, string>): Record<string, string> {
+  const locale = detectClientDeviceLocale();
   const headers: Record<string, string> = {
+    ...(locale.countryCode ? { 'X-Device-Country': locale.countryCode } : {}),
+    ...(locale.timeZone ? { 'X-Device-Timezone': locale.timeZone } : {}),
     ...custom,
   };
   const token = getToken();
@@ -180,6 +229,14 @@ function redirectToLogin(): void {
 export async function authFetch(url: string, options?: RequestInit): Promise<Response> {
   const token = getToken();
   const headers = new Headers(options?.headers);
+  const locale = detectClientDeviceLocale();
+
+  if (locale.countryCode && !headers.has('X-Device-Country')) {
+    headers.set('X-Device-Country', locale.countryCode);
+  }
+  if (locale.timeZone && !headers.has('X-Device-Timezone')) {
+    headers.set('X-Device-Timezone', locale.timeZone);
+  }
 
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
@@ -205,6 +262,12 @@ export async function authFetch(url: string, options?: RequestInit): Promise<Res
       // Retry the original request with the new token.
       const newToken = getToken();
       const retryHeaders = new Headers(options?.headers);
+      if (locale.countryCode && !retryHeaders.has('X-Device-Country')) {
+        retryHeaders.set('X-Device-Country', locale.countryCode);
+      }
+      if (locale.timeZone && !retryHeaders.has('X-Device-Timezone')) {
+        retryHeaders.set('X-Device-Timezone', locale.timeZone);
+      }
       if (newToken) {
         retryHeaders.set('Authorization', `Bearer ${newToken}`);
       }

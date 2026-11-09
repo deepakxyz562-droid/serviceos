@@ -292,7 +292,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Ensure tenant and workspace are provisioned for seamless 1-tap mobile sign-in
-    await ensureBgosTenantAndWorkspace(user.id);
+    await ensureBgosTenantAndWorkspace(user.id, { request, phone: e164 });
 
     // Resolve BGOS mobile account context
     const account = await resolveBgosMobileAccount(user.id);

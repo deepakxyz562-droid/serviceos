@@ -22,6 +22,12 @@ export interface BgosWorkspace {
   };
   intakeForm?: { id: string; name: string; slug: string } | null;
   plan: { code: string; status: string };
+  billing?: {
+    region: 'india' | 'international';
+    currency: 'INR' | 'USD';
+    countryCode: string;
+    startingPriceLabel: string;
+  };
   usage?: { contacts: number; forms: number; usedLeadCredits: number; leadCreditLimit: number };
 }
 export interface BgosConversation {

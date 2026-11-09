@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
  */
 export async function POST() {
   return NextResponse.json(
-    { error: 'Stripe is disabled for BGOS. Use Razorpay or Creem webhooks.' },
+    { error: 'This payment webhook endpoint is deprecated.' },
     { status: 410 },
   );
 }

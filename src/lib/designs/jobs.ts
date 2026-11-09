@@ -1,8 +1,8 @@
 import { db } from '@/lib/db';
 import { generateDesignImage, resolveCuratedImageFallback } from './image-provider';
 import { saveDesignAsset } from './assets';
-import { evaluateBgosEntitlement } from '@/lib/bgos-entitlement';
-import { BGOS_AI_QUOTAS } from '@/lib/bgos-billing';
+import { evaluateBgosEntitlement, pickBestSubscriptionRow } from '@/lib/bgos-entitlement';
+import { getBgosAiQuotaForPlan, normalizeBgosPlanCode } from '@/lib/bgos-billing';
 
 /** A single atomic claim prevents concurrent workers from generating twice. */
 export async function runDesignJob(id:string){
@@ -11,7 +11,20 @@ export async function runDesignJob(id:string){
  const job=await db.designGenerationJob.findUnique({where:{id}});if(!job)return;
  let reserved:string|undefined;let generated=false;
  try{
-  let subscription=await db.subscription.findFirst({where:{tenantId:job.tenantId},orderBy:{createdAt:'desc'}});
+  const subscriptionsRaw =
+    typeof (db as any).subscription?.findMany === 'function'
+      ? await (db as any).subscription
+          .findMany({ where: { tenantId: job.tenantId }, orderBy: { createdAt: 'desc' }, take: 10 })
+          .catch(() => [])
+      : typeof (db as any).subscription?.findFirst === 'function'
+        ? await (db as any).subscription
+            .findFirst({ where: { tenantId: job.tenantId }, orderBy: { createdAt: 'desc' } })
+            .then((row: any) => (row ? [row] : []))
+            .catch(() => [])
+        : [];
+  let subscription: any = pickBestSubscriptionRow(
+    Array.isArray(subscriptionsRaw) ? subscriptionsRaw : [],
+  );
   const tenant = await (db as any).tenant?.findUnique?.({ where: { id: job.tenantId } }).catch?.(() => null) ?? null;
   let productSubscription: any = null;
   const bgosWorkspaces = await (db as any).productWorkspace?.findMany?.({
@@ -20,55 +33,117 @@ export async function runDesignJob(id:string){
   }).catch?.(() => []) ?? [];
   const wsIds = Array.isArray(bgosWorkspaces) ? bgosWorkspaces.map((w: any) => w.workspaceId).filter(Boolean) : [];
   if (wsIds.length > 0) {
-    productSubscription = await (db as any).productSubscription?.findFirst?.({
-      where: { workspaceId: { in: wsIds } },
-    }).catch?.(() => null) ?? null;
+    if (typeof (db as any).productSubscription?.findMany === 'function') {
+      const prodSubs = await (db as any).productSubscription
+        .findMany({ where: { workspaceId: { in: wsIds } } })
+        .catch(() => []);
+      productSubscription = pickBestSubscriptionRow(Array.isArray(prodSubs) ? prodSubs : []);
+    } else {
+      productSubscription = await (db as any).productSubscription?.findFirst?.({
+        where: { workspaceId: { in: wsIds } },
+      }).catch?.(() => null) ?? null;
+    }
   }
 
   const entitlement = evaluateBgosEntitlement({ tenant, subscription, productSubscription });
-  if (!entitlement.entitled) {
+  const legacyActiveQuotaSub =
+    !entitlement.entitled &&
+    !tenant &&
+    !productSubscription &&
+    Boolean(subscription) &&
+    !subscription.plan &&
+    String(subscription.status || '').trim().toLowerCase() === 'active' &&
+    typeof subscription.aiQuota === 'number' &&
+    (subscription.aiQuota > 0 || subscription.aiQuota === -1);
+
+  if (!entitlement.entitled && !legacyActiveQuotaSub) {
     throw new Error('Your 7-day trial has ended or no active subscription is present. Complete payment to generate AI images.');
   }
 
-  // Ensure a Subscription quota row exists/matches active entitlement (covers trial & BGOS checkouts)
-  const expectedQuota = BGOS_AI_QUOTAS[entitlement.plan] ?? 200;
+  const hasExplicitPlan = Boolean(tenant?.plan || productSubscription?.plan || subscription?.plan);
+  // Ensure a Subscription quota row exists and matches the active entitlement plan/status/quota.
+  const expectedQuota = hasExplicitPlan
+    ? getBgosAiQuotaForPlan(entitlement.plan)
+    : (typeof subscription?.aiQuota === 'number' && subscription.aiQuota > 0 ? subscription.aiQuota : 200);
+  const expectedStatus = entitlement.isPaid || legacyActiveQuotaSub ? 'active' : 'trial';
   if (!subscription && typeof (db as any).subscription?.create === 'function') {
     subscription = await (db as any).subscription.create({
       data: {
         tenantId: job.tenantId,
         plan: entitlement.plan,
-        status: entitlement.isPaid ? 'active' : 'trial',
+        status: expectedStatus,
         amount: 0,
-        currency: 'USD',
+        currency: tenant?.currency || 'USD',
         billingCycle: 'monthly',
+        paymentProvider: 'none',
+        maxUsers: entitlement.plan === 'business' ? 25 : entitlement.plan === 'growth' ? 10 : 5,
+        maxJobs: entitlement.plan === 'business' ? 99999 : 1000,
+        maxWorkflows: entitlement.plan === 'business' ? 999 : 50,
+        featuresJson: '{}',
         startDate: new Date(),
         endDate: entitlement.currentPeriodEnd ? new Date(entitlement.currentPeriodEnd) : null,
         trialEndsAt: entitlement.trialEndsAt ? new Date(entitlement.trialEndsAt) : null,
         aiQuota: expectedQuota,
         aiUsageCount: 0,
       },
-    }).catch(() => null);
+    }).catch((err: unknown) => {
+      console.warn('[runDesignJob] subscription create fallback notice:', err);
+      return null;
+    });
   } else if (subscription) {
     const patch: Record<string, unknown> = {};
-    if (!['trial', 'active'].includes(String(subscription.status || '').toLowerCase())) {
-      patch.status = entitlement.isPaid ? 'active' : 'trial';
+    const currentStatus = String(subscription.status || '').trim();
+    if (currentStatus.toLowerCase() !== expectedStatus || currentStatus !== expectedStatus) {
+      patch.status = expectedStatus;
     }
-    if (typeof subscription.aiQuota === 'number' && subscription.aiQuota <= 0) {
+    if (hasExplicitPlan && entitlement.plan && normalizeBgosPlanCode(subscription.plan) !== entitlement.plan) {
+      patch.plan = entitlement.plan;
+    }
+    const existingQuota = typeof subscription.aiQuota === 'number' ? subscription.aiQuota : null;
+    // Preserve -1 (unlimited). Repair null/0 or lower plan quotas (e.g. trial 100 -> business 2000).
+    if (
+      existingQuota !== -1 &&
+      (existingQuota === null || existingQuota === 0 || (hasExplicitPlan && entitlement.plan !== 'free' && existingQuota < expectedQuota))
+    ) {
       patch.aiQuota = expectedQuota;
     }
-    if (Object.keys(patch).length > 0 && typeof (db as any).subscription?.update === 'function') {
-      await (db as any).subscription.update({ where: { id: subscription.id }, data: patch }).catch(() => {});
-      subscription = { ...subscription, ...patch };
+    if (subscription.aiUsageCount === null) {
+      patch.aiUsageCount = 0;
+    }
+    if (Object.keys(patch).length > 0 && typeof (db as any).subscription?.updateMany === 'function') {
+      try {
+        await (db as any).subscription.updateMany({ where: { id: subscription.id }, data: patch });
+        subscription = { ...subscription, ...patch };
+      } catch (err) {
+        console.warn('[runDesignJob] subscription patch notice:', err);
+      }
     }
   }
 
   if (subscription) {
-    const taken = await db.subscription.updateMany({
-      where: { id: subscription.id, status: { in: ['trial', 'active'] }, aiUsageCount: { lt: subscription.aiQuota ?? expectedQuota } },
-      data: { aiUsageCount: { increment: 1 } },
-    });
-    if (taken.count !== 1) {
-      throw new Error('Your image-generation allowance is exhausted. Upgrade your plan or wait for renewal.');
+    const isUnlimited = subscription.aiQuota === -1;
+    const effectiveQuota =
+      typeof subscription.aiQuota === 'number' && subscription.aiQuota > 0
+        ? Math.max(subscription.aiQuota, expectedQuota)
+        : expectedQuota;
+
+    if (isUnlimited) {
+      await db.subscription.updateMany({
+        where: { id: subscription.id },
+        data: { aiUsageCount: { increment: 1 } },
+      });
+    } else {
+      const taken = await db.subscription.updateMany({
+        where: {
+          id: subscription.id,
+          status: { in: ['trial', 'active'] },
+          aiUsageCount: { lt: effectiveQuota },
+        },
+        data: { aiUsageCount: { increment: 1 } },
+      });
+      if (taken.count !== 1) {
+        throw new Error('Your image-generation allowance is exhausted. Upgrade your plan or wait for renewal.');
+      }
     }
     reserved = subscription.id;
   }

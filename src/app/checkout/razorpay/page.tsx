@@ -168,7 +168,7 @@ function RazorpayCheckoutContent() {
             razorpay_order_id: data.order_id || orderId || paymentLinkId,
           });
         } else {
-          setError(data.error || 'Razorpay signature verification failed. Please retry.');
+          setError(data.error || 'Payment signature verification failed. Please retry.');
         }
       })
       .catch((err: any) => {
@@ -278,7 +278,7 @@ function RazorpayCheckoutContent() {
           return;
         }
         clearTimeout(watchdog);
-        throw new Error('Could not load Razorpay checkout SDK. Please retry.');
+        throw new Error('Could not load secure checkout. Please retry.');
       }
       const keyId =
         orderData.key_id ||
@@ -357,9 +357,9 @@ function RazorpayCheckoutContent() {
           <div className="w-12 h-12 mx-auto rounded-full bg-[#009F50]/30 border border-[#34D399]/40 flex items-center justify-center mb-3">
             <Zap className="size-6 text-[#34D399]" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight">Razorpay Standard Checkout</h1>
+          <h1 className="text-xl font-bold tracking-tight">BGOS Secure Checkout</h1>
           <p className="text-xs text-emerald-200 mt-1">
-            Official Indian Web UPI, QR, Netbanking & Card Checkout
+            Instant Plan Activation · UPI, QR, Netbanking & Cards
           </p>
         </div>
 
@@ -368,7 +368,7 @@ function RazorpayCheckoutContent() {
           {verifying ? (
             <div className="text-center space-y-3 py-8">
               <Loader2 className="size-10 mx-auto animate-spin text-[#009F50]" />
-              <p className="text-base font-bold text-slate-900">Verifying Razorpay Payment…</p>
+              <p className="text-base font-bold text-slate-900">Verifying Payment…</p>
               <p className="text-xs text-slate-500">
                 Confirming payment signature and activating your BGOS plan.
               </p>
@@ -481,7 +481,7 @@ function RazorpayCheckoutContent() {
                       rel="noopener noreferrer"
                       className="flex items-center justify-center gap-1.5 w-full bg-[#009F50] text-white font-bold h-10 text-xs rounded-lg mt-1 hover:bg-[#008A45] transition-all shadow-sm"
                     >
-                      <ExternalLink className="size-3.5" /> Open Direct Razorpay Page (UPI / Cards) ↗
+                      <ExternalLink className="size-3.5" /> Open Direct Payment Page (UPI / Cards) ↗
                     </a>
                   )}
                   <Button
@@ -505,10 +505,10 @@ function RazorpayCheckoutContent() {
                   {busy ? (
                     <>
                       <Loader2 className="size-5 animate-spin mr-2" />
-                      Opening Razorpay UI…
+                      Opening Secure Checkout…
                     </>
                   ) : (
-                    `Pay ₹${finalPriceInr.toLocaleString('en-IN')} with Razorpay`
+                    `Complete Payment — ₹${finalPriceInr.toLocaleString('en-IN')}`
                   )}
                 </Button>
 
@@ -520,13 +520,13 @@ function RazorpayCheckoutContent() {
                     className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-[#009F50] hover:bg-emerald-100 transition-all text-center mt-2 shadow-sm"
                   >
                     <ExternalLink className="size-3.5 shrink-0" />
-                    <span>Pay via Direct Razorpay Page (UPI, QR & Cards) ↗</span>
+                    <span>Pay via Direct Payment Page (UPI, QR & Cards) ↗</span>
                   </a>
                 )}
 
                 <p className="text-[11px] text-center text-muted-foreground flex items-center justify-center gap-1.5 pt-1">
                   <ShieldCheck className="size-3.5 text-slate-400" />
-                  Secured by 256-bit Razorpay Payment Gateway
+                  Secured by 256-bit Encrypted Payment Gateway
                 </p>
               </div>
             </>

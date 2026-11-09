@@ -11,6 +11,7 @@ import { BRAND } from '@/lib/brand';
 import { resolveSignupDefaultPlan } from '@/lib/billing-seed';
 import { getOrCreateBusinessForUser } from '@/lib/quote-flow-session';
 import { MOBILE_COOKIE, MOBILE_RETURN, readMobileState, sealMobileState } from '@/lib/bgos-mobile-auth';
+import { getBgosAiQuotaForPlan, resolveInstallCountryAndBilling } from '@/lib/bgos-billing';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -36,7 +37,8 @@ async function createTenantForGoogleUser(
   requestedPlan?: string,
   requestedSignupMode?: string,
   originHost?: string,
-  requestedApp?: string
+  requestedApp?: string,
+  request?: NextRequest,
 ) {
   // Use the Google user's name as the initial business name.
   const businessName = `${userName || userEmail.split('@')[0]}'s Workspace`;
@@ -84,12 +86,18 @@ async function createTenantForGoogleUser(
 
   const productType = isBgos ? 'bgos' : (isBosHost ? 'bos' : (isChatbotly ? 'chatbotly' : (isQuoteFlowHost ? 'quoteflow' : (isStandalone ? 'forms' : 'crm'))));
   const trialEndsAt = isFreePlan ? null : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const geo = await resolveInstallCountryAndBilling({
+    request: request ?? null,
+    allowIpLookup: Boolean(request),
+  });
 
   const tenant = await db.tenant.create({
     data: {
       name: businessName,
       slug,
       email: userEmail,
+      country: geo.countryCode,
+      currency: geo.currency,
       plan: signupPlan,
       planStatus: isFreePlan ? 'active' : 'trial',
       trialEndsAt, // 7-day trial (null for free)
@@ -170,9 +178,10 @@ async function createTenantForGoogleUser(
         plan: signupPlan,
         status: isFreePlan ? 'active' : 'trial',
         amount: signupPlan === 'standalone_business' ? 19 : (signupPlan === 'standalone_starter' ? 10 : 0),
-        currency: 'USD',
+        currency: isBgos ? geo.currency : (geo.countryCode === 'IN' ? 'INR' : 'USD'),
         billingCycle: 'monthly',
         trialEndsAt,
+        ...(isBgos ? { aiQuota: getBgosAiQuotaForPlan(signupPlan) } : {}),
         maxUsers: signupPlan === 'standalone_business' ? 10 : (signupPlan === 'standalone_starter' ? 3 : 5),
         maxJobs: 200,
         maxWorkflows: 10,
@@ -732,7 +741,8 @@ export async function GET(request: NextRequest) {
           state.plan,
           state.signupMode,
           state.originHost,
-          state.app
+          state.app,
+          request,
         );
         const tokens = await issueAuthTokens({
           ...authUser,
@@ -816,7 +826,8 @@ export async function GET(request: NextRequest) {
       state.plan,
       state.signupMode,
       state.originHost,
-      state.app
+      state.app,
+      request,
     );
 
     const authUser = {

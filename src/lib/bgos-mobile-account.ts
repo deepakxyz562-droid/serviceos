@@ -1,14 +1,24 @@
+import type { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { generateSlug } from '@/lib/auth';
 import { ProductAccessError, resolveProductAccess } from '@/lib/product-access';
 import { isBgosIdentity } from '../../shared/bgos-identity';
 import { isDeliverableEmail } from '@/lib/emails/bgos/templates';
+import { getBgosAiQuotaForPlan, resolveInstallCountryAndBilling } from '@/lib/bgos-billing';
 
 /**
  * Auto-provision Tenant + Workspace + Subscription for mobile users
  * ensuring seamless 1-tap sign-in without requiring desktop web setup.
  */
-export async function ensureBgosTenantAndWorkspace(userId: string) {
+export async function ensureBgosTenantAndWorkspace(
+  userId: string,
+  options?: {
+    request?: NextRequest | Request;
+    phone?: string | null;
+    explicitCountry?: string | null;
+    explicitTimeZone?: string | null;
+  },
+) {
   const user = await db.user.findUnique({
     where: { id: userId },
     include: { workspace: true, tenant: true },
@@ -31,18 +41,39 @@ export async function ensureBgosTenantAndWorkspace(userId: string) {
       slugCounter++;
     }
 
+    const geo = await resolveInstallCountryAndBilling({
+      request: options?.request,
+      phone: options?.phone || user.phone,
+      explicitCountry: options?.explicitCountry,
+      explicitTimeZone: options?.explicitTimeZone,
+      allowIpLookup: Boolean(options?.request),
+    });
+    const deviceTz =
+      options?.explicitTimeZone ||
+      options?.request?.headers?.get('x-device-timezone')?.trim() ||
+      null;
+
     const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     tenant = await db.tenant.create({
       data: {
         name: businessName,
         slug,
         email: user.email,
-        phone: user.phone || null,
+        phone: user.phone || options?.phone || null,
         plan: 'starter',
         planStatus: 'trial',
         trialEndsAt,
-        country: 'US',
-        currency: 'USD',
+        country: geo.countryCode,
+        currency: geo.currency,
+        ...(deviceTz
+          ? {
+              settingsJson: JSON.stringify({
+                country: geo.countryCode,
+                timezone: deviceTz,
+                countryVerified: false,
+              }),
+            }
+          : {}),
         onboardingCompleted: false,
         onboardingStep: 1,
       },
@@ -58,8 +89,9 @@ export async function ensureBgosTenantAndWorkspace(userId: string) {
         status: 'trial',
         trialEndsAt,
         amount: 0,
-        currency: 'USD',
+        currency: geo.currency,
         billingCycle: 'monthly',
+        aiQuota: getBgosAiQuotaForPlan('starter'),
       },
     });
   }

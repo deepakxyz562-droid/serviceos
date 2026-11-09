@@ -7,6 +7,7 @@ import {
   BGOS_AI_QUOTAS,
   BGOS_PLANS,
   BGOS_USD_PRICES,
+  getBgosAiQuotaForPlan,
   normalizeBgosPlanCode,
   type BgosPlan,
 } from '@/lib/bgos-billing';
@@ -34,6 +35,20 @@ export interface BgosEntitlementResult {
   reason?: string;
 }
 
+const BGOS_PLAN_RANK: Record<string, number> = {
+  free: 0,
+  trial: 0,
+  starter: 1,
+  growth: 2,
+  business: 3,
+  enterprise: 4,
+};
+
+function getPlanRank(plan: string | null | undefined): number {
+  const normalized = normalizeBgosPlanCode(plan);
+  return BGOS_PLAN_RANK[normalized] ?? 0;
+}
+
 function isSourcePaidActive(
   row: EntitlementSourceRow | null | undefined,
   nowMs: number,
@@ -41,12 +56,22 @@ function isSourcePaidActive(
 ): boolean {
   if (!row) return false;
   if (!isTenantRow && row.billingSource === 'legacy') return false;
-  const status = String(row.status || '').toLowerCase();
+  const status = String(row.status || '').trim().toLowerCase();
   if (status !== 'active') return false;
   const plan = normalizeBgosPlanCode(row.plan);
-  if (plan === 'free') return false;
+  if (!plan || plan === 'free') return false;
   const periodEnd = toValidDate(row.currentPeriodEnd ?? row.endDate);
-  if (periodEnd && periodEnd.getTime() <= nowMs) return false;
+  if (periodEnd && periodEnd.getTime() <= nowMs) {
+    // Trial provisioning in /api/subscriptions sets endDate/planEndsAt = trialEndsAt.
+    // If an admin later flips status to 'active' without clearing that old trial timestamp,
+    // do not reject the active paid plan unless it was an independent paid billing period.
+    const trialEnd = toValidDate(row.trialEndsAt);
+    const copiedFromTrial =
+      trialEnd !== null && Math.abs(periodEnd.getTime() - trialEnd.getTime()) <= 120_000;
+    if (!copiedFromTrial) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -121,12 +146,16 @@ export function evaluateBgosEntitlement(params: {
   const subRow: EntitlementSourceRow | null = params.subscription ?? null;
   const prodRow: EntitlementSourceRow | null = params.productSubscription ?? null;
 
-  // Pick paid source first across non-legacy productSubscription, subscription, tenant
-  const paidCandidate =
-    (isSourcePaidActive(prodRow, nowMs, false) && prodRow) ||
-    (isSourcePaidActive(subRow, nowMs, false) && subRow) ||
-    (isSourcePaidActive(tenantRow, nowMs, true) && tenantRow) ||
-    null;
+  // Pick paid source first across non-legacy productSubscription, subscription, tenant.
+  // If multiple sources show an active paid status (for example when Tenant was upgraded
+  // to Business while a legacy/trial Subscription row still says Starter), prefer the
+  // highest active plan tier so upgrades are never masked by stale rows.
+  const paidCandidates: EntitlementSourceRow[] = [];
+  if (isSourcePaidActive(prodRow, nowMs, false) && prodRow) paidCandidates.push(prodRow);
+  if (isSourcePaidActive(subRow, nowMs, false) && subRow) paidCandidates.push(subRow);
+  if (isSourcePaidActive(tenantRow, nowMs, true) && tenantRow) paidCandidates.push(tenantRow);
+  paidCandidates.sort((a, b) => getPlanRank(b.plan) - getPlanRank(a.plan));
+  const paidCandidate = paidCandidates[0] ?? null;
 
   if (paidCandidate) {
     const endDate = toValidDate(paidCandidate.currentPeriodEnd ?? paidCandidate.endDate);
@@ -209,21 +238,39 @@ export function evaluateBgosEntitlement(params: {
   };
 }
 
+export function pickBestSubscriptionRow<T extends EntitlementSourceRow>(rows: T[]): T | null {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const nowMs = Date.now();
+  const activePaidRows = rows.filter((r) => isSourcePaidActive(r, nowMs, false));
+  if (activePaidRows.length > 0) {
+    activePaidRows.sort((a, b) => getPlanRank(b.plan) - getPlanRank(a.plan));
+    return activePaidRows[0];
+  }
+  const activeTrial = rows.find((r) => isSourceTrialActive(r, nowMs, false).active);
+  if (activeTrial) return activeTrial;
+  return rows[0] ?? null;
+}
+
 export async function getTenantBgosEntitlement(tenantId: string): Promise<{
   entitlement: BgosEntitlementResult;
   tenant: any;
   subscription: any;
   productSubscription: any;
 }> {
-  const [tenant, subscription, bgosWorkspaces] = await Promise.all([
+  const [tenant, subscriptionsRaw, bgosWorkspaces] = await Promise.all([
     typeof (db as any).tenant?.findUnique === 'function'
       ? (db as any).tenant.findUnique({ where: { id: tenantId } }).catch(() => null)
       : Promise.resolve(null),
-    typeof (db as any).subscription?.findFirst === 'function'
+    typeof (db as any).subscription?.findMany === 'function'
       ? (db as any).subscription
-          .findFirst({ where: { tenantId }, orderBy: { createdAt: 'desc' } })
-          .catch(() => null)
-      : Promise.resolve(null),
+          .findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' }, take: 10 })
+          .catch(() => [])
+      : typeof (db as any).subscription?.findFirst === 'function'
+        ? (db as any).subscription
+            .findFirst({ where: { tenantId }, orderBy: { createdAt: 'desc' } })
+            .then((row: any) => (row ? [row] : []))
+            .catch(() => [])
+        : Promise.resolve([]),
     typeof (db as any).productWorkspace?.findMany === 'function'
       ? (db as any).productWorkspace
           .findMany({
@@ -234,14 +281,25 @@ export async function getTenantBgosEntitlement(tenantId: string): Promise<{
       : Promise.resolve([]),
   ]);
 
+  const subscription = pickBestSubscriptionRow(
+    Array.isArray(subscriptionsRaw) ? subscriptionsRaw : [],
+  );
+
   let productSubscription: any = null;
   const wsIds = Array.isArray(bgosWorkspaces)
     ? bgosWorkspaces.map((w: any) => w.workspaceId).filter(Boolean)
     : [];
-  if (wsIds.length > 0 && typeof (db as any).productSubscription?.findFirst === 'function') {
-    productSubscription = await (db as any).productSubscription
-      .findFirst({ where: { workspaceId: { in: wsIds } } })
-      .catch(() => null);
+  if (wsIds.length > 0) {
+    if (typeof (db as any).productSubscription?.findMany === 'function') {
+      const prodSubs = await (db as any).productSubscription
+        .findMany({ where: { workspaceId: { in: wsIds } } })
+        .catch(() => []);
+      productSubscription = pickBestSubscriptionRow(Array.isArray(prodSubs) ? prodSubs : []);
+    } else if (typeof (db as any).productSubscription?.findFirst === 'function') {
+      productSubscription = await (db as any).productSubscription
+        .findFirst({ where: { workspaceId: { in: wsIds } } })
+        .catch(() => null);
+    }
   }
 
   const entitlement = evaluateBgosEntitlement({
@@ -320,8 +378,7 @@ export async function requireBgosEntitled(user: {
       entitlement,
       response: NextResponse.json(
         {
-          error:
-            'Your 7-day trial has ended. Complete payment via Razorpay or Creem to unlock all BGOS features.',
+          error: 'Your 7-day trial has ended. Complete payment to unlock all BGOS features.',
           code: 'PAYMENT_REQUIRED',
           entitlement,
         },
@@ -331,6 +388,156 @@ export async function requireBgosEntitled(user: {
   }
 
   return { ok: true, entitlement };
+}
+
+/**
+ * Synchronize Tenant, Subscription, ProductSubscription, and cache after SuperAdmin
+ * changes a tenant plan/status or modifies a subscription row directly.
+ */
+export async function syncSuperadminPlanState(input: {
+  tenantId: string;
+  plan?: string | null;
+  planStatus?: string | null;
+  aiQuota?: number | null;
+  endDate?: Date | string | null;
+}): Promise<void> {
+  const normalizedPlan = input.plan ? normalizeBgosPlanCode(input.plan) : null;
+  const normalizedStatus = input.planStatus ? String(input.planStatus).trim().toLowerCase() : null;
+  const isActivatingPaid =
+    normalizedStatus === 'active' && Boolean(normalizedPlan && normalizedPlan !== 'free');
+  const resolvedQuota =
+    typeof input.aiQuota === 'number' && Number.isFinite(input.aiQuota)
+      ? input.aiQuota
+      : normalizedPlan
+        ? getBgosAiQuotaForPlan(normalizedPlan)
+        : undefined;
+  const explicitEndDate = input.endDate !== undefined ? toValidDate(input.endDate) : undefined;
+
+  try {
+    const existingSub =
+      typeof (db as any).subscription?.findFirst === 'function'
+        ? await (db as any).subscription
+            .findFirst({ where: { tenantId: input.tenantId }, orderBy: { createdAt: 'desc' } })
+            .catch(() => null)
+        : null;
+
+    const existingSubEnd = toValidDate(existingSub?.endDate);
+    const shouldClearPastSubEnd =
+      isActivatingPaid && existingSubEnd && existingSubEnd.getTime() <= Date.now();
+
+    if (existingSub && typeof (db as any).subscription?.update === 'function') {
+      const subUpdate: Record<string, unknown> = {};
+      if (normalizedPlan) subUpdate.plan = normalizedPlan;
+      if (normalizedStatus) subUpdate.status = normalizedStatus;
+      if (isActivatingPaid) {
+        subUpdate.trialEndsAt = null;
+        if (explicitEndDate !== undefined) {
+          subUpdate.endDate = explicitEndDate;
+        } else if (shouldClearPastSubEnd) {
+          subUpdate.endDate = null;
+        }
+      }
+      if (resolvedQuota !== undefined) {
+        const currentQuota = typeof existingSub.aiQuota === 'number' ? existingSub.aiQuota : 0;
+        if (resolvedQuota === -1 || currentQuota === 0 || currentQuota < resolvedQuota || input.aiQuota != null) {
+          subUpdate.aiQuota = resolvedQuota;
+        }
+      }
+      if (Object.keys(subUpdate).length > 0) {
+        await (db as any).subscription.update({
+          where: { id: existingSub.id },
+          data: subUpdate,
+        }).catch(() => {});
+      }
+    } else if (
+      isActivatingPaid &&
+      normalizedPlan &&
+      typeof (db as any).subscription?.create === 'function'
+    ) {
+      await (db as any).subscription
+        .create({
+          data: {
+            tenantId: input.tenantId,
+            plan: normalizedPlan,
+            status: 'active',
+            amount: 0,
+            currency: 'USD',
+            billingCycle: 'monthly',
+            paymentProvider: 'none',
+            startDate: new Date(),
+            endDate: explicitEndDate ?? null,
+            trialEndsAt: null,
+            maxUsers: normalizedPlan === 'business' ? 25 : normalizedPlan === 'growth' ? 10 : 5,
+            maxJobs: normalizedPlan === 'business' ? 99999 : 1000,
+            maxWorkflows: normalizedPlan === 'business' ? 999 : 50,
+            featuresJson: '{}',
+            aiQuota: resolvedQuota ?? getBgosAiQuotaForPlan(normalizedPlan),
+            aiUsageCount: 0,
+          },
+        })
+        .catch(() => {});
+    }
+
+    if (typeof (db as any).productWorkspace?.findMany === 'function') {
+      const bgosWorkspaces = await (db as any).productWorkspace
+        .findMany({ where: { tenantId: input.tenantId, product: 'bgos' }, select: { workspaceId: true } })
+        .catch(() => []);
+      const wsIds = Array.isArray(bgosWorkspaces)
+        ? bgosWorkspaces.map((w: any) => w.workspaceId).filter(Boolean)
+        : [];
+      for (const wsId of wsIds) {
+        if (typeof (db as any).productSubscription?.findUnique !== 'function') break;
+        const existingPs = await (db as any).productSubscription
+          .findUnique({ where: { workspaceId: wsId } })
+          .catch(() => null);
+        if (existingPs && typeof (db as any).productSubscription?.update === 'function') {
+          const psUpdate: Record<string, unknown> = { billingSource: 'product' };
+          if (normalizedPlan) psUpdate.plan = normalizedPlan;
+          if (normalizedStatus) psUpdate.status = normalizedStatus;
+          if (isActivatingPaid) {
+            psUpdate.trialEndsAt = null;
+            const psEnd = toValidDate(existingPs.currentPeriodEnd);
+            if (explicitEndDate !== undefined) {
+              psUpdate.currentPeriodEnd = explicitEndDate;
+            } else if (psEnd && psEnd.getTime() <= Date.now()) {
+              psUpdate.currentPeriodEnd = null;
+            }
+          }
+          await (db as any).productSubscription
+            .update({ where: { workspaceId: wsId }, data: psUpdate })
+            .catch(() => {});
+        } else if (
+          isActivatingPaid &&
+          normalizedPlan &&
+          typeof (db as any).productSubscription?.create === 'function'
+        ) {
+          await (db as any).productSubscription
+            .create({
+              data: {
+                workspaceId: wsId,
+                plan: normalizedPlan,
+                status: 'active',
+                trialEndsAt: null,
+                currentPeriodEnd: explicitEndDate ?? null,
+                provider: 'none',
+                billingSource: 'product',
+              },
+            })
+            .catch(() => {});
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[syncSuperadminPlanState] sync warning:', err);
+  }
+
+  try {
+    cache.invalidateByPrefix(`subscription:${input.tenantId}`);
+    cache.invalidateByPrefix('subscription:');
+    cache.invalidateByPrefix('superadmin:');
+  } catch {
+    // best-effort
+  }
 }
 
 export interface ActivateBgosSubscriptionInput {

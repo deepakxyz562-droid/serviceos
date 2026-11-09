@@ -3,7 +3,7 @@ import { AccessibilityInfo, Animated, ActivityIndicator, Alert, Easing, Image, L
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card, Screen, Action, ErrorNotice, MenuRow, Badge, MetricCard, ui, colors, Avatar, Loading } from '../../src/components/ui';
-import { getGreetingForLocalTime } from '../../src/lib/country-codes';
+import { detectDeviceCountryAndTimezone, getGreetingForLocalTime } from '../../src/lib/country-codes';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const brandMark = require('../../assets/brand-mark.png');
@@ -1362,7 +1362,9 @@ export default function HomeScreen() {
           </View>
           <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 14, paddingVertical: 6 }}>
             <Text style={{ fontSize: 11, color: '#3730A3', fontWeight: '600' }}>
-              Full access to Google Growth, 1-Tap Reviews & AI · Upgrade anytime from ₹499/mo
+              Full access to Google Growth, 1-Tap Reviews & AI · Upgrade anytime from{' '}
+              {workspace.data?.billing?.startingPriceLabel ||
+                (detectDeviceCountryAndTimezone().country.code === 'IN' ? '₹499/mo' : '$9/mo')}
             </Text>
           </View>
         </View>

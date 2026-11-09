@@ -2,9 +2,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Check, Loader2, Globe } from 'lucide-react';
+import { AlertTriangle, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { authFetch } from '@/lib/client-auth';
+import { authFetch, detectClientDeviceLocale } from '@/lib/client-auth';
 import { toast } from 'sonner';
 
 type BgosEntitlement = {
@@ -79,7 +79,13 @@ function loadRazorpayScript(): Promise<boolean> {
 export function BgosBilling() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [region, setRegion] = useState<'india' | 'international'>('india');
+  const [region, setRegion] = useState<'india' | 'international'>(() => {
+    const loc = detectClientDeviceLocale();
+    if (loc.countryCode) {
+      return loc.countryCode === 'IN' ? 'india' : 'international';
+    }
+    return 'india';
+  });
   const regionInitializedRef = useRef(false);
 
   const query = useQuery({
@@ -103,21 +109,24 @@ export function BgosBilling() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
+    const checkoutStatus = params.get('checkout');
     const creemStatus = params.get('creem');
     const razorpayStatus = params.get('razorpay');
 
-    if (creemStatus === 'success' || razorpayStatus === 'success') {
+    if (checkoutStatus === 'success' || creemStatus === 'success' || razorpayStatus === 'success') {
       toast.success('Payment received! Refreshing your subscription status…');
       void refetchBilling().then(() => {
         window.dispatchEvent(new Event('bgos:billing-updated'));
       });
+      params.delete('checkout');
       params.delete('creem');
       params.delete('razorpay');
       params.delete('plan');
       const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`;
       window.history.replaceState({}, '', nextUrl);
-    } else if (creemStatus === 'cancelled') {
-      toast.info('Creem checkout was cancelled.');
+    } else if (checkoutStatus === 'cancelled' || creemStatus === 'cancelled') {
+      toast.info('Checkout was cancelled.');
+      params.delete('checkout');
       params.delete('creem');
       const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`;
       window.history.replaceState({}, '', nextUrl);
@@ -129,25 +138,22 @@ export function BgosBilling() {
     setError('');
 
     try {
-      const chosenGateway = region === 'india' ? 'razorpay' : 'creem';
-
       const res = await authFetch('/api/bgos/billing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plan: planCode,
-          gateway: chosenGateway,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Checkout initialization failed');
 
-      // ── 1. Razorpay standard modal checkout (India) ────────────────────────
+      // ── 1. Modal checkout flow (INR) ──────────────────────────────────────
       if (data.gateway === 'razorpay' && data.order_id) {
         const scriptOk = await loadRazorpayScript();
         if (!scriptOk) {
-          throw new Error('Could not load Razorpay checkout script.');
+          throw new Error('Could not load secure checkout script.');
         }
 
         const options = {
@@ -161,7 +167,7 @@ export function BgosBilling() {
           modal: {
             ondismiss: () => {
               setBusy(false);
-              toast.info('Razorpay payment cancelled');
+              toast.info('Payment cancelled');
             },
           },
           handler: async (response: any) => {
@@ -245,37 +251,9 @@ export function BgosBilling() {
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">Room for your next stage.</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {region === 'india'
-              ? 'Monthly plans in INR (₹) via Razorpay. UPI, Netbanking & Cards accepted.'
-              : 'Monthly plans in USD ($) via Creem. Global Cards, Apple Pay & Google Pay accepted.'}
+              ? 'Monthly plans in INR (₹). UPI, Netbanking & Cards accepted.'
+              : 'Monthly plans in USD ($). Global Cards, Apple Pay & Google Pay accepted.'}
           </p>
-        </div>
-
-        {/* Currency & Gateway Region Switcher */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl self-start sm:self-auto border border-border">
-          <button
-            type="button"
-            onClick={() => setRegion('india')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              region === 'india'
-                ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <span>🇮🇳</span>
-            <span>India (Razorpay · ₹)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setRegion('international')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              region === 'international'
-                ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Globe className="size-3.5" />
-            <span>International (Creem · $)</span>
-          </button>
         </div>
       </header>
 
@@ -301,7 +279,7 @@ export function BgosBilling() {
               <div>
                 <p className="font-bold">Your 7-day free trial has ended</p>
                 <p className="text-xs mt-0.5 text-rose-800 dark:text-rose-200">
-                  Complete payment using Razorpay (India · ₹) or Creem (International · $) below to unlock all BGOS features.
+                  Choose a plan below and complete payment to unlock all BGOS features.
                 </p>
               </div>
             </div>
@@ -375,7 +353,7 @@ export function BgosBilling() {
                   </p>
 
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    {region === 'india' ? 'Via Razorpay (UPI, Cards)' : 'Via Creem (Cards, Apple Pay)'}
+                    {region === 'india' ? 'UPI, Netbanking & Cards accepted' : 'Global Cards, Apple Pay & Google Pay'}
                   </p>
 
                   <ul className="my-6 flex-1 space-y-3">
@@ -400,9 +378,9 @@ export function BgosBilling() {
                     ) : plan.code === 'free' ? (
                       'Included in 7-day trial'
                     ) : !isGatewayReady ? (
-                      `${region === 'india' ? 'Razorpay' : 'Creem'} not configured`
+                      'Checkout unavailable'
                     ) : (
-                      `Pay with ${region === 'india' ? `Razorpay (₹${inrPrice})` : `Creem ($${usdPrice})`}`
+                      `Subscribe — ${region === 'india' ? `₹${inrPrice.toLocaleString('en-IN')}/mo` : `$${usdPrice}/mo`}`
                     )}
                   </Button>
                 </div>

@@ -19,6 +19,7 @@ import { apiRequest } from '../../lib/api';
 import { getToken } from '../../lib/auth';
 import { useAuthStore } from '../../stores/auth-store';
 import { WEB_URL } from '../../lib/constants';
+import { detectDeviceCountryAndTimezone } from '../../lib/country-codes';
 
 interface BillingResponse {
   subscription?: {
@@ -98,7 +99,13 @@ interface PaywallGateProps {
 export function PaywallGate({ children }: PaywallGateProps) {
   const billingRes = useResource<BillingResponse>('/api/bgos/billing');
   const [activatingPlan, setActivatingPlan] = useState<string | null>(null);
-  const [region, setRegion] = useState<'india' | 'international'>('india');
+  const [region, setRegion] = useState<'india' | 'international'>(() => {
+    try {
+      return detectDeviceCountryAndTimezone().country.code === 'IN' ? 'india' : 'international';
+    } catch {
+      return 'india';
+    }
+  });
   const regionInitRef = useRef(false);
   const { logout } = useAuthStore();
 
@@ -149,10 +156,10 @@ export function PaywallGate({ children }: PaywallGateProps) {
       if (region === 'international') {
         const res = await apiRequest<{ url?: string; error?: string }>('/api/bgos/billing', {
           method: 'POST',
-          body: { plan: planCode, gateway: 'creem' },
+          body: { plan: planCode },
         });
         if (!res?.url) {
-          throw new Error(res?.error || 'Could not start Creem international checkout.');
+          throw new Error(res?.error || 'Could not start online checkout. Please try again.');
         }
         await WebBrowser.openBrowserAsync(res.url, {
           presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
@@ -204,30 +211,8 @@ export function PaywallGate({ children }: PaywallGateProps) {
           </View>
           <Text style={styles.title}>Complete Payment to Continue</Text>
           <Text style={styles.subtitle}>
-            Your 7-day full-access trial has ended. Subscribe via Razorpay (India) or Creem (International) to unlock all BGOS features.
+            Your 7-day full-access trial has ended. Choose a plan below to unlock all BGOS features.
           </Text>
-        </View>
-
-        {/* Region / Gateway Switcher */}
-        <View style={styles.regionSwitcher}>
-          <Pressable
-            onPress={() => setRegion('india')}
-            style={[styles.regionBtn, region === 'india' && styles.regionBtnActive]}
-          >
-            <Text style={[styles.regionBtnText, region === 'india' && styles.regionBtnTextActive]}>
-              🇮🇳 India (Razorpay · ₹)
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setRegion('international')}
-            style={[styles.regionBtn, region === 'international' && styles.regionBtnActive]}
-          >
-            <Text
-              style={[styles.regionBtnText, region === 'international' && styles.regionBtnTextActive]}
-            >
-              🌐 International (Creem · $)
-            </Text>
-          </Pressable>
         </View>
 
         {/* Pricing Cards */}
@@ -236,7 +221,6 @@ export function PaywallGate({ children }: PaywallGateProps) {
             const isBusy = activatingPlan === plan.code;
             const priceText =
               region === 'india' ? `₹${plan.priceInr.toLocaleString('en-IN')}` : `$${plan.priceUsd}`;
-            const gatewayLabel = region === 'india' ? 'Razorpay' : 'Creem';
             const gatewayReady =
               region === 'india'
                 ? billingRes.data?.gateways?.razorpay !== false
@@ -295,8 +279,8 @@ export function PaywallGate({ children }: PaywallGateProps) {
                       <MaterialIcons name="payment" size={18} color="#FFFFFF" />
                       <Text style={styles.payButtonText}>
                         {gatewayReady
-                          ? `Pay ${priceText} with ${gatewayLabel}`
-                          : `${gatewayLabel} Unavailable`}
+                          ? `Subscribe for ${priceText}/mo`
+                          : 'Checkout Unavailable'}
                       </Text>
                     </View>
                   )}
@@ -318,8 +302,8 @@ export function PaywallGate({ children }: PaywallGateProps) {
             <MaterialIcons name="security" size={16} color={colors.muted} />
             <Text style={styles.trustText}>
               {region === 'india'
-                ? 'Secured by Razorpay · UPI, QR, Netbanking & Cards'
-                : 'Secured by Creem · Global Cards, Apple Pay & Google Pay'}
+                ? 'Secured 256-bit encrypted checkout · UPI, QR, Netbanking & Cards'
+                : 'Secured 256-bit encrypted checkout · Global Cards, Apple Pay & Google Pay'}
             </Text>
           </View>
           <Pressable
@@ -348,31 +332,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginBottom: 18,
-  },
-  regionSwitcher: {
-    flexDirection: 'row',
-    backgroundColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 4,
-    gap: 4,
-    marginBottom: 18,
-  },
-  regionBtn: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 9,
-    alignItems: 'center',
-  },
-  regionBtnActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  regionBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#475569',
-  },
-  regionBtnTextActive: {
-    color: '#047857',
   },
   refreshButton: {
     paddingVertical: 8,

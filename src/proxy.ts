@@ -410,7 +410,7 @@ export async function proxy(request: NextRequest) {
           const preflightResponse = new NextResponse(null, { status: 204 });
           preflightResponse.headers.set('Access-Control-Allow-Origin', origin);
           preflightResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-          preflightResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Cron-Secret, x-cron-secret');
+          preflightResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Cron-Secret, x-cron-secret, X-Device-Country, X-Device-Timezone');
           preflightResponse.headers.set('Access-Control-Allow-Credentials', 'true');
           preflightResponse.headers.set('Access-Control-Max-Age', '86400');
           preflightResponse.headers.set('X-Request-Id', requestId);

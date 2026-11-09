@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Ensure tenant and workspace are provisioned for seamless 1-tap mobile sign-in
-    await ensureBgosTenantAndWorkspace(user.id);
+    await ensureBgosTenantAndWorkspace(user.id, { request });
 
     const account = await resolveBgosMobileAccount(user.id);
     const authUser = {

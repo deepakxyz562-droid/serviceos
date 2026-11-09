@@ -74,6 +74,25 @@ function pruneCache(): void {
   }
 }
 
+const GEO_COUNTRY_HEADERS = [
+  'x-vercel-ip-country',
+  'cf-ipcountry',
+  'cloudfront-viewer-country',
+  'fly-client-country',
+  'x-country-code',
+] as const
+
+export function getCountryCodeFromHeaders(headers?: Headers | null): string | null {
+  if (!headers) return null
+  for (const name of GEO_COUNTRY_HEADERS) {
+    const raw = headers.get(name)?.trim().toUpperCase()
+    if (raw && /^[A-Z]{2}$/.test(raw) && raw !== 'XX' && raw !== 'T1') {
+      return raw
+    }
+  }
+  return null
+}
+
 /**
  * Resolve the client's approximate location from their IP address.
  * Call this from server components / API routes where you have a NextRequest.
@@ -81,19 +100,19 @@ function pruneCache(): void {
 export async function getIpLocation(
   req: NextRequest
 ): Promise<IpLocation> {
-  // ── Primary: Vercel headers ────────────────────────────────────────────
+  // ── Primary: Vercel / CDN Edge headers ────────────────────────────────
   const vercelCity = req.headers.get('x-vercel-ip-city')
   const vercelLat = req.headers.get('x-vercel-ip-latitude')
   const vercelLng = req.headers.get('x-vercel-ip-longitude')
-  const vercelCountry = req.headers.get('x-vercel-ip-country')
+  const headerCountry = getCountryCodeFromHeaders(req.headers)
   const vercelRegion = req.headers.get('x-vercel-ip-country-region')
 
-  if (vercelCity || (vercelLat && vercelLng)) {
+  if (vercelCity || (vercelLat && vercelLng) || headerCountry) {
     return {
       city: vercelCity || null,
       state: vercelRegion || null,
       country: null,
-      countryCode: vercelCountry || null,
+      countryCode: headerCountry,
       lat: vercelLat ? parseFloat(vercelLat) : null,
       lng: vercelLng ? parseFloat(vercelLng) : null,
       source: 'ip',

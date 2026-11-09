@@ -4,6 +4,7 @@ import { hashPassword, generateSlug, getProductAppUrl } from '@/lib/auth';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { issueVerificationToken, sendVerificationEmail } from '@/lib/emails/verification-email';
 import { resolveSignupDefaultPlan } from '@/lib/billing-seed';
+import { getBgosAiQuotaForPlan, resolveInstallCountryAndBilling } from '@/lib/bgos-billing';
 
 export async function POST(request: NextRequest) {
   const rateLimited = applyRateLimit(authLimiter, request);
@@ -84,6 +85,15 @@ export async function POST(request: NextRequest) {
     // Free plan (CRM only): no trial, no expiration, 100 lifetime jobs
     const isFreePlan = !isBgos && signupPlan === 'free';
 
+    const geo = await resolveInstallCountryAndBilling({
+      request,
+      phone: phone || null,
+      explicitCountry: country || null,
+      explicitTimeZone: typeof body.timeZone === 'string' ? body.timeZone : null,
+      allowIpLookup: !country,
+    });
+    const resolvedCountry = country || geo.countryCode;
+
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
@@ -92,7 +102,8 @@ export async function POST(request: NextRequest) {
         phone: phone || null,
         email,
         city: city || null,
-        country: country || null,
+        country: resolvedCountry,
+        currency: isBgos ? geo.currency : (resolvedCountry === 'IN' ? 'INR' : 'USD'),
         website: website || null,
         plan: signupPlan,
         planStatus: isFreePlan ? 'active' : 'trial',
@@ -243,9 +254,10 @@ export async function POST(request: NextRequest) {
           plan: signupPlan,
           status: 'trial',
           amount: signupPlan === 'standalone_business' ? 19 : (signupPlan === 'standalone_starter' ? 10 : 0),
-          currency: 'USD',
+          currency: isBgos ? geo.currency : (resolvedCountry === 'IN' ? 'INR' : 'USD'),
           billingCycle: 'monthly',
           trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          aiQuota: isBgos ? getBgosAiQuotaForPlan(signupPlan) : undefined,
           maxUsers: isStandalone ? (signupPlan === 'standalone_business' ? 10 : 1) : 5,
           maxJobs: isStandalone ? 0 : 200,
           maxWorkflows: isStandalone ? 5 : 10,

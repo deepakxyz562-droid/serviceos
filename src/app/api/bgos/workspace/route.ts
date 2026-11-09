@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { resolveTenantLocale, getCountryLocaleMeta, isValidTimeZone } from '@/lib/locale-timezone';
+import { resolveInstallCountryAndBilling } from '@/lib/bgos-billing';
 import type { BgosWorkspace } from '../../../../../shared/bgos-contracts';
 
 const patch = z.object({
@@ -31,8 +32,10 @@ const patch = z.object({
 }).strict();
 function parse(value: string | null) { try { return JSON.parse(value || '{}'); } catch { return {}; } }
 
-export async function GET() {
-  const user = await getAuthUser();
+export async function GET(): Promise<NextResponse>;
+export async function GET(request: NextRequest): Promise<NextResponse>;
+export async function GET(request?: NextRequest): Promise<NextResponse> {
+  const user = await getAuthUser(request);
   if (!user?.tenantId || user.role === 'customer') return NextResponse.json({ error: 'Workspace authentication required' }, { status: 401 });
   try {
     const tenant = await db.tenant.findUnique({
@@ -53,8 +56,12 @@ export async function GET() {
     });
     if (!tenant) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     const settings = parse(tenant.settingsJson);
+    const locationBilling = await resolveInstallCountryAndBilling({
+      request: request ?? null,
+      tenant,
+    });
     const resolvedLocale = resolveTenantLocale({
-      tenantCountry: tenant.country,
+      tenantCountry: locationBilling.countryCode || tenant.country,
       settingsJson: settings,
     });
     // Resolve primary intake form: explicitly configured or most recently updated active form
@@ -118,6 +125,12 @@ export async function GET() {
         },
       },
       plan: { code: subscription?.billingSource === 'product' ? subscription.plan : tenant.plan, status: subscription?.billingSource === 'product' ? subscription.status : tenant.planStatus },
+      billing: {
+        region: locationBilling.defaultRegion,
+        currency: locationBilling.currency,
+        countryCode: locationBilling.countryCode,
+        startingPriceLabel: locationBilling.startingPriceLabel,
+      },
     };
     return NextResponse.json(data, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch { return NextResponse.json({ error: 'Workspace unavailable. Please retry.' }, { status: 503 }); }
@@ -137,6 +150,7 @@ export async function PATCH(request: NextRequest) {
     if (input.data.country) {
       const normalizedCountry = input.data.country.trim().toUpperCase();
       settings.country = normalizedCountry;
+      settings.countryVerified = true;
       if (!input.data.timeZone && !settings.timezone) {
         settings.timezone = getCountryLocaleMeta(normalizedCountry).timeZone;
       }
@@ -157,7 +171,11 @@ export async function PATCH(request: NextRequest) {
       settings.intakeFormId = input.data.intakeFormId;
     }
     const updateData: Record<string, any> = { settingsJson: JSON.stringify(settings) };
-    if (input.data.country) updateData.country = input.data.country.trim().toUpperCase();
+    if (input.data.country) {
+      const normalizedCountry = input.data.country.trim().toUpperCase();
+      updateData.country = normalizedCountry;
+      updateData.currency = normalizedCountry === 'IN' ? 'INR' : 'USD';
+    }
     if (input.data.bookingPageConfig?.phone) updateData.phone = input.data.bookingPageConfig.phone;
     if (input.data.bookingPageConfig?.website) updateData.website = input.data.bookingPageConfig.website;
     if (input.data.bookingPageConfig?.seoDescription) updateData.description = input.data.bookingPageConfig.seoDescription;

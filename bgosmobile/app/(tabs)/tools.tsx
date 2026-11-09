@@ -274,7 +274,7 @@ export default function ToolsScreen() {
         <View style={[ui.row, { gap: 10 }]}>
           <View style={{ flex: 1 }}>
             <Action
-              label="Upgrade Plan (₹)"
+              label="Upgrade Plan"
               icon="stars"
               onPress={() => router.push('/my-plan')}
             />

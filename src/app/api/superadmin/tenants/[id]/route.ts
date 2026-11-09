@@ -4,6 +4,9 @@ import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { cache } from '@/lib/cache';
 import { submitTenantUrlToIndexNow } from '@/lib/indexnow';
+import { syncSuperadminPlanState } from '@/lib/bgos-entitlement';
+import { normalizeBgosPlanCode } from '@/lib/bgos-billing';
+import { toValidDate } from '@/lib/safe-date';
 
 export async function GET(
   request: NextRequest,
@@ -113,7 +116,7 @@ export async function PATCH(
 
     // Handle plan update
     if (body.plan !== undefined && typeof body.plan === 'string') {
-      updateData.plan = body.plan;
+      updateData.plan = normalizeBgosPlanCode(body.plan) || body.plan;
     }
 
     // Handle planStatus update (if not using status field)
@@ -126,6 +129,23 @@ export async function PATCH(
         updateData.suspendedAt = null;
         updateData.suspensionReason = null;
       }
+    }
+
+    const effectivePlan = String(updateData.plan ?? existing.plan ?? 'starter').toLowerCase();
+    const effectiveStatus = String(updateData.planStatus ?? existing.planStatus ?? 'trial').toLowerCase();
+    const isActivatingPaid = effectiveStatus === 'active' && effectivePlan !== 'free';
+    if (isActivatingPaid) {
+      updateData.trialEndsAt = null;
+      if (body.planEndsAt !== undefined) {
+        updateData.planEndsAt = body.planEndsAt ? new Date(body.planEndsAt) : null;
+      } else {
+        const existingEnd = toValidDate(existing.planEndsAt);
+        if (existingEnd && existingEnd.getTime() <= Date.now()) {
+          updateData.planEndsAt = null;
+        }
+      }
+    } else if (body.planEndsAt !== undefined) {
+      updateData.planEndsAt = body.planEndsAt ? new Date(body.planEndsAt) : null;
     }
 
     // Handle other updatable fields
@@ -145,8 +165,23 @@ export async function PATCH(
       data: updateData,
     });
 
+    if (
+      body.plan !== undefined ||
+      body.planStatus !== undefined ||
+      body.status !== undefined ||
+      body.planEndsAt !== undefined
+    ) {
+      await syncSuperadminPlanState({
+        tenantId: id,
+        plan: effectivePlan,
+        planStatus: effectiveStatus,
+        endDate: 'planEndsAt' in updateData ? (updateData.planEndsAt as Date | null) : undefined,
+      });
+    }
+
     // Invalidate relevant caches
     cache.invalidateByPrefix('superadmin:');
+    cache.invalidateByPrefix(`subscription:${id}`);
 
     // Notify IndexNow so Bing/Yandex recrawl the public business hub page
     // (/{industry}/{city}/{slug}) sooner. Fire-and-forget — never block the

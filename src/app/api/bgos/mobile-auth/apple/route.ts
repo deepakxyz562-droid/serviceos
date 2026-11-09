@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Ensure BGOS workspace exists seamlessly
-    await ensureBgosTenantAndWorkspace(user.id);
+    await ensureBgosTenantAndWorkspace(user.id, { request });
 
     // 4. Resolve BGOS account
     const account = await resolveBgosMobileAccount(user.id);

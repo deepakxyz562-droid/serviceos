@@ -162,9 +162,8 @@ export function TrialPaywallOverlay({ trialStatus }: { trialStatus: TrialStatus 
         </div>
         <h2 className="text-2xl font-bold tracking-tight">Your 7-day trial has ended</h2>
         <p className="text-muted-foreground text-sm">
-          You enjoyed full feature access during your 7-day trial. Complete payment
-          via Razorpay (India) or Creem (International) to continue using AI studio,
-          reviews, marketing, leads, and automations. Your data is safely preserved.
+          You enjoyed full feature access during your 7-day trial. Complete payment to continue
+          using AI studio, reviews, marketing, leads, and automations. Your data is safely preserved.
         </p>
         <button
           onClick={() => setCurrentView('billing')}

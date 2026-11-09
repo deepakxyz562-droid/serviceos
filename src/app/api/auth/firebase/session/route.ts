@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
 
     // 4. Ensure Store Workspace & BGOS configuration
     if (!user.tenantId || !user.workspaceId) {
-      await ensureBgosTenantAndWorkspace(user.id);
+      await ensureBgosTenantAndWorkspace(user.id, { request, phone: withPlus });
       user = (await db.user.findUnique({
         where: { id: user.id },
         include: { tenant: true, workspace: true },

@@ -1,5 +1,6 @@
 import { API_BASE_URL } from './constants';
 import { clearTokens, getToken, getRefreshToken, setTokens, sessionRevision } from './auth';
+import { detectDeviceCountryAndTimezone } from './country-codes';
 
 export class ApiError extends Error {
   statusCode: number;
@@ -90,9 +91,19 @@ export async function apiRequest<T = any>(
     }
   }
 
+  let deviceLocaleHeaders: Record<string, string> = {};
+  try {
+    const detected = detectDeviceCountryAndTimezone();
+    if (detected.country?.code) deviceLocaleHeaders['X-Device-Country'] = detected.country.code;
+    if (detected.timeZone) deviceLocaleHeaders['X-Device-Timezone'] = detected.timeZone;
+  } catch {
+    // non-fatal
+  }
+
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   const hasJsonBody = body !== undefined && body !== null && !isFormData;
   const reqHeaders: Record<string, string> = {
+    ...deviceLocaleHeaders,
     ...(hasJsonBody ? { 'Content-Type': 'application/json' } : {}),
     ...headers,
   };
