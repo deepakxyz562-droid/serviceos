@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { toIsoStringSafe, toValidDate } from '@/lib/safe-date';
 
 const MIN_RUN_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes — if cron fires more often, it's likely a duplicate trigger
 
@@ -41,10 +42,12 @@ export async function checkCronRunGuard(
       select: { createdAt: true },
     });
     if (recent) {
+      const lastRunIso = toIsoStringSafe(recent.createdAt) || String(recent.createdAt || '');
+      const lastRunDate = toValidDate(recent.createdAt) || undefined;
       return {
         ok: false,
-        reason: `Cron ${endpoint} already ran at ${recent.createdAt.toISOString()} (within ${MIN_RUN_INTERVAL_MS / 60000}min window)`,
-        lastRunAt: recent.createdAt,
+        reason: `Cron ${endpoint} already ran at ${lastRunIso} (within ${MIN_RUN_INTERVAL_MS / 60000}min window)`,
+        lastRunAt: lastRunDate,
       };
     }
     return { ok: true };

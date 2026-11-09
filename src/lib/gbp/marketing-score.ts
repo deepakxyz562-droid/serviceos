@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { toIsoStringSafe } from '@/lib/safe-date';
 import { computeGbpAudit } from './audit';
 import { googleReviewScope } from '@/lib/social/google-review-scope';
 
@@ -247,7 +248,12 @@ export async function readHistory(tenantId: string, days = 30): Promise<{ date: 
       take: days,
     });
     scoreSnapshotTableAvailable = true;
-    return rows.map((r) => ({ date: r.snapshotDate.toISOString().slice(0, 10), score: r.overallScore }));
+    return rows
+      .map((r) => {
+        const iso = toIsoStringSafe(r.snapshotDate);
+        return iso ? { date: iso.slice(0, 10), score: r.overallScore } : null;
+      })
+      .filter((x): x is { date: string; score: number } => Boolean(x));
   } catch (err: any) {
     if (isMissingTableError(err)) {
       scoreSnapshotTableAvailable = false;

@@ -299,6 +299,80 @@ export function MarketingCanvasStudio({
   const [brandName, setBrandName] = useState<string>('');
   const [brandSettingsOpen, setBrandSettingsOpen] = useState(false);
 
+  // Business reference photos for AI image generation (max 3)
+  const [businessRefPhotos, setBusinessRefPhotos] = useState<
+    Array<{ id: string; url: string; title?: string }>
+  >([]);
+  const [selectedRefUrls, setSelectedRefUrls] = useState<string[]>([]);
+  const [refPhotosLoading, setRefPhotosLoading] = useState(false);
+  const [uploadingRefPhoto, setUploadingRefPhoto] = useState(false);
+  const refPhotoInputRef = useRef<HTMLInputElement>(null);
+
+  const loadBusinessRefPhotos = useCallback(async () => {
+    setRefPhotosLoading(true);
+    try {
+      const res = await authFetch('/api/social/ai-image-ideas?includeGoogle=0');
+      if (res.ok) {
+        const json = (await res.json().catch(() => ({}))) as {
+          previousPhotos?: Array<{ id: string; url: string; title?: string }>;
+        };
+        if (Array.isArray(json.previousPhotos)) {
+          setBusinessRefPhotos(json.previousPhotos.filter((p) => Boolean(p.url)));
+        }
+      }
+    } catch {
+      // Non-blocking: reference photos are optional
+    } finally {
+      setRefPhotosLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadBusinessRefPhotos();
+    const onProfileChange = () => void loadBusinessRefPhotos();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('gbp-profile-changed', onProfileChange);
+      return () => window.removeEventListener('gbp-profile-changed', onProfileChange);
+    }
+  }, [loadBusinessRefPhotos]);
+
+  const toggleRefPhoto = (url: string) => {
+    setSelectedRefUrls((prev) => {
+      if (prev.includes(url)) return prev.filter((u) => u !== url);
+      return prev.length >= 3 ? [...prev.slice(1), url] : [...prev, url];
+    });
+  };
+
+  const handleUploadRefPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingRefPhoto(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('folder', 'gbp-media');
+      form.append('visibility', 'public');
+      const res = await authFetch('/api/omnichannel/upload', { method: 'POST', body: form });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok || !data.url) throw new Error(data.error || 'Reference upload failed');
+      const uploadedUrl = data.url;
+      setBusinessRefPhotos((prev) => [
+        { id: `ref-${Date.now()}`, url: uploadedUrl, title: file.name || 'Reference Photo' },
+        ...prev.filter((p) => p.url !== uploadedUrl),
+      ]);
+      setSelectedRefUrls((prev) => {
+        if (prev.includes(uploadedUrl)) return prev;
+        return prev.length >= 3 ? [...prev.slice(1), uploadedUrl] : [...prev, uploadedUrl];
+      });
+      toast.success('Reference photo uploaded and selected for AI generation.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not upload reference photo');
+    } finally {
+      setUploadingRefPhoto(false);
+    }
+  };
+
   const effectiveBusinessName = brandName || workspaceInfo?.businessName || (businessName !== 'Fieseros' ? businessName : '') || 'Commercial Brand';
   const effectivePhone = workspaceInfo?.phone;
   const effectiveWebsite = brandWebsite || (workspaceInfo?.slug ? `fieseros.com/p/${workspaceInfo.slug}` : 'visit website');
@@ -646,9 +720,11 @@ export function MarketingCanvasStudio({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               prompt: text,
-              provider: 'cloudflare',
+              provider: selectedRefUrls.length > 0 ? 'gemini' : 'cloudflare',
               requestId,
               isPoster: true,
+              autoFromBusiness: false,
+              referenceImageUrls: selectedRefUrls,
               businessName: effectiveBusinessName,
               category: brandTagline || '',
               website: effectiveWebsite,
@@ -768,7 +844,11 @@ export function MarketingCanvasStudio({
   const handleRegenerateImage = async () => {
     if (isGenerating) return;
     setIsGenerating(true);
-    setGeneratingStage('Rendering commercial photography background with Cloudflare AI...');
+    setGeneratingStage(
+      selectedRefUrls.length > 0
+        ? `Blending ${selectedRefUrls.length} reference business photo${selectedRefUrls.length > 1 ? 's' : ''} with Gemini AI...`
+        : 'Rendering commercial photography background with Cloudflare AI...'
+    );
     try {
       const requestId = `web-img-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       const res = await authFetch('/api/social/designs/image', {
@@ -776,9 +856,11 @@ export function MarketingCanvasStudio({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: activeUserPrompt || promptInput || activeTemplateBgPrompt || 'commercial product photography',
-          provider: 'cloudflare',
+          provider: selectedRefUrls.length > 0 ? 'gemini' : 'cloudflare',
           requestId,
           isPoster: true,
+          autoFromBusiness: false,
+          referenceImageUrls: selectedRefUrls,
           businessName: effectiveBusinessName,
           category: brandTagline || '',
           website: effectiveWebsite,
@@ -1442,17 +1524,50 @@ export function MarketingCanvasStudio({
                   className="border-0 focus-visible:ring-0 shadow-none text-xs resize-none p-1 placeholder:text-muted-foreground/70"
                 />
 
+                {selectedRefUrls.length > 0 && (
+                  <div className="flex items-center gap-1.5 px-1 pb-1 flex-wrap">
+                    <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wide">
+                      AI Ref ({selectedRefUrls.length}/3):
+                    </span>
+                    {selectedRefUrls.map((url) => (
+                      <div
+                        key={url}
+                        className="relative size-8 rounded-md overflow-hidden border border-purple-400 shrink-0 group"
+                      >
+                        <img src={url} alt="Selected AI reference" className="size-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => toggleRefPhoto(url)}
+                          aria-label="Remove reference photo"
+                          className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between pt-1 border-t border-border/40 mt-1">
                   <div className="flex items-center gap-1.5">
+                  <input
+                    ref={refPhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadRefPhoto}
+                    className="hidden"
+                    aria-label="Upload business reference photo for AI"
+                  />
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setReplaceImageOpen(true)}
-                    className="h-7 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground gap-1 rounded-lg"
+                    onClick={() => refPhotoInputRef.current?.click()}
+                    disabled={uploadingRefPhoto}
+                    className="h-7 px-2 text-[11px] font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 gap-1 rounded-lg"
                   >
-                    <Paperclip className="size-3.5" />
-                    <span>Attach photos</span>
+                    {uploadingRefPhoto ? <Loader2 className="size-3.5 animate-spin" /> : <Paperclip className="size-3.5" />}
+                    <span>{uploadingRefPhoto ? 'Uploading…' : 'AI Ref Photo'}</span>
                   </Button>
 
                   <Button
@@ -1463,7 +1578,7 @@ export function MarketingCanvasStudio({
                     className="h-7 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground gap-1 rounded-lg"
                   >
                     <ImageIcon className="size-3.5" />
-                    <span>Image ▾</span>
+                    <span>Image ({selectedRefUrls.length > 0 ? `${selectedRefUrls.length} Ref` : '▾'})</span>
                   </Button>
                 </div>
 
@@ -2165,6 +2280,82 @@ export function MarketingCanvasStudio({
               <span>Upload Custom Photo (from Computer/Device)</span>
               <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
             </label>
+
+            {/* Previous Business Photos for AI Reference */}
+            <div className="space-y-2 rounded-xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/40 dark:bg-purple-950/15 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-bold text-foreground">
+                    Previous Business Photos ({selectedRefUrls.length}/3 selected for AI)
+                  </p>
+                  <p className="text-[10.5px] text-muted-foreground">
+                    Click &quot;Use as AI Ref&quot; to blend your real business photo into generated AI backgrounds.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={uploadingRefPhoto}
+                  onClick={() => refPhotoInputRef.current?.click()}
+                  className="h-7 px-2.5 text-[11px] font-bold border-purple-300 text-purple-700"
+                >
+                  {uploadingRefPhoto ? 'Uploading…' : '+ Upload Ref'}
+                </Button>
+              </div>
+              {refPhotosLoading ? (
+                <p className="text-[11px] text-muted-foreground">Loading your saved business photos…</p>
+              ) : businessRefPhotos.length > 0 ? (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {businessRefPhotos.slice(0, 8).map((bp) => {
+                    const isRefSelected = selectedRefUrls.includes(bp.url);
+                    return (
+                      <div
+                        key={bp.id}
+                        className={`rounded-lg overflow-hidden border bg-card transition-all ${
+                          isRefSelected ? 'border-purple-600 ring-2 ring-purple-400/40' : 'border-border'
+                        }`}
+                      >
+                        <img
+                          src={bp.url}
+                          alt={bp.title || 'Previous business photo'}
+                          className="h-16 w-full object-cover"
+                        />
+                        <div className="flex divide-x divide-border text-[9.5px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => toggleRefPhoto(bp.url)}
+                            className={`flex-1 py-1 ${
+                              isRefSelected
+                                ? 'bg-purple-600 text-white'
+                                : 'text-purple-700 hover:bg-purple-50'
+                            }`}
+                          >
+                            {isRefSelected ? '✓ AI Ref' : 'AI Ref'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              pushHistory();
+                              setPhotoUrl(bp.url);
+                              setReplaceImageOpen(false);
+                              toast.success('Applied photo to canvas!');
+                            }}
+                            className="flex-1 py-1 text-foreground hover:bg-muted"
+                          >
+                            Use Bg
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  No previous business photos found yet. Upload a photo above or via &quot;+ Upload Ref&quot;.
+                </p>
+              )}
+            </div>
 
             {/* Category Filter Chips */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1">

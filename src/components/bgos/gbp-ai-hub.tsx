@@ -1377,6 +1377,7 @@ function PhotosTab({
   connectUrl,
   onPhotosChanged,
   loading,
+  photosError,
 }: {
   photos: PhotosResponse | null;
   businessName: string;
@@ -1384,9 +1385,11 @@ function PhotosTab({
   connectUrl: string;
   onPhotosChanged: () => void;
   loading: boolean;
+  photosError?: string | null;
 }) {
   const [view, setView] = useState<'queue' | 'published' | 'not_posted'>('queue');
   const [metadataModalOpen, setMetadataModalOpen] = useState(false);
+  const [mediaModalMode, setMediaModalMode] = useState<'upload' | 'ai_generate'>('upload');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [editingItem, setEditingItem] = useState<WebMediaItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1411,6 +1414,7 @@ function PhotosTab({
     if (!files.length) return;
     setEditingItem(null);
     setPendingFiles(files);
+    setMediaModalMode('upload');
     setMetadataModalOpen(true);
   };
 
@@ -1419,7 +1423,7 @@ function PhotosTab({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,video/*"
+        accept="image/*,video/*,.mp4,.mov,.webm,.m4v,.3gp,.mkv,.avi"
         multiple
         onChange={handleFiles}
         className="hidden"
@@ -1471,15 +1475,47 @@ function PhotosTab({
           </button>
         </div>
 
-        <Button
-          size="sm"
-          onClick={() => fileInputRef.current?.click()}
-          className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 text-xs"
-        >
-          <Sparkles className="size-3.5" aria-hidden="true" />
-          Upload Photo / Video
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setEditingItem(null);
+              setPendingFiles([]);
+              setMediaModalMode('ai_generate');
+              setMetadataModalOpen(true);
+            }}
+            className="rounded-xl border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 gap-1.5 text-xs font-bold"
+          >
+            <Wand2 className="size-3.5" aria-hidden="true" />
+            Create AI Photo
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 text-xs"
+          >
+            <Sparkles className="size-3.5" aria-hidden="true" />
+            Upload Photo / Video
+          </Button>
+        </div>
       </div>
+
+      {photosError && (
+        <Card className="rounded-2xl border-rose-200 bg-rose-50/70 shadow-xs">
+          <CardContent className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs font-semibold text-rose-700">{photosError}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onPhotosChanged}
+              className="h-7 shrink-0 rounded-lg border-rose-300 text-rose-700 hover:bg-rose-100 text-xs"
+            >
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {!isConnected && (
         <Card className="rounded-2xl border-amber-200 bg-amber-50/60 shadow-xs">
@@ -1520,7 +1556,7 @@ function PhotosTab({
 
           {activeItems.map((p) => {
             const isVideo =
-              p.mediaFormat === 'VIDEO' || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(p.url || '');
+              p.mediaFormat === 'VIDEO' || /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(p.url || '');
             const isEditable = p.source === 'queue' && Boolean(p.postId || p.id);
             const displayDate = formatDate(p.scheduledFor || p.createdAt);
             const displayTitle = p.title || p.caption || '';
@@ -1535,6 +1571,7 @@ function PhotosTab({
                     ? () => {
                         setPendingFiles([]);
                         setEditingItem(p);
+                        setMediaModalMode('upload');
                         setMetadataModalOpen(true);
                       }
                     : undefined
@@ -1621,6 +1658,7 @@ function PhotosTab({
         initialFiles={pendingFiles}
         editingItem={editingItem}
         defaultScheduleMode="daily"
+        initialMode={mediaModalMode}
         onSaved={(_message, mode) => {
           if (mode === 'instant') setView('published');
           else if (mode === 'draft') setView('not_posted');
@@ -2147,6 +2185,7 @@ export function GbpAiHub() {
   const [reviews, setReviews] = useState<GbpReview[]>([]);
   const [posts, setPosts] = useState<SocialPostItem[]>([]);
   const [photos, setPhotos] = useState<PhotosResponse | null>(null);
+  const [photosError, setPhotosError] = useState<string | null>(null);
   const [gbpAccountId, setGbpAccountId] = useState<string | null>(null);
   const [summary, setSummary] = useState<{ enabled: boolean; email: string }>({ enabled: false, email: '' });
   const [automations, setAutomations] = useState({
@@ -2200,6 +2239,7 @@ export function GbpAiHub() {
 
   const loadPhotos = useCallback(async () => {
     try {
+      setPhotosError(null);
       const res = await authFetch('/api/social/photos?platform=googlebusiness');
       if (res.ok) {
         const data = (await res.json()) as PhotosResponse;
@@ -2208,9 +2248,12 @@ export function GbpAiHub() {
           liveCount: data.liveCount ?? 0,
           queuedCount: data.queuedCount ?? 0,
         });
+      } else {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        setPhotosError(err.error || 'Could not load Google Business media.');
       }
     } catch {
-      // silent
+      setPhotosError('Could not load Google Business media. Check your connection.');
     }
   }, []);
 
@@ -2512,6 +2555,7 @@ export function GbpAiHub() {
             connectUrl={connectUrl}
             onPhotosChanged={loadPhotos}
             loading={loading}
+            photosError={photosError}
           />
         </TabsContent>
 

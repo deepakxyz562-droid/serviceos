@@ -18,7 +18,11 @@ export interface UploadStorageOptions {
   retryAuth?: boolean;
   timeoutMs?: number;
   onProgress?: (percent: number) => void;
+  onWarning?: (warning: string) => void;
 }
+
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+const MAX_IMAGE_DOC_BYTES = 25 * 1024 * 1024;
 
 const EXT_MIME_MAP: Record<string, string> = {
   jpg: 'image/jpeg',
@@ -33,6 +37,11 @@ const EXT_MIME_MAP: Record<string, string> = {
   m4v: 'video/x-m4v',
   mov: 'video/quicktime',
   webm: 'video/webm',
+  '3gp': 'video/3gpp',
+  mkv: 'video/x-matroska',
+  avi: 'video/x-msvideo',
+  mpeg: 'video/mpeg',
+  mpg: 'video/mpeg',
   pdf: 'application/pdf',
 };
 
@@ -64,13 +73,23 @@ export function normalizePendingUpload(input: PendingUpload, index = 0): Pending
   const defaultExt =
     mime === 'video/quicktime'
       ? 'mov'
-      : mime.startsWith('video/')
-        ? 'mp4'
-        : mime === 'image/png'
-          ? 'png'
-          : mime === 'image/webp'
-            ? 'webp'
-            : 'jpg';
+      : mime === 'video/3gpp'
+        ? '3gp'
+        : mime === 'video/x-matroska'
+          ? 'mkv'
+          : mime === 'video/x-msvideo'
+            ? 'avi'
+            : mime === 'video/webm'
+              ? 'webm'
+              : mime === 'video/x-m4v'
+                ? 'm4v'
+                : mime.startsWith('video/')
+                  ? 'mp4'
+                  : mime === 'image/png'
+                    ? 'png'
+                    : mime === 'image/webp'
+                      ? 'webp'
+                      : 'jpg';
 
   const safeName = cleanNameBase
     ? cleanNameBase.includes('.')
@@ -148,10 +167,57 @@ function uploadNativeViaXhr(params: {
   });
 }
 
+interface PresignResponse {
+  success?: boolean;
+  directUploadAvailable?: boolean;
+  method?: string;
+  uploadUrl?: string | null;
+  headers?: Record<string, string>;
+  publicUrl?: string | null;
+  gbpVideoWarning?: string;
+  error?: string;
+}
+
+function uploadBlobViaXhrPut(params: {
+  url: string;
+  headers?: Record<string, string>;
+  blob: Blob;
+  timeoutMs: number;
+  onProgress?: (percent: number) => void;
+}): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', params.url);
+    if (params.headers) {
+      for (const [k, v] of Object.entries(params.headers)) {
+        if (v) xhr.setRequestHeader(k, v);
+      }
+    }
+    xhr.timeout = params.timeoutMs;
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        const pct = Math.min(99, Math.max(5, Math.round((event.loaded / event.total) * 95) + 4));
+        params.onProgress?.(pct);
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error(`Direct storage upload returned HTTP ${xhr.status}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Direct storage network error'));
+    xhr.ontimeout = () => reject(new Error('Direct storage upload timed out'));
+    xhr.onabort = () => reject(new Error('Direct storage upload aborted'));
+    xhr.send(params.blob);
+  });
+}
+
 /**
- * Uploads a local device file (image, video, or PDF) to BGOS storage via the
- * authenticated multipart endpoint (POST /api/omnichannel/upload) and returns
- * a public URL suitable for Google Business Profile & social publishing.
+ * Uploads a local device file (image, video, or PDF) to BGOS storage —
+ * preferring direct presigned S3/R2 PUT (bypasses proxy body limits on large videos)
+ * with transparent fallback to POST /api/omnichannel/upload.
  */
 export async function uploadFileToStorage(
   fileInput: PendingUpload,
@@ -164,10 +230,27 @@ export async function uploadFileToStorage(
     retryAuth = true,
     timeoutMs = 120000,
     onProgress,
+    onWarning,
   } = options;
 
   if (!file.uri && !file.file) {
     throw new ApiError('Selected file could not be read from device.', 400);
+  }
+
+  const resolvedSize =
+    typeof file.fileSize === 'number' && file.fileSize > 0
+      ? file.fileSize
+      : file.file && typeof (file.file as Blob).size === 'number'
+        ? (file.file as Blob).size
+        : 0;
+  const maxBytes = file.mediaType === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_DOC_BYTES;
+  if (resolvedSize > maxBytes) {
+    throw new ApiError(
+      file.mediaType === 'video'
+        ? 'Video exceeds the 100MB maximum upload limit.'
+        : 'File exceeds the 25MB maximum upload limit.',
+      400,
+    );
   }
 
   const revision = sessionRevision();
@@ -176,6 +259,71 @@ export async function uploadFileToStorage(
 
   onProgress?.(2);
 
+  // 1. Try direct presigned PUT upload first so large videos bypass proxy body limits
+  try {
+    const presignRes = await fetch(`${API_BASE_URL}/api/omnichannel/upload/presign`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        fileName: file.name,
+        mimeType: file.mimeType,
+        fileSize: resolvedSize,
+        folder,
+        visibility,
+      }),
+    });
+
+    if (presignRes.status === 401 && retryAuth && revision === sessionRevision()) {
+      const latest = await getToken();
+      if (!latest || latest === token) {
+        await refreshSession();
+      }
+      return uploadFileToStorage(file, { ...options, retryAuth: false });
+    }
+
+    const presign = (await presignRes.json().catch(() => ({}))) as PresignResponse;
+    if (presignRes.status === 400 || presignRes.status === 413) {
+      throw new ApiError(presign.error || 'Unsupported file or size limit exceeded.', presignRes.status, presign);
+    }
+
+    if (presign.gbpVideoWarning) {
+      onWarning?.(presign.gbpVideoWarning);
+    }
+
+    if (presignRes.ok && presign.directUploadAvailable && presign.uploadUrl && presign.publicUrl) {
+      try {
+        let blob: Blob | null = null;
+        if (file.file && typeof (file.file as Blob).arrayBuffer === 'function') {
+          blob = file.file as Blob;
+        } else if (file.uri) {
+          const blobRes = await fetch(file.uri);
+          blob = await blobRes.blob();
+        }
+        if (blob) {
+          onProgress?.(5);
+          await uploadBlobViaXhrPut({
+            url: presign.uploadUrl,
+            headers: presign.headers || { 'Content-Type': file.mimeType },
+            blob,
+            timeoutMs: Math.max(timeoutMs, file.mediaType === 'video' ? 180000 : timeoutMs),
+            onProgress,
+          });
+          onProgress?.(100);
+          return presign.publicUrl;
+        }
+      } catch (directErr) {
+        console.warn('[uploadFileToStorage] Direct presigned PUT failed, falling back to multipart upload:', directErr);
+      }
+    }
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    console.warn('[uploadFileToStorage] Presign request unavailable, falling back to multipart upload:', err);
+  }
+
+  // 2. Fallback: authenticated multipart upload (POST /api/omnichannel/upload)
   if (Platform.OS !== 'web') {
     const result = await uploadNativeViaXhr({
       url: uploadUrl,

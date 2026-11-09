@@ -49,6 +49,7 @@ export default function ManageGoogleProfileScreen() {
   const photosRes = useResource<PhotosResponse>('/api/social/photos');
 
   const [mediaComposerOpen, setMediaComposerOpen] = useState(false);
+  const [mediaComposerMode, setMediaComposerMode] = useState<'upload' | 'ai_generate'>('upload');
   const [pendingMedia, setPendingMedia] = useState<PendingUpload[]>([]);
   const [editingMedia, setEditingMedia] = useState<GbpPhoto | null>(null);
 
@@ -339,6 +340,7 @@ export default function ManageGoogleProfileScreen() {
       );
       setEditingMedia(null);
       setPendingMedia(normalized);
+      setMediaComposerMode('upload');
       setMediaComposerOpen(true);
     } catch (err: unknown) {
       Alert.alert(
@@ -576,69 +578,110 @@ export default function ManageGoogleProfileScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ gap: 10 }}
               >
-                {profilePhotos.slice(0, 12).map((item, idx) => (
-                  <Pressable
-                    key={item.id || `prof-media-${idx}`}
-                    onPress={() => {
-                      if (item.source === 'queue') {
-                        setPendingMedia([]);
-                        setEditingMedia(item);
-                        setMediaComposerOpen(true);
-                      } else {
-                        router.push('/(tabs)/photos');
-                      }
-                    }}
-                    style={{
-                      width: 88,
-                      height: 88,
-                      borderRadius: 12,
-                      overflow: 'hidden',
-                      borderWidth: 1,
-                      borderColor: '#E2E8F0',
-                      backgroundColor: '#F1F5F9',
-                    }}
-                  >
-                    <Image
-                      source={{ uri: item.thumbnailUrl || item.url }}
-                      style={{ width: '100%', height: '100%' }}
-                      resizeMode="cover"
-                    />
-                    {item.source === 'queue' ? (
-                      <View
-                        style={{
-                          position: 'absolute',
-                          left: 4,
-                          bottom: 4,
-                          right: 4,
-                          backgroundColor: 'rgba(7,11,45,0.72)',
-                          borderRadius: 5,
-                          paddingHorizontal: 4,
-                          paddingVertical: 1.5,
-                        }}
-                      >
-                        <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700' }} numberOfLines={1}>
-                          {item.status === 'draft' ? 'Draft' : 'Scheduled'}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </Pressable>
-                ))}
+                {profilePhotos.slice(0, 12).map((item, idx) => {
+                  const isVid =
+                    item.mediaFormat === 'VIDEO' ||
+                    /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(item.url || '');
+                  return (
+                    <Pressable
+                      key={item.id || `prof-media-${idx}`}
+                      onPress={() => {
+                        if (item.source === 'queue') {
+                          setPendingMedia([]);
+                          setEditingMedia(item);
+                          setMediaComposerMode('upload');
+                          setMediaComposerOpen(true);
+                        } else {
+                          router.push('/(tabs)/photos');
+                        }
+                      }}
+                      style={{
+                        width: 88,
+                        height: 88,
+                        borderRadius: 12,
+                        overflow: 'hidden',
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        backgroundColor: '#F1F5F9',
+                      }}
+                    >
+                      {isVid && !item.thumbnailUrl ? (
+                        <View
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            backgroundColor: '#0F172A',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 2,
+                          }}
+                        >
+                          <MaterialIcons name="videocam" size={24} color="#34D399" />
+                          <Text style={{ color: '#E2E8F0', fontSize: 9, fontWeight: '800' }}>VIDEO</Text>
+                        </View>
+                      ) : (
+                        <Image
+                          source={{ uri: item.thumbnailUrl || item.url }}
+                          style={{ width: '100%', height: '100%' }}
+                          resizeMode="cover"
+                        />
+                      )}
+                      {item.source === 'queue' ? (
+                        <View
+                          style={{
+                            position: 'absolute',
+                            left: 4,
+                            bottom: 4,
+                            right: 4,
+                            backgroundColor: 'rgba(7,11,45,0.72)',
+                            borderRadius: 5,
+                            paddingHorizontal: 4,
+                            paddingVertical: 1.5,
+                          }}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700' }} numberOfLines={1}>
+                            {item.status === 'draft' ? 'Draft' : 'Scheduled'}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
               </ScrollView>
             )}
-            <View style={{ flexDirection: 'row', gap: 12, width: '100%', justifyContent: 'center' }}>
+            <View style={{ gap: 10 }}>
+              <View style={{ flexDirection: 'row', gap: 12, width: '100%', justifyContent: 'center' }}>
+                <Pressable
+                  onPress={() => void handleAddMedia('photo')}
+                  style={styles.outlineMediaBtn}
+                >
+                  <MaterialIcons name="add-photo-alternate" size={17} color={colors.brand} />
+                  <Text style={[styles.outlineMediaBtnText, { color: colors.brand }]}>Add photo</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleAddMedia('video')}
+                  style={styles.outlineMediaBtn}
+                >
+                  <MaterialIcons name="videocam" size={18} color={colors.brand} />
+                  <Text style={[styles.outlineMediaBtnText, { color: colors.brand }]}>Add video</Text>
+                </Pressable>
+              </View>
               <Pressable
-                onPress={() => void handleAddMedia('photo')}
-                style={styles.outlineMediaBtn}
+                onPress={() => {
+                  setPendingMedia([]);
+                  setEditingMedia(null);
+                  setMediaComposerMode('ai_generate');
+                  setMediaComposerOpen(true);
+                }}
+                style={[
+                  styles.outlineMediaBtn,
+                  { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' },
+                ]}
               >
-                <MaterialIcons name="add-photo-alternate" size={17} color={colors.brand} />
-                <Text style={[styles.outlineMediaBtnText, { color: colors.brand }]}>Add photo</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => void handleAddMedia('video')}
-                style={styles.outlineMediaBtn}
-              >
-                <MaterialIcons name="videocam" size={18} color={colors.brand} />
-                <Text style={[styles.outlineMediaBtnText, { color: colors.brand }]}>Add video</Text>
+                <MaterialIcons name="auto-awesome" size={17} color="#6D28D9" />
+                <Text style={[styles.outlineMediaBtnText, { color: '#6D28D9' }]}>
+                  Create AI Business Photo
+                </Text>
               </Pressable>
             </View>
           </Card>
@@ -1200,6 +1243,8 @@ export default function ManageGoogleProfileScreen() {
         businessName={title}
         pendingAssets={pendingMedia}
         editingItem={editingMedia}
+        workspaceLocale={photosRes.data?.locale || null}
+        initialMode={mediaComposerMode}
         onSaved={async (msg) => {
           Alert.alert('Media Saved', msg);
           await photosRes.refresh();

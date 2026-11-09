@@ -35,6 +35,7 @@ export default function PhotosScreen() {
 
   const [pendingAssets, setPendingAssets] = useState<PendingUpload[]>([]);
   const [composerVisible, setComposerVisible] = useState(false);
+  const [composerMode, setComposerMode] = useState<'upload' | 'ai_generate'>('upload');
   const [editingItem, setEditingItem] = useState<GbpPhoto | null>(null);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
 
@@ -127,6 +128,7 @@ export default function PhotosScreen() {
 
       setEditingItem(null);
       setPendingAssets(normalized);
+      setComposerMode('upload');
       setComposerVisible(true);
     } catch (e: any) {
       Alert.alert('Media Picker Error', e?.message || 'Could not select media. Please try again.');
@@ -136,6 +138,14 @@ export default function PhotosScreen() {
   const handleEditItem = (item: GbpPhoto) => {
     setPendingAssets([]);
     setEditingItem(item);
+    setComposerMode('upload');
+    setComposerVisible(true);
+  };
+
+  const handleAiCreate = () => {
+    setPendingAssets([]);
+    setEditingItem(null);
+    setComposerMode('ai_generate');
     setComposerVisible(true);
   };
 
@@ -191,6 +201,7 @@ export default function PhotosScreen() {
             timeZone={photosRes.data?.locale?.timeZone}
             locale={photosRes.data?.locale?.locale}
             onUploadPress={handleUpload}
+            onAiCreatePress={handleAiCreate}
             onEditItem={handleEditItem}
           />
         )}
@@ -203,6 +214,7 @@ export default function PhotosScreen() {
         pendingAssets={pendingAssets}
         editingItem={editingItem}
         workspaceLocale={photosRes.data?.locale || null}
+        initialMode={composerMode}
         onSaved={async (msg) => {
           setStatusBanner(msg);
           await photosRes.refresh();

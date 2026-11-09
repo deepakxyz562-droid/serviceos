@@ -1,7 +1,167 @@
 import { db } from '@/lib/db';
 import { decryptKey } from '@/lib/ai-key-crypto';
+import dns from 'node:dns/promises';
+import fs from 'node:fs/promises';
+import net from 'node:net';
+import path from 'node:path';
 
 export type ImageProvider = 'gemini' | 'openrouter' | 'cloudflare';
+
+export interface GenerateDesignImageOptions {
+  referenceImageUrls?: string[];
+  autoFromBusiness?: boolean;
+  aspectRatio?: '1:1' | '4:5' | '9:16' | '16:9';
+}
+
+const MAX_REFERENCE_IMAGES = 3;
+const MAX_REFERENCE_IMAGE_BYTES = 8 * 1024 * 1024;
+
+function isPrivateIpAddress(ip: string): boolean {
+  const cleaned = ip.trim().toLowerCase();
+  if (!cleaned) return true;
+  if (cleaned === '::1' || cleaned === '0:0:0:0:0:0:0:1' || cleaned.startsWith('fe80:') || cleaned.startsWith('fc') || cleaned.startsWith('fd')) {
+    return true;
+  }
+  const v4 = cleaned.startsWith('::ffff:') ? cleaned.slice(7) : cleaned;
+  const parts = v4.split('.').map((n) => Number(n));
+  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+    return net.isIP(v4) !== 0;
+  }
+  const [a, b] = parts;
+  if (a === 10 || a === 127 || a === 0) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  return false;
+}
+
+export function isUnsafeReferenceHostname(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) return true;
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    host.endsWith('.internal') ||
+    host === 'metadata.google.internal'
+  ) {
+    return true;
+  }
+  if (net.isIP(host) !== 0) {
+    return isPrivateIpAddress(host);
+  }
+  return false;
+}
+
+async function assertSafeRemoteUrl(rawUrl: string): Promise<URL> {
+  const parsed = new URL(rawUrl);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`Unsupported reference image protocol: ${parsed.protocol}`);
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error('Credentials are not allowed in reference image URLs');
+  }
+  if (isUnsafeReferenceHostname(parsed.hostname)) {
+    throw new Error('Blocked private or loopback reference image host');
+  }
+  try {
+    const records = await dns.lookup(parsed.hostname, { all: true });
+    if (records.some((r) => isPrivateIpAddress(r.address))) {
+      throw new Error('Blocked private network IP for reference image URL');
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Blocked private')) {
+      throw err;
+    }
+    // Non-blocking if DNS lookup isn't resolved locally (e.g., mocked fetch environments)
+  }
+  return parsed;
+}
+
+function detectImageMime(
+  headerType: string | null | undefined,
+  urlOrPath: string,
+  bytes?: Buffer,
+): 'image/png' | 'image/jpeg' | 'image/webp' | null {
+  const ct = (headerType || '').split(';')[0].trim().toLowerCase();
+  if (ct === 'image/png') return 'image/png';
+  if (ct === 'image/jpeg' || ct === 'image/jpg') return 'image/jpeg';
+  if (ct === 'image/webp') return 'image/webp';
+  if (bytes && bytes.length >= 12) {
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+    if (bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp';
+  }
+  const lower = urlOrPath.split('?')[0].toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  return null;
+}
+
+export async function fetchReferenceImages(
+  urls: string[],
+  signal?: AbortSignal,
+): Promise<Array<{ url: string; mimeType: 'image/png' | 'image/jpeg' | 'image/webp'; base64: string }>> {
+  const cleaned = Array.from(
+    new Set(
+      (Array.isArray(urls) ? urls : [])
+        .filter((u): u is string => typeof u === 'string')
+        .map((u) => u.trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, MAX_REFERENCE_IMAGES);
+
+  const results: Array<{ url: string; mimeType: 'image/png' | 'image/jpeg' | 'image/webp'; base64: string }> = [];
+  const publicUploadsRoot = path.resolve(process.cwd(), 'public', 'uploads');
+
+  for (const refUrl of cleaned) {
+    if (refUrl.startsWith('/uploads/')) {
+      const relativeSubPath = refUrl.replace(/^\/uploads\//, '');
+      const resolvedPath = path.resolve(publicUploadsRoot, relativeSubPath);
+      if (resolvedPath !== publicUploadsRoot && !resolvedPath.startsWith(publicUploadsRoot + path.sep)) {
+        throw new Error('Blocked path traversal in reference image path');
+      }
+      try {
+        const bytes = await fs.readFile(resolvedPath);
+        if (bytes.length > 0 && bytes.length <= MAX_REFERENCE_IMAGE_BYTES) {
+          const mime = detectImageMime(null, resolvedPath, bytes);
+          if (mime) {
+            results.push({ url: refUrl, mimeType: mime, base64: bytes.toString('base64') });
+          }
+        }
+      } catch (err) {
+        console.warn('[image-provider] Failed reading local reference image:', refUrl, err instanceof Error ? err.message : err);
+      }
+      continue;
+    }
+
+    const safeUrl = await assertSafeRemoteUrl(refUrl);
+    try {
+      const fetchSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000);
+      const res = await fetch(safeUrl.toString(), { signal: fetchSignal, redirect: 'follow' });
+      if (!res.ok) continue;
+      if (res.url) {
+        await assertSafeRemoteUrl(res.url);
+      }
+      const cl = Number(res.headers.get('content-length') || 0);
+      if (cl > MAX_REFERENCE_IMAGE_BYTES) continue;
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length === 0 || buf.length > MAX_REFERENCE_IMAGE_BYTES) continue;
+      const mime = detectImageMime(res.headers.get('content-type'), refUrl, buf);
+      if (!mime) continue;
+      results.push({ url: refUrl, mimeType: mime, base64: buf.toString('base64') });
+    } catch (err) {
+      if (err instanceof Error && (err.message.includes('Blocked') || err.message.includes('Credentials') || err.message.includes('Unsupported'))) {
+        throw err;
+      }
+      console.warn('[image-provider] Skipping unreachable reference image:', refUrl, err instanceof Error ? err.message : err);
+    }
+  }
+
+  return results;
+}
 
 async function callCloudflareImage(
   text: string,
@@ -94,6 +254,9 @@ export interface BusinessVisualContext {
   products?: string[] | string;
   services?: string[] | string;
   website?: string;
+  referenceImageUrls?: string[];
+  autoFromBusiness?: boolean;
+  aspectRatio?: '1:1' | '4:5' | '9:16' | '16:9';
 }
 
 function cleanMarketingTopic(raw: string): string {
@@ -159,7 +322,7 @@ export function buildHighQualityImagePrompt(
   const catLower = category.toLowerCase();
   const offLower = offerings.toLowerCase();
 
-  const scores = { tech: 0, food: 0, fashion: 0, jewellery: 0, trades: 0 };
+  const scores = { tech: 0, food: 0, fashion: 0, jewellery: 0, trades: 0, hospitality: 0 };
 
   // Category matching (primary signal)
   if (hasWord(catLower, ['jewel', 'jewelry', 'jewellery', 'jeweller', 'jewellers', 'diamond', 'diamonds', 'gold ornament', 'solitaire', 'gemstone', 'gemstones'])) scores.jewellery += 10;
@@ -167,6 +330,7 @@ export function buildHighQualityImagePrompt(
   if (hasWord(catLower, ['saree', 'sarees', 'ethnic wear', 'bridal lehenga', 'boutique', 'apparel', 'clothing', 'fashion', 'garment', 'garments', 'textile', 'textiles'])) scores.fashion += 10;
   if (hasWord(catLower, ['software', 'saas', 'tech', 'technology', 'it ', 'cloud', 'app', 'apps', 'telemetry', 'gps', 'developer', 'workforce'])) scores.tech += 10;
   if (hasWord(catLower, ['hvac', 'plumb', 'plumbing', 'electric', 'repair', 'repairs', 'contractor', 'trade', 'clean', 'cleaning', 'heating', 'cooling', 'air conditioning'])) scores.trades += 10;
+  if (hasWord(catLower, ['farmhouse', 'farm house', 'resort', 'villa', 'cottage', 'homestay', 'retreat', 'banquet', 'staycation', 'glamping', 'hotel', 'hospitality', 'venue'])) scores.hospitality += 10;
 
   // Offerings matching (secondary signal)
   if (hasWord(offLower, ['jewel', 'jewelry', 'jewellery', 'diamond', 'diamonds', 'necklace', 'necklaces', 'gold necklace', 'bangles', 'solitaire', 'earrings', 'chokers'])) scores.jewellery += 4;
@@ -174,6 +338,7 @@ export function buildHighQualityImagePrompt(
   if (hasWord(offLower, ['saree', 'sarees', 'lehenga', 'lehengas', 'dupatta', 'banarasi', 'suit', 'dress'])) scores.fashion += 4;
   if (hasWord(offLower, ['employee tracking', 'tracking app', 'gps', 'telemetry', 'route map', 'punch in', 'attendance', 'mobile app', 'cloud migration', 'software'])) scores.tech += 4;
   if (hasWord(offLower, ['ac repair', 'furnace', 'duct cleaning', 'plumbing', 'technician', 'boiler'])) scores.trades += 4;
+  if (hasWord(offLower, ['farmhouse', 'villa', 'swimming pool', 'lawn', 'staycation', 'weekend stay', 'banquet', 'garden venue', 'private pool'])) scores.hospitality += 4;
 
   // Prompt contextual matching (tertiary signal)
   if (hasWord(pLower, ['gps', 'attendance', 'punch', 'workforce', 'telemetry', 'route map', 'software', 'mobile app', 'saas'])) scores.tech += 2;
@@ -181,9 +346,10 @@ export function buildHighQualityImagePrompt(
   if (hasWord(pLower, ['saree', 'lehenga', 'ethnic wear', 'bridal collection', 'couture'])) scores.fashion += 2;
   if (hasWord(pLower, ['diamond', 'solitaires', 'gold necklace', 'jewellery', 'jewels', 'hallmark'])) scores.jewellery += 2;
   if (hasWord(pLower, ['repair', 'hvac', 'plumbing', 'technician', 'air conditioning'])) scores.trades += 2;
+  if (hasWord(pLower, ['farmhouse', 'villa', 'resort', 'pool', 'lawn', 'garden', 'cottage', 'patio', 'retreat'])) scores.hospitality += 3;
 
   let maxScore = 0;
-  let winningArchetype: 'tech' | 'food' | 'fashion' | 'jewellery' | 'trades' | 'custom' = 'custom';
+  let winningArchetype: 'tech' | 'food' | 'fashion' | 'jewellery' | 'trades' | 'hospitality' | 'custom' = 'custom';
   for (const [key, score] of Object.entries(scores) as [keyof typeof scores, number][]) {
     if (score > maxScore) {
       maxScore = score;
@@ -258,6 +424,12 @@ export function buildHighQualityImagePrompt(
       'bright natural studio lighting, ultra-sharp focus, shallow depth of field with copy space';
     domainSubject =
       'Certified professional service technician in clean modern uniform inspecting equipment with advanced diagnostic tools, friendly trustworthy atmosphere, bright clean setting';
+  } else if (winningArchetype === 'hospitality') {
+    styleDescriptor =
+      'Editorial luxury boutique property and outdoor venue photography, golden-hour warmth, architectural greenery, inviting resort ambiance';
+    settingDescriptor =
+      'natural sunlit garden courtyard and outdoor property setting with clean depth of field and balanced composition';
+    domainSubject = `Authentic scenic showcase of ${businessName || 'the boutique farmhouse or villa retreat'}, manicured green lawns, warm ambient string lighting, relaxing outdoor seating, serene architectural details`;
   } else {
     // 100% Dynamic Custom Domain for ANY industry (Solar, Legal, Dental, Gym, Logistics, Agriculture, etc.)
     const primaryOfferings = offerings || category || 'professional business solutions';
@@ -266,9 +438,12 @@ export function buildHighQualityImagePrompt(
     domainSubject = `Professional commercial showcase for ${businessName || category || 'business'}, highlighting ${primaryOfferings}, modern state-of-the-art facilities, authentic equipment, clean aspirational presentation`;
   }
 
-  // Combine synthesized subject with campaign visual theme
-  const finalSubject = cleanPrompt && cleanPrompt.length > 3 && !domainSubject.toLowerCase().includes(cleanPrompt.toLowerCase().slice(0, 12))
-    ? `${domainSubject}, themed around ${cleanPrompt}`
+  // When the user writes an explicit scene prompt, let it lead so custom requests are honored faithfully.
+  const hasExplicitScenePrompt = cleanPrompt && cleanPrompt.length > 10 && !domainSubject.toLowerCase().includes(cleanPrompt.toLowerCase().slice(0, 12));
+  const finalSubject = hasExplicitScenePrompt
+    ? !isFestive && cleanPrompt.length >= 24
+      ? `${cleanPrompt} (tailored for ${businessName || category || 'business'}${offerings ? `: ${offerings}` : ''})`
+      : `${domainSubject}, themed around ${cleanPrompt}`
     : domainSubject;
 
   if (isPosterMode) {
@@ -320,7 +495,6 @@ Rules:
         { role: 'user', content: userPayload },
       ],
       temperature: 0.3,
-      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000),
     });
 
     let synthesized = (aiRes.content || '').trim().replace(/^["']|["']$/g, '');
@@ -338,126 +512,225 @@ Rules:
   return buildHighQualityImagePrompt(rawPrompt, isPosterMode, context);
 }
 
-export async function generateDesignImage(
-  prompt: string,
-  provider: ImageProvider,
-  signal: AbortSignal,
-  isPoster?: boolean,
-  context?: BusinessVisualContext
-) {
-  const isPosterMode = isPoster || prompt.startsWith('[POSTER]');
-  // Use instant deterministic prompt composition (0ms latency, zero failing LLM stall)
-  const text = buildHighQualityImagePrompt(prompt, isPosterMode, context);
-
-  if (provider === 'cloudflare') {
-    return await callCloudflareImage(text, signal);
-  }
-
+async function resolveProviderCredential(provider: 'gemini' | 'openrouter'): Promise<{
+  secret: string;
+  keyRowId: string | null;
+} | null> {
   const key = await db.aiProviderKey.findFirst({
     where: { provider, isActive: true },
     orderBy: { priority: 'asc' },
-  });
-  if (!key) throw new Error(`Configure an active ${provider} key in Superadmin`);
+  }).catch(() => null);
 
-  const secret = decryptKey(key.encryptedKey);
+  if (key?.encryptedKey) {
+    return { secret: decryptKey(key.encryptedKey), keyRowId: key.id };
+  }
+
+  const envSecret =
+    provider === 'gemini' ? process.env.GEMINI_API_KEY : process.env.OPENROUTER_API_KEY;
+  if (envSecret && envSecret.trim()) {
+    return { secret: envSecret.trim(), keyRowId: null };
+  }
+  return null;
+}
+
+function parseProviderImageResponse(
+  provider: 'gemini' | 'openrouter',
+  data: any,
+): string | null {
+  if (provider === 'gemini') {
+    const inline = data.candidates?.[0]?.content?.parts?.find((part: any) => part.inlineData)?.inlineData;
+    const inlineMime = typeof inline?.mimeType === 'string' ? inline.mimeType.toLowerCase() : '';
+    if (
+      ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(inlineMime) &&
+      typeof inline?.data === 'string' &&
+      inline.data.length <= 11_000_000
+    ) {
+      return inline.data;
+    }
+    return null;
+  }
+
+  const uri = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  const match =
+    typeof uri === 'string'
+      ? /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(uri)
+      : null;
+  const encoded = match?.[2];
+  return typeof encoded === 'string' && encoded.length <= 11_000_000 ? encoded : null;
+}
+
+async function callGeminiOrOpenRouterImage(params: {
+  provider: 'gemini' | 'openrouter';
+  promptText: string;
+  referenceImages: Array<{ mimeType: 'image/png' | 'image/jpeg' | 'image/webp'; base64: string }>;
+  signal: AbortSignal;
+}): Promise<{ bytes: Buffer; model: string; cost: number | null }> {
+  const cred = await resolveProviderCredential(params.provider);
+  if (!cred) {
+    throw new Error(`Configure an active ${params.provider} key in Superadmin`);
+  }
+
   const model =
-    provider === 'gemini'
+    params.provider === 'gemini'
       ? process.env.BGOS_GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image'
       : process.env.BGOS_OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image';
 
-  let response = await fetch(
-    provider === 'gemini'
+  const requestBody =
+    params.provider === 'gemini'
+      ? {
+          contents: [
+            {
+              parts: [
+                ...params.referenceImages.map((ref) => ({
+                  inlineData: { mimeType: ref.mimeType, data: ref.base64 },
+                })),
+                { text: params.promptText },
+              ],
+            },
+          ],
+          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+        }
+      : {
+          model,
+          messages: [
+            {
+              role: 'user',
+              content:
+                params.referenceImages.length > 0
+                  ? [
+                      { type: 'text', text: params.promptText },
+                      ...params.referenceImages.map((ref) => ({
+                        type: 'image_url',
+                        image_url: { url: `data:${ref.mimeType};base64,${ref.base64}` },
+                      })),
+                    ]
+                  : params.promptText,
+            },
+          ],
+          modalities: ['image', 'text'],
+        };
+
+  const response = await fetch(
+    params.provider === 'gemini'
       ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`
       : 'https://openrouter.ai/api/v1/chat/completions',
     {
       method: 'POST',
-      signal,
+      signal: params.signal,
       headers: {
         'Content-Type': 'application/json',
-        ...(provider === 'gemini' ? { 'x-goog-api-key': secret } : { Authorization: `Bearer ${secret}` }),
+        ...(params.provider === 'gemini'
+          ? { 'x-goog-api-key': cred.secret }
+          : { Authorization: `Bearer ${cred.secret}` }),
       },
-      body: JSON.stringify(
-        provider === 'gemini'
-          ? { contents: [{ parts: [{ text }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }
-          : { model, messages: [{ role: 'user', content: text }], modalities: ['image', 'text'] }
-      ),
-    }
+      body: JSON.stringify(requestBody),
+    },
   );
 
-  // Auto-failover on any provider failure (400, 401, 402, 429, 500) directly to Cloudflare Flux.1
   if (!response.ok) {
-    try {
-      return await callCloudflareImage(text, signal);
-    } catch {
-      // Try secondary OpenRouter key if gemini was requested
-      if (provider === 'gemini') {
-        const fallbackKey = await db.aiProviderKey.findFirst({
-          where: { provider: 'openrouter', isActive: true },
-          orderBy: { priority: 'asc' },
-        });
-        if (fallbackKey) {
-          const fallbackSecret = decryptKey(fallbackKey.encryptedKey);
-          const fallbackModel = process.env.BGOS_OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image';
-          const fallbackRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            signal,
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${fallbackSecret}` },
-            body: JSON.stringify({
-              model: fallbackModel,
-              messages: [{ role: 'user', content: text }],
-              modalities: ['image', 'text'],
-            }),
-          });
-          if (fallbackRes.ok) {
-            const fallbackData = await fallbackRes.json();
-            const fallbackUri = fallbackData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-            const fallbackMatch =
-              typeof fallbackUri === 'string'
-                ? /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(fallbackUri)
-                : null;
-            const fallbackEncoded = fallbackMatch?.[2];
-            if (typeof fallbackEncoded === 'string' && fallbackEncoded.length <= 11_000_000) {
-              await db.aiProviderKey.update({
-                where: { id: fallbackKey.id },
-                data: { lastUsedAt: new Date(), requestCount: { increment: 1 } },
-              });
-              return {
-                bytes: Buffer.from(fallbackEncoded, 'base64'),
-                model: fallbackModel,
-                cost: typeof fallbackData.usage?.cost === 'number' ? fallbackData.usage.cost : null,
-              };
-            }
-          }
-        }
-      }
-    }
-  }
-
-  if (!response.ok) {
-    throw new Error(`${provider} image generation failed (${response.status}). Check model access and credit in Superadmin.`);
+    throw new Error(`${params.provider} image generation failed (${response.status})`);
   }
 
   const data = await response.json();
-  const inline = data.candidates?.[0]?.content?.parts?.find((part: any) => part.inlineData)?.inlineData;
-  const uri = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  const match = typeof uri === 'string' ? /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(uri) : null;
-  const encoded =
-    provider === 'gemini' && ['image/png', 'image/jpeg', 'image/webp'].includes(inline?.mimeType)
-      ? inline.data
-      : match?.[2];
-  if (typeof encoded !== 'string' || encoded.length > 11_000_000) {
+  const encoded = parseProviderImageResponse(params.provider, data);
+  if (!encoded) {
     throw new Error('The provider did not return a supported image');
   }
 
-  try {
-    await db.aiProviderKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date(), requestCount: { increment: 1 } } });
-  } catch {}
+  if (cred.keyRowId) {
+    try {
+      await db.aiProviderKey.update({
+        where: { id: cred.keyRowId },
+        data: { lastUsedAt: new Date(), requestCount: { increment: 1 } },
+      });
+    } catch {}
+  }
 
   return {
     bytes: Buffer.from(encoded, 'base64'),
     model,
     cost: typeof data.usage?.cost === 'number' ? data.usage.cost : null,
   };
+}
+
+export async function generateDesignImage(
+  prompt: string,
+  provider: ImageProvider,
+  signal: AbortSignal,
+  isPoster?: boolean,
+  context?: BusinessVisualContext,
+  options?: GenerateDesignImageOptions
+) {
+  const isPosterMode = isPoster || prompt.startsWith('[POSTER]');
+  const text = buildHighQualityImagePrompt(prompt, isPosterMode, context);
+  const referenceUrls = options?.referenceImageUrls || context?.referenceImageUrls || [];
+  const aspectRatio = options?.aspectRatio || context?.aspectRatio;
+  const aspectHint = aspectRatio ? ` Frame for ${aspectRatio} aspect ratio.` : '';
+
+  const loadedRefs =
+    referenceUrls.length > 0 ? await fetchReferenceImages(referenceUrls, signal) : [];
+
+  if (loadedRefs.length > 0) {
+    const multimodalPrompt =
+      `Using the attached real business reference photo(s), preserve the actual property, architecture, product appearance, and authentic character from the reference image(s), while composing this scene: ${text}${aspectHint}`.trim();
+
+    const multimodalOrder: Array<'gemini' | 'openrouter'> =
+      provider === 'openrouter' ? ['openrouter', 'gemini'] : ['gemini', 'openrouter'];
+
+    let lastMultimodalError: unknown = null;
+    for (const mmProvider of multimodalOrder) {
+      try {
+        return await callGeminiOrOpenRouterImage({
+          provider: mmProvider,
+          promptText: multimodalPrompt,
+          referenceImages: loadedRefs,
+          signal,
+        });
+      } catch (err) {
+        lastMultimodalError = err;
+      }
+    }
+
+    // Fallback to Cloudflare Flux with descriptive prompt when Gemini & OpenRouter are unavailable
+    try {
+      return await callCloudflareImage(`${text}${aspectHint}`, signal);
+    } catch {
+      if (lastMultimodalError instanceof Error) {
+        throw lastMultimodalError;
+      }
+      throw new Error('Multimodal image generation failed across configured providers');
+    }
+  }
+
+  if (provider === 'cloudflare') {
+    return await callCloudflareImage(`${text}${aspectHint}`, signal);
+  }
+
+  try {
+    return await callGeminiOrOpenRouterImage({
+      provider,
+      promptText: `${text}${aspectHint}`,
+      referenceImages: [],
+      signal,
+    });
+  } catch (primaryErr) {
+    try {
+      return await callCloudflareImage(`${text}${aspectHint}`, signal);
+    } catch {
+      const secondary: 'gemini' | 'openrouter' =
+        provider === 'gemini' ? 'openrouter' : 'gemini';
+      try {
+        return await callGeminiOrOpenRouterImage({
+          provider: secondary,
+          promptText: `${text}${aspectHint}`,
+          referenceImages: [],
+          signal,
+        });
+      } catch {
+        throw primaryErr;
+      }
+    }
+  }
 }
 
 export async function resolveCuratedImageFallback(

@@ -66,6 +66,7 @@ import {
   Trash2,
   AlertCircle,
   Film,
+  Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -382,9 +383,11 @@ export function ReviewsView({
   );
   const [photosList, setPhotosList] = useState<WebMediaItem[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
+  const [photosError, setPhotosError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const overviewPhotoInputRef = useRef<HTMLInputElement>(null);
   const [mediaModalOpen, setMediaModalOpen] = useState(false);
+  const [mediaModalMode, setMediaModalMode] = useState<'upload' | 'ai_generate'>('upload');
   const [pendingMediaFiles, setPendingMediaFiles] = useState<File[]>([]);
   const [editingMediaItem, setEditingMediaItem] = useState<WebMediaItem | null>(null);
   const [mediaModalDefaultMode, setMediaModalDefaultMode] = useState<WebScheduleMode>('daily');
@@ -660,14 +663,23 @@ export function ReviewsView({
   const loadPhotos = useCallback(() => {
     if (isDemo || initialReviews === INITIAL_REVIEWS) return;
     setPhotosLoading(true);
+    setPhotosError(null);
     authFetch('/api/social/photos')
-      .then((res) => (res.ok ? res.json() : null))
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(err.error || 'Could not load Google Business media.');
+        }
+        return res.json();
+      })
       .then((data) => {
         if (!Array.isArray(data?.photos)) return;
         setPhotosList(data.photos);
         setCustomerPhotos(data.photos.map((p: any) => p.url));
       })
-      .catch(() => {})
+      .catch((err) => {
+        setPhotosError(err instanceof Error ? err.message : 'Could not load Google Business media.');
+      })
       .finally(() => setPhotosLoading(false));
   }, [isDemo, initialReviews]);
 
@@ -1335,6 +1347,17 @@ export function ReviewsView({
     setEditingMediaItem(null);
     setPendingMediaFiles(picked);
     setMediaModalDefaultMode(mappedMode);
+    setMediaModalMode('upload');
+    setMediaModalOpen(true);
+  };
+
+  const openAiMediaComposer = (mode: string = photoDripMode) => {
+    const mappedMode: WebScheduleMode =
+      mode === 'instant' || mode === 'weekly' || mode === 'draft' ? mode : 'daily';
+    setEditingMediaItem(null);
+    setPendingMediaFiles([]);
+    setMediaModalDefaultMode(mappedMode);
+    setMediaModalMode('ai_generate');
     setMediaModalOpen(true);
   };
 
@@ -4385,11 +4408,20 @@ export function ReviewsView({
               <input
                 ref={photoInputRef}
                 type="file"
-                accept="image/*,video/*"
+                accept="image/*,video/*,.mp4,.mov,.webm,.m4v,.3gp,.mkv,.avi"
                 multiple
                 className="hidden"
                 onChange={(e) => openMediaComposer(e.target.files, photoDripMode)}
               />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openAiMediaComposer(photoDripMode)}
+                className="border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 text-xs font-semibold rounded-xl gap-1.5 h-9"
+              >
+                <Wand2 className="size-3.5" />
+                <span>Create AI Photo</span>
+              </Button>
               <Button
                 size="sm"
                 onClick={() => photoInputRef.current?.click()}
@@ -4402,6 +4434,19 @@ export function ReviewsView({
           </div>
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 space-y-4">
+            {photosError && (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-semibold text-rose-700">
+                <span>{photosError}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={loadPhotos}
+                  className="h-7 rounded-lg border-rose-300 text-rose-700 hover:bg-rose-100 text-xs"
+                >
+                  Retry
+                </Button>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">
@@ -4433,7 +4478,8 @@ export function ReviewsView({
             (photosList.length > 0
               ? photosList.map((item, i) => {
                   const isVideo =
-                    item.mediaFormat === 'VIDEO' || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(item.url || '');
+                    item.mediaFormat === 'VIDEO' ||
+                    /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(item.url || '');
                   const isEditable = item.source === 'queue' && Boolean(item.postId || item.id);
                   const dateIso = item.scheduledFor || item.createdAt;
                   return (
@@ -4444,6 +4490,7 @@ export function ReviewsView({
                           ? () => {
                               setPendingMediaFiles([]);
                               setEditingMediaItem(item);
+                              setMediaModalMode('upload');
                               setMediaModalOpen(true);
                             }
                           : undefined
@@ -4932,6 +4979,7 @@ export function ReviewsView({
         initialFiles={pendingMediaFiles}
         editingItem={editingMediaItem}
         defaultScheduleMode={mediaModalDefaultMode}
+        initialMode={mediaModalMode}
         onSaved={() => {
           loadPhotos();
         }}

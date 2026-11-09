@@ -9591,6 +9591,7 @@ model DesignGenerationJob {
   provider String
   prompt String
   status String @default("queued")
+  contextJson String?
   resultJson String?
   error String?
   subscriptionId String?

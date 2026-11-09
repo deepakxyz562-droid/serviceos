@@ -91,6 +91,7 @@ import {
   Type,
   LayoutTemplate,
   FolderOpen,
+  Wand2,
   type LucideIcon,
 } from 'lucide-react';
 import { MarketingCanvasStudio } from '@/components/bgos/marketing-canvas-studio';
@@ -1933,8 +1934,10 @@ export function SocialMediaView({
   // ── Google Media tab state ──
   const [photosData, setPhotosData] = useState<PhotosResponse | null>(null);
   const [photosLoading, setPhotosLoading] = useState(true);
+  const [photosError, setPhotosError] = useState<string | null>(null);
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('uploaded');
   const [mediaDialogOpen, setMediaDialogOpen] = useState(false);
+  const [mediaDialogMode, setMediaDialogMode] = useState<'upload' | 'ai_generate'>('upload');
   const [selectedMediaFiles, setSelectedMediaFiles] = useState<File[]>([]);
   const [editingMediaItem, setEditingMediaItem] = useState<WebMediaItem | null>(null);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
@@ -2204,13 +2207,17 @@ export function SocialMediaView({
 
   const fetchPhotos = useCallback(async () => {
     setPhotosLoading(true);
+    setPhotosError(null);
     try {
       const res = await authFetch('/api/social/photos');
       if (res.ok) {
         setPhotosData(await res.json());
+      } else {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        setPhotosError(err.error || 'Could not load Google Media.');
       }
     } catch {
-      // keep previous state
+      setPhotosError('Could not load Google Media. Check your connection.');
     } finally {
       setPhotosLoading(false);
     }
@@ -3058,6 +3065,7 @@ export function SocialMediaView({
     if (!files || files.length === 0) return;
     setEditingMediaItem(null);
     setSelectedMediaFiles(Array.from(files).slice(0, 20));
+    setMediaDialogMode('upload');
     setMediaDialogOpen(true);
     if (mediaInputRef.current) mediaInputRef.current.value = '';
   };
@@ -5576,11 +5584,25 @@ export function SocialMediaView({
               <input
                 ref={mediaInputRef}
                 type="file"
-                accept="image/*,video/*"
+                accept="image/*,video/*,.mp4,.mov,.webm,.m4v,.3gp,.mkv,.avi"
                 multiple
                 className="hidden"
                 onChange={(e) => handleMediaFileSelection(e.target.files)}
               />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setEditingMediaItem(null);
+                  setSelectedMediaFiles([]);
+                  setMediaDialogMode('ai_generate');
+                  setMediaDialogOpen(true);
+                }}
+                className="h-9 px-3.5 rounded-xl border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 text-xs font-bold gap-1.5"
+              >
+                <Wand2 className="size-3.5" />
+                <span>Create AI Photo</span>
+              </Button>
               <Button
                 size="sm"
                 onClick={() => mediaInputRef.current?.click()}
@@ -5591,6 +5613,20 @@ export function SocialMediaView({
               </Button>
             </div>
           </div>
+
+          {photosError && (
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-semibold text-rose-700">
+              <span>{photosError}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={fetchPhotos}
+                className="h-7 rounded-lg border-rose-300 text-rose-700 hover:bg-rose-100 text-xs"
+              >
+                Retry
+              </Button>
+            </div>
+          )}
 
           <div className="bg-card border border-border rounded-2xl p-5 shadow-2xs">
             {photosLoading ? (
@@ -5626,6 +5662,9 @@ export function SocialMediaView({
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 {visiblePhotos.map((photo) => {
                   const isEditable = photo.source === 'queue';
+                  const isVideo =
+                    photo.mediaFormat === 'VIDEO' ||
+                    /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(photo.url || '');
                   return (
                     <div
                       key={photo.id}
@@ -5633,20 +5672,28 @@ export function SocialMediaView({
                         if (isEditable) {
                           setSelectedMediaFiles([]);
                           setEditingMediaItem(photo);
+                          setMediaDialogMode('upload');
                           setMediaDialogOpen(true);
                         }
                       }}
                       className={`space-y-1.5 ${isEditable ? 'cursor-pointer group' : ''}`}
                     >
                       <div className="relative aspect-square rounded-xl overflow-hidden border border-border bg-muted">
-                        {/* Remote storage/data URLs — not local /public assets, plain img is intentional */}
-                        <img
-                          src={photo.thumbnailUrl || photo.url}
-                          alt={photo.title || photo.caption || 'Google Business media'}
-                          loading="lazy"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        />
-                        {photo.mediaFormat === 'VIDEO' && (
+                        {isVideo && !photo.thumbnailUrl ? (
+                          <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center gap-1 text-white">
+                            <Film className="size-7 text-emerald-400" />
+                            <span className="text-[10px] font-extrabold tracking-wider text-slate-200">VIDEO</span>
+                          </div>
+                        ) : (
+                          /* Remote storage/data URLs — not local /public assets, plain img is intentional */
+                          <img
+                            src={photo.thumbnailUrl || photo.url}
+                            alt={photo.title || photo.caption || 'Google Business media'}
+                            loading="lazy"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                        )}
+                        {isVideo && (
                           <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/75 text-white text-[9px] font-bold">
                             VIDEO
                           </span>
@@ -6220,6 +6267,7 @@ export function SocialMediaView({
         initialFiles={selectedMediaFiles}
         editingItem={editingMediaItem}
         defaultScheduleMode="daily"
+        initialMode={mediaDialogMode}
         onSaved={(_msg, mode) => {
           if (mode === 'instant') setMediaFilter('uploaded');
           else if (mode === 'draft') setMediaFilter('not_posted');

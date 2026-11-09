@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { colors } from '../ui';
 import { apiRequest } from '../../lib/api';
 import {
@@ -104,6 +105,36 @@ const PUBLISH_TIMES: { value: string; label: string }[] = [
   { value: '19:00', label: '7:00 PM' },
 ];
 
+const VIDEO_URL_RE = /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i;
+
+function isVideoPhotoItem(item?: { mediaFormat?: string; url?: string } | null): boolean {
+  if (!item) return false;
+  return item.mediaFormat === 'VIDEO' || VIDEO_URL_RE.test(item.url || '');
+}
+
+interface PreviousBusinessPhoto {
+  id: string;
+  url: string;
+  title?: string;
+  source: 'library' | 'post' | 'google';
+}
+
+interface BusinessImageIdea {
+  id: string;
+  title: string;
+  icon: string;
+  prompt: string;
+}
+
+interface BusinessAiContext {
+  name?: string;
+  category?: string;
+  location?: string;
+  products?: string[];
+  services?: string[];
+  website?: string;
+}
+
 export function MediaMetadataSheet({
   visible,
   onClose,
@@ -111,6 +142,7 @@ export function MediaMetadataSheet({
   pendingAssets = [],
   editingItem = null,
   initialScheduleMode = 'daily',
+  initialMode = 'upload',
   workspaceLocale = null,
   onSaved,
 }: {
@@ -120,11 +152,14 @@ export function MediaMetadataSheet({
   pendingAssets?: PendingUpload[];
   editingItem?: GbpPhoto | null;
   initialScheduleMode?: MediaScheduleMode;
+  initialMode?: 'upload' | 'ai_generate';
   workspaceLocale?: WorkspaceLocaleInfo | null;
   onSaved: (message: string) => void | Promise<void>;
 }) {
   const detected = detectDeviceCountryAndTimezone();
+  const [composerMode, setComposerMode] = useState<'upload' | 'ai_generate'>(initialMode);
   const [uploads, setUploads] = useState<UploadedMediaState[]>([]);
+  const [videoWarning, setVideoWarning] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -146,8 +181,45 @@ export function MediaMetadataSheet({
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Reference-aware AI image generation states
+  const [ideasLoading, setIdeasLoading] = useState(false);
+  const [ideasError, setIdeasError] = useState<string | null>(null);
+  const [businessContext, setBusinessContext] = useState<BusinessAiContext | null>(null);
+  const [previousPhotos, setPreviousPhotos] = useState<PreviousBusinessPhoto[]>([]);
+  const [aiIdeas, setAiIdeas] = useState<BusinessImageIdea[]>([]);
+  const [selectedRefUrls, setSelectedRefUrls] = useState<string[]>([]);
+  const [uploadingRef, setUploadingRef] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiAspectRatio, setAiAspectRatio] = useState<'1:1' | '4:5' | '9:16'>('1:1');
+  const [generatingAiImage, setGeneratingAiImage] = useState(false);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+
   const sessionKeyRef = useRef(0);
+  const lastInitKeyRef = useRef('');
   const isEditMode = Boolean(editingItem && (editingItem.postId || editingItem.id));
+
+  async function loadAiImageIdeas(topic?: string) {
+    const reqKey = sessionKeyRef.current;
+    setIdeasLoading(true);
+    setIdeasError(null);
+    try {
+      const qs = topic?.trim() ? `?topic=${encodeURIComponent(topic.trim())}` : '';
+      const res = await apiRequest<{
+        business?: BusinessAiContext;
+        previousPhotos?: PreviousBusinessPhoto[];
+        ideas?: BusinessImageIdea[];
+      }>(`/api/social/ai-image-ideas${qs}`);
+      if (reqKey !== sessionKeyRef.current) return;
+      if (res?.business) setBusinessContext(res.business);
+      if (Array.isArray(res?.previousPhotos)) setPreviousPhotos(res.previousPhotos);
+      if (Array.isArray(res?.ideas)) setAiIdeas(res.ideas);
+    } catch (err: unknown) {
+      if (reqKey !== sessionKeyRef.current) return;
+      setIdeasError(err instanceof Error ? err.message : 'Could not load business photos & AI ideas.');
+    } finally {
+      if (reqKey === sessionKeyRef.current) setIdeasLoading(false);
+    }
+  }
 
   async function runAiMetadata(
     filenames: string[],
@@ -188,45 +260,11 @@ export function MediaMetadataSheet({
     }
   }
 
-  useEffect(() => {
-    if (!visible) return;
-    sessionKeyRef.current += 1;
-    const reqKey = sessionKeyRef.current;
-    setErrorMsg(null);
-    setTagInput('');
-    const d = detectDeviceCountryAndTimezone();
-    setSelectedCountry(workspaceLocale?.country ? getCountryByCode(workspaceLocale.country) : d.country);
-    setSelectedTimeZone(workspaceLocale?.timeZone || d.timeZone);
-
-    if (editingItem) {
-      setUploads([]);
-      setTitle(editingItem.title || `${businessName} Showcase`);
-      setDescription(editingItem.description || editingItem.caption || '');
-      setTags(Array.isArray(editingItem.tags) ? editingItem.tags : []);
-      const cat = String(editingItem.gbpCategory || editingItem.category || 'ADDITIONAL').toUpperCase();
-      setCategory(
-        GBP_CATEGORIES.some((c) => c.value === cat) ? (cat as GbpCategoryType) : 'ADDITIONAL',
-      );
-      setScheduleMode(editingItem.status === 'draft' ? 'draft' : 'daily');
-      setSuggestedTitles([]);
-      setSuggestedTags([]);
-      return;
-    }
-
-    const normalized = pendingAssets.map((a, idx) => normalizePendingUpload(a, idx));
-    setScheduleMode(initialScheduleMode);
-    setIntent('local_seo');
-    setTitle('');
-    setDescription('');
-    setTags([]);
-    setSuggestedTitles([]);
-    setSuggestedTags([]);
-
+  function startBatchUploads(normalized: PendingUpload[], reqKey: number) {
     if (!normalized.length) {
       setUploads([]);
       return;
     }
-
     const initialState: UploadedMediaState[] = normalized.map((local) => ({
       local,
       uploading: true,
@@ -237,7 +275,7 @@ export function MediaMetadataSheet({
     const hasVideo = normalized.some((n) => n.mediaType === 'video');
     void runAiMetadata(
       normalized.map((n) => n.name),
-      'local_seo',
+      intent,
       hasVideo ? 'video' : 'photo',
     );
 
@@ -246,6 +284,9 @@ export function MediaMetadataSheet({
         const cloudUrl = await uploadFileToStorage(item, {
           folder: 'gbp-media',
           visibility: 'public',
+          onWarning: (w) => {
+            if (reqKey === sessionKeyRef.current) setVideoWarning(w);
+          },
           onProgress: (pct) => {
             if (reqKey !== sessionKeyRef.current) return;
             setUploads((prev) =>
@@ -267,7 +308,245 @@ export function MediaMetadataSheet({
         );
       }
     });
-  }, [visible, editingItem, pendingAssets, initialScheduleMode, businessName, workspaceLocale]);
+  }
+
+  useEffect(() => {
+    if (!visible) {
+      lastInitKeyRef.current = '';
+      return;
+    }
+    const pendingKey = pendingAssets.map((a) => `${a.uri}:${a.name}`).join(',');
+    const openKey = `${editingItem?.postId || editingItem?.id || ''}|${initialMode}|${pendingKey}`;
+    if (lastInitKeyRef.current === openKey) return;
+    lastInitKeyRef.current = openKey;
+
+    sessionKeyRef.current += 1;
+    const reqKey = sessionKeyRef.current;
+    setErrorMsg(null);
+    setVideoWarning(null);
+    setTagInput('');
+    setIdeasError(null);
+    setGeneratedImageUrl(null);
+    setAiPrompt('');
+    setSelectedRefUrls([]);
+
+    const d = detectDeviceCountryAndTimezone();
+    setSelectedCountry(workspaceLocale?.country ? getCountryByCode(workspaceLocale.country) : d.country);
+    setSelectedTimeZone(workspaceLocale?.timeZone || d.timeZone);
+
+    if (editingItem) {
+      setComposerMode('upload');
+      setUploads([]);
+      setTitle(editingItem.title || `${businessName} Showcase`);
+      setDescription(editingItem.description || editingItem.caption || '');
+      setTags(Array.isArray(editingItem.tags) ? editingItem.tags : []);
+      const cat = String(editingItem.gbpCategory || editingItem.category || 'ADDITIONAL').toUpperCase();
+      setCategory(
+        GBP_CATEGORIES.some((c) => c.value === cat) ? (cat as GbpCategoryType) : 'ADDITIONAL',
+      );
+      setScheduleMode(editingItem.status === 'draft' ? 'draft' : 'daily');
+      setSuggestedTitles([]);
+      setSuggestedTags([]);
+      return;
+    }
+
+    const nextMode = pendingAssets.length > 0 ? 'upload' : initialMode;
+    setComposerMode(nextMode);
+    const normalized = pendingAssets.map((a, idx) => normalizePendingUpload(a, idx));
+    setScheduleMode(initialScheduleMode);
+    setIntent('local_seo');
+    setTitle('');
+    setDescription('');
+    setTags([]);
+    setSuggestedTitles([]);
+    setSuggestedTags([]);
+
+    if (nextMode === 'ai_generate') {
+      void loadAiImageIdeas();
+    }
+
+    startBatchUploads(normalized, reqKey);
+  }, [visible, editingItem, pendingAssets, initialScheduleMode, initialMode, businessName, workspaceLocale]);
+
+  useEffect(() => {
+    if (visible && !isEditMode && composerMode === 'ai_generate' && aiIdeas.length === 0 && !ideasLoading && !ideasError) {
+      void loadAiImageIdeas();
+    }
+  }, [visible, isEditMode, composerMode]);
+
+  async function pickUploadMediaInsideSheet() {
+    setErrorMsg(null);
+    try {
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Permission Needed', 'Please allow photo & video access in Settings to upload media.');
+          return;
+        }
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsMultipleSelection: true,
+        selectionLimit: 10,
+        quality: 0.85,
+        exif: false,
+      });
+      if (res.canceled || !res.assets?.length) return;
+      const mapped = res.assets.map((asset, idx) =>
+        normalizePendingUpload(
+          {
+            uri: asset.uri,
+            name: asset.fileName || `${asset.type === 'video' ? 'video' : 'photo'}-${Date.now()}-${idx}`,
+            mimeType: asset.mimeType || (asset.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+            file: (asset as any).file,
+            fileSize: asset.fileSize,
+            mediaType: asset.type === 'video' ? 'video' : 'image',
+          },
+          idx,
+        ),
+      );
+      startBatchUploads(mapped, sessionKeyRef.current);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Could not pick media from library.');
+    }
+  }
+
+  function toggleReferencePhoto(url: string) {
+    setErrorMsg(null);
+    setSelectedRefUrls((prev) => {
+      if (prev.includes(url)) {
+        return prev.filter((u) => u !== url);
+      }
+      if (prev.length >= 3) {
+        setErrorMsg('You can select up to 3 reference photos at once.');
+        return prev;
+      }
+      return [...prev, url];
+    });
+  }
+
+  async function pickReferencePhotoFromDevice() {
+    setErrorMsg(null);
+    try {
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Permission Needed', 'Allow photo library access to upload a reference photo.');
+          return;
+        }
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        quality: 0.85,
+        exif: false,
+      });
+      if (res.canceled || !res.assets?.[0]) return;
+      const asset = res.assets[0];
+      const normalized = normalizePendingUpload({
+        uri: asset.uri,
+        name: asset.fileName || `ref-photo-${Date.now()}.jpg`,
+        mimeType: asset.mimeType || 'image/jpeg',
+        file: (asset as any).file,
+        fileSize: asset.fileSize,
+        mediaType: 'image',
+      });
+      setUploadingRef(true);
+      const cloudUrl = await uploadFileToStorage(normalized, {
+        folder: 'gbp-media',
+        visibility: 'public',
+      });
+      setPreviousPhotos((prev) => [
+        { id: `ref-${Date.now()}`, url: cloudUrl, title: 'Uploaded Ref', source: 'library' },
+        ...prev.filter((p) => p.url !== cloudUrl),
+      ]);
+      setSelectedRefUrls((prev) => (prev.includes(cloudUrl) ? prev : [...prev.slice(0, 2), cloudUrl]));
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Could not upload reference photo.');
+    } finally {
+      setUploadingRef(false);
+    }
+  }
+
+  async function handleGenerateAiImage(autoFromBusiness: boolean) {
+    if (generatingAiImage) return;
+    const reqKey = sessionKeyRef.current;
+    setErrorMsg(null);
+    setGeneratingAiImage(true);
+    try {
+      const requestId = `mob-ai-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const trimmedPrompt = aiPrompt.trim();
+      const useAuto = autoFromBusiness || !trimmedPrompt;
+      const startRes = await apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
+        method: 'POST',
+        body: {
+          requestId,
+          prompt: trimmedPrompt || undefined,
+          autoFromBusiness: useAuto,
+          referenceImageUrls: selectedRefUrls,
+          aspectRatio: aiAspectRatio,
+          provider: selectedRefUrls.length > 0 ? 'gemini' : 'cloudflare',
+          businessName: businessContext?.name || businessName,
+          category: businessContext?.category,
+          products: businessContext?.products,
+          services: businessContext?.services,
+          website: businessContext?.website,
+        },
+      });
+      if (reqKey !== sessionKeyRef.current) return;
+      const jobId = startRes?.jobId || requestId;
+      const pollStart = Date.now();
+      let generated: string | null = null;
+      while (Date.now() - pollStart < 60000) {
+        if (reqKey !== sessionKeyRef.current) return;
+        const statusRes = await apiRequest<{
+          status: string;
+          error?: string;
+          result?: { url?: string; assetId?: string } | null;
+        }>(`/api/social/designs/image?id=${encodeURIComponent(jobId)}`);
+        if (reqKey !== sessionKeyRef.current) return;
+        if (statusRes?.status === 'completed' && statusRes.result?.url) {
+          generated = statusRes.result.url;
+          break;
+        }
+        if (statusRes?.status === 'failed' || statusRes?.status === 'cancelled') {
+          throw new Error(statusRes.error || 'AI image generation failed.');
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      if (!generated) {
+        throw new Error('Image generation timed out. Please try again.');
+      }
+
+      setGeneratedImageUrl(generated);
+      const localItem = normalizePendingUpload({
+        uri: generated,
+        name: `ai-business-photo-${Date.now()}.png`,
+        mimeType: 'image/png',
+        mediaType: 'image',
+      });
+      setUploads([
+        {
+          local: localItem,
+          cloudUrl: generated,
+          uploading: false,
+          progress: 100,
+        },
+      ]);
+      void runAiMetadata(
+        [localItem.name],
+        intent,
+        'photo',
+        trimmedPrompt || `${businessContext?.name || businessName} commercial showcase`,
+      );
+    } catch (err: unknown) {
+      if (reqKey === sessionKeyRef.current) {
+        setErrorMsg(err instanceof Error ? err.message : 'Could not generate AI image. Please try again.');
+      }
+    } finally {
+      if (reqKey === sessionKeyRef.current) setGeneratingAiImage(false);
+    }
+  }
 
   async function retrySingleUpload(index: number) {
     const target = uploads[index];
@@ -280,6 +559,7 @@ export function MediaMetadataSheet({
       const cloudUrl = await uploadFileToStorage(target.local, {
         folder: 'gbp-media',
         visibility: 'public',
+        onWarning: (w) => setVideoWarning(w),
         onProgress: (pct) => {
           setUploads((prev) =>
             prev.map((row, i) => (i === index ? { ...row, progress: pct } : row)),
@@ -356,7 +636,10 @@ export function MediaMetadataSheet({
     }
     if (!readyUrls.length) {
       setErrorMsg(
-        failedUploads[0]?.error || 'No uploaded files succeeded. Tap Retry on failed files and try again.',
+        failedUploads[0]?.error ||
+          (composerMode === 'ai_generate'
+            ? 'Tap Auto-Create or Generate Image first before saving.'
+            : 'Select at least one photo or video to upload, or tap Retry on failed files.'),
       );
       return;
     }
@@ -459,7 +742,7 @@ export function MediaMetadataSheet({
                   ? [title || businessName]
                   : uploads.map((u) => u.local.name),
                 intent,
-                editingItem?.mediaFormat === 'VIDEO' ||
+                isVideoPhotoItem(editingItem) ||
                   uploads.some((u) => u.local.mediaType === 'video')
                   ? 'video'
                   : 'photo',
@@ -482,15 +765,68 @@ export function MediaMetadataSheet({
             </View>
           ) : null}
 
-          {/* Media Thumbnails & Cloud Upload Progress */}
+          {!isEditMode ? (
+            <View style={styles.modeToggleBar}>
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: composerMode === 'upload' }}
+                onPress={() => setComposerMode('upload')}
+                style={[styles.modeToggleBtn, composerMode === 'upload' && styles.modeToggleBtnActive]}
+              >
+                <MaterialIcons
+                  name="cloud-upload"
+                  size={15}
+                  color={composerMode === 'upload' ? '#FFFFFF' : colors.muted}
+                />
+                <Text
+                  style={[
+                    styles.modeToggleText,
+                    composerMode === 'upload' && styles.modeToggleTextActive,
+                  ]}
+                >
+                  Upload Media
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: composerMode === 'ai_generate' }}
+                onPress={() => setComposerMode('ai_generate')}
+                style={[styles.modeToggleBtn, composerMode === 'ai_generate' && styles.modeToggleBtnAiActive]}
+              >
+                <MaterialIcons
+                  name="auto-awesome"
+                  size={15}
+                  color={composerMode === 'ai_generate' ? '#FFFFFF' : '#7C3AED'}
+                />
+                <Text
+                  style={[
+                    styles.modeToggleText,
+                    composerMode === 'ai_generate' && styles.modeToggleTextActive,
+                  ]}
+                >
+                  Create with AI
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* Media Thumbnails & Cloud Upload Progress / Reference-Aware AI Generator */}
           {isEditMode && editingItem ? (
             <View style={styles.editPreviewCard}>
-              <Image
-                source={{ uri: editingItem.thumbnailUrl || editingItem.url }}
-                style={styles.editPreviewImg}
-                resizeMode="cover"
-                alt={editingItem.title || 'Selected media preview'}
-              />
+              {isVideoPhotoItem(editingItem) && !editingItem.thumbnailUrl ? (
+                <View style={[styles.editPreviewImg, styles.videoTileDark]}>
+                  <MaterialIcons name="videocam" size={24} color="#34D399" />
+                  <Text style={styles.videoTileLabel}>VIDEO</Text>
+                </View>
+              ) : (
+                <Image
+                  source={{ uri: editingItem.thumbnailUrl || editingItem.url }}
+                  style={styles.editPreviewImg}
+                  resizeMode="cover"
+                  alt={editingItem.title || 'Selected media preview'}
+                />
+              )}
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={styles.previewBadgeText}>
                   {editingItem.status === 'draft' ? 'Not Posted (Draft)' : 'Scheduled to Publish'}
@@ -500,40 +836,248 @@ export function MediaMetadataSheet({
                 </Text>
               </View>
             </View>
+          ) : composerMode === 'ai_generate' ? (
+            <View style={styles.aiStudioBox}>
+              <View style={styles.aiStudioHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.aiStudioTitle}>Generate Photo for {businessContext?.name || businessName}</Text>
+                  <Text style={styles.aiStudioSub}>
+                    Select previous business photos (optional) so AI preserves your real property/product, or let AI auto-create from your business profile.
+                  </Text>
+                </View>
+              </View>
+
+              {ideasError ? (
+                <View style={styles.uploadFailBanner}>
+                  <MaterialIcons name="info-outline" size={14} color={colors.danger} />
+                  <Text style={styles.uploadFailText}>{ideasError}</Text>
+                  <Pressable onPress={() => void loadAiImageIdeas()} style={styles.retryMiniBtn}>
+                    <Text style={styles.retryMiniText}>Retry</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {/* Reference Photos Selector */}
+              <View style={{ gap: 6 }}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.aiSubLabel}>
+                    Use Previous Business Photos ({selectedRefUrls.length}/3)
+                  </Text>
+                  <Pressable
+                    onPress={() => void pickReferencePhotoFromDevice()}
+                    disabled={uploadingRef || generatingAiImage}
+                    style={styles.uploadRefBtn}
+                  >
+                    {uploadingRef ? (
+                      <ActivityIndicator size="small" color={colors.brandDark} />
+                    ) : (
+                      <MaterialIcons name="add-a-photo" size={13} color={colors.brandDark} />
+                    )}
+                    <Text style={styles.uploadRefText}>
+                      {uploadingRef ? 'Uploading…' : 'Upload Ref'}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {ideasLoading && previousPhotos.length === 0 ? (
+                  <View style={{ paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator size="small" color="#7C3AED" />
+                    <Text style={{ fontSize: 11.5, color: colors.muted }}>Loading your previous business photos…</Text>
+                  </View>
+                ) : previousPhotos.length > 0 ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                    {previousPhotos.map((photo) => {
+                      const selected = selectedRefUrls.includes(photo.url);
+                      return (
+                        <Pressable
+                          key={photo.id}
+                          onPress={() => toggleReferencePhoto(photo.url)}
+                          style={[styles.refPhotoCard, selected && styles.refPhotoCardActive]}
+                        >
+                          <Image source={{ uri: photo.url }} style={styles.refPhotoImg} resizeMode="cover" alt={photo.title || 'Previous business photo'} />
+                          {selected ? (
+                            <View style={styles.refPhotoCheck}>
+                              <MaterialIcons name="check" size={12} color="#FFFFFF" />
+                            </View>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                ) : (
+                  <Text style={{ fontSize: 11.5, color: colors.muted }}>
+                    No previous photos saved yet — tap &quot;Upload Ref&quot; to use a real photo of your space, or Auto-Create below.
+                  </Text>
+                )}
+              </View>
+
+              {/* Smart Business Idea Prompts */}
+              {aiIdeas.length > 0 ? (
+                <View style={{ gap: 6 }}>
+                  <Text style={styles.aiSubLabel}>Quick Business Ideas</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {aiIdeas.map((idea) => (
+                      <Pressable
+                        key={idea.id}
+                        onPress={() => setAiPrompt(idea.prompt)}
+                        style={styles.ideaChip}
+                      >
+                        <Text style={styles.ideaChipText}>{idea.title}</Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
+
+              {/* Custom Prompt + Aspect Ratio */}
+              <View style={{ gap: 6 }}>
+                <Text style={styles.aiSubLabel}>Custom Prompt (optional)</Text>
+                <TextInput
+                  value={aiPrompt}
+                  onChangeText={setAiPrompt}
+                  placeholder={`e.g. Evening fairy-light lawn setup at ${businessContext?.name || businessName}, keep our farmhouse building`}
+                  placeholderTextColor={colors.muted}
+                  multiline
+                  style={[styles.input, { minHeight: 68, textAlignVertical: 'top' }]}
+                />
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {(['1:1', '4:5', '9:16'] as const).map((ratio) => {
+                    const active = aiAspectRatio === ratio;
+                    return (
+                      <Pressable
+                        key={ratio}
+                        onPress={() => setAiAspectRatio(ratio)}
+                        style={[styles.chip, active && styles.chipPurpleActive]}
+                      >
+                        <Text style={[styles.chipText, active && styles.chipPurpleText]}>
+                          {ratio === '1:1' ? 'Square 1:1' : ratio === '4:5' ? 'Portrait 4:5' : 'Story 9:16'}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Two Clear Generation CTAs */}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable
+                  disabled={generatingAiImage || uploadingRef}
+                  onPress={() => void handleGenerateAiImage(true)}
+                  style={[styles.aiAutoBtn, (generatingAiImage || uploadingRef) && { opacity: 0.6 }]}
+                >
+                  {generatingAiImage ? (
+                    <ActivityIndicator size="small" color="#7C3AED" />
+                  ) : (
+                    <MaterialIcons name="auto-awesome" size={15} color="#7C3AED" />
+                  )}
+                  <Text style={styles.aiAutoBtnText}>Auto-Create</Text>
+                </Pressable>
+
+                <Pressable
+                  disabled={generatingAiImage || uploadingRef}
+                  onPress={() => void handleGenerateAiImage(false)}
+                  style={[styles.aiGenBtn, (generatingAiImage || uploadingRef) && { opacity: 0.6 }]}
+                >
+                  {generatingAiImage ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <MaterialIcons name="auto-fix-high" size={15} color="#FFFFFF" />
+                  )}
+                  <Text style={styles.aiGenBtnText}>
+                    {generatingAiImage ? 'Creating…' : generatedImageUrl ? 'Regenerate' : 'Generate Image'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {generatedImageUrl ? (
+                <View style={styles.generatedPreviewCard}>
+                  <Image
+                    source={{ uri: generatedImageUrl }}
+                    style={styles.generatedPreviewImg}
+                    resizeMode="cover"
+                    alt="Generated AI business image"
+                  />
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.brandDark }}>
+                      ✓ Image Ready to Schedule or Publish
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.muted }}>
+                      Review your AI SEO title, tags &amp; schedule below, then tap Save.
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
           ) : (
             <View style={{ gap: 8 }}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbRow}>
-                {uploads.map((item, idx) => (
-                  <View key={`${item.local.uri}-${idx}`} style={styles.thumbCard}>
-                    <Image source={{ uri: item.local.uri }} style={styles.thumbImage} resizeMode="cover" alt={item.local.name || 'Upload preview'} />
-                    {item.local.mediaType === 'video' ? (
-                      <View style={styles.videoPill}>
-                        <MaterialIcons name="videocam" size={12} color="#FFFFFF" />
-                      </View>
-                    ) : null}
-                    {item.uploading ? (
-                      <View style={styles.thumbOverlay}>
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                        <Text style={styles.thumbOverlayText}>
-                          {item.progress && item.progress > 0 ? `${item.progress}%` : 'Uploading'}
-                        </Text>
-                      </View>
-                    ) : item.error ? (
-                      <Pressable
-                        onPress={() => void retrySingleUpload(idx)}
-                        style={[styles.thumbOverlay, { backgroundColor: 'rgba(186,53,71,0.88)' }]}
-                      >
-                        <MaterialIcons name="refresh" size={16} color="#FFFFFF" />
-                        <Text style={styles.thumbOverlayText}>Tap Retry</Text>
-                      </Pressable>
-                    ) : (
-                      <View style={styles.donePill}>
-                        <MaterialIcons name="check-circle" size={14} color="#FFFFFF" />
-                      </View>
-                    )}
-                  </View>
-                ))}
-              </ScrollView>
+              {uploads.length === 0 ? (
+                <Pressable
+                  onPress={() => void pickUploadMediaInsideSheet()}
+                  style={styles.pickInsideCard}
+                >
+                  <MaterialIcons name="add-photo-alternate" size={28} color={colors.brand} />
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
+                    Select Photos or Videos from Device
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.muted, textAlign: 'center' }}>
+                    Supports JPG, PNG, WEBP &amp; MP4, MOV, 3GP, MKV videos (up to 100MB; Google recommends under 75MB / 30s).
+                  </Text>
+                </Pressable>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbRow}>
+                  {uploads.map((item, idx) => (
+                    <View key={`${item.local.uri}-${idx}`} style={styles.thumbCard}>
+                      {item.local.mediaType === 'video' ? (
+                        <View style={[styles.thumbImage, styles.videoTileDark]}>
+                          <MaterialIcons name="videocam" size={24} color="#34D399" />
+                          <Text style={styles.videoTileLabel}>VIDEO</Text>
+                        </View>
+                      ) : (
+                        <Image
+                          source={{ uri: item.local.uri }}
+                          style={styles.thumbImage}
+                          resizeMode="cover"
+                          alt={item.local.name || 'Upload preview'}
+                        />
+                      )}
+                      {item.uploading ? (
+                        <View style={styles.thumbOverlay}>
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                          <Text style={styles.thumbOverlayText}>
+                            {item.progress && item.progress > 0 ? `${item.progress}%` : 'Uploading'}
+                          </Text>
+                        </View>
+                      ) : item.error ? (
+                        <Pressable
+                          onPress={() => void retrySingleUpload(idx)}
+                          style={[styles.thumbOverlay, { backgroundColor: 'rgba(186,53,71,0.88)' }]}
+                        >
+                          <MaterialIcons name="refresh" size={16} color="#FFFFFF" />
+                          <Text style={styles.thumbOverlayText}>Tap Retry</Text>
+                        </Pressable>
+                      ) : (
+                        <View style={styles.donePill}>
+                          <MaterialIcons name="check-circle" size={14} color="#FFFFFF" />
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                  <Pressable onPress={() => void pickUploadMediaInsideSheet()} style={styles.thumbAddMore}>
+                    <MaterialIcons name="add" size={22} color={colors.brand} />
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.brandDark }}>Change</Text>
+                  </Pressable>
+                </ScrollView>
+              )}
+
+              {(videoWarning || uploads.some((u) => u.local.mediaType === 'video')) ? (
+                <View style={styles.videoNoticeBanner}>
+                  <MaterialIcons name="videocam" size={15} color={colors.noteText} />
+                  <Text style={styles.videoNoticeText}>
+                    {videoWarning || 'Google Business Profile works best with MP4/MOV videos under 75MB (up to 30s at 1080p).'}
+                  </Text>
+                </View>
+              ) : null}
+
               {failedUploads.length > 0 ? (
                 <View style={styles.uploadFailBanner}>
                   <MaterialIcons name="warning-amber" size={15} color={colors.danger} />
@@ -569,7 +1113,7 @@ export function MediaMetadataSheet({
                       void runAiMetadata(
                         isEditMode ? [title || businessName] : uploads.map((u) => u.local.name),
                         item.value,
-                        editingItem?.mediaFormat === 'VIDEO' ||
+                        isVideoPhotoItem(editingItem) ||
                           uploads.some((u) => u.local.mediaType === 'video')
                           ? 'video'
                           : 'photo',
@@ -1358,5 +1902,223 @@ const styles = StyleSheet.create({
   pickerTz: {
     fontSize: 11,
     color: colors.muted,
+  },
+  modeToggleBar: {
+    flexDirection: 'row',
+    backgroundColor: '#EEF2F6',
+    borderRadius: 14,
+    padding: 4,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  modeToggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  modeToggleBtnActive: {
+    backgroundColor: colors.brand,
+  },
+  modeToggleBtnAiActive: {
+    backgroundColor: '#7C3AED',
+  },
+  modeToggleText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: colors.muted,
+  },
+  modeToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  videoTileDark: {
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  videoTileLabel: {
+    color: '#E2E8F0',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  aiStudioBox: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    padding: 12,
+    gap: 10,
+  },
+  aiStudioHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  aiStudioTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  aiStudioSub: {
+    fontSize: 11,
+    color: colors.muted,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  aiSubLabel: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  uploadRefBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.brandSoft,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  uploadRefText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.brandDark,
+  },
+  refPhotoCard: {
+    width: 68,
+    height: 68,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: colors.line,
+    backgroundColor: colors.soft,
+  },
+  refPhotoCardActive: {
+    borderColor: '#7C3AED',
+  },
+  refPhotoImg: {
+    width: '100%',
+    height: '100%',
+  },
+  refPhotoCheck: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#7C3AED',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ideaChip: {
+    backgroundColor: colors.aiPurpleSoft,
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  ideaChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6D28D9',
+  },
+  aiAutoBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: colors.aiPurpleSoft,
+    borderWidth: 1,
+    borderColor: '#C084FC',
+    borderRadius: 12,
+    height: 42,
+  },
+  aiAutoBtnText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#6D28D9',
+  },
+  aiGenBtn: {
+    flex: 1.35,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#7C3AED',
+    borderRadius: 12,
+    height: 42,
+  },
+  aiGenBtnText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  generatedPreviewCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.brandSoft,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+    padding: 8,
+  },
+  generatedPreviewImg: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
+    backgroundColor: colors.soft,
+  },
+  pickInsideCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.brand,
+    borderRadius: 14,
+    padding: 18,
+  },
+  thumbAddMore: {
+    width: 86,
+    height: 86,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.brand,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  videoNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.note,
+    borderWidth: 1,
+    borderColor: colors.noteBorder,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  videoNoticeText: {
+    flex: 1,
+    fontSize: 11,
+    color: colors.noteText,
+    fontWeight: '600',
+    lineHeight: 15,
   },
 });

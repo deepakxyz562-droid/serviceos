@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { CI } from '@/lib/db-utils';
 import { getAuthUser } from '@/lib/auth';
 import { hasRole } from '@/lib/auth/permissions';
+import { toIsoStringSafe } from '@/lib/safe-date';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/reviews — List reviews with filters
@@ -117,21 +118,26 @@ export async function GET(request: NextRequest) {
     ]);
 
     const normalizedReviews = reviews.map((review: any) => {
+      const normalizedCreatedAt = toIsoStringSafe(review?.createdAt);
       if (review?.source === 'google' && typeof review.responseJson === 'string' && review.responseJson) {
         try {
           const parsed = JSON.parse(review.responseJson);
-          if (typeof parsed?.googleCreateTime === 'string') {
-            const createDate = new Date(parsed.googleCreateTime);
-            if (!isNaN(createDate.getTime())) {
-              return {
-                ...review,
-                createdAt: createDate.toISOString(),
-                createTime: createDate.toISOString(),
-                googleUpdateTime: typeof parsed?.googleUpdateTime === 'string' ? parsed.googleUpdateTime : undefined,
-              };
-            }
+          const createIso = toIsoStringSafe(parsed?.googleCreateTime);
+          if (createIso) {
+            return {
+              ...review,
+              createdAt: createIso,
+              createTime: createIso,
+              googleUpdateTime: toIsoStringSafe(parsed?.googleUpdateTime) || (typeof parsed?.googleUpdateTime === 'string' ? parsed.googleUpdateTime : undefined),
+            };
           }
         } catch {}
+      }
+      if (normalizedCreatedAt && normalizedCreatedAt !== review?.createdAt) {
+        return {
+          ...review,
+          createdAt: normalizedCreatedAt,
+        };
       }
       return review;
     });

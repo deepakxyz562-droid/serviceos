@@ -121,7 +121,10 @@ export async function GET(request: NextRequest) {
   });
   const avgCompletionTimeSec = completionTimes.length > 0
     ? completionTimes.reduce((sum, r) => {
-        const diff = (r.completedAt!.getTime() - r.startedAt!.getTime()) / 1000;
+        const endMs = r.completedAt ? new Date(r.completedAt).getTime() : NaN;
+        const startMs = r.startedAt ? new Date(r.startedAt).getTime() : NaN;
+        if (Number.isNaN(endMs) || Number.isNaN(startMs)) return sum;
+        const diff = (endMs - startMs) / 1000;
         return sum + (diff > 0 ? diff : 0);
       }, 0) / completionTimes.length
     : 0;
@@ -129,7 +132,9 @@ export async function GET(request: NextRequest) {
   // Group daily trend
   const trendMap = new Map<string, number>();
   for (const r of dailyTrend) {
-    const day = r.createdAt.toISOString().split('T')[0];
+    const createdD = r.createdAt ? new Date(r.createdAt) : null;
+    if (!createdD || Number.isNaN(createdD.getTime())) continue;
+    const day = createdD.toISOString().split('T')[0];
     trendMap.set(day, (trendMap.get(day) || 0) + 1);
   }
   const trend = Array.from(trendMap.entries())

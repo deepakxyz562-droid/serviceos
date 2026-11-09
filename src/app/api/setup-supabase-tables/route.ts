@@ -24,6 +24,41 @@ ALTER TABLE IF EXISTS "User" ADD COLUMN IF NOT EXISTS "emailVerifyTokenHash" TEX
 ALTER TABLE IF EXISTS "User" ADD COLUMN IF NOT EXISTS "emailVerifyTokenExpiresAt" TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS "User_emailVerifyTokenHash_idx" ON "User"("emailVerifyTokenHash");
 
+-- 0b. SocialPost Media & Approval Columns
+ALTER TABLE IF EXISTS "SocialPost" ADD COLUMN IF NOT EXISTS "approvalStatus" TEXT;
+ALTER TABLE IF EXISTS "SocialPost" ADD COLUMN IF NOT EXISTS "designJson" TEXT;
+ALTER TABLE IF EXISTS "SocialPost" ADD COLUMN IF NOT EXISTS "linkUrl" TEXT;
+ALTER TABLE IF EXISTS "SocialPost" ADD COLUMN IF NOT EXISTS "scheduledAt" TIMESTAMPTZ;
+ALTER TABLE IF EXISTS "SocialPost" ADD COLUMN IF NOT EXISTS "publishedAt" TIMESTAMPTZ;
+ALTER TABLE IF EXISTS "SocialPost" ADD COLUMN IF NOT EXISTS "failureReason" TEXT;
+ALTER TABLE IF EXISTS "SocialPost" ADD COLUMN IF NOT EXISTS "gbpPostType" TEXT;
+ALTER TABLE IF EXISTS "SocialPost" ADD COLUMN IF NOT EXISTS "gbpOfferData" TEXT;
+ALTER TABLE IF EXISTS "SocialPost" ADD COLUMN IF NOT EXISTS "pinterestBoard" TEXT;
+CREATE INDEX IF NOT EXISTS "SocialPost_tenant_status_sched_idx" ON "SocialPost"("tenantId", "status", "scheduledAt");
+CREATE INDEX IF NOT EXISTS "SocialPost_gbpPostType_idx" ON "SocialPost"("gbpPostType");
+
+-- 0c. DesignGenerationJob Table & Multimodal Context Column
+CREATE TABLE IF NOT EXISTS "DesignGenerationJob" (
+  "id" TEXT PRIMARY KEY,
+  "tenantId" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "provider" TEXT NOT NULL,
+  "prompt" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'queued',
+  "contextJson" TEXT,
+  "resultJson" TEXT,
+  "error" TEXT,
+  "subscriptionId" TEXT,
+  "cancelRequested" BOOLEAN NOT NULL DEFAULT false,
+  "startedAt" TIMESTAMPTZ,
+  "finishedAt" TIMESTAMPTZ,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE IF EXISTS "DesignGenerationJob" ADD COLUMN IF NOT EXISTS "contextJson" TEXT;
+CREATE INDEX IF NOT EXISTS "DesignGenerationJob_tenant_created_idx" ON "DesignGenerationJob"("tenantId", "createdAt");
+CREATE INDEX IF NOT EXISTS "DesignGenerationJob_status_created_idx" ON "DesignGenerationJob"("status", "createdAt");
+
 -- 1. CommunicationProvider
 CREATE TABLE IF NOT EXISTS "CommunicationProvider" (
   "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),

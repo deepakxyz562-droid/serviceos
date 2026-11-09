@@ -16,6 +16,10 @@ const ALLOWED_MIME_TYPES = new Set([
   'video/quicktime',
   'video/webm',
   'video/x-m4v',
+  'video/3gpp',
+  'video/x-matroska',
+  'video/x-msvideo',
+  'video/avi',
   'video/mpeg',
   'application/pdf',
   'text/plain',
@@ -37,6 +41,9 @@ const EXT_TO_MIME: Record<string, string> = {
   m4v: 'video/x-m4v',
   mov: 'video/quicktime',
   webm: 'video/webm',
+  '3gp': 'video/3gpp',
+  mkv: 'video/x-matroska',
+  avi: 'video/x-msvideo',
   mpeg: 'video/mpeg',
   mpg: 'video/mpeg',
   pdf: 'application/pdf',
@@ -47,10 +54,41 @@ const EXT_TO_MIME: Record<string, string> = {
 const MAX_IMAGE_DOC_SIZE = 25 * 1024 * 1024; // 25MB
 const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
 
+function getDevCorsHeaders(request: NextRequest): Record<string, string> {
+  if (process.env.NODE_ENV === 'production') return {};
+  const origin = request.headers.get('origin');
+  if (!origin) return {};
+  const isLocalOrigin =
+    origin.includes('localhost') ||
+    origin.includes('127.0.0.1') ||
+    origin.includes('192.168.') ||
+    origin.includes('10.0.');
+  if (!isLocalOrigin) return {};
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Credentials': 'true',
+  };
+}
+
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get('origin') || '*';
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
+}
+
 function resolveMime(rawType: string | undefined, fileName: string): string {
   const normalized = (rawType || '').trim().toLowerCase();
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
   if (normalized === 'image/jpg') return 'image/jpeg';
+  if (normalized === 'video/avi') return 'video/x-msvideo';
   if (normalized === 'image') return EXT_TO_MIME[ext] || 'image/jpeg';
   if (normalized === 'video') return EXT_TO_MIME[ext] || 'video/mp4';
   if (!normalized || normalized === 'application/octet-stream') {
@@ -60,24 +98,42 @@ function resolveMime(rawType: string | undefined, fileName: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const corsHeaders = getDevCorsHeaders(request);
   try {
     const authUser = await getAuthUser(request);
     if (!canUseInbox(authUser)) {
       return NextResponse.json(
         { error: 'Operator authentication required' },
-        { status: authUser ? 403 : 401 }
+        { status: authUser ? 403 : 401, headers: corsHeaders }
       );
     }
 
-    const formData = (await request.formData()) as unknown as {
+    let formData: {
       get(name: string): FormDataEntryValue | File | Blob | string | null;
     };
+    try {
+      formData = (await request.formData()) as unknown as {
+        get(name: string): FormDataEntryValue | File | Blob | string | null;
+      };
+    } catch (formErr) {
+      const formMsg = formErr instanceof Error ? formErr.message : String(formErr);
+      console.warn('[Omnichannel Upload] Failed parsing multipart formData:', formMsg);
+      const isTooLarge = /limit|size|length|exceeded|too large|body/i.test(formMsg);
+      return NextResponse.json(
+        {
+          error: isTooLarge
+            ? 'Upload body exceeded server size limit or connection was interrupted. Try direct upload or a smaller file.'
+            : 'Could not read uploaded file body (connection interrupted or file too large). Try direct upload or a smaller file.',
+        },
+        { status: isTooLarge ? 413 : 400, headers: corsHeaders }
+      );
+    }
     const rawFile = formData.get('file');
 
     if (!rawFile || typeof rawFile === 'string' || typeof (rawFile as Blob).arrayBuffer !== 'function') {
       return NextResponse.json(
         { error: 'No valid file payload provided. Please select a photo, video, or document.' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -89,8 +145,8 @@ export async function POST(request: NextRequest) {
 
     if (!ALLOWED_MIME_TYPES.has(mime) && !isImage && !isVideo) {
       return NextResponse.json(
-        { error: `File type ${mime} is not supported. Please upload an image, video (MP4/MOV), or PDF/document.` },
-        { status: 400 }
+        { error: `File type ${mime} is not supported. Please upload an image, video (MP4/MOV/WEBM), or PDF/document.` },
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -98,7 +154,7 @@ export async function POST(request: NextRequest) {
     if (file.size > maxSize) {
       return NextResponse.json(
         { error: `File exceeds maximum allowed size of ${isVideo ? '100MB' : '25MB'}` },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -107,7 +163,11 @@ export async function POST(request: NextRequest) {
     const ext = originalName.includes('.')
       ? ''
       : isVideo
-        ? '.mp4'
+        ? mime === 'video/quicktime'
+          ? '.mov'
+          : mime === 'video/3gpp'
+            ? '.3gp'
+            : '.mp4'
         : isImage
           ? `.${mime.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg'}`
           : '';
@@ -130,23 +190,27 @@ export async function POST(request: NextRequest) {
       folder: folderParam,
       fileName,
       contentType: mime,
+      requirePublicUrl: visibilityParam === 'public' && process.env.NODE_ENV === 'production',
     });
 
-    return NextResponse.json({
-      success: true,
-      url,
-      path,
-      fileName: originalName,
-      fileSize: file.size,
-      mimeType: mime,
-      isVideo,
-      isImage,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        url,
+        path,
+        fileName: originalName,
+        fileSize: file.size,
+        mimeType: mime,
+        isVideo,
+        isImage,
+      },
+      { headers: corsHeaders },
+    );
   } catch (error) {
     console.error('[Omnichannel Upload] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to process file upload. Please try again.' },
-      { status: 500 }
+      { error: error instanceof Error ? error.message : 'Failed to process file upload. Please try again.' },
+      { status: 500, headers: corsHeaders }
     );
   }
 }

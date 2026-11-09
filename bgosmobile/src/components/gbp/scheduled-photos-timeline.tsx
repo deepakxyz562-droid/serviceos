@@ -15,11 +15,18 @@ import type { GbpConnectionState, GbpPhoto } from './types';
 
 type MediaTabKey = 'scheduled' | 'uploaded' | 'unposted';
 
+const VIDEO_URL_RE = /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i;
+
+function isVideoMediaItem(item: GbpPhoto): boolean {
+  return item.mediaFormat === 'VIDEO' || VIDEO_URL_RE.test(item.url || '');
+}
+
 interface ScheduledPhotosTimelineProps {
   photos?: GbpPhoto[];
   scheduledPhotos?: GbpPhoto[];
   draftPhotos?: GbpPhoto[];
   onUploadPress: () => void;
+  onAiCreatePress?: () => void;
   onEditItem?: (item: GbpPhoto) => void;
   onConnectPress?: () => void;
   businessName?: string;
@@ -35,6 +42,7 @@ export function ScheduledPhotosTimeline({
   scheduledPhotos = [],
   draftPhotos = [],
   onUploadPress,
+  onAiCreatePress,
   onEditItem,
   onConnectPress,
   businessName = 'My Business',
@@ -136,29 +144,56 @@ export function ScheduledPhotosTimeline({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.portraitPhotosTrack}
         >
-          {galleryPhotos.map((item, idx) => (
-            <Pressable
-              key={item.id || `photo-${idx}`}
-              onPress={() => {
-                if (item.source === 'queue' && onEditItem) {
-                  onEditItem(item);
-                }
-              }}
-              style={styles.portraitCard}
-            >
-              <Image
-                source={{ uri: item.thumbnailUrl || item.url }}
-                style={styles.portraitImage}
-                resizeMode="cover"
-                alt={item.title || 'Google Business photo'}
-              />
-              <View style={styles.portraitOverlay}>
-                <Text style={styles.portraitTitle} numberOfLines={1}>
-                  {item.title || item.category || (item.source === 'google' ? 'Google Live' : 'Queued')}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
+          {galleryPhotos.map((item, idx) => {
+            const videoNoThumb = isVideoMediaItem(item) && !item.thumbnailUrl;
+            return (
+              <Pressable
+                key={item.id || `photo-${idx}`}
+                onPress={() => {
+                  if (item.source === 'queue' && onEditItem) {
+                    onEditItem(item);
+                  }
+                }}
+                style={styles.portraitCard}
+              >
+                {videoNoThumb ? (
+                  <View style={[styles.portraitImage, styles.videoTileDark]}>
+                    <MaterialIcons name="videocam" size={30} color="#34D399" />
+                    <Text style={styles.videoTileLabel}>VIDEO</Text>
+                  </View>
+                ) : (
+                  <Image
+                    source={{ uri: item.thumbnailUrl || item.url }}
+                    style={styles.portraitImage}
+                    resizeMode="cover"
+                    alt={item.title || 'Google Business photo'}
+                  />
+                )}
+                {isVideoMediaItem(item) ? (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 6,
+                      right: 6,
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      backgroundColor: 'rgba(7,11,45,0.72)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <MaterialIcons name="videocam" size={14} color="#FFFFFF" />
+                  </View>
+                ) : null}
+                <View style={styles.portraitOverlay}>
+                  <Text style={styles.portraitTitle} numberOfLines={1}>
+                    {item.title || item.category || (item.source === 'google' ? 'Google Live' : 'Queued')}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
         </ScrollView>
       ) : (
         <View style={styles.emptyHeroCard}>
@@ -190,6 +225,21 @@ export function ScheduledPhotosTimeline({
           {isUploading ? 'Opening Media Picker…' : 'Add Photos & Videos'}
         </Text>
       </Pressable>
+
+      {onAiCreatePress ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Create AI Business Photo"
+          onPress={onAiCreatePress}
+          style={({ pressed }) => [
+            styles.aiCreateButton,
+            pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+          ]}
+        >
+          <MaterialIcons name="auto-awesome" size={17} color="#6D28D9" />
+          <Text style={styles.aiCreateButtonText}>Create AI Photo from Business &amp; Previous Photos</Text>
+        </Pressable>
+      ) : null}
 
       <Pressable
         accessibilityRole="button"
@@ -294,12 +344,19 @@ export function ScheduledPhotosTimeline({
                 onPress={() => isEditable && onEditItem?.(item)}
                 style={styles.timelineRow}
               >
-                <Image
-                  source={{ uri: item.thumbnailUrl || item.url }}
-                  style={styles.slotThumbnail}
-                  resizeMode="cover"
-                  alt={item.title || 'Scheduled media thumbnail'}
-                />
+                {isVideoMediaItem(item) && !item.thumbnailUrl ? (
+                  <View style={[styles.slotThumbnail, styles.videoTileDark]}>
+                    <MaterialIcons name="videocam" size={24} color="#34D399" />
+                    <Text style={styles.videoTileLabel}>VIDEO</Text>
+                  </View>
+                ) : (
+                  <Image
+                    source={{ uri: item.thumbnailUrl || item.url }}
+                    style={styles.slotThumbnail}
+                    resizeMode="cover"
+                    alt={item.title || 'Scheduled media thumbnail'}
+                  />
+                )}
 
                 <View style={styles.timelineInfo}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
@@ -463,15 +520,30 @@ export function ScheduledPhotosTimeline({
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-            {galleryPhotos.map((item, i) => (
-              <Image
-                key={item.id || `gallery-${i}`}
-                source={{ uri: item.thumbnailUrl || item.url }}
-                style={{ width: '48%', height: 160, borderRadius: 12, backgroundColor: colors.soft }}
-                resizeMode="cover"
-                alt={item.title || 'Gallery photo'}
-              />
-            ))}
+            {galleryPhotos.map((item, i) =>
+              isVideoMediaItem(item) && !item.thumbnailUrl ? (
+                <View
+                  key={item.id || `gallery-${i}`}
+                  style={[styles.videoTileDark, { width: '48%', height: 160, borderRadius: 12 }]}
+                >
+                  <MaterialIcons name="videocam" size={32} color="#34D399" />
+                  <Text style={styles.videoTileLabel}>VIDEO</Text>
+                  {item.title ? (
+                    <Text style={{ color: '#CBD5E1', fontSize: 11, fontWeight: '700', paddingHorizontal: 8 }} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : (
+                <Image
+                  key={item.id || `gallery-${i}`}
+                  source={{ uri: item.thumbnailUrl || item.url }}
+                  style={{ width: '48%', height: 160, borderRadius: 12, backgroundColor: colors.soft }}
+                  resizeMode="cover"
+                  alt={item.title || 'Gallery photo'}
+                />
+              ),
+            )}
           </ScrollView>
         </View>
       </Modal>
@@ -876,6 +948,34 @@ const styles = StyleSheet.create({
   modalActionBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
+    fontWeight: '800',
+  },
+  videoTileDark: {
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  videoTileLabel: {
+    color: '#E2E8F0',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  aiCreateButton: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    borderRadius: 14,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiCreateButtonText: {
+    color: '#6D28D9',
+    fontSize: 13,
     fontWeight: '800',
   },
 });

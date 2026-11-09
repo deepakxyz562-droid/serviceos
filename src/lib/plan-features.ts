@@ -518,7 +518,9 @@ export async function seedPlanFeatureMatrix(): Promise<{ seeded: number }> {
         // whether it was created or already existed (createdAt vs updatedAt
         // would, but that's two extra fields). Use a count-by-create approach
         // by checking if createdAt === updatedAt (true only on initial insert).
-        if (row.createdAt.getTime() === row.updatedAt.getTime()) {
+        const createdMs = row.createdAt ? new Date(row.createdAt).getTime() : 0;
+        const updatedMs = row.updatedAt ? new Date(row.updatedAt).getTime() : 0;
+        if (createdMs > 0 && createdMs === updatedMs) {
           seeded++;
         }
       } catch (err) {

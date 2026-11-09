@@ -65,6 +65,7 @@ import { SocialCalendarView } from '../../src/components/gbp/social-calendar';
 import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
 import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
 import { UpcomingPostsCarousel } from '../../src/components/gbp/upcoming-posts-carousel';
+import { normalizePendingUpload, uploadFileToStorage } from '../../src/lib/upload';
 
 const TIME_SLOTS = [
   { label: '08:00 AM (Early Rush)', value: '08:00' },
@@ -816,7 +817,86 @@ export default function MarketingScreen() {
   const [detailsOpen,setDetailsOpen]=useState(false);
   const [editSheet, setEditSheet] = useState<'none' | 'text' | 'photo' | 'style' | 'brand'>('none');
   const [imageProvider, setImageProvider] = useState<'cloudflare' | 'gemini' | 'openrouter'>('cloudflare');
+  const [refPhotosList, setRefPhotosList] = useState<Array<{ id: string; url: string; title?: string; source?: string }>>([]);
+  const [refPhotosLoading, setRefPhotosLoading] = useState(false);
+  const [selectedRefUrls, setSelectedRefUrls] = useState<string[]>([]);
+  const [uploadingRefPhoto, setUploadingRefPhoto] = useState(false);
   useEffect(()=>()=>{generationEpoch.current++;},[]);
+  const loadBusinessRefPhotos = useCallback(async () => {
+    try {
+      setRefPhotosLoading(true);
+      const res = await apiRequest<{
+        previousPhotos?: Array<{ id: string; url: string; title?: string; source?: string }>;
+      }>('/api/social/ai-image-ideas?includeGoogle=0');
+      if (Array.isArray(res?.previousPhotos)) {
+        setRefPhotosList(res.previousPhotos.filter((p) => Boolean(p.url)));
+      }
+    } catch {
+      // Non-blocking: reference photos are optional
+    } finally {
+      setRefPhotosLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (activeMode === 'studio') void loadBusinessRefPhotos();
+  }, [activeMode, loadBusinessRefPhotos]);
+  const toggleRefPhoto = (url: string) => {
+    setSelectedRefUrls((prev) => {
+      if (prev.includes(url)) return prev.filter((u) => u !== url);
+      if (prev.length >= 3) {
+        return [...prev.slice(1), url];
+      }
+      return [...prev, url];
+    });
+  };
+  const handleUploadRefPhoto = async () => {
+    try {
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Permission Needed', 'Allow photo access to upload a reference business photo.');
+          return;
+        }
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        selectionLimit: 1,
+        quality: 0.85,
+        exif: false,
+      });
+      if (res.canceled || !res.assets?.length) return;
+      const asset = res.assets[0];
+      setUploadingRefPhoto(true);
+      const pending = normalizePendingUpload(
+        {
+          uri: asset.uri,
+          name: asset.fileName || `ref-${Date.now()}.jpg`,
+          mimeType: asset.mimeType || 'image/jpeg',
+          file: (asset as any).file,
+          fileSize: asset.fileSize,
+          mediaType: 'image',
+        },
+        0,
+      );
+      const uploadedUrl = await uploadFileToStorage(pending);
+      const newEntry = {
+        id: `ref-${Date.now()}`,
+        url: uploadedUrl,
+        title: 'Reference Photo',
+        source: 'upload',
+      };
+      setRefPhotosList((prev) => [newEntry, ...prev.filter((x) => x.url !== uploadedUrl)]);
+      setSelectedRefUrls((prev) => {
+        if (prev.includes(uploadedUrl)) return prev;
+        return prev.length >= 3 ? [...prev.slice(1), uploadedUrl] : [...prev, uploadedUrl];
+      });
+    } catch (e: unknown) {
+      Alert.alert('Upload Failed', e instanceof Error ? e.message : 'Could not upload reference photo.');
+    } finally {
+      setUploadingRefPhoto(false);
+    }
+  };
   const [autosaveFailed,setAutosaveFailed] = useState(false);
   const [isCanvasGestureActive, setIsCanvasGestureActive] = useState(false);
   const applyPosterTemplate = (t: PosterTemplate) => {
@@ -1361,11 +1441,13 @@ export default function MarketingScreen() {
     const epoch=++generationEpoch.current;
     try {
       const requestId = `mob-img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const effectiveProv =
+        selectedRefUrls.length > 0 && imageProvider === 'cloudflare' ? 'gemini' : imageProvider;
       const res = await apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
         method: 'POST',
         body: {
           prompt: backgroundBrief({template:activeTemplateId?getTemplateById(activeTemplateId):undefined,headline,instruction:promptInput,ratio:aspectRatio}),
-          provider: imageProvider,
+          provider: effectiveProv,
           requestId,
           isPoster: true,
           businessName: effectiveBusinessName,
@@ -1373,6 +1455,8 @@ export default function MarketingScreen() {
           products: brandProfile.data?.profile?.products || '',
           services: brandProfile.data?.profile?.services || '',
           website: effectiveBusinessWebsite,
+          autoFromBusiness: false,
+          referenceImageUrls: selectedRefUrls,
         },
       });
 
@@ -1893,15 +1977,17 @@ export default function MarketingScreen() {
         body: { prompt: topicToUse, design, caption: caption || effectiveCaption, mode: generationMode },
       });
 
-      // 2. If in poster mode, trigger Cloudflare Flux AI image generation asynchronously
+      // 2. If in poster mode, trigger AI image generation asynchronously (with optional previous business photo references)
       let imagePromise: Promise<any> | null = null;
       if (generationMode === 'poster') {
         setIsGeneratingImage(true);
+        const effectiveGenProvider =
+          selectedRefUrls.length > 0 && imageProvider === 'cloudflare' ? 'gemini' : imageProvider;
         imagePromise = apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
           method: 'POST',
           body: {
             prompt: backgroundBrief({template:activeTemplateId?getTemplateById(activeTemplateId):undefined,headline,instruction:topicToUse,ratio:aspectRatio}),
-            provider: imageProvider,
+            provider: effectiveGenProvider,
             requestId,
             isPoster: true,
             businessName: effectiveBusinessName,
@@ -1909,6 +1995,8 @@ export default function MarketingScreen() {
             products: brandProfile.data?.profile?.products || '',
             services: brandProfile.data?.profile?.services || '',
             website: effectiveBusinessWebsite,
+            autoFromBusiness: false,
+            referenceImageUrls: selectedRefUrls,
           },
         }).catch(() => null);
       }
@@ -4273,6 +4361,73 @@ export default function MarketingScreen() {
                       Synthesizes a brand-new high-resolution background tailored to your headline and festive occasion.
                     </Text>
 
+                    {/* Optional Reference Photos (Previous Business Photos) */}
+                    <View style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>
+                          Use Previous Business Photos ({selectedRefUrls.length}/3)
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Pressable
+                            onPress={() => void loadBusinessRefPhotos()}
+                            disabled={refPhotosLoading}
+                            style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1' }}
+                          >
+                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>
+                              {refPhotosLoading ? '…' : '↻'}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => void handleUploadRefPhoto()}
+                            disabled={uploadingRefPhoto}
+                            style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: '#F5F3FF', borderWidth: 1, borderColor: '#DDD6FE' }}
+                          >
+                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#6D28D9' }}>
+                              {uploadingRefPhoto ? 'Uploading…' : '+ Upload Ref'}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                      {refPhotosList.length > 0 ? (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                          {refPhotosList.map((refItem) => {
+                            const active = selectedRefUrls.includes(refItem.url);
+                            return (
+                              <Pressable
+                                key={refItem.id}
+                                onPress={() => toggleRefPhoto(refItem.url)}
+                                style={{
+                                  width: 58,
+                                  height: 58,
+                                  borderRadius: 9,
+                                  overflow: 'hidden',
+                                  borderWidth: active ? 2.5 : 1,
+                                  borderColor: active ? '#009F50' : '#CBD5E1',
+                                  backgroundColor: '#E2E8F0',
+                                }}
+                              >
+                                <Image source={{ uri: refItem.url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                {active ? (
+                                  <View style={{ position: 'absolute', top: 3, right: 3, backgroundColor: '#009F50', borderRadius: 8, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+                                    <MaterialIcons name="check" size={11} color="#FFFFFF" />
+                                  </View>
+                                ) : null}
+                              </Pressable>
+                            );
+                          })}
+                        </ScrollView>
+                      ) : (
+                        <Text style={{ fontSize: 11, color: '#64748B' }}>
+                          {refPhotosLoading ? 'Loading business photos…' : 'No saved business photos yet — tap "+ Upload Ref" to include your own.'}
+                        </Text>
+                      )}
+                      {selectedRefUrls.length > 0 && imageProvider === 'cloudflare' ? (
+                        <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#6D28D9', marginTop: 4 }}>
+                          ✨ Using Gemini Vision to blend your selected reference photo{selectedRefUrls.length > 1 ? 's' : ''}.
+                        </Text>
+                      ) : null}
+                    </View>
+
                     <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>
                       AI Model Provider
                     </Text>
@@ -4788,6 +4943,56 @@ export default function MarketingScreen() {
                         textAlignVertical: 'top',
                       }}
                     />
+                  </View>
+
+                  {/* Previous Business Photos Reference Strip (optional) */}
+                  <View style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#334155' }}>
+                        Previous Business Photos ({selectedRefUrls.length}/3 optional)
+                      </Text>
+                      <Pressable
+                        onPress={() => void handleUploadRefPhoto()}
+                        disabled={uploadingRefPhoto}
+                        style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: '#F5F3FF', borderWidth: 1, borderColor: '#DDD6FE' }}
+                      >
+                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#6D28D9' }}>
+                          {uploadingRefPhoto ? 'Uploading…' : '+ Upload Ref'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                    {refPhotosList.length > 0 ? (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                        {refPhotosList.map((refItem) => {
+                          const active = selectedRefUrls.includes(refItem.url);
+                          return (
+                            <Pressable
+                              key={refItem.id}
+                              onPress={() => toggleRefPhoto(refItem.url)}
+                              style={{
+                                width: 54,
+                                height: 54,
+                                borderRadius: 8,
+                                overflow: 'hidden',
+                                borderWidth: active ? 2.5 : 1,
+                                borderColor: active ? '#009F50' : '#CBD5E1',
+                              }}
+                            >
+                              <Image source={{ uri: refItem.url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                              {active ? (
+                                <View style={{ position: 'absolute', top: 3, right: 3, backgroundColor: '#009F50', borderRadius: 8, width: 15, height: 15, alignItems: 'center', justifyContent: 'center' }}>
+                                  <MaterialIcons name="check" size={10} color="#FFFFFF" />
+                                </View>
+                              ) : null}
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    ) : (
+                      <Text style={{ fontSize: 11, color: '#64748B' }}>
+                        Pick up to 3 existing business photos or tap &quot;+ Upload Ref&quot; so AI blends your real place into the campaign poster.
+                      </Text>
+                    )}
                   </View>
 
                   {/* Headline & Badge Customization */}

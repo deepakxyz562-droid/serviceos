@@ -17,16 +17,35 @@ export async function runDesignJob(id:string){
   }
   if(reserved) await db.designGenerationJob.update({where:{id},data:{subscriptionId:reserved}});
 
-  // Parse business visual context if stored
+  // Parse business visual & multimodal context from __pendingMeta in resultJson (or legacy contextJson/costBreakdownJson)
   let visualContext: any = undefined;
-  if (job.costBreakdownJson) {
+  const parseContextObject = (raw: unknown) => {
+    if (typeof raw !== 'string' || !raw) return null;
     try {
-      const parsed = JSON.parse(job.costBreakdownJson);
-      if (parsed && typeof parsed === 'object' && (parsed.category || parsed.products || parsed.businessName)) {
-        visualContext = parsed;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        const candidate = parsed.__pendingMeta && typeof parsed.__pendingMeta === 'object' ? parsed.__pendingMeta : parsed;
+        if (
+          candidate.category ||
+          candidate.products ||
+          candidate.services ||
+          candidate.businessName ||
+          (Array.isArray(candidate.referenceImageUrls) && candidate.referenceImageUrls.length > 0) ||
+          candidate.aspectRatio ||
+          candidate.autoFromBusiness
+        ) {
+          return candidate;
+        }
       }
     } catch {}
-  }
+    return null;
+  };
+
+  visualContext =
+    parseContextObject(job.resultJson) ||
+    parseContextObject((job as any).contextJson) ||
+    parseContextObject((job as any).costBreakdownJson) ||
+    undefined;
 
   const isPoster = job.prompt.startsWith('[POSTER]');
   let result: { bytes: Buffer; model: string; cost: number | null };
@@ -36,7 +55,14 @@ export async function runDesignJob(id:string){
       (job.provider || 'cloudflare') as any,
       AbortSignal.timeout(150000),
       isPoster,
-      visualContext
+      visualContext,
+      {
+        referenceImageUrls: Array.isArray(visualContext?.referenceImageUrls)
+          ? visualContext.referenceImageUrls
+          : undefined,
+        autoFromBusiness: Boolean(visualContext?.autoFromBusiness),
+        aspectRatio: visualContext?.aspectRatio,
+      }
     );
   } catch (err: any) {
     const errMsg = err instanceof Error ? err.message : String(err);
@@ -56,7 +82,7 @@ export async function runDesignJob(id:string){
   await db.designGenerationJob.updateMany({where:{id,status:'running'},data:{status:current?.cancelRequested?'cancelled':'completed',resultJson:JSON.stringify(asset),finishedAt:new Date()}});
  }catch(error){
   if(reserved&&!generated)await db.subscription.update({where:{id:reserved},data:{aiUsageCount:{decrement:1}}}).catch(()=>{});
-  await db.designGenerationJob.updateMany({where:{id,status:'running'},data:{status:'failed',error:generated?'Generation finished but its result could not be stored. Contact support before retrying.':error instanceof Error?error.message:'Generation failed',finishedAt:new Date()}});
+  await db.designGenerationJob.updateMany({where:{id,status:'running'},data:{status:'failed',resultJson:null,error:generated?'Generation finished but its result could not be stored. Contact support before retrying.':error instanceof Error?error.message:'Generation failed',finishedAt:new Date()}});
  }
 }
 export async function drainDesignJobs(){

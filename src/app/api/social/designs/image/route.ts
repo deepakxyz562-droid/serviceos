@@ -2,23 +2,106 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { runDesignJob } from '@/lib/designs/jobs';
+import { isUnsafeReferenceHostname } from '@/lib/designs/image-provider';
 
 export const maxDuration = 180;
+
+const VALID_ASPECT_RATIOS = new Set(['1:1', '4:5', '9:16', '16:9']);
+
+function sanitizeAndValidateReferenceUrls(raw: unknown): {
+  urls: string[];
+  error?: string;
+} {
+  if (raw === undefined || raw === null) return { urls: [] };
+  if (!Array.isArray(raw)) {
+    return { urls: [], error: 'referenceImageUrls must be an array of image URLs' };
+  }
+  const urls: string[] = [];
+  for (const entry of raw.slice(0, 3)) {
+    if (typeof entry !== 'string' || !entry.trim()) {
+      return { urls: [], error: 'Each reference image URL must be a non-empty string' };
+    }
+    const trimmed = entry.trim();
+    if (trimmed.startsWith('/uploads/')) {
+      if (trimmed.includes('..')) {
+        return { urls: [], error: 'Invalid local reference image path' };
+      }
+      urls.push(trimmed);
+      continue;
+    }
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return { urls: [], error: 'Reference image URLs must use http, https, or /uploads/' };
+      }
+      if (parsed.username || parsed.password || isUnsafeReferenceHostname(parsed.hostname)) {
+        return { urls: [], error: 'Unsafe reference image URL host is not allowed' };
+      }
+      urls.push(trimmed);
+    } catch {
+      return { urls: [], error: `Invalid reference image URL: ${trimmed}` };
+    }
+  }
+  return { urls };
+}
+
+function buildAutoBusinessPrompt(params: {
+  businessName?: string;
+  category?: string;
+  products?: string[];
+  services?: string[];
+  hasRefs: boolean;
+}): string {
+  const name = params.businessName || 'our business';
+  const category = params.category || 'local business';
+  const offerings = [...(params.products || []), ...(params.services || [])]
+    .filter(Boolean)
+    .slice(0, 4)
+    .join(', ');
+  const blob = `${name} ${category} ${offerings}`.toLowerCase();
+  const isHospitality = /(farmhouse|farm house|resort|villa|cottage|homestay|retreat|banquet|lawn|staycation|hotel)/i.test(
+    blob,
+  );
+  if (params.hasRefs) {
+    if (isHospitality) {
+      return `Preserve our real property from the reference photos for ${name} and stage an inviting golden-hour commercial showcase with lush manicured greenery, warm ambient lights, and welcoming resort elegance.`;
+    }
+    return `Preserve the real business space and key identity from the reference photos for ${name} (${category}${offerings ? `, featuring ${offerings}` : ''}), upgraded with warm daylight studio quality and clean commercial framing.`;
+  }
+  if (isHospitality) {
+    return `Photorealistic golden-hour commercial showcase of ${name}, featuring welcoming outdoor architecture, manicured green lawn, cozy seating, and warm string lighting.`;
+  }
+  return `Photorealistic commercial showcase for ${name} (${category})${offerings ? ` highlighting ${offerings}` : ''}, authentic inviting atmosphere and crisp lighting.`;
+}
 
 export async function POST(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user?.tenantId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   try {
-    const body = await request.json();
-    const provider = body.provider && ['cloudflare', 'gemini', 'openrouter'].includes(body.provider)
-      ? body.provider
-      : 'cloudflare';
-    if (typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 4000 || !/^[-a-zA-Z0-9]{16,80}$/.test(body.requestId || '')) {
-      return NextResponse.json({ error: 'Provide a prompt and unique request ID' }, { status: 400 });
+    const body = await request.json().catch(() => ({}));
+    if (!/^[-a-zA-Z0-9]{16,80}$/.test(body.requestId || '')) {
+      return NextResponse.json({ error: 'Provide a unique request ID' }, { status: 400 });
     }
-    const rawPrompt = body.prompt.trim();
-    const storedPrompt = (body.isPoster && !rawPrompt.startsWith('[POSTER]')) ? `[POSTER] ${rawPrompt}` : rawPrompt;
-    const id = `${user.tenantId}:${body.requestId}`;
+
+    const { urls: referenceImageUrls, error: refUrlError } = sanitizeAndValidateReferenceUrls(
+      body.referenceImageUrls,
+    );
+    if (refUrlError) {
+      return NextResponse.json({ error: refUrlError }, { status: 400 });
+    }
+
+    const autoFromBusiness = Boolean(body.autoFromBusiness);
+    const aspectRatio =
+      typeof body.aspectRatio === 'string' && VALID_ASPECT_RATIOS.has(body.aspectRatio)
+        ? (body.aspectRatio as '1:1' | '4:5' | '9:16' | '16:9')
+        : undefined;
+
+    const provider =
+      body.provider && ['cloudflare', 'gemini', 'openrouter'].includes(body.provider)
+        ? body.provider
+        : referenceImageUrls.length > 0
+          ? 'gemini'
+          : 'cloudflare';
 
     // Resolve business visual context
     let category = typeof body.category === 'string' ? body.category.trim() : undefined;
@@ -32,7 +115,12 @@ export async function POST(request: NextRequest) {
       try {
         const [brandProfile, tenant] = await Promise.all([
           db.brandProfile.findUnique({ where: { tenantId: user.tenantId } }).catch(() => null),
-          db.tenant.findUnique({ where: { id: user.tenantId } }).catch(() => null),
+          db.tenant
+            .findUnique({
+              where: { id: user.tenantId },
+              select: { name: true, industry: true, settingsJson: true },
+            })
+            .catch(() => null),
         ]);
         if (brandProfile) {
           if (!businessName && brandProfile.businessName) businessName = brandProfile.businessName;
@@ -47,12 +135,50 @@ export async function POST(request: NextRequest) {
         }
         if (tenant) {
           if (!businessName && tenant.name) businessName = tenant.name;
-          if (!website && tenant.website) website = tenant.website;
+          if (!category && tenant.industry) category = tenant.industry;
+          if (tenant.settingsJson && (!products || products.length === 0)) {
+            try {
+              const parsed = JSON.parse(tenant.settingsJson);
+              const items = parsed?.brandBrain?.sellingItems;
+              if (Array.isArray(items) && items.length > 0) {
+                products = items
+                  .map((it: any) => (typeof it?.name === 'string' ? it.name.trim() : ''))
+                  .filter(Boolean);
+              }
+            } catch {}
+          }
         }
       } catch {}
     }
 
-    const contextJson = JSON.stringify({ category, businessName, products, services, website });
+    let rawPrompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
+    if (!rawPrompt && autoFromBusiness) {
+      rawPrompt = buildAutoBusinessPrompt({
+        businessName,
+        category,
+        products,
+        services,
+        hasRefs: referenceImageUrls.length > 0,
+      });
+    }
+
+    if (!rawPrompt || rawPrompt.length > 4000) {
+      return NextResponse.json({ error: 'Provide a prompt and unique request ID' }, { status: 400 });
+    }
+
+    const storedPrompt = body.isPoster && !rawPrompt.startsWith('[POSTER]') ? `[POSTER] ${rawPrompt}` : rawPrompt;
+    const id = `${user.tenantId}:${body.requestId}`;
+
+    const pendingMeta = {
+      category,
+      businessName,
+      products,
+      services,
+      website,
+      referenceImageUrls,
+      aspectRatio,
+      autoFromBusiness,
+    };
 
     const existing = await db.designGenerationJob.findFirst({ where: { id, tenantId: user.tenantId } });
     if (existing) {
@@ -72,7 +198,7 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         prompt: storedPrompt,
         provider,
-        costBreakdownJson: contextJson,
+        resultJson: JSON.stringify({ __pendingMeta: pendingMeta }),
       },
     });
 

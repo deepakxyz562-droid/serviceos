@@ -51,10 +51,8 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
-    // Raise the clonable-body limit (default 10MB) to 15MB so large photo
-    // uploads (up to 10MB raw → ~13.3MB as base64 JSON) don't get silently
-    // truncated mid-string, which causes "Unterminated string in JSON" errors.
-    proxyClientMaxBodySize: 15 * 1024 * 1024,
+    // Raise the clonable-body limit to 100MB as a secondary ceiling for direct upload fallbacks.
+    proxyClientMaxBodySize: 100 * 1024 * 1024,
     // Enable scroll restoration so back/forward navigation preserves the
     // user's scroll position on the marketplace page. Without this, clicking
     // a provider detail and coming back lands the user at the top of the

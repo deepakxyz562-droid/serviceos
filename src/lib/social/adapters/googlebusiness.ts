@@ -315,9 +315,10 @@ export const googleBusinessAdapter: PlatformAdapter = {
     // If scheduled as photo media gallery upload, route straight to Google Media API
     if (postType === 'photo_media' || postType === 'media') {
       const photoUrl = params.mediaUrls?.[0];
-      if (!photoUrl) throw new Error('Photo URL is required for Google Media upload');
+      if (!photoUrl) throw new Error('Photo or video URL is required for Google Media upload');
+      assertPublicMediaUrl(photoUrl);
       const inferredFormat =
-        params.mediaFormat === 'VIDEO' || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(photoUrl)
+        params.mediaFormat === 'VIDEO' || /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(photoUrl)
           ? 'VIDEO'
           : 'PHOTO';
       const mediaResult = await uploadGoogleBusinessMedia(account, {
@@ -890,8 +891,32 @@ export async function fetchGoogleBusinessReviews(
   };
 }
 
+function assertPublicMediaUrl(sourceUrl: string): void {
+  const trimmed = (sourceUrl || '').trim();
+  if (!trimmed || trimmed.startsWith('/')) {
+    throw new Error(
+      'Media URL must be a publicly reachable HTTPS cloud URL for Google Business Profile (local /uploads paths are not accessible by Google).',
+    );
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error('Invalid media URL provided for Google Business Profile upload.');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Google Business Profile requires an HTTP/HTTPS public media URL.');
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host.endsWith('.local')) {
+    throw new Error(
+      `Local media URL host (${host}) is not reachable by Google Business Profile. Configure cloud storage (Supabase Storage or S3).`,
+    );
+  }
+}
+
 /**
- * Upload a media photo to Google Business Profile.
+ * Upload a media photo or video to Google Business Profile.
  *
  * POST https://mybusiness.googleapis.com/v4/accounts/{accountId}/locations/{locationId}/media
  */
@@ -909,6 +934,7 @@ export async function uploadGoogleBusinessMedia(
   thumbnailUrl?: string;
   createTime: string;
 }> {
+  assertPublicMediaUrl(mediaData.sourceUrl);
   const { accountName, locationId } = await extractLocationRef(account);
   const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
   const url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/media`;
@@ -948,7 +974,7 @@ export async function uploadGoogleBusinessMedia(
 }
 
 /**
- * List media photos from Google Business Profile.
+ * List media photos and videos from Google Business Profile.
  *
  * GET https://mybusiness.googleapis.com/v4/accounts/{accountId}/locations/{locationId}/media
  */
@@ -962,6 +988,7 @@ export async function listGoogleBusinessMedia(
     thumbnailUrl?: string;
     createTime: string;
     category?: string;
+    mediaFormat?: 'PHOTO' | 'VIDEO' | string;
   }>;
   nextPageToken?: string;
 }> {
@@ -987,6 +1014,7 @@ export async function listGoogleBusinessMedia(
       googleUrl?: string;
       thumbnailUrl?: string;
       createTime?: string;
+      mediaFormat?: 'PHOTO' | 'VIDEO' | string;
       locationAssociation?: { category?: string };
     }>;
     nextPageToken?: string;
@@ -998,6 +1026,9 @@ export async function listGoogleBusinessMedia(
     thumbnailUrl: m.thumbnailUrl,
     createTime: m.createTime || new Date().toISOString(),
     category: m.locationAssociation?.category || 'ADDITIONAL',
+    mediaFormat:
+      m.mediaFormat ||
+      (/\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(m.googleUrl || '') ? 'VIDEO' : 'PHOTO'),
   }));
 
   return {

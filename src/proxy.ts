@@ -435,5 +435,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image).*)'],
+  // Exclude large multipart upload endpoints from proxy body buffering so videos (>15MB)
+  // stream directly to their Route Handlers without truncation, while keeping /presign protected.
+  matcher: ['/((?!_next/static|_next/image|api/omnichannel/upload$|api/upload$).*)'],
 };

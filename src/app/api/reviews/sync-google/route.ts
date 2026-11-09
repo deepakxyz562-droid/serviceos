@@ -9,6 +9,7 @@ import {
 } from '@/lib/social/adapters/googlebusiness';
 import { callAI } from '@/lib/ai-client';
 import { sendWebPushToUser } from '@/lib/web-push-send';
+import { getTimeSafe, toValidDate } from '@/lib/safe-date';
 
 /**
  * POST /api/reviews/sync-google
@@ -94,14 +95,9 @@ export async function POST(request: NextRequest) {
 
       // Always anchor createdAt to Google's original review creation time so owner replies
       // or metadata updates (gRev.updateTime) never make old reviews count as "this week's reviews".
-      const parsedCreate = gRev.createTime ? new Date(gRev.createTime) : null;
-      const parsedUpdate = gRev.updateTime ? new Date(gRev.updateTime) : null;
-      const effectiveReviewTime =
-        parsedCreate && !isNaN(parsedCreate.getTime())
-          ? parsedCreate
-          : parsedUpdate && !isNaN(parsedUpdate.getTime())
-            ? parsedUpdate
-            : new Date();
+      const parsedCreate = toValidDate(gRev.createTime);
+      const parsedUpdate = toValidDate(gRev.updateTime);
+      const effectiveReviewTime = parsedCreate || parsedUpdate || new Date();
 
       if (!existing) {
         const parsedInitial: Record<string, any> = {
@@ -138,7 +134,7 @@ export async function POST(request: NextRequest) {
           updateData.comment = gRev.comment;
         }
         if (gRev.createTime && !isNaN(effectiveReviewTime.getTime())) {
-          const existingTime = existing.createdAt ? new Date(existing.createdAt).getTime() : 0;
+          const existingTime = getTimeSafe(existing.createdAt, 0);
           if (!existingTime || Math.abs(effectiveReviewTime.getTime() - existingTime) > 60_000) {
             updateData.createdAt = effectiveReviewTime;
           }

@@ -105,14 +105,17 @@ function toAccountData(account: {
 /**
  * Build the PublishParams object for the adapter from the SocialPost row.
  */
-function toPublishParams(post: {
-  content: string;
-  mediaUrls: string;
-  linkUrl: string | null;
-  gbpPostType: string | null;
-  gbpOfferData: string | null;
-  pinterestBoard: string | null;
-}): PublishParams {
+function toPublishParams(
+  post: {
+    content: string;
+    mediaUrls: string;
+    linkUrl: string | null;
+    gbpPostType: string | null;
+    gbpOfferData: string | null;
+    pinterestBoard: string | null;
+  },
+  targets: PublishTarget[] = [],
+): PublishParams {
   let mediaUrls: string[] = [];
   try {
     const parsed = JSON.parse(post.mediaUrls);
@@ -152,11 +155,35 @@ function toPublishParams(post: {
     }
   }
 
+  // Schema-drift fallback: recover media metadata stored on publishTargets when gbpPostType/gbpOfferData are null
+  let targetMediaMeta: Record<string, unknown> | null = null;
+  for (const t of targets) {
+    const rawTarget = t as unknown as Record<string, unknown>;
+    if (rawTarget?.mediaMeta && typeof rawTarget.mediaMeta === 'object') {
+      targetMediaMeta = rawTarget.mediaMeta as Record<string, unknown>;
+      break;
+    }
+  }
+  if (targetMediaMeta) {
+    if (!gbpMediaCategory && typeof targetMediaMeta.category === 'string') {
+      gbpMediaCategory = targetMediaMeta.category as PublishParams['gbpMediaCategory'];
+    }
+    if (!mediaFormat && (targetMediaMeta.mediaFormat === 'VIDEO' || targetMediaMeta.mediaFormat === 'PHOTO')) {
+      mediaFormat = targetMediaMeta.mediaFormat;
+    }
+  }
+
+  const resolvedGbpPostType =
+    post.gbpPostType ??
+    (targetMediaMeta?.gbpPostType === 'photo_media' || gbpMediaCategory || mediaFormat
+      ? 'photo_media'
+      : undefined);
+
   return {
     content: post.content,
     mediaUrls,
     linkUrl: post.linkUrl ?? undefined,
-    gbpPostType: post.gbpPostType ?? undefined,
+    gbpPostType: resolvedGbpPostType,
     gbpMediaCategory,
     mediaFormat,
     gbpOfferData,
@@ -247,10 +274,53 @@ export async function publishPost(postId: string): Promise<void> {
 
   // Parse targets.
   const targets = parsePublishTargets(post.publishTargets);
+  const publishParams = toPublishParams(post, targets);
+  const isMediaPost =
+    publishParams.gbpPostType === 'photo_media' ||
+    publishParams.gbpPostType === 'media' ||
+    (!post.gbpPostType && !post.designJson && !post.linkUrl && publishParams.mediaUrls.length > 0);
+
   if (targets.length === 0) {
-    // No targets — mark as failed with a clear reason.
-    await finalizePost(postId, [], 'No publish targets defined for this post.');
-    return;
+    if (isMediaPost) {
+      try {
+        const { prepareGoogleAccount } = await import('@/lib/social/google-account-helper');
+        const googleAccount = await prepareGoogleAccount(post.tenantId);
+        if (googleAccount?.id) {
+          targets.push({
+            platform: 'googlebusiness',
+            socialAccountId: googleAccount.id,
+            status: 'pending',
+          });
+          publishParams.gbpPostType = publishParams.gbpPostType || 'photo_media';
+        }
+      } catch (lookupErr) {
+        console.warn('[social/publisher] Pre-connection Google lookup warning:', lookupErr);
+      }
+    }
+
+    if (targets.length === 0) {
+      await finalizePost(
+        postId,
+        [],
+        isMediaPost
+          ? 'Google Business Profile not connected yet — connect Google to publish this scheduled media.'
+          : 'No publish targets defined for this post.',
+      );
+      return;
+    }
+  } else {
+    // Also backfill socialAccountId on pre-connection placeholder googlebusiness targets
+    for (const target of targets) {
+      if (target.platform === 'googlebusiness' && !target.socialAccountId) {
+        try {
+          const { prepareGoogleAccount } = await import('@/lib/social/google-account-helper');
+          const googleAccount = await prepareGoogleAccount(post.tenantId);
+          if (googleAccount?.id) {
+            target.socialAccountId = googleAccount.id;
+          }
+        } catch {}
+      }
+    }
   }
 
   // Lazy-load adapters (skips platforms whose adapter modules haven't
@@ -291,7 +361,6 @@ export async function publishPost(postId: string): Promise<void> {
 
   // Checkpoint each result before another external delivery. If persistence fails,
   // leave the post publishing so recovery cannot blindly duplicate a delivery.
-  const publishParams = toPublishParams(post);
   const results = [...targets];
   for (let i=0;i<results.length;i++) {
     if (results[i].status === 'published') continue;

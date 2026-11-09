@@ -22,7 +22,9 @@ function PhotoCell({
   unposted?: boolean;
   onPress?: () => void;
 }) {
-  const isVideo = photo.mediaFormat === 'VIDEO';
+  const isVideo =
+    photo.mediaFormat === 'VIDEO' ||
+    /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(photo.url || '');
   const editable = photo.source === 'queue' && Boolean(onPress);
 
   return (
@@ -42,14 +44,32 @@ function PhotoCell({
         opacity: pressed && editable ? 0.85 : 1,
       })}
     >
-      <Image
-        source={{ uri: photo.thumbnailUrl || photo.url }}
-        style={{ width: '100%', height: '100%' }}
-        resizeMode="cover"
-        accessibilityIgnoresInvertColors
-        accessibilityLabel={photo.title || photo.caption || 'Google Business Profile media'}
-        alt={photo.title || photo.caption || 'Google Business Profile media'}
-      />
+      {isVideo && !photo.thumbnailUrl ? (
+        <View
+          style={{
+            width: '100%',
+            height: '100%',
+            backgroundColor: '#0F172A',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 4,
+          }}
+        >
+          <MaterialIcons name="videocam" size={28} color="#34D399" />
+          <Text style={{ color: '#E2E8F0', fontSize: 10, fontWeight: '800', letterSpacing: 0.6 }}>
+            VIDEO
+          </Text>
+        </View>
+      ) : (
+        <Image
+          source={{ uri: photo.thumbnailUrl || photo.url }}
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="cover"
+          accessibilityIgnoresInvertColors
+          accessibilityLabel={photo.title || photo.caption || 'Google Business Profile media'}
+          alt={photo.title || photo.caption || 'Google Business Profile media'}
+        />
+      )}
 
       {isVideo ? (
         <View
@@ -269,6 +289,7 @@ export function PhotosBoard({
   const [tab, setTab] = useState<TabKey>('soon');
   const [pendingAssets, setPendingAssets] = useState<PendingUpload[]>([]);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [composerMode, setComposerMode] = useState<'upload' | 'ai_generate'>('upload');
   const [editingItem, setEditingItem] = useState<GbpPhoto | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -358,6 +379,7 @@ export function PhotosBoard({
       );
       setEditingItem(null);
       setPendingAssets(mapped);
+      setComposerMode('upload');
       setComposerOpen(true);
     } catch (e) {
       setLocalError((e as Error).message || 'Could not open the media picker.');
@@ -367,6 +389,16 @@ export function PhotosBoard({
   function openEditModal(item: GbpPhoto) {
     setPendingAssets([]);
     setEditingItem(item);
+    setComposerMode('upload');
+    setComposerOpen(true);
+  }
+
+  function openAiCreate() {
+    setLocalError(null);
+    setNotice(null);
+    setPendingAssets([]);
+    setEditingItem(null);
+    setComposerMode('ai_generate');
     setComposerOpen(true);
   }
 
@@ -526,38 +558,52 @@ export function PhotosBoard({
                 Upload photos or videos — BGOS AI generates local-SEO titles, descriptions, and tags automatically.
               </Text>
             </View>
-            <View style={{ width: '100%', maxWidth: 300 }}>
+            <View style={{ width: '100%', maxWidth: 300, gap: 8 }}>
               <Action label="Upload Media" icon="cloud-upload" onPress={pickPhotos} />
+              <Action label="Create AI Photo" icon="auto-awesome" secondary onPress={openAiCreate} />
             </View>
           </View>
         ) : (
-          <Empty
-            title={
-              tab === 'soon'
-                ? 'Nothing scheduled'
-                : tab === 'published'
-                  ? 'No Google media yet'
-                  : 'No drafts or unposted media'
-            }
-            detail={
-              tab === 'soon'
-                ? 'Upload photos or videos and let AI write the SEO title & tags and publish on your schedule.'
-                : tab === 'published'
-                  ? 'Published photos & videos from your Google Business Profile appear here.'
-                  : 'Drafts and media saved before connecting Google appear here — tap any item to edit.'
-            }
-            actionLabel="Add Photos & Videos"
-            onAction={pickPhotos}
-          />
+          <View style={{ gap: 8 }}>
+            <Empty
+              title={
+                tab === 'soon'
+                  ? 'Nothing scheduled'
+                  : tab === 'published'
+                    ? 'No Google media yet'
+                    : 'No drafts or unposted media'
+              }
+              detail={
+                tab === 'soon'
+                  ? 'Upload photos or videos and let AI write the SEO title & tags and publish on your schedule.'
+                  : tab === 'published'
+                    ? 'Published photos & videos from your Google Business Profile appear here.'
+                    : 'Drafts and media saved before connecting Google appear here — tap any item to edit.'
+              }
+              actionLabel="Add Photos & Videos"
+              onAction={pickPhotos}
+            />
+            <Action label="Create AI Business Photo" icon="auto-awesome" secondary onPress={openAiCreate} />
+          </View>
         )
       ) : (
-        <Grid
-          photos={activeList}
-          scheduled={tab === 'soon'}
-          unposted={tab === 'unposted'}
-          onAdd={pickPhotos}
-          onEdit={openEditModal}
-        />
+        <View style={{ gap: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <Action label="Upload Media" icon="add-a-photo" onPress={pickPhotos} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Action label="Create AI Photo" icon="auto-awesome" secondary onPress={openAiCreate} />
+            </View>
+          </View>
+          <Grid
+            photos={activeList}
+            scheduled={tab === 'soon'}
+            unposted={tab === 'unposted'}
+            onAdd={pickPhotos}
+            onEdit={openEditModal}
+          />
+        </View>
       )}
 
       <MediaMetadataSheet
@@ -567,6 +613,7 @@ export function PhotosBoard({
         pendingAssets={pendingAssets}
         editingItem={editingItem}
         workspaceLocale={data?.locale || null}
+        initialMode={composerMode}
         onSaved={async (msg) => {
           setNotice(msg);
           await refresh();

@@ -114,7 +114,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check token expiry (based on claim creation time)
-    if (Date.now() - claim.createdAt.getTime() > TOKEN_TTL_MS) {
+    const claimCreatedMs = claim.createdAt ? new Date(claim.createdAt).getTime() : 0;
+    if (claimCreatedMs > 0 && Date.now() - claimCreatedMs > TOKEN_TTL_MS) {
       return NextResponse.json(
         { error: 'This claim link has expired. Please submit a new claim.' },
         { status: 400 },
@@ -420,7 +421,8 @@ export async function GET(request: NextRequest) {
         error: 'This claim is still pending review.',
       });
     }
-    if (Date.now() - claim.createdAt.getTime() > TOKEN_TTL_MS) {
+    const claimCreatedMs = claim.createdAt ? new Date(claim.createdAt).getTime() : 0;
+    if (claimCreatedMs > 0 && Date.now() - claimCreatedMs > TOKEN_TTL_MS) {
       return NextResponse.json({
         valid: false,
         error: 'This claim link has expired.',

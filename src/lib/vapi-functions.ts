@@ -334,7 +334,7 @@ async function handleCheckAvailability(params: Record<string, unknown>, ctx: Too
     const slotTime = `${String(h).padStart(2, '0')}:00`;
     const slotDateTime = new Date(`${date}T${slotTime}:00`);
     const isBooked = existingBookings.some(
-      (b) => b.scheduledAt && b.scheduledAt.getTime() === slotDateTime.getTime()
+      (b) => b.scheduledAt && new Date(b.scheduledAt).getTime() === slotDateTime.getTime()
     );
     if (!isBooked) slots.push(slotTime);
   }

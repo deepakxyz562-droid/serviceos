@@ -540,8 +540,10 @@ async function handleWhatsAppAnalytics(
         if (messages[i].direction === 'inbound') {
           for (let j = i + 1; j < messages.length; j++) {
             if (messages[j].direction === 'outbound') {
-              const gap = messages[j].createdAt.getTime() - messages[i].createdAt.getTime()
-              if (gap >= 0 && gap <= MAX_GAP_MS) {
+              const outMs = new Date(messages[j].createdAt).getTime()
+              const inMs = new Date(messages[i].createdAt).getTime()
+              const gap = outMs - inMs
+              if (!Number.isNaN(gap) && gap >= 0 && gap <= MAX_GAP_MS) {
                 gapTotalMs += gap
                 gapCount++
               }
@@ -632,8 +634,10 @@ async function handleJourneyAnalytics(
     let totalMs = 0
     let counted = 0
     for (const j of completedSample) {
-      const span = j.stageChangedAt.getTime() - j.createdAt.getTime()
-      if (span > 0) {
+      const changedMs = new Date(j.stageChangedAt).getTime()
+      const createdMs = new Date(j.createdAt).getTime()
+      const span = changedMs - createdMs
+      if (!Number.isNaN(span) && span > 0) {
         totalMs += span
         counted++
       }

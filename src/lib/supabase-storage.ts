@@ -74,6 +74,73 @@ export const STORAGE_BUCKETS = {
 
 export type StorageBucket = typeof STORAGE_BUCKETS[keyof typeof STORAGE_BUCKETS]
 
+const PUBLIC_STORAGE_BUCKETS = new Set<StorageBucket>([
+  STORAGE_BUCKETS.avatars,
+  STORAGE_BUCKETS.companyAssets,
+  STORAGE_BUCKETS.templateAssets,
+  STORAGE_BUCKETS.campaignAssets,
+])
+
+const BUCKET_MAX_SIZE_BYTES = 100 * 1024 * 1024 // 100MB for video/photo uploads
+const BUCKET_ALLOWED_MIMES = [
+  'image/*',
+  'video/*',
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]
+
+const ensuredSupabaseBuckets = new Set<string>()
+
+export async function ensureSupabaseBucket(
+  bucket: StorageBucket,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!isSupabaseStorageConfigured()) {
+    return { ok: false, message: 'Supabase storage is not configured' }
+  }
+  if (ensuredSupabaseBuckets.has(bucket)) {
+    return { ok: true }
+  }
+
+  const supabaseAdmin = getSupabaseAdmin()!
+  const isPublic = PUBLIC_STORAGE_BUCKETS.has(bucket)
+
+  try {
+    const { data: existing, error: getErr } = await supabaseAdmin.storage.getBucket(bucket)
+    if (!existing || getErr) {
+      const { error: createErr } = await supabaseAdmin.storage.createBucket(bucket, {
+        public: isPublic,
+        fileSizeLimit: BUCKET_MAX_SIZE_BYTES,
+        allowedMimeTypes: BUCKET_ALLOWED_MIMES,
+      })
+      if (createErr && !createErr.message?.toLowerCase().includes('already exists')) {
+        return { ok: false, message: createErr.message }
+      }
+    } else {
+      const needsUpdate =
+        Boolean(existing.public) !== isPublic ||
+        Number(existing.file_size_limit || 0) < BUCKET_MAX_SIZE_BYTES ||
+        (Array.isArray(existing.allowed_mime_types) &&
+          !existing.allowed_mime_types.includes('video/*'))
+      if (needsUpdate) {
+        await supabaseAdmin.storage
+          .updateBucket(bucket, {
+            public: isPublic,
+            fileSizeLimit: BUCKET_MAX_SIZE_BYTES,
+            allowedMimeTypes: BUCKET_ALLOWED_MIMES,
+          })
+          .catch(() => {})
+      }
+    }
+    ensuredSupabaseBuckets.add(bucket)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 // ── Helper ──────────────────────────────────────────────────────────────────
 
 export function isSupabaseStorageConfigured(): boolean {
@@ -89,6 +156,98 @@ export interface UploadFileParams {
   folder: string
   fileName: string
   contentType: string
+  requirePublicUrl?: boolean
+}
+
+export interface PresignedUploadTarget {
+  directUploadAvailable: boolean
+  provider: 's3' | 'supabase' | 'none'
+  method: 'PUT'
+  uploadUrl: string | null
+  publicUrl: string
+  path: string
+  headers: Record<string, string>
+}
+
+export async function createPresignedUploadTarget(params: {
+  bucket: StorageBucket
+  companyId: string
+  folder: string
+  fileName: string
+  contentType: string
+  expiresIn?: number
+}): Promise<PresignedUploadTarget> {
+  const { bucket, companyId, folder, fileName, contentType, expiresIn = 900 } = params
+  const storagePath = `${companyId}/${folder}/${fileName}`
+
+  if (isS3Configured()) {
+    try {
+      const client = getS3Client()!
+      const s3Key = `${bucket}/${storagePath}`
+      const usePublicAcl =
+        process.env.AWS_S3_USE_PUBLIC_READ_ACL === 'true' && PUBLIC_STORAGE_BUCKETS.has(bucket)
+      const command = new PutObjectCommand({
+        Bucket: getS3Bucket(),
+        Key: s3Key,
+        ContentType: contentType,
+        ...(usePublicAcl ? { ACL: 'public-read' } : {}),
+      })
+      const uploadUrl = await getSignedUrlS3(client, command, { expiresIn })
+      const headers: Record<string, string> = {
+        'Content-Type': contentType,
+        ...(usePublicAcl ? { 'x-amz-acl': 'public-read' } : {}),
+      }
+      return {
+        directUploadAvailable: true,
+        provider: 's3',
+        method: 'PUT',
+        uploadUrl,
+        publicUrl: getS3PublicUrl(s3Key),
+        path: storagePath,
+        headers,
+      }
+    } catch (err) {
+      console.warn('[Storage] S3 presign failed:', err instanceof Error ? err.message : err)
+    }
+  }
+
+  if (isSupabaseStorageConfigured()) {
+    try {
+      await ensureSupabaseBucket(bucket)
+      const supabaseAdmin = getSupabaseAdmin()!
+      const { data, error } = await supabaseAdmin.storage
+        .from(bucket)
+        .createSignedUploadUrl(storagePath, { upsert: true })
+      if (!error && data?.signedUrl) {
+        return {
+          directUploadAvailable: true,
+          provider: 'supabase',
+          method: 'PUT',
+          uploadUrl: data.signedUrl,
+          publicUrl: getPublicUrl(bucket, storagePath),
+          path: storagePath,
+          headers: {
+            'Content-Type': contentType,
+          },
+        }
+      }
+      if (error) {
+        console.warn('[Storage] Supabase createSignedUploadUrl error:', error.message)
+      }
+    } catch (err) {
+      console.warn('[Storage] Supabase presign failed:', err instanceof Error ? err.message : err)
+    }
+  }
+
+  return {
+    directUploadAvailable: false,
+    provider: 'none',
+    method: 'PUT',
+    uploadUrl: null,
+    publicUrl: `/uploads/${bucket}/${storagePath}`,
+    path: storagePath,
+    headers: {},
+  }
 }
 
 async function toUploadBuffer(file: File | Blob | Buffer): Promise<Buffer> {
@@ -105,23 +264,24 @@ async function toUploadBuffer(file: File | Blob | Buffer): Promise<Buffer> {
 export async function uploadFile(
   params: UploadFileParams
 ): Promise<{ path: string; url: string }> {
-  const { bucket, file, companyId, folder, fileName, contentType } = params
+  const { bucket, file, companyId, folder, fileName, contentType, requirePublicUrl = false } = params
   const storagePath = `${companyId}/${folder}/${fileName}`
   const bytesBuffer = await toUploadBuffer(file)
+  const cloudErrors: string[] = []
 
   // ── Priority 1: AWS S3 ──────────────────────────────────────────────────
   if (isS3Configured()) {
+    const client = getS3Client()!
+    const s3Key = `${bucket}/${storagePath}`
+    const usePublicAcl = process.env.AWS_S3_USE_PUBLIC_READ_ACL === 'true'
     try {
-      const client = getS3Client()!
-      const s3Key = `${bucket}/${storagePath}`
-
       await client.send(
         new PutObjectCommand({
           Bucket: getS3Bucket(),
           Key: s3Key,
           Body: bytesBuffer,
           ContentType: contentType,
-          ACL: 'public-read', // Make uploaded files publicly accessible
+          ...(usePublicAcl ? { ACL: 'public-read' } : {}),
         })
       )
 
@@ -129,7 +289,29 @@ export async function uploadFile(
       console.log(`[Storage] Uploaded to S3: ${s3Key}`)
       return { path: storagePath, url }
     } catch (err) {
-      console.error('[Storage] S3 upload error:', err instanceof Error ? err.message : err)
+      const msg = err instanceof Error ? err.message : String(err)
+      if (usePublicAcl && /AccessControlListNotSupported|ACL|InvalidRequest/i.test(msg)) {
+        try {
+          await client.send(
+            new PutObjectCommand({
+              Bucket: getS3Bucket(),
+              Key: s3Key,
+              Body: bytesBuffer,
+              ContentType: contentType,
+            })
+          )
+          const url = getS3PublicUrl(s3Key)
+          console.log(`[Storage] Uploaded to S3 (without ACL): ${s3Key}`)
+          return { path: storagePath, url }
+        } catch (retryErr) {
+          const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr)
+          cloudErrors.push(`S3: ${retryMsg}`)
+          console.error('[Storage] S3 upload retry error:', retryMsg)
+        }
+      } else {
+        cloudErrors.push(`S3: ${msg}`)
+        console.error('[Storage] S3 upload error:', msg)
+      }
       // Fall through to Supabase or local
     }
   }
@@ -137,17 +319,39 @@ export async function uploadFile(
   // ── Priority 2: Supabase Storage ────────────────────────────────────────
   if (isSupabaseStorageConfigured()) {
     const supabaseAdmin = getSupabaseAdmin()!
-    const { error } = await supabaseAdmin.storage
+    let { error } = await supabaseAdmin.storage
       .from(bucket)
       .upload(storagePath, bytesBuffer, { contentType, upsert: true })
 
+    if (
+      error &&
+      (error.message?.toLowerCase().includes('not found') ||
+        error.message?.toLowerCase().includes('mime') ||
+        error.message?.toLowerCase().includes('size'))
+    ) {
+      await ensureSupabaseBucket(bucket)
+      const retry = await supabaseAdmin.storage
+        .from(bucket)
+        .upload(storagePath, bytesBuffer, { contentType, upsert: true })
+      error = retry.error
+    }
+
     if (error) {
+      cloudErrors.push(`Supabase: ${error.message}`)
       console.error('[Storage] Supabase upload error:', error.message)
-      // Fall through to local fallback
+      // Fall through to local fallback unless public URL is strictly required
     } else {
       const url = getPublicUrl(bucket, storagePath)
       return { path: storagePath, url }
     }
+  }
+
+  if (requirePublicUrl && (cloudErrors.length > 0 || process.env.NODE_ENV === 'production')) {
+    throw new Error(
+      cloudErrors.length > 0
+        ? `Cloud media upload failed (${cloudErrors.join('; ')})`
+        : 'Cloud storage (S3 or Supabase Storage) is required for public media uploads in production.',
+    )
   }
 
   // ── Priority 3: Local filesystem fallback ───────────────────────────────
@@ -395,9 +599,20 @@ function guessContentType(filename: string): string {
     '.jpeg': 'image/jpeg',
     '.gif': 'image/gif',
     '.webp': 'image/webp',
+    '.heic': 'image/heic',
+    '.heif': 'image/heif',
+    '.avif': 'image/avif',
     '.svg': 'image/svg+xml',
     '.pdf': 'application/pdf',
     '.mp4': 'video/mp4',
+    '.mov': 'video/quicktime',
+    '.webm': 'video/webm',
+    '.m4v': 'video/x-m4v',
+    '.3gp': 'video/3gpp',
+    '.mkv': 'video/x-matroska',
+    '.avi': 'video/x-msvideo',
+    '.mpeg': 'video/mpeg',
+    '.mpg': 'video/mpeg',
     '.doc': 'application/msword',
     '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   }

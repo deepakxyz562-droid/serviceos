@@ -68,7 +68,8 @@ export async function generateNumber(config: NumberSequenceConfig): Promise<stri
     }
 
     // Handle yearly reset
-    if (resetYearly && sequence.updatedAt.getFullYear() < year) {
+    const seqUpdatedYear = sequence.updatedAt ? new Date(sequence.updatedAt).getFullYear() : year;
+    if (resetYearly && !Number.isNaN(seqUpdatedYear) && seqUpdatedYear < year) {
       sequence = await db.numberSequence.update({
         where: { id: sequence.id },
         data: { nextNumber: 1 },

@@ -75,7 +75,10 @@ export async function resumeFormState(token: string): Promise<ResumedFormState |
   } catch {
     meta = {};
   }
-  const expiresAt = meta.expiresAt ? new Date(meta.expiresAt) : new Date(row.createdAt.getTime() + TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+  const createdMs = row.createdAt ? new Date(row.createdAt).getTime() : Date.now();
+  const expiresAt = meta.expiresAt
+    ? new Date(meta.expiresAt)
+    : new Date((Number.isNaN(createdMs) ? Date.now() : createdMs) + TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
   if (expiresAt < new Date()) return null; // expired
 
   let data: Record<string, unknown> = {};

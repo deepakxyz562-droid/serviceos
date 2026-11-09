@@ -300,9 +300,12 @@ export async function GET() {
     let jobsWithDuration = 0;
     for (const job of completedWithDuration) {
       if (job.actualEndTime && job.createdAt) {
-        const durationMs = job.actualEndTime.getTime() - job.createdAt.getTime();
-        totalDurationHours += durationMs / (1000 * 60 * 60);
-        jobsWithDuration++;
+        const endMs = new Date(job.actualEndTime).getTime();
+        const startMs = new Date(job.createdAt).getTime();
+        if (!Number.isNaN(endMs) && !Number.isNaN(startMs) && endMs >= startMs) {
+          totalDurationHours += (endMs - startMs) / (1000 * 60 * 60);
+          jobsWithDuration++;
+        }
       }
     }
 

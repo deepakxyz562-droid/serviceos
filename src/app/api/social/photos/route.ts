@@ -12,6 +12,7 @@ import {
   computeLocalScheduledDate,
   parseHourMinute,
 } from '@/lib/locale-timezone';
+import { toIsoStringSafe } from '@/lib/safe-date';
 
 type GbpMediaCategory =
   | 'ADDITIONAL'
@@ -32,18 +33,25 @@ interface PhotoInputItem {
   mediaFormat?: 'PHOTO' | 'VIDEO';
 }
 
-function parseOfferMeta(raw: string | null | undefined): {
+interface StoredMediaMeta {
+  gbpPostType?: string;
   title?: string;
   tags?: string[];
   category?: string;
   mediaFormat?: 'PHOTO' | 'VIDEO';
   altText?: string;
-} {
+  scheduledFor?: string;
+  timeZone?: string;
+  country?: string;
+}
+
+function parseOfferMeta(raw: string | null | undefined): StoredMediaMeta {
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object') {
       return {
+        gbpPostType: typeof parsed.gbpPostType === 'string' ? parsed.gbpPostType : undefined,
         title: typeof parsed.title === 'string' ? parsed.title : undefined,
         tags: Array.isArray(parsed.tags)
           ? parsed.tags.filter((t: unknown): t is string => typeof t === 'string')
@@ -54,10 +62,85 @@ function parseOfferMeta(raw: string | null | undefined): {
             ? parsed.mediaFormat
             : undefined,
         altText: typeof parsed.altText === 'string' ? parsed.altText : undefined,
+        scheduledFor: typeof parsed.scheduledFor === 'string' ? parsed.scheduledFor : undefined,
+        timeZone: typeof parsed.timeZone === 'string' ? parsed.timeZone : undefined,
+        country: typeof parsed.country === 'string' ? parsed.country : undefined,
       };
     }
   } catch {}
   return {};
+}
+
+function parsePublishTargetsRaw(raw: string | null | undefined): Array<Record<string, any>> {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((t): t is Record<string, any> => Boolean(t && typeof t === 'object'));
+    }
+  } catch {}
+  return [];
+}
+
+function parseMediaMetaFromTargets(raw: string | null | undefined): StoredMediaMeta {
+  const targets = parsePublishTargetsRaw(raw);
+  for (const target of targets) {
+    const mm = target?.mediaMeta;
+    if (mm && typeof mm === 'object') {
+      return {
+        gbpPostType: typeof mm.gbpPostType === 'string' ? mm.gbpPostType : undefined,
+        title: typeof mm.title === 'string' ? mm.title : undefined,
+        tags: Array.isArray(mm.tags)
+          ? mm.tags.filter((t: unknown): t is string => typeof t === 'string')
+          : undefined,
+        category: typeof mm.category === 'string' ? mm.category : undefined,
+        mediaFormat:
+          mm.mediaFormat === 'VIDEO' || mm.mediaFormat === 'PHOTO' ? mm.mediaFormat : undefined,
+        altText: typeof mm.altText === 'string' ? mm.altText : undefined,
+        scheduledFor: typeof mm.scheduledFor === 'string' ? mm.scheduledFor : undefined,
+        timeZone: typeof mm.timeZone === 'string' ? mm.timeZone : undefined,
+        country: typeof mm.country === 'string' ? mm.country : undefined,
+      };
+    }
+  }
+  return {};
+}
+
+function isPhotoMediaRow(post: {
+  gbpPostType?: string | null;
+  gbpOfferData?: string | null;
+  publishTargets?: string | null;
+  designJson?: string | null;
+  linkUrl?: string | null;
+  mediaUrls?: unknown;
+}): boolean {
+  if (post.gbpPostType === 'photo_media') return true;
+  if (post.gbpPostType && post.gbpPostType !== 'photo_media') return false;
+
+  const targetMeta = parseMediaMetaFromTargets(post.publishTargets);
+  if (targetMeta.gbpPostType === 'photo_media' || targetMeta.mediaFormat) {
+    return true;
+  }
+
+  const offerMeta = parseOfferMeta(post.gbpOfferData);
+  if (offerMeta.mediaFormat || offerMeta.altText || (offerMeta.category && !(post.gbpOfferData || '').includes('startDate'))) {
+    return true;
+  }
+
+  // Fallback for rows saved before Supabase SQL migration stripped gbpPostType/gbpOfferData:
+  // non-designed media posts targeting only GBP (or empty pre-connection target) with mediaUrls.
+  if (!post.gbpPostType && !post.designJson && !post.linkUrl) {
+    const urls = parseMediaUrls(post.mediaUrls);
+    if (urls.length > 0) {
+      const targets = parsePublishTargetsRaw(post.publishTargets);
+      const hasOtherSocialPlatform = targets.some(
+        (t) => typeof t.platform === 'string' && t.platform !== 'googlebusiness',
+      );
+      if (!hasOtherSocialPlatform) return true;
+    }
+  }
+
+  return false;
 }
 
 function normalizeTags(raw: unknown): string[] {
@@ -72,28 +155,34 @@ function normalizeTags(raw: unknown): string[] {
 }
 
 function inferMediaFormat(url: string, explicit?: string): 'PHOTO' | 'VIDEO' {
-  if (explicit === 'VIDEO' || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url)) {
+  if (explicit === 'VIDEO' || /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(url)) {
     return 'VIDEO';
   }
   return 'PHOTO';
 }
 
-function toIsoStringSafe(val: unknown): string | null {
-  if (!val) return null;
-  if (val instanceof Date) {
-    return isNaN(val.getTime()) ? null : val.toISOString();
+function resolvePublicOrigin(request: NextRequest): string | null {
+  const proto =
+    request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
+    request.nextUrl?.protocol?.replace(/:$/, '') ||
+    'https';
+  const host =
+    request.headers.get('x-forwarded-host')?.split(',')[0]?.trim() ||
+    request.headers.get('host')?.split(',')[0]?.trim();
+  if (host) return `${proto}://${host}`;
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  return envUrl ? envUrl.replace(/\/$/, '') : null;
+}
+
+function toPublicMediaUrl(url: string, request: NextRequest): string {
+  const trimmed = url.trim();
+  if (!trimmed) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('/')) {
+    const origin = resolvePublicOrigin(request);
+    if (origin) return `${origin}${trimmed}`;
   }
-  if (typeof val === 'string') {
-    const s = val.trim();
-    if (!s) return null;
-    const normalized =
-      /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s) && !s.endsWith('Z') && !/[+-]\d{2}(:\d{2})?$/.test(s)
-        ? `${s.replace(' ', 'T')}Z`
-        : s;
-    const d = new Date(normalized);
-    return isNaN(d.getTime()) ? s : d.toISOString();
-  }
-  return null;
+  return trimmed;
 }
 
 function parseMediaUrls(raw: unknown): string[] {
@@ -183,7 +272,7 @@ export async function GET(request: NextRequest) {
           category: m.category || 'ADDITIONAL',
           createdAt: m.createTime,
           source: 'google' as const,
-          mediaFormat: 'PHOTO',
+          mediaFormat: (m as { mediaFormat?: string }).mediaFormat || inferMediaFormat(m.googleUrl),
           caption: m.category ? `Google Business Profile · ${m.category}` : undefined,
         }));
       } catch (err: unknown) {
@@ -191,15 +280,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch queued/draft/failed photo media posts
-    const scheduledPosts = await db.socialPost.findMany({
+    // Fetch candidate queued/draft/failed posts and filter in JS so unmigrated Supabase schemas
+    // missing `gbpPostType` or `gbpOfferData` never drop scheduled/draft media items.
+    const candidatePosts = await db.socialPost.findMany({
       where: {
         tenantId: user.tenantId,
         status: { in: ['scheduled', 'publishing', 'draft', 'failed'] },
-        gbpPostType: 'photo_media',
       },
       orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'desc' }],
-      take: 80,
+      take: 150,
       select: {
         id: true,
         mediaUrls: true,
@@ -207,30 +296,44 @@ export async function GET(request: NextRequest) {
         createdAt: true,
         content: true,
         status: true,
+        gbpPostType: true,
         gbpOfferData: true,
+        publishTargets: true,
+        designJson: true,
+        linkUrl: true,
         failureReason: true,
       },
     });
+
+    const scheduledPosts = candidatePosts.filter((p) => isPhotoMediaRow(p));
 
     const queuedPhotos = scheduledPosts
       .flatMap((p) => {
         try {
           const urls = parseMediaUrls(p.mediaUrls);
           if (!urls.length) return [];
-          const meta = parseOfferMeta(p.gbpOfferData);
-          const scheduledForIso = toIsoStringSafe(p.scheduledAt);
+          const offerMeta = parseOfferMeta(p.gbpOfferData);
+          const targetMeta = parseMediaMetaFromTargets(p.publishTargets);
+          const meta: StoredMediaMeta = {
+            ...targetMeta,
+            ...offerMeta,
+            tags: (offerMeta.tags && offerMeta.tags.length > 0 ? offerMeta.tags : targetMeta.tags) || [],
+          };
+          const scheduledForIso =
+            toIsoStringSafe(p.scheduledAt) || toIsoStringSafe(meta.scheduledFor);
           const createdAtIso = toIsoStringSafe(p.createdAt);
-          return urls
-            .map((u: string, idx: number) => ({
+          return urls.map((rawUrl: string, idx: number) => {
+            const publicUrl = toPublicMediaUrl(rawUrl, request);
+            return {
               id: urls.length === 1 ? p.id : `${p.id}-${idx}`,
               postId: p.id,
-              url: u,
-              thumbnailUrl: u,
+              url: publicUrl,
+              thumbnailUrl: publicUrl,
               title: meta.title || undefined,
               tags: meta.tags || [],
               category: meta.category || 'SCHEDULED',
               gbpCategory: meta.category || 'ADDITIONAL',
-              mediaFormat: meta.mediaFormat || inferMediaFormat(u),
+              mediaFormat: meta.mediaFormat || inferMediaFormat(publicUrl),
               createdAt: scheduledForIso || createdAtIso || new Date().toISOString(),
               scheduledFor: scheduledForIso,
               source: 'queue' as const,
@@ -238,7 +341,8 @@ export async function GET(request: NextRequest) {
               caption: p.content,
               description: p.content,
               failureReason: p.failureReason || undefined,
-            }));
+            };
+          });
         } catch (err: unknown) {
           console.warn('[social/photos] Failed to normalize queued photo post:', p.id, err instanceof Error ? err.message : err);
           return [];
@@ -246,10 +350,19 @@ export async function GET(request: NextRequest) {
       })
       .filter(Boolean);
 
+    const scheduledCount = queuedPhotos.filter(
+      (p) => p.status === 'scheduled' || p.status === 'publishing',
+    ).length;
+    const notPostedCount = queuedPhotos.filter(
+      (p) => p.status === 'draft' || p.status === 'failed',
+    ).length;
+
     return NextResponse.json({
       photos: [...livePhotos, ...queuedPhotos],
       liveCount: livePhotos.length,
       queuedCount: queuedPhotos.length,
+      scheduledCount,
+      notPostedCount,
       isConnected,
       connectionState,
       locale,
@@ -373,22 +486,25 @@ export async function POST(request: NextRequest) {
 
     if (scheduleMode === 'instant') {
       for (const item of items) {
+        const publicItemUrl = toPublicMediaUrl(item.url, request);
         const effectiveDescription = buildDescriptionWithKeywords(
           item.description || `Recent work and services at ${businessName}`,
           item.title,
           item.tags,
         );
-        const mediaMetaJson = JSON.stringify({
+        const mediaMetaObj: StoredMediaMeta = {
+          gbpPostType: 'photo_media',
           title: item.title || `${businessName} Showcase`,
           tags: item.tags || [],
           category: item.category || 'ADDITIONAL',
           mediaFormat: item.mediaFormat || 'PHOTO',
-        });
+        };
+        const mediaMetaJson = JSON.stringify(mediaMetaObj);
 
         if (googleAccount) {
           try {
             const uploaded = await uploadGoogleBusinessMedia(googleAccount, {
-              sourceUrl: item.url,
+              sourceUrl: publicItemUrl,
               mediaFormat: item.mediaFormat || 'PHOTO',
               category: item.category || 'ADDITIONAL',
               description: effectiveDescription,
@@ -408,9 +524,15 @@ export async function POST(request: NextRequest) {
                 tenantId: user.tenantId,
                 status: 'draft',
                 content: effectiveDescription,
-                mediaUrls: JSON.stringify([item.url]),
+                mediaUrls: JSON.stringify([publicItemUrl]),
                 publishTargets: JSON.stringify([
-                  { platform: 'googlebusiness', socialAccountId: googleAccount.id, status: 'pending', error: msg },
+                  {
+                    platform: 'googlebusiness',
+                    socialAccountId: googleAccount.id,
+                    status: 'pending',
+                    error: msg,
+                    mediaMeta: mediaMetaObj,
+                  },
                 ]),
                 scheduledAt: null,
                 gbpPostType: 'photo_media',
@@ -421,7 +543,7 @@ export async function POST(request: NextRequest) {
             });
             uploadedPhotos.push({
               id: savedDraft.id,
-              url: item.url,
+              url: publicItemUrl,
               status: `saved_locally: ${msg}`,
               title: item.title,
               tags: item.tags,
@@ -433,8 +555,15 @@ export async function POST(request: NextRequest) {
               tenantId: user.tenantId,
               status: 'draft',
               content: effectiveDescription,
-              mediaUrls: JSON.stringify([item.url]),
-              publishTargets: JSON.stringify([]),
+              mediaUrls: JSON.stringify([publicItemUrl]),
+              publishTargets: JSON.stringify([
+                {
+                  platform: 'googlebusiness',
+                  socialAccountId: '',
+                  status: 'pending',
+                  mediaMeta: mediaMetaObj,
+                },
+              ]),
               scheduledAt: null,
               gbpPostType: 'photo_media',
               gbpOfferData: mediaMetaJson,
@@ -443,7 +572,7 @@ export async function POST(request: NextRequest) {
           });
           uploadedPhotos.push({
             id: savedDraft.id,
-            url: item.url,
+            url: publicItemUrl,
             status: 'saved_locally (Google account not connected)',
             title: item.title,
             tags: item.tags,
@@ -452,36 +581,47 @@ export async function POST(request: NextRequest) {
       }
     } else if (scheduleMode === 'draft') {
       for (const item of items) {
+        const publicItemUrl = toPublicMediaUrl(item.url, request);
         const effectiveDescription = buildDescriptionWithKeywords(
           item.description || `Quality craftsmanship and customer satisfaction at ${businessName}.`,
           item.title,
           item.tags,
         );
+        const mediaMetaObj: StoredMediaMeta = {
+          gbpPostType: 'photo_media',
+          title: item.title || `${businessName} Media`,
+          tags: item.tags || [],
+          category: item.category || 'ADDITIONAL',
+          mediaFormat: item.mediaFormat || 'PHOTO',
+        };
         const created = await db.socialPost.create({
           data: {
             tenantId: user.tenantId,
             status: 'draft',
             content: effectiveDescription,
-            mediaUrls: JSON.stringify([item.url]),
-            publishTargets: JSON.stringify(
-              googleAccount
-                ? [{ platform: 'googlebusiness', socialAccountId: googleAccount.id, status: 'pending' }]
-                : [],
-            ),
+            mediaUrls: JSON.stringify([publicItemUrl]),
+            publishTargets: JSON.stringify([
+              {
+                platform: 'googlebusiness',
+                socialAccountId: googleAccount?.id || '',
+                status: 'pending',
+                mediaMeta: mediaMetaObj,
+              },
+            ]),
             scheduledAt: null,
             gbpPostType: 'photo_media',
             gbpOfferData: JSON.stringify({
-              title: item.title || `${businessName} Media`,
-              tags: item.tags || [],
-              category: item.category || 'ADDITIONAL',
-              mediaFormat: item.mediaFormat || 'PHOTO',
+              title: mediaMetaObj.title,
+              tags: mediaMetaObj.tags,
+              category: mediaMetaObj.category,
+              mediaFormat: mediaMetaObj.mediaFormat,
             }),
             createdById: user.id || 'system',
           },
         });
         uploadedPhotos.push({
           id: created.id,
-          url: item.url,
+          url: publicItemUrl,
           status: 'draft',
           title: item.title,
           tags: item.tags,
@@ -502,6 +642,7 @@ export async function POST(request: NextRequest) {
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
+        const publicItemUrl = toPublicMediaUrl(item.url, request);
         const dayOffset = (canStartToday ? i : i + 1) * dayInterval;
         const scheduledTime = computeLocalScheduledDate({
           dayOffset,
@@ -517,30 +658,40 @@ export async function POST(request: NextRequest) {
           item.tags,
         );
 
-        const publishTargets = googleAccount
-          ? [
-              {
-                platform: 'googlebusiness',
-                socialAccountId: googleAccount.id,
-                status: 'pending',
-              },
-            ]
-          : [];
+        const mediaMetaObj: StoredMediaMeta = {
+          gbpPostType: 'photo_media',
+          title: item.title || `${businessName} Showcase`,
+          tags: item.tags || [],
+          category: item.category || 'ADDITIONAL',
+          mediaFormat: item.mediaFormat || 'PHOTO',
+          scheduledFor: scheduledTime.toISOString(),
+          timeZone: locale.timeZone,
+          country: locale.country,
+        };
+
+        const publishTargets = [
+          {
+            platform: 'googlebusiness',
+            socialAccountId: googleAccount?.id || '',
+            status: 'pending',
+            mediaMeta: mediaMetaObj,
+          },
+        ];
 
         const created = await db.socialPost.create({
           data: {
             tenantId: user.tenantId,
             status: 'scheduled',
             content: caption,
-            mediaUrls: JSON.stringify([item.url]),
+            mediaUrls: JSON.stringify([publicItemUrl]),
             publishTargets: JSON.stringify(publishTargets),
             scheduledAt: scheduledTime,
             gbpPostType: 'photo_media',
             gbpOfferData: JSON.stringify({
-              title: item.title || `${businessName} Showcase`,
-              tags: item.tags || [],
-              category: item.category || 'ADDITIONAL',
-              mediaFormat: item.mediaFormat || 'PHOTO',
+              title: mediaMetaObj.title,
+              tags: mediaMetaObj.tags,
+              category: mediaMetaObj.category,
+              mediaFormat: mediaMetaObj.mediaFormat,
               timeZone: locale.timeZone,
               country: locale.country,
             }),
@@ -550,7 +701,7 @@ export async function POST(request: NextRequest) {
 
         uploadedPhotos.push({
           id: created.id,
-          url: item.url,
+          url: publicItemUrl,
           status: 'scheduled',
           scheduledAt: scheduledTime.toISOString(),
           title: item.title,
@@ -608,24 +759,31 @@ export async function PATCH(request: NextRequest) {
       where: {
         id: postId,
         tenantId: user.tenantId,
-        gbpPostType: 'photo_media',
       },
       select: {
         id: true,
         content: true,
         status: true,
         scheduledAt: true,
+        gbpPostType: true,
         gbpOfferData: true,
+        publishTargets: true,
+        designJson: true,
+        linkUrl: true,
+        mediaUrls: true,
       },
     });
 
-    if (!existing) {
+    if (!existing || !isPhotoMediaRow(existing)) {
       return NextResponse.json({ error: 'Scheduled media item not found.' }, { status: 404 });
     }
 
-    const meta = parseOfferMeta(existing.gbpOfferData);
-    const nextMeta = {
+    const offerMeta = parseOfferMeta(existing.gbpOfferData);
+    const targetMeta = parseMediaMetaFromTargets(existing.publishTargets);
+    const meta: StoredMediaMeta = { ...targetMeta, ...offerMeta };
+    const nextMeta: StoredMediaMeta = {
       ...meta,
+      gbpPostType: 'photo_media',
       ...(typeof body.title === 'string' ? { title: body.title.trim() } : {}),
       ...(body.tags !== undefined ? { tags: normalizeTags(body.tags) } : {}),
       ...(typeof body.category === 'string' ? { category: body.category.trim().toUpperCase() } : {}),
@@ -642,6 +800,7 @@ export async function PATCH(request: NextRequest) {
     if (body.scheduledAt !== undefined) {
       if (body.scheduledAt === null || body.scheduledAt === '') {
         updateData.scheduledAt = null;
+        nextMeta.scheduledFor = undefined;
         if (existing.status === 'scheduled') updateData.status = 'draft';
       } else {
         const dt = new Date(body.scheduledAt);
@@ -649,6 +808,7 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ error: 'Invalid schedule date.' }, { status: 400 });
         }
         updateData.scheduledAt = dt;
+        nextMeta.scheduledFor = dt.toISOString();
         updateData.status = 'scheduled';
       }
     }
@@ -656,9 +816,21 @@ export async function PATCH(request: NextRequest) {
     if (body.status === 'draft' || body.status === 'scheduled') {
       updateData.status = body.status;
       if (body.status === 'scheduled' && !updateData.scheduledAt && !existing.scheduledAt) {
-        updateData.scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const nextDt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        updateData.scheduledAt = nextDt;
+        nextMeta.scheduledFor = nextDt.toISOString();
       }
     }
+
+    const existingTargets = parsePublishTargetsRaw(existing.publishTargets);
+    const nextTargets =
+      existingTargets.length > 0
+        ? existingTargets.map((t, idx) =>
+            idx === 0 || t.platform === 'googlebusiness' ? { ...t, mediaMeta: nextMeta } : t,
+          )
+        : [{ platform: 'googlebusiness', socialAccountId: '', status: 'pending', mediaMeta: nextMeta }];
+    updateData.publishTargets = JSON.stringify(nextTargets);
+    updateData.gbpOfferData = JSON.stringify(nextMeta);
 
     const updated = await db.socialPost.update({
       where: { id: existing.id },
@@ -674,7 +846,7 @@ export async function PATCH(request: NextRequest) {
         tags: nextMeta.tags || [],
         category: nextMeta.category || 'ADDITIONAL',
         status: updated.status,
-        scheduledFor: toIsoStringSafe(updated.scheduledAt),
+        scheduledFor: toIsoStringSafe(updated.scheduledAt) || toIsoStringSafe(nextMeta.scheduledFor),
       },
     });
   } catch (error) {
@@ -701,10 +873,18 @@ export async function DELETE(request: NextRequest) {
     }
 
     const existing = await db.socialPost.findFirst({
-      where: { id, tenantId: user.tenantId, gbpPostType: 'photo_media' },
-      select: { id: true },
+      where: { id, tenantId: user.tenantId },
+      select: {
+        id: true,
+        gbpPostType: true,
+        gbpOfferData: true,
+        publishTargets: true,
+        designJson: true,
+        linkUrl: true,
+        mediaUrls: true,
+      },
     });
-    if (!existing) {
+    if (!existing || !isPhotoMediaRow(existing)) {
       return NextResponse.json({ error: 'Media item not found.' }, { status: 404 });
     }
 
