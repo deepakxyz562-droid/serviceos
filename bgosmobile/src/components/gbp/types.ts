@@ -10,6 +10,8 @@ export type Review = {
   responseJson?: string;
   googleReviewId?: string;
   createdAt?: string;
+  createTime?: string;
+  publishedAt?: string;
 };
 
 export type ReplyPayload = {
@@ -76,8 +78,16 @@ export type AnalyticsResult = {
   } | null;
 };
 
+export type GbpConnectionState =
+  | 'connected'
+  | 'pending_approval'
+  | 'select_profile'
+  | 'reconnect_required'
+  | 'not_connected';
+
 export type GbpPlaceResult = {
   isConnected: boolean;
+  connectionState?: GbpConnectionState;
   isPendingApproval?: boolean;
   googleEmail?: string;
   googleName?: string;
@@ -148,14 +158,21 @@ export type SocialPost = {
 
 export type GbpPhoto = {
   id: string;
+  postId?: string;
   url: string;
   thumbnailUrl?: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
   category?: string;
+  gbpCategory?: string;
+  mediaFormat?: 'PHOTO' | 'VIDEO' | string;
   createdAt: string;
   source: 'google' | 'queue';
   status?: string;
   caption?: string;
-  /** ISO date the drip scheduler will publish this queued photo (server-computed). */
+  failureReason?: string;
+  /** ISO date the scheduler will publish this queued photo (server-computed). */
   scheduledFor?: string | null;
 };
 
@@ -163,6 +180,15 @@ export type PhotosResponse = {
   photos: GbpPhoto[];
   liveCount: number;
   queuedCount: number;
+  isConnected?: boolean;
+  connectionState?: GbpConnectionState;
+  locale?: {
+    country: string;
+    countryName: string;
+    callingCode: string;
+    timeZone: string;
+    locale: string;
+  };
 };
 
 export type AiPostDraft = {

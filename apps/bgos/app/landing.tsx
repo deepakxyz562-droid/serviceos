@@ -11,7 +11,7 @@ const features = [
   { icon: Megaphone, name: 'Marketing studio', sub: 'Stay part of the conversation.', text: 'Draft content with AI and manage posts for your connected publishing accounts.', color: 'green', visual: 'channels' },
   { icon: Star, name: 'Reviews & reputation', sub: 'Let happy customers speak.', text: 'Request customer feedback and bring your review management into your daily workflow.', color: 'blue', visual: 'reviews' },
 ];
-function Logo() { return <img src="/bgos/logo.svg" alt="bgos" width="112" height="41" />; }
+function Logo() { return <img src="/bgos/primary-logo.png" alt="BGOS — Business Growth OS" width="132" height="43" />; }
 function CTA({ children = 'Get started free', secondary = false, href = signup }: { children?: React.ReactNode; secondary?: boolean; href?: string }) { return <a className={secondary ? s.secondary : s.primary} href={href}>{children}<ArrowRight size={16} /></a>; }
 function MiniVisual({ type }: { type: string }) {
   if (type === 'leads') return <div className={s.miniRows}>{['New inquiry', 'Follow-up ready'].map((v,i)=><div key={v}><span className={s.avatar}>{i ? 'AK' : 'PS'}</span><span>{v}<small>{i ? 'Appointment request' : 'Website contact form'}</small></span><b>{i ? 'Contacted' : 'New lead'}</b></div>)}</div>;

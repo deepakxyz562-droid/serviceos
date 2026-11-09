@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import { notificationDestination } from '../src/lib/notification-routing';
 import { useAuthStore } from '../src/stores/auth-store';
 import { RootErrorBoundary } from '../src/components/navigation/error-boundary';
+import { AnimatedSplash } from '../src/components/navigation/animated-splash';
 
 try {
   Notifications.setNotificationHandler({
@@ -106,6 +107,7 @@ export default function RootLayout() {
         <Stack.Screen name="preferences" />
         <Stack.Screen name="help" />
       </Stack>
+      <AnimatedSplash ready={fontsLoaded && !isLoading} />
     </RootErrorBoundary>
   );
 }

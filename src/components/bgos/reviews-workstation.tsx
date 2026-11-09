@@ -65,6 +65,7 @@ import {
   ShieldCheck,
   Trash2,
   AlertCircle,
+  Film,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -87,6 +88,11 @@ import { GbpStandeeModal } from '@/components/bgos/gbp-standee-modal';
 import { RankTracker } from '@/components/bgos/rank-tracker';
 import { GbpPageCreateModal } from '@/components/bgos/gbp-page-create-modal';
 import { GbpWebsiteBuilderCard } from '@/components/bgos/gbp-website-builder-card';
+import {
+  WebMediaMetadataDialog,
+  type WebMediaItem,
+  type WebScheduleMode,
+} from '@/components/bgos/media-metadata-dialog';
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -101,6 +107,7 @@ export interface ReviewItem {
   text: string;
   keywords?: string[];
   replied: boolean;
+  source?: string;
   failedSync?: boolean;
   publishedToGoogle?: boolean;
   status?: 'published' | 'pending' | 'hidden';
@@ -258,6 +265,8 @@ export function ReviewsView({
     placeId?: string | null;
     mapsUrl?: string;
     reviewUrl?: string | null;
+    googleEmail?: string | null;
+    googlePicture?: string | null;
     completionScore?: number;
     missingFields?: string[];
   } | null>(null);
@@ -371,12 +380,14 @@ export function ReviewsView({
   const [customerPhotos, setCustomerPhotos] = useState<string[]>(
     isDemo || initialReviews === INITIAL_REVIEWS ? CUSTOMER_PHOTOS_INITIAL : []
   );
-  const [photosList, setPhotosList] = useState<
-    Array<{ id: string; url: string; source: 'google' | 'queue'; scheduledAt?: string; status?: string }>
-  >([]);
+  const [photosList, setPhotosList] = useState<WebMediaItem[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const overviewPhotoInputRef = useRef<HTMLInputElement>(null);
+  const [mediaModalOpen, setMediaModalOpen] = useState(false);
+  const [pendingMediaFiles, setPendingMediaFiles] = useState<File[]>([]);
+  const [editingMediaItem, setEditingMediaItem] = useState<WebMediaItem | null>(null);
+  const [mediaModalDefaultMode, setMediaModalDefaultMode] = useState<WebScheduleMode>('daily');
 
   // Automate Review Requests state (persisted in tenant settingsJson.reviewAutomation)
   const [automateEnabled, setAutomateEnabled] = useState(false);
@@ -401,7 +412,6 @@ export function ReviewsView({
 
   // AI Photo Drip Scheduler state
   const [photoDripMode, setPhotoDripMode] = useState<'instant' | 'daily' | 'weekly' | 'staggered'>('staggered');
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Omnichannel Auto-Reply state
   const [omnichannelConfig, setOmnichannelConfig] = useState({
@@ -719,7 +729,9 @@ export function ReviewsView({
             initials,
             avatarBg: avatarBgs[idx % avatarBgs.length],
             rating: validRating,
-            timeAgo: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
+            timeAgo: (r.createTime || r.publishedAt || r.createdAt)
+              ? new Date(r.createTime || r.publishedAt || r.createdAt).toLocaleDateString()
+              : 'Recent',
             text: comment || '(No written comment provided)',
             keywords: r.keywords || (extractedKeywords.length > 0 ? extractedKeywords : undefined),
             replied: !!(parsedResp && parsedResp.text && parsedResp.publishedToGoogle),
@@ -801,7 +813,9 @@ export function ReviewsView({
                 timeAgo:
                   r.relativeTime ||
                   r.timeAgo ||
-                  (r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recently'),
+                  ((r.createTime || r.publishedAt || r.createdAt)
+                    ? new Date(r.createTime || r.publishedAt || r.createdAt).toLocaleDateString()
+                    : 'Recently'),
                 text: comment,
                 keywords: extractedKeywords,
                 replied:
@@ -892,7 +906,9 @@ export function ReviewsView({
               initials,
               avatarBg: avatarBgs[idx % avatarBgs.length],
               rating: validRating,
-              timeAgo: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
+              timeAgo: (r.createTime || r.publishedAt || r.createdAt)
+              ? new Date(r.createTime || r.publishedAt || r.createdAt).toLocaleDateString()
+              : 'Recent',
               text: comment || '(No written comment provided)',
               keywords: r.keywords || (extractedKeywords.length > 0 ? extractedKeywords : undefined),
               replied: !!(parsedResp && parsedResp.text && parsedResp.publishedToGoogle),
@@ -1305,71 +1321,27 @@ export function ReviewsView({
     }
   };
 
-  // ─── AI Bulk Photo Upload & Drip Scheduler (real file upload → storage → Google) ─
-  const handleUploadPhotos = async (files: FileList | null, mode = photoDripMode) => {
-    if (!files || files.length === 0) {
-      toast.error('Choose at least one photo to upload.');
+  // ─── AI Media Studio & Drip Scheduler (file pick → AI Title/Description/Tags → storage → Google) ─
+  const openMediaComposer = (files: FileList | null, mode: string = photoDripMode) => {
+    const picked = files ? Array.from(files).slice(0, 20) : [];
+    if (photoInputRef.current) photoInputRef.current.value = '';
+    if (overviewPhotoInputRef.current) overviewPhotoInputRef.current.value = '';
+    if (picked.length === 0) {
+      toast.error('Choose at least one photo or video to upload.');
       return;
     }
-    setIsUploadingPhoto(true);
-    const uploadedUrls: string[] = [];
-    try {
-      // 1) Upload each real file to workspace storage → returns a public URL
-      for (const file of Array.from(files).slice(0, 20)) {
-        try {
-          const fd = new FormData();
-          fd.append('file', file);
-          const upRes = await authFetch('/api/omnichannel/upload', { method: 'POST', body: fd });
-          const upData = await upRes.json().catch(() => ({}));
-          if (upRes.ok && upData?.url) {
-            uploadedUrls.push(upData.url);
-          } else {
-            toast.error(upData.error || `Could not upload ${file.name}`);
-          }
-        } catch {
-          toast.error(`Could not upload ${file.name}`);
-        }
-      }
-
-      if (uploadedUrls.length === 0) {
-        toast.error('No photos were uploaded. Check your connection and try again.');
-        return;
-      }
-
-      // 2) Hand the uploaded URLs to the GBP media pipeline (instant publish or AI drip)
-      const res = await authFetch('/api/social/photos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          photos: uploadedUrls,
-          scheduleMode: mode,
-          category: 'ADDITIONAL',
-          description: `Quality craftsmanship and local service at ${profileTitle || businessName}`,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        if (!isDemo && initialReviews !== INITIAL_REVIEWS) {
-          setCustomerPhotos((prev) => [...uploadedUrls, ...prev]);
-        }
-        toast.success(data.message || 'Photos uploaded.');
-        loadPhotos();
-      } else {
-        toast.error(data.error || 'Uploaded to storage, but Google scheduling failed. Try again.');
-      }
-    } catch {
-      toast.error('Photo upload failed. Please try again.');
-    } finally {
-      setIsUploadingPhoto(false);
-      if (photoInputRef.current) photoInputRef.current.value = '';
-      if (overviewPhotoInputRef.current) overviewPhotoInputRef.current.value = '';
-    }
+    const mappedMode: WebScheduleMode =
+      mode === 'instant' || mode === 'weekly' || mode === 'draft' ? mode : 'daily';
+    setEditingMediaItem(null);
+    setPendingMediaFiles(picked);
+    setMediaModalDefaultMode(mappedMode);
+    setMediaModalOpen(true);
   };
 
-  // Overview "Add Photo" — same real upload pipeline (instant publish)
-  const handleOverviewPhotoSelect = async (files: FileList | null) => {
+  // Overview "Add Photo" — opens AI Media Studio with Publish Now preset
+  const handleOverviewPhotoSelect = (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    await handleUploadPhotos(files, 'instant');
+    openMediaComposer(files, 'instant');
   };
 
   // ─── Apply SEO content: save to BGOS brand profile + push to Google when connected ──
@@ -1783,11 +1755,11 @@ export function ReviewsView({
 
   return (
     <div className="p-4 sm:p-5 lg:p-6 space-y-5 w-full bg-[#F7FAF9] dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-      {/* Hidden real file inputs for photo uploads */}
+      {/* Hidden real file inputs for photo/video uploads */}
       <input
         ref={overviewPhotoInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,video/*"
         multiple
         className="hidden"
         onChange={(e) => handleOverviewPhotoSelect(e.target.files)}
@@ -2903,11 +2875,10 @@ export function ReviewsView({
                 <button
                   type="button"
                   onClick={() => overviewPhotoInputRef.current?.click()}
-                  disabled={isUploadingPhoto}
-                  className="w-full h-20 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-slate-500 hover:border-[#009F50] hover:text-[#009F50] transition-colors disabled:opacity-50"
+                  className="w-full h-20 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-slate-500 hover:border-[#009F50] hover:text-[#009F50] transition-colors"
                 >
-                  <Plus className={cn('size-4', isUploadingPhoto && 'animate-pulse')} />
-                  <span className="text-[11px] font-medium">{isUploadingPhoto ? 'Uploading' : 'Add Photo'}</span>
+                  <Plus className="size-4" />
+                  <span className="text-[11px] font-medium">Add Photo</span>
                 </button>
               </div>
             </div>
@@ -4382,49 +4353,50 @@ export function ReviewsView({
          ═══════════════════════════════════════════════════════════════════════ */}
       {activeSubTab === 'photos' && (
         <div className="space-y-4">
-          {/* AI Bulk Photo Drip Header Banner */}
-          <div className="bg-gradient-to-r from-emerald-950/70 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-2xl p-5 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          {/* AI Bulk Media Schedule Header Banner (BGOS Light UI) */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xs">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <Badge className="bg-[#009F50] text-white border-0 text-xs px-2.5 font-bold">
-                  AI Photo Upload • Automated Cadence
+                  AI Media Upload • Automated Cadence
                 </Badge>
-                <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
-                  <Sparkles className="size-3.5" /> Seasonal Freshness Engine
+                <span className="text-xs text-[#009F50] font-semibold flex items-center gap-1">
+                  <Sparkles className="size-3.5" /> AI Title &amp; Tag Studio
                 </span>
               </div>
-              <h2 className="text-base font-bold">Bulk Upload with AI Drip Scheduling</h2>
-              <p className="text-xs text-slate-300 max-w-xl">
-                Upload photos in bulk once. The AI schedules and drips them daily or weekly with seasonal tags, signaling continuous fresh activity to Google Maps.
+              <h2 className="text-base font-bold text-[#070B2D] dark:text-white">
+                Upload Photos &amp; Videos with AI Title, Tags &amp; Smart Scheduling
+              </h2>
+              <p className="text-xs text-slate-600 dark:text-slate-300 max-w-xl">
+                Pick photos or videos once. BGOS AI automatically generates SEO titles, descriptions, keyword tags, and Google categories before publishing immediately or on your local schedule.
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap shrink-0">
               <select
                 value={photoDripMode}
                 onChange={(e) => setPhotoDripMode(e.target.value as any)}
-                className="h-8 px-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white"
+                className="h-9 px-3 rounded-xl bg-[#F7FAF9] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-white"
               >
-                <option value="staggered">AI Drip: Every 2 Days (Recommended)</option>
-                <option value="daily">AI Drip: Daily (Every 24h)</option>
-                <option value="weekly">AI Drip: Weekly (Every 7d)</option>
+                <option value="staggered">AI Schedule: Daily (Recommended)</option>
+                <option value="daily">AI Schedule: Daily (1/Day)</option>
+                <option value="weekly">AI Schedule: Weekly (1/Week)</option>
                 <option value="instant">Instant: Publish All Now</option>
               </select>
               <input
                 ref={photoInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,video/*"
                 multiple
                 className="hidden"
-                onChange={(e) => handleUploadPhotos(e.target.files, photoDripMode)}
+                onChange={(e) => openMediaComposer(e.target.files, photoDripMode)}
               />
               <Button
                 size="sm"
                 onClick={() => photoInputRef.current?.click()}
-                disabled={isUploadingPhoto}
-                className="bg-[#009F50] hover:bg-[#008A45] text-white text-xs font-semibold rounded-xl gap-1.5"
+                className="bg-[#009F50] hover:bg-[#008A45] text-white text-xs font-semibold rounded-xl gap-1.5 h-9"
               >
                 <Plus className="size-4" />
-                <span>{isUploadingPhoto ? 'Uploading...' : 'Upload Photos'}</span>
+                <span>Upload Photo / Video</span>
               </Button>
             </div>
           </div>
@@ -4433,10 +4405,10 @@ export function ReviewsView({
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                  Google Business Photos &amp; Scheduled Queue
+                  Google Business Media &amp; Scheduled Queue
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Businesses with fresh photos receive 42% more requests for directions on Google Maps.
+                  Tap any queued or draft item to edit its AI title, SEO description, keyword tags, or schedule.
                 </p>
               </div>
             </div>
@@ -4444,37 +4416,109 @@ export function ReviewsView({
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {photosLoading &&
               Array.from({ length: 4 }).map((_, i) => (
-                <div key={`ph-sk-${i}`} className="h-36 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                <div key={`ph-sk-${i}`} className="h-40 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
               ))}
             {!photosLoading && customerPhotos.length === 0 && (
               <div className="col-span-full p-8 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
                 <ImageIcon className="size-8 mx-auto text-slate-300 mb-2" />
-                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No photos yet</p>
+                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No photos or videos yet</p>
                 <p className="text-xs text-slate-400 mt-1">
                   {isGbpConnected
-                    ? 'Upload your first photos — they publish to Google automatically on your chosen drip schedule.'
-                    : 'Connect your Google Business Profile, then upload photos to publish them straight to Google Maps.'}
+                    ? 'Upload your first photos or videos — BGOS AI generates titles, tags & publishes on your schedule.'
+                    : 'Upload photos or videos to prepare AI-tagged drafts, or connect Google Business Profile to publish live.'}
                 </p>
               </div>
             )}
             {!photosLoading &&
-            customerPhotos.map((src, i) => (
-              <div
-                key={i}
-                className="relative rounded-2xl overflow-hidden group border border-slate-200 dark:border-slate-800"
-              >
-                <img
-                  src={src}
-                  alt={`Business photo ${i + 1}`}
-                  className="w-full h-36 object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                {photosList[i]?.source === 'queue' && (
-                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-slate-900/80 text-white text-[10px] font-bold">
-                    Scheduled {photosList[i]?.scheduledAt ? new Date(photosList[i].scheduledAt!).toLocaleDateString() : ''}
-                  </span>
-                )}
-              </div>
-            ))}
+            (photosList.length > 0
+              ? photosList.map((item, i) => {
+                  const isVideo =
+                    item.mediaFormat === 'VIDEO' || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(item.url || '');
+                  const isEditable = item.source === 'queue' && Boolean(item.postId || item.id);
+                  const dateIso = item.scheduledFor || item.createdAt;
+                  return (
+                    <div
+                      key={item.id || i}
+                      onClick={
+                        isEditable
+                          ? () => {
+                              setPendingMediaFiles([]);
+                              setEditingMediaItem(item);
+                              setMediaModalOpen(true);
+                            }
+                          : undefined
+                      }
+                      className={cn(
+                        'relative rounded-2xl overflow-hidden group border border-slate-200 dark:border-slate-800 bg-slate-100 h-40',
+                        isEditable && 'cursor-pointer hover:ring-2 hover:ring-[#009F50]/50 transition',
+                      )}
+                    >
+                      {isVideo ? (
+                        <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center gap-1 text-white">
+                          <Film className="size-7 text-emerald-400" />
+                          <span className="text-[10px] font-bold uppercase tracking-wider">Video</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={item.thumbnailUrl || item.url}
+                          alt={item.title || `Business media ${i + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      )}
+                      {item.source === 'queue' ? (
+                        <span
+                          className={cn(
+                            'absolute top-2 left-2 px-2 py-0.5 rounded-full text-white text-[10px] font-bold',
+                            item.status === 'failed'
+                              ? 'bg-rose-600/90'
+                              : item.status === 'draft'
+                                ? 'bg-slate-700/90'
+                                : 'bg-amber-500/95',
+                          )}
+                        >
+                          {item.status === 'failed'
+                            ? 'Failed'
+                            : item.status === 'draft'
+                              ? 'Draft'
+                              : `Scheduled ${dateIso ? new Date(dateIso).toLocaleDateString() : ''}`}
+                        </span>
+                      ) : (
+                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-emerald-600/90 text-white text-[10px] font-bold">
+                          Live
+                        </span>
+                      )}
+                      {isEditable && (
+                        <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px] font-semibold">
+                          Edit
+                        </span>
+                      )}
+                      {(item.title || (item.tags && item.tags.length > 0)) && (
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/45 to-transparent p-2 text-white">
+                          {item.title ? (
+                            <p className="text-[11px] font-semibold truncate">{item.title}</p>
+                          ) : null}
+                          {item.tags && item.tags.length > 0 ? (
+                            <p className="text-[10px] text-emerald-300 truncate">
+                              #{item.tags.slice(0, 2).join(' #')}
+                            </p>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              : customerPhotos.map((src, i) => (
+                  <div
+                    key={i}
+                    className="relative rounded-2xl overflow-hidden group border border-slate-200 dark:border-slate-800"
+                  >
+                    <img
+                      src={src}
+                      alt={`Business photo ${i + 1}`}
+                      className="w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                )))}
             </div>
           </div>
         </div>
@@ -4878,6 +4922,19 @@ export function ReviewsView({
         defaultBusinessName={profileTitle || businessName}
         defaultCity={(auth as any)?.tenant?.city || ''}
         onSuccess={() => handleSyncGbp()}
+      />
+
+      {/* 9. AI Media Title, Description, Tags & Schedule Dialog */}
+      <WebMediaMetadataDialog
+        open={mediaModalOpen}
+        onOpenChange={setMediaModalOpen}
+        businessName={profileTitle || businessName}
+        initialFiles={pendingMediaFiles}
+        editingItem={editingMediaItem}
+        defaultScheduleMode={mediaModalDefaultMode}
+        onSaved={() => {
+          loadPhotos();
+        }}
       />
     </div>
   );

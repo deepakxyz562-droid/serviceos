@@ -1,8 +1,12 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, ActivityIndicator, Alert, Easing, Linking, Modal, Pressable, useWindowDimensions, ScrollView, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, ActivityIndicator, Alert, Easing, Image, Linking, Modal, Pressable, useWindowDimensions, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card, Screen, Action, ErrorNotice, MenuRow, Badge, MetricCard, ui, colors, Avatar, Loading } from '../../src/components/ui';
+import { getGreetingForLocalTime } from '../../src/lib/country-codes';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const brandMark = require('../../assets/brand-mark.png');
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { useAuthStore } from '../../src/stores/auth-store';
@@ -18,7 +22,7 @@ import { GrowthActionSheet } from '../../src/components/gbp/growth-action-sheet'
 import { UrgentReviewCard } from '../../src/components/gbp/urgent-review-card';
 import { AiAgentUpdatesSheet } from '../../src/components/gbp/ai-agent-updates-sheet';
 import { HomeStoryBubblesStrip, GbpAiAgentHomeCard } from '../../src/components/gbp/ai-agent-home-card';
-import type { GbpPlaceResult } from '../../src/components/gbp/types';
+import type { GbpPlaceResult, PhotosResponse } from '../../src/components/gbp/types';
 import type { BgosConversation, BgosWorkspace } from '../../src/types/bgos-contracts';
 
 type Booking = { id: string; title?: string; customerName?: string; scheduledAt?: string; status: string };
@@ -488,6 +492,7 @@ export default function HomeScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [growthModalOpen, setGrowthModalOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewModalTab, setReviewModalTab] = useState<'single' | 'bulk'>('single');
   const [seoUpdatesOpen, setSeoUpdatesOpen] = useState(false);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [expandedCompetitor, setExpandedCompetitor] = useState<string | null>(null);
@@ -509,6 +514,13 @@ export default function HomeScreen() {
   const competitors = useResource<CompetitorsResponse>('/api/gbp/competitors', 0, showInsights);
   const growthActions = useResource<GrowthActionsResponse>('/api/gbp/growth-actions');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
+  const photosRes = useResource<PhotosResponse>('/api/social/photos');
+  const socialPosts = useResource<{ data?: Array<{ id?: string; status?: string }> }>(
+    '/api/social/posts?platform=googlebusiness&limit=20',
+  );
+  const reviewQueue = useResource<{ queue?: { pending: number; sent: number; failed: number } }>(
+    '/api/reviews/request',
+  );
 
   const today = new Date().toDateString();
   const appointments = bookings.data?.bookings.filter(
@@ -529,6 +541,9 @@ export default function HomeScreen() {
       showInsights && competitors.refresh(),
       growthActions.refresh(),
       discover.refresh(),
+      photosRes.refresh(),
+      socialPosts.refresh(),
+      reviewQueue.refresh(),
     ].map((p) => Promise.resolve(p).catch(() => {})));
   };
 
@@ -554,7 +569,7 @@ export default function HomeScreen() {
     const list = reviews.data?.reviews || [];
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return list.filter((r) => {
-      const raw = r.createdAt || r.createTime || r.publishedAt;
+      const raw = r.createTime || r.publishedAt || r.createdAt;
       if (!raw) return false;
       const t = new Date(raw).getTime();
       return !isNaN(t) && t >= sevenDaysAgo;
@@ -565,12 +580,30 @@ export default function HomeScreen() {
     const list = reviews.data?.reviews || [];
     if (!list.length) return null;
     const sorted = [...list].sort((a, b) => {
-      const tA = new Date(a.createdAt || a.createTime || a.publishedAt || 0).getTime();
-      const tB = new Date(b.createdAt || b.createTime || b.publishedAt || 0).getTime();
+      const tA = new Date(a.createTime || a.publishedAt || a.createdAt || 0).getTime();
+      const tB = new Date(b.createTime || b.publishedAt || b.createdAt || 0).getTime();
       return tB - tA;
     });
-    return sorted[0]?.createdAt || sorted[0]?.createTime || sorted[0]?.publishedAt || null;
+    return sorted[0]?.createTime || sorted[0]?.publishedAt || sorted[0]?.createdAt || null;
   }, [reviews.data?.reviews]);
+
+  const publishedPhotosCount = useMemo(() => {
+    if (photosRes.data?.liveCount != null) return photosRes.data.liveCount;
+    return (photosRes.data?.photos || []).filter((p) => p.source === 'google').length;
+  }, [photosRes.data]);
+
+  const scheduledPhotosCount = useMemo(
+    () =>
+      (photosRes.data?.photos || []).filter(
+        (p) => p.source === 'queue' && (p.status === 'scheduled' || p.status === 'publishing'),
+      ).length,
+    [photosRes.data],
+  );
+
+  const scheduledPostsCount = useMemo(
+    () => (socialPosts.data?.data || []).filter((p) => p.status === 'scheduled').length,
+    [socialPosts.data?.data],
+  );
   const perfCells = useMemo(
     () => [
       { label: 'Profile Views', value: perf ? (perf.searchImpressions || 0) + (perf.mapsImpressions || 0) : null },
@@ -644,91 +677,124 @@ export default function HomeScreen() {
   }
 
   const activeProfile = discover.data?.activeProfile;
-  const profileName = activeProfile?.name || gbpPlace.data?.place?.title || 'My Business';
-  const shortId = activeProfile?.shortId
-    ? activeProfile.shortId.replace('#', '')
-    : gbpPlace.data?.place?.locationId
-    ? gbpPlace.data.place.locationId.slice(-4)
-    : '';
-  const phone = discover.data?.phone || gbpPlace.data?.place?.phone || '';
-  const version = discover.data?.version || 'v2.83';
-  const customHeader = (
+  const profileName = activeProfile?.name || gbpPlace.data?.place?.title || workspace.data?.name || 'My Business';
+  const greetingText = getGreetingForLocalTime(workspace.data?.locale?.timeZone);
+  const firstGreetingName = (user?.name || profileName || 'there').trim().split(/\s+/)[0];
+
+  const homeTopBar = (
     <View
       style={{
-        backgroundColor: '#009F50', // BGOS Emerald brand color
-        paddingHorizontal: 16,
-        paddingTop: 12,
-        paddingBottom: 14,
-        marginHorizontal: -16,
-        marginTop: -16,
-        marginBottom: 12,
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        minHeight: 54,
         borderBottomWidth: 1,
-        borderBottomColor: '#008A45',
+        borderBottomColor: '#EEF2F6',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        {/* Left: Hamburger & Profile block (Direct Clean Typography) */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Operations Menu"
-            onPress={() => setDrawerOpen(true)}
-            hitSlop={8}
-          >
-            <MaterialIcons name="menu" size={24} color="#FFFFFF" />
-          </Pressable>
+      {/* Left: Menu + Brand + Compact Profile Switcher */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Operations Menu"
+          onPress={() => setDrawerOpen(true)}
+          hitSlop={10}
+          style={({ pressed }) => ({ padding: 2, opacity: pressed ? 0.65 : 1 })}
+        >
+          <MaterialIcons name="menu" size={23} color="#0F172A" />
+        </Pressable>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Select profile"
-            onPress={() => router.push('/select-profile')}
-            style={{ flex: 1, paddingVertical: 2 }}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Image
+            source={brandMark}
+            style={{ width: 22, height: 22, resizeMode: 'contain' }}
+            accessibilityIgnoresInvertColors
+            alt="BGOS mark"
+          />
+          <Text
+            style={{
+              color: '#0B9042',
+              fontSize: 20,
+              fontWeight: '800',
+              letterSpacing: -0.6,
+            }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: -0.2 }} numberOfLines={1}>
-                {profileName}
-              </Text>
-              <MaterialIcons name="arrow-drop-down" size={22} color="#D1F0DE" />
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' }} />
-              <Text style={{ color: '#E8F8EF', fontSize: 11, fontWeight: '600' }}>
-                BGOS Verified • {shortId.replace('#', '') ? `${shortId.replace('#', '')} • ` : ''}{version}
-              </Text>
-            </View>
-          </Pressable>
+            bgos
+          </Text>
         </View>
 
-        {/* Right: Help & Notifications */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Help and Support"
-            onPress={() => router.push('/help')}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 4,
-              backgroundColor: 'rgba(255,255,255,0.12)',
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              borderRadius: 16,
-              opacity: pressed ? 0.75 : 1,
-            })}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Switch business profile"
+          onPress={() => router.push('/select-profile')}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 2,
+            backgroundColor: '#F1F5F9',
+            borderRadius: 14,
+            paddingLeft: 9,
+            paddingRight: 5,
+            paddingVertical: 4,
+            maxWidth: 138,
+            flexShrink: 1,
+            opacity: pressed ? 0.75 : 1,
+          })}
+        >
+          <Text
+            numberOfLines={1}
+            style={{ color: '#334155', fontSize: 11.5, fontWeight: '700', flexShrink: 1 }}
           >
-            <MaterialIcons name="help-outline" size={14} color="#FFFFFF" />
-            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Help</Text>
-          </Pressable>
+            {profileName}
+          </Text>
+          <MaterialIcons name="arrow-drop-down" size={16} color="#64748B" />
+        </Pressable>
+      </View>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Notifications"
-            onPress={() => router.push('/(tabs)/inbox')}
-            style={{ padding: 4 }}
-          >
-            <MaterialIcons name="notifications-none" size={22} color="#FFFFFF" />
-          </Pressable>
-        </View>
+      {/* Right: Clean Help + Notifications */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Help and Support"
+          onPress={() => router.push('/help')}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            backgroundColor: '#F0FDF4',
+            borderWidth: 1,
+            borderColor: '#BBF7D0',
+            paddingHorizontal: 9,
+            paddingVertical: 5,
+            borderRadius: 16,
+            opacity: pressed ? 0.75 : 1,
+          })}
+        >
+          <MaterialIcons name="help-outline" size={14} color="#0B9042" />
+          <Text style={{ color: '#0B9042', fontSize: 11.5, fontWeight: '700' }}>Help</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Notifications"
+          onPress={() => router.push('/(tabs)/inbox')}
+          hitSlop={8}
+          style={({ pressed }) => ({
+            width: 34,
+            height: 34,
+            borderRadius: 17,
+            backgroundColor: '#F8FAFC',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.65 : 1,
+          })}
+        >
+          <MaterialIcons name="notifications-none" size={20} color="#0F172A" />
+        </Pressable>
       </View>
     </View>
   );
@@ -840,10 +906,20 @@ export default function HomeScreen() {
 
   return (
     <Screen
-      customHeader={customHeader}
+      stickyHeader={homeTopBar}
       onRefresh={refresh}
       floatingAction={growthActionFloatingDock}
     >
+      {/* Dynamic local time greeting hero matching UI kit */}
+      <View style={{ paddingTop: 2, paddingBottom: 2 }}>
+        <Text style={{ fontSize: 21, fontWeight: '800', color: colors.ink, letterSpacing: -0.45 }}>
+          {greetingText}, {firstGreetingName} 👋
+        </Text>
+        <Text style={{ fontSize: 13, color: colors.muted, marginTop: 2 }}>
+          Here&apos;s what&apos;s happening with {profileName}.
+        </Text>
+      </View>
+
       <ErrorNotice
         message={workspace.error || inbox.error || bookings.error || leads.error || calls.error}
         retry={refresh}
@@ -855,13 +931,17 @@ export default function HomeScreen() {
       <HomeStoryBubblesStrip
         onAddPhotos={() => router.push('/(tabs)/photos')}
         onOpenPosts={() => router.push('/(tabs)/marketing')}
-        onOpenReviews={() => setReviewModalOpen(true)}
+        onOpenReviews={() => {
+          setReviewModalTab('single');
+          setReviewModalOpen(true);
+        }}
         onPhotoBoost={() => router.push('/(tabs)/photos')}
       />
 
-      {/* Grexa Benchmark: Urgent Review Engine Card (Screenshot 2 & 4) */}
+      {/* Urgent Review Engine Card */}
       <UrgentReviewCard
         businessName={profileName || workspace.data?.name || 'My Business'}
+        countryCode={workspace.data?.locale?.country}
         reviewUrl={
           gbpPlace.data?.place?.reviewUrl ||
           (gbpPlace.data?.place?.placeId
@@ -875,15 +955,28 @@ export default function HomeScreen() {
         thisWeekCount={thisWeekReviewsCount}
         lastReviewDate={lastReviewDate}
         onOpenQr={() => router.push('/qr-standee')}
-        onOpenBulk={() => setReviewModalOpen(true)}
+        onOpenBulk={() => {
+          setReviewModalTab('bulk');
+          setReviewModalOpen(true);
+        }}
         onOpenSeoUpdates={() => setSeoUpdatesOpen(true)}
       />
 
-      {/* Grexa Benchmark: Active GBP AI Agent Checklist Card (Screenshot 2) */}
+      {/* Active GBP AI Agent Checklist Card (Light UI + Live Stats) */}
       <GbpAiAgentHomeCard
         businessName={profileName || workspace.data?.name || 'My Business'}
+        publishedPhotosCount={publishedPhotosCount}
+        scheduledPhotosCount={scheduledPhotosCount}
+        newReviewsCount={thisWeekReviewsCount}
+        totalReviewsCount={reviews.data?.reviews?.length || 0}
+        replyRate={perf?.responseRate ?? null}
+        queuedInvitesCount={reviewQueue.data?.queue?.pending ?? 0}
+        sentInvitesCount={reviewQueue.data?.queue?.sent ?? 0}
+        scheduledPostsCount={scheduledPostsCount}
         onOpenSeoUpdates={() => setSeoUpdatesOpen(true)}
         onAddPhotos={() => router.push('/(tabs)/photos')}
+        onOpenReviews={() => router.push('/(tabs)/reviews')}
+        onOpenPosts={() => router.push('/(tabs)/marketing')}
       />
 
       <Card style={{padding:14, gap:10}}>
@@ -893,7 +986,10 @@ export default function HomeScreen() {
             {label:'Create post', icon:'auto-awesome', onPress:()=>router.push('/(tabs)/marketing?generate=1')},
             {label:'Add lead', icon:'person-add', onPress:()=>router.push('/(tabs)/leads?create=1')},
             {label:'Make call', icon:'dialpad', onPress:()=>router.push('/(tabs)/phone?open=dialpad')},
-            {label:'Request review', icon:'star-outline', onPress:()=>setReviewModalOpen(true)},
+            {label:'Request review', icon:'star-outline', onPress:()=>{
+              setReviewModalTab('single');
+              setReviewModalOpen(true);
+            }},
           ] as const).map(action=>(
             <Pressable key={action.label} accessibilityRole="button" onPress={action.onPress}
               style={({pressed})=>({flexGrow:1,flexBasis:compactActions?'46%':0,minHeight:52,alignItems:'center',justifyContent:'center',
@@ -1327,11 +1423,13 @@ export default function HomeScreen() {
         onRefresh={growthActions.refresh}
       />
 
-      {/* 1-Tap WhatsApp Google Review Request Sheet */}
+      {/* 1-Tap WhatsApp & Bulk 5/Day Google Review Request Sheet */}
       <ReviewRequestSheet
         visible={reviewModalOpen}
         onClose={() => setReviewModalOpen(false)}
-        businessName={profileName || workspace.data?.name || user?.name || 'Deepak Chandra'}
+        businessName={profileName || workspace.data?.name || user?.name || 'My Business'}
+        initialTab={reviewModalTab}
+        onQueueUpdated={() => reviewQueue.refresh()}
         reviewUrl={
           gbpPlace.data?.place?.reviewUrl ||
           (gbpPlace.data?.place?.placeId

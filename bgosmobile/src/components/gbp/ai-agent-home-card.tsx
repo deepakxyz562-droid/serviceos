@@ -1,16 +1,28 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { colors } from '../ui';
 
 interface AiAgentHomeCardProps {
   businessName?: string;
+  seoUpdatesCount?: number;
+  publishedPhotosCount?: number;
+  scheduledPhotosCount?: number;
+  newReviewsCount?: number;
+  totalReviewsCount?: number;
+  replyRate?: number | null;
+  queuedInvitesCount?: number;
+  sentInvitesCount?: number;
+  scheduledPostsCount?: number;
   onOpenSeoUpdates: () => void;
   onAddPhotos: () => void;
+  onOpenReviews?: () => void;
+  onOpenPosts?: () => void;
 }
 
 /**
- * Top Circular Action Story Bubbles matching Grexa Screenshot 2:
+ * Top Circular Action Story Bubbles:
  * [Add Photos] [Editing Posts] [Reviews Mgmt] [Photo Boost]
  */
 export function HomeStoryBubblesStrip({
@@ -87,66 +99,102 @@ export function HomeStoryBubblesStrip({
 }
 
 /**
- * Active "GBP AI Agent" Checklist Card matching Grexa Benchmark Screenshot 2
+ * Active "GBP AI Agent" Checklist Card — Light BGOS UI + live workspace stats
  */
 export function GbpAiAgentHomeCard({
-  businessName = 'Delhi Farm',
+  businessName = 'My Business',
+  seoUpdatesCount = 8,
+  publishedPhotosCount = 0,
+  scheduledPhotosCount = 0,
+  newReviewsCount = 0,
+  totalReviewsCount = 0,
+  replyRate = null,
+  queuedInvitesCount = 0,
+  sentInvitesCount = 0,
+  scheduledPostsCount = 0,
   onOpenSeoUpdates,
   onAddPhotos,
+  onOpenReviews,
+  onOpenPosts,
 }: AiAgentHomeCardProps) {
   const router = useRouter();
+
+  const totalInvites = queuedInvitesCount + sentInvitesCount;
+  const reviewSummaryParts: string[] = [];
+  if (totalReviewsCount > 0) {
+    reviewSummaryParts.push(`${totalReviewsCount} total`);
+    if (replyRate != null) reviewSummaryParts.push(`${Math.round(replyRate)}% replied`);
+  } else {
+    reviewSummaryParts.push('Send invite links to start collecting reviews');
+  }
+  if (totalInvites > 0) {
+    reviewSummaryParts.push(
+      queuedInvitesCount > 0
+        ? `${queuedInvitesCount} scheduled`
+        : `${sentInvitesCount} invite${sentInvitesCount === 1 ? '' : 's'} sent`,
+    );
+  }
 
   const checklist = [
     {
       id: 'c1',
       title: 'GBP Profile SEO',
-      subtitle: '8 Profile SEO updates',
-      badge: '⚡ 8 New Updates',
-      badgeType: 'purple',
+      subtitle: `${seoUpdatesCount} automated SEO checks & updates`,
+      badge: `⚡ ${seoUpdatesCount} Active`,
+      badgeType: 'purple' as const,
       icon: 'tune' as const,
-      iconColor: '#3B82F6',
-      iconBg: '#1E293B',
+      iconColor: '#6440CD',
+      iconBg: '#F2EDFD',
       onPress: onOpenSeoUpdates,
     },
     {
       id: 'c2',
-      title: 'GBP Posting Configured',
-      subtitle: 'First post will be published in 1 day',
+      title: 'GBP Posting Autopilot',
+      subtitle:
+        scheduledPostsCount > 0
+          ? `${scheduledPostsCount} scheduled post${scheduledPostsCount === 1 ? '' : 's'} in queue`
+          : `Create or schedule posts for ${businessName}`,
       icon: 'schedule' as const,
-      iconColor: '#F59E0B',
-      iconBg: '#1E293B',
-      onPress: () => router.push('/(tabs)/marketing'),
+      iconColor: '#B45309',
+      iconBg: '#FEF3C7',
+      onPress: onOpenPosts || (() => router.push('/(tabs)/marketing')),
     },
     {
       id: 'c3',
-      title: '0 Photos/Videos Published',
-      subtitle: '1 scheduled drip active',
-      badge: 'Needs action',
-      badgeType: 'red',
+      title: `${publishedPhotosCount} Photos/Videos Live`,
+      subtitle:
+        scheduledPhotosCount > 0
+          ? `${scheduledPhotosCount} scheduled to publish`
+          : 'Upload photos or short videos for steady weekly posting',
+      badge: publishedPhotosCount === 0 && scheduledPhotosCount === 0 ? 'Add media' : undefined,
+      badgeType: 'amber' as const,
       icon: 'photo-library' as const,
-      iconColor: '#10B981',
-      iconBg: '#1E293B',
+      iconColor: colors.brandDark,
+      iconBg: colors.brandSoft,
       onPress: onAddPhotos,
     },
     {
       id: 'c4',
-      title: '0 New Reviews',
-      subtitle: 'Replied 100% · 3 review links sent',
+      title: `${newReviewsCount} New Reviews This Week`,
+      subtitle: reviewSummaryParts.join(' · '),
       icon: 'star' as const,
-      iconColor: '#F59E0B',
-      iconBg: '#1E293B',
-      onPress: () => router.push('/(tabs)/reviews'),
+      iconColor: '#D97706',
+      iconBg: '#FFFBEB',
+      onPress: onOpenReviews || (() => router.push('/(tabs)/reviews')),
     },
     {
       id: 'c5',
       title: 'Performance Analysis',
-      subtitle: 'Expect results in 3-4 weeks',
+      subtitle: 'Live Google Search views, calls & direction clicks',
       icon: 'bar-chart' as const,
-      iconColor: '#3B82F6',
-      iconBg: '#1E293B',
+      iconColor: '#0284C7',
+      iconBg: '#E0F2FE',
       onPress: () => router.push('/(tabs)/growth'),
     },
   ];
+
+  const hasScheduledMedia = scheduledPhotosCount > 0;
+  const hasAnyMedia = publishedPhotosCount > 0 || scheduledPhotosCount > 0;
 
   return (
     <View style={styles.card}>
@@ -154,11 +202,13 @@ export function GbpAiAgentHomeCard({
       <View style={styles.agentHeader}>
         <View style={styles.agentInfoRow}>
           <View style={styles.agentAvatarCircle}>
-            <MaterialIcons name="smart-toy" size={20} color="#3B82F6" />
+            <MaterialIcons name="smart-toy" size={20} color={colors.brand} />
           </View>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.agentTitle}>GBP AI Agent</Text>
-            <Text style={styles.agentSub}>Continuously optimizing your local rank</Text>
+            <Text style={styles.agentSub} numberOfLines={1}>
+              Continuously optimizing {businessName}
+            </Text>
           </View>
         </View>
 
@@ -168,33 +218,56 @@ export function GbpAiAgentHomeCard({
         </View>
       </View>
 
-      {/* ── Banner: 1 Photo Left ── */}
-      <View style={styles.photoAlertBanner}>
+      {/* ── Media Readiness Banner (Honest Live Count) ── */}
+      <View style={[styles.photoBanner, !hasAnyMedia && styles.photoBannerAttention]}>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={styles.photoAlertTitle}>
-            <Text style={{ color: '#EF4444', fontWeight: '800' }}>1 Photo</Text> left
+          <Text style={styles.photoBannerTitle}>
+            {hasScheduledMedia ? (
+              <>
+                <Text style={{ color: colors.brandDark, fontWeight: '800' }}>
+                  {scheduledPhotosCount} {scheduledPhotosCount === 1 ? 'media item' : 'media items'}
+                </Text>{' '}
+                scheduled to publish
+              </>
+            ) : publishedPhotosCount > 0 ? (
+              <>
+                <Text style={{ color: colors.brandDark, fontWeight: '800' }}>
+                  {publishedPhotosCount} live
+                </Text>{' '}
+                on Google Business Profile
+              </>
+            ) : (
+              <>
+                <Text style={{ color: '#B45309', fontWeight: '800' }}>No media queued</Text> yet
+              </>
+            )}
           </Text>
-          <Text style={styles.photoAlertSub}>Profile stays fresh &amp; active for 1 more week</Text>
+          <Text style={styles.photoBannerSub}>
+            {hasScheduledMedia
+              ? 'BGOS keeps your Google profile active automatically'
+              : 'Upload photos or videos with AI-generated titles & tags'}
+          </Text>
         </View>
 
         <Pressable
           accessibilityRole="button"
           onPress={onAddPhotos}
-          style={styles.addPhotosMiniBtn}
+          style={({ pressed }) => [styles.addPhotosMiniBtn, pressed && { opacity: 0.9 }]}
         >
-          <Text style={styles.addPhotosMiniBtnText}>Add Photos</Text>
+          <Text style={styles.addPhotosMiniBtnText}>Add Media</Text>
         </Pressable>
       </View>
 
       {/* ── Checklist Rows ── */}
       <View style={styles.checklistColumn}>
-        {checklist.map((item) => (
+        {checklist.map((item, idx) => (
           <Pressable
             key={item.id}
             accessibilityRole="button"
             onPress={item.onPress}
             style={({ pressed }) => [
               styles.checklistItem,
+              idx === checklist.length - 1 && { borderBottomWidth: 0, paddingBottom: 2 },
               pressed && { opacity: 0.8 },
             ]}
           >
@@ -203,19 +276,19 @@ export function GbpAiAgentHomeCard({
             </View>
 
             <View style={{ flex: 1, gap: 2 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <Text style={styles.itemTitle}>{item.title}</Text>
                 {item.badge ? (
                   <View
                     style={[
                       styles.itemBadge,
-                      item.badgeType === 'purple' ? styles.purpleBadge : styles.redBadge,
+                      item.badgeType === 'purple' ? styles.purpleBadge : styles.amberBadge,
                     ]}
                   >
                     <Text
-                      style={[
-                        item.badgeType === 'purple' ? styles.purpleBadgeText : styles.redBadgeText,
-                      ]}
+                      style={
+                        item.badgeType === 'purple' ? styles.purpleBadgeText : styles.amberBadgeText
+                      }
                     >
                       {item.badge}
                     </Text>
@@ -225,7 +298,7 @@ export function GbpAiAgentHomeCard({
               <Text style={styles.itemSub}>{item.subtitle}</Text>
             </View>
 
-            <MaterialIcons name="chevron-right" size={18} color="#64748B" />
+            <MaterialIcons name="chevron-right" size={18} color={colors.muted} />
           </Pressable>
         ))}
       </View>
@@ -265,93 +338,106 @@ const styles = StyleSheet.create({
   storyTitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.ink,
     textAlign: 'center',
   },
   card: {
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.line,
     gap: 12,
     marginVertical: 4,
+    shadowColor: '#070B2D',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   agentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
   agentInfoRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
   agentAvatarCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#1E293B',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#C6F6D5',
   },
   agentTitle: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: colors.ink,
   },
   agentSub: {
-    fontSize: 11,
-    color: '#94A3B8',
+    fontSize: 11.5,
+    color: colors.muted,
   },
   activePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    gap: 5,
+    backgroundColor: colors.brandSoft,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderColor: '#A7F3D0',
   },
   activeDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#10B981',
+    backgroundColor: colors.brand,
   },
   activePillText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#10B981',
+    color: colors.brandDark,
   },
-  photoAlertBanner: {
+  photoBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1E293B',
+    gap: 10,
+    backgroundColor: '#F3F8F5',
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#D5E9DD',
   },
-  photoAlertTitle: {
+  photoBannerAttention: {
+    backgroundColor: colors.note,
+    borderColor: colors.noteBorder,
+  },
+  photoBannerTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#F8FAFC',
+    color: colors.ink,
   },
-  photoAlertSub: {
+  photoBannerSub: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: colors.muted,
+    lineHeight: 15,
   },
   addPhotosMiniBtn: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.brand,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 7,
+    borderRadius: 9,
   },
   addPhotosMiniBtnText: {
     fontSize: 11.5,
@@ -359,56 +445,56 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   checklistColumn: {
-    gap: 8,
-    marginTop: 4,
+    gap: 4,
+    marginTop: 2,
   },
   checklistItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: '#EEF2F6',
     gap: 10,
   },
   itemIconCircle: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   itemTitle: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#F8FAFC',
+    color: colors.ink,
   },
   itemSub: {
-    fontSize: 11,
-    color: '#94A3B8',
+    fontSize: 11.5,
+    color: colors.muted,
   },
   itemBadge: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   purpleBadge: {
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    backgroundColor: colors.aiPurpleSoft,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.4)',
+    borderColor: '#DDD6FE',
   },
   purpleBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#C084FC',
+    color: colors.aiPurple,
   },
-  redBadge: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+  amberBadge: {
+    backgroundColor: colors.note,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.4)',
+    borderColor: colors.noteBorder,
   },
-  redBadgeText: {
+  amberBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#F87171',
+    color: '#B45309',
   },
 });

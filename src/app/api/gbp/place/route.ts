@@ -4,25 +4,21 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import {
+  PLACE_PAYLOAD_CACHE,
+  invalidatePlacePayloadCacheForTenant,
+  resolveGoogleConnectionState,
+} from '@/lib/social/google-connection-state';
+import {
   fetchGoogleBusinessPlaceDetails,
   fetchGoogleBusinessPerformanceMetrics,
 } from '@/lib/social/adapters/googlebusiness';
 
 export const dynamic = 'force-dynamic';
 
-const PLACE_PAYLOAD_CACHE = new Map<string, { data: any; expiresAt: number }>();
 const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
 
 export function invalidatePlacePayloadCache(tenantId?: string) {
-  if (!tenantId) {
-    PLACE_PAYLOAD_CACHE.clear();
-    return;
-  }
-  for (const key of PLACE_PAYLOAD_CACHE.keys()) {
-    if (key.startsWith(`${tenantId}:`)) {
-      PLACE_PAYLOAD_CACHE.delete(key);
-    }
-  }
+  invalidatePlacePayloadCacheForTenant(tenantId);
 }
 
 /**
@@ -130,6 +126,7 @@ export async function GET(request: NextRequest) {
     };
 
     const googleAccount = await prepareGoogleAccount(user.tenantId, requestedLocationId);
+    const { connectionState } = await resolveGoogleConnectionState(user.tenantId, googleAccount);
 
     if (!googleAccount) {
       const { score, missing } = computeCompleteness(
@@ -142,6 +139,7 @@ export async function GET(request: NextRequest) {
 
       const disconnectedPayload = {
         isConnected: false,
+        connectionState,
         place: null,
         tenantFallback: {
           name: fallbackName,
@@ -177,11 +175,9 @@ export async function GET(request: NextRequest) {
         },
       };
 
-      PLACE_PAYLOAD_CACHE.set(cacheKey, { data: disconnectedPayload, expiresAt: Date.now() + CACHE_TTL_MS });
-
       return NextResponse.json(disconnectedPayload, {
         headers: {
-          'Cache-Control': 'private, max-age=60, stale-while-revalidate=180',
+          'Cache-Control': 'no-store, max-age=0',
         },
       });
     }
@@ -265,6 +261,7 @@ export async function GET(request: NextRequest) {
 
     const connectedPayload = {
       isConnected: true,
+      connectionState,
       isPendingApproval,
       googleEmail,
       googleName,

@@ -11,10 +11,19 @@ import {
 } from '@/lib/pwa-install';
 
 const DISMISS_KEY = 'fieseros_install_dismissed';
+const BGOS_DISMISS_KEY = 'bgos_install_dismissed';
 const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 // Separate dismissal for the iOS instructions banner so Android users (who
 // never see it) and iOS users don't share the same dismissal state.
 const IOS_DISMISS_KEY = 'fieseros_ios_install_dismissed';
+const BGOS_IOS_DISMISS_KEY = 'bgos_ios_install_dismissed';
+
+function detectBgosBrand(): boolean {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+  if (document.documentElement.classList.contains('bgos-theme')) return true;
+  if (window.location.pathname.startsWith('/bgos-home')) return true;
+  return new URLSearchParams(window.location.search).get('product') === 'bgos';
+}
 
 function isDismissedRecently(key: string): boolean {
   try {
@@ -83,26 +92,44 @@ export default function InstallPrompt() {
   const [visible, setVisible] = useState(false);
   const [installed, setInstalled] = useState(false);
   const [iosVisible, setIosVisible] = useState(false);
+  const [isBgos, setIsBgos] = useState(false);
+
+  const brandName = isBgos ? 'BGOS' : 'Fieseros';
+  const brandIcon = isBgos ? '/bgos/icon-192.png' : '/icon-192.png';
+  const dismissKey = isBgos ? BGOS_DISMISS_KEY : DISMISS_KEY;
+  const iosDismissKey = isBgos ? BGOS_IOS_DISMISS_KEY : IOS_DISMISS_KEY;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    setIsBgos(detectBgosBrand());
+
+    const observer = new MutationObserver(() => {
+      setIsBgos(detectBgosBrand());
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
 
     // If already installed (standalone display), never show either banner.
     if (isStandaloneDisplay()) {
       setInstalled(true);
-      return;
+      return () => observer.disconnect();
     }
 
     let showTimer: number | undefined;
     let iosTimer: number | undefined;
 
     const handleBeforeInstallPrompt = (e: Event) => {
+      const bgosActive = detectBgosBrand();
+      setIsBgos(bgosActive);
+      const activeDismissKey = bgosActive ? BGOS_DISMISS_KEY : DISMISS_KEY;
       const promptEvent = e as BeforeInstallPromptEvent;
 
       // Only suppress Chrome's native mini-infobar if we're actually going
       // to show our custom banner. If the user dismissed recently, let
       // Chrome handle it natively (avoids the "Banner not shown" warning).
-      const dismissed = isDismissedRecently(DISMISS_KEY);
+      const dismissed = isDismissedRecently(activeDismissKey);
       if (!dismissed) {
         e.preventDefault();
       }
@@ -119,19 +146,20 @@ export default function InstallPrompt() {
     };
 
     const handleAppInstalled = () => {
+      const bgosActive = detectBgosBrand();
       setInstalled(true);
       setVisible(false);
       setIosVisible(false);
       setLocalDeferredPrompt(null);
       publishDeferredPrompt(null);
-      toast.success('Fieseros installed', {
+      toast.success(`${bgosActive ? 'BGOS' : 'Fieseros'} installed`, {
         description: 'You can now launch it from your home screen.',
       });
     };
 
     // iOS path: no beforeinstallprompt event, so after a short delay show the
     // manual instructions banner (unless already dismissed recently).
-    if (isIOS() && !isDismissedRecently(IOS_DISMISS_KEY)) {
+    if (isIOS() && !isDismissedRecently(detectBgosBrand() ? BGOS_IOS_DISMISS_KEY : IOS_DISMISS_KEY)) {
       iosTimer = window.setTimeout(() => setIosVisible(true), 2500);
     }
 
@@ -139,6 +167,7 @@ export default function InstallPrompt() {
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
+      observer.disconnect();
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
       if (showTimer) window.clearTimeout(showTimer);
@@ -152,10 +181,10 @@ export default function InstallPrompt() {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
       if (choice.outcome === 'accepted') {
-        toast.success('Installing Fieseros…');
+        toast.success(`Installing ${brandName}…`);
       } else {
         // User dismissed the native prompt — honor it as a 7-day dismissal.
-        markDismissed(DISMISS_KEY);
+        markDismissed(dismissKey);
       }
     } catch (err) {
       console.error('Install prompt failed:', err);
@@ -165,19 +194,19 @@ export default function InstallPrompt() {
       publishDeferredPrompt(null);
       setVisible(false);
     }
-  }, [deferredPrompt]);
+  }, [brandName, deferredPrompt, dismissKey]);
 
   const handleDismiss = useCallback(() => {
-    markDismissed(DISMISS_KEY);
+    markDismissed(dismissKey);
     setVisible(false);
     setLocalDeferredPrompt(null);
     publishDeferredPrompt(null);
-  }, []);
+  }, [dismissKey]);
 
   const handleIosDismiss = useCallback(() => {
-    markDismissed(IOS_DISMISS_KEY);
+    markDismissed(iosDismissKey);
     setIosVisible(false);
-  }, []);
+  }, [iosDismissKey]);
 
   if (installed) return null;
 
@@ -187,24 +216,24 @@ export default function InstallPrompt() {
       <div
         className="fixed left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 bottom-[calc(4rem+1rem+env(safe-area-inset-bottom,0px))] lg:bottom-4"
         role="dialog"
-        aria-label="Install Fieseros"
+        aria-label={`Install ${brandName}`}
         aria-live="polite"
       >
         <div className="relative flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xl shadow-slate-900/10">
           <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-emerald-50 ring-1 ring-emerald-100">
             <Image
-              src="/icon-192.png"
-              alt="Fieseros"
+              src={brandIcon}
+              alt={brandName}
               width={28}
               height={28}
-              priority
+              loading="eager"
               unoptimized
             />
           </div>
 
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-slate-900">
-              Install Fieseros
+              Install {brandName}
             </h3>
             <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
               Add to your device for quick access and offline work.
@@ -251,24 +280,24 @@ export default function InstallPrompt() {
       <div
         className="fixed left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 bottom-[calc(4rem+1rem+env(safe-area-inset-bottom,0px))] lg:bottom-4"
         role="dialog"
-        aria-label="Add Fieseros to Home Screen"
+        aria-label={`Add ${brandName} to Home Screen`}
         aria-live="polite"
       >
         <div className="relative flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xl shadow-slate-900/10">
           <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-emerald-50 ring-1 ring-emerald-100">
             <Image
-              src="/icon-192.png"
-              alt="Fieseros"
+              src={brandIcon}
+              alt={brandName}
               width={28}
               height={28}
-              priority
+              loading="eager"
               unoptimized
             />
           </div>
 
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-slate-900">
-              Add Fieseros to Home Screen
+              Add {brandName} to Home Screen
             </h3>
             <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
               For the full app experience on iPhone/iPad:

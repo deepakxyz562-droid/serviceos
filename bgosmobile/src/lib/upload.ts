@@ -1,40 +1,273 @@
+import { Platform } from 'react-native';
 import { API_BASE_URL } from './constants';
-import { ApiError } from './api';
-import { getToken } from './auth';
+import { ApiError, refreshSession } from './api';
+import { getToken, sessionRevision } from './auth';
 
 export type PendingUpload = {
   uri: string;
   name: string;
   mimeType: string;
+  file?: unknown;
+  fileSize?: number;
+  mediaType?: 'image' | 'video';
 };
 
+export interface UploadStorageOptions {
+  folder?: string;
+  visibility?: 'public' | 'private';
+  retryAuth?: boolean;
+  timeoutMs?: number;
+  onProgress?: (percent: number) => void;
+}
+
+const EXT_MIME_MAP: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  heic: 'image/heic',
+  heif: 'image/heif',
+  avif: 'image/avif',
+  mp4: 'video/mp4',
+  m4v: 'video/x-m4v',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  pdf: 'application/pdf',
+};
+
+export function normalizePendingUpload(input: PendingUpload, index = 0): PendingUpload {
+  const rawUri = input.uri || '';
+  const cleanNameBase = (input.name || '').trim() || rawUri.split('/').pop()?.split('?')[0] || '';
+  let mime = (input.mimeType || '').trim().toLowerCase();
+
+  if (mime === 'image/jpg') mime = 'image/jpeg';
+  if (mime === 'image') mime = 'image/jpeg';
+  if (mime === 'video') mime = 'video/mp4';
+
+  const extFromName = cleanNameBase.includes('.') ? cleanNameBase.split('.').pop()?.toLowerCase() || '' : '';
+  const extFromUri = rawUri.includes('.') && !rawUri.startsWith('data:')
+    ? rawUri.split('?')[0].split('.').pop()?.toLowerCase() || ''
+    : '';
+  const detectedExt = extFromName || extFromUri;
+
+  if (!mime || mime === 'application/octet-stream') {
+    if (detectedExt && EXT_MIME_MAP[detectedExt]) {
+      mime = EXT_MIME_MAP[detectedExt];
+    } else if (input.mediaType === 'video') {
+      mime = 'video/mp4';
+    } else {
+      mime = 'image/jpeg';
+    }
+  }
+
+  const defaultExt =
+    mime === 'video/quicktime'
+      ? 'mov'
+      : mime.startsWith('video/')
+        ? 'mp4'
+        : mime === 'image/png'
+          ? 'png'
+          : mime === 'image/webp'
+            ? 'webp'
+            : 'jpg';
+
+  const safeName = cleanNameBase
+    ? cleanNameBase.includes('.')
+      ? cleanNameBase
+      : `${cleanNameBase}.${defaultExt}`
+    : `${mime.startsWith('video/') ? 'video' : 'photo'}-${Date.now()}-${index}.${defaultExt}`;
+
+  return {
+    ...input,
+    name: safeName,
+    mimeType: mime,
+    mediaType: mime.startsWith('video/') ? 'video' : 'image',
+  };
+}
+
 /**
- * Uploads a local device file to BGOS storage via the authenticated multipart
- * endpoint (POST /api/omnichannel/upload — allowed for any operator account)
- * and returns the public URL that downstream APIs (e.g. /api/social/photos,
- * which hands sourceUrl to Google) can consume.
+ * Native React Native upload via XMLHttpRequest.
+ *
+ * Expo SDK 57 replaces global `fetch()` with Winter `expo/fetch`, whose
+ * `convertFormDataAsync()` throws `Unsupported FormDataPart implementation`
+ * on RN `{ uri, name, type }` objects. XMLHttpRequest routes directly through
+ * React Native's NetworkingModule, supporting native `file://` and `content://`
+ * streaming multipart parts and accurate upload progress events without memory copies.
  */
-export async function uploadFileToStorage(file: PendingUpload): Promise<string> {
+function uploadNativeViaXhr(params: {
+  url: string;
+  token: string | null;
+  file: PendingUpload;
+  folder: string;
+  visibility: 'public' | 'private';
+  timeoutMs: number;
+  onProgress?: (percent: number) => void;
+}): Promise<{ status: number; bodyText: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const form = new FormData();
+    form.append('file', {
+      uri: params.file.uri,
+      name: params.file.name,
+      type: params.file.mimeType || 'image/jpeg',
+    } as any);
+    form.append('folder', params.folder);
+    form.append('visibility', params.visibility);
+
+    xhr.open('POST', params.url);
+    if (params.token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${params.token}`);
+    }
+    xhr.timeout = params.timeoutMs;
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        const pct = Math.min(99, Math.max(1, Math.round((event.loaded / event.total) * 100)));
+        params.onProgress?.(pct);
+      }
+    };
+
+    xhr.onload = () => {
+      resolve({ status: xhr.status || 500, bodyText: xhr.responseText || '' });
+    };
+
+    xhr.onerror = () => {
+      reject(new ApiError('Network error while uploading media. Check your connection and try again.', 0));
+    };
+
+    xhr.ontimeout = () => {
+      reject(new ApiError('The upload timed out. Please try again on a stronger connection.', 408));
+    };
+
+    xhr.onabort = () => {
+      reject(new ApiError('The upload was cancelled.', 499));
+    };
+
+    xhr.send(form);
+  });
+}
+
+/**
+ * Uploads a local device file (image, video, or PDF) to BGOS storage via the
+ * authenticated multipart endpoint (POST /api/omnichannel/upload) and returns
+ * a public URL suitable for Google Business Profile & social publishing.
+ */
+export async function uploadFileToStorage(
+  fileInput: PendingUpload,
+  options: UploadStorageOptions = {},
+): Promise<string> {
+  const file = normalizePendingUpload(fileInput);
+  const {
+    folder = 'gbp-media',
+    visibility = 'public',
+    retryAuth = true,
+    timeoutMs = 120000,
+    onProgress,
+  } = options;
+
+  if (!file.uri && !file.file) {
+    throw new ApiError('Selected file could not be read from device.', 400);
+  }
+
+  const revision = sessionRevision();
   const token = await getToken();
+  const uploadUrl = `${API_BASE_URL}/api/omnichannel/upload`;
+
+  onProgress?.(2);
+
+  if (Platform.OS !== 'web') {
+    const result = await uploadNativeViaXhr({
+      url: uploadUrl,
+      token,
+      file,
+      folder,
+      visibility,
+      timeoutMs,
+      onProgress,
+    });
+
+    if (result.status === 401 && retryAuth && revision === sessionRevision()) {
+      const latest = await getToken();
+      if (!latest || latest === token) {
+        await refreshSession();
+      }
+      return uploadFileToStorage(file, { ...options, retryAuth: false });
+    }
+
+    let parsed: { url?: string; error?: string; message?: string } = {};
+    try {
+      parsed = result.bodyText ? JSON.parse(result.bodyText) : {};
+    } catch {
+      parsed = {};
+    }
+
+    if (result.status < 200 || result.status >= 300) {
+      throw new ApiError(
+        parsed.error || parsed.message || `Upload failed (${result.status}). Please try again.`,
+        result.status,
+        parsed,
+      );
+    }
+
+    if (!parsed.url) {
+      throw new ApiError('Upload did not return a file URL.', 502);
+    }
+
+    onProgress?.(100);
+    return parsed.url;
+  }
+
+  // Web platform: use standard Blob / File FormData + fetch
   const form = new FormData();
-  // React Native FormData part — { uri, name, type } shape.
-  form.append('file', { uri: file.uri, name: file.name, type: file.mimeType } as any);
+  let webBlob: Blob | null = null;
+  if (file.file && typeof (file.file as Blob).arrayBuffer === 'function') {
+    webBlob = file.file as Blob;
+  } else if (file.uri) {
+    const blobRes = await fetch(file.uri);
+    webBlob = await blobRes.blob();
+  }
+  if (!webBlob) {
+    throw new ApiError('Could not read the selected file on this browser.', 400);
+  }
+  if (typeof File !== 'undefined' && !(webBlob instanceof File)) {
+    const typedFile = new File([webBlob], file.name, {
+      type: webBlob.type || file.mimeType || 'image/jpeg',
+    });
+    form.append('file', typedFile, file.name);
+  } else {
+    form.append('file', webBlob, file.name);
+  }
+
+  form.append('folder', folder);
+  form.append('visibility', visibility);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}/api/omnichannel/upload`, {
+    onProgress?.(35);
+    res = await fetch(uploadUrl, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       body: form,
       signal: controller.signal,
     });
   } catch (err) {
-    if (controller.signal.aborted) throw new ApiError('The upload timed out. Please try again.', 408);
+    if (controller.signal.aborted) {
+      throw new ApiError('The upload timed out. Please try again on a stronger connection.', 408);
+    }
     throw err;
   } finally {
     clearTimeout(timeout);
+  }
+
+  if (res.status === 401 && retryAuth && revision === sessionRevision()) {
+    const latest = await getToken();
+    if (!latest || latest === token) {
+      await refreshSession();
+    }
+    return uploadFileToStorage(file, { ...options, retryAuth: false });
   }
 
   if (!res.ok) {
@@ -48,5 +281,6 @@ export async function uploadFileToStorage(file: PendingUpload): Promise<string> 
 
   const data = (await res.json()) as { url?: string };
   if (!data?.url) throw new ApiError('Upload did not return a file URL.', 502);
+  onProgress?.(100);
   return data.url;
 }

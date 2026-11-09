@@ -1,5 +1,5 @@
 import { pendingCountPath } from '../../src/hooks/use-pending-replies';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -21,7 +21,7 @@ import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { relativeDate, formatReviewTime } from '../../src/components/gbp/bits';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
-import type { GbpPlaceResult, Review } from '../../src/components/gbp/types';
+import type { GbpConnectionState, GbpPlaceResult, Review } from '../../src/components/gbp/types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -29,6 +29,8 @@ interface DiscoverResponse {
   email: string;
   phone: string;
   version: string;
+  count?: number;
+  hasConnectedGbp?: boolean;
   activeProfile?: { id: string; name: string; shortId: string; initial: string };
 }
 
@@ -59,7 +61,12 @@ const DEFAULT_KEYWORDS_FALLBACK: KeywordUsage[] = [
 
 function parseReply(review: Review): ParsedReply | null {
   try {
-    const parsed = JSON.parse(review.responseJson || '{}');
+    const parsed =
+      typeof review.responseJson === 'string'
+        ? JSON.parse(review.responseJson || '{}')
+        : review.responseJson && typeof review.responseJson === 'object'
+          ? (review.responseJson as Record<string, any>)
+          : {};
     const text = parsed && (parsed.text || parsed.replyText);
     if (text) {
       return {
@@ -293,8 +300,9 @@ export default function ReviewRepliesScreen() {
     if (all.length > 0) {
       all.forEach((r, idx) => {
         let bucket = idx % 5;
-        if (r.createdAt) {
-          const d = new Date(r.createdAt);
+        const revDate = r.createTime || r.publishedAt || r.createdAt;
+        if (revDate) {
+          const d = new Date(revDate);
           if (!isNaN(d.getTime())) {
             bucket = Math.min(4, Math.floor((d.getDate() - 1) / 7));
           }
@@ -364,29 +372,99 @@ export default function ReviewRepliesScreen() {
   }
 
   const [syncBusy, setSyncBusy] = useState(false);
+  const autoSyncedProfileRef = useRef<string | null>(null);
 
+  const rawConnected =
+    gbpPlace.data?.isConnected ??
+    (discover.data?.hasConnectedGbp && discover.data?.count === 1 ? true : undefined);
 
-  async function handleSyncGoogle() {
-    if (syncBusy) return;
-    setSyncBusy(true);
-    setLocalError(null);
-    setNotice('');
-    try {
-      const res = await apiRequest<{ success: boolean; newReviewsCount: number; totalFetched: number; message: string }>('/api/reviews/sync-google', {
-        method: 'POST',
-      });
-      const syncMsg = res.message || `Synced ${res.totalFetched || 0} reviews from Google Maps.`;
-      setNotice(syncMsg);
-      Alert.alert('Google Sync Completed', syncMsg);
-      await Promise.all([reviews.refresh(),pendingFeed.refresh(),pendingCount.refresh()]);
-    } catch (err: unknown) {
-      const syncErr = (err as Error).message || 'Failed to sync Google reviews.';
-      setLocalError(syncErr);
-      Alert.alert('Sync Error', syncErr);
-    } finally {
-      setSyncBusy(false);
+  const connectionState: GbpConnectionState =
+    gbpPlace.data?.connectionState ??
+    (rawConnected === true
+      ? 'connected'
+      : discover.data?.hasConnectedGbp
+        ? 'select_profile'
+        : 'not_connected');
+
+  const profileSyncKey =
+    activeProfile?.id ||
+    gbpPlace.data?.place?.locationId ||
+    (connectionState === 'connected' ? 'connected-default' : '');
+
+  const effectivePendingTotal =
+    pendingFeed.data?.pagination?.total ??
+    pendingCount.data?.total ??
+    (reviews.data ? pending.length : undefined);
+
+  const handleSyncGoogle = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (syncBusy) return;
+      const silent = Boolean(opts?.silent);
+      setSyncBusy(true);
+      if (!silent) {
+        setLocalError(null);
+        setNotice('');
+      }
+      try {
+        const res = await apiRequest<{
+          success: boolean;
+          newReviewsCount: number;
+          totalFetched: number;
+          message: string;
+        }>('/api/reviews/sync-google', {
+          method: 'POST',
+        });
+        const syncMsg = res.message || `Synced ${res.totalFetched || 0} reviews from Google Maps.`;
+        if (!silent || (res.totalFetched || 0) > 0 || (res.newReviewsCount || 0) > 0) {
+          setNotice(syncMsg);
+        }
+        if (!silent) {
+          Alert.alert('Google Sync Completed', syncMsg);
+        }
+        await Promise.all([
+          reviews.refresh(),
+          pendingFeed.refresh(),
+          pendingCount.refresh(),
+          gbpPlace.refresh(),
+        ]);
+      } catch (err: unknown) {
+        const syncErr = (err as Error).message || 'Failed to sync Google reviews.';
+        setLocalError(syncErr);
+        if (!silent) {
+          Alert.alert('Sync Error', syncErr);
+        }
+      } finally {
+        setSyncBusy(false);
+      }
+    },
+    [syncBusy, reviews, pendingFeed, pendingCount, gbpPlace],
+  );
+
+  useEffect(() => {
+    if (
+      !profileSyncKey ||
+      connectionState !== 'connected' ||
+      reviews.loading ||
+      !reviews.data ||
+      reviews.error ||
+      all.length > 0 ||
+      syncBusy ||
+      autoSyncedProfileRef.current === profileSyncKey
+    ) {
+      return;
     }
-  }
+    autoSyncedProfileRef.current = profileSyncKey;
+    void handleSyncGoogle({ silent: true });
+  }, [
+    profileSyncKey,
+    connectionState,
+    reviews.loading,
+    reviews.data,
+    reviews.error,
+    all.length,
+    syncBusy,
+    handleSyncGoogle,
+  ]);
 
   async function handleShareReply(text: string) {
     try {
@@ -561,10 +639,10 @@ export default function ReviewRepliesScreen() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 4,
-                backgroundColor: '#25D366',
-                paddingHorizontal: 10,
+                backgroundColor: '#0B9042',
+                paddingHorizontal: 11,
                 paddingVertical: 6,
-                borderRadius: 20,
+                borderRadius: 18,
                 opacity: pressed ? 0.8 : 1,
               })}
             >
@@ -577,18 +655,18 @@ export default function ReviewRepliesScreen() {
               accessibilityLabel="Open Reply Settings"
               onPress={() => router.push('/reply-settings')}
               style={({ pressed }) => ({
-                flexDirection: 'row',
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#F8FAFC',
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
                 alignItems: 'center',
-                gap: 4,
-                backgroundColor: '#0F172A',
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 20,
-                opacity: pressed ? 0.8 : 1,
+                justifyContent: 'center',
+                opacity: pressed ? 0.75 : 1,
               })}
             >
-              <MaterialIcons name="settings" size={13} color="#FFFFFF" />
-              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#FFFFFF' }}>Settings</Text>
+              <MaterialIcons name="tune" size={16} color="#0F172A" />
             </Pressable>
           </View>
         }
@@ -613,7 +691,7 @@ export default function ReviewRepliesScreen() {
             contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 }}
             style={{ flex: 1 }}
           >
-            <Pressable accessibilityRole="button" accessibilityState={{selected:filter==='needs_reply'}} onPress={()=>handleSelectFilter('needs_reply')} style={{paddingHorizontal:14,paddingVertical:8,borderRadius:20,backgroundColor:filter==='needs_reply'?'#065f46':'#f1f5f9'}}><Text style={{fontWeight:'700',color:filter==='needs_reply'?'white':'#334155'}}>Needs reply{pendingCount.data ? ' ('+pendingCount.data.total+')' : ''}</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityState={{selected:filter==='needs_reply'}} onPress={()=>handleSelectFilter('needs_reply')} style={{paddingHorizontal:14,paddingVertical:8,borderRadius:20,backgroundColor:filter==='needs_reply'?'#065f46':'#f1f5f9'}}><Text style={{fontWeight:'700',color:filter==='needs_reply'?'white':'#334155'}}>Needs reply{effectivePendingTotal !== undefined ? ' ('+effectivePendingTotal+')' : ''}</Text></Pressable>
             {/* All */}
             <Pressable
               onPress={() => handleSelectFilter('all')}
@@ -1235,14 +1313,150 @@ export default function ReviewRepliesScreen() {
         </View>
 
         </>}
+        {/* ── GBP SYNC / CONNECTION STATUS BAR ── */}
+        {!gbpPlace.loading && connectionState !== 'connected' ? (
+          <View
+            style={{
+              backgroundColor: '#FFFBEB',
+              borderWidth: 1,
+              borderColor: '#FDE68A',
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
+            <MaterialIcons name="info-outline" size={18} color="#92400E" />
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: '#92400E', lineHeight: 17 }}>
+              {connectionState === 'select_profile'
+                ? 'Select your Google Business location to load and sync reviews.'
+                : connectionState === 'reconnect_required'
+                  ? 'Google Business Profile session expired. Reconnect to sync reviews.'
+                  : connectionState === 'pending_approval'
+                    ? 'Google Business API approval is pending — reviews will sync once approved.'
+                    : 'Connect your Google Business Profile to sync Google Maps reviews.'}
+            </Text>
+            {connectionState !== 'pending_approval' ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push('/select-profile')}
+                style={({ pressed }) => ({
+                  backgroundColor: '#0F172A',
+                  paddingHorizontal: 11,
+                  paddingVertical: 6,
+                  borderRadius: 8,
+                  opacity: pressed ? 0.8 : 1,
+                })}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' }}>
+                  {connectionState === 'select_profile'
+                    ? 'Select Profile'
+                    : connectionState === 'reconnect_required'
+                      ? 'Reconnect'
+                      : 'Connect'}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : (
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 9,
+              marginBottom: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}
+          >
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
+              {syncBusy
+                ? 'Syncing reviews from Google Maps…'
+                : all.length > 0
+                  ? `${all.length} review${all.length === 1 ? '' : 's'} synced from Google Maps`
+                  : 'Sync latest reviews from Google Maps'}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sync Google Reviews"
+              disabled={syncBusy}
+              onPress={() => void handleSyncGoogle()}
+              style={({ pressed }) => ({
+                backgroundColor: '#F0FDF4',
+                borderWidth: 1,
+                borderColor: '#BBF7D0',
+                paddingHorizontal: 11,
+                paddingVertical: 6,
+                borderRadius: 8,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                opacity: syncBusy ? 0.6 : pressed ? 0.8 : 1,
+              })}
+            >
+              {syncBusy ? (
+                <ActivityIndicator size="small" color="#0B9042" />
+              ) : (
+                <MaterialIcons name="sync" size={14} color="#0B9042" />
+              )}
+              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0B9042' }}>
+                {syncBusy ? 'Syncing…' : 'Sync Reviews'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* ── REVIEW LIST ── */}
         {(filter==='needs_reply'?pendingFeed.loading:reviews.loading) ? (
           <Loading />
         ) : shown.length === 0 ? (
-          <Empty
-            title={filter === 'needs_reply' ? 'No reviews waiting for a reply' : filter === 'critical' ? 'No critical reviews 🎉' : 'No reviews found'}
-            detail="Verified Google reviews will display here automatically."
-          />
+          <View style={{ gap: 10 }}>
+            <Empty
+              title={
+                filter === 'needs_reply' && all.length > 0
+                  ? 'No reviews waiting for a reply'
+                  : filter === 'needs_reply'
+                    ? 'No unreplied reviews found'
+                    : filter === 'critical'
+                      ? 'No critical reviews 🎉'
+                      : 'No reviews synced yet'
+              }
+              detail={
+                filter === 'needs_reply' && all.length > 0
+                  ? `All ${all.length} synced review${all.length === 1 ? '' : 's'} already have a reply. Switch to All to view them.`
+                  : connectionState === 'connected'
+                    ? 'Tap "Sync Google Reviews" below to fetch your latest customer reviews from Google Maps.'
+                    : 'Connect or select your Google Business Profile to import reviews.'
+              }
+            />
+            {filter === 'needs_reply' && all.length > 0 ? (
+              <Action
+                label={`View All ${all.length} Reviews`}
+                icon="list"
+                onPress={() => handleSelectFilter('all')}
+              />
+            ) : connectionState === 'connected' ? (
+              <Action
+                label={syncBusy ? 'Syncing Google Reviews…' : 'Sync Google Reviews'}
+                icon="sync"
+                disabled={syncBusy}
+                onPress={() => void handleSyncGoogle()}
+              />
+            ) : connectionState !== 'pending_approval' ? (
+              <Action
+                label={connectionState === 'select_profile' ? 'Select Google Profile' : 'Connect Google Business'}
+                icon="storefront"
+                onPress={() => router.push('/select-profile')}
+              />
+            ) : null}
+          </View>
         ) : (
           visibleReviews.map((review) => {
             const reply = parseReply(review);

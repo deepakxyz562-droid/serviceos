@@ -343,7 +343,7 @@ export function BgosGbpOnboardingWizard({
                     {[
                       { icon: MessageCircle, title: 'AI Review Replies', desc: 'Instantly answered with SEO keywords' },
                       { icon: Sparkles, title: 'Auto Post Generation', desc: '1–2 weekly rank-boosting posts' },
-                      { icon: Layers, title: 'Photo Drip-Publishing', desc: 'Keeps your listing active on Maps' },
+                      { icon: Layers, title: 'Scheduled Photo Publishing', desc: 'Keeps your listing active on Maps' },
                       { icon: Star, title: 'Local Search Telemetry', desc: 'Track views, calls, and directions' },
                     ].map((feat) => (
                       <div key={feat.title} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
@@ -909,7 +909,7 @@ export function BgosGbpOnboardingWizard({
 
                 <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
                   <div className="space-y-0.5 max-w-sm">
-                    <div className="text-xs font-bold text-slate-900">Photo Drip-Publishing Schedule</div>
+                    <div className="text-xs font-bold text-slate-900">Automated Photo Publishing Schedule</div>
                     <div className="text-[11px] text-slate-500">
                       Maintains continuous fresh activity to rank your listing in Google 3-Pack.
                     </div>

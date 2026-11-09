@@ -1,99 +1,142 @@
-import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+import React, { useMemo, useState } from 'react';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Screen, Loading } from '../../src/components/ui';
+import * as ImagePicker from 'expo-image-picker';
+import { Screen, Loading, ErrorNotice, colors } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
-import { apiRequest } from '../../src/lib/api';
-import { uploadFileToStorage } from '../../src/lib/upload';
+import { normalizePendingUpload, type PendingUpload } from '../../src/lib/upload';
 import { ScheduledPhotosTimeline } from '../../src/components/gbp/scheduled-photos-timeline';
-import type { GbpPlaceResult, PhotosResponse } from '../../src/components/gbp/types';
+import { MediaMetadataSheet } from '../../src/components/gbp/media-metadata-sheet';
+import type {
+  GbpConnectionState,
+  GbpPhoto,
+  GbpPlaceResult,
+  PhotosResponse,
+} from '../../src/components/gbp/types';
 
 interface DiscoverResponse {
   email: string;
   phone: string;
   version: string;
+  count?: number;
+  hasConnectedGbp?: boolean;
   activeProfile?: { id: string; name: string; shortId: string; initial: string };
 }
 
 /**
- * Photos Screen — Benchmark matching Grexa Screenshot 3.
- * Clean, single-page layout with large portrait carousel, 1-tap "Add Photos & Videos"
- * button with real cloud upload, and a vertical "Scheduled Photos & Videos" drip timeline.
+ * Photos Screen — Light BGOS UI with Google + Scheduled + Not Posted media,
+ * real Photo & Video upload, and AI Title/Tags/SEO Description review sheet.
  */
 export default function PhotosScreen() {
   const router = useRouter();
   const photosRes = useResource<PhotosResponse>('/api/social/photos');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
-  const [isUploading, setIsUploading] = useState(false);
+
+  const [pendingAssets, setPendingAssets] = useState<PendingUpload[]>([]);
+  const [composerVisible, setComposerVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<GbpPhoto | null>(null);
+  const [statusBanner, setStatusBanner] = useState<string | null>(null);
 
   const activeProfile = discover.data?.activeProfile;
-  const profileName = activeProfile?.name || gbpPlace.data?.place?.title || 'Delhi Farm';
+  const profileName = activeProfile?.name || gbpPlace.data?.place?.title || 'My Business';
+
+  const isInitialLoading =
+    (photosRes.loading && !photosRes.data) ||
+    (gbpPlace.loading && !gbpPlace.data && photosRes.data?.isConnected === undefined);
+
+  const hasConnectionErrorOnly =
+    Boolean(gbpPlace.error && !gbpPlace.data) && photosRes.data?.isConnected === undefined;
+
+  const rawConnected =
+    gbpPlace.data?.isConnected ??
+    photosRes.data?.isConnected ??
+    (discover.data?.hasConnectedGbp && discover.data?.count === 1 ? true : undefined);
+
+  const resolvedConnectionState: GbpConnectionState =
+    gbpPlace.data?.connectionState ??
+    photosRes.data?.connectionState ??
+    (rawConnected === true
+      ? 'connected'
+      : discover.data?.hasConnectedGbp
+        ? 'select_profile'
+        : 'not_connected');
+
+  const resolvedConnected =
+    hasConnectionErrorOnly || isInitialLoading ? true : Boolean(rawConnected);
+
+  const allPhotos = useMemo(() => photosRes.data?.photos || [], [photosRes.data]);
+  const publishedPhotos = useMemo(
+    () => allPhotos.filter((p) => p.source === 'google'),
+    [allPhotos],
+  );
+  const scheduledPhotos = useMemo(
+    () =>
+      allPhotos.filter(
+        (p) => p.source === 'queue' && (p.status === 'scheduled' || p.status === 'publishing'),
+      ),
+    [allPhotos],
+  );
+  const draftPhotos = useMemo(
+    () =>
+      allPhotos.filter(
+        (p) => p.source === 'queue' && p.status !== 'scheduled' && p.status !== 'publishing',
+      ),
+    [allPhotos],
+  );
 
   const handleUpload = async () => {
     try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Permission Needed', 'Please allow photo gallery access to pick photos for your Google Business Profile.');
-        return;
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert(
+            'Permission Needed',
+            'Please allow photo & video library access to upload media for your Google Business Profile.',
+          );
+          return;
+        }
       }
 
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ['images', 'videos'],
         allowsMultipleSelection: true,
+        selectionLimit: 10,
         quality: 0.85,
+        exif: false,
       });
 
       if (res.canceled || !res.assets?.length) return;
 
-      setIsUploading(true);
-      const uploadedUrls: string[] = [];
-
-      for (const asset of res.assets) {
-        const cloudUrl = await uploadFileToStorage({
-          uri: asset.uri,
-          name: asset.fileName || `photo-${Date.now()}.jpg`,
-          mimeType: asset.mimeType || 'image/jpeg',
-        });
-        if (cloudUrl) uploadedUrls.push(cloudUrl);
-      }
-
-      if (uploadedUrls.length > 0) {
-        // Auto-generate on-brand caption with AI
-        let autoCaption = `Lush, scenic spaces and exceptional hospitality at ${profileName}.`;
-        try {
-          const aiRes = await apiRequest<{ caption: string }>('/api/social/ai-caption', {
-            method: 'POST',
-            body: {
-              topic: `${profileName} new photo showcase`,
-              platforms: ['googlebusiness'],
-            },
-          });
-          if (aiRes?.caption) autoCaption = aiRes.caption;
-        } catch {}
-
-        await apiRequest('/api/social/photos', {
-          method: 'POST',
-          body: {
-            photos: uploadedUrls,
-            scheduleMode: 'daily',
-            description: autoCaption,
+      const normalized = res.assets.map((asset, idx) =>
+        normalizePendingUpload(
+          {
+            uri: asset.uri,
+            name:
+              asset.fileName ||
+              `${asset.type === 'video' ? 'video' : 'photo'}-${Date.now()}-${idx}`,
+            mimeType:
+              asset.mimeType || (asset.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+            file: (asset as any).file,
+            fileSize: asset.fileSize,
+            mediaType: asset.type === 'video' ? 'video' : 'image',
           },
-        });
+          idx,
+        ),
+      );
 
-        await photosRes.refresh();
-        Alert.alert(
-          'Media Scheduled',
-          `${uploadedUrls.length} photo${uploadedUrls.length > 1 ? 's' : ''} queued for daily AI drip publishing to Google Business Profile.`
-        );
-      }
+      setEditingItem(null);
+      setPendingAssets(normalized);
+      setComposerVisible(true);
     } catch (e: any) {
-      Alert.alert('Upload Error', e?.message || 'Could not upload photos. Please try again.');
-    } finally {
-      setIsUploading(false);
+      Alert.alert('Media Picker Error', e?.message || 'Could not select media. Please try again.');
     }
+  };
+
+  const handleEditItem = (item: GbpPhoto) => {
+    setPendingAssets([]);
+    setEditingItem(item);
+    setComposerVisible(true);
   };
 
   const rightHelpAction = (
@@ -102,8 +145,8 @@ export default function PhotosScreen() {
       accessibilityLabel="Help"
       onPress={() =>
         Alert.alert(
-          'Photos & Media Help',
-          'Publishing photos to your Google Business Profile improves visibility on Google Maps and search. Our AI agent schedules daily drips so your profile stays active.'
+          'Media & AI Auto-Tagging Help',
+          'Upload photos or short videos for your Google Business Profile.\n\n• After picking media, BGOS AI suggests a business-tailored Title, SEO Description, Tags, and Google Category — you can edit any field before saving.\n• Choose Daily Schedule, Weekly Schedule, Publish Now, or Save Draft (Not Posted) in your local country timezone.',
         )
       }
       style={styles.helpButton}
@@ -115,25 +158,56 @@ export default function PhotosScreen() {
   return (
     <View style={styles.screenWrapper}>
       <Screen
-        title="Photos"
+        title="Media"
+        headerIcon="photo-library"
         subtitle={profileName}
         onRefresh={async () => {
           await Promise.all([photosRes.refresh(), gbpPlace.refresh(), discover.refresh()]).catch(() => {});
         }}
         rightAction={rightHelpAction}
       >
-        {photosRes.loading && !photosRes.data ? (
+        <ErrorNotice
+          message={photosRes.error || gbpPlace.error}
+          retry={() => void Promise.all([photosRes.refresh(), gbpPlace.refresh(), discover.refresh()])}
+        />
+
+        {statusBanner ? (
+          <View style={styles.bannerCard}>
+            <Text style={styles.bannerText}>{statusBanner}</Text>
+          </View>
+        ) : null}
+
+        {isInitialLoading ? (
           <Loading />
         ) : (
           <ScheduledPhotosTimeline
-            photos={photosRes.data?.photos?.filter((p) => p.source === 'google' || !p.scheduledFor)}
-            scheduledPhotos={photosRes.data?.photos?.filter((p) => p.source === 'queue' || Boolean(p.scheduledFor))}
+            photos={publishedPhotos}
+            scheduledPhotos={scheduledPhotos}
+            draftPhotos={draftPhotos}
             businessName={profileName}
+            isConnected={resolvedConnected}
+            connectionState={resolvedConnectionState}
+            onConnectPress={() => router.push('/select-profile')}
+            timeZone={photosRes.data?.locale?.timeZone}
+            locale={photosRes.data?.locale?.locale}
             onUploadPress={handleUpload}
-            isUploading={isUploading}
+            onEditItem={handleEditItem}
           />
         )}
       </Screen>
+
+      <MediaMetadataSheet
+        visible={composerVisible}
+        onClose={() => setComposerVisible(false)}
+        businessName={profileName}
+        pendingAssets={pendingAssets}
+        editingItem={editingItem}
+        workspaceLocale={photosRes.data?.locale || null}
+        onSaved={async (msg) => {
+          setStatusBanner(msg);
+          await photosRes.refresh();
+        }}
+      />
     </View>
   );
 }
@@ -141,17 +215,33 @@ export default function PhotosScreen() {
 const styles = StyleSheet.create({
   screenWrapper: {
     flex: 1,
-    backgroundColor: '#0F172A', // Sleek dark mode theme matching Benchmark Screenshot 3
+    backgroundColor: colors.background,
+  },
+  bannerCard: {
+    backgroundColor: colors.successSoft,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  bannerText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: colors.success,
   },
   helpButton: {
-    backgroundColor: '#009F50', // BGOS Emerald green pill matching benchmark
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 16,
   },
   helpButtonText: {
-    color: '#FFFFFF',
+    color: '#0B9042',
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
   },
 });

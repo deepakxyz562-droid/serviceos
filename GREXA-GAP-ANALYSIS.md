@@ -1,124 +1,124 @@
-# BGOS (ServiceOS) vs Grexa — Findings & Optimization Plan
+# BGOS call tracking: verified gaps and revised build-versus-buy plan
 
-**Date:** Nov 6, 2026 · **No code changed — analysis only.**
-Yardstick: REA report `~/Downloads/rea-analysis/REPORT-ai.grexa.app.md` (Grexa `ai.grexa.app` v2.49.1).
-Basis: full inventory of `bgosmobile/` (Expo/RN) and the Next.js web app + `prisma/schema.prisma` (291 models), spot-verified.
+Updated: 2026-11-06. Planning only; no product implementation in this update.
 
----
+This revision supersedes the original blanket Grexa parity assessment and its fixed delivery estimates. Repository findings establish implementation paths, not live deployment readiness. Salestrail statements below are published vendor capabilities, not independently tested device results.
 
-## 1. Verdict first
+## 1. Recommendation
 
-**The web app is AT or ABOVE Grexa's level almost everywhere.** 291 Prisma models, full GBP automation surface, Vapi AI voice receptionist, WhatsApp Cloud API + State-machine, campaign/retargeting/ad stacks, AI provider failover (openrouter→gemini→openai→anthropic), omnichannel inbox, workflow canvas. In several areas (field-service: jobs/dispatch/quotes/invoices; AI voice; GBP automation depth) BGOS exceeds Grexa.
+Keep BGOS responsible for contacts, leads, follow-ups, bookings and business outcomes. Make call capture a replaceable input to that workflow.
 
-**The gaps are concentrated in: (a) the mobile app's CRM depth, (b) call-log capture & lead attribution — Grexa's signature feature — which BGOS replaced with a different (AI-forwarding) model, (c) WhatsApp multi-tenant onboarding, (d) mobile observability & offline resilience.**
+First harden the existing mobile/manual call tracker and complete its web counterpart. In parallel, evaluate Salestrail with a small, explicitly authorized pilot and a written integration/commercial proposal. Choose native capture or licensed capture after measuring device reliability, integration constraints and unit economics. Do not commit to a vendor SDK, a recording feature or an automatic iPhone capture promise before validation.
 
----
+Remove AI Receptionist from BGOS entry points and dependencies while preserving its shared implementation for Fieseros. Do not reintroduce a forward-to-AI action into BGOS as part of this plan.
 
-## 2. Feature-by-feature gap table
+## 2. Current BGOS implementation
 
-Legend: ✅ full · ⚠️ partial · ❌ missing
+Verified in the preceding repository audit:
 
-| Grexa capability (decompiled yardstick) | BGOS Web | BGOS Mobile | Notes |
+| Capability | Current implementation | Gap |
+|---|---|---|
+| Mobile call tracker | `bgosmobile/app/(tabs)/phone.tsx` uses `/api/calls`; manual logging, callbacks, WhatsApp follow-up and lead conversion exist | Only first 50 records; no dedicated follow-up tab; no native automatic capture |
+| Call ingestion | `src/app/api/calls/route.ts` GET/POST | Input validation, origin attribution, idempotency and transactional writes need hardening |
+| Conversion | `src/app/api/calls/convert/route.ts` | Check/create/update sequence can race; not atomic; existing contact/lead matching needs improvement |
+| Post-call prompt | Detects returning from the dialer | Elapsed time away from BGOS is not verified connected-call duration or proof a call occurred |
+| Web Call Tracker | `callTracker` maps to `AiCallHistoryView` | Still calls `/api/vapi/calls` and exposes Vapi concepts |
+| Home statistics | Mobile Home requests `/api/vapi/calls` | Replace with appropriate call-tracker summary |
+| Android capture | No native receiver, call-log reconciliation or durable capture queue found | Separate native implementation or vendor integration required; overlay permission currently blocked |
+| WhatsApp onboarding | Embedded Signup endpoint/component, tenant provider configuration and send-resolution paths already exist | Verify authorization, account selection, registration/webhook acknowledgements and connected state |
+| Mobile resilience | Shared in-memory resource cache exists | Durable mutation queue and dedicated crash/product telemetry remain gaps |
+
+Specific defects: missed-call filtering overwrites the API search OR condition; zero-duration manual records can be misclassified as missed; lead creation can succeed before call creation fails; repeated concurrent conversions can produce duplicate leads.
+
+The earlier claim that BGOS has no call APIs is outdated. The earlier claim that all tenants use one platform WhatsApp number is also incorrect. A large schema or a passing navigation test does not prove feature parity.
+
+## 3. Salestrail analysis: supported versus unverified
+
+- Salestrail describes mobile capture, a dashboard and push/pull integration with external CRMs. It advertises Android SIM and WhatsApp call tracking. These make it a relevant capture-provider candidate. [Product explanation](https://www.salestrail.io/knowledge-base/what-is-salestrail)
+- Its iPhone setup guide says only outbound calls initiated from Salestrail are tracked; inbound calls require manual logging. WhatsApp tracking and recording are not supported there. Do not describe this as full cross-platform capture parity or general access to iPhone call history. The exact iOS implementation is not established by this guide. [iPhone documentation](https://www.salestrail.io/knowledge-base/installing-the-salestrail-app-on-ios-iphone)
+- The vendor advertises white-label, embedded and co-selling partnerships. This confirms a commercial discussion is worthwhile, not that a documented drop-in React Native SDK, source licence or single-app distribution is available. The React Native stack claim itself does not establish interoperability. [Vendor site](https://www.salestrail.io/)
+- Its documentation supports custom CRM integration through Push API/webhooks or Pull API. Deal-specific logging can require customization. API integration may still require the separate Salestrail app; it is not equivalent to embedding its capture agent in BGOS. [Integration documentation](https://www.salestrail.io/knowledge-base/what-crm-integrations-does-salestrail-support-and-how-do-they-work)
+- Recording is distinct from event metadata. Salestrail documents Android recording through supported built-in recording or its companion recording app. That does not prove unrestricted device support or that sideloading removes consent, security or distribution obligations. Leave recording outside the first BGOS release. [Platform overview](https://www.salestrail.io/knowledge-base/platform-overview-understanding-salestrail)
+- Exact prices supplied in the discussion were not independently confirmed from the retrieved pricing-page text. Treat them as illustrative until a written quote establishes API/SDK rights, minimum seats, taxes, support and partner pricing. [Pricing](https://www.salestrail.io/pricing)
+
+### Cost arithmetic, using the user's unverified figures
+
+| Package | Monthly billing per seat | Annual-billing monthly equivalent |
+|---|---:|---:|
+| Tracking | $5.00 | $3.50 |
+| Tracking + CRM | $9.00 | $6.30 |
+| Tracking + recording + CRM | $11.00 | $7.70 |
+
+At those illustrative rates, 100 seats cost $900/month for tracking plus CRM or $1,100/month including recording. These are not OEM/embedded quotes. Compare vendor fees and BGOS hosting/support against subscription margin. Compare native engineering, maintenance, device QA and approval risk against the same horizon; do not assume native is necessarily cheapest long-term.
+
+## 4. Build versus buy
+
+| Option | Advantage | Main uncertainty | Decision gate |
 |---|---|---|---|
-| **CRM**: customers, segments, customer-data, bulk ops, phone-book → customers | ✅ contacts/crm/customer-360/segments/groups, contact imports/exports | ❌ no customers view; leads tab only | Mobile is lead-centric; customers deep-link to web (`bgos-urls.ts`) |
-| **Leads**: open/expected/called + source filters | ✅ leads-view, sales-pipeline, lead-discovery | ⚠️ leads tab + pipeline stages | Mobile lacks "called" lead dimension (tied to #5) |
-| **Sales capture**: AddSale/MiniSale, sales CSV, sales-history, location-stats analytics | ✅ invoices/quotes/recurring + billing | ❌ none | Grexa tracks sale-per-lead attribution; BGOS tracks invoices |
-| **Call-log capture + lead attribution + post-call popup + BulkUploadCallLogs** | ❌ verified: no `call-log` route in `src/app/api/**` | ❌ replaced by **AI receptionist**: Vapi + call divert via USSD `*004*number#` | **The strategic divergence.** See §3.1 |
-| **WhatsApp — Tech Provider embedded signup, PLBV validation, whatsappBalance** | ⚠️ Cloud API via own env tokens (`WHATSAPP_*`), templates, state-machine, transactional + `generate-whatsapp-template` AI | ⚠️ broadcasts + inbox; ONE support number (`916127967087`) | BGOS customers ride BGOS's number/creds; no per-tenant WABA signup flow |
-| **WhatsApp chat agents** (per-business agent configs, activate/parallel) | ✅ chatbot builder, AI auto-reply per tenant, agents/AI views | ✅ per-chat "AI Paused / AI Active" in inbox | Roughly at parity; Grexa's parallel-booking callback config is an edge |
-| **GBP**: connect, AI posts, optimization plan, media, location-stats | ✅✅ STRONGER: `api/gbp/*` — accounts, keywords, competitors, rankings, growth-actions, ai-post, auto-post + weekly-digest/score crons | ✅✅ strongest mobile area (5 tabs: growth/reviews/photos/posts + keyword-planner) | BGOS wins this one |
-| **Campaigns**: promotional/retargeting/review ideas, analytics + cost, PLBV | ✅ campaigns, email campaigns, retargeting rules/log, ads integration, marketing analytics | ⚠️ outreach broadcasts (WA/SMS/Email) only | Mobile lacks analytics + campaign-ideas depth |
-| **Reviews**: rating distribution, weekly stats, review-request | ✅ reviews-view, claim-business, reply-settings, `needsReply` counts | ✅ strong: stream, needs_reply/critical filters, AI + manual replies, 1-tap WhatsApp review push | Parity+ |
-| **Feedback forms** + versioned configs | ✅ form-builder + submissions + analytics + GPTForm commerce | ⚠️ submissions tab only (view) | Mobile can't create/solicit |
-| **Memberships / loyalty** | ✅ ProductMembership, LoyaltyPoint, Referral, Subscriptions | ❌ mobile absent | |
-| **Org knowledge base** (feeds AI agents) | ✅ knowledge-base-view + AiKnowledgeDocument/Chunk + receptionist-knowledge-builder | ✅ agents tab ("teach it your business") | Parity; mobile is lighter |
-| **Org KYC / Udyam verification** | ✅ admin verification evidence flows | ⚠️ thin | Relevant only when WhatsApp Tech-Provider path is pursued |
-| **Media presigned uploads** | ✅ S3 | ⚠️ multipart to `/api/omnichannel/upload` | Works; presigned would be lighter for large media |
-| **Bulk CSV uploads** (call logs, sales, leads) | ✅ contact imports | ❌ | |
-| **Observability** (Grexa runs PostHog + Clarity + WebEngage + Firebase concurrently) | — (not compared) | ❌ **zero analytics SDKs in mobile** | Blind spot for product decisions & crash quality |
-| **Offline resilience** | — | ❌ SecureStore only; in-memory cache; no durable mutation queue | Poor-network UX (field/India market) suffers |
-| **Push + deep-link routing** | ✅ webhooks, notifications | ✅ expo-notifications + notification-routing | OK |
+| Separate Salestrail app + API | Potentially fastest way to validate capture and CRM outcomes | Second-app onboarding, webhook security, pricing and customer provisioning | Demonstrate end-to-end ingestion and acceptable user friction |
+| Licensed embedded/white-label capture | Potentially a more unified experience | SDK availability, licensing, supported Expo/native versions, app identity and store responsibility | Written technical evaluation package and commercial terms |
+| BGOS native Android module | Control over UI, data lifecycle and native behavior | Permissions eligibility, device behavior, ongoing maintenance | Approved architecture plus representative-device proof |
+| Hybrid behind common ingestion | Can change capture providers while retaining BGOS CRM | More provider/account lifecycle handling | Shared event contract and demonstrably safe deduplication |
 
-**Where BGOS is AHEAD of Grexa (worth saying aloud):** jobs/dispatch/scheduling/checklists, quotes & invoicing & payments (Stripe/Razorpay/Airwallex/PayPal), e-sign, real AI voice receptionist that *answers* calls (Grexa doesn't), omnichannel beyond WhatsApp, workflow canvas + AI workflow generation, customer portals, marketplace.
+Recommended architecture: the hybrid boundary; no provider commitment yet. A separate-app pilot is an evaluation step, not the default final product.
 
----
+## 5. Shared architecture before choosing capture provider
 
-## 3. What's missing — prioritized
+Proposed flow:
 
-### 3.1 Call-log capture → lead attribution (the gap that matters most)
-Grexa's moat is passive: every call on the owner's phone → duration, missed/answered, contact match → post-call popup classifying lead → `/call-log/sync` → sales-per-lead analytics. BGOS currently only knows about calls that **were forwarded to Vapi** (`/api/vapi/calls`). Destinations for BGOS growth — the businesses in this segment — will expect this.
+Device/provider -> authenticated ingestion -> durable event record -> normalization and duplicate handling -> contact matching -> call activity -> optional lead creation -> follow-up -> booking/conversion metrics.
 
-**Important:** these two models are *complementary*, not exclusive:
-```
-Call arrives → rings → answered by AI (forwarded)  → Vapi transcript/intel
-Call arrives → rings → owner answers personally    → call-log capture + popup + CRM row
-```
-Today BGOS only sees case 1. Case 2 is invisible — and it's most calls.
+- Define a call event with source, provider account/event ID, device identity when available, channel, direction, outcome, started/answered/ended timestamps, duration provenance, SIM reference when permitted, and representative identity.
+- Derive tenant/workspace ownership from trusted authentication or provisioned provider-account mappings, never from an arbitrary inbound tenant ID.
+- Use a unique provider/account/event key for retry-safe ingestion. Handle out-of-order updates and reconciliation; do not merge separate legitimate calls merely because the phone number matches.
+- Separate provider events from BGOS contact/lead links. Use normalized phone matching, offer disambiguation, and avoid automatically creating a lead for every call.
+- Duration and outcome may be unknown. Display whether values are device-reported, provider-reported or manually supplied. Never promote app-background elapsed time to measured talk time.
+- Select a dedicated neutral call-activity model or an explicit source discriminator after reviewing existing Vapi consumers. Preserve historical AiCall data and Fieseros behavior.
+- For provider ingestion, require documented request authentication, replay protection, retries, event IDs and deletion/update behavior. If the vendor does not support signed webhooks, choose a supported secure alternative; do not assume signatures exist.
+- Provide authenticated CSV export, team visibility rules and a useful failure/retry interface. Recording URLs and audio are excluded initially.
 
-Cost to add: a small Kotlin native module (manifest-declared `PHONE_STATE` receiver + post-call overlay via `SYSTEM_ALERT_WINDOW` + WorkManager sync queue) exposed to RN behind an existing settings-offer toggle + one `/api/call-log` endpoint set. Hard part is not code — it's the **Play restricted-permission declaration** (READ_CALL_LOG) and OEM QA (MIUI/vivo/Oppo background kill).
+## 6. Revised phases and acceptance criteria
 
-### 3.2 WhatsApp multi-tenant onboarding (Tech Provider / BSP)
-BGOS tenants share your Cloud-API creds/number today. Grexa lets each business get **their own WABA** via Meta Embedded Signup under Grexa's Tech Provider account (PLBV doc checks, balance tracking). Without this, BGOS WhatsApp campaigns are capped by your number's tier/quality and templates review queue.
-→ Decision needed (business, not code): become a Meta Tech Provider (weeks of approvals, full margin control) vs. ride a BSP (Gupshup/360dialog/Twilio: fast, per-margin fee).
+### Phase A — trustworthy existing workflow
 
-### 3.3 Mobile app thinness (customers/sales/memberships/forms)
-The most-used Grexa surfaces (customer list, per-customer history, sales, memberships, feedback forms) are web-only in BGOS. The "More Tools" grid + deep links paper over it, but Grexa's mobile experience treats the phone as the primary CRM surface. Cheap wins: read+write customers view, lead-from-phone-contacts, sale recording (mini-sale), form submission solicit via WhatsApp link.
+Fix conversion transactions/idempotency, phone normalization, validation, search/filter composition, pagination and business-timezone metrics. Replace inferred post-call duration with an outcome-confirmation prompt. Add follow-up due dates and an actionable queue.
 
-### 3.4 No product analytics in the mobile app
-Grexa ships 4 telemetry planes; BGOS mobile ships none — you can't answer attribution questions (which feature drives retention/plan upgrades), can't see crashes/non-fatal issues, can't measure funnel from install→setup→GBP-connect→paying.
-→ PostHog RN SDK (events + feature flags) + Sentry (crash) ≈ 1 day of work.
+Complete web Call Tracker against neutral call APIs and replace BGOS Home's Vapi dependency. Preserve receptionist code for Fieseros.
 
-### 3.5 Offline & network resilience
-In-memory resource cache + SecureStore only. Every mutation is online-only; background app-kill mid-action loses work. A SQLite (expo-sqlite) cache + outbox queue (idempotent `OfflineMutation` model already exists server-side!) would make the inbox/lead-entry flows robust on Indian networks.
+Accept when repeated requests create one activity/conversion, cancelled calls are not labeled completed, tenant isolation holds, and mobile/web show consistent data.
 
----
+### Phase B — vendor and Android feasibility evaluation
 
-## 4. Optimization plan (proposed — awaiting your approval)
+Prepare an evaluation matrix for outbound, inbound, missed/rejected/cancelled calls, dual SIM, business hours, private numbers, offline use, reboot, background termination and permission revocation. Include WhatsApp and WhatsApp Business separately. Pilot iPhone only for the vendor-supported initiated-call/manual-inbound workflow.
 
-### Phase 0 — quick wins (~1–2 weeks)
-1. **Mobile analytics**: PostHog RN + Sentry; instrument the existing funnel (login → setup → gbp-connect → plan); 0 backend work.
-2. **Mobile customers/sales read views**: reuse `API_PATHS` already in web; customer detail + mini-sale record + lead-from-phones.
-3. **Web SPA performance**: `app-layout` mounts ~100 view components in one client bundle → lazy-load per view group (`next/dynamic`), audit the heaviest views (marketing.tsx at 5,617 lines mirrors this problem client-side in mobile too — split Marketing Studio into feature files).
-4. **Media upload → presigned S3 URLs** on mobile (endpoints already exist for web).
+Request SDK/sample app availability, single-versus-two-app requirements, supported devices, caller identity/duration provenance, permissions, store responsibility, API schemas, webhook retry/authentication details, regional data handling, deletion/export, support SLA and licensing costs. Do not send customer data or contact vendors without explicit authorization.
 
-### Phase 1 — call-log capture & attribution (~3–6 weeks incl. Play review)
-1. Kotlin module: `CallReceiver` (state machine RINGING→OFFHOOK→IDLE), ignore-list, duration, WorkManager queue; **expo config plugin** (not currently in `app.config.ts` plugins).
-2. Post-call overlay popup: lead / not-lead / forward-to-AI (ties into Vapi).
-3. API: `POST /api/call-log/sync`, `GET /api/call-log`, counts — mirroring verify-patterns of existing appliance-grade endpoints; feeds lead modules you already have.
-4. Settings + onboarding ribbon + Play policy declaration (screencast for the restricted-permission review). OEM QA matrix plan.
-5. Mobile "Calls" tab: history, per-lead attribution, "called leads" filter in Leads tab.
+Accept when measured completeness, duplicate rates, synchronization delay, battery impact and total costs meet targets agreed before the pilot. No unconditional three-to-six-week release promise.
 
-### Phase 2 — WhatsApp depth & remaining mobile parity (~4–8 weeks, mix of code + business process)
-1. Decide Tech-Provider vs BSP (start Meta business verification in parallel regardless — it's free and slow).
-2. Embedded-signup WebView flow + PLBV upload screens + per-tenant number management + balance/quality dashboard (`whatsappBalance` equivalents).
-3. Mobile: memberships, feedback forms, contact bulk import via CSV.
-4. Mobile offline queue (expo-sqlite cache + outbox → `OfflineMutation`).
+### Phase C — production capture adapter
 
-### Phase 3 — polish & hardening
-1. Campaign analytics on mobile (`/api/campaigns-analytics` parity).
-2. Per-tenant cost ledger surfaced in-app (Grexa's low_balance banner pattern).
-3. Crash-free-rate ≥99.5% exit criteria per release; Play pre-launch checks for OEM receiver behavior.
+If buying, implement provisioning, authenticated provider ingestion, retry/reconciliation and account lifecycle. If building, implement native Android capture with durable local storage and scheduled retry, SIM/business-hours controls and denial/revocation fallbacks. Keep the same BGOS event contract either way.
 
----
+Android call-log eligibility remains a release dependency. Google Play lists restricted permitted uses and reviewable exceptions; a settings toggle is not universal authorization. A phoneCall foreground service is not a generic passive-capture workaround. [Play policy](https://support.google.com/googleplay/android-developer/answer/10208820?hl=en-GB), [Android requirements](https://developer.android.com/develop/background-work/services/fgs/service-types)
 
-## 5. Risks & notes
+Treat WhatsApp-call capture as a separately validated extension. A vendor's advertised capability does not establish a standard API BGOS can safely reproduce.
 
-- **Play restricted permissions** (READ_CALL_LOG/CONTACTS): needs use-case declaration + demo video; rejection risk on first attempt — iterate wording based on Grexa model ("business phone book + customer service", never "personal data collection").
-- **Vapi-first product**: if upstream policy/latency issues arise, `ai-voice-failover.ts` is your mitigation — keep it maintained.
-- **Prisma 291-model schema**: nearing the point where a service-level split (or partitioned schema groups) pays off; not urgent for these features.
-- **Mobile bundle**: `marketing.tsx` (5.6k lines) & `growth.tsx`/`reviews.tsx` (>1.3k lines) are monolith screens — refactor opportunistically, don't big-bang.
-- **Nothing copied**: this plan reuses BGOS's own architecture; competitor endpoints/keys were used only as a requirements list.
+### Phase D — user experience and observability
 
----
+Mobile: compact call feed, missed calls requiring action, contact match, notes and next follow-up. Make post-call prompts dismissible and optional; provide quiet hours. Caller ID before answering is a separately permissioned feature to evaluate, not a requirement for initial launch.
 
-## 6. Effort summary (1–2 senior devs)
+Web: search, filters, per-representative reports, contact activity and lead/booking outcomes. Measure successful synchronization, failures and crash rates without sending raw phone numbers, notes or document content to analytics.
 
-| Phase | Duration |
-|---|---|
-| P0 quick wins | 1–2 weeks |
-| P1 call-log capture + popup + API | 3–6 weeks (mostly Play review + OEM QA, not code) |
-| P2 WhatsApp depth + mobile parity | 4–8 weeks |
-| P3 polish | rolling |
+Add a durable offline outbox with account-switch protection and visible retry state. Keep iPhone capabilities explicitly labeled instead of promising Android parity.
 
-**Biggest single ROI item:** §3.1 call-log capture — complementary to Vapi, closes the largest Grexa-parity gap.
-**Biggest single strategic decision:** §3.2 Tech Provider vs BSP for WhatsApp.
+### Phase E — WhatsApp onboarding and release gate
+
+Harden the existing Embedded Signup implementation rather than rebuild it. Verify account binding, provider registration, webhook delivery and honest pending/connected/failed status. Keep messaging campaigns distinct from capture of calls in the consumer WhatsApp apps.
+
+Release only after real persistence, cross-workspace isolation, retry/race, permission-denial, device, migration and provider-outage tests pass. Resolve relevant build errors and validate Fieseros receptionist regressions. Neither competitor marketing claims nor mocked tests constitute production certification.
+
+## 7. Scope boundaries
+
+BGOS differentiation: enquiry -> contact -> follow-up -> booking -> conversion, connected to marketing and reviews. Do not import BOS inventory/POS/store features to inflate a parity checklist.
+
+Current audit results from the preceding turn: mobile TypeScript passed; 11 selected Grexa-feature/navigation tests passed. These do not cover native capture or live provider onboarding. This update changes the plan only; no SDK installed, provider contacted, account connected or application code changed.

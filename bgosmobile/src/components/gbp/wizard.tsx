@@ -152,7 +152,7 @@ function GoogleWordmark({ size = 22 }: { size?: number }) {
 const BENEFITS: { icon: React.ComponentProps<typeof MaterialIcons>['name']; title: string; detail: string }[] = [
   { icon: 'chat-bubble-outline', title: 'AI review replies', detail: 'Every Google review answered with SEO-rich replies' },
   { icon: 'auto-awesome', title: 'Auto posts', detail: '1-2 SEO posts published to your profile every week' },
-  { icon: 'photo-library', title: 'Photo publishing', detail: 'Bulk photos drip-published on an AI schedule' },
+  { icon: 'photo-library', title: 'Photo publishing', detail: 'Bulk photos auto-scheduled on your local calendar' },
   { icon: 'insights', title: 'Weekly analytics', detail: 'Views, calls and directions in a weekly summary' },
 ];
 

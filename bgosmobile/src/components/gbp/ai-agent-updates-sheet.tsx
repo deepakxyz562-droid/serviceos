@@ -20,71 +20,67 @@ export interface SeoUpdateMilestone {
 const DEFAULT_MILESTONES: SeoUpdateMilestone[] = [
   {
     id: 'm1',
-    title: 'AI Replies Sent to All Past Un-replied Reviews',
-    badge: '⚡ New',
-    bullets: ['Synced and replied to all past un-replied reviews'],
+    title: 'AI Replies Synced for Un-replied Reviews',
+    badge: 'Active',
+    bullets: ['Monitors Google Business Profile reviews and drafts brand-aligned replies'],
   },
   {
     id: 'm2',
-    title: 'GBP Ranking Benchmark Data Collection Completed',
-    badge: '⚡ New',
+    title: 'GBP Performance Telemetry Synced',
+    badge: 'Active',
     bullets: [
-      'Stored Views, Calls, Directions, etc. as the benchmark',
-      'Prepared the profile for future optimisations by the agent',
+      'Tracks Search views, Maps views, Calls, Directions, and Website clicks',
+      'Keeps profile completion & weekly targets visible on Home',
     ],
   },
   {
     id: 'm3',
-    title: 'AI Replies to GBP Reviews Enabled',
-    badge: '⚡ New',
+    title: 'Review Reply Guidelines & Tone Ready',
+    badge: 'Active',
     bullets: [
-      'Defined review reply guidelines',
-      'Enabled periodic review sync',
-      'Enabled auto-replies to new un-replied reviews',
+      'Uses business brand context & tracked local SEO keywords in replies',
+      'Respects original Google review timestamps for accurate weekly metrics',
     ],
   },
   {
     id: 'm4',
-    title: 'GBP Post Topics Generated',
-    badge: '⚡ New',
+    title: 'GBP Post Topics & Autopilot Calendar',
+    badge: 'Active',
     bullets: [
-      'Generated an in-depth Business Fingerprint',
-      'Curated relevant post topics',
+      'Curates local offers, service highlights, and update posts tailored to your business',
+      'Supports instant publishing and scheduled posting queues',
     ],
   },
   {
     id: 'm5',
-    title: 'GBP Best SEO Keywords Identified',
-    badge: '⚡ New',
+    title: 'Local SEO Keywords Identified',
+    badge: 'Active',
     bullets: [
-      'Analysed business details & shared information',
-      'Identified missing keywords',
-      'Selected the most suitable keywords',
+      'Uses tracked search terms & city keywords across posts, replies, and media tags',
     ],
   },
   {
     id: 'm6',
-    title: 'GBP Ranking Benchmark Data Collection Started',
-    badge: '⚡ New',
+    title: 'Bulk Review Invites (5/Day)',
+    badge: 'Active',
     bullets: [
-      'Generated an internal rank report for chosen keywords',
-      'Collected GBP performance data to measure against',
-      'Identified opportunities for growth',
+      'Staggers up to 5 customer invites/day from CSV uploads, pasted lists, or CRM contacts',
     ],
   },
   {
     id: 'm7',
-    title: 'GBP Review Request Through WhatsApp Configured',
-    badge: '⚡ New',
-    bullets: ['Enabled review requests through WhatsApp'],
+    title: 'AI Media Title, SEO Description & Tagging',
+    badge: 'Active',
+    bullets: [
+      'Generates editable title, local SEO description, tags, and GBP category for every photo/video upload',
+    ],
   },
   {
     id: 'm8',
-    title: 'AI Auto-Publishing Enabled for Photos & Videos',
-    badge: '⚡ New',
+    title: 'Scheduled Media Publishing Queue',
+    badge: 'Active',
     bullets: [
-      'Enabled media publishing to GBP',
-      'Configured an optimal media publishing schedule',
+      'Publishes queued media daily or weekly in your local timezone to keep your Google listing fresh',
     ],
   },
 ];
@@ -113,18 +109,18 @@ export function AiAgentUpdatesSheet({
             onPress={onClose}
             style={styles.backButton}
           >
-            <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
+            <MaterialIcons name="arrow-back" size={22} color={colors.ink} />
           </Pressable>
-          <View style={{ flex: 1, marginLeft: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
               <View style={styles.agentAvatar}>
                 <MaterialIcons name="smart-toy" size={18} color="#FFFFFF" />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.headerTitle} numberOfLines={1}>
                   {businessName}
                 </Text>
-                <Text style={styles.headerSubtitle}>AI Agent Optimization Engine</Text>
+                <Text style={styles.headerSubtitle}>GBP AI Agent Optimization Engine</Text>
               </View>
             </View>
           </View>
@@ -132,22 +128,20 @@ export function AiAgentUpdatesSheet({
 
         {/* Continuous Monitoring Banner */}
         <View style={styles.banner}>
-          <MaterialIcons name="auto-awesome" size={18} color="#8B5CF6" />
+          <MaterialIcons name="auto-awesome" size={18} color={colors.aiPurple} />
           <Text style={styles.bannerText}>
-            Continuously Monitoring & Improving Your Google Business Profile
+            Continuously monitoring &amp; optimizing your Google Business Profile
           </Text>
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {/* Section Heading */}
-          <Text style={styles.sectionHeading}>PROFILE SEO UPDATES</Text>
+          <Text style={styles.sectionHeading}>ACTIVE AI AGENT CAPABILITIES</Text>
 
-          {/* Milestone Cards */}
           {milestones.map((milestone) => (
             <View key={milestone.id} style={styles.card}>
               <View style={styles.cardHeader}>
                 <View style={styles.iconCircle}>
-                  <MaterialIcons name="check-circle" size={20} color="#10B981" />
+                  <MaterialIcons name="check-circle" size={20} color={colors.brand} />
                 </View>
                 <Text style={styles.cardTitle}>{milestone.title}</Text>
                 {milestone.badge ? (
@@ -157,11 +151,10 @@ export function AiAgentUpdatesSheet({
                 ) : null}
               </View>
 
-              {/* Bullets */}
               <View style={styles.bulletsContainer}>
                 {milestone.bullets.map((bullet, idx) => (
                   <View key={idx} style={styles.bulletRow}>
-                    <MaterialIcons name="check" size={14} color="#059669" style={{ marginTop: 2 }} />
+                    <MaterialIcons name="check" size={14} color={colors.brand} style={{ marginTop: 2 }} />
                     <Text style={styles.bulletText}>{bullet}</Text>
                   </View>
                 ))}
@@ -177,7 +170,7 @@ export function AiAgentUpdatesSheet({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A', // Dark mode matching benchmark Screenshot 6
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -185,45 +178,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: colors.line,
   },
   backButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.soft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   agentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#3B82F6',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: colors.ink,
   },
   headerSubtitle: {
-    fontSize: 11,
-    color: '#94A3B8',
+    fontSize: 11.5,
+    color: colors.muted,
     marginTop: 1,
   },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#1E1B4B',
+    backgroundColor: colors.aiPurpleSoft,
     borderWidth: 1,
-    borderColor: '#3730A3',
+    borderColor: '#DDD6FE',
     marginHorizontal: 16,
     marginTop: 14,
-    marginBottom: 6,
+    marginBottom: 4,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -232,28 +226,28 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: '700',
-    color: '#C7D2FE',
+    color: colors.aiPurple,
     lineHeight: 16,
   },
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
-    gap: 12,
+    gap: 10,
   },
   sectionHeading: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#38BDF8',
-    letterSpacing: 0.8,
+    color: colors.brandDark,
+    letterSpacing: 0.7,
     marginVertical: 4,
   },
   card: {
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.line,
     padding: 14,
-    gap: 10,
+    gap: 9,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -267,24 +261,26 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13.5,
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: colors.ink,
     lineHeight: 18,
   },
   badge: {
-    backgroundColor: '#4C1D95',
-    borderRadius: 6,
-    paddingHorizontal: 7,
+    backgroundColor: colors.brandSoft,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 8,
+    paddingHorizontal: 8,
     paddingVertical: 2,
     alignSelf: 'flex-start',
   },
   badgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#E9D5FF',
+    color: colors.brandDark,
   },
   bulletsContainer: {
     paddingLeft: 30,
-    gap: 6,
+    gap: 5,
   },
   bulletRow: {
     flexDirection: 'row',
@@ -294,7 +290,7 @@ const styles = StyleSheet.create({
   bulletText: {
     flex: 1,
     fontSize: 12,
-    color: '#94A3B8',
+    color: colors.muted,
     lineHeight: 16,
   },
 });

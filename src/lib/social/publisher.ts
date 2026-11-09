@@ -124,16 +124,28 @@ function toPublishParams(post: {
   }
 
   let gbpOfferData: PublishParams['gbpOfferData'] | undefined;
+  let gbpMediaCategory: PublishParams['gbpMediaCategory'] | undefined;
+  let mediaFormat: PublishParams['mediaFormat'] | undefined;
   if (post.gbpOfferData) {
     try {
       const parsed = JSON.parse(post.gbpOfferData);
-      if (parsed && typeof parsed === 'object' && parsed.title) {
-        gbpOfferData = {
-          title: String(parsed.title),
-          startDate: String(parsed.startDate ?? ''),
-          endDate: String(parsed.endDate ?? ''),
-          couponCode: parsed.couponCode ? String(parsed.couponCode) : undefined,
-        };
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.title && parsed.startDate) {
+          gbpOfferData = {
+            title: String(parsed.title),
+            startDate: String(parsed.startDate ?? ''),
+            endDate: String(parsed.endDate ?? ''),
+            couponCode: parsed.couponCode ? String(parsed.couponCode) : undefined,
+          };
+        }
+        if (typeof parsed.category === 'string') {
+          gbpMediaCategory = parsed.category as PublishParams['gbpMediaCategory'];
+        } else if (typeof parsed.gbpMediaCategory === 'string') {
+          gbpMediaCategory = parsed.gbpMediaCategory as PublishParams['gbpMediaCategory'];
+        }
+        if (parsed.mediaFormat === 'VIDEO' || parsed.mediaFormat === 'PHOTO') {
+          mediaFormat = parsed.mediaFormat;
+        }
       }
     } catch {
       // ignore — adapter will publish as a standard GBP post
@@ -145,6 +157,8 @@ function toPublishParams(post: {
     mediaUrls,
     linkUrl: post.linkUrl ?? undefined,
     gbpPostType: post.gbpPostType ?? undefined,
+    gbpMediaCategory,
+    mediaFormat,
     gbpOfferData,
     pinterestBoard: post.pinterestBoard ?? undefined,
   };

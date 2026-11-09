@@ -1,23 +1,26 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Flame,
-  Phone,
-  Send,
-  QrCode,
   Calendar,
   CheckCircle2,
-  Sparkles,
   ExternalLink,
-  ChevronRight,
+  FileSpreadsheet,
+  HelpCircle,
+  Loader2,
+  MessageSquare,
+  Phone,
+  QrCode,
+  Send,
+  Sparkles,
+  Trash2,
+  TrendingUp,
   Upload,
-  X,
-  PlayCircle,
+  Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +29,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/api';
 
 export interface SeoUpdateMilestone {
   id: string;
@@ -37,79 +41,175 @@ export interface SeoUpdateMilestone {
 const DEFAULT_MILESTONES: SeoUpdateMilestone[] = [
   {
     id: 'm1',
-    title: 'AI Replies Sent to All Past Un-replied Reviews',
-    badge: '⚡ New',
-    bullets: ['Synced and replied to all past un-replied reviews'],
+    title: 'AI Replies Synced to Past Un-replied Reviews',
+    badge: 'Active',
+    bullets: ['Synced and replied to historical un-replied Google reviews'],
   },
   {
     id: 'm2',
-    title: 'GBP Ranking Benchmark Data Collection Completed',
-    badge: '⚡ New',
+    title: 'GBP Performance Telemetry Synced',
+    badge: 'Active',
     bullets: [
-      'Stored Views, Calls, Directions, etc. as the benchmark',
-      'Prepared the profile for future optimisations by the agent',
+      'Stores Search Views, Maps Views, Calls, and Direction Requests',
+      'Tracks real weekly review momentum against your weekly goal',
     ],
   },
   {
     id: 'm3',
-    title: 'AI Replies to GBP Reviews Enabled',
-    badge: '⚡ New',
+    title: 'AI Replies Using Original Review Timestamps',
+    badge: 'Active',
     bullets: [
-      'Defined review reply guidelines',
-      'Enabled periodic review sync',
-      'Enabled auto-replies to new un-replied reviews',
+      'Defined brand-aligned review reply guidelines',
+      'Preserves original Google create timestamps for honest weekly metrics',
     ],
   },
   {
     id: 'm4',
-    title: 'GBP Post Topics Generated',
-    badge: '⚡ New',
+    title: 'GBP Post Topics & Autopilot Calendar Ready',
+    badge: 'Active',
     bullets: [
-      'Generated an in-depth Business Fingerprint',
-      'Curated relevant post topics',
+      'Curated business-specific Google post topics',
+      'Supports instant publishing and daily/weekly scheduling',
     ],
   },
   {
     id: 'm5',
-    title: 'GBP Best SEO Keywords Identified',
-    badge: '⚡ New',
+    title: 'Best Local SEO Keywords Identified',
+    badge: 'Active',
     bullets: [
-      'Analysed business details & shared information',
-      'Identified missing keywords',
-      'Selected the most suitable keywords',
+      'Analyzed business profile & service keywords for local ranking',
     ],
   },
   {
     id: 'm6',
-    title: 'GBP Ranking Benchmark Data Collection Started',
-    badge: '⚡ New',
+    title: 'Bulk Review Invites (5/Day)',
+    badge: 'Active',
     bullets: [
-      'Generated an internal rank report for chosen keywords',
-      'Collected GBP performance data to measure against',
-      'Identified opportunities for growth',
+      'Staggers CSV uploads, pasted lists, and CRM contacts at 5/day',
     ],
   },
   {
     id: 'm7',
-    title: 'GBP Review Request Through WhatsApp Configured',
-    badge: '⚡ New',
-    bullets: ['Enabled review requests through WhatsApp'],
+    title: 'AI Media Title, SEO Description & Tags',
+    badge: 'Active',
+    bullets: [
+      'Auto-generates editable title, SEO description, tags, and category on every photo/video upload',
+    ],
   },
   {
     id: 'm8',
-    title: 'AI Auto-Publishing Enabled for Photos & Videos',
-    badge: '⚡ New',
+    title: 'Scheduled Media Queue',
+    badge: 'Active',
     bullets: [
-      'Enabled media publishing to GBP',
-      'Configured an optimal media publishing schedule',
+      'Keeps your Google Business Profile active with scheduled photos & videos',
     ],
   },
 ];
 
+interface QueueItem {
+  id: string;
+  channel: string;
+  phone: string;
+  customerName: string;
+  batchDay?: number;
+  message: string;
+  dueAt: string;
+  status: string;
+  lastError: string | null;
+}
+
+interface CrmCandidate {
+  name: string;
+  phone: string;
+  source: 'booking' | 'crm';
+  alreadyQueued: boolean;
+}
+
+interface QueueLocale {
+  country?: string;
+  countryName?: string;
+  callingCode?: string;
+  timeZone?: string;
+  locale?: string;
+}
+
+interface QueueApiResponse {
+  hasWhatsAppProvider?: boolean;
+  smsAvailable?: boolean;
+  locale?: QueueLocale;
+  businessName?: string;
+  reviewLink?: string;
+  queue?: {
+    pending: number;
+    sent: number;
+    failed: number;
+    items: QueueItem[];
+  };
+  candidates?: CrmCandidate[];
+}
+
+function normalizePhone(raw: string, callingCode = '+91'): string | null {
+  const digits = (raw || '').replace(/[^\d]/g, '');
+  if (digits.length < 7 || digits.length > 15) return null;
+  if (raw.trim().startsWith('+')) return `+${digits}`;
+  const cleanCode = callingCode.replace(/[^\d]/g, '') || '91';
+  if (digits.length === 10) return `+${cleanCode}${digits}`;
+  return `+${digits}`;
+}
+
+function parseRecipientsText(rawText: string, callingCode = '+91'): Array<{ name?: string; phone: string }> {
+  const seen = new Set<string>();
+  const out: Array<{ name?: string; phone: string }> = [];
+  const lines = rawText.split(/\r?\n|;/).map((l) => l.trim()).filter(Boolean);
+
+  for (const line of lines) {
+    const parts = line
+      .split(/[,\t|]/)
+      .map((p) => p.replace(/^["']|["']$/g, '').trim())
+      .filter(Boolean);
+    if (parts.length >= 2) {
+      const phones = parts.map((p) => normalizePhone(p, callingCode));
+      if (phones.every(Boolean)) {
+        for (const p of phones) {
+          if (p && !seen.has(p)) {
+            seen.add(p);
+            out.push({ phone: p });
+          }
+        }
+        continue;
+      }
+      if (phones[1] && !phones[0]) {
+        if (!seen.has(phones[1])) {
+          seen.add(phones[1]);
+          out.push({ name: parts[0], phone: phones[1] });
+        }
+        continue;
+      }
+      if (phones[0]) {
+        if (!seen.has(phones[0])) {
+          seen.add(phones[0]);
+          out.push({ name: !phones[1] ? parts[1] : undefined, phone: phones[0] });
+        }
+        continue;
+      }
+      continue;
+    }
+
+    const single = normalizePhone(line, callingCode);
+    if (single && !seen.has(single)) {
+      seen.add(single);
+      out.push({ phone: single });
+    }
+  }
+  return out;
+}
+
 interface UrgentReviewCardProps {
   businessName: string;
   reviewUrl: string;
-  lastReviewDays?: number;
+  thisWeekCount?: number;
+  weeklyTarget?: number;
+  lastReviewDays?: number | null;
   totalReviews?: number;
   onOpenBulk?: () => void;
   onOpenQr?: () => void;
@@ -118,7 +218,9 @@ interface UrgentReviewCardProps {
 export function UrgentReviewCard({
   businessName,
   reviewUrl,
-  lastReviewDays = 69,
+  thisWeekCount = 0,
+  weeklyTarget = 12,
+  lastReviewDays = null,
   totalReviews = 0,
   onOpenBulk,
   onOpenQr,
@@ -127,16 +229,85 @@ export function UrgentReviewCard({
   const [isSending, setIsSending] = useState(false);
   const [seoModalOpen, setSeoModalOpen] = useState(false);
 
+  // Built-in Bulk Review Scheduler Modal
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkSource, setBulkSource] = useState<'paste' | 'csv' | 'crm'>('paste');
+  const [channel, setChannel] = useState<'whatsapp' | 'sms'>('whatsapp');
+  const [preferredTime, setPreferredTime] = useState('10:00');
+  const [pasteText, setPasteText] = useState('');
+  const [csvName, setCsvName] = useState<string | null>(null);
+  const [csvRecipients, setCsvRecipients] = useState<Array<{ name?: string; phone: string }>>([]);
+  const [selectedCrm, setSelectedCrm] = useState<Record<string, boolean>>({});
+  const [queueData, setQueueData] = useState<QueueApiResponse | null>(null);
+  const [queueLoading, setQueueLoading] = useState(false);
+  const [schedulingBulk, setSchedulingBulk] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
+
+  const loadQueue = useCallback(async () => {
+    setQueueLoading(true);
+    try {
+      const res = await authFetch('/api/reviews/request');
+      if (res.ok) {
+        const json = (await res.json()) as QueueApiResponse;
+        setQueueData(json);
+      }
+    } catch {
+      // silent fallback
+    } finally {
+      setQueueLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadQueue();
+  }, [loadQueue]);
+
+  const activeCallingCode = queueData?.locale?.callingCode || '+91';
+  const activeTimeZone = useMemo(() => {
+    if (queueData?.locale?.timeZone) return queueData.locale.timeZone;
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+    } catch {
+      return 'Asia/Kolkata';
+    }
+  }, [queueData?.locale?.timeZone]);
+
+  const parsedPasted = useMemo(
+    () => parseRecipientsText(pasteText, activeCallingCode),
+    [pasteText, activeCallingCode],
+  );
+  const selectedCrmRecipients = useMemo(
+    () =>
+      (queueData?.candidates || [])
+        .filter((c) => selectedCrm[c.phone])
+        .map((c) => ({ name: c.name, phone: c.phone })),
+    [queueData?.candidates, selectedCrm],
+  );
+  const activeRecipients =
+    bulkSource === 'csv'
+      ? csvRecipients
+      : bulkSource === 'crm'
+        ? selectedCrmRecipients
+        : parsedPasted;
+  const estimatedDays = activeRecipients.length > 0 ? Math.ceil(activeRecipients.length / 5) : 0;
+
+  const isHealthy = thisWeekCount >= 1 || (lastReviewDays !== null && lastReviewDays <= 7);
+  const progressPct = Math.min(
+    100,
+    Math.max(thisWeekCount > 0 ? 8 : 0, Math.round((thisWeekCount / Math.max(1, weeklyTarget)) * 100)),
+  );
+
   const handleSendLink = () => {
     const clean = phone.replace(/[^0-9]/g, '');
-    if (!clean || clean.length < 10) {
-      toast.error('Please enter a valid 10-digit mobile number.');
+    if (!clean || clean.length < 7) {
+      toast.error('Please enter a valid mobile number.');
       return;
     }
     setIsSending(true);
     try {
       const message = `Hi! Thank you for choosing ${businessName}. We’d truly appreciate your feedback! Could you take 30 seconds to leave us a quick Google review? Tap here: ${reviewUrl}`;
-      const waNumber = clean.length === 10 ? `91${clean}` : clean;
+      const codeDigits = activeCallingCode.replace(/[^\d]/g, '') || '91';
+      const waNumber = clean.length === 10 && !phone.trim().startsWith('+') ? `${codeDigits}${clean}` : clean;
       const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
       window.open(waUrl, '_blank');
       toast.success('WhatsApp review request opened!');
@@ -148,41 +319,187 @@ export function UrgentReviewCard({
     }
   };
 
+  const handleCsvFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = parseRecipientsText(text, activeCallingCode);
+      if (!parsed.length) {
+        toast.error(`No valid phone numbers found in ${file.name}. Use mobile numbers or Name,Phone columns.`);
+        return;
+      }
+      setCsvName(file.name);
+      setCsvRecipients(parsed);
+      setBulkSource('csv');
+      toast.success(`Loaded ${parsed.length} unique numbers from ${file.name}`);
+    } catch {
+      toast.error('Could not read the selected CSV file.');
+    } finally {
+      if (csvInputRef.current) csvInputRef.current.value = '';
+    }
+  };
+
+  const handleScheduleBulk = async () => {
+    if (!activeRecipients.length) {
+      toast.error('Add customer numbers first via Paste, CSV Upload, or CRM Contacts.');
+      return;
+    }
+    setSchedulingBulk(true);
+    try {
+      const res = await authFetch('/api/reviews/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'scheduled',
+          channel,
+          dailyLimit: 5,
+          preferredTime,
+          timeZone: activeTimeZone,
+          country: queueData?.locale?.country,
+          source: bulkSource,
+          reviewLink: reviewUrl,
+          businessName,
+          includeDirectLink: true,
+          recipients: activeRecipients,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Could not schedule bulk review invites');
+      }
+      toast.success(data.message || 'Scheduled 5/day bulk review invites!');
+      if (bulkSource === 'paste') setPasteText('');
+      if (bulkSource === 'csv') {
+        setCsvName(null);
+        setCsvRecipients([]);
+      }
+      if (bulkSource === 'crm') setSelectedCrm({});
+      await loadQueue();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Bulk scheduling failed');
+    } finally {
+      setSchedulingBulk(false);
+    }
+  };
+
+  const handleMarkSent = async (id: string) => {
+    try {
+      const res = await authFetch('/api/reviews/request', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'mark_sent' }),
+      });
+      if (res.ok) await loadQueue();
+    } catch {}
+  };
+
+  const handleDeleteQueueItem = async (id: string) => {
+    try {
+      const res = await authFetch(`/api/reviews/request?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) await loadQueue();
+    } catch {}
+  };
+
+  const pendingItems = (queueData?.queue?.items || []).filter((i) => i.status === 'pending');
+
   return (
     <>
-      <div className="bg-slate-900 text-slate-100 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col justify-between gap-4">
+      <div className="bg-card text-foreground border border-border rounded-2xl p-5 shadow-2xs flex flex-col justify-between gap-4">
         {/* Top Header: Target Indicator */}
-        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-slate-300">This Week&apos;s Reviews</h2>
+        <div className="space-y-2 border-b border-border/60 pb-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-bold text-foreground">This Week&apos;s Reviews</h2>
+              <p className="text-[11px] text-muted-foreground">
+                {thisWeekCount > 0
+                  ? `${thisWeekCount} received in the last 7 days · ${totalReviews} total`
+                  : totalReviews > 0
+                    ? `0 received in the last 7 days · ${totalReviews} total`
+                    : 'No Google reviews synced yet'}
+              </p>
+            </div>
+            <span
+              className={`text-xs font-extrabold px-2.5 py-1 rounded-full border ${
+                isHealthy
+                  ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                  : 'text-amber-700 bg-amber-50 border-amber-200'
+              }`}
+            >
+              {thisWeekCount}/{weeklyTarget}
+            </span>
           </div>
-          <span className="text-sm font-extrabold text-rose-500 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/20">
-            0/12
-          </span>
+          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${isHealthy ? 'bg-primary' : 'bg-amber-500'}`}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
         </div>
 
-        {/* Urgency Alert (Fire Icon & Days count) */}
-        <div className="flex items-start gap-3 bg-red-950/60 border border-red-800/40 rounded-xl p-3">
-          <div className="size-6 rounded-full bg-red-500/20 flex items-center justify-center shrink-0 mt-0.5">
-            <Flame className="size-3.5 text-red-400" />
+        {/* Status Callout */}
+        <div
+          className={`flex items-start gap-3 rounded-xl p-3 border ${
+            isHealthy
+              ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+              : 'bg-amber-50/70 border-amber-200 text-amber-900'
+          }`}
+        >
+          <div
+            className={`size-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+              isHealthy ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+            }`}
+          >
+            <TrendingUp className="size-3.5" />
           </div>
-          <p className="text-xs text-red-200 leading-relaxed">
-            Your last review was{' '}
-            <strong className="text-red-400 font-bold underline underline-offset-2">
-              {lastReviewDays} days ago
-            </strong>
-            , reviews are vital for good Google ranking.
+          <p className="text-xs leading-relaxed">
+            {lastReviewDays === null ? (
+              'Invite recent customers below — consistent weekly reviews improve local Google Maps rank.'
+            ) : isHealthy ? (
+              <>
+                Last review received{' '}
+                <strong className="font-bold">
+                  {lastReviewDays === 0
+                    ? 'today'
+                    : lastReviewDays === 1
+                      ? 'yesterday'
+                      : `${lastReviewDays} days ago`}
+                </strong>
+                . Keep inviting customers toward your {weeklyTarget}/week target.
+              </>
+            ) : (
+              <>
+                Last review was{' '}
+                <strong className="font-bold underline underline-offset-2">
+                  {lastReviewDays} days ago
+                </strong>
+                . Regular weekly reviews boost local Google search visibility.
+              </>
+            )}
           </p>
         </div>
 
         {/* Bulk Review Automation Box */}
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 flex flex-col gap-2.5">
-          <h3 className="text-xs font-bold text-slate-100">Get Reviews Every Day, Automatically</h3>
-          <p className="text-[11px] text-slate-400">Upload in bulk and we&apos;ll send 5 review messages/day</p>
+        <div className="bg-muted/40 border border-border rounded-xl p-4 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-bold text-foreground">Get Reviews Every Day, Automatically</h3>
+            <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+              5 / day
+            </span>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Upload a CSV, paste numbers, or select CRM contacts — BGOS queues and sends 5 review invites/day.
+          </p>
           <Button
             type="button"
-            onClick={onOpenBulk}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs h-9 rounded-lg flex items-center justify-center gap-2 shadow-sm transition-all"
+            onClick={() => (onOpenBulk ? onOpenBulk() : setBulkModalOpen(true))}
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-9 rounded-lg flex items-center justify-center gap-2 shadow-xs"
           >
             <Upload className="size-3.5" />
             Schedule Review Messages in Bulk
@@ -192,13 +509,13 @@ export function UrgentReviewCard({
         {/* Direct Customer Phone Input */}
         <div className="space-y-2">
           <div className="relative">
-            <Phone className="size-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Phone className="size-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
             <Input
               type="tel"
-              placeholder="Customer Phone Number"
+              placeholder={`Customer Phone Number (${activeCallingCode} or local)`}
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="pl-9 pr-4 h-10 bg-slate-950/80 border-slate-700 text-slate-100 placeholder:text-slate-500 text-xs rounded-xl focus-visible:ring-blue-500"
+              className="pl-9 pr-4 h-10 bg-background border-border text-foreground text-xs rounded-xl"
             />
           </div>
 
@@ -208,7 +525,7 @@ export function UrgentReviewCard({
               variant="outline"
               disabled={isSending}
               onClick={handleSendLink}
-              className="bg-slate-800 hover:bg-slate-700 border-slate-700 text-blue-400 font-bold text-xs h-9 rounded-xl flex items-center justify-center gap-1.5"
+              className="border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary font-bold text-xs h-9 rounded-xl flex items-center justify-center gap-1.5"
             >
               <Send className="size-3.5" />
               Send Review Link
@@ -218,7 +535,7 @@ export function UrgentReviewCard({
               type="button"
               variant="outline"
               onClick={onOpenQr}
-              className="bg-slate-800 hover:bg-slate-700 border-slate-700 text-blue-400 font-bold text-xs h-9 rounded-xl flex items-center justify-center gap-1.5"
+              className="border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary font-bold text-xs h-9 rounded-xl flex items-center justify-center gap-1.5"
             >
               <QrCode className="size-3.5" />
               Review QR
@@ -226,48 +543,339 @@ export function UrgentReviewCard({
           </div>
         </div>
 
-        {/* Footer Link: How it works? */}
-        <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px]">
-          <span className="text-slate-400">How it works?</span>
+        {/* Footer Link */}
+        <div className="flex items-center justify-between pt-2 border-t border-border/60 text-[11px]">
+          <span className="text-muted-foreground font-medium">
+            Weekly Goal: {thisWeekCount}/{weeklyTarget} reviews
+          </span>
           <button
             type="button"
             onClick={() => setSeoModalOpen(true)}
-            className="text-blue-400 font-bold hover:underline flex items-center gap-1"
+            className="text-primary font-bold hover:underline flex items-center gap-1"
           >
             <span>See AI Agent Actions</span>
-            <PlayCircle className="size-3.5" />
+            <Sparkles className="size-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Profile SEO Updates Modal (Benchmark Screenshot 6) */}
-      <Dialog open={seoModalOpen} onOpenChange={setSeoModalOpen}>
-        <DialogContent className="max-w-md bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-0 overflow-hidden">
-          <DialogHeader className="p-5 border-b border-slate-800 text-left">
-            <div className="flex items-center gap-2">
-              <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-              <DialogTitle className="text-base font-bold text-slate-100">
-                Google Business Profile AI Agent
-              </DialogTitle>
-            </div>
-            <DialogDescription className="text-xs text-slate-400">
-              Profile SEO Updates completed for <strong className="text-slate-200">{businessName}</strong>
+      {/* Built-In Bulk Review Scheduler Dialog */}
+      <Dialog open={bulkModalOpen} onOpenChange={setBulkModalOpen}>
+        <DialogContent className="max-w-lg max-h-[88vh] flex flex-col p-0 overflow-hidden bg-card text-foreground border-border">
+          <DialogHeader className="p-5 pb-3 border-b border-border text-left">
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <Calendar className="size-4 text-primary" />
+              Schedule Bulk Review Invites (5/Day)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Add customers from CSV, paste list, or CRM bookings. BGOS queues 5 messages/day in your local timezone ({activeTimeZone}).
             </DialogDescription>
           </DialogHeader>
 
-          <div className="p-5 overflow-y-auto space-y-3.5">
+          <div className="p-5 space-y-4 overflow-y-auto">
+            {/* Guide Banner */}
+            <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 text-xs text-foreground space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-primary">
+                <HelpCircle className="size-3.5" /> How Bulk Scheduling Works
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                1. Paste numbers, upload CSV (<code className="text-[10px]">Name,Phone</code>), or check CRM customers.
+                2. Pick your preferred local send time ({activeTimeZone}). 3. Choose SMS for automated dispatch or WhatsApp (Cloud API if connected, or 1-tap Send WA).
+              </p>
+            </div>
+
+            {/* Channel + Send Time Picker */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-bold">Delivery Channel &amp; Local Send Time</label>
+                <select
+                  value={preferredTime}
+                  onChange={(e) => setPreferredTime(e.target.value)}
+                  className="h-7 px-2 rounded-lg border border-border bg-background text-[11px] font-semibold"
+                >
+                  <option value="10:00">10:00 AM ({activeTimeZone})</option>
+                  <option value="14:00">02:00 PM ({activeTimeZone})</option>
+                  <option value="18:00">06:00 PM ({activeTimeZone})</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setChannel('whatsapp')}
+                  className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-bold transition-colors ${
+                    channel === 'whatsapp'
+                      ? 'bg-primary/10 border-primary text-primary'
+                      : 'bg-background border-border text-muted-foreground'
+                  }`}
+                >
+                  <MessageSquare className="size-3.5" />
+                  WhatsApp {queueData?.hasWhatsAppProvider ? '(Auto)' : '(Queue + 1-Tap)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChannel('sms')}
+                  className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-bold transition-colors ${
+                    channel === 'sms'
+                      ? 'bg-primary/10 border-primary text-primary'
+                      : 'bg-background border-border text-muted-foreground'
+                  }`}
+                >
+                  <Phone className="size-3.5" />
+                  SMS {queueData?.smsAvailable ? '(Auto 5/Day)' : '(Requires SMS Gateway)'}
+                </button>
+              </div>
+              {channel === 'whatsapp' && queueData && !queueData.hasWhatsAppProvider && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                  WhatsApp Cloud API is not connected — queued invites include 1-tap &ldquo;Send WA&rdquo; buttons so you can send directly.
+                </p>
+              )}
+              {channel === 'sms' && queueData && queueData.smsAvailable === false && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                  SMS gateway is not configured in Integrations — switch to WhatsApp for 1-tap manual send or connect Twilio/SMS.
+                </p>
+              )}
+            </div>
+
+            {/* Source Selector */}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setBulkSource('paste')}
+                className={`py-2 px-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 ${
+                  bulkSource === 'paste'
+                    ? 'bg-primary/10 border-primary text-primary'
+                    : 'bg-background border-border text-muted-foreground'
+                }`}
+              >
+                Paste List
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkSource('csv')}
+                className={`py-2 px-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 ${
+                  bulkSource === 'csv'
+                    ? 'bg-primary/10 border-primary text-primary'
+                    : 'bg-background border-border text-muted-foreground'
+                }`}
+              >
+                <FileSpreadsheet className="size-3.5" /> CSV Upload
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkSource('crm')}
+                className={`py-2 px-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 ${
+                  bulkSource === 'crm'
+                    ? 'bg-primary/10 border-primary text-primary'
+                    : 'bg-background border-border text-muted-foreground'
+                }`}
+              >
+                <Users className="size-3.5" /> CRM ({queueData?.candidates?.length ?? 0})
+              </button>
+            </div>
+
+            {bulkSource === 'paste' && (
+              <div className="space-y-1.5">
+                <Textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  rows={4}
+                  placeholder={'Ramesh Kumar, 9876543210\nPriya Sharma, +919811122233\n9900112233'}
+                  className="rounded-xl text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  One customer per line (Name, Phone or plain 10-digit numbers). Duplicates are removed automatically.
+                </p>
+              </div>
+            )}
+
+            {bulkSource === 'csv' && (
+              <div className="space-y-2">
+                <input
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv,.txt"
+                  onChange={handleCsvFile}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => csvInputRef.current?.click()}
+                  className="w-full py-5 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 text-primary text-xs font-bold flex flex-col items-center gap-1.5 hover:bg-primary/10"
+                >
+                  <FileSpreadsheet className="size-5" />
+                  <span>
+                    {csvName ? `${csvName} (${csvRecipients.length} customers)` : 'Select CSV or TXT File'}
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {bulkSource === 'crm' && (
+              <div className="space-y-2">
+                {queueLoading ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="size-4 animate-spin text-primary" />
+                  </div>
+                ) : !(queueData?.candidates?.length) ? (
+                  <p className="text-xs text-muted-foreground py-3 text-center">
+                    No CRM customer numbers found yet — paste numbers or upload a CSV above.
+                  </p>
+                ) : (
+                  <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+                    {queueData.candidates.map((cand) => {
+                      const checked = Boolean(selectedCrm[cand.phone]);
+                      return (
+                        <label
+                          key={cand.phone}
+                          className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border text-xs cursor-pointer ${
+                            checked ? 'bg-primary/5 border-primary' : 'bg-background border-border'
+                          } ${cand.alreadyQueued ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              disabled={cand.alreadyQueued}
+                              checked={checked}
+                              onChange={() =>
+                                setSelectedCrm((prev) => ({ ...prev, [cand.phone]: !prev[cand.phone] }))
+                              }
+                            />
+                            <div className="min-w-0">
+                              <div className="font-semibold truncate">{cand.name}</div>
+                              <div className="text-[11px] text-muted-foreground">{cand.phone}</div>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                            {cand.alreadyQueued ? 'Queued' : cand.source}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeRecipients.length > 0 && (
+              <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-900 font-medium">
+                {activeRecipients.length} customer{activeRecipients.length === 1 ? '' : 's'} ready → scheduled over{' '}
+                <strong>{estimatedDays} day{estimatedDays === 1 ? '' : 's'}</strong> (5/day).
+              </div>
+            )}
+
+            <Button
+              type="button"
+              disabled={schedulingBulk || activeRecipients.length === 0}
+              onClick={handleScheduleBulk}
+              className="w-full h-10 rounded-xl bg-primary text-primary-foreground font-bold text-xs gap-1.5"
+            >
+              {schedulingBulk ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-3.5" />}
+              Schedule {activeRecipients.length || ''} Review Invites (5/Day)
+            </Button>
+
+            {/* Existing Queue Tracker */}
+            <div className="border-t border-border pt-3 space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold">
+                <span>
+                  Scheduled Queue ({pendingItems.length} pending · {queueData?.queue?.sent ?? 0} sent)
+                </span>
+              </div>
+              {!(queueData?.queue?.items?.length) ? (
+                <p className="text-[11px] text-muted-foreground">No queued review invites yet.</p>
+              ) : (
+                <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                  {queueData.queue.items.slice(0, 15).map((item) => {
+                    const cleanDigits = item.phone.replace(/[^\d]/g, '');
+                    const waUrl = `https://wa.me/${cleanDigits}?text=${encodeURIComponent(item.message)}`;
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between gap-2 p-2 rounded-xl border border-border bg-muted/20 text-xs"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold truncate">
+                            {item.customerName || item.phone}
+                          </div>
+                          <div className="text-[10.5px] text-muted-foreground truncate">
+                            {item.phone} · {item.channel.toUpperCase()} ·{' '}
+                            {new Date(item.dueAt).toLocaleString(queueData?.locale?.locale || 'en', {
+                              timeZone: activeTimeZone,
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                            {item.batchDay ? ` · Day ${item.batchDay}` : ''}
+                          </div>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            item.status === 'sent'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : item.status === 'failed'
+                                ? 'bg-rose-100 text-rose-700'
+                                : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {item.status}
+                        </span>
+                        {item.status === 'pending' && item.channel === 'whatsapp' && (
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={() => void handleMarkSent(item.id)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold hover:bg-emerald-700 shrink-0"
+                          >
+                            Send WA <ExternalLink className="size-2.5" />
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteQueueItem(item.id)}
+                          className="text-muted-foreground hover:text-destructive p-1"
+                          aria-label="Remove queued invite"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Light Mode Profile SEO Updates Modal */}
+      <Dialog open={seoModalOpen} onOpenChange={setSeoModalOpen}>
+        <DialogContent className="max-w-md bg-card border-border text-foreground max-h-[85vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-5 border-b border-border text-left">
+            <div className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+              <DialogTitle className="text-base font-bold text-foreground">
+                Google Business Profile AI Agent
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Active automations running for <strong className="text-foreground">{businessName}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-5 overflow-y-auto space-y-3">
             {DEFAULT_MILESTONES.map((m) => (
               <div
                 key={m.id}
-                className="bg-slate-800/80 border border-slate-700/60 rounded-xl p-3.5 space-y-2 hover:border-slate-600 transition-colors"
+                className="bg-muted/30 border border-border rounded-xl p-3.5 space-y-2"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="size-4 text-blue-400 shrink-0 mt-0.5" />
-                    <h4 className="text-xs font-bold text-slate-200 leading-snug">{m.title}</h4>
+                    <CheckCircle2 className="size-4 text-primary shrink-0 mt-0.5" />
+                    <h4 className="text-xs font-bold text-foreground leading-snug">{m.title}</h4>
                   </div>
                   {m.badge && (
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full shrink-0">
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full shrink-0">
                       {m.badge}
                     </span>
                   )}
@@ -275,7 +883,7 @@ export function UrgentReviewCard({
 
                 <ul className="pl-6 space-y-1">
                   {m.bullets.map((b, i) => (
-                    <li key={i} className="text-[11px] text-slate-400 list-disc">
+                    <li key={i} className="text-[11px] text-muted-foreground list-disc">
                       {b}
                     </li>
                   ))}
@@ -284,12 +892,12 @@ export function UrgentReviewCard({
             ))}
           </div>
 
-          <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-semibold">8 milestones active</span>
+          <div className="p-4 border-t border-border bg-muted/20 flex items-center justify-between">
+            <span className="text-xs text-muted-foreground font-semibold">8 agent workflows active</span>
             <Button
               type="button"
               onClick={() => setSeoModalOpen(false)}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs h-8 px-4 rounded-lg"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-4 rounded-lg"
             >
               Done
             </Button>

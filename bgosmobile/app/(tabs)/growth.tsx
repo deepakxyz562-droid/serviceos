@@ -87,7 +87,7 @@ function replyTimestamp(review: Review): string | null {
     const parsed = JSON.parse(review.responseJson || '{}');
     if (parsed?.repliedAt) return String(parsed.repliedAt);
   } catch {}
-  return review.createdAt || null;
+  return review.createTime || review.publishedAt || review.createdAt || null;
 }
 
 function categoryWords(category?: string | null): string[] {
@@ -175,7 +175,9 @@ export default function GrowthScreen() {
   const reviewList = useMemo(
     () =>
       [...(reviews.data?.reviews || [])].sort(
-        (a, b) => (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0),
+        (a, b) =>
+          (Date.parse(b.createTime || b.publishedAt || b.createdAt || '') || 0) -
+          (Date.parse(a.createTime || a.publishedAt || a.createdAt || '') || 0),
       ),
     [reviews.data],
   );
@@ -252,7 +254,12 @@ export default function GrowthScreen() {
     }
     for (const ph of publishedPhotos.slice(0, 10)) {
       if (!ph.createdAt) continue;
-      items.push({ id: `photo-${ph.id}`, kind: 'photo', when: ph.createdAt, title: 'Photo published to Google Maps' });
+      items.push({
+        id: `photo-${ph.id}`,
+        kind: 'photo',
+        when: ph.createdAt,
+        title: ph.title || ph.caption || 'Photo published to Google Maps',
+      });
     }
     for (const r of repliedReviews) {
       const when = replyTimestamp(r);
@@ -1245,6 +1252,13 @@ export default function GrowthScreen() {
   }
 
   function PhotosTab() {
+    const resolvedState = gbpPlace.data?.connectionState ?? photosRes.data?.connectionState;
+    const photosConnected =
+      (gbpPlace.loading && !gbpPlace.data && photosRes.data?.isConnected === undefined) ||
+      (gbpPlace.error && !gbpPlace.data && photosRes.data?.isConnected === undefined)
+        ? true
+        : Boolean(gbpPlace.data?.isConnected ?? photosRes.data?.isConnected);
+
     return (
       <View style={{ gap: 12 }}>
         <SectionHeader title="Google Photos" icon="photo-library" />
@@ -1253,8 +1267,10 @@ export default function GrowthScreen() {
           loading={photosRes.loading}
           error={photosRes.error}
           refresh={photosRes.refresh}
-          connected={isConnected}
+          connected={photosConnected}
+          connectionState={resolvedState}
           onNeedConnect={() => setTab('overview')}
+          businessName={businessName}
         />
       </View>
     );

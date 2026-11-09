@@ -1,6 +1,13 @@
 export interface BgosWorkspace {
   name: string;
   mode: 'local' | 'agency';
+  locale?: {
+    country: string;
+    countryName: string;
+    callingCode: string;
+    timeZone: string;
+    locale: string;
+  };
   links: { profile: string | null; booking: string | null; form: string | null; review: string | null };
   automations: { profileAssistant: boolean; offlineReply: boolean; gbp?: Record<string, boolean> };
   bookingPageConfig?: {

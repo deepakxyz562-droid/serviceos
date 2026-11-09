@@ -316,10 +316,14 @@ export const googleBusinessAdapter: PlatformAdapter = {
     if (postType === 'photo_media' || postType === 'media') {
       const photoUrl = params.mediaUrls?.[0];
       if (!photoUrl) throw new Error('Photo URL is required for Google Media upload');
+      const inferredFormat =
+        params.mediaFormat === 'VIDEO' || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(photoUrl)
+          ? 'VIDEO'
+          : 'PHOTO';
       const mediaResult = await uploadGoogleBusinessMedia(account, {
         sourceUrl: photoUrl,
-        mediaFormat: 'PHOTO',
-        category: (params as any).gbpMediaCategory || 'ADDITIONAL',
+        mediaFormat: inferredFormat,
+        category: params.gbpMediaCategory || 'ADDITIONAL',
         description: params.content || undefined,
       });
       return {
@@ -895,8 +899,8 @@ export async function uploadGoogleBusinessMedia(
   account: SocialAccountData,
   mediaData: {
     sourceUrl: string;
-    mediaFormat?: 'PHOTO';
-    category?: 'ADDITIONAL' | 'COVER' | 'PROFILE' | 'EXTERIOR' | 'INTERIOR' | 'PRODUCT';
+    mediaFormat?: 'PHOTO' | 'VIDEO';
+    category?: 'ADDITIONAL' | 'COVER' | 'PROFILE' | 'EXTERIOR' | 'INTERIOR' | 'PRODUCT' | 'AT_WORK' | 'TEAMS';
     description?: string;
   },
 ): Promise<{

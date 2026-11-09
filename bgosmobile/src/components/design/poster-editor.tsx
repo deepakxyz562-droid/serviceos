@@ -551,15 +551,17 @@ export function PosterEditor({
       });
       if (picked.canceled || !picked.assets[0]?.base64) return;
       const asset = picked.assets[0];
-      if ((asset.fileSize || 0) > 4_000_000) {
-        setError('Choose an image smaller than 4 MB.');
+      if ((asset.fileSize || 0) > 12_000_000) {
+        setError('Choose an image smaller than 12 MB.');
         return;
       }
+      const rawMime = (asset.mimeType || 'image/jpeg').toLowerCase();
+      const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
       const result = await apiRequest<{ url: string; assetId: string }>(
         '/api/social/designs/assets',
         {
           method: 'POST',
-          body: { data: `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` },
+          body: { data: `data:${mime};base64,${asset.base64}` },
         }
       );
       const latest = current.current;

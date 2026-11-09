@@ -81,7 +81,7 @@ export function BgosNavigation({ onLogout: _onLogout }: { onLogout?: () => void 
     <>
       <div className="bgos-brand-header">
         <button className="bgos-brand" onClick={() => navigate('dashboard')} aria-label="BGOS overview">
-          <BgosBrand />
+          <BgosBrand themeAdaptive />
         </button>
         <button
           type="button"

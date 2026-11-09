@@ -35,10 +35,18 @@ import { WEB_URL } from '../../src/lib/constants';
 import { getBgosWebUrl } from '../../src/lib/bgos-urls';
 import { useAuthStore } from '../../src/stores/auth-store';
 import { enablePush } from '../../src/lib/push';
+import {
+  COUNTRIES,
+  detectDeviceCountryAndTimezone,
+  getCountryByCode,
+  getTimeZoneShortLabel,
+  type CountryItem,
+} from '../../src/lib/country-codes';
 import type { BgosWorkspace } from '../../src/types/bgos-contracts';
 
 export default function ToolsScreen() {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [localeModalOpen, setLocaleModalOpen] = useState(false);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -105,6 +113,10 @@ export default function ToolsScreen() {
   }
 
   const data = workspace.data;
+  const detectedLocale = detectDeviceCountryAndTimezone();
+  const activeCountry: CountryItem = getCountryByCode(data?.locale?.country || detectedLocale.country.code);
+  const activeTimeZone = data?.locale?.timeZone || activeCountry.timeZone;
+  const tzShortLabel = getTimeZoneShortLabel(activeTimeZone);
   const planCode = data?.plan.code ? data.plan.code.toUpperCase() : 'STARTER';
   const isTrial = data?.plan.status === 'trial';
   const isActive = data?.plan.status === 'active';
@@ -112,6 +124,7 @@ export default function ToolsScreen() {
   return (
     <Screen
       title="Tools"
+      headerIcon="settings"
       subtitle="Open a tool or manage your business."
       onRefresh={workspace.refresh}
     >
@@ -825,6 +838,36 @@ export default function ToolsScreen() {
               label={data.mode === 'local' ? 'Workspace: Local Business (Switch to Agency)' : 'Workspace: Agency (Switch to Local)'}
               onPress={() => run(() => update({ mode: data.mode === 'local' ? 'agency' : 'local' }))}
             />
+
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => setLocaleModalOpen(true)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: 12,
+                borderRadius: 12,
+                backgroundColor: colors.background,
+                borderWidth: 1,
+                borderColor: colors.line,
+                gap: 10,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <Text style={{ fontSize: 22 }}>{activeCountry.flag}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }}>
+                    Country &amp; Schedule Timezone
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: colors.muted, marginTop: 1 }} numberOfLines={1}>
+                    {activeCountry.name} (+{activeCountry.callingCode}) • {activeTimeZone} ({tzShortLabel})
+                  </Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={colors.muted} />
+            </Pressable>
           </View>
         )}
 
@@ -910,6 +953,128 @@ export default function ToolsScreen() {
       </Card>
 
       </>}
+
+      <Modal
+        visible={localeModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setLocaleModalOpen(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(7, 11, 45, 0.45)', justifyContent: 'flex-end' }}>
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              maxHeight: '76%',
+              paddingBottom: Math.max(insets.bottom, 20),
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingHorizontal: 18,
+                paddingVertical: 14,
+                borderBottomWidth: 1,
+                borderBottomColor: '#F1F5F9',
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
+                  Country &amp; Schedule Timezone
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                  Used for review invite times, scheduled media &amp; SMS phone formatting.
+                </Text>
+              </View>
+              <Pressable hitSlop={10} onPress={() => setLocaleModalOpen(false)}>
+                <MaterialIcons name="close" size={22} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => {
+                  const dev = detectDeviceCountryAndTimezone();
+                  setLocaleModalOpen(false);
+                  void run(async () => {
+                    await update({ country: dev.country.code, timeZone: dev.timeZone });
+                    setNotice(`Updated workspace locale to ${dev.country.name} (${dev.timeZone}).`);
+                  });
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  backgroundColor: '#F0FDF4',
+                  borderWidth: 1,
+                  borderColor: '#BBF7D0',
+                  borderRadius: 12,
+                  paddingVertical: 10,
+                  marginBottom: 8,
+                }}
+              >
+                <MaterialIcons name="my-location" size={16} color="#0B9042" />
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0B9042' }}>
+                  Use Device Region ({detectedLocale.country.flag} {detectedLocale.country.name} • {detectedLocale.timeZone})
+                </Text>
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+              {COUNTRIES.map((c) => {
+                const isSelected = c.code === activeCountry.code;
+                return (
+                  <Pressable
+                    key={c.code}
+                    disabled={busy}
+                    onPress={() => {
+                      setLocaleModalOpen(false);
+                      void run(async () => {
+                        await update({ country: c.code, timeZone: c.timeZone });
+                        setNotice(`Updated workspace locale to ${c.name} (${c.timeZone}).`);
+                      });
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 11,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      backgroundColor: isSelected ? '#F0FDF4' : 'transparent',
+                      marginBottom: 2,
+                    }}
+                  >
+                    <Text style={{ fontSize: 22, marginRight: 12 }}>{c.flag}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: isSelected ? '800' : '600',
+                          color: isSelected ? '#0B9042' : '#0F172A',
+                        }}
+                      >
+                        {c.name} (+{c.callingCode})
+                      </Text>
+                      <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                        {c.timeZone} • {getTimeZoneShortLabel(c.timeZone)}
+                      </Text>
+                    </View>
+                    {isSelected ? (
+                      <MaterialIcons name="check" size={18} color="#0B9042" />
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
     </Screen>
   );

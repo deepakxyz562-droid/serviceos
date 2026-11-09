@@ -12,7 +12,7 @@ export default ({ config }: ConfigContext): any => ({
   owner: 'rishi076s-team',
   version: '1.0.0',
   icon: './assets/app-icon.png',
-  splash: { image: './assets/brand-mark.png', resizeMode: 'contain', backgroundColor: '#F4FAF9' },
+  splash: { image: './assets/icon-squircle.png', resizeMode: 'contain', backgroundColor: '#F5FBF8' },
   orientation: 'portrait',
   scheme: SCHEME,
   userInterfaceStyle: 'light',
@@ -28,7 +28,7 @@ export default ({ config }: ConfigContext): any => ({
   android: {
     package: 'com.fieseros.bgos',
     googleServicesFile: './google-services.json',
-    adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#009F50' },
+    adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#0B9042' },
     compileSdkVersion: 36,
     targetSdkVersion: 36,
     permissions: ['POST_NOTIFICATIONS', 'READ_PHONE_STATE', 'READ_CALL_LOG'],

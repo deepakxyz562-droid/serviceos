@@ -204,11 +204,24 @@ async function dispatchScheduledMessage(msg: ScheduledMessageRow): Promise<boole
       if (!recipientPhone) {
         throw new Error('No recipient phone number available')
       }
+      let countryCode = 'IN'
+      if (msg.tenantId) {
+        try {
+          const tenant = await db.tenant.findUnique({
+            where: { id: msg.tenantId },
+            select: { country: true },
+          })
+          if (tenant?.country) countryCode = tenant.country
+        } catch {
+          // fallback to default
+        }
+      }
       const { sendSmsMessage } = await import('@/lib/sms-send')
       const r = await sendSmsMessage({
         to: recipientPhone,
         message: msg.bodyText || msg.subject || '',
         tenantId: msg.tenantId || undefined,
+        countryCode,
       })
       dispatchOk = !!r.success
       if (!dispatchOk) dispatchError = r.error || 'SMS provider returned failure'

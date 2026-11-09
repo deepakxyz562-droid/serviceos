@@ -25,15 +25,25 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB (supports videos and high-res 
 
 export async function POST(request: NextRequest) {
   try {
-    const authUser = await getAuthUser();
-    const tenantId = authUser?.tenantId || authUser?.workspaceId || 'public';
-
-    const formData = await request.formData();
-    const file = formData.get('file') as File | null;
-
-    if (!file || typeof file === 'string') {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const tenantId = authUser.tenantId || authUser.workspaceId;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Workspace context required' }, { status: 400 });
+    }
+
+    const formData = (await request.formData()) as unknown as {
+      get(name: string): FormDataEntryValue | File | Blob | string | null;
+    };
+    const rawFile = formData.get('file');
+
+    if (!rawFile || typeof rawFile === 'string' || typeof (rawFile as Blob).arrayBuffer !== 'function') {
+      return NextResponse.json({ error: 'No valid file provided' }, { status: 400 });
+    }
+
+    const file = rawFile as Blob & { name?: string; size: number; type: string };
 
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
@@ -42,7 +52,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const mime = file.type || 'application/octet-stream';
+    const originalName = (typeof file.name === 'string' && file.name.trim()) ? file.name.trim() : 'media';
+    const ext = originalName.split('.').pop()?.toLowerCase() || '';
+    const rawMime = (file.type || '').trim().toLowerCase();
+    const mime =
+      rawMime === 'image/jpg'
+        ? 'image/jpeg'
+        : rawMime === 'image'
+          ? 'image/jpeg'
+          : rawMime === 'video'
+            ? (ext === 'mov' ? 'video/quicktime' : 'video/mp4')
+            : !rawMime || rawMime === 'application/octet-stream'
+              ? ext === 'png'
+                ? 'image/png'
+                : ext === 'webp'
+                  ? 'image/webp'
+                  : ext === 'mp4'
+                    ? 'video/mp4'
+                    : ext === 'mov'
+                      ? 'video/quicktime'
+                      : ext === 'pdf'
+                        ? 'application/pdf'
+                        : ext === 'jpg' || ext === 'jpeg'
+                          ? 'image/jpeg'
+                          : 'application/octet-stream'
+              : rawMime;
+
     const isImage = mime.startsWith('image/');
     const isVideo = mime.startsWith('video/');
 
@@ -54,16 +89,20 @@ export async function POST(request: NextRequest) {
     }
 
     const folderParam = (formData.get('folder') as string) || (isVideo ? 'social-videos' : 'social-posts');
-    const bucketParam = (formData.get('bucket') as string) || STORAGE_BUCKETS.companyAssets;
+    const requestedBucket = (formData.get('bucket') as string) || '';
+    const bucketParam = Object.values(STORAGE_BUCKETS).includes(requestedBucket as StorageBucket)
+      ? (requestedBucket as StorageBucket)
+      : STORAGE_BUCKETS.campaignAssets;
     const saveToLibrary = formData.get('saveToLibrary') === 'true';
 
     const timestamp = Date.now();
-    const sanitizedName = (file.name || 'media').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const sanitizedName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
     const fileName = `${timestamp}_${sanitizedName}`;
+    const bytes = Buffer.from(await file.arrayBuffer());
 
     const { url, path } = await uploadFile({
-      bucket: bucketParam as StorageBucket,
-      file,
+      bucket: bucketParam,
+      file: bytes,
       companyId: tenantId,
       folder: folderParam,
       fileName,
@@ -71,12 +110,12 @@ export async function POST(request: NextRequest) {
     });
 
     // Save to ImageLibrary if requested or if tenant is logged in
-    if (saveToLibrary && isImage && authUser?.tenantId) {
+    if (saveToLibrary && isImage && authUser.tenantId) {
       try {
         await db.imageLibrary.create({
           data: {
             tenantId: authUser.tenantId,
-            name: file.name || sanitizedName,
+            name: originalName || sanitizedName,
             url,
             folder: folderParam,
             mediaType: mime,
@@ -93,7 +132,7 @@ export async function POST(request: NextRequest) {
       success: true,
       url,
       path,
-      name: file.name,
+      name: originalName,
       size: file.size,
       mimeType: mime,
       isVideo,

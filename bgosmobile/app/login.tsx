@@ -1,19 +1,31 @@
 import { Redirect, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuthStore } from '../src/stores/auth-store';
 import { isAppleAuthAvailable } from '../src/lib/apple-auth';
 import { sendFirebaseOtp, verifyFirebaseOtp, formatPhoneNumber } from '../src/lib/firebase-auth';
-import { COUNTRIES, DEFAULT_COUNTRY, type CountryItem, formatNationalDisplay, buildE164 } from '../src/lib/country-codes';
+import {
+  COUNTRIES,
+  DEFAULT_COUNTRY,
+  detectDeviceCountryAndTimezone,
+  type CountryItem,
+  formatNationalDisplay,
+  buildE164,
+} from '../src/lib/country-codes';
 import { WEB_URL } from '../src/lib/constants';
-import { Action, Brand, Card, Chip, ErrorNotice, Field, Screen, colors, ui } from '../src/components/ui';
+import { Action, Card, Chip, ErrorNotice, Field, Screen, colors, ui } from '../src/components/ui';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const brandMark = require('../assets/brand-mark.png');
 
 export default function LoginScreen() {
   const router = useRouter();
   const [method, setMethod] = useState<'email' | 'phone'>('email');
-  const [selectedCountry, setSelectedCountry] = useState<CountryItem>(DEFAULT_COUNTRY);
+  const [selectedCountry, setSelectedCountry] = useState<CountryItem>(
+    () => detectDeviceCountryAndTimezone().country || DEFAULT_COUNTRY,
+  );
   const [countryModalVisible, setCountryModalVisible] = useState(false);
   const [phoneDigits, setPhoneDigits] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -144,8 +156,25 @@ export default function LoginScreen() {
   }
 
   const loginHeader = (
-    <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 16 }}>
-      <Brand large />
+    <View style={{ alignItems: 'center', paddingTop: 14, paddingBottom: 18 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Image
+          source={brandMark}
+          style={{ width: 32, height: 32, resizeMode: 'contain' }}
+          accessibilityIgnoresInvertColors
+          alt="BGOS mark"
+        />
+        <Text
+          style={{
+            fontSize: 28,
+            fontWeight: '800',
+            color: '#0B9042',
+            letterSpacing: -0.9,
+          }}
+        >
+          bgos
+        </Text>
+      </View>
       <Text
         accessibilityRole="header"
         style={{
@@ -154,10 +183,10 @@ export default function LoginScreen() {
           color: colors.ink,
           letterSpacing: -0.6,
           textAlign: 'center',
-          marginTop: 14,
+          marginTop: 18,
         }}
       >
-        Welcome to BGOS
+        Welcome back
       </Text>
       <Text
         style={{
@@ -165,10 +194,10 @@ export default function LoginScreen() {
           lineHeight: 19,
           color: colors.muted,
           textAlign: 'center',
-          marginTop: 6,
+          marginTop: 5,
         }}
       >
-        One platform for all your business growth.
+        Sign in to your BGOS account
       </Text>
     </View>
   );

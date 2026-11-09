@@ -84,11 +84,22 @@ export function isSupabaseStorageConfigured(): boolean {
 
 export interface UploadFileParams {
   bucket: StorageBucket
-  file: File | Buffer
+  file: File | Blob | Buffer
   companyId: string
   folder: string
   fileName: string
   contentType: string
+}
+
+async function toUploadBuffer(file: File | Blob | Buffer): Promise<Buffer> {
+  if (Buffer.isBuffer(file)) return file
+  if (typeof (file as Blob)?.arrayBuffer === 'function') {
+    return Buffer.from(await (file as Blob).arrayBuffer())
+  }
+  if (file instanceof ArrayBuffer) {
+    return Buffer.from(file)
+  }
+  return Buffer.from(file as any)
 }
 
 export async function uploadFile(
@@ -96,19 +107,19 @@ export async function uploadFile(
 ): Promise<{ path: string; url: string }> {
   const { bucket, file, companyId, folder, fileName, contentType } = params
   const storagePath = `${companyId}/${folder}/${fileName}`
+  const bytesBuffer = await toUploadBuffer(file)
 
   // ── Priority 1: AWS S3 ──────────────────────────────────────────────────
   if (isS3Configured()) {
     try {
       const client = getS3Client()!
-      const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file
       const s3Key = `${bucket}/${storagePath}`
 
       await client.send(
         new PutObjectCommand({
           Bucket: getS3Bucket(),
           Key: s3Key,
-          Body: Buffer.from(arrayBuffer),
+          Body: bytesBuffer,
           ContentType: contentType,
           ACL: 'public-read', // Make uploaded files publicly accessible
         })
@@ -126,10 +137,9 @@ export async function uploadFile(
   // ── Priority 2: Supabase Storage ────────────────────────────────────────
   if (isSupabaseStorageConfigured()) {
     const supabaseAdmin = getSupabaseAdmin()!
-    const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file
     const { error } = await supabaseAdmin.storage
       .from(bucket)
-      .upload(storagePath, arrayBuffer, { contentType, upsert: true })
+      .upload(storagePath, bytesBuffer, { contentType, upsert: true })
 
     if (error) {
       console.error('[Storage] Supabase upload error:', error.message)
@@ -152,8 +162,7 @@ export async function uploadFile(
   await mkdir(localDir, { recursive: true })
 
   const localPath = path.join(localDir, fileName)
-  const bytes = file instanceof File ? await file.arrayBuffer() : file
-  await writeFile(localPath, Buffer.from(bytes))
+  await writeFile(localPath, bytesBuffer)
 
   const url = `/uploads/${bucket}/${storagePath}`
   return { path: storagePath, url }

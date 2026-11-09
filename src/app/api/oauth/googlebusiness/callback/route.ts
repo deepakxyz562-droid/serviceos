@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { encryptToken } from '@/lib/social/crypto';
 import { logActivity } from '@/lib/activity-log';
 import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
+import { invalidatePlacePayloadCacheForTenant } from '@/lib/social/google-connection-state';
 
 /**
  * CRITICAL: OAuth callback routes MUST be dynamic. Without this, Next.js may
@@ -604,7 +605,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // ── 7. Clear the CSRF cookie + redirect to dashboard or mobile app ─────
+  // ── 7. Clear the CSRF cookie + invalidate cached GBP place payload ────
+  if (state.tenantId) {
+    invalidatePlacePayloadCacheForTenant(state.tenantId);
+  }
   if (isMobile) {
     const mobileTarget = `${mobileReturnUri || 'bgos://gbp-callback'}?google=connected${quotaPendingApproval ? '&gbpPending=1' : ''}`;
     const res = NextResponse.redirect(mobileTarget);

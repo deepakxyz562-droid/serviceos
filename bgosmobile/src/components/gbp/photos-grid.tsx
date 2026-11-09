@@ -1,37 +1,37 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, Text, View } from 'react-native';
+import { Alert, Image, Platform, Pressable, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Action, Card, Empty, ErrorNotice, Field, Loading, colors, ui } from '../ui';
-import { apiRequest } from '../../lib/api';
-import { uploadFileToStorage, type PendingUpload } from '../../lib/upload';
+import { Action, Card, Empty, ErrorNotice, Loading, colors } from '../ui';
+import { normalizePendingUpload, type PendingUpload } from '../../lib/upload';
 import { gbpColors, shortDate } from './bits';
-import type { GbpPhoto, PhotosResponse } from './types';
+import { MediaMetadataSheet } from './media-metadata-sheet';
+import type { GbpConnectionState, GbpPhoto, PhotosResponse } from './types';
 
 type TabKey = 'soon' | 'published' | 'unposted';
-type ScheduleMode = 'instant' | 'daily' | 'weekly';
-/**
- * variant 'default' — GBP AI Hub board: Publishing Soon / Published.
- * variant 'dhanda' — Google Media tab pills: Scheduled 📅 / Uploaded ☁ /
- * Not Posted ℹ (queue items saved as drafts that haven't been scheduled yet).
- */
 type BoardVariant = 'default' | 'dhanda';
 
-const SCHEDULE_OPTIONS: {
-  value: ScheduleMode;
-  label: string;
-  chip: string;
-  icon: React.ComponentProps<typeof MaterialIcons>['name'];
-}[] = [
-  { value: 'instant', label: 'Publish now', chip: 'Now', icon: 'bolt' },
-  { value: 'daily', label: 'Daily drip', chip: 'AI · Daily', icon: 'today' },
-  { value: 'weekly', label: 'Weekly drip', chip: 'AI · Weekly', icon: 'date-range' },
-];
+function PhotoCell({
+  photo,
+  scheduled,
+  unposted,
+  onPress,
+}: {
+  photo: GbpPhoto;
+  scheduled: boolean;
+  unposted?: boolean;
+  onPress?: () => void;
+}) {
+  const isVideo = photo.mediaFormat === 'VIDEO';
+  const editable = photo.source === 'queue' && Boolean(onPress);
 
-function PhotoCell({ photo, scheduled }: { photo: GbpPhoto; scheduled: boolean }) {
   return (
-    <View
-      style={{
+    <Pressable
+      disabled={!editable}
+      onPress={onPress}
+      accessibilityRole={editable ? 'button' : 'image'}
+      accessibilityLabel={photo.title || photo.caption || 'Google Business Profile media'}
+      style={({ pressed }) => ({
         flex: 1,
         aspectRatio: 1,
         borderRadius: 12,
@@ -39,41 +39,120 @@ function PhotoCell({ photo, scheduled }: { photo: GbpPhoto; scheduled: boolean }
         backgroundColor: colors.soft,
         borderWidth: 1,
         borderColor: colors.line,
-      }}
+        opacity: pressed && editable ? 0.85 : 1,
+      })}
     >
       <Image
         source={{ uri: photo.thumbnailUrl || photo.url }}
         style={{ width: '100%', height: '100%' }}
         resizeMode="cover"
         accessibilityIgnoresInvertColors
-        accessibilityLabel={photo.caption || 'Google Business Profile photo'}
+        accessibilityLabel={photo.title || photo.caption || 'Google Business Profile media'}
+        alt={photo.title || photo.caption || 'Google Business Profile media'}
       />
+
+      {isVideo ? (
+        <View
+          style={{
+            position: 'absolute',
+            top: 6,
+            right: 6,
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            backgroundColor: 'rgba(7,11,45,0.72)',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <MaterialIcons name="videocam" size={14} color="#FFFFFF" />
+        </View>
+      ) : null}
+
+      {photo.tags && photo.tags.length > 0 ? (
+        <View
+          style={{
+            position: 'absolute',
+            top: 6,
+            left: 6,
+            backgroundColor: 'rgba(255,255,255,0.92)',
+            borderRadius: 6,
+            paddingHorizontal: 5,
+            paddingVertical: 1.5,
+          }}
+        >
+          <Text style={{ color: colors.brandDark, fontSize: 9, fontWeight: '800' }} numberOfLines={1}>
+            #{photo.tags[0]}
+          </Text>
+        </View>
+      ) : null}
+
       <View
         style={{
           position: 'absolute',
           left: 6,
           bottom: 6,
           right: 6,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 4,
-          flexWrap: 'wrap',
+          gap: 3,
         }}
       >
-        {scheduled ? (
-          <View style={{ backgroundColor: gbpColors.amber, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-            <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' }}>Scheduled</Text>
-          </View>
-        ) : null}
-        {shortDate(photo.scheduledFor || photo.createdAt) ? (
-          <View style={{ backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-            <Text style={{ color: colors.ink, fontSize: 9.5, fontWeight: '700' }}>
-              {shortDate(photo.scheduledFor || photo.createdAt)}
+        {photo.title ? (
+          <View
+            style={{
+              backgroundColor: 'rgba(7,11,45,0.72)',
+              borderRadius: 6,
+              paddingHorizontal: 6,
+              paddingVertical: 2,
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '700' }} numberOfLines={1}>
+              {photo.title}
             </Text>
           </View>
         ) : null}
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+          {unposted ? (
+            <View
+              style={{
+                backgroundColor: colors.danger,
+                borderRadius: 6,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' }}>Not Posted</Text>
+            </View>
+          ) : scheduled ? (
+            <View
+              style={{
+                backgroundColor: gbpColors.amber,
+                borderRadius: 6,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' }}>Scheduled</Text>
+            </View>
+          ) : null}
+
+          {shortDate(photo.scheduledFor || photo.createdAt) ? (
+            <View
+              style={{
+                backgroundColor: 'rgba(255,255,255,0.92)',
+                borderRadius: 6,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+              }}
+            >
+              <Text style={{ color: colors.ink, fontSize: 9.5, fontWeight: '700' }}>
+                {shortDate(photo.scheduledFor || photo.createdAt)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -81,7 +160,7 @@ function AddNewCell({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Add new photos"
+      accessibilityLabel="Add new photos or videos"
       onPress={onPress}
       style={({ pressed }) => ({
         flex: 1,
@@ -97,24 +176,43 @@ function AddNewCell({ onPress }: { onPress: () => void }) {
         opacity: pressed ? 0.75 : 1,
       })}
     >
-      <MaterialIcons name="add" size={34} color={colors.brand} />
-      <Text style={{ color: colors.brand, fontSize: 12.5, fontWeight: '800' }}>Add New</Text>
+      <MaterialIcons name="add" size={32} color={colors.brand} />
+      <Text style={{ color: colors.brandDark, fontSize: 12, fontWeight: '800' }}>Add Media</Text>
     </Pressable>
   );
 }
 
-/** 3-column photo grid; the first cell is the "+ Add New" picker tile. */
-function Grid({ photos, scheduled, onAdd }: { photos: GbpPhoto[]; scheduled: boolean; onAdd: () => void }) {
+/** 3-column media grid; the first cell is the "+ Add Media" picker tile. */
+function Grid({
+  photos,
+  scheduled,
+  unposted,
+  onAdd,
+  onEdit,
+}: {
+  photos: GbpPhoto[];
+  scheduled: boolean;
+  unposted?: boolean;
+  onAdd: () => void;
+  onEdit?: (photo: GbpPhoto) => void;
+}) {
   const firstRow = photos.slice(0, 2);
   const rest = photos.slice(2);
   const restRows: GbpPhoto[][] = [];
   for (let i = 0; i < rest.length; i += 3) restRows.push(rest.slice(i, i + 3));
+
   return (
     <View style={{ gap: 8 }}>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <AddNewCell onPress={onAdd} />
         {firstRow.map((p) => (
-          <PhotoCell key={p.id} photo={p} scheduled={scheduled} />
+          <PhotoCell
+            key={p.id}
+            photo={p}
+            scheduled={scheduled}
+            unposted={unposted}
+            onPress={p.source === 'queue' && onEdit ? () => onEdit(p) : undefined}
+          />
         ))}
         {Array.from({ length: Math.max(0, 2 - firstRow.length) }).map((_, i) => (
           <View key={`pad-first-${i}`} style={{ flex: 1, aspectRatio: 1 }} />
@@ -123,7 +221,13 @@ function Grid({ photos, scheduled, onAdd }: { photos: GbpPhoto[]; scheduled: boo
       {restRows.map((row, rIdx) => (
         <View key={rIdx} style={{ flexDirection: 'row', gap: 8 }}>
           {row.map((p) => (
-            <PhotoCell key={p.id} photo={p} scheduled={scheduled} />
+            <PhotoCell
+              key={p.id}
+              photo={p}
+              scheduled={scheduled}
+              unposted={unposted}
+              onPress={p.source === 'queue' && onEdit ? () => onEdit(p) : undefined}
+            />
           ))}
           {Array.from({ length: Math.max(0, 3 - row.length) }).map((_, i) => (
             <View key={`pad-${rIdx}-${i}`} style={{ flex: 1, aspectRatio: 1 }} />
@@ -135,10 +239,10 @@ function Grid({ photos, scheduled, onAdd }: { photos: GbpPhoto[]; scheduled: boo
 }
 
 /**
- * Shared GBP Photos board (design spec §7) — used by the Photos tab AND the
- * Photos sub-tab inside the GBP AI Hub so both stay pixel-identical.
- * Real device picking (expo-image-picker) → authenticated upload →
- * POST /api/social/photos with an AI drip schedule.
+ * Shared GBP Media board — used inside the GBP AI Hub Media sub-tab.
+ * Supports picking Photos & Videos across native and Expo Web, opening
+ * MediaMetadataSheet for AI Title, SEO Description, Tags & Category, and
+ * editing or removing queued/draft items.
  */
 export function PhotosBoard({
   data,
@@ -146,23 +250,26 @@ export function PhotosBoard({
   error,
   refresh,
   connected,
+  connectionState,
   onNeedConnect,
   variant = 'default',
+  businessName = 'My Business',
 }: {
   data: PhotosResponse | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<unknown>;
   connected: boolean;
+  connectionState?: GbpConnectionState;
   /** Fired when the user taps a connect CTA while GBP is not connected. */
   onNeedConnect?: () => void;
   variant?: BoardVariant;
+  businessName?: string;
 }) {
   const [tab, setTab] = useState<TabKey>('soon');
-  const [pending, setPending] = useState<PendingUpload[]>([]);
-  const [schedule, setSchedule] = useState<ScheduleMode>('instant');
-  const [description, setDescription] = useState('');
-  const [uploading, setUploading] = useState(false);
+  const [pendingAssets, setPendingAssets] = useState<PendingUpload[]>([]);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<GbpPhoto | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -183,10 +290,6 @@ export function PhotosBoard({
   );
 
   const publishedCount = data?.liveCount ?? published.length;
-  const soonCount = data?.queuedCount ?? queued.length;
-  const dhanda = variant === 'dhanda';
-  // Dhanda pills split the queue: items with a publish time (scheduled /
-  // publishing) vs locally-saved drafts that were never sent (Not Posted).
   const scheduledQueue = useMemo(
     () => queued.filter((p) => p.status === 'scheduled' || p.status === 'publishing'),
     [queued],
@@ -195,6 +298,7 @@ export function PhotosBoard({
     () => queued.filter((p) => p.status !== 'scheduled' && p.status !== 'publishing'),
     [queued],
   );
+  const dhanda = variant === 'dhanda';
 
   type TabOption = {
     key: TabKey;
@@ -205,211 +309,135 @@ export function PhotosBoard({
   const tabOptions: TabOption[] = dhanda
     ? [
         { key: 'soon', label: 'Scheduled', count: scheduledQueue.length, icon: 'calendar-today' },
-        { key: 'published', label: 'Uploaded', count: publishedCount, icon: 'cloud-upload' },
+        { key: 'published', label: 'Uploaded', count: publishedCount, icon: 'cloud-done' },
         { key: 'unposted', label: 'Not Posted', count: unpostedQueue.length, icon: 'info-outline' },
       ]
     : [
-        { key: 'soon', label: 'Publishing Soon', count: soonCount, icon: 'schedule' },
+        { key: 'soon', label: 'Scheduled', count: scheduledQueue.length, icon: 'schedule' },
         { key: 'published', label: 'Published', count: publishedCount, icon: 'cloud-done' },
+        { key: 'unposted', label: 'Not Posted', count: unpostedQueue.length, icon: 'bookmark-border' },
       ];
+
+  const activeList =
+    tab === 'published' ? published : tab === 'unposted' ? unpostedQueue : scheduledQueue;
 
   async function pickPhotos() {
     setLocalError(null);
     setNotice(null);
     try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert(
-          'Photo library access needed',
-          'Allow photo access in Settings so BGOS can upload photos to your Google Business Profile.',
-        );
-        return;
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert(
+            'Media library access needed',
+            'Allow photo & video access in Settings so BGOS can upload media to your Google Business Profile.',
+          );
+          return;
+        }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ['images', 'videos'],
         allowsMultipleSelection: true,
         selectionLimit: 10,
-        quality: 0.8,
+        quality: 0.85,
         exif: false,
       });
       if (result.canceled || !result.assets?.length) return;
-      const mapped = result.assets.map((a, i) => ({
-        uri: a.uri,
-        name: a.fileName || `gbp-photo-${Date.now()}-${i}.jpg`,
-        mimeType: a.mimeType || 'image/jpeg',
-      }));
-      setPending(mapped);
-      setTab('soon');
+      const mapped = result.assets.map((a, i) =>
+        normalizePendingUpload(
+          {
+            uri: a.uri,
+            name: a.fileName || `${a.type === 'video' ? 'video' : 'photo'}-${Date.now()}-${i}`,
+            mimeType: a.mimeType || (a.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+            file: (a as any).file,
+            fileSize: a.fileSize,
+            mediaType: a.type === 'video' ? 'video' : 'image',
+          },
+          i,
+        ),
+      );
+      setEditingItem(null);
+      setPendingAssets(mapped);
+      setComposerOpen(true);
     } catch (e) {
-      setLocalError((e as Error).message || 'Could not open the photo picker.');
+      setLocalError((e as Error).message || 'Could not open the media picker.');
     }
   }
 
-  async function uploadPending() {
-    if (!pending.length || uploading) return;
-    setUploading(true);
-    setLocalError(null);
-    setNotice(null);
-    try {
-      const urls: string[] = [];
-      for (const file of pending) {
-        urls.push(await uploadFileToStorage(file));
-      }
-      const res = await apiRequest<{
-        success: boolean;
-        message?: string;
-        results?: Array<{ url: string; status: string }>;
-      }>('/api/social/photos', {
-        method: 'POST',
-        body: {
-          photos: urls,
-          scheduleMode: schedule,
-          category: 'ADDITIONAL',
-          description: description.trim() || undefined,
-        },
-      });
-      const savedLocally = (res.results || []).some((r) => (r.status || '').includes('saved_locally'));
-      setPending([]);
-      setDescription('');
-      setNotice(
-        savedLocally
-          ? 'Photos stored in BGOS — they will publish to Google automatically once your profile is connected.'
-          : res.message || 'Photos sent to your Google Business Profile.',
-      );
-      await refresh();
-    } catch (e: unknown) {
-      setLocalError(e instanceof Error ? e.message : 'Could not upload photos. Please try again.');
-    } finally {
-      setUploading(false);
-    }
+  function openEditModal(item: GbpPhoto) {
+    setPendingAssets([]);
+    setEditingItem(item);
+    setComposerOpen(true);
   }
 
   function SegmentedPills() {
-    if (dhanda) {
-      return (
-        <View style={{ gap: 6 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              backgroundColor: '#F3F5FA',
-              borderRadius: 24,
-              padding: 4,
-              borderWidth: 1,
-              borderColor: '#E2E8F0',
-            }}
-          >
-            {tabOptions.map((opt) => {
-              const active = opt.key === tab;
-              return (
-                <Pressable
-                  key={opt.key}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: active }}
-                  onPress={() => setTab(opt.key)}
-                  style={({ pressed }) => ({
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    paddingVertical: 10,
-                    paddingHorizontal: 8,
-                    borderRadius: 20,
-                    backgroundColor: active ? '#0F172A' : 'transparent',
-                    opacity: pressed && !active ? 0.7 : 1,
-                    ...(active
-                      ? {
-                          shadowColor: '#000',
-                          shadowOffset: { width: 0, height: 2 },
-                          shadowOpacity: 0.12,
-                          shadowRadius: 3,
-                          elevation: 2,
-                        }
-                      : {}),
-                  })}
-                >
-                  <MaterialIcons
-                    name={opt.icon}
-                    size={15}
-                    color={active ? '#FFFFFF' : '#64748B'}
-                  />
-                  <Text
-                    style={{
-                      color: active ? '#FFFFFF' : '#64748B',
-                      fontSize: 12.5,
-                      fontWeight: active ? '700' : '600',
-                    }}
-                  >
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink, paddingHorizontal: 4 }}>
-            {activeList.length} Media {tab === 'soon' ? 'scheduled' : tab === 'published' ? 'uploaded' : 'not posted'}
-          </Text>
-        </View>
-      );
-    }
-
     return (
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {tabOptions.map((opt) => {
-          const active = opt.key === tab;
-          return (
-            <Pressable
-              key={opt.key}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              onPress={() => setTab(opt.key)}
-              style={({ pressed }) => ({
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                minHeight: 42,
-                borderRadius: 12,
-                backgroundColor: active ? colors.brand : colors.surface,
-                borderWidth: 1,
-                borderColor: active ? colors.brand : colors.line,
-                opacity: pressed && !active ? 0.7 : 1,
-              })}
-            >
-              <Text style={{ color: active ? '#FFFFFF' : colors.muted, fontSize: 13, fontWeight: '700' }}>
-                {opt.label}
-              </Text>
-              <View
-                style={{
-                  minWidth: 22,
-                  height: 20,
-                  paddingHorizontal: 6,
-                  borderRadius: 10,
+      <View style={{ gap: 6 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            backgroundColor: '#EEF2F6',
+            borderRadius: 16,
+            padding: 4,
+            borderWidth: 1,
+            borderColor: colors.line,
+          }}
+        >
+          {tabOptions.map((opt) => {
+            const active = opt.key === tab;
+            return (
+              <Pressable
+                key={opt.key}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                onPress={() => setTab(opt.key)}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: active ? 'rgba(255,255,255,0.25)' : colors.soft,
-                }}
+                  gap: 4,
+                  paddingVertical: 9,
+                  paddingHorizontal: 6,
+                  borderRadius: 12,
+                  backgroundColor: active ? colors.brand : 'transparent',
+                  opacity: pressed && !active ? 0.75 : 1,
+                })}
               >
-                <Text style={{ color: active ? '#FFFFFF' : colors.muted, fontSize: 11, fontWeight: '800' }}>
-                  {opt.count}
+                <MaterialIcons
+                  name={opt.icon}
+                  size={14}
+                  color={active ? '#FFFFFF' : colors.muted}
+                />
+                <Text
+                  style={{
+                    color: active ? '#FFFFFF' : colors.muted,
+                    fontSize: 11.5,
+                    fontWeight: '700',
+                  }}
+                  numberOfLines={1}
+                >
+                  {opt.label} ({opt.count})
                 </Text>
-              </View>
-            </Pressable>
-          );
-        })}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {dhanda ? (
+          <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.ink, paddingHorizontal: 4 }}>
+            {activeList.length} Media {tab === 'soon' ? 'scheduled' : tab === 'published' ? 'uploaded' : 'not posted'}
+          </Text>
+        ) : null}
       </View>
     );
   }
-
-  const activeList =
-    tab === 'published' ? published : dhanda ? (tab === 'unposted' ? unpostedQueue : scheduledQueue) : queued;
 
   return (
     <View style={{ gap: 12 }}>
       <ErrorNotice message={localError || error} retry={() => void refresh()} />
       {notice ? (
-        <Card style={{ backgroundColor: colors.successSoft }}>
+        <Card style={{ backgroundColor: colors.successSoft, borderColor: '#A7F3D0' }}>
           <Text style={{ color: colors.success, fontWeight: '700', fontSize: 13 }}>✓ {notice}</Text>
         </Card>
       ) : null}
@@ -419,214 +447,131 @@ export function PhotosBoard({
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <MaterialIcons name="info-outline" size={16} color={colors.noteText} />
             <Text style={{ fontSize: 13, fontWeight: '700', color: colors.noteText }}>
-              Photos publish to Google once GBP is connected
+              {(connectionState || data?.connectionState) === 'select_profile'
+                ? 'Select your active Google Business location'
+                : (connectionState || data?.connectionState) === 'reconnect_required'
+                  ? 'Google Business Profile session expired'
+                  : 'Media publishes to Google once GBP is connected'}
             </Text>
           </View>
           <Text style={{ fontSize: 12, lineHeight: 18, color: colors.noteText }}>
-            Uploads are stored safely in BGOS. Connect your Google Business Profile and AI starts the drip.
+            {(connectionState || data?.connectionState) === 'select_profile'
+              ? 'Multiple Google Business locations are linked. Choose which location to publish media to.'
+              : (connectionState || data?.connectionState) === 'reconnect_required'
+                ? 'Uploads save safely in BGOS. Reconnect your Google account to resume automatic publishing.'
+                : 'Uploads save safely in BGOS with AI title & tags. Connect your Google Business Profile to start publishing.'}
           </Text>
-          {onNeedConnect ? <Action label="Connect in the GBP tab" icon="login" onPress={onNeedConnect} /> : null}
+          {onNeedConnect ? (
+            <Action
+              label={
+                (connectionState || data?.connectionState) === 'select_profile'
+                  ? 'Select Profile'
+                  : (connectionState || data?.connectionState) === 'reconnect_required'
+                    ? 'Reconnect Google'
+                    : 'Connect in Overview'
+              }
+              icon="login"
+              onPress={onNeedConnect}
+            />
+          ) : null}
         </Card>
       ) : null}
 
       <SegmentedPills />
 
-      {/* Pending upload composer (after image picking) */}
-      {pending.length > 0 ? (
-        <Card style={{ gap: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <MaterialIcons name="auto-awesome" size={15} color={gbpColors.ai} />
-            <Text style={{ flex: 1, fontSize: 14, fontWeight: '800', color: colors.ink }}>
-              ✨ AI Suggested — {pending.length} photo{pending.length === 1 ? '' : 's'} ready
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Remove selected photo ${pending.length > 1 ? 's' : ''}`}
-              onPress={() => setPending([])}
-              hitSlop={8}
-            >
-              <MaterialIcons name="close" size={18} color={colors.muted} />
-            </Pressable>
-          </View>
-
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {pending.map((p, i) => (
-              <Image
-                key={`${p.uri}-${i}`}
-                source={{ uri: p.uri }}
-                style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: colors.soft }}
-                accessibilityIgnoresInvertColors
-              />
-            ))}
-          </View>
-
-          <View style={{ gap: 6 }}>
-            <Text style={ui.label}>Publishing schedule</Text>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              {SCHEDULE_OPTIONS.map((opt) => {
-                const active = opt.value === schedule;
-                return (
-                  <Pressable
-                    key={opt.value}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    onPress={() => setSchedule(opt.value)}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 4,
-                      minHeight: 40,
-                      borderRadius: 10,
-                      backgroundColor: active ? colors.brand : colors.surface,
-                      borderWidth: 1,
-                      borderColor: active ? colors.brand : colors.line,
-                      paddingHorizontal: 4,
-                    }}
-                  >
-                    <MaterialIcons name={opt.icon} size={14} color={active ? '#FFFFFF' : colors.muted} />
-                    <Text
-                      style={{ color: active ? '#FFFFFF' : colors.muted, fontSize: 11.5, fontWeight: '700' }}
-                      numberOfLines={1}
-                    >
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Text style={ui.caption}>
-              {schedule === 'instant'
-                ? 'Photos upload straight to Google now.'
-                : schedule === 'daily'
-                ? 'AI publishes one photo per day to keep your profile fresh.'
-                : 'AI publishes one photo per week on a steady drip.'}
-            </Text>
-          </View>
-
-          <Field
-            label="Caption / SEO description (optional)"
-            placeholder="e.g. Recent bathroom remodel in Austin — same-week service"
-            value={description}
-            onChangeText={setDescription}
-            multiline
-          />
-
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Action
-                label={uploading ? 'Uploading…' : schedule === 'instant' ? 'Publish to Google' : 'Queue AI Drip'}
-                icon="cloud-upload"
-                onPress={() => void uploadPending()}
-                disabled={uploading}
-              />
-            </View>
-            <View style={{ minWidth: 110 }}>
-              <Action label="Cancel" secondary onPress={() => setPending([])} disabled={uploading} />
-            </View>
-          </View>
-          {uploading ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <ActivityIndicator size="small" color={colors.brand} />
-              <Text style={ui.caption}>Uploading to BGOS storage, then queueing on Google…</Text>
-            </View>
-          ) : null}
-        </Card>
-      ) : null}
-
       {loading ? (
         <Loading />
       ) : activeList.length === 0 ? (
         dhanda ? (
-          <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 36, gap: 14 }}>
+          <View
+            style={{
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 28,
+              paddingHorizontal: 16,
+              gap: 12,
+              backgroundColor: colors.surface,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.line,
+            }}
+          >
             <View
               style={{
-                width: 96,
-                height: 96,
-                borderRadius: 24,
-                backgroundColor: '#EFF6FF',
+                width: 72,
+                height: 72,
+                borderRadius: 20,
+                backgroundColor: colors.brandSoft,
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderWidth: 1,
-                borderColor: '#DBEAFE',
+                borderColor: '#C6F6D5',
               }}
             >
-              <MaterialIcons name="event-available" size={54} color="#3B82F6" />
+              <MaterialIcons
+                name={tab === 'published' ? 'photo-library' : tab === 'unposted' ? 'bookmark-border' : 'event-available'}
+                size={36}
+                color={colors.brand}
+              />
             </View>
             <View style={{ alignItems: 'center', gap: 4 }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
                 {tab === 'soon'
                   ? 'No Media Scheduled'
                   : tab === 'published'
-                  ? 'No Media Uploaded'
-                  : 'No Media in Drafts'}
+                    ? 'No Media Uploaded'
+                    : 'No Media in Drafts'}
               </Text>
-              <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center' }}>
-                Upload now to attract more customers
+              <Text style={{ fontSize: 12.5, color: colors.muted, textAlign: 'center', lineHeight: 18 }}>
+                Upload photos or videos — BGOS AI generates local-SEO titles, descriptions, and tags automatically.
               </Text>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              onPress={pickPhotos}
-              style={({ pressed }) => ({
-                width: '100%',
-                maxWidth: 340,
-                height: 48,
-                borderRadius: 14,
-                overflow: 'hidden',
-                marginTop: 10,
-                opacity: pressed ? 0.9 : 1,
-              })}
-            >
-              <View
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  flexDirection: 'row',
-                }}
-              >
-                <View style={{ flex: 1, backgroundColor: '#9333EA' }} />
-                <View style={{ flex: 1, backgroundColor: '#EA580C' }} />
-              </View>
-              <View
-                style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
-                  Upload Media
-                </Text>
-                <MaterialIcons name="cloud-upload" size={18} color="#FFFFFF" />
-              </View>
-            </Pressable>
+            <View style={{ width: '100%', maxWidth: 300 }}>
+              <Action label="Upload Media" icon="cloud-upload" onPress={pickPhotos} />
+            </View>
           </View>
         ) : (
           <Empty
-            title={tab === 'soon' ? 'Nothing scheduled' : 'No photos published'}
+            title={
+              tab === 'soon'
+                ? 'Nothing scheduled'
+                : tab === 'published'
+                  ? 'No Google media yet'
+                  : 'No drafts or unposted media'
+            }
             detail={
               tab === 'soon'
-                ? 'Upload photos and let AI publish them to your Google Business Profile on a daily or weekly drip.'
-                : 'Published photos from your Google Business Profile appear here.'
+                ? 'Upload photos or videos and let AI write the SEO title & tags and publish on your schedule.'
+                : tab === 'published'
+                  ? 'Published photos & videos from your Google Business Profile appear here.'
+                  : 'Drafts and media saved before connecting Google appear here — tap any item to edit.'
             }
-            actionLabel="Add Photos"
+            actionLabel="Add Photos & Videos"
             onAction={pickPhotos}
           />
         )
       ) : (
         <Grid
           photos={activeList}
-          scheduled={tab === 'soon' || tab === 'unposted'}
+          scheduled={tab === 'soon'}
+          unposted={tab === 'unposted'}
           onAdd={pickPhotos}
+          onEdit={openEditModal}
         />
       )}
+
+      <MediaMetadataSheet
+        visible={composerOpen}
+        onClose={() => setComposerOpen(false)}
+        businessName={businessName}
+        pendingAssets={pendingAssets}
+        editingItem={editingItem}
+        workspaceLocale={data?.locale || null}
+        onSaved={async (msg) => {
+          setNotice(msg);
+          await refresh();
+        }}
+      />
     </View>
   );
 }

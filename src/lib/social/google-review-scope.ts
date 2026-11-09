@@ -6,8 +6,6 @@ import { extractLocationRef } from './adapters/googlebusiness';
 export async function googleReviewScope(tenantId: string, locationId?: string) {
   const account = await prepareGoogleAccount(tenantId, locationId);
   if (!account) return { source: 'google' };
-  const location = await extractLocationRef(account);
-  if (!location?.locationId) return { source: 'google' };
 
   // Count active Google Business accounts for this workspace
   let gbpAccountCount = 1;
@@ -17,10 +15,45 @@ export async function googleReviewScope(tenantId: string, locationId?: string) {
     });
   } catch {}
 
+  let resolvedLocationId: string | undefined;
+  try {
+    const location = await extractLocationRef(account);
+    if (location && typeof location === 'object' && typeof location.locationId === 'string') {
+      resolvedLocationId = location.locationId;
+    }
+  } catch (err: unknown) {
+    console.warn(
+      '[googleReviewScope] extractLocationRef warning:',
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  if (!resolvedLocationId) {
+    const meta = (account.metadata || {}) as Record<string, unknown>;
+    const rawFallback =
+      (locationId && locationId !== 'all' ? locationId : undefined) ||
+      (typeof meta.locationId === 'string' ? meta.locationId : undefined) ||
+      (typeof meta.activeProfileId === 'string' ? meta.activeProfileId : undefined) ||
+      (typeof account.accountId === 'string' ? account.accountId : undefined);
+    const candidate = rawFallback
+      ? rawFallback.replace(/^locations\//, '').split('/').pop()?.trim()
+      : undefined;
+    if (candidate && candidate !== 'primary' && candidate !== '5008' && candidate !== 'all') {
+      resolvedLocationId = candidate;
+    }
+  }
+
+  if (!resolvedLocationId) {
+    if (gbpAccountCount <= 1 && !locationId) {
+      return { source: 'google' };
+    }
+    return { googleReviewId: '__missing_gbp_location__' };
+  }
+
   const locationConditions: Array<Record<string, unknown>> = [
-    { googleReviewId: { startsWith: `locations/${location.locationId}/reviews/` } },
-    { googleReviewId: { contains: location.locationId } },
-    { responseJson: { contains: location.locationId } },
+    { googleReviewId: { startsWith: `locations/${resolvedLocationId}/reviews/` } },
+    { googleReviewId: { contains: resolvedLocationId } },
+    { responseJson: { contains: resolvedLocationId } },
   ];
 
   // Only allow unscoped fallback if the tenant has only 1 Google Business account

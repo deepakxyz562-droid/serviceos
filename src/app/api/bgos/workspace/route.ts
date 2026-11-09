@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { resolveTenantLocale, getCountryLocaleMeta, isValidTimeZone } from '@/lib/locale-timezone';
 import type { BgosWorkspace } from '../../../../../shared/bgos-contracts';
 
 const patch = z.object({
   mode: z.enum(['local', 'agency']).optional(),
+  country: z.string().min(2).max(4).optional(),
+  timeZone: z.string().min(2).max(80).optional(),
   profileAssistant: z.boolean().optional(),
   offlineReply: z.boolean().optional(),
   gbpAutomations: z.object({
@@ -37,6 +40,7 @@ export async function GET() {
       select: {
         name: true,
         slug: true,
+        country: true,
         phone: true,
         email: true,
         website: true,
@@ -48,7 +52,11 @@ export async function GET() {
       },
     });
     if (!tenant) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
-    const settings = parse(tenant.settingsJson), features = settings;
+    const settings = parse(tenant.settingsJson);
+    const resolvedLocale = resolveTenantLocale({
+      tenantCountry: tenant.country,
+      settingsJson: settings,
+    });
     // Resolve primary intake form: explicitly configured or most recently updated active form
     let form: { id: string; name: string; slug: string | null } | null = null;
     if (settings.intakeFormId) {
@@ -73,6 +81,13 @@ export async function GET() {
       tenant.name;
     const data: BgosWorkspace = {
       name: effectiveBusinessName, mode: settings.bgos?.mode === 'agency' ? 'agency' : 'local',
+      locale: {
+        country: resolvedLocale.country,
+        countryName: resolvedLocale.countryName,
+        callingCode: resolvedLocale.callingCode,
+        timeZone: resolvedLocale.timeZone,
+        locale: resolvedLocale.locale,
+      },
       bookingPageConfig: {
         businessName: effectiveBusinessName,
         phone: bookingPageConfig.phone || tenant.phone || '',
@@ -119,6 +134,16 @@ export async function PATCH(request: NextRequest) {
     if (!tenant) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     const settings = parse(tenant.settingsJson);
     if (input.data.mode) settings.bgos = { ...settings.bgos, mode: input.data.mode };
+    if (input.data.country) {
+      const normalizedCountry = input.data.country.trim().toUpperCase();
+      settings.country = normalizedCountry;
+      if (!input.data.timeZone && !settings.timezone) {
+        settings.timezone = getCountryLocaleMeta(normalizedCountry).timeZone;
+      }
+    }
+    if (input.data.timeZone && isValidTimeZone(input.data.timeZone)) {
+      settings.timezone = input.data.timeZone.trim();
+    }
     if (input.data.profileAssistant !== undefined) {
       if (!settings.creatorProfile) return NextResponse.json({ error: 'Create your digital profile first' }, { status: 409 });
       settings.creatorProfile.aiAgentEnabled = input.data.profileAssistant;
@@ -132,6 +157,7 @@ export async function PATCH(request: NextRequest) {
       settings.intakeFormId = input.data.intakeFormId;
     }
     const updateData: Record<string, any> = { settingsJson: JSON.stringify(settings) };
+    if (input.data.country) updateData.country = input.data.country.trim().toUpperCase();
     if (input.data.bookingPageConfig?.phone) updateData.phone = input.data.bookingPageConfig.phone;
     if (input.data.bookingPageConfig?.website) updateData.website = input.data.bookingPageConfig.website;
     if (input.data.bookingPageConfig?.seoDescription) updateData.description = input.data.bookingPageConfig.seoDescription;

@@ -7,7 +7,7 @@
   "scope": "/",
   "display": "standalone",
   "background_color": "#F4FAF9",
-  "theme_color": "#007F73",
+  "theme_color": "#0B9042",
   "icons": [
     {
       "src": "/bgos/icon-192.png",

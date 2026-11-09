@@ -154,7 +154,7 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
       scoreWeight: 10,
       currentValue: `${photosCount} photo(s) published/scheduled`,
       recommendation: 'Profiles with 10+ photos get 35% more clicks to their website. Keep fresh with weekly photo uploads.',
-      actionRequired: 'Bulk upload photos using the AI Photo Drip Scheduler.',
+      actionRequired: 'Bulk upload photos using the AI Photo Scheduler.',
     },
   ];
 

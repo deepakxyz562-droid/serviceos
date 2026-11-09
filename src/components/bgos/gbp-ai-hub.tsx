@@ -58,6 +58,8 @@ import {
   Wand2,
   Upload,
   Trash2,
+  Film,
+  Tag,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -88,6 +90,10 @@ import { authFetch, getAuthToken } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 import { GbpManageProfileDialog } from '@/components/bgos/gbp-manage-profile-dialog';
+import {
+  WebMediaMetadataDialog,
+  type WebMediaItem,
+} from '@/components/bgos/media-metadata-dialog';
 
 // ─── API response types (mirrors of live route contracts) ────────────────────
 
@@ -117,6 +123,8 @@ interface GbpPlaceResponse {
     placeId: string | null;
     mapsUrl: string | null;
     reviewUrl: string | null;
+    description?: string;
+    regularHours?: Record<string, { open: boolean; openTime: string; closeTime: string; is24Hours?: boolean }> | null;
     isVerified: boolean;
     isPendingApproval?: boolean;
     status: string;
@@ -130,6 +138,8 @@ interface GbpPlaceResponse {
     address: string;
     phone: string;
     website: string;
+    description?: string;
+    regularHours?: Record<string, { open: boolean; openTime: string; closeTime: string; is24Hours?: boolean }> | null;
     completionScore: number;
     missingFields: string[];
   };
@@ -173,6 +183,8 @@ interface GbpReview {
   rating: number;
   comment: string | null;
   createdAt: string;
+  createTime?: string | null;
+  publishedAt?: string | null;
   status: string;
   source: string;
   googleReviewId: string | null;
@@ -202,13 +214,21 @@ interface SocialPostItem {
 
 interface PhotoItem {
   id: string;
+  postId?: string;
   url: string;
   thumbnailUrl?: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
   category?: string;
+  gbpCategory?: string;
+  mediaFormat?: string;
   createdAt: string;
+  scheduledFor?: string | null;
   source: 'google' | 'queue';
   status?: string;
   caption?: string;
+  failureReason?: string;
 }
 
 interface PhotosResponse {
@@ -799,7 +819,7 @@ function RoadmapTimeline({
                 detail={
                   photoQueueCount > 0
                     ? `${photoQueueCount} photo(s) in the publishing queue`
-                    : 'Planned — bulk upload photos to start the daily/weekly drip'
+                    : 'Planned — bulk upload photos to start the daily/weekly schedule'
                 }
               />
               {keywordsSeeded && (
@@ -950,7 +970,7 @@ function AiActionsFeed({ items }: { items: FeedItem[] }) {
             <Bot className="size-8 text-slate-300" aria-hidden="true" />
             <p className="text-sm font-medium text-foreground">No AI actions yet</p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              Once your agents publish posts, reply to reviews or drip photos, every action shows up here.
+              Once your agents publish posts, reply to reviews or schedule photos, every action shows up here.
             </p>
           </div>
         ) : (
@@ -1214,7 +1234,9 @@ function ReviewCard({
               <p className="text-sm font-semibold text-foreground">{review.authorName || 'Google user'}</p>
               <RatingPill rating={review.rating} />
             </div>
-            <p className="text-[11px] text-muted-foreground">{formatDate(review.createdAt)}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {formatDate(review.createTime || review.publishedAt || review.createdAt)}
+            </p>
           </div>
         </div>
 
@@ -1350,113 +1372,120 @@ function ReviewCard({
 
 function PhotosTab({
   photos,
+  businessName,
   isConnected,
   connectUrl,
   onPhotosChanged,
   loading,
 }: {
   photos: PhotosResponse | null;
+  businessName: string;
   isConnected: boolean;
   connectUrl: string;
   onPhotosChanged: () => void;
   loading: boolean;
 }) {
-  const [view, setView] = useState<'queue' | 'published'>('queue');
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [scheduleMode, setScheduleMode] = useState<'instant' | 'daily' | 'weekly'>('instant');
-  const [uploading, setUploading] = useState(false);
-  const [uploadingCount, setUploadingCount] = useState(0);
+  const [view, setView] = useState<'queue' | 'published' | 'not_posted'>('queue');
+  const [metadataModalOpen, setMetadataModalOpen] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [editingItem, setEditingItem] = useState<WebMediaItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const queued = (photos?.photos || []).filter((p) => p.source === 'queue');
-  const published = (photos?.photos || []).filter((p) => p.source === 'google');
+  const allPhotos = photos?.photos || [];
+  const queued = allPhotos.filter(
+    (p) => p.source === 'queue' && (p.status === 'scheduled' || p.status === 'publishing'),
+  );
+  const notPosted = allPhotos.filter(
+    (p) => p.source === 'queue' && p.status !== 'scheduled' && p.status !== 'publishing',
+  );
+  const published = allPhotos.filter((p) => p.source === 'google');
   const liveCount = photos?.liveCount ?? published.length;
-  const queuedCount = photos?.queuedCount ?? queued.length;
+  const queuedCount = queued.length;
+  const notPostedCount = notPosted.length;
+
+  const activeItems = view === 'queue' ? queued : view === 'not_posted' ? notPosted : published;
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setSelectedFiles(files);
-  };
-
-  const confirmUpload = async () => {
-    if (!selectedFiles.length) {
-      toast.error('Choose at least one photo first');
-      return;
-    }
-    setUploading(true);
-    setUploadingCount(0);
-    try {
-      const urls: string[] = [];
-      for (const file of selectedFiles) {
-        setUploadingCount((c) => c + 1);
-        const form = new FormData();
-        form.append('file', file);
-        const upRes = await authFetch('/api/omnichannel/upload', { method: 'POST', body: form });
-        const upData = (await upRes.json().catch(() => ({}))) as { success?: boolean; url?: string; error?: string };
-        if (!upRes.ok || !upData.url) {
-          throw new Error(upData.error || `Upload failed for ${file.name}`);
-        }
-        urls.push(upData.url);
-      }
-      const res = await authFetch('/api/social/photos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photos: urls, scheduleMode, category: 'ADDITIONAL' }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string; error?: string };
-      if (!res.ok || !data.success) throw new Error(data.error || 'Photo upload failed');
-      toast.success(data.message || 'Photos uploaded.');
-      setSelectedFiles([]);
-      setUploadOpen(false);
-      setView(scheduleMode === 'instant' ? 'published' : 'queue');
-      onPhotosChanged();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Photo upload failed');
-    } finally {
-      setUploading(false);
-      setUploadingCount(0);
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (!files.length) return;
+    setEditingItem(null);
+    setPendingFiles(files);
+    setMetadataModalOpen(true);
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Photo queue filters">
-        <button
-          type="button"
-          onClick={() => setView('queue')}
-          aria-pressed={view === 'queue'}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-            view === 'queue'
-              ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-slate-200 bg-white text-muted-foreground hover:bg-slate-50',
-          )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,video/*"
+        multiple
+        onChange={handleFiles}
+        className="hidden"
+        aria-label="Select photos or videos to upload"
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Photo queue filters">
+          <button
+            type="button"
+            onClick={() => setView('queue')}
+            aria-pressed={view === 'queue'}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              view === 'queue'
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-slate-200 bg-white text-muted-foreground hover:bg-slate-50',
+            )}
+          >
+            <StatusDot tone="amber" />
+            Publishing Soon ({queuedCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('published')}
+            aria-pressed={view === 'published'}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              view === 'published'
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-slate-200 bg-white text-muted-foreground hover:bg-slate-50',
+            )}
+          >
+            <StatusDot tone="emerald" />
+            Published ({liveCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('not_posted')}
+            aria-pressed={view === 'not_posted'}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              view === 'not_posted'
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-slate-200 bg-white text-muted-foreground hover:bg-slate-50',
+            )}
+          >
+            Not Posted / Drafts ({notPostedCount})
+          </button>
+        </div>
+
+        <Button
+          size="sm"
+          onClick={() => fileInputRef.current?.click()}
+          className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 text-xs"
         >
-          <StatusDot tone="amber" />
-          Publishing Soon ({queuedCount})
-        </button>
-        <button
-          type="button"
-          onClick={() => setView('published')}
-          aria-pressed={view === 'published'}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-            view === 'published'
-              ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-slate-200 bg-white text-muted-foreground hover:bg-slate-50',
-          )}
-        >
-          <StatusDot tone="emerald" />
-          Published ({liveCount})
-        </button>
+          <Sparkles className="size-3.5" aria-hidden="true" />
+          Upload Photo / Video
+        </Button>
       </div>
 
       {!isConnected && (
         <Card className="rounded-2xl border-amber-200 bg-amber-50/60 shadow-xs">
           <CardContent className="flex flex-col gap-2 p-4 md:flex-row md:items-center md:justify-between">
-            <p className="text-sm text-amber-600">
-              Not connected — uploads are saved to the workspace queue. Connect Google Business Profile so AI can publish them live.
+            <p className="text-sm text-amber-700">
+              Not connected — uploads save in BGOS with AI titles and tags. Connect Google Business Profile so AI can publish them live.
             </p>
             {connectUrl && (
               <Button asChild size="sm" className="shrink-0 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90">
@@ -1474,128 +1503,131 @@ function PhotosTab({
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-3 md:grid-cols-4" role="list" aria-label={view === 'queue' ? 'Photos publishing soon' : 'Published photos'}>
-          {/* Add New tile */}
+        <div
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4"
+          role="list"
+          aria-label={view === 'queue' ? 'Photos publishing soon' : view === 'not_posted' ? 'Draft or failed media' : 'Published photos'}
+        >
           <button
             type="button"
-            onClick={() => setUploadOpen(true)}
-            className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary"
-            aria-label="Add new photos"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-white text-slate-500 transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary"
+            aria-label="Add new photos or videos"
           >
             <Plus className="size-6" aria-hidden="true" />
-            <span className="text-xs font-medium">Add New</span>
+            <span className="text-xs font-medium">Add Photo / Video</span>
           </button>
 
-          {view === 'queue'
-            ? queued.map((p) => (
-                <figure key={p.id} className="group relative aspect-square overflow-hidden rounded-xl bg-slate-100" role="listitem">
+          {activeItems.map((p) => {
+            const isVideo =
+              p.mediaFormat === 'VIDEO' || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(p.url || '');
+            const isEditable = p.source === 'queue' && Boolean(p.postId || p.id);
+            const displayDate = formatDate(p.scheduledFor || p.createdAt);
+            const displayTitle = p.title || p.caption || '';
+            const primaryTag = Array.isArray(p.tags) && p.tags.length > 0 ? p.tags[0] : '';
+
+            return (
+              <figure
+                key={p.id}
+                role="listitem"
+                onClick={
+                  isEditable
+                    ? () => {
+                        setPendingFiles([]);
+                        setEditingItem(p);
+                        setMetadataModalOpen(true);
+                      }
+                    : undefined
+                }
+                className={cn(
+                  'group relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-100',
+                  isEditable && 'cursor-pointer hover:ring-2 hover:ring-primary/50 transition',
+                )}
+              >
+                {isVideo ? (
+                  <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-slate-900 text-white">
+                    <Film className="size-7 text-emerald-400" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-200">Video</span>
+                  </div>
+                ) : (
                   <img
                     src={p.thumbnailUrl || p.url}
-                    alt={p.caption ? `Queued photo: ${p.caption.slice(0, 60)}` : 'Photo queued for publishing'}
+                    alt={displayTitle ? `GBP media: ${displayTitle.slice(0, 60)}` : 'Google Business media'}
                     className="size-full object-cover"
                     loading="lazy"
                   />
-                  <figcaption className="absolute inset-x-1 bottom-1 rounded-lg bg-black/60 px-1.5 py-0.5 text-center text-[10px] font-medium text-white">
-                    {formatDate(p.createdAt)}
-                  </figcaption>
-                </figure>
-              ))
-            : published.map((p) => (
-                <figure key={p.id} className="group relative aspect-square overflow-hidden rounded-xl bg-slate-100" role="listitem">
-                  <img
-                    src={p.thumbnailUrl || p.url}
-                    alt="Published Google Business photo"
-                    className="size-full object-cover"
-                    loading="lazy"
-                  />
-                  <figcaption className="absolute inset-x-1 bottom-1 rounded-lg bg-black/60 px-1.5 py-0.5 text-center text-[10px] font-medium text-white">
-                    {formatDate(p.createdAt)}
-                  </figcaption>
-                </figure>
-              ))}
+                )}
+
+                <div className="absolute left-1.5 top-1.5 flex items-center gap-1">
+                  {p.source === 'google' ? (
+                    <span className="rounded-full bg-emerald-600/90 px-2 py-0.5 text-[9px] font-bold text-white">
+                      LIVE
+                    </span>
+                  ) : p.status === 'failed' ? (
+                    <span className="rounded-full bg-rose-600/90 px-2 py-0.5 text-[9px] font-bold text-white">
+                      FAILED
+                    </span>
+                  ) : p.status === 'draft' ? (
+                    <span className="rounded-full bg-slate-700/90 px-2 py-0.5 text-[9px] font-bold text-white">
+                      DRAFT
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-amber-500/95 px-2 py-0.5 text-[9px] font-bold text-white">
+                      QUEUED
+                    </span>
+                  )}
+                </div>
+
+                {isEditable && (
+                  <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-semibold text-white">
+                    Edit
+                  </span>
+                )}
+
+                <figcaption className="absolute inset-x-1.5 bottom-1.5 rounded-lg bg-black/70 px-2 py-1 text-left text-white backdrop-blur-xs">
+                  {displayTitle ? (
+                    <p className="truncate text-[10px] font-semibold">{displayTitle}</p>
+                  ) : null}
+                  <div className="flex items-center justify-between gap-1 text-[9px] text-slate-200">
+                    <span>{displayDate}</span>
+                    {primaryTag ? (
+                      <span className="inline-flex items-center gap-0.5 truncate text-emerald-300">
+                        <Tag className="size-2.5 shrink-0" />
+                        #{primaryTag}
+                      </span>
+                    ) : null}
+                  </div>
+                </figcaption>
+              </figure>
+            );
+          })}
         </div>
       )}
 
-      {(view === 'queue' ? queued : published).length === 0 && !loading && (
+      {activeItems.length === 0 && !loading && (
         <p className="text-center text-xs text-muted-foreground">
           {view === 'queue'
-            ? 'Nothing queued yet — upload photos and pick a daily or weekly drip schedule.'
-            : 'No photos published to Google yet. Upload and choose “Publish now”.'}
+            ? 'Nothing queued yet — upload photos or videos to generate AI titles, SEO tags & schedule them.'
+            : view === 'not_posted'
+              ? 'No failed or draft uploads — every queued item is on track.'
+              : 'No media published to Google yet. Upload and choose “Publish now”.'}
         </p>
       )}
 
-      {/* Upload dialog */}
-      <Dialog open={uploadOpen} onOpenChange={(open) => { if (!uploading) setUploadOpen(open); }}>
-        <DialogContent className="rounded-2xl sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="size-4 text-purple-600" aria-hidden="true" />
-              Upload photos
-            </DialogTitle>
-            <DialogDescription>
-              Choose one or many photos. AI can publish them instantly or drip them daily / weekly for a fresh profile.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleFiles}
-              className="hidden"
-              aria-label="Select photos to upload"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-6 text-slate-500 transition-colors hover:border-primary hover:text-primary"
-            >
-              <Upload className="size-6" aria-hidden="true" />
-              <span className="text-sm font-medium">
-                {selectedFiles.length ? `${selectedFiles.length} photo(s) selected` : 'Choose photos (multiple allowed)'}
-              </span>
-            </button>
-            <div className="space-y-1.5">
-              <label htmlFor="gbp-photo-schedule" className="text-xs font-medium text-foreground">
-                Publishing schedule
-              </label>
-              <Select value={scheduleMode} onValueChange={(v) => setScheduleMode(v as 'instant' | 'daily' | 'weekly')}>
-                <SelectTrigger id="gbp-photo-schedule" className="rounded-xl" aria-label="Publishing schedule">
-                  <SelectValue placeholder="Choose schedule" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="instant">Publish now</SelectItem>
-                  <SelectItem value="daily">Daily drip (1 photo/day)</SelectItem>
-                  <SelectItem value="weekly">Weekly drip (1 photo/week)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setUploadOpen(false)} disabled={uploading} className="rounded-xl">
-              Cancel
-            </Button>
-            <Button
-              onClick={confirmUpload}
-              disabled={uploading || !selectedFiles.length}
-              className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  {uploadingCount > 0 ? `Uploading ${uploadingCount}/${selectedFiles.length}…` : 'Uploading…'}
-                </>
-              ) : (
-                <>
-                  <Sparkles className="size-4 text-purple-600" aria-hidden="true" />
-                  Add to queue
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <WebMediaMetadataDialog
+        open={metadataModalOpen}
+        onOpenChange={setMetadataModalOpen}
+        businessName={businessName}
+        initialFiles={pendingFiles}
+        editingItem={editingItem}
+        defaultScheduleMode="daily"
+        onSaved={(_message, mode) => {
+          if (mode === 'instant') setView('published');
+          else if (mode === 'draft') setView('not_posted');
+          else if (mode === 'daily' || mode === 'weekly') setView('queue');
+          onPhotosChanged();
+        }}
+      />
     </div>
   );
 }
@@ -2288,9 +2320,12 @@ export function GbpAiHub() {
       items.push({
         id: `photo-${ph.id}`,
         kind: ph.source === 'google' ? 'photo' : 'photoQueued',
-        title: ph.caption || (ph.source === 'google' ? 'Photo live on Google Business Profile' : 'Photo in publishing queue'),
+        title:
+          ph.title ||
+          ph.caption ||
+          (ph.source === 'google' ? 'Photo live on Google Business Profile' : 'Photo in publishing queue'),
         detail: ph.category || '',
-        date: ph.createdAt,
+        date: ph.scheduledFor || ph.createdAt,
       });
     }
     return items
@@ -2472,6 +2507,7 @@ export function GbpAiHub() {
         <TabsContent value="photos">
           <PhotosTab
             photos={photos}
+            businessName={businessName}
             isConnected={isConnected}
             connectUrl={connectUrl}
             onPhotosChanged={loadPhotos}

@@ -141,6 +141,7 @@ const BrandBrainView = lazy(() =>
 import { AutopilotStudio } from './autopilot-studio';
 import { UrgentReviewCard } from '@/components/bgos/urgent-review-card';
 import { UpcomingPostsCarousel } from '@/components/bgos/upcoming-posts-carousel';
+import { WebMediaMetadataDialog, type WebMediaItem } from '@/components/bgos/media-metadata-dialog';
 
 type SocialTab =
   | 'overview'
@@ -714,7 +715,9 @@ interface PlaceResponse {
     address?: string;
     phone?: string;
     website?: string;
+    placeId?: string | null;
     mapsUrl?: string | null;
+    reviewUrl?: string | null;
     completionScore?: number;
     missingFields?: string[];
   } | null;
@@ -747,6 +750,8 @@ interface ReviewDto {
   comment?: string | null;
   authorName?: string | null;
   createdAt?: string | null;
+  createTime?: string | null;
+  publishedAt?: string | null;
   responseJson?: string | null;
   source?: string | null;
   reviewUrl?: string | null;
@@ -754,13 +759,21 @@ interface ReviewDto {
 
 interface PhotoDto {
   id: string;
+  postId?: string;
   url: string;
   thumbnailUrl?: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
   category?: string;
+  gbpCategory?: string;
+  mediaFormat?: string;
   createdAt?: string;
+  scheduledFor?: string | null;
   source?: string;
   status?: string;
   caption?: string;
+  failureReason?: string;
 }
 
 interface PhotosResponse {
@@ -1921,7 +1934,9 @@ export function SocialMediaView({
   const [photosData, setPhotosData] = useState<PhotosResponse | null>(null);
   const [photosLoading, setPhotosLoading] = useState(true);
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('uploaded');
-  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [mediaDialogOpen, setMediaDialogOpen] = useState(false);
+  const [selectedMediaFiles, setSelectedMediaFiles] = useState<File[]>([]);
+  const [editingMediaItem, setEditingMediaItem] = useState<WebMediaItem | null>(null);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
 
   const toggleChannel = (channelName: string) => {
@@ -3037,58 +3052,14 @@ export function SocialMediaView({
     }
   };
 
-  // ── Google Media upload (real pipeline from reviews-workstation) ──
+  // ── Google Media selection -> opens AI Title/Tags/Category dialog ──
 
-  const handleMediaUpload = async (files: FileList | null) => {
+  const handleMediaFileSelection = (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    setIsUploadingMedia(true);
-    const uploadedUrls: string[] = [];
-    try {
-      for (const file of Array.from(files).slice(0, 20)) {
-        try {
-          const fd = new FormData();
-          fd.append('file', file);
-          const upRes = await authFetch('/api/omnichannel/upload', { method: 'POST', body: fd });
-          const upData = await upRes.json().catch(() => ({}));
-          if (upRes.ok && upData?.url) {
-            uploadedUrls.push(upData.url);
-          } else {
-            toast.error(upData?.error || `Could not upload ${file.name}`);
-          }
-        } catch {
-          toast.error(`Could not upload ${file.name}`);
-        }
-      }
-
-      if (uploadedUrls.length === 0) {
-        toast.error('No photos were uploaded. Check your connection and try again.');
-        return;
-      }
-
-      const res = await authFetch('/api/social/photos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          photos: uploadedUrls,
-          scheduleMode: 'instant',
-          category: 'ADDITIONAL',
-          description: `Recent work and services at ${businessName}`,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        toast.success(data?.message || `${uploadedUrls.length} photo(s) uploaded.`);
-        setMediaFilter('uploaded');
-        fetchPhotos();
-      } else {
-        toast.error(data?.error || 'Uploaded to storage, but Google scheduling failed. Try again.');
-      }
-    } catch {
-      toast.error('Photo upload failed. Please try again.');
-    } finally {
-      setIsUploadingMedia(false);
-      if (mediaInputRef.current) mediaInputRef.current.value = '';
-    }
+    setEditingMediaItem(null);
+    setSelectedMediaFiles(Array.from(files).slice(0, 20));
+    setMediaDialogOpen(true);
+    if (mediaInputRef.current) mediaInputRef.current.value = '';
   };
 
   // ── Create Google post modal actions ──
@@ -3243,16 +3214,48 @@ export function SocialMediaView({
   );
   const uploadedCount =
     photosData?.liveCount ?? mediaPhotos.filter((p) => p.source === 'google').length;
-  const scheduledMediaCount =
-    photosData?.queuedCount ??
-    mediaPhotos.filter((p) => p.source === 'queue' && !p.status?.startsWith('saved_locally')).length;
-  const notPostedCount = mediaPhotos.filter((p) => p.status?.startsWith('saved_locally')).length;
+  const scheduledMediaCount = mediaPhotos.filter(
+    (p) => p.source === 'queue' && (p.status === 'scheduled' || p.status === 'publishing')
+  ).length;
+  const notPostedCount = mediaPhotos.filter(
+    (p) =>
+      p.source === 'queue' &&
+      p.status !== 'scheduled' &&
+      p.status !== 'publishing'
+  ).length;
   const visiblePhotos =
     mediaFilter === 'uploaded'
       ? mediaPhotos.filter((p) => p.source === 'google')
       : mediaFilter === 'scheduled'
-        ? mediaPhotos.filter((p) => p.source === 'queue' && !p.status?.startsWith('saved_locally'))
-        : mediaPhotos.filter((p) => p.status?.startsWith('saved_locally'));
+        ? mediaPhotos.filter(
+            (p) => p.source === 'queue' && (p.status === 'scheduled' || p.status === 'publishing')
+          )
+        : mediaPhotos.filter(
+            (p) => p.source === 'queue' && p.status !== 'scheduled' && p.status !== 'publishing'
+          );
+
+  const thisWeekReviewsCount = useMemo(() => {
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return reviews.filter((r) => {
+      const raw = r.createTime || r.publishedAt || r.createdAt;
+      if (!raw) return false;
+      const t = new Date(raw).getTime();
+      return !isNaN(t) && t >= sevenDaysAgo;
+    }).length;
+  }, [reviews]);
+
+  const lastReviewDays = useMemo<number | null>(() => {
+    if (!reviews.length) return null;
+    const timestamps = reviews
+      .map((r) => {
+        const raw = r.createTime || r.publishedAt || r.createdAt;
+        return raw ? new Date(raw).getTime() : NaN;
+      })
+      .filter((t) => !isNaN(t));
+    if (!timestamps.length) return null;
+    const latest = Math.max(...timestamps);
+    return Math.max(0, Math.floor((Date.now() - latest) / (1000 * 60 * 60 * 24)));
+  }, [reviews]);
 
   const detectedCategory = placeData?.place?.category || placeData?.tenantFallback?.category || '';
   const currentOfferings = useMemo(
@@ -3437,7 +3440,7 @@ export function SocialMediaView({
             </button>
           </div>
 
-          {/* Grexa Benchmark: Urgent Review Engine Card (Screenshot 4) */}
+          {/* Urgent Review Engine Card (Light UI + Real Timestamps + Bulk 5/Day Modal) */}
           <UrgentReviewCard
             businessName={businessName}
             reviewUrl={
@@ -3448,9 +3451,10 @@ export function SocialMediaView({
                     businessName || 'Google Business'
                   )}`)
             }
-            lastReviewDays={69}
+            thisWeekCount={thisWeekReviewsCount}
+            weeklyTarget={12}
+            lastReviewDays={lastReviewDays}
             totalReviews={reviews.length}
-            onOpenBulk={() => setActiveTab('review-replies')}
             onOpenQr={() => {
               const url =
                 placeData?.place?.reviewUrl ||
@@ -4259,7 +4263,7 @@ export function SocialMediaView({
                             <p className="text-xs font-bold text-foreground">{authorName}</p>
                             <StarRow rating={review.rating || 0} />
                             <span className="text-[10px] text-muted-foreground">
-                              {relativeTime(review.createdAt)}
+                              {relativeTime(review.createTime || review.publishedAt || review.createdAt)}
                             </span>
                             {existingReply && (
                               isReviewPublished(review) ? (
@@ -5572,28 +5576,18 @@ export function SocialMediaView({
               <input
                 ref={mediaInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,video/*"
                 multiple
                 className="hidden"
-                onChange={(e) => handleMediaUpload(e.target.files)}
+                onChange={(e) => handleMediaFileSelection(e.target.files)}
               />
               <Button
                 size="sm"
                 onClick={() => mediaInputRef.current?.click()}
-                disabled={isUploadingMedia}
                 className="h-9 px-4 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold gap-1.5"
               >
-                {isUploadingMedia ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" />
-                    <span>Uploading…</span>
-                  </>
-                ) : (
-                  <>
-                    <UploadCloud className="size-3.5" />
-                    <span>Upload Media ☁</span>
-                  </>
-                )}
+                <UploadCloud className="size-3.5" />
+                <span>Upload Media</span>
               </Button>
             </div>
           </div>
@@ -5618,38 +5612,69 @@ export function SocialMediaView({
                   }
                   description={
                     mediaFilter === 'uploaded'
-                      ? 'Upload shop photos, finished work and team pictures — they publish straight to your Google Business Profile.'
+                      ? 'Upload shop photos, videos, finished work and team pictures — BGOS AI generates titles & tags and publishes to your Google Business Profile.'
                       : mediaFilter === 'scheduled'
-                        ? 'Photos queued for AI drip scheduling will appear here with their publish dates.'
-                        : 'Photos saved locally (when Google is not connected) will appear here until they can be posted.'
+                        ? 'Photos & videos scheduled for automatic publishing appear here with their publish dates.'
+                        : 'Drafts and media saved before connecting Google appear here — click any item to edit or schedule.'
                   }
-                  actionLabel={mediaFilter === 'uploaded' ? 'Upload Media ☁' : undefined}
-                  onAction={mediaFilter === 'uploaded' ? () => mediaInputRef.current?.click() : undefined}
+                  actionLabel="Upload Media"
+                  onAction={() => mediaInputRef.current?.click()}
                   className="py-6"
                 />
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                {visiblePhotos.map((photo) => (
-                  <div key={photo.id} className="space-y-1.5">
-                    <div className="aspect-square rounded-xl overflow-hidden border border-border bg-muted">
-                      {/* Remote storage/data URLs — not local /public assets, plain img is intentional */}
-                      <img
-                        src={photo.thumbnailUrl || photo.url}
-                        alt={photo.caption || 'Google Business media'}
-                        loading="lazy"
-                        className="w-full h-full object-cover hover:scale-105 transition-transform"
-                      />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                {visiblePhotos.map((photo) => {
+                  const isEditable = photo.source === 'queue';
+                  return (
+                    <div
+                      key={photo.id}
+                      onClick={() => {
+                        if (isEditable) {
+                          setSelectedMediaFiles([]);
+                          setEditingMediaItem(photo);
+                          setMediaDialogOpen(true);
+                        }
+                      }}
+                      className={`space-y-1.5 ${isEditable ? 'cursor-pointer group' : ''}`}
+                    >
+                      <div className="relative aspect-square rounded-xl overflow-hidden border border-border bg-muted">
+                        {/* Remote storage/data URLs — not local /public assets, plain img is intentional */}
+                        <img
+                          src={photo.thumbnailUrl || photo.url}
+                          alt={photo.title || photo.caption || 'Google Business media'}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                        {photo.mediaFormat === 'VIDEO' && (
+                          <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/75 text-white text-[9px] font-bold">
+                            VIDEO
+                          </span>
+                        )}
+                        {photo.tags && photo.tags.length > 0 && (
+                          <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-white/90 text-primary text-[9px] font-bold max-w-[75%] truncate">
+                            #{photo.tags[0]}
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="text-[11px] font-bold text-foreground truncate">
+                          {photo.title || photo.caption || (photo.source === 'google' ? 'Google Live' : 'Queued Media')}
+                        </div>
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[10px] font-semibold text-muted-foreground truncate">
+                            {photo.scheduledFor
+                              ? new Date(photo.scheduledFor).toLocaleDateString([], { month: 'short', day: 'numeric' })
+                              : photo.gbpCategory || photo.category || (photo.source === 'google' ? 'Live' : 'Draft')}
+                          </span>
+                          {isEditable && (
+                            <span className="text-[10px] font-bold text-primary">Edit</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[9px] font-bold text-muted-foreground truncate">
-                        {photo.category === 'SCHEDULED_DRIP'
-                          ? relativeTime(photo.createdAt) || 'Queued'
-                          : photo.category || (photo.source === 'google' ? 'Live' : 'Queued')}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -6188,6 +6213,20 @@ export function SocialMediaView({
           </div>
         </DialogContent>
       </Dialog>
+      <WebMediaMetadataDialog
+        open={mediaDialogOpen}
+        onOpenChange={setMediaDialogOpen}
+        businessName={businessName}
+        initialFiles={selectedMediaFiles}
+        editingItem={editingMediaItem}
+        defaultScheduleMode="daily"
+        onSaved={(_msg, mode) => {
+          if (mode === 'instant') setMediaFilter('uploaded');
+          else if (mode === 'draft') setMediaFilter('not_posted');
+          else if (mode === 'daily' || mode === 'weekly') setMediaFilter('scheduled');
+          fetchPhotos();
+        }}
+      />
     </div>
   );
 }

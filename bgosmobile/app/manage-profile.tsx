@@ -5,6 +5,7 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,10 +16,13 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Screen, Card, Action, Badge, colors, ui } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
-import type { GbpPlaceResult, SocialPost } from '../src/components/gbp/types';
+import { normalizePendingUpload, type PendingUpload } from '../src/lib/upload';
+import { MediaMetadataSheet } from '../src/components/gbp/media-metadata-sheet';
+import type { GbpPhoto, GbpPlaceResult, PhotosResponse, SocialPost } from '../src/components/gbp/types';
 
 interface RewriteVariation {
   id: string;
@@ -42,6 +46,11 @@ export default function ManageGoogleProfileScreen() {
   const router = useRouter();
   const placeRes = useResource<GbpPlaceResult>('/api/gbp/place');
   const postsRes = useResource<PostsResponse>('/api/social/posts?platform=googlebusiness&limit=20');
+  const photosRes = useResource<PhotosResponse>('/api/social/photos');
+
+  const [mediaComposerOpen, setMediaComposerOpen] = useState(false);
+  const [pendingMedia, setPendingMedia] = useState<PendingUpload[]>([]);
+  const [editingMedia, setEditingMedia] = useState<GbpPhoto | null>(null);
 
   // Active Post Type Filter ('standard' | 'offer')
   const [postFilter, setPostFilter] = useState<'standard' | 'offer'>('standard');
@@ -134,7 +143,8 @@ export default function ManageGoogleProfileScreen() {
   const aiReplySalutation = place?.aiReplySalutation || placeRes.data?.tenantFallback?.aiReplySalutation || '';
   const additionalCategories = place?.additionalCategories || placeRes.data?.tenantFallback?.additionalCategories || [];
   const openingDate = place?.openingDate || placeRes.data?.tenantFallback?.openingDate || '';
-  const photosCount = 0; // Dynamic photo indicator
+  const profilePhotos = photosRes.data?.photos || [];
+  const photosCount = profilePhotos.length;
 
   // Sync support branding from API on load
   React.useEffect(() => {
@@ -291,20 +301,51 @@ export default function ManageGoogleProfileScreen() {
     ]);
   }
 
-  function handleAddMedia(type: 'photo' | 'video') {
-    Alert.alert(
-      `Add ${type === 'photo' ? 'Photo' : 'Video'}`,
-      `Select a high-resolution ${type} to upload directly to your Google Maps & Search profile.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Upload from Gallery',
-          onPress: () => {
-            Alert.alert('Gallery Upload', 'Opening gallery picker… (Photos sync directly to Google Business Profile).');
+  async function handleAddMedia(type: 'photo' | 'video') {
+    try {
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert(
+            'Permission Needed',
+            `Allow access to your media library so BGOS can upload ${type}s to your Google Business Profile.`,
+          );
+          return;
+        }
+      }
+
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: [type === 'photo' ? 'images' : 'videos'],
+        allowsMultipleSelection: true,
+        selectionLimit: 10,
+        quality: 0.85,
+        exif: false,
+      });
+
+      if (res.canceled || !res.assets?.length) return;
+
+      const normalized = res.assets.map((asset, idx) =>
+        normalizePendingUpload(
+          {
+            uri: asset.uri,
+            name: asset.fileName || `${type}-${Date.now()}-${idx}`,
+            mimeType: asset.mimeType || (type === 'video' ? 'video/mp4' : 'image/jpeg'),
+            file: (asset as any).file,
+            fileSize: asset.fileSize,
+            mediaType: type === 'video' ? 'video' : 'image',
           },
-        },
-      ]
-    );
+          idx,
+        ),
+      );
+      setEditingMedia(null);
+      setPendingMedia(normalized);
+      setMediaComposerOpen(true);
+    } catch (err: unknown) {
+      Alert.alert(
+        'Media Picker Error',
+        err instanceof Error ? err.message : 'Could not open your media library.',
+      );
+    }
   }
 
   return (
@@ -316,6 +357,7 @@ export default function ManageGoogleProfileScreen() {
       onRefresh={() => {
         placeRes.refresh();
         postsRes.refresh();
+        photosRes.refresh();
       }}
     >
       <ScrollView
@@ -517,25 +559,86 @@ export default function ManageGoogleProfileScreen() {
 
         {/* ── 4. Photos & Videos Section ──────────────────────── */}
         <View style={{ gap: 8 }}>
-          <Text style={styles.sectionHeader}>Photos & videos</Text>
-          <Card style={{ paddingVertical: 24, paddingHorizontal: 16, alignItems: 'center', gap: 14 }}>
-            <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center' }}>
-              No photos or videos on your listing yet
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={styles.sectionHeader}>Photos & videos ({photosCount})</Text>
+            <Pressable onPress={() => router.push('/(tabs)/photos')} hitSlop={8}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: colors.brand }}>Open Media</Text>
+            </Pressable>
+          </View>
+          <Card style={{ paddingVertical: 18, paddingHorizontal: 16, gap: 14 }}>
+            {profilePhotos.length === 0 ? (
+              <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center' }}>
+                No photos or videos on your listing yet
+              </Text>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 10 }}
+              >
+                {profilePhotos.slice(0, 12).map((item, idx) => (
+                  <Pressable
+                    key={item.id || `prof-media-${idx}`}
+                    onPress={() => {
+                      if (item.source === 'queue') {
+                        setPendingMedia([]);
+                        setEditingMedia(item);
+                        setMediaComposerOpen(true);
+                      } else {
+                        router.push('/(tabs)/photos');
+                      }
+                    }}
+                    style={{
+                      width: 88,
+                      height: 88,
+                      borderRadius: 12,
+                      overflow: 'hidden',
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      backgroundColor: '#F1F5F9',
+                    }}
+                  >
+                    <Image
+                      source={{ uri: item.thumbnailUrl || item.url }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                    />
+                    {item.source === 'queue' ? (
+                      <View
+                        style={{
+                          position: 'absolute',
+                          left: 4,
+                          bottom: 4,
+                          right: 4,
+                          backgroundColor: 'rgba(7,11,45,0.72)',
+                          borderRadius: 5,
+                          paddingHorizontal: 4,
+                          paddingVertical: 1.5,
+                        }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700' }} numberOfLines={1}>
+                          {item.status === 'draft' ? 'Draft' : 'Scheduled'}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
             <View style={{ flexDirection: 'row', gap: 12, width: '100%', justifyContent: 'center' }}>
               <Pressable
-                onPress={() => handleAddMedia('photo')}
+                onPress={() => void handleAddMedia('photo')}
                 style={styles.outlineMediaBtn}
               >
-                <MaterialIcons name="add-photo-alternate" size={17} color="#2563EB" />
-                <Text style={styles.outlineMediaBtnText}>Add photo</Text>
+                <MaterialIcons name="add-photo-alternate" size={17} color={colors.brand} />
+                <Text style={[styles.outlineMediaBtnText, { color: colors.brand }]}>Add photo</Text>
               </Pressable>
               <Pressable
-                onPress={() => handleAddMedia('video')}
+                onPress={() => void handleAddMedia('video')}
                 style={styles.outlineMediaBtn}
               >
-                <MaterialIcons name="videocam" size={18} color="#2563EB" />
-                <Text style={styles.outlineMediaBtnText}>Add video</Text>
+                <MaterialIcons name="videocam" size={18} color={colors.brand} />
+                <Text style={[styles.outlineMediaBtnText, { color: colors.brand }]}>Add video</Text>
               </Pressable>
             </View>
           </Card>
@@ -1090,6 +1193,18 @@ export default function ManageGoogleProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      <MediaMetadataSheet
+        visible={mediaComposerOpen}
+        onClose={() => setMediaComposerOpen(false)}
+        businessName={title}
+        pendingAssets={pendingMedia}
+        editingItem={editingMedia}
+        onSaved={async (msg) => {
+          Alert.alert('Media Saved', msg);
+          await photosRes.refresh();
+        }}
+      />
     </Screen>
   );
 }

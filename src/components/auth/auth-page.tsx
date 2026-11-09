@@ -746,7 +746,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                 Back
               </button>
             )}
-            {isBgos ? <BgosBrand inverted /> : <>
+            {isBgos ? <BgosBrand inverted size={44} /> : <>
             <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-400/30">
               <Zap className="w-5 h-5 text-emerald-400" />
             </div>
@@ -855,7 +855,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                 Back
               </button>
             )}
-            {isBgos ? <BgosBrand /> : <>
+            {isBgos ? <BgosBrand size={44} /> : <>
             <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-200">
               <Zap className="w-4 h-4 text-emerald-600" />
             </div>

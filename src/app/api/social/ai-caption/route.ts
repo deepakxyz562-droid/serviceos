@@ -53,7 +53,7 @@ const PLATFORM_LIMITS: Record<string, number> = {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }

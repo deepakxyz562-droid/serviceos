@@ -435,7 +435,7 @@ export function OptimizationTimeline({
         <Text style={{ fontSize: 12.5, color: colors.muted }}>
           {counts.photos > 0
             ? `${counts.photos} photo${counts.photos === 1 ? '' : 's'} published · latest ${relativeDate(counts.photosWhen)}`
-            : 'No photos published yet — bulk-upload from the Photos tab and AI drips them daily.'}
+            : 'No photos published yet — bulk-upload from the Photos tab and BGOS schedules them daily.'}
         </Text>
       </TimelineGroup>
 

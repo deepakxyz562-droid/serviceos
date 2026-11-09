@@ -76,8 +76,10 @@ export function ReviewCard({
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 }}>
             <RatingPill rating={rating} />
-            {relativeDate(review.createdAt) ? (
-              <Text style={{ fontSize: 11, color: colors.muted }}>{relativeDate(review.createdAt)}</Text>
+            {relativeDate(review.createTime || review.publishedAt || review.createdAt) ? (
+              <Text style={{ fontSize: 11, color: colors.muted }}>
+                {relativeDate(review.createTime || review.publishedAt || review.createdAt)}
+              </Text>
             ) : null}
           </View>
         </View>

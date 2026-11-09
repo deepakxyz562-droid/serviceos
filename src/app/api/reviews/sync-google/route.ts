@@ -92,9 +92,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const effectiveReviewTime = gRev.updateTime
-        ? new Date(gRev.updateTime)
-        : (gRev.createTime ? new Date(gRev.createTime) : new Date());
+      // Always anchor createdAt to Google's original review creation time so owner replies
+      // or metadata updates (gRev.updateTime) never make old reviews count as "this week's reviews".
+      const parsedCreate = gRev.createTime ? new Date(gRev.createTime) : null;
+      const parsedUpdate = gRev.updateTime ? new Date(gRev.updateTime) : null;
+      const effectiveReviewTime =
+        parsedCreate && !isNaN(parsedCreate.getTime())
+          ? parsedCreate
+          : parsedUpdate && !isNaN(parsedUpdate.getTime())
+            ? parsedUpdate
+            : new Date();
 
       if (!existing) {
         const parsedInitial: Record<string, any> = {
@@ -124,14 +131,17 @@ export async function POST(request: NextRequest) {
         });
         newReviewsCount++;
       } else {
-        // Update existing review with latest comment, rating, effective date or owner reply from Google Maps
+        // Update existing review with latest comment, rating, original create date, or owner reply from Google Maps
         const updateData: Record<string, any> = {};
         if (gRev.rating && existing.rating !== gRev.rating) updateData.rating = gRev.rating;
         if (gRev.comment && existing.comment !== gRev.comment) {
           updateData.comment = gRev.comment;
-          updateData.createdAt = effectiveReviewTime;
-        } else if (gRev.updateTime && new Date(gRev.updateTime).getTime() > existing.createdAt.getTime()) {
-          updateData.createdAt = effectiveReviewTime;
+        }
+        if (gRev.createTime && !isNaN(effectiveReviewTime.getTime())) {
+          const existingTime = existing.createdAt ? new Date(existing.createdAt).getTime() : 0;
+          if (!existingTime || Math.abs(effectiveReviewTime.getTime() - existingTime) > 60_000) {
+            updateData.createdAt = effectiveReviewTime;
+          }
         }
 
         let parsedExisting: any = {};
@@ -140,7 +150,10 @@ export async function POST(request: NextRequest) {
         } catch {}
 
         let responseJsonChanged = false;
-        if (gRev.updateTime && parsedExisting.googleUpdateTime !== gRev.updateTime) {
+        if (
+          (gRev.updateTime && parsedExisting.googleUpdateTime !== gRev.updateTime) ||
+          (gRev.createTime && parsedExisting.googleCreateTime !== gRev.createTime)
+        ) {
           parsedExisting.googleUpdateTime = gRev.updateTime;
           parsedExisting.googleCreateTime = gRev.createTime;
           responseJsonChanged = true;
@@ -174,8 +187,16 @@ export async function POST(request: NextRequest) {
       // Never delete reviews based on matching author/comment: two locations can
       // legitimately receive identical feedback. Provider resource IDs identify reviews.
 
-      // Check if auto-reply should run for unreplied review
-      const hasReply = gRev.reply?.comment || (existing.responseJson && existing.responseJson !== '{}');
+      // Check if auto-reply should run for unreplied review (ignore Google timestamp-only JSON metadata)
+      let currentReplyMeta: Record<string, any> = {};
+      try {
+        currentReplyMeta = JSON.parse(existing.responseJson || '{}');
+      } catch {}
+      const hasReply = Boolean(
+        gRev.reply?.comment ||
+        (typeof currentReplyMeta?.text === 'string' && currentReplyMeta.text.trim()) ||
+        (typeof currentReplyMeta?.replyText === 'string' && currentReplyMeta.replyText.trim()),
+      );
       if (autoReplySettings.enabled && !hasReply) {
         try {
           const businessName = tenant?.name || 'our company';
@@ -202,7 +223,11 @@ Write a warm, authentic, professional reply (1-3 sentences) thanking them by nam
             { role: 'user', content: aiPrompt },
           ]);
 
-          const replyText = (typeof aiReply === 'string' ? aiReply : (aiReply as any)?.text || '').trim();
+          const replyText = (
+            typeof aiReply === 'string'
+              ? aiReply
+              : (aiReply as any)?.content || (aiReply as any)?.text || ''
+          ).trim();
 
           if (replyText) {
             let publishedToGoogle = false;
@@ -225,6 +250,9 @@ Write a warm, authentic, professional reply (1-3 sentences) thanking them by nam
               where: { id: existing.id },
               data: {
                 responseJson: JSON.stringify({
+                  ...currentReplyMeta,
+                  googleCreateTime: currentReplyMeta.googleCreateTime || gRev.createTime,
+                  googleUpdateTime: currentReplyMeta.googleUpdateTime || gRev.updateTime,
                   text: replyText,
                   repliedAt: new Date().toISOString(),
                   repliedBy: 'BGOS AI Reputation Agent',

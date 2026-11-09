@@ -720,7 +720,7 @@ export default function SetupScreen() {
                   {[
                     { icon: 'chat' as const, title: 'AI Review Replies', desc: 'Every Google review answered instantly with SEO-rich replies' },
                     { icon: 'auto-awesome' as const, title: 'Automated Posts', desc: '1-2 weekly posts published to your GBP automatically' },
-                    { icon: 'photo-library' as const, title: 'Photo Publishing', desc: 'High-res photos scheduled and drip-published on Maps' },
+                    { icon: 'photo-library' as const, title: 'Photo Publishing', desc: 'High-res photos auto-scheduled and published on Maps' },
                     { icon: 'insights' as const, title: 'Performance & Local SEO', desc: 'Real-time views, calls, and direction inquiries tracked' },
                   ].map((feat) => (
                     <View key={feat.title} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
@@ -1507,7 +1507,7 @@ export default function SetupScreen() {
               <View style={styles.automationToggleRow}>
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={{ fontSize: 14, fontWeight: '700', color: colors.ink }}>
-                    Photo Drip-Publishing Schedule
+                    Scheduled Photo Publishing
                   </Text>
                   <Text style={{ fontSize: 12, color: colors.muted }}>
                     Maintains fresh activity on Google Maps to keep your profile in top 3 rank.

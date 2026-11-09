@@ -12,10 +12,12 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Screen, Card, Badge, Loading, colors, ui } from '../../src/components/ui';
+import * as WebBrowser from 'expo-web-browser';
+import { Screen, ErrorNotice, Loading } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
-import { API_BASE_URL } from '../../src/lib/constants';
+import { getToken } from '../../src/lib/auth';
+import { WEB_URL } from '../../src/lib/constants';
 
 interface Account {
   id: string;
@@ -51,7 +53,7 @@ const SUPPORTED_CHANNELS: ChannelDef[] = [
     icon: 'storefront',
     iconColor: '#1A73E8',
     iconBg: '#E8F0FE',
-    desc: 'Sync 5-star Google reviews, AI auto-replies, and publish photo drips directly to Google Maps.',
+    desc: 'Sync 5-star Google reviews, AI auto-replies, and scheduled photo publishing directly to Google Maps.',
     oauthPath: '/api/oauth/googlebusiness',
   },
   {
@@ -138,16 +140,32 @@ export default function IntegrationsScreen() {
       router.push('/(tabs)/reviews');
       return;
     }
-    const targetUrl = `${API_BASE_URL}${channel.oauthPath}`;
+
+    const token = await getToken().catch(() => null);
+    const returnUrl = 'bgos://gbp-callback';
+    const targetUrl =
+      channel.key === 'googlebusiness'
+        ? `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=growth` +
+          `&redirectUri=${encodeURIComponent(returnUrl)}` +
+          `&originHost=${encodeURIComponent(WEB_URL)}` +
+          (token ? `&auth=${encodeURIComponent(token)}` : '')
+        : `${WEB_URL}${channel.oauthPath}?product=bgos&originHost=${encodeURIComponent(WEB_URL)}` +
+          (token ? `&auth=${encodeURIComponent(token)}` : '');
+
     try {
-      const supported = await Linking.canOpenURL(targetUrl);
-      if (supported) {
-        await Linking.openURL(targetUrl);
+      if (channel.key === 'googlebusiness') {
+        await WebBrowser.openAuthSessionAsync(targetUrl, returnUrl);
       } else {
-        await Linking.openURL(targetUrl);
+        await WebBrowser.openBrowserAsync(targetUrl);
       }
     } catch {
-      Alert.alert('Connection Link', `Please open ${targetUrl} in your browser to authorize.`);
+      try {
+        await Linking.openURL(targetUrl);
+      } catch {
+        Alert.alert('Connection Link', `Please open ${targetUrl} in your browser to authorize.`);
+      }
+    } finally {
+      await refreshAll();
     }
   };
 
@@ -176,6 +194,8 @@ export default function IntegrationsScreen() {
       showBack={true}
       onRefresh={refreshAll}
     >
+      <ErrorNotice message={accountsRes.error || waConfig.error} retry={refreshAll} />
+
       {/* ── Top Summary Header Card ── */}
       <View style={styles.summaryCard}>
         <View style={styles.summaryRow}>

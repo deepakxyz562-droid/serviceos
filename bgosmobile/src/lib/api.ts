@@ -46,6 +46,25 @@ export async function refreshSession() {
   return refreshing;
 }
 
+export function formatNetworkError(error: unknown, baseUrl = API_BASE_URL): ApiError | null {
+  const rawMsg = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  if (
+    /fetch failed|network request failed|could not connect|unexpectedexception|expomodulescore|econnrefused|enotfound|econnreset|etimedout|nsurlerrordomain/i.test(
+      rawMsg,
+    )
+  ) {
+    let hostLabel = baseUrl;
+    try {
+      hostLabel = new URL(baseUrl).host;
+    } catch {}
+    return new ApiError(
+      `Could not reach BGOS server (${hostLabel}). Check your internet connection and tap Try again.`,
+      0,
+    );
+  }
+  return null;
+}
+
 export async function apiRequest<T = any>(
   path: string,
   options: RequestOptions = {}
@@ -99,6 +118,8 @@ export async function apiRequest<T = any>(
     });
   } catch (error) {
     if (controller.signal.aborted) throw new ApiError('The request timed out. Refresh to check whether changes were saved before trying again.', 408);
+    const friendly = formatNetworkError(error, API_BASE_URL);
+    if (friendly) throw friendly;
     throw error;
   } finally {
     clearTimeout(timeout);

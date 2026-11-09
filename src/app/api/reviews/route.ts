@@ -116,13 +116,54 @@ export async function GET(request: NextRequest) {
       db.review.count({ where }),
     ]);
 
+    const normalizedReviews = reviews.map((review: any) => {
+      if (review?.source === 'google' && typeof review.responseJson === 'string' && review.responseJson) {
+        try {
+          const parsed = JSON.parse(review.responseJson);
+          if (typeof parsed?.googleCreateTime === 'string') {
+            const createDate = new Date(parsed.googleCreateTime);
+            if (!isNaN(createDate.getTime())) {
+              return {
+                ...review,
+                createdAt: createDate.toISOString(),
+                createTime: createDate.toISOString(),
+                googleUpdateTime: typeof parsed?.googleUpdateTime === 'string' ? parsed.googleUpdateTime : undefined,
+              };
+            }
+          }
+        } catch {}
+      }
+      return review;
+    });
+
+    const finalReviews =
+      searchParams.get('needsReply') === 'true'
+        ? normalizedReviews.filter((review: any) => {
+            try {
+              const parsed =
+                typeof review?.responseJson === 'string'
+                  ? JSON.parse(review.responseJson || '{}')
+                  : review?.responseJson || {};
+              const txt = parsed?.text || parsed?.replyText;
+              return !(typeof txt === 'string' && txt.trim().length > 0);
+            } catch {
+              return true;
+            }
+          })
+        : normalizedReviews;
+
+    const totalFiltered =
+      searchParams.get('needsReply') === 'true'
+        ? Math.max(0, total - (normalizedReviews.length - finalReviews.length))
+        : total;
+
     return NextResponse.json({
-      reviews,
+      reviews: finalReviews,
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+        total: totalFiltered,
+        totalPages: Math.ceil(totalFiltered / limit),
       },
     });
   } catch (error) {

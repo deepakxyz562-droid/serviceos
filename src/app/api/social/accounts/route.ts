@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { encryptToken, maskEncryptedToken } from '@/lib/social/crypto';
 import { logActivity } from '@/lib/activity-log';
+import { invalidatePlacePayloadCacheForTenant } from '@/lib/social/google-connection-state';
 import type { SocialPlatform } from '@/lib/social/types';
 
 /**
@@ -42,7 +43,7 @@ function isValidPlatform(p: string): p is SocialPlatform {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
@@ -135,7 +136,7 @@ interface CreateAccountBody {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
@@ -222,6 +223,10 @@ export async function POST(request: NextRequest) {
       severity: 'info',
     }).catch(() => {});
 
+    if (account.platform === 'googlebusiness') {
+      invalidatePlacePayloadCacheForTenant(tenantId);
+    }
+
     return NextResponse.json({ data: account }, { status: 201 });
   } catch (error) {
     console.error('[api/social/accounts] POST error:', error);
@@ -233,7 +238,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
@@ -273,6 +278,10 @@ export async function DELETE(request: NextRequest) {
       description: `Disconnected ${existing.platform} account "${existing.accountName}".`,
       severity: 'warning',
     }).catch(() => {});
+
+    if (existing.platform === 'googlebusiness') {
+      invalidatePlacePayloadCacheForTenant(tenantId);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

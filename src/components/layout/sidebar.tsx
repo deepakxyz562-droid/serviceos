@@ -898,7 +898,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         )}
       >
         {isChatbotly ? (
-          <BgosRibbonIcon size={32} className="shadow-xs" />
+          <BgosRibbonIcon size={32} />
         ) : (
           <BrandMark size={32} className="shadow-sm" />
         )}

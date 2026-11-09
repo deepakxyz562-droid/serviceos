@@ -3,7 +3,6 @@ import {
   Alert,
   Linking,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -11,6 +10,11 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../ui';
+import {
+  detectDeviceCountryAndTimezone,
+  getCountryByCode,
+  type CountryItem,
+} from '../../lib/country-codes';
 
 interface UrgentReviewCardProps {
   businessName: string;
@@ -19,6 +23,7 @@ interface UrgentReviewCardProps {
   lastReviewDate?: string | Date | null;
   thisWeekCount?: number;
   weeklyTarget?: number;
+  countryCode?: string;
   onOpenQr?: () => void;
   onOpenBulk?: () => void;
   onOpenSeoUpdates?: () => void;
@@ -31,36 +36,46 @@ export function UrgentReviewCard({
   lastReviewDate,
   thisWeekCount = 0,
   weeklyTarget = 12,
+  countryCode,
   onOpenQr,
   onOpenBulk,
   onOpenSeoUpdates,
 }: UrgentReviewCardProps) {
+  const defaultCountry: CountryItem = useMemo(
+    () => (countryCode ? getCountryByCode(countryCode) : detectDeviceCountryAndTimezone().country),
+    [countryCode],
+  );
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [countryPrefix, setCountryPrefix] = useState('+91');
   const [selectedTemplate, setSelectedTemplate] = useState<'polite' | 'hinglish' | 'reward'>('polite');
   const [isSending, setIsSending] = useState(false);
 
-  // Template options for quick customer engagement
   const TEMPLATES = [
     { id: 'polite' as const, label: '⭐ Polite 30s' },
     { id: 'hinglish' as const, label: '🤝 Hinglish' },
     { id: 'reward' as const, label: '🎁 Surprise Gift' },
   ];
 
-  // Calculate days since last review
-  const daysAgo = useMemo(() => {
-    if (!lastReviewDate) return 69; // Benchmark default
+  // Calculate true days since last review (null when no review timestamp exists)
+  const daysAgo = useMemo<number | null>(() => {
+    if (!lastReviewDate) return null;
     const reviewTime = new Date(lastReviewDate).getTime();
-    if (isNaN(reviewTime)) return 69;
+    if (isNaN(reviewTime)) return null;
     const diffDays = Math.floor((Date.now() - reviewTime) / (1000 * 60 * 60 * 24));
-    return Math.max(diffDays, 1);
+    return Math.max(0, diffDays);
   }, [lastReviewDate]);
 
-  // Reliable Universal WhatsApp & SMS Linking
+  const isHealthyWeek = thisWeekCount >= 1 || (daysAgo !== null && daysAgo <= 7);
+  const progressPercent = Math.min(
+    100,
+    Math.max(thisWeekCount > 0 ? 6 : 0, Math.round((thisWeekCount / Math.max(1, weeklyTarget)) * 100)),
+  );
+
+  // Universal WhatsApp + SMS single review invite
   const handleSendLink = async () => {
-    const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
-    if (!cleanPhone || cleanPhone.length < 10) {
-      Alert.alert('Phone Number Required', 'Please enter a valid 10-digit customer phone number.');
+    const trimmed = phoneNumber.trim();
+    const cleanPhone = trimmed.replace(/[^0-9]/g, '');
+    if (!cleanPhone || cleanPhone.length < 7) {
+      Alert.alert('Phone Number Required', 'Please enter a valid customer phone number.');
       return;
     }
 
@@ -70,17 +85,20 @@ export function UrgentReviewCard({
       if (selectedTemplate === 'hinglish') {
         message = `Namaste! ${businessName} me aane ke liye shukriya. Agar aapko hamari service pasand aayi toh please Google par apna 5-star review dekar support karein: ${reviewUrl}`;
       } else if (selectedTemplate === 'reward') {
-        message = `Hi! We loved serving you at ${businessName}. Review us on Google and show this on your next visit to get a special surprise discount! ${reviewUrl}`;
+        message = `Hi! We loved serving you at ${businessName}. Review us on Google and show this on your next visit to get a special thank-you offer! ${reviewUrl}`;
       }
 
-      const fullPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+      const fullPhone =
+        trimmed.startsWith('+')
+          ? cleanPhone
+          : cleanPhone.length === defaultCountry.digits || cleanPhone.length === 10
+            ? `${defaultCountry.callingCode}${cleanPhone}`
+            : cleanPhone;
       const universalWaUrl = `https://wa.me/${fullPhone}?text=${encodeURIComponent(message)}`;
 
-      // Universal wa.me URL works 100% reliably on Android, iOS & Web without package query restrictions
       await Linking.openURL(universalWaUrl);
       setPhoneNumber('');
     } catch {
-      // Fallback to native SMS
       try {
         const cleanDigits = phoneNumber.replace(/[^0-9]/g, '');
         const message = `Hi! Thank you for choosing ${businessName}. Please leave us a quick Google review: ${reviewUrl}`;
@@ -93,44 +111,80 @@ export function UrgentReviewCard({
     }
   };
 
-  const progressPercent = Math.min(100, Math.max(0, Math.round((thisWeekCount / weeklyTarget) * 100)));
-
   return (
     <View style={styles.card}>
-      {/* ── Top Header: This Week's Reviews & Target ── */}
+      {/* ── Top Header: This Week's Reviews & Weekly Goal ── */}
       <View style={styles.headerRow}>
-        <View style={{ gap: 2 }}>
-          <Text style={styles.headerTitle}>This Week's Reviews</Text>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.headerTitle}>This Week&apos;s Reviews</Text>
           <Text style={styles.headerSubtitle}>
-            {thisWeekCount === 0 ? 'No recent reviews received' : `${thisWeekCount} received this week`}
+            {thisWeekCount > 0
+              ? `${thisWeekCount} received this week · ${totalReviews} total`
+              : totalReviews > 0
+                ? `0 received in last 7 days · ${totalReviews} total`
+                : 'No Google reviews synced yet'}
           </Text>
         </View>
-        <View style={styles.targetBadge}>
-          <Text style={styles.targetBadgeText}>
+        <View style={[styles.targetBadge, isHealthyWeek && styles.targetBadgeHealthy]}>
+          <Text style={[styles.targetBadgeText, isHealthyWeek && styles.targetBadgeTextHealthy]}>
             {thisWeekCount}/{weeklyTarget}
           </Text>
         </View>
       </View>
 
-      {/* ── Visual Target Progress Bar ── */}
+      {/* ── Visual Weekly Goal Progress Bar ── */}
       <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${Math.max(4, progressPercent)}%` }]} />
+        <View
+          style={[
+            styles.progressFill,
+            {
+              width: `${progressPercent}%`,
+              backgroundColor: isHealthyWeek ? colors.brand : '#F59E0B',
+            },
+          ]}
+        />
       </View>
 
-      {/* ── Urgency Alert (Fire Icon & Aging Days Count) ── */}
-      <View style={styles.alertRow}>
-        <View style={styles.fireIconCircle}>
-          <Text style={{ fontSize: 13 }}>🔥</Text>
+      {/* ── Status Callout (Accurate timestamp, clean light surface) ── */}
+      <View style={[styles.alertRow, isHealthyWeek && styles.alertRowHealthy]}>
+        <View style={[styles.iconCircle, isHealthyWeek && styles.iconCircleHealthy]}>
+          <MaterialIcons
+            name={isHealthyWeek ? 'trending-up' : daysAgo === null ? 'star-outline' : 'schedule'}
+            size={15}
+            color={isHealthyWeek ? colors.brandDark : '#B45309'}
+          />
         </View>
-        <Text style={styles.alertText}>
-          Your last review was <Text style={styles.alertHighlight}>{daysAgo} days ago</Text>, reviews are vital for good Google ranking.
+        <Text style={[styles.alertText, isHealthyWeek && styles.alertTextHealthy]}>
+          {daysAgo === null ? (
+            'Invite recent customers now — steady weekly reviews boost local Google Maps ranking.'
+          ) : isHealthyWeek ? (
+            <>
+              Last review received{' '}
+              <Text style={styles.alertHighlightHealthy}>
+                {daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo} days ago`}
+              </Text>
+              . Keep requesting reviews toward your {weeklyTarget}/week target.
+            </>
+          ) : (
+            <>
+              Last review was{' '}
+              <Text style={styles.alertHighlight}>{daysAgo} days ago</Text>. Regular weekly reviews keep your Google ranking ahead of nearby competitors.
+            </>
+          )}
         </Text>
       </View>
 
-      {/* ── Bulk Review Automation Banner ── */}
+      {/* ── Bulk Review Automation Banner (5/day) ── */}
       <View style={styles.bannerContainer}>
-        <Text style={styles.bannerHeading}>Get Reviews Every Day, Automatically</Text>
-        <Text style={styles.bannerSubtext}>Upload in bulk and we'll send 5 review messages/day</Text>
+        <View style={styles.bannerTopRow}>
+          <Text style={styles.bannerHeading}>Get Reviews Every Day, Automatically</Text>
+          <View style={styles.cadencePill}>
+            <Text style={styles.cadencePillText}>5 / day</Text>
+          </View>
+        </View>
+        <Text style={styles.bannerSubtext}>
+          Upload a CSV, paste numbers, or pick CRM contacts — BGOS queues and staggers 5 invites/day automatically.
+        </Text>
 
         <Pressable
           accessibilityRole="button"
@@ -138,13 +192,13 @@ export function UrgentReviewCard({
           onPress={onOpenBulk}
           style={({ pressed }) => [styles.bulkButton, pressed && { opacity: 0.9 }]}
         >
-          <MaterialIcons name="file-upload" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+          <MaterialIcons name="schedule-send" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
           <Text style={styles.bulkButtonText}>Schedule Review Messages in Bulk</Text>
         </Pressable>
       </View>
 
       {/* ── Message Style Chips ── */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         {TEMPLATES.map((tpl) => {
           const isActive = selectedTemplate === tpl.id;
           return (
@@ -152,19 +206,19 @@ export function UrgentReviewCard({
               key={tpl.id}
               onPress={() => setSelectedTemplate(tpl.id)}
               style={{
-                paddingHorizontal: 9,
-                paddingVertical: 4,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
                 borderRadius: 14,
-                backgroundColor: isActive ? '#EFF6FF' : '#F8FAFC',
+                backgroundColor: isActive ? colors.brandSoft : colors.background,
                 borderWidth: 1,
-                borderColor: isActive ? '#3B82F6' : '#E2E8F0',
+                borderColor: isActive ? colors.brand : colors.line,
               }}
             >
               <Text
                 style={{
-                  fontSize: 11,
-                  fontWeight: isActive ? '700' : '500',
-                  color: isActive ? '#2563EB' : '#64748B',
+                  fontSize: 11.5,
+                  fontWeight: isActive ? '700' : '600',
+                  color: isActive ? colors.brandDark : colors.muted,
                 }}
               >
                 {tpl.label}
@@ -177,13 +231,15 @@ export function UrgentReviewCard({
       {/* ── Direct Customer Phone Input ── */}
       <View style={styles.inputContainer}>
         <View style={styles.countryPill}>
-          <Text style={styles.countryPillText}>🇮🇳 {countryPrefix}</Text>
+          <Text style={styles.countryPillText}>
+            {defaultCountry.flag} +{defaultCountry.callingCode}
+          </Text>
         </View>
         <TextInput
           value={phoneNumber}
           onChangeText={setPhoneNumber}
           placeholder="Customer Phone Number"
-          placeholderTextColor="#64748B"
+          placeholderTextColor={colors.muted}
           keyboardType="phone-pad"
           style={styles.textInput}
         />
@@ -191,14 +247,14 @@ export function UrgentReviewCard({
           accessibilityRole="button"
           onPress={() => {
             Alert.alert(
-              'Quick Contact',
-              'Enter a 10-digit mobile number or paste a customer phone to send an instant 1-tap review link.'
+              '1-Tap or Bulk Review Requests',
+              'Enter one mobile number here for an instant WhatsApp review invite, or tap "Schedule Review Messages in Bulk" above to upload CSV/paste many customers at 5/day.',
             );
           }}
           hitSlop={8}
           style={{ paddingRight: 10 }}
         >
-          <MaterialIcons name="contacts" size={19} color="#3B82F6" />
+          <MaterialIcons name="help-outline" size={18} color={colors.brand} />
         </Pressable>
       </View>
 
@@ -211,12 +267,11 @@ export function UrgentReviewCard({
           disabled={isSending}
           style={({ pressed }) => [
             styles.actionBtn,
-            styles.sendLinkBtn,
             pressed && { opacity: 0.85 },
           ]}
         >
-          <MaterialIcons name="send" size={16} color="#3B82F6" style={{ marginRight: 6 }} />
-          <Text style={styles.sendLinkText}>Send Review Link</Text>
+          <MaterialIcons name="send" size={16} color={colors.brandDark} style={{ marginRight: 6 }} />
+          <Text style={styles.actionBtnText}>Send Review Link</Text>
         </Pressable>
 
         <Pressable
@@ -225,25 +280,24 @@ export function UrgentReviewCard({
           onPress={onOpenQr}
           style={({ pressed }) => [
             styles.actionBtn,
-            styles.qrBtn,
             pressed && { opacity: 0.85 },
           ]}
         >
-          <MaterialIcons name="qr-code-2" size={16} color="#3B82F6" style={{ marginRight: 6 }} />
-          <Text style={styles.qrBtnText}>Review QR</Text>
+          <MaterialIcons name="qr-code-2" size={16} color={colors.brandDark} style={{ marginRight: 6 }} />
+          <Text style={styles.actionBtnText}>Review QR</Text>
         </Pressable>
       </View>
 
-      {/* ── Footer Link: How it works? ── */}
+      {/* ── Footer Link: AI Agent Actions ── */}
       <View style={styles.footerRow}>
-        <Text style={styles.footerText}>How it works?</Text>
+        <Text style={styles.footerText}>Weekly Goal: {thisWeekCount}/{weeklyTarget} reviews</Text>
         <Pressable
           accessibilityRole="button"
           onPress={onOpenSeoUpdates}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
         >
           <Text style={styles.watchVideosLink}>See AI Agent Actions</Text>
-          <MaterialIcons name="play-circle-filled" size={15} color="#3B82F6" />
+          <MaterialIcons name="auto-awesome" size={15} color={colors.brand} />
         </Pressable>
       </View>
     </View>
@@ -252,113 +306,155 @@ export function UrgentReviewCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#0F172A', // Dark mode card matching Benchmark Screenshot 2
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.line,
     gap: 12,
     marginVertical: 4,
-    shadowColor: '#000',
+    shadowColor: '#070B2D',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 5,
-    elevation: 3,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 8,
   },
   headerTitle: {
-    fontSize: 14.5,
+    fontSize: 15,
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: colors.ink,
     letterSpacing: -0.2,
   },
   headerSubtitle: {
     fontSize: 11.5,
-    color: '#94A3B8',
+    color: colors.muted,
     fontWeight: '500',
   },
   targetBadge: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    paddingHorizontal: 8,
+    backgroundColor: colors.note,
+    paddingHorizontal: 9,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: colors.noteBorder,
+  },
+  targetBadgeHealthy: {
+    backgroundColor: colors.brandSoft,
+    borderColor: '#A7F3D0',
   },
   targetBadgeText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#EF4444',
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  targetBadgeTextHealthy: {
+    color: colors.brandDark,
   },
   progressTrack: {
-    height: 5,
-    backgroundColor: '#1E293B',
-    borderRadius: 2.5,
+    height: 6,
+    backgroundColor: '#EEF2F6',
+    borderRadius: 3,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#EF4444',
-    borderRadius: 2.5,
+    borderRadius: 3,
   },
   alertRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: '#450A0A',
-    padding: 12,
+    backgroundColor: colors.note,
+    padding: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#7F1D1D',
+    borderColor: colors.noteBorder,
   },
-  fireIconCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#7F1D1D',
+  alertRowHealthy: {
+    backgroundColor: colors.brandSoft,
+    borderColor: '#C6F6D5',
+  },
+  iconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FDE68A',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,
   },
+  iconCircleHealthy: {
+    backgroundColor: '#D1FAE5',
+  },
   alertText: {
     flex: 1,
     fontSize: 12,
-    color: '#FECACA',
+    color: '#78350F',
     lineHeight: 17,
   },
+  alertTextHealthy: {
+    color: colors.brandDark,
+  },
   alertHighlight: {
-    color: '#F87171',
+    color: '#92400E',
+    fontWeight: '800',
+  },
+  alertHighlightHealthy: {
+    color: colors.brandDark,
     fontWeight: '800',
   },
   bannerContainer: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#F3F8F5',
     borderRadius: 14,
-    padding: 14,
-    gap: 4,
+    padding: 13,
+    gap: 6,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#D5E9DD',
+  },
+  bannerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   bannerHeading: {
+    flex: 1,
     fontSize: 13,
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: colors.ink,
+  },
+  cadencePill: {
+    backgroundColor: colors.brandSoft,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  cadencePillText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: colors.brandDark,
   },
   bannerSubtext: {
     fontSize: 11.5,
-    color: '#94A3B8',
-    marginBottom: 8,
+    color: colors.muted,
+    lineHeight: 16,
+    marginBottom: 4,
   },
   bulkButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2563EB',
-    height: 40,
-    borderRadius: 10,
+    backgroundColor: colors.brand,
+    height: 42,
+    borderRadius: 11,
   },
   bulkButtonText: {
     color: '#FFFFFF',
@@ -368,27 +464,27 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#020617',
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.line,
     minHeight: 44,
   },
   countryPill: {
     paddingHorizontal: 10,
     borderRightWidth: 1,
-    borderRightColor: '#1E293B',
+    borderRightColor: colors.line,
     justifyContent: 'center',
   },
   countryPillText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#94A3B8',
+    color: colors.ink,
   },
   textInput: {
     flex: 1,
     fontSize: 13,
-    color: '#F8FAFC',
+    color: colors.ink,
     paddingHorizontal: 10,
     height: 44,
   },
@@ -403,21 +499,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 40,
     borderRadius: 10,
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.brandSoft,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#BBEAD1',
   },
-  sendLinkBtn: {},
-  sendLinkText: {
+  actionBtnText: {
     fontSize: 12.5,
     fontWeight: '800',
-    color: '#3B82F6',
-  },
-  qrBtn: {},
-  qrBtnText: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#3B82F6',
+    color: colors.brandDark,
   },
   footerRow: {
     flexDirection: 'row',
@@ -425,15 +514,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#1E293B',
+    borderTopColor: '#EEF2F6',
   },
   footerText: {
     fontSize: 11.5,
-    color: '#94A3B8',
+    color: colors.muted,
+    fontWeight: '600',
   },
   watchVideosLink: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#3B82F6',
+    color: colors.brand,
   },
 });

@@ -1838,9 +1838,11 @@ export default function MarketingScreen() {
       if(picked.canceled)return;
       const asset=picked.assets[0];
       if(!asset?.base64)throw new Error('Could not read this image. Choose another photo.');
-      if((asset.fileSize||0)>4_000_000)throw new Error('Choose an image smaller than 4 MB.');
+      if((asset.fileSize||0)>12_000_000)throw new Error('Choose an image smaller than 12 MB.');
       setBusy(true);
-      const uploaded=await apiRequest<{url:string;assetId:string}>('/api/social/designs/assets',{method:'POST',body:{data:`data:${asset.mimeType||'image/jpeg'};base64,${asset.base64}`}});
+      const rawMime = (asset.mimeType || 'image/jpeg').toLowerCase();
+      const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
+      const uploaded=await apiRequest<{url:string;assetId:string}>('/api/social/designs/assets',{method:'POST',body:{data:`data:${mime};base64,${asset.base64}`}});
       if(epoch!==generationEpoch.current)return;
       if(!uploaded.url)throw new Error('Upload was not confirmed. Please retry.');
       handleCustomDesignChange({...design,layers:design.layers.map(l=>l.id==='bg_photo'?{...l,src:uploaded.url,assetId:uploaded.assetId}:l)});
@@ -2234,8 +2236,47 @@ export default function MarketingScreen() {
   </>);
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: '#F8FAFC', paddingTop: Math.max(insets.top, 12) }}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: Math.max(insets.top, 12) }}>
+      {/* ── Single-Row Light Header Bar matching Design Kit ─────────────────── */}
+      <View
+        style={{
+          backgroundColor: '#FFFFFF',
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          minHeight: 50,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottomWidth: 1,
+          borderBottomColor: '#EEF2F6',
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 9,
+              backgroundColor: '#E8F8EF',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <MaterialIcons name="auto-awesome" size={17} color="#0B9042" />
+          </View>
+          <Text style={{ fontSize: 19, fontWeight: '800', color: '#070B2D', letterSpacing: -0.35 }}>
+            Marketing
+          </Text>
+        </View>
+        {effectiveBusinessName ? (
+          <Text numberOfLines={1} style={{ fontSize: 11.5, fontWeight: '700', color: '#64748B', maxWidth: 150 }}>
+            {effectiveBusinessName}
+          </Text>
+        ) : null}
+      </View>
+
       {/* ── Top Mode Switcher Bar ────────────────────────────────────────── */}
+      <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       <View style={styles.modeBar}>
         <Pressable
           accessibilityRole="tab"
@@ -4839,6 +4880,7 @@ export default function MarketingScreen() {
           </Modal>
         </View>
       )}
+      </View>
     </KeyboardAvoidingView>
   );
 }

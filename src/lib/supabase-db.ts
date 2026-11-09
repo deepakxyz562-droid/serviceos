@@ -833,6 +833,20 @@ interface DeleteManyOptions {
   where?: WhereInput;
 }
 
+// ── Helper: Quote & escape PostgREST OR/IN filter values ─────────────────
+//
+// Inside PostgREST logic-tree filters (`or=(...)` / `in.(...)`), reserved
+// syntax characters such as double quotes `"`, commas `,`, parentheses `( )`,
+// backslashes `\`, or whitespace must be wrapped in double quotes with `\` and
+// `"` backslash-escaped (`\\`, `\"`). Unquoted JSON substrings like
+// `%"text":"%` cause PostgREST PGRST100 parse errors.
+export function formatPostgrestOrValue(raw: string): string {
+  if (/[",()\\\s]/.test(raw)) {
+    return `"${raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  }
+  return raw;
+}
+
 // ── Helper: Convert a value to a PostgREST OR-clause literal ───────────────
 //
 // PostgREST OR clauses are built as a single string like
@@ -845,7 +859,7 @@ interface DeleteManyOptions {
 function toOrLiteral(v: unknown): string {
   if (v instanceof Date) return v.toISOString();
   if (v === null) return 'null';
-  return String(v);
+  return formatPostgrestOrValue(String(v));
 }
 
 // ── Helper: Build one PostgREST OR-clause fragment from a Prisma condition ─
@@ -872,7 +886,7 @@ function toOrLiteral(v: unknown): string {
 //     → PostgREST 400 "column Tenant.AND does not exist" (22 logged errors).
 //   - Date values in `gt`/`gte`/`lt`/`lte` were stringified via template
 //     literals → Date.toString() → 22007 timestamp parse errors (201 logged).
-function buildOrConditionPart(cond: WhereInput): string | null {
+export function buildOrConditionPart(cond: WhereInput): string | null {
   const parts: string[] = [];
   for (const [orField, orValue] of Object.entries(cond)) {
     if (orValue === undefined) continue;
@@ -900,13 +914,13 @@ function buildOrConditionPart(cond: WhereInput): string | null {
       const op = orValue as WhereOperator;
       if (op.contains !== undefined) {
         const fieldName = orField.endsWith('Json') ? `${orField}::text` : orField;
-        parts.push(`${fieldName}.ilike.%${op.contains}%`);
+        parts.push(`${fieldName}.ilike.${formatPostgrestOrValue(`%${op.contains}%`)}`);
       } else if (op.startsWith !== undefined) {
         const fieldName = orField.endsWith('Json') ? `${orField}::text` : orField;
-        parts.push(`${fieldName}.ilike.${op.startsWith}%`);
+        parts.push(`${fieldName}.ilike.${formatPostgrestOrValue(`${op.startsWith}%`)}`);
       } else if (op.endsWith !== undefined) {
         const fieldName = orField.endsWith('Json') ? `${orField}::text` : orField;
-        parts.push(`${fieldName}.ilike.%${op.endsWith}`);
+        parts.push(`${fieldName}.ilike.${formatPostgrestOrValue(`%${op.endsWith}`)}`);
       } else if (op.equals !== undefined) {
         if (op.equals === null) parts.push(`${orField}.is.null`);
         else parts.push(`${orField}.eq.${toOrLiteral(op.equals)}`);
@@ -956,7 +970,7 @@ type QueryMethods = {
     (...args: Parameters<SelectBuilder[K]>) => unknown;
 };
 
-function applyWhereFilters(
+export function applyWhereFilters(
   query: QueryMethods,
   where: WhereInput
 ): void {
@@ -1018,8 +1032,7 @@ function applyWhereFilters(
               query.not(notField, 'is', null);
             } else {
               // NOT equals value → (field IS NULL OR field != value)
-              const v = op.equals as string | number | boolean;
-              query.or(`${notField}.is.null,${notField}.neq.${v}`);
+              query.or(`${notField}.is.null,${notField}.neq.${toOrLiteral(op.equals)}`);
             }
           } else if (op.in !== undefined) {
             // NOT IN: (field IS NULL OR field != v1 OR field != v2 OR ...)
@@ -1038,16 +1051,15 @@ function applyWhereFilters(
             const values = op.in as (string | number | boolean)[];
             const parts = [`${notField}.is.null`];
             for (const v of values) {
-              parts.push(`${notField}.neq.${v}`);
+              parts.push(`${notField}.neq.${toOrLiteral(v)}`);
             }
             query.or(parts.join(','));
           } else if (op.contains !== undefined) {
             // NOT contains: NULL rows should be included (NULL doesn't contain anything).
-            query.or(`${notField}.is.null,${notField}.not.ilike.%${op.contains}%`);
+            query.or(`${notField}.is.null,${notField}.not.ilike.${formatPostgrestOrValue(`%${op.contains}%`)}`);
           } else {
             // Fallback: treat as a simple not-equals, preserving NULLs.
-            const v = notValue as string | number | boolean;
-            query.or(`${notField}.is.null,${notField}.neq.${v}`);
+            query.or(`${notField}.is.null,${notField}.neq.${toOrLiteral(notValue)}`);
           }
         } else {
           // Simple value: NOT equals
@@ -1056,8 +1068,7 @@ function applyWhereFilters(
             query.not(notField, 'is', null);
           } else {
             // NOT equals value → (field IS NULL OR field != value)
-            const v = notValue as string | number | boolean;
-            query.or(`${notField}.is.null,${notField}.neq.${v}`);
+            query.or(`${notField}.is.null,${notField}.neq.${toOrLiteral(notValue)}`);
           }
         }
       }
@@ -1092,7 +1103,7 @@ function applyWhereFilters(
         if (vals.length > 0) {
           // supabase-js: .not(field, 'in', '(val1,val2,val3)')
           // The parentheses-wrapped list is PostgREST's IN list syntax.
-          query.not(field, 'in', `(${vals.join(',')})`);
+          query.not(field, 'in', `(${vals.map(toOrLiteral).join(',')})`);
         }
       }
       if (op.contains !== undefined) {

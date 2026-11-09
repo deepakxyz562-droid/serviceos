@@ -46,22 +46,41 @@ export const colors = {
 const brandMark = require('../../assets/brand-mark.png');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const brandMarkLight = require('../../assets/brand-mark-light.png');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const primaryLogo = require('../../assets/primary-logo.png');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const primaryLogoLight = require('../../assets/primary-logo-light.png');
 
 export function Brand({ large = false, light = false }: { large?: boolean; light?: boolean }) {
+  if (large) {
+    return (
+      <Image
+        source={light ? primaryLogoLight : primaryLogo}
+        style={{ width: 215, height: 70, resizeMode: 'contain' }}
+        accessibilityIgnoresInvertColors
+        alt="BGOS — Business Growth OS"
+      />
+    );
+  }
+
   return (
-    <View style={[ui.row, { gap: 8 }]}>
+    <View style={[ui.row, { gap: 7 }]}>
       <Image
         source={light ? brandMarkLight : brandMark}
-        style={{ width: large ? 54 : 28, height: large ? 54 : 28, resizeMode: 'contain' }}
+        style={{ width: 28, height: 28, resizeMode: 'contain' }}
         accessibilityIgnoresInvertColors
-        alt="bgos logo"
+        alt="BGOS mark"
       />
-      <View>
-        <Text style={{ fontSize: large ? 32 : 19, fontWeight: '800', color: light ? '#FFFFFF' : colors.ink, letterSpacing: -0.8 }}>
-          bgos
-        </Text>
-
-      </View>
+      <Text
+        style={{
+          fontSize: 19,
+          fontWeight: '800',
+          color: light ? '#FFFFFF' : '#0B9042',
+          letterSpacing: -0.3,
+        }}
+      >
+        BGOS
+      </Text>
     </View>
   );
 }
@@ -75,9 +94,11 @@ export function Screen({
   refreshing = false,
   onRefresh,
   rightAction,
+  headerIcon,
   showBack,
   onBack,
   customHeader,
+  stickyHeader,
   extraBottomPadding = 0,
   floatingAction,
   scrollable = true,
@@ -88,9 +109,11 @@ export function Screen({
   refreshing?: boolean;
   onRefresh?: () => void | Promise<unknown>;
   rightAction?: React.ReactNode;
+  headerIcon?: React.ComponentProps<typeof MaterialIcons>['name'];
   showBack?: boolean;
   onBack?: () => void;
   customHeader?: React.ReactNode;
+  stickyHeader?: React.ReactNode;
   extraBottomPadding?: number;
   floatingAction?: React.ReactNode;
   scrollable?: boolean;
@@ -110,54 +133,61 @@ export function Screen({
     }
   }
 
-  // Safe status bar top inset calculation (handles dynamic island, notch, modals, and Android status bar)
-  const topInset = Platform.OS === 'ios' ? Math.max(insets.top, 54) : Math.max(insets.top, (RNStatusBar.currentHeight || 24) + 8);
+  // Fallback top padding only when SafeAreaView reports zero top inset (e.g., certain full-screen Modals)
+  const modalFallbackTop = Platform.OS === 'ios' ? 14 : (RNStatusBar.currentHeight || 24) + 4;
   // Ensure content never gets hidden behind bottom tabs (62px bar + insets.bottom + clearance)
-  // When floatingAction is passed, include extra clearance so content scrolls completely above the floating dock
   const floatingClearance = floatingAction ? 60 : 0;
   const bottomInset = Math.max(insets.bottom, 16) + 76 + extraBottomPadding + floatingClearance;
 
-  const headerContent = customHeader ? (
-    customHeader
-  ) : (
-    <>
-      <View style={ui.topbar}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8, flexWrap: 'nowrap' }}>
-          {canBack ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              onPress={handleBack}
-              style={ui.backBtn}
-            >
-              <MaterialIcons name="arrow-back" size={20} color={colors.ink} />
-            </Pressable>
-          ) : null}
-          <Brand />
-        </View>
-        {rightAction ? (
-          <View style={{ flexShrink: 0, alignItems: 'flex-end', maxWidth: '65%' }}>
-            {rightAction}
+  const hasPinnedNav = Boolean(stickyHeader || !customHeader);
+
+  const pinnedNavBar = stickyHeader ? (
+    stickyHeader
+  ) : !customHeader ? (
+    <View style={ui.navBar}>
+      <View style={ui.navBarLeft}>
+        {canBack ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={10}
+            onPress={handleBack}
+            style={({ pressed }) => [ui.navBackBtn, { opacity: pressed ? 0.65 : 1 }]}
+          >
+            <MaterialIcons name="chevron-left" size={26} color={colors.ink} />
+          </Pressable>
+        ) : headerIcon ? (
+          <View style={ui.navIconTile}>
+            <MaterialIcons name={headerIcon} size={18} color="#0B9042" />
           </View>
+        ) : null}
+
+        {title ? (
+          <Text accessibilityRole="header" numberOfLines={1} style={ui.navTitle}>
+            {title}
+          </Text>
         ) : (
-          <View style={[ui.row, { flexShrink: 0, gap: 6, flexWrap: 'nowrap' }]}>
-            <View style={[ui.statusDot, { backgroundColor: colors.accent }]} />
-            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.muted }}>Online</Text>
-          </View>
+          <Brand />
         )}
       </View>
-      {title ? (
-        <Text accessibilityRole="header" style={ui.title}>
-          {title}
-        </Text>
-      ) : null}
-      {subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : <View style={{ height: 14 }} />}
-    </>
-  );
+
+      {rightAction ? <View style={ui.navBarRight}>{rightAction}</View> : null}
+    </View>
+  ) : null;
 
   return (
-    <SafeAreaView style={[ui.screen, { paddingTop: insets.top < 44 ? topInset : 0 }]} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView
+      style={[
+        ui.screen,
+        {
+          backgroundColor: hasPinnedNav ? '#FFFFFF' : colors.background,
+          paddingTop: insets.top > 0 ? 0 : modalFallbackTop,
+        },
+      ]}
+      edges={['top', 'left', 'right']}
+    >
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {pinnedNavBar}
         <View style={{ flex: 1, position: 'relative' }}>
           {scrollable ? (
             <ScrollView
@@ -180,12 +210,14 @@ export function Screen({
                 ) : undefined
               }
             >
-              {headerContent}
+              {customHeader ? customHeader : null}
+              {!customHeader && subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : null}
               <View style={ui.stack}>{children}</View>
             </ScrollView>
           ) : (
-            <View style={{ flex: 1, paddingHorizontal: 16 }}>
-              {headerContent}
+            <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 12 }}>
+              {customHeader ? customHeader : null}
+              {!customHeader && subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : null}
               <View style={{ flex: 1, paddingBottom: bottomInset }}>{children}</View>
             </View>
           )}
@@ -610,11 +642,57 @@ export function DialpadGrid({
 
 export const ui = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 16, maxWidth: 760, width: '100%', alignSelf: 'center' },
-  topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  content: { paddingHorizontal: 16, paddingTop: 12, maxWidth: 760, width: '100%', alignSelf: 'center' },
+  navBar: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F6',
+    minHeight: 54,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  navBarLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
+  navBarRight: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
+  },
+  navBackBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -4,
+  },
+  navIconTile: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: colors.ink,
+    letterSpacing: -0.35,
+    flexShrink: 1,
+  },
+  topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.brand },
-  title: { fontSize: 26, fontWeight: '800', color: colors.ink, letterSpacing: -0.6 },
-  subtitle: { fontSize: 13, lineHeight: 19, color: colors.muted, marginTop: 4, marginBottom: 18 },
+  title: { fontSize: 24, fontWeight: '800', color: colors.ink, letterSpacing: -0.5 },
+  subtitle: { fontSize: 12.5, lineHeight: 18, color: colors.muted, marginBottom: 12 },
   stack: { gap: 14 },
   card: {
     backgroundColor: colors.surface,

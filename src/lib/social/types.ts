@@ -143,8 +143,12 @@ export interface PublishParams {
   content: string;
   mediaUrls: string[];
   linkUrl?: string;
-  /** GBP-only: 'offer' | 'event' | 'whats_new' | 'product'. */
+  /** GBP-only: 'offer' | 'event' | 'whats_new' | 'product' | 'photo_media'. */
   gbpPostType?: string;
+  /** GBP-only: media category when gbpPostType='photo_media'. */
+  gbpMediaCategory?: 'ADDITIONAL' | 'COVER' | 'PROFILE' | 'EXTERIOR' | 'INTERIOR' | 'PRODUCT' | 'AT_WORK' | 'TEAMS';
+  /** Media format hint for GBP media uploads. */
+  mediaFormat?: 'PHOTO' | 'VIDEO';
   /** GBP-only: structured offer data when gbpPostType='offer'. */
   gbpOfferData?: {
     title: string;

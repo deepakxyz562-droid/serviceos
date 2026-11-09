@@ -56,9 +56,11 @@ export function relativeDate(iso?: string | null): string {
   return `${years}y ago`;
 }
 
-/** Accurately calculates relative review age, accounting for edited/re-submitted Google reviews. */
+/** Accurately calculates relative review age anchored to the review's original creation timestamp. */
 export function formatReviewTime(review: {
   createdAt?: string;
+  createTime?: string;
+  publishedAt?: string;
   updatedAt?: string;
   responseJson?: string | null;
 }): string {
@@ -67,15 +69,17 @@ export function formatReviewTime(review: {
     parsed = JSON.parse(review.responseJson || '{}');
   } catch {}
 
-  const targetIso = parsed.googleUpdateTime || parsed.updateTime || review.createdAt;
-  const isEdited = Boolean(
-    parsed.googleUpdateTime &&
-    parsed.googleCreateTime &&
-    parsed.googleUpdateTime !== parsed.googleCreateTime
-  );
-
-  const rel = relativeDate(targetIso) || 'Recent';
-  return isEdited && targetIso !== review.createdAt ? `Updated ${rel}` : rel;
+  const createdIso =
+    review.createTime ||
+    review.publishedAt ||
+    parsed.googleCreateTime ||
+    parsed.createTime ||
+    review.createdAt;
+  if (createdIso) {
+    return relativeDate(createdIso) || 'Recent';
+  }
+  const fallbackIso = parsed.googleUpdateTime || parsed.updateTime || review.updatedAt;
+  return relativeDate(fallbackIso) || 'Recent';
 }
 
 export function shortDate(iso?: string | null): string {
