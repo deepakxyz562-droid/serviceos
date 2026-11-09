@@ -18,6 +18,12 @@ import { EditableMarketingDesign } from './editable-marketing-design';
 import { getTemplateById } from '../../../shared/poster-templates';
 import type { PosterTemplate } from '../../../shared/poster-templates';
 import { PosterTemplateGallery } from './poster-template-gallery';
+import { FullscreenImageLightbox } from './fullscreen-image-lightbox';
+import {
+  appendImageCandidate,
+  type ImageCandidate,
+  type ImageProviderChoice,
+} from '../../../shared/image-review';
 import {
   Sparkles,
   Send,
@@ -30,6 +36,7 @@ import {
   Type,
   Palette,
   Maximize2,
+  ZoomIn,
   Share2,
   FileText,
   Copy,
@@ -215,6 +222,12 @@ export function MarketingCanvasStudio({
   const [generationMode, setGenerationMode] = useState<'poster' | 'graphic' | 'image_only'>('poster');
   const [activeVisualFormat, setActiveVisualFormat] = useState<'poster' | 'canvas'>('poster');
   const [posterUrl, setPosterUrl] = useState<string>('');
+  const [bgCandidates, setBgCandidates] = useState<ImageCandidate[]>([]);
+  const [bgApprovedUrl, setBgApprovedUrl] = useState<string | null>(null);
+  const [inspectLightboxMode, setInspectLightboxMode] = useState<false | 'poster' | 'photo'>(false);
+  const [aiProviderChoice, setAiProviderChoice] = useState<ImageProviderChoice>('cloudflare');
+  const [lastBgPromptUsed, setLastBgPromptUsed] = useState('');
+  const [aiLightboxError, setAiLightboxError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Array<{ id: string; category?: string; chipLabel?: string; icon?: string; title?: string; prompt: string }>>([]);
   const [websiteTags, setWebsiteTags] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
@@ -428,6 +441,22 @@ export function MarketingCanvasStudio({
     posterLayout,
   ]);
 
+  const activePosterImage = posterUrl || photoUrl;
+
+  const applySelectedBgImage = useCallback((url: string) => {
+    setPosterUrl(url);
+    setPhotoUrl(url);
+    setCustomDesign((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        layers: prev.layers.map((l) =>
+          l.id === 'bg_photo' || l.type === 'image' ? { ...l, src: url } : l,
+        ),
+      };
+    });
+  }, []);
+
   // ─── Template Gallery entry (Flyer-Maker-style one-tap posters) ───────────
   const [entryView, setEntryView] = useState<'gallery' | 'studio'>('gallery');
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
@@ -450,6 +479,9 @@ export function MarketingCanvasStudio({
     setGenerationMode('poster');
     setPhotoUrl(t.photo);
     setPosterUrl('');
+    setBgCandidates([]);
+    setBgApprovedUrl(null);
+    setAiLightboxError(null);
     setActiveUserPrompt('');
     setActiveRightTab('design');
     setEntryView('studio');
@@ -708,6 +740,12 @@ export function MarketingCanvasStudio({
 
     if (generationMode === 'poster') {
       try {
+        const initialProvider: ImageProviderChoice =
+          selectedRefUrls.length > 0 && aiProviderChoice === 'cloudflare'
+            ? 'gemini'
+            : aiProviderChoice;
+        setLastBgPromptUsed(text);
+        setAiLightboxError(null);
         const requestId = `web-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         const [genRes, imageRes] = await Promise.all([
           authFetch('/api/social/designs/generate', {
@@ -720,7 +758,7 @@ export function MarketingCanvasStudio({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               prompt: text,
-              provider: selectedRefUrls.length > 0 ? 'gemini' : 'cloudflare',
+              provider: initialProvider,
               requestId,
               isPoster: true,
               autoFromBusiness: false,
@@ -762,15 +800,17 @@ export function MarketingCanvasStudio({
                 if (job.status === 'completed' && job.result?.url) {
                   clearInterval(poll);
                   const newImg = job.result.url;
-                  setPosterUrl(newImg);
-                  setPhotoUrl(newImg);
-                  setCustomDesign((prev) => {
-                    if (!prev) return null;
-                    return {
-                      ...prev,
-                      layers: prev.layers.map((l) => (l.id === 'bg_photo' || l.type === 'image' ? { ...l, src: newImg } : l)),
-                    };
-                  });
+                  applySelectedBgImage(newImg);
+                  setBgCandidates((prev) =>
+                    appendImageCandidate(prev, {
+                      id: targetJobId,
+                      url: newImg,
+                      prompt: text,
+                      provider: initialProvider,
+                      aspectRatio,
+                    }),
+                  );
+                  setBgApprovedUrl(null);
                   setActiveVisualFormat('poster');
                   setIsGenerating(false);
                   setGeneratingStage('');
@@ -841,13 +881,40 @@ export function MarketingCanvasStudio({
   };
 
   // AI Helpers
-  const handleRegenerateImage = async () => {
+  const handleRegenerateImage = async (opts?: {
+    promptOverride?: string;
+    providerOverride?: ImageProviderChoice;
+    openInspector?: boolean;
+  }) => {
     if (isGenerating) return;
+    const effectivePrompt =
+      opts?.promptOverride?.trim() ||
+      activeUserPrompt ||
+      promptInput.trim() ||
+      activeTemplateBgPrompt ||
+      'commercial product photography';
+    const effectiveProvider: ImageProviderChoice =
+      opts?.providerOverride ??
+      (selectedRefUrls.length > 0 && aiProviderChoice === 'cloudflare'
+        ? 'gemini'
+        : aiProviderChoice);
+    if (opts?.providerOverride) {
+      setAiProviderChoice(opts.providerOverride);
+    }
+    setLastBgPromptUsed(effectivePrompt);
+    setAiLightboxError(null);
+    if (opts?.openInspector) {
+      setInspectLightboxMode('photo');
+    }
     setIsGenerating(true);
     setGeneratingStage(
       selectedRefUrls.length > 0
         ? `Blending ${selectedRefUrls.length} reference business photo${selectedRefUrls.length > 1 ? 's' : ''} with Gemini AI...`
-        : 'Rendering commercial photography background with Cloudflare AI...'
+        : effectiveProvider === 'openrouter'
+          ? 'Rendering high-detail commercial visual with Flux Pro...'
+          : effectiveProvider === 'gemini'
+            ? 'Rendering commercial photography background with Gemini Vision...'
+            : 'Rendering commercial photography background with Cloudflare AI...'
     );
     try {
       const requestId = `web-img-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -855,8 +922,8 @@ export function MarketingCanvasStudio({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: activeUserPrompt || promptInput || activeTemplateBgPrompt || 'commercial product photography',
-          provider: selectedRefUrls.length > 0 ? 'gemini' : 'cloudflare',
+          prompt: effectivePrompt,
+          provider: effectiveProvider,
           requestId,
           isPoster: true,
           autoFromBusiness: false,
@@ -879,30 +946,36 @@ export function MarketingCanvasStudio({
               if (job.status === 'completed' && job.result?.url) {
                 clearInterval(poll);
                 const newImg = job.result.url;
-                setPosterUrl(newImg);
-                setPhotoUrl(newImg);
-                setCustomDesign((prev) => {
-                  if (!prev) return null;
-                  return {
-                    ...prev,
-                    layers: prev.layers.map((l) => (l.id === 'bg_photo' || l.type === 'image' ? { ...l, src: newImg } : l)),
-                  };
-                });
+                applySelectedBgImage(newImg);
+                setBgCandidates((prev) =>
+                  appendImageCandidate(prev, {
+                    id: targetJobId,
+                    url: newImg,
+                    prompt: effectivePrompt,
+                    provider: effectiveProvider,
+                    aspectRatio,
+                  }),
+                );
+                setBgApprovedUrl(null);
                 setActiveVisualFormat('poster');
                 setIsGenerating(false);
                 setGeneratingStage('');
+                setInspectLightboxMode('photo');
                 toast.success('✨ Fresh AI commercial photo background generated!');
-              } else if (job.status === 'failed' || job.status === 'cancelled') {
+              } else if (job.status === 'failed' || job.status === 'cancelled' || job.status === 'uncertain') {
                 clearInterval(poll);
                 setIsGenerating(false);
                 setGeneratingStage('');
-                toast.error(job.error || 'Image generation failed');
+                const errMsg = job.error || 'Image generation failed';
+                setAiLightboxError(errMsg);
+                toast.error(errMsg);
               }
             }
             if (Date.now() - pollStart > 60000) {
               clearInterval(poll);
               setIsGenerating(false);
               setGeneratingStage('');
+              setAiLightboxError('Image generation timed out');
               toast.error('Image generation timed out');
             }
           } catch {
@@ -912,13 +985,17 @@ export function MarketingCanvasStudio({
           }
         }, 1500);
       } else {
+        const errPayload = await res.json().catch(() => ({} as { error?: string }));
+        const errMsg = errPayload.error || 'Could not initiate image generation';
         setIsGenerating(false);
         setGeneratingStage('');
-        toast.error('Could not initiate image generation');
+        setAiLightboxError(errMsg);
+        toast.error(errMsg);
       }
     } catch {
       setIsGenerating(false);
       setGeneratingStage('');
+      setAiLightboxError('Image generation encountered an error');
       toast.error('Image generation encountered an error');
     }
   };
@@ -1749,14 +1826,28 @@ export function MarketingCanvasStudio({
               /* ─── FINISHED AI CREATIVE POSTER VIEW ────────────────────────── */
               <div className="space-y-3">
                 <div className="relative rounded-2xl overflow-hidden border border-border shadow-md bg-gradient-to-b from-card to-muted/20 flex flex-col items-center justify-center p-3 sm:p-5">
-                  <div className="relative max-w-[420px] w-full aspect-[4/5] rounded-xl overflow-hidden shadow-2xl bg-zinc-950 border border-border/80 group">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Inspect finished poster in full screen"
+                    onClick={() => {
+                      if (!isGenerating) setInspectLightboxMode('poster');
+                    }}
+                    onKeyDown={(e) => {
+                      if ((e.key === 'Enter' || e.key === ' ') && !isGenerating) {
+                        e.preventDefault();
+                        setInspectLightboxMode('poster');
+                      }
+                    }}
+                    className="relative max-w-[420px] w-full aspect-[4/5] rounded-xl overflow-hidden shadow-2xl bg-zinc-950 border border-border/80 group cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  >
                     <img
-                      src={posterUrl}
+                      src={activePosterImage}
                       alt="Promotional marketing poster"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg?v=1';
                       }}
-                      className={`w-full h-full object-cover transition-all duration-500 ${isGenerating ? 'opacity-30 scale-95 blur-xs' : 'opacity-100 scale-100'}`}
+                      className={`w-full h-full object-cover transition-all duration-500 ${isGenerating ? 'opacity-30 scale-95 blur-xs' : 'opacity-100 scale-100 group-hover:scale-[1.01]'}`}
                     />
 
                     {/* Animated AI Generator Overlay */}
@@ -1776,25 +1867,40 @@ export function MarketingCanvasStudio({
                       </div>
                     )}
 
-                    {/* Top Scrim with Offer Badge & Download Action */}
-                    <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
+                    {/* Top Scrim with Offer Badge, Full Screen & Download Actions */}
+                    <div className="absolute top-3 inset-x-3 flex items-center justify-between gap-2 pointer-events-none">
                       <div
                         style={{ backgroundColor: activeThemeConfig.badgeBg, color: activeThemeConfig.badgeText }}
                         className="font-black text-[11px] px-3 py-1 rounded-full uppercase tracking-wider shadow-sm pointer-events-auto border border-white/20"
                       >
                         {badgeText || 'SPECIAL OFFER'}
                       </div>
-                      {posterUrl ? (
-                        <a
-                          href={posterUrl}
-                          download="marketing-poster.jpg"
-                          className="bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-white tracking-wide uppercase border border-white/20 shadow-xs pointer-events-auto flex items-center gap-1 hover:text-primary transition-colors"
-                          title="Download image"
+                      <div className="flex items-center gap-1.5 pointer-events-auto">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInspectLightboxMode('poster');
+                          }}
+                          className="bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-white tracking-wide uppercase border border-white/20 shadow-xs flex items-center gap-1 hover:text-emerald-300 transition-colors cursor-pointer"
+                          title="Inspect full screen"
                         >
-                          <Download className="size-3" />
-                          <span>Save Visual</span>
-                        </a>
-                      ) : null}
+                          <Maximize2 className="size-3" />
+                          <span>Full Screen</span>
+                        </button>
+                        {activePosterImage ? (
+                          <a
+                            href={activePosterImage}
+                            download="marketing-poster.jpg"
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-white tracking-wide uppercase border border-white/20 shadow-xs flex items-center gap-1 hover:text-primary transition-colors"
+                            title="Download image"
+                          >
+                            <Download className="size-3" />
+                            <span>Save Visual</span>
+                          </a>
+                        ) : null}
+                      </div>
                     </div>
 
                     {/* Headline Banner Scrim with Smooth Vignette */}
@@ -1863,7 +1969,7 @@ export function MarketingCanvasStudio({
 
                 {/* Poster Quick Tools Bar */}
                 <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40 flex-wrap">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <label className="inline-flex items-center gap-1.5 cursor-pointer h-8 px-3 text-xs font-semibold rounded-xl border border-border bg-card hover:bg-muted/50 transition-all text-foreground shadow-2xs">
                       <Upload className="size-3.5 text-primary" />
                       <span>Upload custom graphic</span>
@@ -1879,12 +1985,32 @@ export function MarketingCanvasStudio({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={handleRegenerateImage}
+                      onClick={() => void handleRegenerateImage()}
                       disabled={isGenerating}
                       className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card text-emerald-600 hover:text-emerald-700"
                     >
                       <Sparkles className="size-3.5 text-emerald-500" />
                       <span>New AI photo</span>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setInspectLightboxMode('photo')}
+                      disabled={isGenerating || !activePosterImage}
+                      className={`h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card ${
+                        bgApprovedUrl && bgApprovedUrl === activePosterImage
+                          ? 'border-emerald-500/50 text-emerald-700 dark:text-emerald-400'
+                          : 'text-foreground'
+                      }`}
+                    >
+                      <ZoomIn className="size-3.5 text-emerald-600" />
+                      <span>
+                        {bgApprovedUrl && bgApprovedUrl === activePosterImage
+                          ? 'AI Photo Approved'
+                          : `Inspect AI Photo${bgCandidates.length > 1 ? ` (${bgCandidates.length})` : ''}`}
+                      </span>
                     </Button>
 
                     <Button
@@ -1904,7 +2030,7 @@ export function MarketingCanvasStudio({
                     </Button>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Button
                       type="button"
                       variant="outline"
@@ -1924,17 +2050,18 @@ export function MarketingCanvasStudio({
                     >
                       <span>🏷️ Brand & Logo</span>
                     </Button>
-                    <a
-                      href={posterUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-xl border border-border bg-card hover:bg-muted/50 transition-all text-muted-foreground hover:text-foreground"
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setInspectLightboxMode('poster')}
+                      className="h-8 text-xs font-semibold gap-1.5 rounded-xl border-border bg-card text-foreground"
                     >
-                      <ExternalLink className="size-3.5" />
-                      <span>View full size</span>
-                    </a>
+                      <Maximize2 className="size-3.5 text-primary" />
+                      <span>Inspect Full Screen</span>
+                    </Button>
                     <a
-                      href={posterUrl}
+                      href={activePosterImage}
                       download="marketing-poster.jpg"
                       className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-xs"
                     >
@@ -2034,23 +2161,46 @@ export function MarketingCanvasStudio({
 
                 {/* Media */}
                 {activeVisualFormat === 'poster' ? (
-                  <div className="relative w-full aspect-[4/5] bg-zinc-950 overflow-hidden">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Inspect channel preview poster in full screen"
+                    onClick={() => setInspectLightboxMode('poster')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setInspectLightboxMode('poster');
+                      }
+                    }}
+                    className="relative w-full aspect-[4/5] bg-zinc-950 overflow-hidden cursor-pointer group focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  >
                     <img
-                      src={posterUrl}
+                      src={activePosterImage}
                       alt="Promotional marketing poster"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:scale-[1.01] transition-transform"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg?v=1';
                       }}
                     />
                     {/* Top Scrim */}
-                    <div className="absolute top-2.5 inset-x-2.5 flex items-center justify-between pointer-events-none">
+                    <div className="absolute top-2.5 inset-x-2.5 flex items-center justify-between gap-2 pointer-events-none">
                       <span
                         style={{ backgroundColor: activeThemeConfig.badgeBg, color: activeThemeConfig.badgeText }}
                         className="font-black text-[9.5px] px-2 py-0.5 rounded uppercase shadow-xs pointer-events-auto"
                       >
                         {badgeText || 'SPECIAL OFFER'}
                       </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setInspectLightboxMode('poster');
+                        }}
+                        className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/75 px-2 py-0.5 text-[9.5px] font-bold text-white hover:text-emerald-300 cursor-pointer"
+                      >
+                        <Maximize2 className="size-2.5" />
+                        <span>Full Screen</span>
+                      </button>
                     </div>
                     {/* Bottom Headline Scrim */}
                     <div
@@ -2108,9 +2258,28 @@ export function MarketingCanvasStudio({
                   </div>
                 ) : (
                   <div
-                    className="w-full aspect-square bg-cover bg-center"
-                    style={{ backgroundImage: `url(${photoUrl})` }}
-                  />
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Inspect post visual in full screen"
+                    onClick={() => setInspectLightboxMode('photo')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setInspectLightboxMode('photo');
+                      }
+                    }}
+                    className="relative w-full aspect-square bg-zinc-950 overflow-hidden cursor-pointer group"
+                  >
+                    <img
+                      src={photoUrl}
+                      alt="Campaign post visual"
+                      className="w-full h-full object-cover"
+                    />
+                    <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/75 px-2 py-0.5 text-[9.5px] font-bold text-white">
+                      <Maximize2 className="size-2.5" />
+                      <span>Full Screen</span>
+                    </span>
+                  </div>
                 )}
 
                 {/* Caption & Actions */}
@@ -2963,6 +3132,144 @@ export function MarketingCanvasStudio({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <FullscreenImageLightbox
+        open={Boolean(inspectLightboxMode)}
+        onOpenChange={(v) => {
+          if (!v) setInspectLightboxMode(false);
+        }}
+        imageUrl={activePosterImage}
+        alt="Full screen campaign visual"
+        title={
+          inspectLightboxMode === 'poster'
+            ? 'Full Screen Poster Inspection'
+            : 'AI Photo Quality Review'
+        }
+        subtitle={
+          inspectLightboxMode === 'poster'
+            ? `${aspectRatio} · Scroll or double-click to inspect typography & layout`
+            : `${aspectRatio} · ${aiProviderChoice}`
+        }
+        renderCustomContent={
+          inspectLightboxMode === 'poster'
+            ? () => (
+                <div
+                  style={{
+                    height: 'min(74dvh, 640px)',
+                    maxWidth: '90vw',
+                    aspectRatio: aspectRatio.replace(':', ' / '),
+                  }}
+                  className="relative rounded-2xl overflow-hidden shadow-2xl bg-zinc-950 border border-white/15"
+                >
+                  <img
+                    src={activePosterImage}
+                    alt="Promotional marketing poster full screen"
+                    draggable={false}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg?v=1';
+                    }}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
+                    <div
+                      style={{ backgroundColor: activeThemeConfig.badgeBg, color: activeThemeConfig.badgeText }}
+                      className="font-black text-xs px-3 py-1 rounded-full uppercase tracking-wider shadow-sm border border-white/20"
+                    >
+                      {badgeText || 'SPECIAL OFFER'}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      background:
+                        'linear-gradient(to top, rgba(7, 10, 19, 0.95) 0%, rgba(7, 10, 19, 0.8) 60%, transparent 100%)',
+                    }}
+                    className="absolute bottom-14 inset-x-0 pt-12 pb-3 px-4 text-white text-left"
+                  >
+                    <h3
+                      style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95)' }}
+                      className="font-black text-lg sm:text-xl leading-tight tracking-tight"
+                    >
+                      {headline || effectiveHeadline}
+                    </h3>
+                    {subheadText ? (
+                      <p
+                        style={{ color: activeThemeConfig.subColor, textShadow: '0 1px 4px rgba(0,0,0,0.85)' }}
+                        className="text-xs font-semibold mt-1"
+                      >
+                        {subheadText}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div
+                    style={{ backgroundColor: activeThemeConfig.footerBg }}
+                    className="absolute bottom-0 inset-x-0 h-14 backdrop-blur-md border-t border-white/10 px-4 flex items-center justify-between text-white"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 pr-3">
+                      {brandLogo ? (
+                        <img
+                          src={brandLogo}
+                          alt="Logo"
+                          className="size-8 rounded-lg object-cover bg-slate-900 border border-white/20 shrink-0"
+                        />
+                      ) : (
+                        <div
+                          style={{ backgroundColor: activeThemeConfig.accent }}
+                          className="size-8 rounded-lg flex items-center justify-center font-black text-white text-xs shrink-0"
+                        >
+                          {effectiveBusinessName.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 text-left">
+                        <p className="font-extrabold text-xs text-white truncate">{effectiveBusinessName}</p>
+                        <p style={{ color: activeThemeConfig.subColor }} className="text-[10px] font-medium truncate">
+                          {effectiveTagline || `🌐 ${effectiveWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '')}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span
+                        style={{ backgroundColor: activeThemeConfig.ctaBg, color: activeThemeConfig.ctaText }}
+                        className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow-xs"
+                      >
+                        {ctaText || 'VISIT STORE'}
+                      </span>
+                      <p className="text-[9px] text-sky-400 font-mono mt-0.5 truncate max-w-[120px]">
+                        {effectiveWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            : undefined
+        }
+        candidates={inspectLightboxMode === 'photo' ? bgCandidates : undefined}
+        selectedUrl={activePosterImage}
+        onSelectCandidate={(cand) => {
+          applySelectedBgImage(cand.url);
+        }}
+        reviewMode={inspectLightboxMode === 'photo'}
+        isApproved={Boolean(activePosterImage && bgApprovedUrl === activePosterImage)}
+        onApprove={(url) => {
+          applySelectedBgImage(url);
+          setBgApprovedUrl(url);
+          toast.success('AI photo approved for this campaign!');
+        }}
+        basePrompt={lastBgPromptUsed || activeUserPrompt || promptInput || activeTemplateBgPrompt || ''}
+        activeProvider={aiProviderChoice}
+        allowProviderSwitch={inspectLightboxMode === 'photo'}
+        regenerating={isGenerating}
+        errorMessage={aiLightboxError}
+        onRegenerate={
+          inspectLightboxMode === 'photo'
+            ? ({ prompt, provider }) =>
+                handleRegenerateImage({
+                  promptOverride: prompt,
+                  providerOverride: provider,
+                  openInspector: true,
+                })
+            : undefined
+        }
+      />
     </div>
   );
 }

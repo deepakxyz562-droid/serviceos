@@ -15,6 +15,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiRequest } from '../../lib/api';
 import { colors, ui } from '../ui';
+import { FullscreenImageModal } from './fullscreen-image-modal';
 
 export interface UpcomingPostItem {
   id: string;
@@ -41,6 +42,7 @@ export function UpcomingPostsCarousel({
   const [posts, setPosts] = useState<UpcomingPostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<UpcomingPostItem | null>(null);
+  const [fullscreenImageOpen, setFullscreenImageOpen] = useState(false);
 
   // Dynamic fallback posts tailored to business
   const fallbackPosts: UpcomingPostItem[] = [
@@ -129,6 +131,7 @@ export function UpcomingPostsCarousel({
   const activePosts = posts.length > 0 ? posts : fallbackPosts;
 
   const handleOpenPost = (post: UpcomingPostItem) => {
+    setFullscreenImageOpen(false);
     if (onViewPost) {
       onViewPost(post);
     } else {
@@ -253,7 +256,13 @@ export function UpcomingPostsCarousel({
           visible={Boolean(selectedPost)}
           animationType="slide"
           transparent
-          onRequestClose={() => setSelectedPost(null)}
+          onRequestClose={() => {
+            if (fullscreenImageOpen) {
+              setFullscreenImageOpen(false);
+              return;
+            }
+            setSelectedPost(null);
+          }}
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -265,7 +274,10 @@ export function UpcomingPostsCarousel({
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Close"
-                  onPress={() => setSelectedPost(null)}
+                  onPress={() => {
+                    setFullscreenImageOpen(false);
+                    setSelectedPost(null);
+                  }}
                   hitSlop={10}
                   style={styles.closeBtn}
                 >
@@ -275,11 +287,37 @@ export function UpcomingPostsCarousel({
 
               <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
                 {selectedPost.imageUrl ? (
-                  <Image
-                    source={{ uri: selectedPost.imageUrl }}
-                    style={styles.modalImage}
-                    resizeMode="cover"
-                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Inspect post image full screen"
+                    onPress={() => setFullscreenImageOpen(true)}
+                    style={{ position: 'relative' }}
+                  >
+                    <Image
+                      source={{ uri: selectedPost.imageUrl }}
+                      style={styles.modalImage}
+                      resizeMode="contain"
+                    />
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingHorizontal: 9,
+                        paddingVertical: 4,
+                        borderRadius: 14,
+                        backgroundColor: 'rgba(15, 23, 42, 0.82)',
+                      }}
+                    >
+                      <MaterialIcons name="fullscreen" size={14} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>
+                        Full Screen
+                      </Text>
+                    </View>
+                  </Pressable>
                 ) : null}
 
                 <View style={{ paddingVertical: 12, gap: 10 }}>
@@ -329,6 +367,15 @@ export function UpcomingPostsCarousel({
               </View>
             </View>
           </View>
+
+          <FullscreenImageModal
+            asOverlay
+            visible={fullscreenImageOpen && Boolean(selectedPost.imageUrl)}
+            onClose={() => setFullscreenImageOpen(false)}
+            imageUrl={selectedPost.imageUrl}
+            title={selectedPost.headline || 'Scheduled Post Image'}
+            subtitle={`Scheduled for ${selectedPost.scheduledTime}`}
+          />
         </Modal>
       ) : null}
     </View>

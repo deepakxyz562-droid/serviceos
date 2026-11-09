@@ -65,6 +65,12 @@ import { SocialCalendarView } from '../../src/components/gbp/social-calendar';
 import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
 import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
 import { UpcomingPostsCarousel } from '../../src/components/gbp/upcoming-posts-carousel';
+import { FullscreenImageModal } from '../../src/components/gbp/fullscreen-image-modal';
+import {
+  appendImageCandidate,
+  type ImageCandidate,
+  type ImageProviderChoice,
+} from '../../../shared/image-review';
 import { normalizePendingUpload, uploadFileToStorage } from '../../src/lib/upload';
 
 const TIME_SLOTS = [
@@ -855,6 +861,11 @@ export default function MarketingScreen() {
   const [refPhotosLoading, setRefPhotosLoading] = useState(false);
   const [selectedRefUrls, setSelectedRefUrls] = useState<string[]>([]);
   const [uploadingRefPhoto, setUploadingRefPhoto] = useState(false);
+  const [bgImageCandidates, setBgImageCandidates] = useState<ImageCandidate[]>([]);
+  const [bgApprovedUrl, setBgApprovedUrl] = useState<string | null>(null);
+  const [inspectMainFullscreen, setInspectMainFullscreen] = useState<false | 'poster' | 'photo'>(false);
+  const [inspectSheetBgFullscreen, setInspectSheetBgFullscreen] = useState(false);
+  const [lastBgGenPrompt, setLastBgGenPrompt] = useState('');
   useEffect(()=>()=>{generationEpoch.current++;},[]);
   const loadBusinessRefPhotos = useCallback(async () => {
     try {
@@ -1468,19 +1479,50 @@ export default function MarketingScreen() {
     setColorTheme(nextTheme);
   };
 
-  async function handleRegenerateImage() {
+  function applySelectedBgImage(url: string, assetId?: string) {
+    setCustomPosterUri(url);
+    setBgPhotoUrl(url);
+    setCustomDesign((prev) => {
+      const base = prev || design;
+      return {
+        ...base,
+        layers: base.layers.map((l) =>
+          l.id === 'bg_photo' ? { ...l, src: url, ...(assetId ? { assetId } : {}) } : l,
+        ),
+      };
+    });
+  }
+
+  async function handleRegenerateImage(opts?: {
+    promptOverride?: string;
+    providerOverride?: ImageProviderChoice;
+    openSheetInspector?: boolean;
+  }) {
     if (isGeneratingImage) return;
     setIsGeneratingImage(true);
     setError(null);
     const epoch=++generationEpoch.current;
     try {
       const requestId = `mob-img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const chosenProv = opts?.providerOverride ?? imageProvider;
+      if (opts?.providerOverride) {
+        setImageProvider(opts.providerOverride);
+      }
       const effectiveProv =
-        selectedRefUrls.length > 0 && imageProvider === 'cloudflare' ? 'gemini' : imageProvider;
+        selectedRefUrls.length > 0 && chosenProv === 'cloudflare' ? 'gemini' : chosenProv;
+      const computedPrompt =
+        opts?.promptOverride?.trim() ||
+        backgroundBrief({
+          template: activeTemplateId ? getTemplateById(activeTemplateId) : undefined,
+          headline,
+          instruction: promptInput,
+          ratio: aspectRatio,
+        });
+      setLastBgGenPrompt(computedPrompt);
       const res = await apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
         method: 'POST',
         body: {
-          prompt: backgroundBrief({template:activeTemplateId?getTemplateById(activeTemplateId):undefined,headline,instruction:promptInput,ratio:aspectRatio}),
+          prompt: computedPrompt,
           provider: effectiveProv,
           requestId,
           isPoster: true,
@@ -1510,17 +1552,19 @@ export default function MarketingScreen() {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
               const generatedUrl = check.result.url;
-              setCustomPosterUri(generatedUrl);
-              setBgPhotoUrl(generatedUrl);
-              setCustomDesign((prev) => {
-                const base=prev||design;
-                return {
-                  ...base,
-                  layers: base.layers.map((l) =>
-                    l.id === 'bg_photo' ? { ...l, src: generatedUrl,assetId:check.result?.assetId } : l
-                  ),
-                };
-              });
+              applySelectedBgImage(generatedUrl, check.result?.assetId);
+              setBgImageCandidates((prev) =>
+                appendImageCandidate(prev, {
+                  url: generatedUrl,
+                  prompt: computedPrompt,
+                  provider: effectiveProv,
+                  aspectRatio,
+                }),
+              );
+              setBgApprovedUrl(null);
+              if (opts?.openSheetInspector) {
+                setInspectSheetBgFullscreen(true);
+              }
               setSuccessNotice('✨ Fresh commercial photo background generated!');
               setTimeout(() => setSuccessNotice(null), 3500);
             } else if (check?.status === 'failed' || check?.status === 'cancelled' || check?.status === 'uncertain') {
@@ -2085,17 +2129,25 @@ export default function MarketingScreen() {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
               const generatedUrl = check.result.url;
-              setCustomPosterUri(generatedUrl);
-              setBgPhotoUrl(generatedUrl);
-              setCustomDesign((prev) => {
-                const base=prev||design;
-                return {
-                  ...base,
-                  layers: base.layers.map((l) =>
-                    l.id === 'bg_photo' ? { ...l, src: generatedUrl,assetId:check.result?.assetId } : l
-                  ),
-                };
+              applySelectedBgImage(generatedUrl, check.result?.assetId);
+              const usedBrief = backgroundBrief({
+                template: activeTemplateId ? getTemplateById(activeTemplateId) : undefined,
+                headline,
+                instruction: topicToUse,
+                ratio: aspectRatio,
               });
+              setLastBgGenPrompt(usedBrief);
+              setBgImageCandidates((prev) =>
+                appendImageCandidate(prev, {
+                  url: generatedUrl,
+                  prompt: usedBrief,
+                  provider:
+                    selectedRefUrls.length > 0 && imageProvider === 'cloudflare'
+                      ? 'gemini'
+                      : imageProvider,
+                  aspectRatio,
+                }),
+              );
             } else if (check?.status === 'failed' || check?.status === 'cancelled' || check?.status === 'uncertain' || Date.now() - pollStart > 75000) {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
@@ -3315,7 +3367,12 @@ export default function MarketingScreen() {
                         elevation: 3,
                       }}
                     >
-                      <View style={{ padding: 12, backgroundColor: '#070A13', alignItems: 'center', justifyContent: 'center' }}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Inspect poster in full screen"
+                        onPress={() => setInspectMainFullscreen('poster')}
+                        style={{ padding: 12, backgroundColor: '#070A13', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+                      >
                         <AutoBrandedPosterCard document={design}
                           photoUri={customPosterUri || bgPhotoUrl}
                           headline={headline || effectiveHeadline}
@@ -3331,7 +3388,73 @@ export default function MarketingScreen() {
                           layout={posterLayout}
                           isGenerating={isGeneratingImage || (busy && generationMode === 'poster')}
                         />
-                      </View>
+                        <View
+                          style={{
+                            position: 'absolute',
+                            top: 18,
+                            right: 18,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            paddingHorizontal: 9,
+                            paddingVertical: 5,
+                            borderRadius: 14,
+                            backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                            borderWidth: 1,
+                            borderColor: 'rgba(255,255,255,0.22)',
+                          }}
+                        >
+                          <MaterialIcons name="fullscreen" size={14} color="#FFFFFF" />
+                          <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>Full Screen</Text>
+                        </View>
+                      </Pressable>
+
+                      {(customPosterUri || bgPhotoUrl) ? (
+                        <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingTop: 10 }}>
+                          <Pressable
+                            accessibilityRole="button"
+                            onPress={() => setInspectMainFullscreen('photo')}
+                            style={{
+                              flex: 1,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 5,
+                              paddingVertical: 8,
+                              borderRadius: 10,
+                              backgroundColor: '#F5F3FF',
+                              borderWidth: 1,
+                              borderColor: '#DDD6FE',
+                            }}
+                          >
+                            <MaterialIcons name="image-search" size={15} color="#6D28D9" />
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#6D28D9' }}>
+                              Inspect AI Photo{bgImageCandidates.length > 1 ? ` (${bgImageCandidates.length})` : ''}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            accessibilityRole="button"
+                            onPress={() => setInspectMainFullscreen('poster')}
+                            style={{
+                              flex: 1,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 5,
+                              paddingVertical: 8,
+                              borderRadius: 10,
+                              backgroundColor: '#F8FAFC',
+                              borderWidth: 1,
+                              borderColor: '#CBD5E1',
+                            }}
+                          >
+                            <MaterialIcons name="fullscreen" size={15} color="#0F172A" />
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>
+                              Full Poster
+                            </Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
 
                       <View style={{padding:12}}><Action secondary label="Edit design" icon="edit" onPress={()=>{setStudioStep(2);setStudioSubTab('design');}}/></View>
 
@@ -3781,7 +3904,12 @@ export default function MarketingScreen() {
                     <MaterialIcons name="more-horiz" size={20} color="#64748B" />
                   </View>
 
-                  <View style={{ backgroundColor: '#090D16', paddingVertical: 4 }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Inspect post preview full screen"
+                    onPress={() => setInspectMainFullscreen('poster')}
+                    style={{ backgroundColor: '#090D16', paddingVertical: 4, position: 'relative' }}
+                  >
                     <AutoBrandedPosterCard document={design}
                       photoUri={customPosterUri || bgPhotoUrl}
                       headline={headline || effectiveHeadline}
@@ -3796,7 +3924,24 @@ export default function MarketingScreen() {
                       theme={colorTheme}
                       layout={posterLayout}
                     />
-                  </View>
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: 10,
+                        right: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingHorizontal: 9,
+                        paddingVertical: 4,
+                        borderRadius: 14,
+                        backgroundColor: 'rgba(15, 23, 42, 0.84)',
+                      }}
+                    >
+                      <MaterialIcons name="fullscreen" size={14} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>Full Screen</Text>
+                    </View>
+                  </Pressable>
 
                   {/* Interactive Social Action Icons */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10 }}>
@@ -4335,7 +4480,13 @@ export default function MarketingScreen() {
             visible={editSheet === 'photo'}
             animationType="slide"
             transparent
-            onRequestClose={() => setEditSheet('none')}
+            onRequestClose={() => {
+              if (inspectSheetBgFullscreen) {
+                setInspectSheetBgFullscreen(false);
+                return;
+              }
+              setEditSheet('none');
+            }}
           >
             <View style={styles.modalBackdrop}>
               <View style={styles.modalCard}>
@@ -4501,7 +4652,7 @@ export default function MarketingScreen() {
 
                     <Pressable
                       onPress={async () => {
-                        await handleRegenerateImage();
+                        await handleRegenerateImage({ openSheetInspector: true });
                       }}
                       disabled={isGeneratingImage}
                       style={{
@@ -4524,6 +4675,39 @@ export default function MarketingScreen() {
                         {isGeneratingImage ? 'Synthesizing Image...' : 'Generate New AI Image'}
                       </Text>
                     </Pressable>
+
+                    {(customPosterUri || bgPhotoUrl) ? (
+                      <View style={{ marginTop: 12, backgroundColor: '#FFFFFF', borderRadius: 10, padding: 8, borderWidth: 1, borderColor: '#CBD5E1', gap: 8 }}>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => setInspectSheetBgFullscreen(true)}
+                          style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', backgroundColor: '#0F172A', alignItems: 'center' }}
+                        >
+                          <Image
+                            source={{ uri: (customPosterUri || bgPhotoUrl) as string }}
+                            style={{ width: '100%', height: 150 }}
+                            resizeMode="contain"
+                            alt="Current AI background preview"
+                          />
+                          <View style={{ position: 'absolute', top: 6, right: 6, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(15, 23, 42, 0.85)', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 }}>
+                            <MaterialIcons name="fullscreen" size={13} color="#FFFFFF" />
+                            <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800' }}>Full Screen</Text>
+                          </View>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => setInspectSheetBgFullscreen(true)}
+                          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 7, borderRadius: 8, backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#A7F3D0' }}
+                        >
+                          <MaterialIcons name="zoom-in" size={15} color="#047857" />
+                          <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#047857' }}>
+                            {bgApprovedUrl === (customPosterUri || bgPhotoUrl)
+                              ? 'Approved · Inspect Again'
+                              : `Inspect Full Screen & Judge Quality${bgImageCandidates.length > 1 ? ` (${bgImageCandidates.length})` : ''}`}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
                   </View>
 
                   <Pressable onPress={() => setEditSheet('none')} style={styles.modalDoneBtn}>
@@ -4532,6 +4716,38 @@ export default function MarketingScreen() {
                 </ScrollView>
               </View>
             </View>
+
+            <FullscreenImageModal
+              asOverlay
+              visible={inspectSheetBgFullscreen}
+              onClose={() => setInspectSheetBgFullscreen(false)}
+              imageUrl={customPosterUri || bgPhotoUrl}
+              title="AI Background Inspection"
+              subtitle={`${aspectRatio} · ${imageProvider}`}
+              candidates={bgImageCandidates}
+              selectedUrl={customPosterUri || bgPhotoUrl}
+              onSelectCandidate={(cand) => {
+                applySelectedBgImage(cand.url);
+              }}
+              reviewMode
+              isApproved={Boolean((customPosterUri || bgPhotoUrl) && bgApprovedUrl === (customPosterUri || bgPhotoUrl))}
+              onApprove={(url) => {
+                applySelectedBgImage(url);
+                setBgApprovedUrl(url);
+              }}
+              basePrompt={lastBgGenPrompt || promptInput}
+              activeProvider={imageProvider}
+              allowProviderSwitch
+              regenerating={isGeneratingImage}
+              errorMessage={error}
+              onRegenerate={({ prompt, provider }) =>
+                handleRegenerateImage({
+                  promptOverride: prompt,
+                  providerOverride: provider,
+                  openSheetInspector: true,
+                })
+              }
+            />
           </Modal>
 
           {/* Modal 3: Style, Layout & Format */}
@@ -5122,6 +5338,71 @@ export default function MarketingScreen() {
               </View>
             </View>
           </Modal>
+
+          {/* Main Fullscreen Inspector for Poster or AI Background Photo */}
+          <FullscreenImageModal
+            visible={Boolean(inspectMainFullscreen)}
+            onClose={() => setInspectMainFullscreen(false)}
+            imageUrl={customPosterUri || bgPhotoUrl}
+            title={
+              inspectMainFullscreen === 'poster'
+                ? 'Full Poster Preview'
+                : 'AI Photo Quality Review'
+            }
+            subtitle={
+              inspectMainFullscreen === 'poster'
+                ? `${aspectRatio} · Pinch or double-tap to inspect typography & framing`
+                : `${aspectRatio} · ${imageProvider}`
+            }
+            renderCustomContent={
+              inspectMainFullscreen === 'poster'
+                ? () => (
+                    <AutoBrandedPosterCard
+                      document={design}
+                      photoUri={customPosterUri || bgPhotoUrl}
+                      headline={headline || effectiveHeadline}
+                      subtitle={subtitle}
+                      badge={discountBadge}
+                      ctaText={ctaText}
+                      businessName={effectiveBusinessName}
+                      logoUri={effectiveBusinessLogo}
+                      tagline={effectiveBusinessTagline}
+                      website={effectiveBusinessWebsite}
+                      height={Math.min(540, Math.round(Dimensions.get('window').height * 0.68))}
+                      theme={colorTheme}
+                      layout={posterLayout}
+                    />
+                  )
+                : undefined
+            }
+            candidates={inspectMainFullscreen === 'photo' ? bgImageCandidates : undefined}
+            selectedUrl={customPosterUri || bgPhotoUrl}
+            onSelectCandidate={(cand) => {
+              applySelectedBgImage(cand.url);
+            }}
+            reviewMode={inspectMainFullscreen === 'photo'}
+            isApproved={Boolean(
+              (customPosterUri || bgPhotoUrl) && bgApprovedUrl === (customPosterUri || bgPhotoUrl),
+            )}
+            onApprove={(url) => {
+              applySelectedBgImage(url);
+              setBgApprovedUrl(url);
+            }}
+            basePrompt={lastBgGenPrompt || promptInput}
+            activeProvider={imageProvider}
+            allowProviderSwitch={inspectMainFullscreen === 'photo'}
+            regenerating={isGeneratingImage}
+            errorMessage={error}
+            onRegenerate={
+              inspectMainFullscreen === 'photo'
+                ? ({ prompt, provider }) =>
+                    handleRegenerateImage({
+                      promptOverride: prompt,
+                      providerOverride: provider,
+                    })
+                : undefined
+            }
+          />
         </View>
       )}
       </View>

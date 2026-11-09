@@ -5,6 +5,17 @@ export const Platform = {
   select: <T>(objs: { ios?: T; android?: T; default?: T }) => objs.ios ?? objs.default,
 };
 
+export const Dimensions = {
+  get: () => ({ width: 390, height: 844, scale: 2, fontScale: 1 }),
+  addEventListener: () => ({ remove: () => {} }),
+};
+
+export function useWindowDimensions() {
+  return { width: 390, height: 844, scale: 2, fontScale: 1 };
+}
+
+export const StatusBar = (props: any) => React.createElement('div', props);
+
 export const Alert = {
   alert: () => {},
 };
@@ -47,10 +58,34 @@ function toDomProps(props: any, isPressable = false) {
     style,
     contentContainerStyle: _ccs,
     showsVerticalScrollIndicator: _svsi,
+    showsHorizontalScrollIndicator: _shsi,
     onPress,
+    onChangeText,
+    accessibilityLabel,
+    accessibilityRole: _role,
+    hitSlop: _hs,
+    activeOpacity: _ao,
+    numberOfLines: _nol,
+    horizontal: _horiz,
+    pointerEvents: _pe,
+    placeholderTextColor: _ptc,
+    behavior: _beh,
+    resizeMode: _rm,
+    onLoadStart: _ols,
+    onLoadEnd: _ole,
+    source,
     ...rest
   } = props;
   const next: Record<string, any> = { ...rest };
+  if (accessibilityLabel !== undefined) {
+    next['aria-label'] = accessibilityLabel;
+  }
+  if (source && typeof source === 'object' && typeof source.uri === 'string' && !next.src) {
+    next.src = source.uri;
+  }
+  if (typeof onChangeText === 'function' && !next.onChange) {
+    next.onChange = (e: any) => onChangeText(e?.target?.value ?? '');
+  }
   const flat = flattenStyle(style);
   if (flat) next.style = flat;
   if (isPressable && typeof onPress === 'function' && !next.onClick) {
@@ -65,6 +100,7 @@ export const Pressable = (props: any) => React.createElement('button', toDomProp
 export const ScrollView = (props: any) => React.createElement('div', toDomProps(props));
 export const Image = (props: any) => React.createElement('img', toDomProps(props));
 export const Modal = (props: any) => React.createElement('div', toDomProps(props));
+export const KeyboardAvoidingView = (props: any) => React.createElement('div', toDomProps(props));
 export const ActivityIndicator = (props: any) => React.createElement('div', toDomProps(props));
 export const TextInput = (props: any) => React.createElement('input', toDomProps(props));
 export const PanResponder = {
@@ -73,6 +109,9 @@ export const PanResponder = {
 
 const reactNativeMock = {
   Platform,
+  Dimensions,
+  useWindowDimensions,
+  StatusBar,
   Alert,
   Linking,
   AppState,
@@ -84,6 +123,7 @@ const reactNativeMock = {
   ScrollView,
   Image,
   Modal,
+  KeyboardAvoidingView,
   ActivityIndicator,
   TextInput,
   PanResponder,

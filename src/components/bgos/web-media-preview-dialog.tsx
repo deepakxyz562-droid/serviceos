@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { ExternalLink, Film, Pencil, Play } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ExternalLink, Film, Maximize2, Pencil, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { WebMediaItem } from './media-metadata-dialog';
+import { FullscreenImageLightbox } from './fullscreen-image-lightbox';
 
 const VIDEO_URL_RE = /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i;
 
@@ -89,6 +90,12 @@ export function WebMediaPreviewDialog({
   onEdit?: (item: WebMediaItem) => void;
   businessName?: string;
 }) {
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) setFullscreenOpen(false);
+  }, [open, item?.id, item?.url]);
+
   if (!item) return null;
 
   const isVideo = isWebVideoItem(item);
@@ -103,6 +110,7 @@ export function WebMediaPreviewDialog({
           : 'Draft (Not Posted)';
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-card text-foreground border-border">
         <DialogHeader className="p-5 pb-3 border-b border-border text-left">
@@ -146,11 +154,28 @@ export function WebMediaPreviewDialog({
                 className="w-full max-h-[380px] object-contain"
               />
             ) : (
-              <img
-                src={item.url}
-                alt={item.title || item.caption || 'Business media preview'}
-                className="w-full max-h-[380px] object-contain"
-              />
+              <div className="relative w-full flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => setFullscreenOpen(true)}
+                  className="w-full cursor-zoom-in block"
+                  title="Inspect photo full screen"
+                >
+                  <img
+                    src={item.url}
+                    alt={item.title || item.caption || 'Business media preview'}
+                    className="w-full max-h-[380px] object-contain mx-auto"
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFullscreenOpen(true)}
+                  className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 rounded-full border border-white/20 bg-slate-900/85 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-slate-900 cursor-pointer"
+                >
+                  <Maximize2 className="size-3" />
+                  <span>Full Screen</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -164,17 +189,29 @@ export function WebMediaPreviewDialog({
                   Scheduled: {new Date(item.scheduledFor).toLocaleString()}
                 </span>
               )}
-              {item.url && (
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
-                >
-                  <ExternalLink className="size-3" />
-                  Open Original
-                </a>
-              )}
+              <div className="flex items-center gap-3">
+                {!isVideo && item.url && (
+                  <button
+                    type="button"
+                    onClick={() => setFullscreenOpen(true)}
+                    className="inline-flex items-center gap-1 font-semibold text-primary hover:underline cursor-pointer"
+                  >
+                    <Maximize2 className="size-3" />
+                    Inspect Full Screen
+                  </button>
+                )}
+                {item.url && (
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                  >
+                    <ExternalLink className="size-3" />
+                    Open Original
+                  </a>
+                )}
+              </div>
             </div>
 
             {(item.description || item.caption) && (
@@ -205,5 +242,17 @@ export function WebMediaPreviewDialog({
         </div>
       </DialogContent>
     </Dialog>
+
+    {!isVideo ? (
+      <FullscreenImageLightbox
+        open={fullscreenOpen}
+        onOpenChange={setFullscreenOpen}
+        imageUrl={item.url}
+        alt={item.title || item.caption || 'Business media preview'}
+        title={item.title || `${businessName} Photo`}
+        subtitle={`${statusLabel}${item.gbpCategory || item.category ? ` · ${item.gbpCategory || item.category}` : ''}`}
+      />
+    ) : null}
+    </>
   );
 }

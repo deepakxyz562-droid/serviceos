@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   Linking,
@@ -14,6 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { colors } from '../ui';
 import type { GbpPhoto } from './types';
+import { FullscreenImageModal } from './fullscreen-image-modal';
 
 const VIDEO_URL_RE = /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i;
 
@@ -35,6 +36,12 @@ export function MediaPreviewModal({
   onEdit?: (item: GbpPhoto) => void;
   businessName?: string;
 }) {
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
+
+  useEffect(() => {
+    if (!visible) setFullscreenOpen(false);
+  }, [visible, item?.id, item?.url]);
+
   if (!item) return null;
 
   const isVideo = isVideoMediaAsset(item);
@@ -57,8 +64,16 @@ export function MediaPreviewModal({
     }
   };
 
+  const handleRequestClose = () => {
+    if (fullscreenOpen) {
+      setFullscreenOpen(false);
+      return;
+    }
+    onClose();
+  };
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleRequestClose}>
       <View style={styles.root}>
         <View style={styles.header}>
           <Pressable
@@ -132,12 +147,23 @@ export function MediaPreviewModal({
                 </Pressable>
               )
             ) : (
-              <Image
-                source={{ uri: item.url }}
-                style={styles.photoPreviewImg}
-                resizeMode="contain"
-                alt={item.title || item.caption || 'Business media'}
-              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open photo in full screen"
+                onPress={() => setFullscreenOpen(true)}
+                style={styles.photoTapWrap}
+              >
+                <Image
+                  source={{ uri: item.url }}
+                  style={styles.photoPreviewImg}
+                  resizeMode="contain"
+                  alt={item.title || item.caption || 'Business media'}
+                />
+                <View style={styles.fullscreenPillBadge}>
+                  <MaterialIcons name="fullscreen" size={14} color="#FFFFFF" />
+                  <Text style={styles.fullscreenPillText}>Full Screen</Text>
+                </View>
+              </Pressable>
             )}
           </View>
 
@@ -146,7 +172,12 @@ export function MediaPreviewModal({
               <MaterialIcons name="play-circle-outline" size={18} color="#FFFFFF" />
               <Text style={styles.openPlayerBtnText}>Play Video Fullscreen</Text>
             </Pressable>
-          ) : null}
+          ) : (
+            <Pressable onPress={() => setFullscreenOpen(true)} style={styles.openPlayerBtn}>
+              <MaterialIcons name="fullscreen" size={18} color="#FFFFFF" />
+              <Text style={styles.openPlayerBtnText}>Inspect Full Screen &amp; Zoom</Text>
+            </Pressable>
+          )}
 
           <View style={styles.metaCard}>
             <View style={styles.metaTopRow}>
@@ -184,6 +215,17 @@ export function MediaPreviewModal({
           </View>
         </ScrollView>
       </View>
+
+      {!isVideo ? (
+        <FullscreenImageModal
+          asOverlay
+          visible={fullscreenOpen}
+          onClose={() => setFullscreenOpen(false)}
+          imageUrl={item.url}
+          title={item.title || `${businessName} Photo`}
+          subtitle={`${statusLabel}${item.category ? ` · ${item.category}` : ''}`}
+        />
+      ) : null}
     </Modal>
   );
 }
@@ -249,10 +291,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
+  photoTapWrap: {
+    position: 'relative',
+    width: '100%',
+  },
   photoPreviewImg: {
     width: '100%',
     height: 320,
     backgroundColor: '#0F172A',
+  },
+  fullscreenPillBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+  fullscreenPillText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
   },
   nativeVideoFrame: {
     width: '100%',

@@ -35,6 +35,13 @@ import {
   type CountryItem,
 } from '../../lib/country-codes';
 import type { GbpPhoto } from './types';
+import { FullscreenImageModal } from './fullscreen-image-modal';
+import {
+  appendImageCandidate,
+  getAspectRatioNumeric,
+  type ImageCandidate,
+  type ImageProviderChoice,
+} from '../../../../shared/image-review';
 
 export type MediaScheduleMode = 'daily' | 'weekly' | 'instant' | 'draft';
 export type GbpCategoryType =
@@ -220,8 +227,14 @@ export function MediaMetadataSheet({
   const [uploadingRef, setUploadingRef] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiAspectRatio, setAiAspectRatio] = useState<'1:1' | '4:5' | '9:16'>('1:1');
+  const [aiProviderChoice, setAiProviderChoice] = useState<ImageProviderChoice>('cloudflare');
   const [generatingAiImage, setGeneratingAiImage] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [aiCandidates, setAiCandidates] = useState<ImageCandidate[]>([]);
+  const [aiApprovedUrl, setAiApprovedUrl] = useState<string | null>(null);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  const [inspectStaticUrl, setInspectStaticUrl] = useState<string | null>(null);
+  const [lastAiUsedPrompt, setLastAiUsedPrompt] = useState('');
 
   const sessionKeyRef = useRef(0);
   const lastInitKeyRef = useRef('');
@@ -326,6 +339,11 @@ export function MediaMetadataSheet({
     setTagInput('');
     setIdeasError(null);
     setGeneratedImageUrl(null);
+    setAiCandidates([]);
+    setAiApprovedUrl(null);
+    setFullscreenOpen(false);
+    setInspectStaticUrl(null);
+    setLastAiUsedPrompt('');
     setAiPrompt('');
     setSelectedRefUrls([]);
 
@@ -468,15 +486,53 @@ export function MediaMetadataSheet({
     }
   }
 
-  async function handleGenerateAiImage(autoFromBusiness: boolean) {
+  function applyGeneratedCandidateUrl(url: string) {
+    setGeneratedImageUrl(url);
+    const localItem = normalizePendingUpload({
+      uri: url,
+      name: `ai-business-photo-${Date.now()}.png`,
+      mimeType: 'image/png',
+      mediaType: 'image',
+    });
+    setActiveBatchId(null);
+    setAiUploads([
+      {
+        local: localItem,
+        cloudUrl: url,
+        uploading: false,
+        progress: 100,
+      },
+    ]);
+    return localItem;
+  }
+
+  async function handleGenerateAiImage(
+    autoFromBusiness: boolean,
+    opts?: {
+      promptOverride?: string;
+      providerOverride?: ImageProviderChoice;
+    },
+  ) {
     if (generatingAiImage) return;
     const reqKey = sessionKeyRef.current;
     setErrorMsg(null);
     setGeneratingAiImage(true);
     try {
       const requestId = `mob-ai-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      const trimmedPrompt = aiPrompt.trim();
+      const trimmedPrompt = (opts?.promptOverride ?? aiPrompt).trim();
+      if (opts?.promptOverride !== undefined) {
+        setAiPrompt(trimmedPrompt);
+      }
+      if (opts?.providerOverride) {
+        setAiProviderChoice(opts.providerOverride);
+      }
       const useAuto = autoFromBusiness || !trimmedPrompt;
+      const effectiveProvider: ImageProviderChoice =
+        opts?.providerOverride || (selectedRefUrls.length > 0 ? 'gemini' : aiProviderChoice);
+      setLastAiUsedPrompt(
+        trimmedPrompt ||
+          `${businessContext?.name || businessName} commercial showcase`,
+      );
       const startRes = await apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
         method: 'POST',
         body: {
@@ -485,7 +541,7 @@ export function MediaMetadataSheet({
           autoFromBusiness: useAuto,
           referenceImageUrls: selectedRefUrls,
           aspectRatio: aiAspectRatio,
-          provider: selectedRefUrls.length > 0 ? 'gemini' : 'cloudflare',
+          provider: effectiveProvider,
           businessName: businessContext?.name || businessName,
           category: businessContext?.category,
           products: businessContext?.products,
@@ -540,22 +596,17 @@ export function MediaMetadataSheet({
         throw new Error('Image generation timed out. Please try again.');
       }
 
-      setGeneratedImageUrl(generated);
-      const localItem = normalizePendingUpload({
-        uri: generated,
-        name: `ai-business-photo-${Date.now()}.png`,
-        mimeType: 'image/png',
-        mediaType: 'image',
-      });
-      setActiveBatchId(null);
-      setAiUploads([
-        {
-          local: localItem,
-          cloudUrl: generated,
-          uploading: false,
-          progress: 100,
-        },
-      ]);
+      const localItem = applyGeneratedCandidateUrl(generated);
+      setAiCandidates((prev) =>
+        appendImageCandidate(prev, {
+          url: generated,
+          prompt: trimmedPrompt || undefined,
+          provider: effectiveProvider,
+          aspectRatio: aiAspectRatio,
+        }),
+      );
+      setAiApprovedUrl(null);
+      setFullscreenOpen(true);
       void runAiMetadata(
         [localItem.name],
         intent,
@@ -645,6 +696,14 @@ export function MediaMetadataSheet({
   }
 
   function handleRequestClose() {
+    if (inspectStaticUrl) {
+      setInspectStaticUrl(null);
+      return;
+    }
+    if (fullscreenOpen) {
+      setFullscreenOpen(false);
+      return;
+    }
     if (
       !isEditMode &&
       composerMode !== 'ai_generate' &&
@@ -938,12 +997,21 @@ export function MediaMetadataSheet({
                   </View>
                 )
               ) : (
-                <Image
-                  source={{ uri: editingItem.thumbnailUrl || editingItem.url }}
-                  style={styles.editPreviewImg}
-                  resizeMode="cover"
-                  alt={editingItem.title || 'Selected media preview'}
-                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Inspect media full screen"
+                  onPress={() => {
+                    const uri = editingItem.thumbnailUrl || editingItem.url;
+                    if (uri) setInspectStaticUrl(uri);
+                  }}
+                >
+                  <Image
+                    source={{ uri: editingItem.thumbnailUrl || editingItem.url }}
+                    style={styles.editPreviewImg}
+                    resizeMode="cover"
+                    alt={editingItem.title || 'Selected media preview'}
+                  />
+                </Pressable>
               )}
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={styles.previewBadgeText}>
@@ -1109,19 +1177,60 @@ export function MediaMetadataSheet({
 
               {generatedImageUrl ? (
                 <View style={styles.generatedPreviewCard}>
-                  <Image
-                    source={{ uri: generatedImageUrl }}
-                    style={styles.generatedPreviewImg}
-                    resizeMode="cover"
-                    alt="Generated AI business image"
-                  />
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.brandDark }}>
-                      ✓ Image Ready to Schedule or Publish
-                    </Text>
-                    <Text style={{ fontSize: 11, color: colors.muted }}>
-                      Review your AI SEO title, tags &amp; schedule below, then tap Save.
-                    </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Inspect generated image in full screen"
+                    onPress={() => setFullscreenOpen(true)}
+                    style={styles.generatedHeroWrap}
+                  >
+                    <Image
+                      source={{ uri: generatedImageUrl }}
+                      style={[
+                        styles.generatedPreviewImg,
+                        { aspectRatio: getAspectRatioNumeric(aiAspectRatio) },
+                      ]}
+                      resizeMode="contain"
+                      alt="Generated AI business image"
+                    />
+                    <View style={styles.fullscreenPillBadge}>
+                      <MaterialIcons name="fullscreen" size={14} color="#FFFFFF" />
+                      <Text style={styles.fullscreenPillText}>Full Screen</Text>
+                    </View>
+                  </Pressable>
+
+                  <View style={styles.generatedMetaRow}>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.brandDark }}>
+                        {aiApprovedUrl === generatedImageUrl
+                          ? '✓ Approved — Ready to Schedule or Publish'
+                          : 'Generated · Tap image to judge quality'}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: colors.muted }}>
+                        {aiCandidates.length > 1
+                          ? `${aiCandidates.length} variations generated this session — tap Full Screen to compare.`
+                          : 'Open full screen to zoom & verify faces, text, and edges.'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.generatedActionRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setFullscreenOpen(true)}
+                      style={styles.inspectPrimaryBtn}
+                    >
+                      <MaterialIcons name="zoom-in" size={15} color="#FFFFFF" />
+                      <Text style={styles.inspectPrimaryText}>Inspect Full Screen</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={generatingAiImage}
+                      onPress={() => void handleGenerateAiImage(false)}
+                      style={[styles.regenSecondaryBtn, generatingAiImage && { opacity: 0.6 }]}
+                    >
+                      <MaterialIcons name="refresh" size={14} color="#6D28D9" />
+                      <Text style={styles.regenSecondaryText}>Regenerate</Text>
+                    </Pressable>
                   </View>
                 </View>
               ) : null}
@@ -1178,12 +1287,22 @@ export function MediaMetadataSheet({
                           </View>
                         )
                       ) : (
-                        <Image
-                          source={{ uri: item.local.uri }}
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Inspect ${item.local.name || 'photo'} full screen`}
+                          onPress={() => {
+                            const target = item.cloudUrl || item.local.uri;
+                            if (target) setInspectStaticUrl(target);
+                          }}
                           style={styles.thumbImage}
-                          resizeMode="cover"
-                          alt={item.local.name || 'Upload preview'}
-                        />
+                        >
+                          <Image
+                            source={{ uri: item.local.uri }}
+                            style={styles.thumbImage}
+                            resizeMode="cover"
+                            alt={item.local.name || 'Upload preview'}
+                          />
+                        </Pressable>
                       )}
                       {item.uploading ? (
                         <View style={styles.thumbOverlay}>
@@ -1572,6 +1691,47 @@ export function MediaMetadataSheet({
           </View>
         </View>
       </Modal>
+
+      {/* Fullscreen AI Image Quality Reviewer (overlay inside sheet modal) */}
+      <FullscreenImageModal
+        asOverlay
+        visible={fullscreenOpen}
+        onClose={() => setFullscreenOpen(false)}
+        imageUrl={generatedImageUrl}
+        title={title.trim() || `${businessContext?.name || businessName} · AI Photo`}
+        subtitle={`${aiAspectRatio} · Check faces, text, and framing`}
+        candidates={aiCandidates}
+        selectedUrl={generatedImageUrl}
+        onSelectCandidate={(cand) => {
+          applyGeneratedCandidateUrl(cand.url);
+        }}
+        reviewMode
+        isApproved={Boolean(generatedImageUrl && aiApprovedUrl === generatedImageUrl)}
+        onApprove={(url) => {
+          applyGeneratedCandidateUrl(url);
+          setAiApprovedUrl(url);
+        }}
+        basePrompt={lastAiUsedPrompt || aiPrompt}
+        activeProvider={selectedRefUrls.length > 0 ? 'gemini' : aiProviderChoice}
+        allowProviderSwitch
+        regenerating={generatingAiImage}
+        errorMessage={errorMsg}
+        onRegenerate={({ prompt, provider }) =>
+          handleGenerateAiImage(false, {
+            promptOverride: prompt,
+            providerOverride: provider,
+          })
+        }
+      />
+
+      {/* Fullscreen Read-Only Photo Viewer for uploads / editing items */}
+      <FullscreenImageModal
+        asOverlay
+        visible={Boolean(inspectStaticUrl)}
+        onClose={() => setInspectStaticUrl(null)}
+        imageUrl={inspectStaticUrl}
+        title={title.trim() || editingItem?.title || `${businessName} Photo`}
+      />
     </Modal>
   );
 }
@@ -2213,20 +2373,88 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   generatedPreviewCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 10,
     backgroundColor: colors.brandSoft,
     borderWidth: 1,
     borderColor: '#A7F3D0',
+    borderRadius: 14,
+    padding: 10,
+  },
+  generatedHeroWrap: {
+    width: '100%',
+    maxHeight: 280,
     borderRadius: 12,
-    padding: 8,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
   generatedPreviewImg: {
-    width: 64,
-    height: 64,
+    width: '100%',
+    maxHeight: 280,
+    backgroundColor: '#0F172A',
+  },
+  fullscreenPillBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 14,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  fullscreenPillText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  generatedMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  generatedActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inspectPrimaryBtn: {
+    flex: 1.3,
+    height: 36,
     borderRadius: 10,
-    backgroundColor: colors.soft,
+    backgroundColor: colors.brand,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  inspectPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  regenSecondaryBtn: {
+    flex: 1,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  regenSecondaryText: {
+    color: '#6D28D9',
+    fontSize: 12,
+    fontWeight: '800',
   },
   pickInsideCard: {
     alignItems: 'center',

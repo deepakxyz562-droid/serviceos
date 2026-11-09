@@ -5,6 +5,7 @@ import {
   Check,
   Image as ImageIcon,
   Loader2,
+  Maximize2,
   Plus,
   RefreshCw,
   Sparkles,
@@ -34,6 +35,12 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
+import { FullscreenImageLightbox } from './fullscreen-image-lightbox';
+import {
+  appendImageCandidate,
+  type ImageCandidate,
+  type ImageProviderChoice,
+} from '../../../shared/image-review';
 
 export type WebGbpCategoryType =
   | 'ADDITIONAL'
@@ -287,9 +294,16 @@ export function WebMediaMetadataDialog({
   const [aiIdeas, setAiIdeas] = useState<AiImageIdeaItem[]>([]);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiAspectRatio, setAiAspectRatio] = useState<'1:1' | '4:5' | '9:16'>('4:5');
+  const [aiProviderChoice, setAiProviderChoice] = useState<ImageProviderChoice>('cloudflare');
   const [generatingAiImage, setGeneratingAiImage] = useState(false);
   const [aiGenStatus, setAiGenStatus] = useState<string | null>(null);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [aiCandidates, setAiCandidates] = useState<ImageCandidate[]>([]);
+  const [aiApprovedUrl, setAiApprovedUrl] = useState<string | null>(null);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  const [inspectStaticUrl, setInspectStaticUrl] = useState<string | null>(null);
+  const [lastAiPromptUsed, setLastAiPromptUsed] = useState('');
+  const [aiLightboxError, setAiLightboxError] = useState<string | null>(null);
   const [uploadingRefPhoto, setUploadingRefPhoto] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -420,6 +434,12 @@ export function WebMediaMetadataDialog({
     setVideoWarning(null);
     setAiGenStatus(null);
     setGeneratingAiImage(false);
+    setAiCandidates([]);
+    setAiApprovedUrl(null);
+    setFullscreenOpen(false);
+    setInspectStaticUrl(null);
+    setLastAiPromptUsed('');
+    setAiLightboxError(null);
 
     if (editingItem) {
       setComposerMode('upload');
@@ -611,10 +631,24 @@ export function WebMediaMetadataDialog({
     });
   };
 
-  const handleGenerateAiPhoto = async (autoMode: boolean) => {
+  const handleGenerateAiPhoto = async (
+    autoMode: boolean,
+    opts?: { promptOverride?: string; providerOverride?: ImageProviderChoice },
+  ) => {
     if (generatingAiImage) return;
     const reqSession = sessionRef.current;
-    const effectiveAuto = autoMode || (!aiPrompt.trim() && selectedRefUrls.length === 0);
+    const promptForRequest = (opts?.promptOverride ?? aiPrompt).trim();
+    if (opts?.promptOverride !== undefined) {
+      setAiPrompt(promptForRequest);
+    }
+    if (opts?.providerOverride) {
+      setAiProviderChoice(opts.providerOverride);
+    }
+    const effectiveAuto = autoMode || (!promptForRequest && selectedRefUrls.length === 0);
+    const effectiveProvider: ImageProviderChoice =
+      opts?.providerOverride ?? (selectedRefUrls.length > 0 ? 'gemini' : aiProviderChoice);
+    setLastAiPromptUsed(promptForRequest || `Showcase ${businessName}`);
+    setAiLightboxError(null);
     setGeneratingAiImage(true);
     setAiGenStatus(
       selectedRefUrls.length > 0
@@ -637,8 +671,8 @@ export function WebMediaMetadataDialog({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: aiPrompt.trim() || (effectiveAuto ? undefined : `Showcase ${resolvedBusinessName}`),
-          provider: selectedRefUrls.length > 0 ? 'gemini' : 'cloudflare',
+          prompt: promptForRequest || (effectiveAuto ? undefined : `Showcase ${resolvedBusinessName}`),
+          provider: effectiveProvider,
           requestId,
           isPoster: false,
           autoFromBusiness: effectiveAuto,
@@ -677,15 +711,26 @@ export function WebMediaMetadataDialog({
         };
         if (reqSession !== sessionRef.current) return;
         if (check.status === 'completed' && check.result?.url) {
-          setGeneratedImageUrl(check.result.url);
+          const url = check.result.url;
+          setGeneratedImageUrl(url);
+          setAiCandidates((prev) =>
+            appendImageCandidate(prev, {
+              url,
+              prompt: promptForRequest || undefined,
+              provider: effectiveProvider,
+              aspectRatio: aiAspectRatio,
+            }),
+          );
+          setAiApprovedUrl(null);
           setAiGenStatus(null);
           setGeneratingAiImage(false);
-          toast.success('AI photo ready! Review metadata & schedule below.');
+          setFullscreenOpen(true);
+          toast.success('AI photo ready! Inspect full screen to verify quality.');
           void generateAiMetadata(
-            [aiPrompt.trim() || `${businessName} AI Photo`],
+            [promptForRequest || `${businessName} AI Photo`],
             intent,
             'photo',
-            aiPrompt.trim() || undefined,
+            promptForRequest || undefined,
           );
           return;
         }
@@ -696,9 +741,11 @@ export function WebMediaMetadataDialog({
       throw new Error('AI image generation timed out after 60s. Please try again.');
     } catch (err) {
       if (reqSession === sessionRef.current) {
+        const msg = err instanceof Error ? err.message : 'AI image generation failed';
         setAiGenStatus(null);
         setGeneratingAiImage(false);
-        toast.error(err instanceof Error ? err.message : 'AI image generation failed');
+        setAiLightboxError(msg);
+        toast.error(msg);
       }
     }
   };
@@ -972,6 +1019,7 @@ export function WebMediaMetadataDialog({
       : files.length > 0;
 
   return (
+    <>
     <Dialog
       open={open}
       onOpenChange={(v) => {
@@ -1257,22 +1305,60 @@ export function WebMediaMetadataDialog({
               )}
 
               {generatedImageUrl && (
-                <div className="space-y-1.5">
-                  <div className="relative rounded-xl overflow-hidden border border-border bg-muted">
-                    <img
-                      src={generatedImageUrl}
-                      alt={aiPrompt || `${businessName} AI generated photo`}
-                      className="w-full max-h-56 object-cover"
-                    />
+                <div className="space-y-2 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/20 p-2.5">
+                  <div className="relative rounded-xl overflow-hidden border border-border bg-slate-950 flex items-center justify-center">
                     <button
                       type="button"
-                      disabled={generatingAiImage}
-                      onClick={() => void handleGenerateAiPhoto(false)}
-                      className="absolute bottom-2 right-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900/80 text-white text-[11px] font-bold hover:bg-slate-900"
+                      onClick={() => setFullscreenOpen(true)}
+                      className="w-full cursor-zoom-in block"
+                      title="Inspect full screen"
                     >
-                      <RefreshCw className="size-3" />
-                      Regenerate
+                      <img
+                        src={generatedImageUrl}
+                        alt={aiPrompt || `${businessName} AI generated photo`}
+                        className="w-full max-h-72 object-contain mx-auto"
+                      />
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setFullscreenOpen(true)}
+                      className="absolute top-2 right-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/85 border border-white/20 text-white text-[11px] font-bold hover:bg-slate-900 cursor-pointer"
+                    >
+                      <Maximize2 className="size-3" />
+                      Full Screen
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+                    <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                      {aiApprovedUrl === generatedImageUrl
+                        ? '✓ Approved — Ready to schedule or publish'
+                        : aiCandidates.length > 1
+                          ? `${aiCandidates.length} variations saved — inspect full screen to pick best`
+                          : 'Click image to inspect quality in full screen'}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setFullscreenOpen(true)}
+                        className="h-7 rounded-lg text-[11px] font-bold gap-1 bg-background"
+                      >
+                        <Maximize2 className="size-3" />
+                        Inspect
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={generatingAiImage}
+                        onClick={() => void handleGenerateAiPhoto(false)}
+                        className="h-7 rounded-lg text-[11px] font-bold gap-1 bg-background"
+                      >
+                        <RefreshCw className="size-3" />
+                        Regenerate
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1309,7 +1395,14 @@ export function WebMediaMetadataDialog({
                           </span>
                         </div>
                       ) : (
-                        <img src={p.url} alt={p.file.name} className="size-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setInspectStaticUrl(p.url)}
+                          className="size-full cursor-zoom-in block"
+                          title={`Inspect ${p.file.name} full screen`}
+                        >
+                          <img src={p.url} alt={p.file.name} className="size-full object-cover" />
+                        </button>
                       )}
                     </div>
                   ))}
@@ -1615,5 +1708,46 @@ export function WebMediaMetadataDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <FullscreenImageLightbox
+      open={fullscreenOpen}
+      onOpenChange={setFullscreenOpen}
+      imageUrl={generatedImageUrl}
+      title={title.trim() || `${businessName} · AI Photo`}
+      subtitle={`${aiAspectRatio} · Check faces, text, and framing`}
+      candidates={aiCandidates}
+      selectedUrl={generatedImageUrl}
+      onSelectCandidate={(cand) => {
+        setGeneratedImageUrl(cand.url);
+      }}
+      reviewMode
+      isApproved={Boolean(generatedImageUrl && aiApprovedUrl === generatedImageUrl)}
+      onApprove={(url) => {
+        setGeneratedImageUrl(url);
+        setAiApprovedUrl(url);
+        toast.success('Selected AI photo locked in!');
+      }}
+      basePrompt={lastAiPromptUsed || aiPrompt}
+      activeProvider={selectedRefUrls.length > 0 ? 'gemini' : aiProviderChoice}
+      allowProviderSwitch
+      regenerating={generatingAiImage}
+      errorMessage={aiLightboxError}
+      onRegenerate={({ prompt, provider }) =>
+        handleGenerateAiPhoto(false, {
+          promptOverride: prompt,
+          providerOverride: provider,
+        })
+      }
+    />
+
+    <FullscreenImageLightbox
+      open={Boolean(inspectStaticUrl)}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setInspectStaticUrl(null);
+      }}
+      imageUrl={inspectStaticUrl}
+      title={title.trim() || `${businessName} Media`}
+    />
+    </>
   );
 }

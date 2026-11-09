@@ -71,6 +71,7 @@ export default defineConfig({
       'react': resolve(__dirname, 'node_modules/react'),
       'react-dom': resolve(__dirname, 'node_modules/react-dom'),
       'react-native': resolve(__dirname, 'tests/mocks/react-native.ts'),
+      'react-native-safe-area-context': resolve(__dirname, 'tests/mocks/react-native-safe-area-context.ts'),
       'expo-secure-store': resolve(__dirname, 'tests/mocks/expo-secure-store.ts'),
       'expo-web-browser': resolve(__dirname, 'tests/mocks/expo-web-browser.ts'),
       '@expo/vector-icons': resolve(__dirname, 'tests/mocks/expo-vector-icons.ts'),
