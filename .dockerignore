@@ -29,16 +29,6 @@ mobile-pro/*
 !mobile-pro/package.json
 mobile-employee/*
 !mobile-employee/package.json
-apps/bos/*
-!apps/bos/package.json
-apps/bgos/*
-!apps/bgos/package.json
-apps/chatbotly/*
-!apps/chatbotly/package.json
-apps/quoteflow/*
-!apps/quoteflow/package.json
-apps/marketplace/*
-!apps/marketplace/package.json
 docs
 playwright-report
 test-results
