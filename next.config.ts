@@ -62,6 +62,9 @@ const nextConfig: NextConfig = {
     // Run Webpack inside an isolated worker process so its ~2.5GB AST/module heap
     // is completely reclaimed before "Collecting page data" starts.
     webpackBuildWorker: true,
+    // Reduce peak V8 heap during Webpack production compilation
+    webpackMemoryOptimizations: true,
+    serverSourceMaps: false,
     cpus: 1,
     optimizePackageImports: [
       'lucide-react',
@@ -102,6 +105,7 @@ const nextConfig: NextConfig = {
     ],
   },
   productionBrowserSourceMaps: false,
+  enablePrerenderSourceMaps: false,
   webpack: (config, { dev }) => {
     config.devtool = false;
     if (!dev) {
