@@ -18,6 +18,8 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import {
+  IMAGE_PROVIDER_CHOICES,
+  IMAGE_PROVIDER_LABELS,
   IMAGE_QUICK_FIX_OPTIONS,
   buildRefinedImagePrompt,
   type ImageCandidate,
@@ -51,12 +53,6 @@ export interface FullscreenImageLightboxProps {
     provider?: ImageProviderChoice;
   }) => void | Promise<void>;
 }
-
-const PROVIDER_LABELS: Record<ImageProviderChoice, string> = {
-  cloudflare: 'Cloudflare',
-  gemini: 'Gemini Vision',
-  openrouter: 'Flux Pro',
-};
 
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
@@ -527,8 +523,8 @@ export function FullscreenImageLightbox({
                             className="flex-1 rounded-lg border border-white/20 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-400 focus:border-purple-400 focus:outline-none"
                           />
                           {allowProviderSwitch ? (
-                            <div className="flex items-center gap-1 rounded-lg border border-white/15 bg-slate-950 p-1">
-                              {(['cloudflare', 'gemini', 'openrouter'] as const).map((prov) => (
+                            <div className="flex flex-wrap items-center gap-1 rounded-lg border border-white/15 bg-slate-950 p-1">
+                              {IMAGE_PROVIDER_CHOICES.map((prov) => (
                                 <button
                                   key={prov}
                                   type="button"
@@ -539,7 +535,7 @@ export function FullscreenImageLightbox({
                                       : 'text-slate-300 hover:bg-white/10'
                                   }`}
                                 >
-                                  {PROVIDER_LABELS[prov]}
+                                  {IMAGE_PROVIDER_LABELS[prov]}
                                 </button>
                               ))}
                             </div>

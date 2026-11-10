@@ -125,9 +125,30 @@ const PROVIDERS = [
   {
     value: 'gemini',
     label: 'Google Gemini',
-    description: 'Gemini 1.5 Pro, Flash',
+    description: 'Gemini 2.5 Flash Image, Text & Multimodal',
     color: 'violet',
     docsUrl: 'https://aistudio.google.com/app/apikey',
+  },
+  {
+    value: 'cloudflare',
+    label: 'Cloudflare Workers AI',
+    description: 'FLUX.2 klein 9b & Lucid Origin (Images)',
+    color: 'orange',
+    docsUrl: 'https://dash.cloudflare.com/?to=/:account/ai/workers-ai',
+  },
+  {
+    value: 'siliconflow',
+    label: 'SiliconFlow',
+    description: 'Tongyi Z-Image-Turbo & FLUX (Images)',
+    color: 'cyan',
+    docsUrl: 'https://cloud.siliconflow.com/account/ak',
+  },
+  {
+    value: 'nvidia',
+    label: 'NVIDIA NIM',
+    description: 'FLUX.1 dev & schnell (Images)',
+    color: 'lime',
+    docsUrl: 'https://build.nvidia.com/explore/discover',
   },
 ] as const;
 
@@ -139,6 +160,19 @@ const PROVIDER_COLOR_CLASSES: Record<ProviderColor, string> = {
   sky: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
   amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
   violet: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
+  orange: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
+  cyan: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
+  lime: 'bg-lime-500/10 text-lime-700 dark:text-lime-400 border-lime-500/20',
+};
+
+const KEY_PLACEHOLDER_BY_PROVIDER: Record<ProviderValue, string> = {
+  openrouter: 'sk-or-v1-…',
+  openai: 'sk-proj-…',
+  anthropic: 'sk-ant-…',
+  gemini: 'AIza…',
+  cloudflare: '{"accountId":"…","authKey":"…"} or API token',
+  siliconflow: 'sk-…',
+  nvidia: 'nvapi-…',
 };
 
 function providerMeta(value: string) {
@@ -192,7 +226,7 @@ export function AICenterSection() {
 
   const keys = data?.keys ?? [];
 
-  // Group keys by provider (only the 4 known providers), sorted by priority.
+  // Group keys by provider (only known providers), sorted by priority.
   const keysByProvider = PROVIDERS.map((p) => ({
     ...p,
     keys: keys
@@ -1017,7 +1051,7 @@ function AddKeyDialog({ open, onOpenChange, providerPref, onCreated }: AddKeyDia
             <Label htmlFor="add-label">Label</Label>
             <Input
               id="add-label"
-              placeholder="e.g. OpenRouter Key 1"
+              placeholder={`e.g. ${providerMeta(provider)?.label ?? 'Provider'} Key 1`}
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               maxLength={80}
@@ -1030,15 +1064,16 @@ function AddKeyDialog({ open, onOpenChange, providerPref, onCreated }: AddKeyDia
             <Input
               id="add-key"
               type="password"
-              placeholder="sk-or-v1-…"
+              placeholder={KEY_PLACEHOLDER_BY_PROVIDER[provider] ?? 'Paste API key…'}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               autoComplete="off"
               spellCheck={false}
             />
             <p className="text-[11px] text-muted-foreground">
-              Paste the raw key from {providerMeta(provider)?.label}. It will be
-              encrypted at rest.
+              {provider === 'cloudflare'
+                ? 'Paste a Cloudflare API token or JSON {"accountId":"…","authKey":"…"}. Encrypted at rest.'
+                : `Paste the raw key from ${providerMeta(provider)?.label}. It will be encrypted at rest.`}
             </p>
           </div>
 

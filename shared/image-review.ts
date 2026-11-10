@@ -1,4 +1,24 @@
-export type ImageProviderChoice = 'cloudflare' | 'gemini' | 'openrouter';
+export type ImageProviderChoice = 'cloudflare' | 'siliconflow' | 'nvidia' | 'gemini' | 'openrouter';
+
+export const IMAGE_PROVIDER_CHOICES: readonly ImageProviderChoice[] = [
+  'cloudflare',
+  'siliconflow',
+  'nvidia',
+  'gemini',
+  'openrouter',
+] as const;
+
+export const IMAGE_PROVIDER_LABELS: Record<ImageProviderChoice, string> = {
+  cloudflare: 'Cloudflare',
+  siliconflow: 'SiliconFlow',
+  nvidia: 'NVIDIA FLUX',
+  gemini: 'Gemini Vision',
+  openrouter: 'Flux Pro',
+};
+
+export function isTextOnlyImageProvider(provider?: ImageProviderChoice | null): boolean {
+  return provider === 'cloudflare' || provider === 'siliconflow' || provider === 'nvidia';
+}
 
 export interface ImageCandidate {
   id: string;

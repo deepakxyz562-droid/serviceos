@@ -20,7 +20,9 @@ import type { PosterTemplate } from '../../../shared/poster-templates';
 import { PosterTemplateGallery } from './poster-template-gallery';
 import { FullscreenImageLightbox } from './fullscreen-image-lightbox';
 import {
+  IMAGE_PROVIDER_LABELS,
   appendImageCandidate,
+  isTextOnlyImageProvider,
   type ImageCandidate,
   type ImageProviderChoice,
 } from '../../../shared/image-review';
@@ -741,7 +743,7 @@ export function MarketingCanvasStudio({
     if (generationMode === 'poster') {
       try {
         const initialProvider: ImageProviderChoice =
-          selectedRefUrls.length > 0 && aiProviderChoice === 'cloudflare'
+          selectedRefUrls.length > 0 && isTextOnlyImageProvider(aiProviderChoice)
             ? 'gemini'
             : aiProviderChoice;
         setLastBgPromptUsed(text);
@@ -895,7 +897,7 @@ export function MarketingCanvasStudio({
       'commercial product photography';
     const effectiveProvider: ImageProviderChoice =
       opts?.providerOverride ??
-      (selectedRefUrls.length > 0 && aiProviderChoice === 'cloudflare'
+      (selectedRefUrls.length > 0 && isTextOnlyImageProvider(aiProviderChoice)
         ? 'gemini'
         : aiProviderChoice);
     if (opts?.providerOverride) {
@@ -914,7 +916,11 @@ export function MarketingCanvasStudio({
           ? 'Rendering high-detail commercial visual with Flux Pro...'
           : effectiveProvider === 'gemini'
             ? 'Rendering commercial photography background with Gemini Vision...'
-            : 'Rendering commercial photography background with Cloudflare AI...'
+            : effectiveProvider === 'siliconflow'
+              ? 'Rendering commercial photography visual with SiliconFlow...'
+              : effectiveProvider === 'nvidia'
+                ? 'Rendering commercial photography visual with NVIDIA FLUX...'
+                : 'Rendering commercial photography background with Cloudflare FLUX.2...'
     );
     try {
       const requestId = `web-img-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -3148,7 +3154,7 @@ export function MarketingCanvasStudio({
         subtitle={
           inspectLightboxMode === 'poster'
             ? `${aspectRatio} · Scroll or double-click to inspect typography & layout`
-            : `${aspectRatio} · ${aiProviderChoice}`
+            : `${aspectRatio} · ${IMAGE_PROVIDER_LABELS[aiProviderChoice] ?? aiProviderChoice}`
         }
         renderCustomContent={
           inspectLightboxMode === 'poster'

@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { runDesignJob } from '@/lib/designs/jobs';
 import { isUnsafeReferenceHostname } from '@/lib/designs/image-provider';
 import { requireBgosEntitled } from '@/lib/bgos-entitlement';
+import { IMAGE_PROVIDER_CHOICES, type ImageProviderChoice } from '../../../../../../shared/image-review';
 
 export const maxDuration = 180;
 
@@ -123,9 +124,10 @@ export async function POST(request: NextRequest) {
         ? (body.aspectRatio as '1:1' | '4:5' | '9:16' | '16:9')
         : undefined;
 
-    const provider =
-      body.provider && ['cloudflare', 'gemini', 'openrouter'].includes(body.provider)
-        ? body.provider
+    const provider: ImageProviderChoice =
+      typeof body.provider === 'string' &&
+      (IMAGE_PROVIDER_CHOICES as readonly string[]).includes(body.provider)
+        ? (body.provider as ImageProviderChoice)
         : referenceImageUrls.length > 0
           ? 'gemini'
           : 'cloudflare';

@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 
-export type ImageProvider = 'gemini' | 'openrouter' | 'cloudflare';
+export type ImageProvider = 'gemini' | 'openrouter' | 'cloudflare' | 'siliconflow' | 'nvidia';
 
 export interface GenerateDesignImageOptions {
   referenceImageUrls?: string[];
@@ -163,9 +163,185 @@ export async function fetchReferenceImages(
   return results;
 }
 
+interface ImageDimensions {
+  width: number;
+  height: number;
+  nvidiaWidth: number;
+  nvidiaHeight: number;
+  siliconflowSize: string;
+}
+
+function resolveDimensionsForAspectRatio(
+  aspectRatio?: '1:1' | '4:5' | '9:16' | '16:9',
+  isPoster?: boolean,
+): ImageDimensions {
+  if (aspectRatio === '1:1') {
+    return {
+      width: 1024,
+      height: 1024,
+      nvidiaWidth: 1024,
+      nvidiaHeight: 1024,
+      siliconflowSize: '1024x1024',
+    };
+  }
+  if (aspectRatio === '9:16') {
+    return {
+      width: 768,
+      height: 1344,
+      nvidiaWidth: 768,
+      nvidiaHeight: 1344,
+      siliconflowSize: '768x1344',
+    };
+  }
+  if (aspectRatio === '16:9') {
+    return {
+      width: 1344,
+      height: 768,
+      nvidiaWidth: 1344,
+      nvidiaHeight: 768,
+      siliconflowSize: '1344x768',
+    };
+  }
+  if (aspectRatio === '4:5' || isPoster) {
+    return {
+      width: 896,
+      height: 1120,
+      nvidiaWidth: 896,
+      nvidiaHeight: 1152,
+      siliconflowSize: '896x1152',
+    };
+  }
+  return {
+    width: 1024,
+    height: 1024,
+    nvidiaWidth: 1024,
+    nvidiaHeight: 1024,
+    siliconflowSize: '1024x1024',
+  };
+}
+
+function combineSignals(parent: AbortSignal, timeoutMs: number): AbortSignal {
+  try {
+    return AbortSignal.any([parent, AbortSignal.timeout(timeoutMs)]);
+  } catch {
+    return parent;
+  }
+}
+
+async function recordProviderKeyUsage(keyRowId: string | null): Promise<void> {
+  if (!keyRowId) return;
+  try {
+    await db.aiProviderKey.update({
+      where: { id: keyRowId },
+      data: { lastUsedAt: new Date(), requestCount: { increment: 1 } },
+    });
+  } catch {}
+}
+
+function buildCloudflareModelChain(): string[] {
+  const configured = process.env.CLOUDFLARE_IMAGE_MODEL?.trim();
+  const candidates = [
+    configured || '@cf/black-forest-labs/flux-2-klein-9b',
+    '@cf/black-forest-labs/flux-2-klein-9b',
+    '@cf/leonardo/lucid-origin',
+    '@cf/black-forest-labs/flux-1-schnell',
+  ];
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
+async function callCloudflareSingleModel(params: {
+  accountId: string;
+  authKey: string;
+  email?: string;
+  model: string;
+  promptText: string;
+  dims: ImageDimensions;
+  signal: AbortSignal;
+}): Promise<Buffer> {
+  const { accountId, authKey, email, model, promptText, dims, signal } = params;
+  const headers: Record<string, string> = {};
+  if (email && authKey.startsWith('cfk_')) {
+    headers['X-Auth-Key'] = authKey;
+    headers['X-Auth-Email'] = email;
+  } else {
+    headers['Authorization'] = `Bearer ${authKey}`;
+  }
+
+  let body: BodyInit;
+  if (/flux-2-/i.test(model)) {
+    const formData = new FormData();
+    formData.append('prompt', promptText);
+    formData.append('width', String(dims.width));
+    formData.append('height', String(dims.height));
+    if (/flux-2-dev/i.test(model)) {
+      formData.append('steps', '20');
+    }
+    body = formData;
+  } else if (/lucid-origin|phoenix|leonardo/i.test(model)) {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify({
+      prompt: promptText,
+      width: dims.width,
+      height: dims.height,
+      num_steps: 20,
+      guidance: 4.5,
+    });
+  } else if (/flux-1-schnell/i.test(model)) {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify({ prompt: promptText, steps: 8 });
+  } else {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify({
+      prompt: promptText,
+      width: dims.width,
+      height: dims.height,
+    });
+  }
+
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`,
+    {
+      method: 'POST',
+      signal: combineSignals(signal, 40000),
+      headers,
+      body,
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Cloudflare image generation failed (${response.status})`);
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  let bytes: Buffer;
+  if (contentType.includes('application/json')) {
+    const data = await response.json();
+    if (typeof data.result?.image === 'string' && data.result.image.length > 0) {
+      bytes = Buffer.from(data.result.image, 'base64');
+    } else {
+      throw new Error('Cloudflare did not return a supported image');
+    }
+  } else {
+    bytes = Buffer.from(await response.arrayBuffer());
+  }
+
+  if (bytes.length === 0 || bytes.length > 11_000_000) {
+    throw new Error('Cloudflare returned an invalid image size');
+  }
+
+  return bytes;
+}
+
 async function callCloudflareImage(
   text: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  dims: ImageDimensions = {
+    width: 1024,
+    height: 1024,
+    nvidiaWidth: 1024,
+    nvidiaHeight: 1024,
+    siliconflowSize: '1024x1024',
+  },
 ): Promise<{ bytes: Buffer; model: string; cost: number | null }> {
   let accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   let authKey = process.env.CLOUDFLARE_AUTH_KEY || process.env.CLOUDFLARE_API_TOKEN;
@@ -194,58 +370,32 @@ async function callCloudflareImage(
     throw new Error('Configure an active Cloudflare key in Superadmin or CLOUDFLARE_ACCOUNT_ID/AUTH_KEY in .env');
   }
 
-  const model = process.env.CLOUDFLARE_IMAGE_MODEL || '@cf/black-forest-labs/flux-1-schnell';
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (email && authKey.startsWith('cfk_')) {
-    headers['X-Auth-Key'] = authKey;
-    headers['X-Auth-Email'] = email;
-  } else {
-    headers['Authorization'] = `Bearer ${authKey}`;
-  }
+  const models = buildCloudflareModelChain();
+  let lastError: unknown = null;
 
-  const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`,
-    {
-      method: 'POST',
-      signal,
-      headers,
-      body: JSON.stringify({ prompt: text, steps: 8 }),
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Cloudflare image generation failed (${response.status})`);
-  }
-
-  const contentType = response.headers.get('content-type') || '';
-  let bytes: Buffer;
-  if (contentType.includes('application/json')) {
-    const data = await response.json();
-    if (typeof data.result?.image === 'string') {
-      bytes = Buffer.from(data.result.image, 'base64');
-    } else {
-      throw new Error('Cloudflare did not return a supported image');
-    }
-  } else {
-    bytes = Buffer.from(await response.arrayBuffer());
-  }
-
-  if (bytes.length === 0 || bytes.length > 11_000_000) {
-    throw new Error('Cloudflare returned an invalid image size');
-  }
-
-  if (keyRowId) {
+  for (const model of models) {
+    if (signal.aborted) break;
     try {
-      await db.aiProviderKey.update({
-        where: { id: keyRowId },
-        data: { lastUsedAt: new Date(), requestCount: { increment: 1 } },
+      const bytes = await callCloudflareSingleModel({
+        accountId,
+        authKey,
+        email,
+        model,
+        promptText: text,
+        dims,
+        signal,
       });
-    } catch {}
+      await recordProviderKeyUsage(keyRowId);
+      return { bytes, model, cost: 0 };
+    } catch (err) {
+      lastError = err;
+    }
   }
 
-  return { bytes, model, cost: 0 };
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+  throw new Error('Cloudflare image generation failed');
 }
 
 export interface BusinessVisualContext {
@@ -512,9 +662,13 @@ Rules:
   return buildHighQualityImagePrompt(rawPrompt, isPosterMode, context);
 }
 
-async function resolveProviderCredential(provider: 'gemini' | 'openrouter'): Promise<{
+type ApiKeyProvider = 'gemini' | 'openrouter' | 'siliconflow' | 'nvidia';
+
+async function resolveProviderCredential(provider: ApiKeyProvider): Promise<{
   secret: string;
   keyRowId: string | null;
+  baseUrl?: string;
+  modelOverride?: string;
 } | null> {
   const key = await db.aiProviderKey.findFirst({
     where: { provider, isActive: true },
@@ -522,11 +676,40 @@ async function resolveProviderCredential(provider: 'gemini' | 'openrouter'): Pro
   }).catch(() => null);
 
   if (key?.encryptedKey) {
-    return { secret: decryptKey(key.encryptedKey), keyRowId: key.id };
+    const decrypted = decryptKey(key.encryptedKey);
+    const trimmed = decrypted.trim();
+    let secret = trimmed;
+    let baseUrl: string | undefined;
+    let modelOverride: string | undefined;
+    if (trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (typeof parsed.apiKey === 'string' && parsed.apiKey.trim()) {
+          secret = parsed.apiKey.trim();
+        } else if (typeof parsed.key === 'string' && parsed.key.trim()) {
+          secret = parsed.key.trim();
+        }
+        if (typeof parsed.baseUrl === 'string' && parsed.baseUrl.trim()) {
+          baseUrl = parsed.baseUrl.trim().replace(/\/+$/, '');
+        }
+        if (typeof parsed.model === 'string' && parsed.model.trim()) {
+          modelOverride = parsed.model.trim();
+        }
+      } catch {}
+    }
+    if (secret) {
+      return { secret, keyRowId: key.id, baseUrl, modelOverride };
+    }
   }
 
   const envSecret =
-    provider === 'gemini' ? process.env.GEMINI_API_KEY : process.env.OPENROUTER_API_KEY;
+    provider === 'gemini'
+      ? process.env.GEMINI_API_KEY
+      : provider === 'openrouter'
+        ? process.env.OPENROUTER_API_KEY
+        : provider === 'siliconflow'
+          ? process.env.SILICONFLOW_API_KEY
+          : process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY;
   if (envSecret && envSecret.trim()) {
     return { secret: envSecret.trim(), keyRowId: null };
   }
@@ -573,9 +756,10 @@ async function callGeminiOrOpenRouterImage(params: {
   }
 
   const model =
-    params.provider === 'gemini'
+    cred.modelOverride ||
+    (params.provider === 'gemini'
       ? process.env.BGOS_GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image'
-      : process.env.BGOS_OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image';
+      : process.env.BGOS_OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image');
 
   const requestBody =
     params.provider === 'gemini'
@@ -639,20 +823,237 @@ async function callGeminiOrOpenRouterImage(params: {
     throw new UnsupportedImagePayloadError('The provider did not return a supported image');
   }
 
-  if (cred.keyRowId) {
-    try {
-      await db.aiProviderKey.update({
-        where: { id: cred.keyRowId },
-        data: { lastUsedAt: new Date(), requestCount: { increment: 1 } },
-      });
-    } catch {}
-  }
+  await recordProviderKeyUsage(cred.keyRowId);
 
   return {
     bytes: Buffer.from(encoded, 'base64'),
     model,
     cost: typeof data.usage?.cost === 'number' ? data.usage.cost : null,
   };
+}
+
+async function callSiliconFlowImage(params: {
+  promptText: string;
+  dims: ImageDimensions;
+  signal: AbortSignal;
+}): Promise<{ bytes: Buffer; model: string; cost: number | null }> {
+  const cred = await resolveProviderCredential('siliconflow');
+  if (!cred) {
+    throw new Error('Configure an active siliconflow key in Superadmin or SILICONFLOW_API_KEY in .env');
+  }
+
+  const baseUrl = (
+    cred.baseUrl ||
+    process.env.BGOS_SILICONFLOW_BASE_URL ||
+    'https://api.siliconflow.com/v1'
+  )
+    .trim()
+    .replace(/\/+$/, '');
+  await assertSafeRemoteUrl(baseUrl);
+
+  const model =
+    cred.modelOverride ||
+    process.env.BGOS_SILICONFLOW_IMAGE_MODEL?.trim() ||
+    'Tongyi-MAI/Z-Image-Turbo';
+
+  const response = await fetch(`${baseUrl}/images/generations`, {
+    method: 'POST',
+    signal: combineSignals(params.signal, 45000),
+    headers: {
+      Authorization: `Bearer ${cred.secret}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      prompt: params.promptText,
+      image_size: params.dims.siliconflowSize,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`siliconflow image generation failed (${response.status})`);
+  }
+
+  const data = await response.json();
+  let bytes: Buffer | null = null;
+  const b64 = data?.images?.[0]?.b64_json || data?.data?.[0]?.b64_json;
+  if (typeof b64 === 'string' && b64.length > 0 && b64.length <= 15_000_000) {
+    bytes = Buffer.from(b64, 'base64');
+  } else {
+    const imageUrl = data?.images?.[0]?.url || data?.data?.[0]?.url;
+    if (typeof imageUrl === 'string' && imageUrl.trim()) {
+      const dataUriMatch = /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(
+        imageUrl.trim(),
+      );
+      if (dataUriMatch) {
+        bytes = Buffer.from(dataUriMatch[2], 'base64');
+      } else {
+        const safeImgUrl = await assertSafeRemoteUrl(imageUrl.trim());
+        const imgRes = await fetch(safeImgUrl.toString(), {
+          signal: combineSignals(params.signal, 25000),
+          redirect: 'follow',
+        });
+        if (!imgRes.ok) {
+          throw new Error(`SiliconFlow image download failed (${imgRes.status})`);
+        }
+        if (imgRes.url) {
+          await assertSafeRemoteUrl(imgRes.url);
+        }
+        const cl = Number(imgRes.headers.get('content-length') || 0);
+        if (cl > 11_000_000) {
+          throw new Error('SiliconFlow returned an oversized image');
+        }
+        const downloaded = Buffer.from(await imgRes.arrayBuffer());
+        const mime = detectImageMime(
+          imgRes.headers.get('content-type'),
+          imgRes.url || imageUrl,
+          downloaded,
+        );
+        if (!mime) {
+          throw new Error('SiliconFlow returned an unsupported image content type');
+        }
+        bytes = downloaded;
+      }
+    }
+  }
+
+  if (!bytes || bytes.length === 0 || bytes.length > 11_000_000) {
+    throw new Error('SiliconFlow did not return a supported image');
+  }
+
+  await recordProviderKeyUsage(cred.keyRowId);
+
+  return {
+    bytes,
+    model,
+    cost: null,
+  };
+}
+
+async function callNvidiaImage(params: {
+  promptText: string;
+  dims: ImageDimensions;
+  signal: AbortSignal;
+}): Promise<{ bytes: Buffer; model: string; cost: number | null }> {
+  const cred = await resolveProviderCredential('nvidia');
+  if (!cred) {
+    throw new Error('Configure an active nvidia key in Superadmin or NVIDIA_API_KEY in .env');
+  }
+
+  const baseUrl = (
+    cred.baseUrl ||
+    process.env.BGOS_NVIDIA_IMAGE_BASE_URL ||
+    'https://ai.api.nvidia.com/v1/genai'
+  )
+    .trim()
+    .replace(/\/+$/, '');
+  await assertSafeRemoteUrl(baseUrl);
+
+  const model =
+    cred.modelOverride ||
+    process.env.BGOS_NVIDIA_IMAGE_MODEL?.trim() ||
+    'black-forest-labs/flux.1-dev';
+  const modelPath = model
+    .split('/')
+    .filter(Boolean)
+    .map((seg) => encodeURIComponent(seg))
+    .join('/');
+
+  const isSchnell = /schnell/i.test(model);
+  const requestBody = isSchnell
+    ? {
+        prompt: params.promptText,
+        width: params.dims.nvidiaWidth,
+        height: params.dims.nvidiaHeight,
+        steps: 4,
+        seed: 0,
+      }
+    : {
+        prompt: params.promptText,
+        width: params.dims.nvidiaWidth,
+        height: params.dims.nvidiaHeight,
+        steps: 25,
+        cfg_scale: 3.5,
+        mode: 'base',
+        seed: 0,
+      };
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/${modelPath}`, {
+      method: 'POST',
+      signal: combineSignals(params.signal, 25000),
+      headers: {
+        Authorization: `Bearer ${cred.secret}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (err) {
+    if (!params.signal.aborted && err instanceof Error && /timeout|aborted/i.test(err.name + ' ' + err.message)) {
+      throw new Error('nvidia image generation failed (504)');
+    }
+    throw err;
+  }
+
+  if (!response.ok) {
+    throw new Error(`nvidia image generation failed (${response.status})`);
+  }
+
+  const data = await response.json();
+  const encoded =
+    data?.artifacts?.[0]?.base64 ||
+    data?.data?.[0]?.b64_json ||
+    (typeof data?.image === 'string' ? data.image : null);
+
+  if (typeof encoded !== 'string' || encoded.length === 0 || encoded.length > 15_000_000) {
+    throw new Error('NVIDIA did not return a supported image');
+  }
+
+  const bytes = Buffer.from(encoded, 'base64');
+  if (bytes.length === 0 || bytes.length > 11_000_000) {
+    throw new Error('NVIDIA returned an invalid image size');
+  }
+
+  await recordProviderKeyUsage(cred.keyRowId);
+
+  return {
+    bytes,
+    model,
+    cost: null,
+  };
+}
+
+const IMAGE_FALLBACK_ORDER: Record<ImageProvider, ImageProvider[]> = {
+  cloudflare: ['siliconflow', 'nvidia', 'gemini', 'openrouter'],
+  siliconflow: ['cloudflare', 'nvidia', 'gemini', 'openrouter'],
+  nvidia: ['siliconflow', 'cloudflare', 'gemini', 'openrouter'],
+  gemini: ['cloudflare', 'openrouter', 'siliconflow', 'nvidia'],
+  openrouter: ['cloudflare', 'gemini', 'siliconflow', 'nvidia'],
+};
+
+async function callSingleTextImageProvider(params: {
+  provider: ImageProvider;
+  promptText: string;
+  dims: ImageDimensions;
+  signal: AbortSignal;
+}): Promise<{ bytes: Buffer; model: string; cost: number | null }> {
+  if (params.provider === 'cloudflare') {
+    return callCloudflareImage(params.promptText, params.signal, params.dims);
+  }
+  if (params.provider === 'siliconflow') {
+    return callSiliconFlowImage(params);
+  }
+  if (params.provider === 'nvidia') {
+    return callNvidiaImage(params);
+  }
+  return callGeminiOrOpenRouterImage({
+    provider: params.provider,
+    promptText: params.promptText,
+    referenceImages: [],
+    signal: params.signal,
+  });
 }
 
 export async function generateDesignImage(
@@ -668,19 +1069,22 @@ export async function generateDesignImage(
   const referenceUrls = options?.referenceImageUrls || context?.referenceImageUrls || [];
   const aspectRatio = options?.aspectRatio || context?.aspectRatio;
   const aspectHint = aspectRatio ? ` Frame for ${aspectRatio} aspect ratio.` : '';
+  const dims = resolveDimensionsForAspectRatio(aspectRatio, isPosterMode);
+  const promptWithAspect = `${text}${aspectHint}`;
 
   const loadedRefs =
     referenceUrls.length > 0 ? await fetchReferenceImages(referenceUrls, signal) : [];
 
   if (loadedRefs.length > 0) {
     const multimodalPrompt =
-      `Using the attached real business reference photo(s), preserve the actual property, architecture, product appearance, and authentic character from the reference image(s), while composing this scene: ${text}${aspectHint}`.trim();
+      `Using the attached real business reference photo(s), preserve the actual property, architecture, product appearance, and authentic character from the reference image(s), while composing this scene: ${promptWithAspect}`.trim();
 
     const multimodalOrder: Array<'gemini' | 'openrouter'> =
       provider === 'openrouter' ? ['openrouter', 'gemini'] : ['gemini', 'openrouter'];
 
     let lastMultimodalError: unknown = null;
     for (const mmProvider of multimodalOrder) {
+      if (signal.aborted) break;
       try {
         return await callGeminiOrOpenRouterImage({
           provider: mmProvider,
@@ -693,48 +1097,50 @@ export async function generateDesignImage(
       }
     }
 
-    // Fallback to Cloudflare Flux with descriptive prompt when Gemini & OpenRouter are unavailable
-    try {
-      return await callCloudflareImage(`${text}${aspectHint}`, signal);
-    } catch {
-      if (lastMultimodalError instanceof Error) {
-        throw lastMultimodalError;
-      }
-      throw new Error('Multimodal image generation failed across configured providers');
+    // Fallback to text-to-image providers with descriptive prompt when Gemini & OpenRouter are unavailable
+    for (const textFallback of ['cloudflare', 'siliconflow', 'nvidia'] as const) {
+      if (signal.aborted) break;
+      try {
+        return await callSingleTextImageProvider({
+          provider: textFallback,
+          promptText: promptWithAspect,
+          dims,
+          signal,
+        });
+      } catch {}
     }
-  }
 
-  if (provider === 'cloudflare') {
-    return await callCloudflareImage(`${text}${aspectHint}`, signal);
+    if (lastMultimodalError instanceof Error) {
+      throw lastMultimodalError;
+    }
+    throw new Error('Multimodal image generation failed across configured providers');
   }
 
   try {
-    return await callGeminiOrOpenRouterImage({
+    return await callSingleTextImageProvider({
       provider,
-      promptText: `${text}${aspectHint}`,
-      referenceImages: [],
+      promptText: promptWithAspect,
+      dims,
       signal,
     });
   } catch (primaryErr) {
-    if (primaryErr instanceof UnsupportedImagePayloadError) {
+    if (primaryErr instanceof UnsupportedImagePayloadError || signal.aborted) {
       throw primaryErr;
     }
-    try {
-      return await callCloudflareImage(`${text}${aspectHint}`, signal);
-    } catch {
-      const secondary: 'gemini' | 'openrouter' =
-        provider === 'gemini' ? 'openrouter' : 'gemini';
+
+    for (const fallbackProvider of IMAGE_FALLBACK_ORDER[provider] || []) {
+      if (signal.aborted) break;
       try {
-        return await callGeminiOrOpenRouterImage({
-          provider: secondary,
-          promptText: `${text}${aspectHint}`,
-          referenceImages: [],
+        return await callSingleTextImageProvider({
+          provider: fallbackProvider,
+          promptText: promptWithAspect,
+          dims,
           signal,
         });
-      } catch {
-        throw primaryErr;
-      }
+      } catch {}
     }
+
+    throw primaryErr;
   }
 }
 

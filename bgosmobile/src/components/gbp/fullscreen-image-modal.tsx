@@ -17,6 +17,8 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  IMAGE_PROVIDER_CHOICES,
+  IMAGE_PROVIDER_LABELS,
   IMAGE_QUICK_FIX_OPTIONS,
   buildRefinedImagePrompt,
   type ImageCandidate,
@@ -53,12 +55,6 @@ export interface FullscreenImageModalProps {
     provider?: ImageProviderChoice;
   }) => void | Promise<void>;
 }
-
-const PROVIDER_LABELS: Record<ImageProviderChoice, string> = {
-  cloudflare: 'Cloudflare',
-  gemini: 'Gemini Vision',
-  openrouter: 'Flux Pro',
-};
 
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
@@ -587,7 +583,7 @@ export function FullscreenImageModal({
                   {allowProviderSwitch ? (
                     <View style={styles.providerRow}>
                       <Text style={styles.providerLabel}>Model:</Text>
-                      {(['cloudflare', 'gemini', 'openrouter'] as const).map((prov) => {
+                      {IMAGE_PROVIDER_CHOICES.map((prov) => {
                         const selected = providerOverride === prov;
                         return (
                           <Pressable
@@ -605,7 +601,7 @@ export function FullscreenImageModal({
                                 selected && styles.providerPillTextActive,
                               ]}
                             >
-                              {PROVIDER_LABELS[prov]}
+                              {IMAGE_PROVIDER_LABELS[prov]}
                             </Text>
                           </Pressable>
                         );
@@ -995,6 +991,7 @@ const styles = StyleSheet.create({
   },
   providerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
   },

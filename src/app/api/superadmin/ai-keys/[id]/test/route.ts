@@ -11,10 +11,13 @@ import { decryptKey } from '@/lib/ai-key-crypto';
  * provider and recording the outcome on the AiProviderKey row.
  *
  * Per-provider test endpoints (all use a 10s AbortController timeout):
- *   - openrouter: GET https://openrouter.ai/api/v1/auth/key (Bearer)
- *   - openai:     GET https://api.openai.com/v1/models        (Bearer)
- *   - anthropic:  POST https://api.anthropic.com/v1/messages  (x-api-key, 1-token call)
- *   - gemini:     GET https://generativelanguage.googleapis.com/v1/models?key=<key>
+ *   - openrouter:  GET https://openrouter.ai/api/v1/auth/key (Bearer)
+ *   - openai:      GET https://api.openai.com/v1/models        (Bearer)
+ *   - anthropic:   POST https://api.anthropic.com/v1/messages  (x-api-key, 1-token call)
+ *   - gemini:      GET https://generativelanguage.googleapis.com/v1/models?key=<key>
+ *   - cloudflare:  GET https://api.cloudflare.com/client/v4/accounts
+ *   - siliconflow: GET https://api.siliconflow.com/v1/models?type=image (Bearer)
+ *   - nvidia:      GET https://integrate.api.nvidia.com/v1/models       (Bearer)
  *
  * Response (always HTTP 200 so the client can surface the error message):
  *   success: { success: true, message: 'Key is valid' }
@@ -133,6 +136,44 @@ async function testProviderKey(provider: string, plaintextKey: string): Promise<
       const res = await fetchWithTimeout('https://api.cloudflare.com/client/v4/accounts', {
         method: 'GET',
         headers,
+      });
+      if (!res.ok) throw new Error(await extractUpstreamError(res));
+      return;
+    }
+    case 'siliconflow': {
+      let apiKey = plaintextKey.trim();
+      let baseUrl = (process.env.BGOS_SILICONFLOW_BASE_URL || 'https://api.siliconflow.com/v1')
+        .trim()
+        .replace(/\/+$/, '');
+      if (apiKey.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(apiKey);
+          if (typeof parsed.apiKey === 'string' && parsed.apiKey.trim()) apiKey = parsed.apiKey.trim();
+          else if (typeof parsed.key === 'string' && parsed.key.trim()) apiKey = parsed.key.trim();
+          if (typeof parsed.baseUrl === 'string' && parsed.baseUrl.trim()) {
+            baseUrl = parsed.baseUrl.trim().replace(/\/+$/, '');
+          }
+        } catch {}
+      }
+      const res = await fetchWithTimeout(`${baseUrl}/models?type=image`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!res.ok) throw new Error(await extractUpstreamError(res));
+      return;
+    }
+    case 'nvidia': {
+      let apiKey = plaintextKey.trim();
+      if (apiKey.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(apiKey);
+          if (typeof parsed.apiKey === 'string' && parsed.apiKey.trim()) apiKey = parsed.apiKey.trim();
+          else if (typeof parsed.key === 'string' && parsed.key.trim()) apiKey = parsed.key.trim();
+        } catch {}
+      }
+      const res = await fetchWithTimeout('https://integrate.api.nvidia.com/v1/models', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` },
       });
       if (!res.ok) throw new Error(await extractUpstreamError(res));
       return;

@@ -145,6 +145,8 @@ describe('Web FullscreenImageLightbox', () => {
     fireEvent.change(within(dialog).getByPlaceholderText(/Optional note/i), {
       target: { value: 'remove text on cup' },
     });
+    expect(within(dialog).getByRole('button', { name: 'SiliconFlow' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'NVIDIA FLUX' })).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Flux Pro' }));
     fireEvent.click(within(dialog).getByRole('button', { name: /Regenerate Variation/i }));
 
@@ -350,6 +352,8 @@ describe('Mobile FullscreenImageModal (bgosmobile)', () => {
     fireEvent.change(screen.getByPlaceholderText(/optional.*note/i), {
       target: { value: 'natural crust texture' },
     });
+    expect(screen.getByText('SiliconFlow')).toBeTruthy();
+    expect(screen.getByText('NVIDIA FLUX')).toBeTruthy();
     fireEvent.click(screen.getByText('Gemini Vision'));
     fireEvent.click(screen.getByText('Regenerate Variation'));
 

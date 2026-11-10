@@ -7,9 +7,13 @@ const m = vi.hoisted(() => ({
   findFirst: vi.fn(),
   create: vi.fn(),
   updateMany: vi.fn(),
+  entitled: vi.fn(),
+  brandFindUnique: vi.fn(),
+  tenantFindUnique: vi.fn(),
 }));
 
 vi.mock('@/lib/auth', () => ({ getAuthUser: m.auth }));
+vi.mock('@/lib/bgos-entitlement', () => ({ requireBgosEntitled: m.entitled }));
 vi.mock('@/lib/db', () => ({
   db: {
     designGenerationJob: {
@@ -17,15 +21,24 @@ vi.mock('@/lib/db', () => ({
       create: m.create,
       updateMany: m.updateMany,
     },
+    brandProfile: {
+      findUnique: m.brandFindUnique,
+    },
+    tenant: {
+      findUnique: m.tenantFindUnique,
+    },
   },
 }));
 vi.mock('@/lib/designs/jobs', () => ({ runDesignJob: vi.fn() }));
 
-import { GET } from '@/app/api/social/designs/image/route';
+import { GET, POST } from '@/app/api/social/designs/image/route';
 
 beforeEach(() => {
   vi.resetAllMocks();
   m.auth.mockResolvedValue({ id: 'user-1', tenantId: 'tenant-123' });
+  m.entitled.mockResolvedValue({ ok: true });
+  m.brandFindUnique.mockResolvedValue(null);
+  m.tenantFindUnique.mockResolvedValue({ name: 'Roast & Bloom', industry: 'Cafe', settingsJson: '{}' });
 });
 
 it('finds job when client queries with raw requestId without tenant prefix', async () => {
@@ -124,4 +137,28 @@ it('returns 500 JSON when GET encounters a database error', async () => {
   expect(res.status).toBe(500);
   const json = await res.json();
   expect(json.error).toContain('Could not retrieve');
+});
+
+it('accepts siliconflow and nvidia providers in POST /api/social/designs/image', async () => {
+  m.findFirst.mockResolvedValue(null);
+  m.create.mockResolvedValue({});
+
+  for (const prov of ['siliconflow', 'nvidia'] as const) {
+    const req = new NextRequest('http://localhost/api/social/designs/image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requestId: `req-${prov}-0123456789`,
+        prompt: 'Fresh espresso roast showcase',
+        provider: prov,
+        businessName: 'Roast & Bloom',
+        category: 'Cafe',
+        products: ['Espresso'],
+      }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(202);
+    const lastCreate = m.create.mock.calls.at(-1)?.[0];
+    expect(lastCreate.data.provider).toBe(prov);
+  }
 });

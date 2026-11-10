@@ -313,7 +313,7 @@ Requirements:
     if(!content.trim())throw new Error('AI returned empty content');
     }
 
-    // 2. Generate Graphic with Cloudflare Workers AI Flux-1 Schnell
+    // 2. Generate Graphic with configured AI image provider (Cloudflare FLUX.2 / SiliconFlow / NVIDIA / Gemini)
     const imagePrompt = `Clean professional advertisement poster for ${businessName}, ${industry} in ${city}. High quality commercial photography, sleek layout, warm lighting, high detail, modern style.`;
     const mediaUrls: string[] = [];
     let postDesignJson: string | null = null;
@@ -331,9 +331,22 @@ Requirements:
       content = template.content?.trim() || '';
       if (!content) throw new Error('Add a caption to the selected saved poster before publishing.');
     } else {
-      const key = await db.aiProviderKey.findFirst({where:{isActive:true,provider:{in:['gemini','openrouter','cloudflare']}},orderBy:{priority:'asc'},select:{provider:true}});
-      if (!key) throw new Error('Configure an image provider in Superadmin.');
-      const generated = await generateDesignImage(imagePrompt,key.provider as 'gemini'|'openrouter'|'cloudflare',AbortSignal.timeout(60000),true);
+      const key = await db.aiProviderKey.findFirst({where:{isActive:true,provider:{in:['cloudflare','siliconflow','nvidia','gemini','openrouter']}},orderBy:{priority:'asc'},select:{provider:true}});
+      const envProvider =
+        process.env.CLOUDFLARE_ACCOUNT_ID && (process.env.CLOUDFLARE_AUTH_KEY || process.env.CLOUDFLARE_API_TOKEN)
+          ? 'cloudflare'
+          : process.env.SILICONFLOW_API_KEY?.trim()
+            ? 'siliconflow'
+            : (process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY)?.trim()
+              ? 'nvidia'
+              : process.env.GEMINI_API_KEY?.trim()
+                ? 'gemini'
+                : process.env.OPENROUTER_API_KEY?.trim()
+                  ? 'openrouter'
+                  : null;
+      const selectedProvider = (key?.provider || envProvider) as 'cloudflare'|'siliconflow'|'nvidia'|'gemini'|'openrouter'|null;
+      if (!selectedProvider) throw new Error('Configure an image provider in Superadmin.');
+      const generated = await generateDesignImage(imagePrompt,selectedProvider,AbortSignal.timeout(60000),true);
       if (!generated?.bytes) throw new Error('Image generation returned no image.');
       const asset = await saveDesignAsset(generated.bytes, tenantId, actorId, { format: 'jpeg' });
       mediaUrls.push(asset.url);

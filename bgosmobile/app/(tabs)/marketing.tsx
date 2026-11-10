@@ -67,7 +67,10 @@ import { StayActiveSocialMediaCard } from '../../src/components/social/stay-acti
 import { UpcomingPostsCarousel } from '../../src/components/gbp/upcoming-posts-carousel';
 import { FullscreenImageModal } from '../../src/components/gbp/fullscreen-image-modal';
 import {
+  IMAGE_PROVIDER_CHOICES,
+  IMAGE_PROVIDER_LABELS,
   appendImageCandidate,
+  isTextOnlyImageProvider,
   type ImageCandidate,
   type ImageProviderChoice,
 } from '../../../shared/image-review';
@@ -861,7 +864,7 @@ export default function MarketingScreen() {
   const [draftPickerOpen,setDraftPickerOpen]=useState(false);
   const [detailsOpen,setDetailsOpen]=useState(false);
   const [editSheet, setEditSheet] = useState<'none' | 'text' | 'photo' | 'style' | 'brand'>('none');
-  const [imageProvider, setImageProvider] = useState<'cloudflare' | 'gemini' | 'openrouter'>('cloudflare');
+  const [imageProvider, setImageProvider] = useState<ImageProviderChoice>('cloudflare');
   const [refPhotosList, setRefPhotosList] = useState<Array<{ id: string; url: string; title?: string; source?: string }>>([]);
   const [refPhotosLoading, setRefPhotosLoading] = useState(false);
   const [selectedRefUrls, setSelectedRefUrls] = useState<string[]>([]);
@@ -1513,8 +1516,8 @@ export default function MarketingScreen() {
       if (opts?.providerOverride) {
         setImageProvider(opts.providerOverride);
       }
-      const effectiveProv =
-        selectedRefUrls.length > 0 && chosenProv === 'cloudflare' ? 'gemini' : chosenProv;
+      const effectiveProv: ImageProviderChoice =
+        selectedRefUrls.length > 0 && isTextOnlyImageProvider(chosenProv) ? 'gemini' : chosenProv;
       const computedPrompt =
         opts?.promptOverride?.trim() ||
         backgroundBrief({
@@ -2065,8 +2068,8 @@ export default function MarketingScreen() {
       let imagePromise: Promise<any> | null = null;
       if (generationMode === 'poster') {
         setIsGeneratingImage(true);
-        const effectiveGenProvider =
-          selectedRefUrls.length > 0 && imageProvider === 'cloudflare' ? 'gemini' : imageProvider;
+        const effectiveGenProvider: ImageProviderChoice =
+          selectedRefUrls.length > 0 && isTextOnlyImageProvider(imageProvider) ? 'gemini' : imageProvider;
         imagePromise = apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
           method: 'POST',
           body: {
@@ -2147,7 +2150,7 @@ export default function MarketingScreen() {
                   url: generatedUrl,
                   prompt: usedBrief,
                   provider:
-                    selectedRefUrls.length > 0 && imageProvider === 'cloudflare'
+                    selectedRefUrls.length > 0 && isTextOnlyImageProvider(imageProvider)
                       ? 'gemini'
                       : imageProvider,
                   aspectRatio,
@@ -4622,7 +4625,7 @@ export default function MarketingScreen() {
                           {refPhotosLoading ? 'Loading business photos…' : 'No saved business photos yet — tap "+ Upload Ref" to include your own.'}
                         </Text>
                       )}
-                      {selectedRefUrls.length > 0 && imageProvider === 'cloudflare' ? (
+                      {selectedRefUrls.length > 0 && isTextOnlyImageProvider(imageProvider) ? (
                         <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#6D28D9', marginTop: 4 }}>
                           ✨ Using Gemini Vision to blend your selected reference photo{selectedRefUrls.length > 1 ? 's' : ''}.
                         </Text>
@@ -4632,14 +4635,16 @@ export default function MarketingScreen() {
                     <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>
                       AI Model Provider
                     </Text>
-                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
-                      {(['gemini', 'openrouter', 'cloudflare'] as const).map((prov) => (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                      {IMAGE_PROVIDER_CHOICES.map((prov) => (
                         <Pressable
                           key={prov}
                           onPress={() => setImageProvider(prov)}
                           style={{
-                            flex: 1,
+                            minWidth: '30%',
+                            flexGrow: 1,
                             paddingVertical: 6,
+                            paddingHorizontal: 8,
                             borderRadius: 8,
                             backgroundColor: imageProvider === prov ? '#009F50' : '#FFFFFF',
                             borderWidth: 1,
@@ -4652,10 +4657,9 @@ export default function MarketingScreen() {
                               fontSize: 10.5,
                               fontWeight: '700',
                               color: imageProvider === prov ? '#FFFFFF' : '#475569',
-                              textTransform: 'capitalize',
                             }}
                           >
-                            {prov === 'openrouter' ? 'Flux' : prov}
+                            {IMAGE_PROVIDER_LABELS[prov]}
                           </Text>
                         </Pressable>
                       ))}

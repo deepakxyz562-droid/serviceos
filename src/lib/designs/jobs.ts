@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { generateDesignImage, resolveCuratedImageFallback } from './image-provider';
+import { generateDesignImage, resolveCuratedImageFallback, type ImageProvider } from './image-provider';
 import { saveDesignAsset } from './assets';
 import { evaluateBgosEntitlement, pickBestSubscriptionRow } from '@/lib/bgos-entitlement';
 import { getBgosAiQuotaForPlan, normalizeBgosPlanCode } from '@/lib/bgos-billing';
@@ -184,7 +184,7 @@ export async function runDesignJob(id:string){
   try {
     result = await generateDesignImage(
       job.prompt,
-      (job.provider || 'cloudflare') as any,
+      (job.provider || 'cloudflare') as ImageProvider,
       AbortSignal.timeout(150000),
       isPoster,
       visualContext,
@@ -198,7 +198,7 @@ export async function runDesignJob(id:string){
     );
   } catch (err: any) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    const isProviderExhausted = /429|402|quota|rate|exhausted|credit|balance|Superadmin|neurons|Bad input|fetch failed/i.test(errMsg);
+    const isProviderExhausted = /429|402|503|504|quota|rate|exhausted|credit|balance|Superadmin|neurons|Bad input|fetch failed/i.test(errMsg);
     if (isProviderExhausted) {
       console.warn(`[runDesignJob] AI image provider quota/error (${errMsg}), resolving curated occasion fallback`);
       result = await resolveCuratedImageFallback(job.prompt, visualContext);
