@@ -130,7 +130,8 @@ The following cron-shaped endpoints exist in the codebase but are **not** in `cr
 | Endpoint | Auth | Status |
 |---|---|---|
 | `/api/cron/ai-cleanup` | `verifyCronAuth` (CRON_SECRET) | Releases stale AI call reservations + phone-number release saga. Recommend adding to cron-job.org at `*/15 * * * *` (every 15 min). |
-| `/api/social/publish-due` | `SOCIAL_PUBLISH_TOKEN` (separate secret) | Publishes scheduled social posts. Needs its own cron-job.org entry if social scheduling is used. |
+| `/api/cron/social-autopilot` | `Authorization: Bearer <CRON_SECRET>` | Drains due scheduled social posts (`publishDueSocialPosts`) + runs daily Marketing Autopilot. Included in `cron-job-org-import.json` every 5 min as an external backup alongside the 60s in-process daemon. |
+| `/api/social/publish-due` | `SOCIAL_PUBLISH_TOKEN` (separate secret) | Standalone scheduled-post-only endpoint (`GET` & `POST`) if you want an isolated secret separate from `CRON_SECRET`. |
 | `/api/journey/process-scheduled` | `verifyCronAuth` | Processes scheduled journey automations. Needs cron-job.org entry if journey scheduling is used. |
 
 To add any of these to cron-job.org, follow the same pattern: POST method, `x-cron-secret` header, appropriate schedule.

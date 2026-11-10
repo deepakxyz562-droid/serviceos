@@ -101,6 +101,7 @@ export default function RootLayout() {
         <Stack.Screen name="manage-profile" />
         <Stack.Screen name="my-plan" />
         <Stack.Screen name="keyword-planner" />
+        <Stack.Screen name="seo-growth" />
         <Stack.Screen name="reply-settings" />
         <Stack.Screen name="growth-report" />
         <Stack.Screen name="select-profile" />

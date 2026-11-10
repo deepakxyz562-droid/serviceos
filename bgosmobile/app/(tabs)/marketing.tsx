@@ -727,6 +727,7 @@ export default function MarketingScreen() {
     accountIds?: string[];
     templateIds?: string[];
     postingTime: string;
+    lastError?: string | null;
     totalPostsCreated: number;
     daysRemaining: number;
   }>({
@@ -734,6 +735,7 @@ export default function MarketingScreen() {
     duration: '30_days',
     platforms: ['googlebusiness', 'instagram', 'facebook'],
     postingTime: '09:00',
+    lastError: null,
     totalPostsCreated: 0,
     daysRemaining: 30,
     contentSource: 'ai_generated',
@@ -768,6 +770,7 @@ export default function MarketingScreen() {
           contentSource: res.config.contentSource || 'ai_generated',
           platforms: res.config.platforms || ['googlebusiness', 'instagram', 'facebook'],
           postingTime: res.config.postingTime || '09:00',
+          lastError: res.config.lastError || null,
           totalPostsCreated: res.config.totalPostsCreated || 0,
           daysRemaining: res.daysRemaining ?? 0,
         });
@@ -783,7 +786,7 @@ export default function MarketingScreen() {
     try {
       setApLoading(true);
       setApError(null);
-      const res = await apiRequest<{ config: any; daysRemaining: number; nextRunAt:string|null; message: string; triggerResult?:{success:boolean;error?:string} }>('/api/social/autopilot', {
+      const res = await apiRequest<{ config: any; daysRemaining: number; nextRunAt:string|null; message: string; triggerResult?:{success:boolean;partial?:boolean;warning?:string;error?:string} }>('/api/social/autopilot', {
         method: 'POST',
         body: updates.enabled === false && Object.keys(updates).length === 1 ? {enabled:false} : {
           enabled: updates.enabled !== undefined ? updates.enabled : apConfig.enabled,
@@ -808,10 +811,12 @@ export default function MarketingScreen() {
           contentSource: res.config.contentSource || 'ai_generated',
           platforms: res.config.platforms,
           postingTime: res.config.postingTime,
+          lastError: res.config.lastError || null,
           totalPostsCreated: res.config.totalPostsCreated,
           daysRemaining: res.daysRemaining,
         });
         if (res.triggerResult && !res.triggerResult.success) {setApError(res.triggerResult.error || 'Post could not be published.');Alert.alert('Post needs attention',res.triggerResult.error || 'Check recent activity.');}
+        else if (res.triggerResult?.warning) {setApError(res.triggerResult.warning);Alert.alert('Partially published', res.triggerResult.warning);}
         else Alert.alert('Autopilot', updates.triggerPostNow ? 'Post published successfully.' : 'Settings saved.');
         if (updates.triggerPostNow) await loadAutopilot();
       }
@@ -2832,6 +2837,12 @@ export default function MarketingScreen() {
               <Text style={{ fontSize: 12, color: '#64748B' }}>Preferred Daily Time</Text>
               <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50' }}>{apConfig.postingTime} · {apConfig.timeZone}</Text>
             </View>
+            {apConfig.lastError ? (
+              <View style={{ backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', borderRadius: 10, padding: 10 }}>
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#991B1B' }}>Last Autopilot Notice</Text>
+                <Text style={{ fontSize: 11, color: '#B91C1C', marginTop: 2 }}>{apConfig.lastError}</Text>
+              </View>
+            ) : null}
           </Card>
           </>}
         </ScrollView>

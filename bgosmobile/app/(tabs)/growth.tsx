@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Pressable, Text, TextInput, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import {
@@ -145,6 +145,7 @@ export default function GrowthScreen() {
 
   const [error, setError] = useState<string | null>(null);
   const localParams = useLocalSearchParams<{ error?: string; google?: string }>();
+  const router = useRouter();
 
   const isConnected = Boolean(gbpPlace.data?.isConnected);
   const isPendingApproval = Boolean(
@@ -757,6 +758,32 @@ export default function GrowthScreen() {
         )}
 
         <QuickActions />
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/seo-growth')}
+          style={({ pressed }) => ({
+            backgroundColor: colors.brandSoft,
+            borderWidth: 1,
+            borderColor: colors.brand,
+            borderRadius: 14,
+            padding: 14,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontSize: 13, fontWeight: '800', color: colors.brandDark }}>
+              Website SEO &amp; AI Search Readiness
+            </Text>
+            <Text style={{ fontSize: 11.5, color: colors.muted }}>
+              Audit OAI-SearchBot access, Schema JSON-LD, Maps Geo-Grid &amp; AI Visibility
+            </Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={22} color={colors.brandDark} />
+        </Pressable>
 
         <View>
           <SectionHeader title="AI Actions" icon="auto-awesome" iconColor={gbpColors.ai} />

@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { localPostingSlot } from './autopilot-schedule';
+import { resolveTenantLocale } from '@/lib/locale-timezone';
 import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
 import { publishPost } from '@/lib/social/publisher';
@@ -19,9 +20,12 @@ export interface AutopilotConfig {
   templateIds?: string[];
   postingTime: string;
   timeZone: string;
+  timeZoneExplicit?: boolean;
   startDate: string;
   endDate: string;
   lastRunAt?: string | null;
+  lastError?: string | null;
+  lastErrorAt?: string | null;
   totalPostsCreated: number;
   status: 'active' | 'paused' | 'completed';
   contentSource?: 'ai_generated' | 'my_templates' | 'hybrid';
@@ -43,13 +47,18 @@ export function getAutopilotDays(duration: AutopilotDuration, customDays?: numbe
 export async function getTenantAutopilotConfig(tenantId: string): Promise<AutopilotConfig> {
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
-    select: { settingsJson: true },
+    select: { settingsJson: true, country: true },
   });
 
   let settings: Record<string, any> = {};
   try {
     settings = JSON.parse(tenant?.settingsJson || '{}');
   } catch {}
+
+  const localeMeta = resolveTenantLocale({
+    tenantCountry: (tenant as { country?: string | null } | null)?.country,
+    settingsJson: settings,
+  });
 
   const raw = settings.socialAutopilot || {};
   const duration: AutopilotDuration =
@@ -72,6 +81,12 @@ export async function getTenantAutopilotConfig(tenantId: string): Promise<Autopi
   const isExpired = new Date(endDate).getTime() <= now.getTime();
   const enabled = Boolean(raw.enabled) && !isExpired;
 
+  const rawTz = typeof raw.timeZone === 'string' && raw.timeZone.trim() ? raw.timeZone.trim() : '';
+  const timeZone =
+    rawTz && !(rawTz === 'UTC' && localeMeta.timeZone !== 'UTC' && raw.timeZoneExplicit !== true)
+      ? rawTz
+      : localeMeta.timeZone;
+
   return {
     enabled,
     duration,
@@ -80,10 +95,13 @@ export async function getTenantAutopilotConfig(tenantId: string): Promise<Autopi
     accountIds: Array.isArray(raw.accountIds) ? raw.accountIds : undefined,
     templateIds: Array.isArray(raw.templateIds) ? raw.templateIds : [],
     postingTime: raw.postingTime || '09:00',
-    timeZone: raw.timeZone || 'UTC',
+    timeZone,
+    timeZoneExplicit: Boolean(raw.timeZoneExplicit),
     startDate,
     endDate,
     lastRunAt: raw.lastRunAt || null,
+    lastError: typeof raw.lastError === 'string' && raw.lastError.trim() ? raw.lastError : null,
+    lastErrorAt: typeof raw.lastErrorAt === 'string' ? raw.lastErrorAt : null,
     totalPostsCreated: Number(raw.totalPostsCreated) || 0,
     status: isExpired ? 'completed' : enabled ? 'active' : 'paused',
     contentSource: raw.contentSource || 'ai_generated',
@@ -110,11 +128,19 @@ export async function saveTenantAutopilotConfig(
     endDate = updates.endDate || new Date(new Date(startDate).getTime() + totalDays * 24 * 60 * 60 * 1000).toISOString();
   }
 
+  const timeZoneExplicit =
+    updates.timeZoneExplicit !== undefined
+      ? updates.timeZoneExplicit
+      : updates.timeZone !== undefined && updates.timeZone !== current.timeZone
+        ? true
+        : current.timeZoneExplicit;
+
   const merged: AutopilotConfig = {
     ...current,
     ...updates,
     duration,
     customDays,
+    timeZoneExplicit,
     startDate,
     endDate,
     status:
@@ -158,7 +184,7 @@ const THEMES = [
 export async function generateDailyAutopilotPost(
   tenantId: string,
   userId?: string
-): Promise<{ success: boolean; postId?: string; error?: string }> {
+): Promise<{ success: boolean; postId?: string; partial?: boolean; warning?: string; error?: string }> {
   let claimedPostId: string | undefined;
   try {
     const tenant = await db.tenant.findUnique({
@@ -167,7 +193,7 @@ export async function generateDailyAutopilotPost(
         brandProfile: true,
         socialAccounts: {
           where: { isActive: true },
-          select: { id: true, platform: true, accountName: true },
+          select: { id: true, platform: true, accountName: true, isActive: true },
         },
       },
     });
@@ -181,16 +207,27 @@ export async function generateDailyAutopilotPost(
       return { success: false, error: 'Autopilot is paused or completed' };
     }
 
-    const targetAccounts=tenant.socialAccounts.filter(acc=>config.platforms.includes(acc.platform as any) && (!config.accountIds || config.accountIds.includes(acc.id)));
+    const targetAccounts = (tenant.socialAccounts || []).filter(
+      (acc) =>
+        (acc as { isActive?: boolean }).isActive !== false &&
+        config.platforms.includes(acc.platform as any) &&
+        (!config.accountIds || config.accountIds.includes(acc.id)),
+    );
     if(!targetAccounts.length)return {success:false,error:'Connect a selected social channel before posting'};
     const slot=localPostingSlot(new Date(),config.timeZone);
     const postId='autopilot_'+createHash('sha256').update(`${tenantId}:${slot.date}`).digest('hex');
     const prior=await db.socialPost.findUnique({where:{id:postId}});
     if (prior) {
       if (prior.status === 'published') {
-        if (!config.lastRunAt || localPostingSlot(new Date(config.lastRunAt),config.timeZone).date !== slot.date)
-          await saveTenantAutopilotConfig(tenantId,{lastRunAt:new Date().toISOString(),totalPostsCreated:config.totalPostsCreated+1});
-        return {success:true,postId};
+        if (!config.lastRunAt || localPostingSlot(new Date(config.lastRunAt),config.timeZone).date !== slot.date) {
+          await saveTenantAutopilotConfig(tenantId,{
+            lastRunAt:new Date().toISOString(),
+            totalPostsCreated:config.totalPostsCreated+1,
+            lastError: null,
+            lastErrorAt: null,
+          });
+        }
+        return { success: true, postId };
       }
       const age = Date.now() - new Date(prior.updatedAt).getTime();
       // Never reclaim an uncertain provider delivery. A response may have been lost.
@@ -214,10 +251,22 @@ export async function generateDailyAutopilotPost(
           throw new Error('A publishing account was removed or disconnected. Review this post before retrying.');
         await db.socialPost.update({where:{id:postId},data:{status:'scheduled'}});
         await publishPost(postId);
-        const delivered = await db.socialPost.findUnique({where:{id:postId}});
-        if (delivered?.status !== 'published') throw new Error('Delivery incomplete. Inspect individual channel results.');
-        await saveTenantAutopilotConfig(tenantId,{lastRunAt:new Date().toISOString(),totalPostsCreated:config.totalPostsCreated+1});
-        return {success:true,postId};
+        const delivered = await db.socialPost.findUnique({where:{id:postId},select:{status:true,failureReason:true}});
+        if (!delivered || (delivered.status !== 'published' && delivered.status !== 'partial')) {
+          throw new Error(delivered?.failureReason || 'Delivery incomplete. Inspect individual channel results.');
+        }
+        await saveTenantAutopilotConfig(tenantId,{
+          lastRunAt:new Date().toISOString(),
+          totalPostsCreated:config.totalPostsCreated+1,
+          lastError: delivered.status === 'partial' ? delivered.failureReason || 'Some channels failed to publish' : null,
+          lastErrorAt: delivered.status === 'partial' ? new Date().toISOString() : null,
+        });
+        return {
+          success: true,
+          postId,
+          partial: delivered.status === 'partial',
+          warning: delivered.status === 'partial' ? delivered.failureReason || undefined : undefined,
+        };
       }
     } else {
       await db.socialPost.create({data:{id:postId,tenantId,content:'',status:'generating',mediaUrls:'[]',publishTargets:'[]',gbpOfferData:JSON.stringify({autopilotAttempts:1}),createdById:'system-autopilot'}});
@@ -277,7 +326,7 @@ Requirements:
       const template = await db.socialPost.findFirst({where:{tenantId,id:ids[Number(slot.date.replace(/-/g,'')) % ids.length]}});
       if (!template?.designJson) throw new Error('Selected poster is unavailable. Update Autopilot templates.');
       postDesignJson = template.designJson;
-      const rendered = await renderDesign(JSON.parse(template.designJson),tenantId);
+      const rendered = await renderDesign(JSON.parse(template.designJson), tenantId, { format: 'jpeg' });
       mediaUrls.push(rendered.imageUrl);
       content = template.content?.trim() || '';
       if (!content) throw new Error('Add a caption to the selected saved poster before publishing.');
@@ -286,7 +335,7 @@ Requirements:
       if (!key) throw new Error('Configure an image provider in Superadmin.');
       const generated = await generateDesignImage(imagePrompt,key.provider as 'gemini'|'openrouter'|'cloudflare',AbortSignal.timeout(60000),true);
       if (!generated?.bytes) throw new Error('Image generation returned no image.');
-      const asset = await saveDesignAsset(generated.bytes,tenantId,actorId);
+      const asset = await saveDesignAsset(generated.bytes, tenantId, actorId, { format: 'jpeg' });
       mediaUrls.push(asset.url);
     }
 
@@ -318,16 +367,32 @@ Requirements:
     });
 
     // 5. Trigger multi-platform publisher if targets exist
+    let deliveryStatus: 'published' | 'partial' = 'published';
+    let deliveryWarning: string | null = null;
     if (publishTargets.length > 0) {
       await publishPost(post.id);
-      const delivery = await db.socialPost.findUnique({where:{id:post.id},select:{status:true}});
-      if (!delivery || delivery.status !== 'published') throw new Error(`Post saved; delivery status: ${delivery?.status || 'processing'}. Check channel results before retrying.`);
+      const delivery = await db.socialPost.findUnique({
+        where: { id: post.id },
+        select: { status: true, failureReason: true },
+      });
+      if (!delivery || (delivery.status !== 'published' && delivery.status !== 'partial')) {
+        throw new Error(
+          delivery?.failureReason ||
+            `Post saved; delivery status: ${delivery?.status || 'processing'}. Check channel results before retrying.`,
+        );
+      }
+      deliveryStatus = delivery.status;
+      if (delivery.status === 'partial') {
+        deliveryWarning = delivery.failureReason || 'Some channels failed to publish';
+      }
     }
 
-    // 6. Update Autopilot counters
+    // 6. Update Autopilot counters & clear/record channel warning
     await saveTenantAutopilotConfig(tenantId, {
       lastRunAt: new Date().toISOString(),
       totalPostsCreated: config.totalPostsCreated + 1,
+      lastError: deliveryWarning,
+      lastErrorAt: deliveryWarning ? new Date().toISOString() : null,
     });
 
     await logActivity({
@@ -337,20 +402,37 @@ Requirements:
       action: 'autopilot_daily_post',
       entityType: 'social_post',
       entityId: post.id,
-      description: `Autopilot submitted daily post across ${publishTargets.length} platform(s).`,
-      severity: 'info',
+      description:
+        deliveryStatus === 'partial'
+          ? `Autopilot partially published daily post across ${publishTargets.length} target(s): ${deliveryWarning}`
+          : `Autopilot submitted daily post across ${publishTargets.length} platform(s).`,
+      severity: deliveryStatus === 'partial' ? 'warning' : 'info',
     }).catch(() => {});
 
     return {
       success: true,
       postId: post.id,
+      partial: deliveryStatus === 'partial',
+      warning: deliveryWarning || undefined,
     };
   } catch (error: any) {
-    if(claimedPostId)await db.socialPost.updateMany({where:{id:claimedPostId,status:'generating'},data:{status:'failed',failureReason:error?.message||'Generation failed'}}).catch(()=>{});
+    const errMsg = error?.message || 'Failed to generate autopilot post';
+    if (claimedPostId) {
+      await db.socialPost
+        .updateMany({
+          where: { id: claimedPostId, status: 'generating' },
+          data: { status: 'failed', failureReason: errMsg },
+        })
+        .catch(() => {});
+    }
+    await saveTenantAutopilotConfig(tenantId, {
+      lastError: errMsg,
+      lastErrorAt: new Date().toISOString(),
+    }).catch(() => {});
     console.error(`[social/autopilot] Error in generateDailyAutopilotPost for tenant ${tenantId}:`, error);
     return {
       success: false,
-      error: error?.message || 'Failed to generate autopilot post',
+      error: errMsg,
     };
   }
 }

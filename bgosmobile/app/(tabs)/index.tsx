@@ -47,6 +47,8 @@ type Competitor = {
   address: string | null;
   category: string | null;
   mapsUrl: string | null;
+  websiteUrl?: string | null;
+  lastSeoScore?: number | null;
   source: string;
 };
 
@@ -117,6 +119,7 @@ const MORE_TOOLS: {
   { label: 'Phone', route: '/(tabs)/phone', icon: 'phone-in-talk' },
   { label: 'Leads', route: '/(tabs)/leads', icon: 'people-outline' },
   { label: 'Keyword Planner', route: '/keyword-planner', icon: 'travel-explore' },
+  { label: 'AI SEO & Grid', route: '/seo-growth', icon: 'radar' },
   { label: 'Appointments', route: '/(tabs)/appointments', icon: 'event' },
   { label: 'Agents', route: '/(tabs)/agents', icon: 'smart-toy' },
   { label: 'Integrations', route: '/(tabs)/integrations', icon: 'extension' },
@@ -1266,6 +1269,13 @@ export default function HomeScreen() {
                     <View style={{ backgroundColor: colors.background, borderRadius: 10, padding: 10, marginBottom: 8, gap: 4 }}>
                       {comp.category ? <Text style={ui.caption}>Category: {comp.category}</Text> : null}
                       {comp.address ? <Text style={ui.caption}>{comp.address}</Text> : null}
+                      {comp.websiteUrl ? (
+                        <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(comp.websiteUrl!)}>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>
+                            Visit Competitor Website ↗
+                          </Text>
+                        </Pressable>
+                      ) : null}
                       {comp.mapsUrl ? (
                         <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(comp.mapsUrl!)}>
                           <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>
@@ -1278,6 +1288,27 @@ export default function HomeScreen() {
                 </View>
               );
             })}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/seo-growth?tab=gap')}
+              style={({ pressed }) => ({
+                marginTop: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                backgroundColor: colors.brandSoft,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <MaterialIcons name="radar" size={16} color={colors.brandDark} />
+              <Text style={{ fontSize: 12, fontWeight: '800', color: colors.brandDark }}>
+                Website SEO &amp; AI Visibility Gap →
+              </Text>
+            </Pressable>
           </>
         )}
       </Card>

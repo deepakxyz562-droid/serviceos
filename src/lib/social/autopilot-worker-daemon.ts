@@ -12,27 +12,47 @@ import { setTimeout, setInterval, clearTimeout, clearInterval } from 'node:timer
 import { db } from '@/lib/db';
 import { getTenantAutopilotConfig, generateDailyAutopilotPost } from '@/lib/social/autopilot';
 import { autopilotDue } from '@/lib/social/autopilot-schedule';
+import { publishDueSocialPosts } from '@/lib/social/due-publisher';
 
-let workerInterval: NodeJS.Timeout | null = null;
+let workerInterval: ReturnType<typeof setInterval> | null = null;
 let isTicking = false;
-let bootTimer: NodeJS.Timeout | null = null;
+let bootTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Execute a single autopilot worker tick.
- * Scans active tenants, generates scheduled daily posts if due,
- * and triggers WhatsApp inactivity nudges.
+ * Publishes due manually scheduled social posts, scans active tenants to
+ * generate scheduled daily autopilot posts if due, and triggers WhatsApp nudges.
  */
 export async function runAutopilotTick(now: Date = new Date()): Promise<{
   tenantsChecked: number;
   processedCount: number;
   publishedCount: number;
   whatsappNudges: number;
+  duePostsProcessed: number;
+  duePostsPublished: number;
+  duePostsFailed: number;
 }> {
   let processedCount = 0;
   let publishedCount = 0;
   let whatsappNudges = 0;
+  let duePostsProcessed = 0;
+  let duePostsPublished = 0;
+  let duePostsFailed = 0;
 
   try {
+    // 0. Drain due scheduled SocialPosts (manual schedule, drip photos/videos, retry queue)
+    try {
+      const dueSummary = await publishDueSocialPosts({ now });
+      duePostsProcessed = dueSummary.processed;
+      duePostsPublished = dueSummary.succeeded;
+      duePostsFailed = dueSummary.failed;
+    } catch (dueErr) {
+      console.warn(
+        '[Autopilot Daemon] Due post dispatch error:',
+        dueErr instanceof Error ? dueErr.message : dueErr,
+      );
+    }
+
     // 1. Fetch tenants that have active social accounts
     let tenantsChecked = 0;
     let afterId: string | undefined;
@@ -76,9 +96,16 @@ export async function runAutopilotTick(now: Date = new Date()): Promise<{
 
     // 2. Process WhatsApp quiet-chat inactivity follow-ups
     try {
-      const { processQuietChatFollowups } = await import('@/lib/whatsapp/inactivity-followup');
-      const nudgeResult = await processQuietChatFollowups();
-      whatsappNudges = nudgeResult.nudgedCount || 0;
+      const inactivityMod = (await import('@/lib/whatsapp/inactivity-followup')) as {
+        processQuietChatFollowups?: () => Promise<{ nudgedCount?: number }>;
+        processWhatsAppInactivityFollowups?: () => Promise<{ nudgedCount?: number }>;
+      };
+      const runFollowups =
+        inactivityMod.processQuietChatFollowups ?? inactivityMod.processWhatsAppInactivityFollowups;
+      if (runFollowups) {
+        const nudgeResult = await runFollowups();
+        whatsappNudges = nudgeResult.nudgedCount || 0;
+      }
     } catch {
       // Quiet-chat followup is optional / non-blocking
     }
@@ -88,6 +115,9 @@ export async function runAutopilotTick(now: Date = new Date()): Promise<{
       processedCount,
       publishedCount,
       whatsappNudges,
+      duePostsProcessed,
+      duePostsPublished,
+      duePostsFailed,
     };
   } catch (error) {
     console.error('[Autopilot Daemon] Tick failed:', error instanceof Error ? error.message : error);
@@ -96,6 +126,9 @@ export async function runAutopilotTick(now: Date = new Date()): Promise<{
       processedCount,
       publishedCount,
       whatsappNudges,
+      duePostsProcessed,
+      duePostsPublished,
+      duePostsFailed,
     };
   }
 }
@@ -132,8 +165,10 @@ export function startBgosAutopilotWorker() {
     isTicking = true;
     try {
       const summary = await runAutopilotTick();
-      if (summary.publishedCount > 0 || summary.whatsappNudges > 0) {
-        console.log(`[Autopilot Daemon] Completed tick: ${summary.publishedCount} daily posts published, ${summary.whatsappNudges} WhatsApp chats nudged.`);
+      if (summary.duePostsPublished > 0 || summary.publishedCount > 0 || summary.whatsappNudges > 0) {
+        console.log(
+          `[Autopilot Daemon] Completed tick: ${summary.duePostsPublished}/${summary.duePostsProcessed} scheduled posts published, ${summary.publishedCount} daily autopilot posts published, ${summary.whatsappNudges} WhatsApp chats nudged.`,
+        );
       }
     } catch (err) {
       console.warn('[Autopilot Daemon] Tick error:', err instanceof Error ? err.message : err);
@@ -143,8 +178,9 @@ export function startBgosAutopilotWorker() {
   }, 60_000);
 
   // Unref timer so it does not block graceful Node process exit (SIGTERM/SIGINT)
-  if (workerInterval && typeof workerInterval.unref === 'function') {
-    workerInterval.unref();
+  const unrefFn = (workerInterval as unknown as { unref?: () => void })?.unref;
+  if (typeof unrefFn === 'function') {
+    unrefFn.call(workerInterval);
   }
 
   console.log('[Autopilot Daemon] In-process BGOS autopilot scheduler is active.');

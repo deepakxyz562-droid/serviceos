@@ -29,6 +29,8 @@ interface AutopilotConfig {
   startDate: string;
   endDate: string;
   lastRunAt?: string | null;
+  lastError?: string | null;
+  lastErrorAt?: string | null;
   totalPostsCreated: number;
   status: 'active' | 'paused' | 'completed';
 }
@@ -46,8 +48,21 @@ interface AutopilotData {
     status: string;
     scheduledAt?: string;
     createdAt: string;
+    failureReason?: string | null;
   }>;
 }
+
+const AUTOPILOT_TIMEZONES = [
+  { value: 'Asia/Kolkata', label: 'India (IST · Asia/Kolkata)' },
+  { value: 'America/New_York', label: 'US Eastern (America/New_York)' },
+  { value: 'America/Chicago', label: 'US Central (America/Chicago)' },
+  { value: 'America/Los_Angeles', label: 'US Pacific (America/Los_Angeles)' },
+  { value: 'Europe/London', label: 'UK (Europe/London)' },
+  { value: 'Asia/Dubai', label: 'UAE (Asia/Dubai)' },
+  { value: 'Asia/Singapore', label: 'Singapore (Asia/Singapore)' },
+  { value: 'Australia/Sydney', label: 'Australia (Australia/Sydney)' },
+  { value: 'UTC', label: 'UTC' },
+];
 
 export function AutopilotStudio({ onConnectAccount }: { onConnectAccount?: () => void }) {
   const [data, setData] = useState<AutopilotData | null>(null);
@@ -306,7 +321,7 @@ export function AutopilotStudio({ onConnectAccount }: { onConnectAccount?: () =>
               </div>
             </div>
 
-            {/* Daily Posting Time Selector */}
+            {/* Daily Posting Time & Timezone Selector */}
             <div className="pt-3 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
               <div>
                 <span className="font-bold text-foreground">Preferred Daily Posting Time</span>
@@ -314,20 +329,46 @@ export function AutopilotStudio({ onConnectAccount }: { onConnectAccount?: () =>
                   Posts generate and publish daily at your target local time.
                 </p>
               </div>
-              <select
-                aria-label={`Posting time in ${timeZone}`}
-                value={postingTime}
-                onChange={(e) => setPostingTime(e.target.value)}
-                className="h-8 px-3 rounded-lg border border-border bg-background text-xs font-semibold"
-              >
-                <option value="08:00">08:00 AM (Early morning reach)</option>
-                <option value="09:00">09:00 AM (Recommended)</option>
-                <option value="12:00">12:00 PM (Lunch break peak)</option>
-                <option value="17:00">05:00 PM (Evening leisure)</option>
-                <option value="19:00">07:00 PM (Prime evening)</option>
-              </select>
-              <span className="text-xs text-muted-foreground">Timezone: {timeZone}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  aria-label={`Posting time in ${timeZone}`}
+                  value={postingTime}
+                  onChange={(e) => setPostingTime(e.target.value)}
+                  className="h-8 px-3 rounded-lg border border-border bg-background text-xs font-semibold"
+                >
+                  <option value="08:00">08:00 AM (Early morning reach)</option>
+                  <option value="09:00">09:00 AM (Recommended)</option>
+                  <option value="12:00">12:00 PM (Lunch break peak)</option>
+                  <option value="17:00">05:00 PM (Evening leisure)</option>
+                  <option value="19:00">07:00 PM (Prime evening)</option>
+                </select>
+                <select
+                  aria-label="Business timezone"
+                  value={timeZone}
+                  onChange={(e) => setTimeZone(e.target.value)}
+                  className="h-8 px-2.5 rounded-lg border border-border bg-background text-xs text-muted-foreground font-medium"
+                >
+                  {!AUTOPILOT_TIMEZONES.some((tz) => tz.value === timeZone) && (
+                    <option value={timeZone}>{timeZone}</option>
+                  )}
+                  {AUTOPILOT_TIMEZONES.map((tz) => (
+                    <option key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+
+            {data?.config?.lastError && (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/50 text-xs text-rose-800 dark:text-rose-200">
+                <AlertCircle className="size-4 shrink-0 mt-0.5 text-rose-600" />
+                <div>
+                  <span className="font-bold">Last run notice: </span>
+                  <span>{data.config.lastError}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Card: Multi-Platform Publishing Targets */}
@@ -622,6 +663,11 @@ export function AutopilotStudio({ onConnectAccount }: { onConnectAccount?: () =>
                   <p className="text-xs text-foreground line-clamp-3 leading-relaxed">
                     {post.content}
                   </p>
+                  {post.failureReason && (
+                    <p className="text-[11px] text-rose-600 dark:text-rose-400 line-clamp-2">
+                      {post.failureReason}
+                    </p>
+                  )}
                 </div>
               );
             })}

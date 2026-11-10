@@ -3,14 +3,25 @@ import { db } from '@/lib/db';
 import { uploadFile, deleteFile, isS3Configured, isSupabaseStorageConfigured } from '@/lib/supabase-storage';
 import { validateDesign } from '../../../shared/marketing-design';
 
-async function processImageBuffer(bytes: Buffer): Promise<{ data: Buffer; width: number; height: number; format: 'webp' | 'jpeg' | 'png' }> {
+async function processImageBuffer(
+  bytes: Buffer,
+  targetFormat: 'webp' | 'jpeg' = 'webp',
+): Promise<{ data: Buffer; width: number; height: number; format: 'webp' | 'jpeg' | 'png' }> {
   try {
     const sharpModule = await import('sharp');
     const sharp = sharpModule.default || sharpModule;
-    // Instagram & Facebook specs: max width 1080px, max height 1350px (portrait 4:5), 85% WebP
-    const normalized = await sharp(bytes, { limitInputPixels: 24_000_000 })
+    // Instagram & Facebook specs: max width 1080px, max height 1350px (portrait 4:5)
+    const pipeline = sharp(bytes, { limitInputPixels: 24_000_000 })
       .rotate()
-      .resize({ width: 1080, height: 1350, fit: 'inside', withoutEnlargement: true })
+      .resize({ width: 1080, height: 1350, fit: 'inside', withoutEnlargement: true });
+    if (targetFormat === 'jpeg') {
+      const normalized = await pipeline
+        .flatten({ background: '#ffffff' })
+        .jpeg({ quality: 92 })
+        .toBuffer({ resolveWithObject: true });
+      return { data: normalized.data, width: normalized.info.width, height: normalized.info.height, format: 'jpeg' };
+    }
+    const normalized = await pipeline
       .webp({ quality: 85, effort: 4 })
       .toBuffer({ resolveWithObject: true });
     return { data: normalized.data, width: normalized.info.width, height: normalized.info.height, format: 'webp' };
@@ -20,13 +31,18 @@ async function processImageBuffer(bytes: Buffer): Promise<{ data: Buffer; width:
   }
 }
 
-export async function saveDesignAsset(bytes:Buffer,tenantId:string,userId:string) {
+export async function saveDesignAsset(
+  bytes: Buffer,
+  tenantId: string,
+  userId: string,
+  options?: { format?: 'webp' | 'jpeg' },
+) {
   if(bytes.length>12_000_000)throw new Error('Images must be smaller than 12 MB');
   if(!isS3Configured()&&!isSupabaseStorageConfigured())throw new Error('Persistent image storage is not configured');
-  const normalized = await processImageBuffer(bytes);
+  const normalized = await processImageBuffer(bytes, options?.format ?? 'webp');
   const id=randomUUID();
-  const fileExt = normalized.format === 'webp' ? 'webp' : 'png';
-  const contentType = normalized.format === 'webp' ? 'image/webp' : 'image/png';
+  const fileExt = normalized.format === 'jpeg' ? 'jpg' : normalized.format === 'webp' ? 'webp' : 'png';
+  const contentType = normalized.format === 'jpeg' ? 'image/jpeg' : normalized.format === 'webp' ? 'image/webp' : 'image/png';
   const fileName = `${id}.${fileExt}`;
   const stored=await uploadFile({bucket:'campaign-assets',companyId:tenantId,folder:'design-assets',fileName,file:normalized.data,contentType});
   try {

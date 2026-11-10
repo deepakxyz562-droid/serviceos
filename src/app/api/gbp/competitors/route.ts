@@ -17,6 +17,9 @@ interface CompetitorRow {
   category: string | null;
   placeId: string | null;
   mapsUrl: string | null;
+  websiteUrl?: string | null;
+  lastSeoScore?: number | null;
+  lastAuditedAt?: string | null;
   source: string;
 }
 
@@ -124,8 +127,9 @@ export async function GET(request: NextRequest) {
                 category: row.category,
                 placeId: row.placeId,
                 mapsUrl: row.mapsUrl,
+                websiteUrl: row.websiteUrl ?? null,
                 source: 'places',
-              },
+              } as any,
               update: {
                 rating: row.rating,
                 reviewCount: row.reviewCount,
@@ -134,11 +138,41 @@ export async function GET(request: NextRequest) {
                 category: row.category,
                 placeId: row.placeId,
                 mapsUrl: row.mapsUrl,
+                websiteUrl: row.websiteUrl ?? undefined,
                 source: 'places',
-              },
+              } as any,
             });
           } catch {
-            // Row-level insert failure must not abort
+            // Retry without optional BGOS 2.0 columns if migration is pending
+            try {
+              await db.competitor.upsert({
+                where: { tenantId_name: { tenantId: user.tenantId, name: row.name } },
+                create: {
+                  tenantId: user.tenantId,
+                  name: row.name,
+                  rating: row.rating,
+                  reviewCount: row.reviewCount,
+                  distanceKm: row.distanceKm,
+                  address: row.address,
+                  category: row.category,
+                  placeId: row.placeId,
+                  mapsUrl: row.mapsUrl,
+                  source: 'places',
+                },
+                update: {
+                  rating: row.rating,
+                  reviewCount: row.reviewCount,
+                  distanceKm: row.distanceKm,
+                  address: row.address,
+                  category: row.category,
+                  placeId: row.placeId,
+                  mapsUrl: row.mapsUrl,
+                  source: 'places',
+                },
+              });
+            } catch {
+              // Row-level insert failure must not abort
+            }
           }
         }
       }
@@ -200,15 +234,17 @@ export async function POST(request: NextRequest) {
         distanceKm: body.distanceKm != null ? Number(body.distanceKm) : null,
         address: body.address ? String(body.address) : null,
         category: body.category ? String(body.category) : null,
+        websiteUrl: body.websiteUrl ? String(body.websiteUrl).slice(0, 300) : null,
         source: 'manual',
-      },
+      } as any,
       update: {
         rating: body.rating != null ? Number(body.rating) : undefined,
         reviewCount: body.reviewCount != null ? Number(body.reviewCount) : undefined,
         distanceKm: body.distanceKm != null ? Number(body.distanceKm) : undefined,
         address: body.address ? String(body.address) : undefined,
         category: body.category ? String(body.category) : undefined,
-      },
+        websiteUrl: body.websiteUrl ? String(body.websiteUrl).slice(0, 300) : undefined,
+      } as any,
     });
 
     return NextResponse.json({ success: true, competitor });
@@ -402,7 +438,7 @@ async function fetchFromPlacesNew(
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
         'X-Goog-FieldMask':
-          'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.googleMapsUri,places.primaryType',
+          'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.googleMapsUri,places.primaryType,places.websiteUri',
       },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(12000),
@@ -442,6 +478,7 @@ async function fetchFromPlacesNew(
         mapsUrl:
           p.googleMapsUri ||
           (p.id ? `https://www.google.com/maps/place/?q=place_id:${p.id}` : null),
+        websiteUrl: p.websiteUri ? String(p.websiteUri).slice(0, 300) : null,
         source: 'places',
       });
     }

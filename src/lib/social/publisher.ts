@@ -360,6 +360,7 @@ export async function publishPost(postId: string): Promise<void> {
         const rendered = await renderDesign(parsedDesign, post.tenantId);
         if (rendered?.imageUrl) {
           post.mediaUrls = JSON.stringify([rendered.imageUrl]);
+          publishParams.mediaUrls = [rendered.imageUrl];
           await db.socialPost.update({
             where: { id: postId },
             data: { mediaUrls: post.mediaUrls },
@@ -409,7 +410,7 @@ export async function publishPost(postId: string): Promise<void> {
         .join('; ');
   }
 
-  await finalizePost(postId, results, finalStatus === 'failed' ? failureReason : null, finalStatus);
+  await finalizePost(postId, results, failureReason, finalStatus);
 
   // Notify tenant team when a scheduled post finishes publishing so the user can view/verify it on Google.
   const isMediaOnlyPost =
@@ -427,6 +428,41 @@ export async function publishPost(postId: string): Promise<void> {
 }
 
 // ─── Single-target publish ─────────────────────────────────────────────────
+
+async function transcodeWebpUrlToJpeg(tenantId: string, webpUrl: string): Promise<string> {
+  try {
+    const { isS3Configured, isSupabaseStorageConfigured, uploadFile } = await import('@/lib/supabase-storage');
+    if (!isS3Configured() && !isSupabaseStorageConfigured()) return webpUrl;
+
+    const res = await fetch(webpUrl, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return webpUrl;
+    const rawBytes = Buffer.from(await res.arrayBuffer());
+    if (!rawBytes.length) return webpUrl;
+
+    const sharpModule = await import('sharp');
+    const sharp = sharpModule.default || sharpModule;
+    const jpegBytes = await sharp(rawBytes, { limitInputPixels: 24_000_000 })
+      .rotate()
+      .resize({ width: 1080, height: 1350, fit: 'inside', withoutEnlargement: true })
+      .flatten({ background: '#ffffff' })
+      .jpeg({ quality: 92 })
+      .toBuffer();
+
+    const { randomUUID } = await import('crypto');
+    const uploaded = await uploadFile({
+      bucket: 'campaign-assets',
+      companyId: tenantId,
+      folder: 'social-normalized',
+      fileName: `${randomUUID()}.jpg`,
+      file: jpegBytes,
+      contentType: 'image/jpeg',
+    });
+    return uploaded?.url || webpUrl;
+  } catch (err) {
+    console.warn('[social/publisher] WebP-to-JPEG conversion fallback:', err instanceof Error ? err.message : err);
+    return webpUrl;
+  }
+}
 
 /**
  * Publish to ONE target platform. Isolated — never throws.
@@ -489,8 +525,24 @@ async function publishSingleTarget(
       );
     }
 
-    // 4. Publish.
-    const result = await adapter.publish(refreshedAccount, params);
+    // 4. Publish (transcode .webp images to JPEG for Instagram Graph API compatibility).
+    let effectiveParams = params;
+    if (
+      target.platform === 'instagram' &&
+      Array.isArray(params.mediaUrls) &&
+      params.mediaUrls.length > 0 &&
+      /\.webp(\?|$)/i.test(params.mediaUrls[0])
+    ) {
+      const normalizedUrl = await transcodeWebpUrlToJpeg(tenantId, params.mediaUrls[0]);
+      if (normalizedUrl !== params.mediaUrls[0]) {
+        effectiveParams = {
+          ...params,
+          mediaUrls: [normalizedUrl, ...params.mediaUrls.slice(1)],
+        };
+      }
+    }
+
+    const result = await adapter.publish(refreshedAccount, effectiveParams);
 
     updated.externalPostId = result.externalPostId;
     if (typeof (result as { permalink?: string }).permalink === 'string') {

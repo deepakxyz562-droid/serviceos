@@ -97,6 +97,7 @@ import { GbpStandeeModal } from '@/components/bgos/gbp-standee-modal';
 import { RankTracker } from '@/components/bgos/rank-tracker';
 import { GbpPageCreateModal } from '@/components/bgos/gbp-page-create-modal';
 import { GbpWebsiteBuilderCard } from '@/components/bgos/gbp-website-builder-card';
+import { WebsiteAiAuditCard } from '@/components/bgos/website-ai-audit-card';
 import {
   WebMediaMetadataDialog,
   type WebMediaItem,
@@ -765,11 +766,7 @@ export function ReviewsView({
             status: (r.status as 'published' | 'pending' | 'hidden') || 'published',
             replyText: parsedResp?.text || undefined,
             replyEdited: parsedResp?.repliedAt ? 'Published' : undefined,
-            replyKeywords: parsedResp?.keywords || (parsedResp?.text ? [
-              { keyword: 'best crm software for small businesses', volume: '500 ↗' },
-              { keyword: 'software development company', volume: '500 ↗' },
-              { keyword: 'software development company in Patna', volume: '100 ↗' },
-            ] : undefined),
+            replyKeywords: parsedResp?.keywords || undefined,
             location: r.location || r.city || undefined,
             reviewCount: r.reviewCount || 1,
           };
@@ -2028,6 +2025,7 @@ export function ReviewsView({
         {[
           { id: 'overview', label: 'Overview', Icon: BarChart3 },
           { id: 'rankings', label: 'Rankings & History', Icon: TrendingUp },
+          { id: 'website-seo', label: 'Website & AI SEO', Icon: Globe },
           { id: 'reviews', label: 'Reviews', count: totalReviews, Icon: Star },
           { id: 'generate-replies', label: 'Generate Replies', count: unrepliedCount, Icon: Sparkles },
           { id: 'review-requests', label: 'Review Requests', Icon: Send },
@@ -2068,7 +2066,11 @@ export function ReviewsView({
       {activeSubTab === 'overview' && (
         <div className="space-y-5">
           {/* Google Business Website Builder Card */}
-          <GbpWebsiteBuilderCard businessSlug={businessSlug} isGbpConnected={isGbpConnected} />
+          <GbpWebsiteBuilderCard
+            businessSlug={businessSlug}
+            isGbpConnected={isGbpConnected}
+            onOpenSeoAudit={() => setActiveSubTab('website-seo')}
+          />
 
           {/* ─── 0. Google Business Connection Notice ─── */}
           {!isGbpConnected && !isDemo && !initialReviews && (
@@ -2135,7 +2137,16 @@ export function ReviewsView({
                 Gets your profile completion to 100% by suggesting SEO-friendly keywords and optimizing your GBP description with localized rich content.
               </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setActiveSubTab('website-seo')}
+                className="border-emerald-400/40 bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-200 text-xs font-semibold rounded-xl gap-1.5"
+              >
+                <Globe className="size-3.5" />
+                <span>Website &amp; AI SEO</span>
+              </Button>
               <Button
                 size="sm"
                 onClick={handleGenerateGbpKeywords}
@@ -3183,6 +3194,11 @@ export function ReviewsView({
           TAB: LOCAL RANKING STATUS & IMPROVEMENT HISTORY
          ═══════════════════════════════════════════════════════════════════════ */}
       {activeSubTab === 'rankings' && <RankTracker />}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          TAB: WEBSITE SEO & AI SEARCH READINESS (BGOS 2.0)
+         ═══════════════════════════════════════════════════════════════════════ */}
+      {activeSubTab === 'website-seo' && <WebsiteAiAuditCard />}
 
       {/* ═══════════════════════════════════════════════════════════════════════
           TAB 2: REVIEWS (TRIAGE WORKSTATION, TELEMETRY STRIP & AI REPLY)

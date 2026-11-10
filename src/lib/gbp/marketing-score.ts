@@ -21,6 +21,8 @@ export interface MarketingScoreResult {
   postsLast30Days: number;
   photosLast30Days: number;
   computedAt: string;
+  presenceMode?: 'no_website' | 'bgos_hosted' | 'custom_domain';
+  websiteSeoScore?: number | null;
 }
 
 function clamp0to100(n: number): number {
@@ -158,6 +160,8 @@ export async function computeMarketingScore(tenantId: string, bypassCache = fals
     postsLast30Days: posts30d,
     photosLast30Days: photos30d,
     computedAt: new Date().toISOString(),
+    presenceMode: audit.presenceMode,
+    websiteSeoScore: audit.websiteSeoScore ?? null,
   };
 
   SCORE_CACHE.set(tenantId, { data: finalResult, expires: Date.now() + 5 * 60 * 1000 });

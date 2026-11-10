@@ -13,7 +13,7 @@ while(!stopping){
    const response=await fetch(url,{method:'POST',headers:{Authorization:`Bearer ${secret}`},signal:AbortSignal.timeout(600000)});
    if(!response.ok)throw new Error(`Autopilot endpoint returned ${response.status}`);
    const result=await response.json();cursor=result.nextCursor;
-   console.log(JSON.stringify({event:'autopilot_tick',processed:result.processedCount,submitted:result.publishedCount}));
+   console.log(JSON.stringify({event:'autopilot_tick',dueProcessed:result.duePostsProcessed||0,duePublished:result.duePostsPublished||0,processed:result.processedCount,submitted:result.publishedCount}));
   }while(cursor&&!stopping);
   const waRes=await fetch(new URL('/api/cron/whatsapp-followup',origin),{method:'POST',headers:{Authorization:`Bearer ${secret}`},signal:AbortSignal.timeout(60000)}).catch(()=>null);
   if(waRes?.ok){

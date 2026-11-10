@@ -297,6 +297,14 @@ const TABLE_MAP: Record<string, string> = {
   aiInvoiceItem: 'AiInvoiceItem',
   aiPayment: 'AiPayment',
   aiTemplate: 'AiTemplate',
+  // ── BGOS SEO & Local Growth ──
+  gbpScoreSnapshot: 'GbpScoreSnapshot',
+  competitor: 'Competitor',
+  trackedKeyword: 'TrackedKeyword',
+  websiteAuditSnapshot: 'WebsiteAuditSnapshot',
+  rankGridScan: 'RankGridScan',
+  aiVisibilityScan: 'AiVisibilityScan',
+  seoFixTask: 'SeoFixTask',
 };
 
 // Known missing tables in Supabase (return empty results gracefully)
@@ -360,6 +368,7 @@ const TABLES_WITHOUT_UPDATED_AT = new Set<string>([
   'EventWebhookLog',
   'ExecutionNodeData',
   'FormResponse',
+  'GbpScoreSnapshot',
   'HolidayCalendar',
   'JobPhoto',
   'JobSignature',
@@ -625,6 +634,11 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
     metaLeads: { targetTable: 'MetaLead', targetFkColumn: 'tenantId', isMany: true },
     googleAdsLeads: { targetTable: 'GoogleAdsLead', targetFkColumn: 'tenantId', isMany: true },
     publicChatSessions: { targetTable: 'PublicChatSession', targetFkColumn: 'tenantId', isMany: true },
+    socialAccounts: { targetTable: 'SocialAccount', targetFkColumn: 'tenantId', isMany: true },
+    socialPosts: { targetTable: 'SocialPost', targetFkColumn: 'tenantId', isMany: true },
+  },
+  SocialAccount: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
   },
   // ── Public Live Chat relations ──
   // PublicChatSession.messages is a one-to-many: PublicChatMessage has
@@ -782,6 +796,7 @@ interface FindManyOptions {
   orderBy?: Record<string, string> | Record<string, string>[];
   skip?: number;
   take?: number;
+  cursor?: Record<string, unknown>;
   select?: Record<string, boolean>;
   distinct?: string[];
 }
@@ -973,6 +988,168 @@ type QueryMethods = {
   [K in 'or' | 'not' | 'eq' | 'neq' | 'in' | 'is' | 'ilike' | 'gt' | 'gte' | 'lt' | 'lte' | 'order']:
     (...args: Parameters<SelectBuilder[K]>) => unknown;
 };
+
+// ── Helper: Resolve Prisma relation filters (some/none/is/isNot) ────────────
+//
+// PostgREST has no direct equivalent for Prisma's relation filters such as
+//   `where: { socialAccounts: { some: { isActive: true } } }`
+// Previously, `applyWhereFilters` treated `socialAccounts` as an unknown operator
+// object and silently dropped it, forcing full-table scans (e.g. 94,555 tenants
+// instead of the 5 tenants with active social accounts).
+//
+// `resolveRelationWhereFilters` resolves relation keys using RELATION_MAP via a
+// fast indexed lookup on the target table and rewrites them into scalar
+// `in` / `notIn` constraints before building the PostgREST query.
+export async function resolveRelationWhereFilters(
+  tableName: string,
+  where?: WhereInput,
+  client: Pick<SupabaseClient, 'from'> = getAdminClient(),
+): Promise<{ where?: WhereInput; impossible: boolean }> {
+  if (!where || typeof where !== 'object') {
+    return { where, impossible: false };
+  }
+
+  const modelRelations = RELATION_MAP[tableName] || {};
+  const cleaned: WhereInput = { ...where };
+  const extraAnd: WhereInput[] = [];
+
+  if (Array.isArray(cleaned.AND)) {
+    const resolvedAnd: WhereInput[] = [];
+    for (const cond of cleaned.AND as WhereInput[]) {
+      const sub = await resolveRelationWhereFilters(tableName, cond, client);
+      if (sub.impossible) return { where, impossible: true };
+      if (sub.where && Object.keys(sub.where).length > 0) {
+        resolvedAnd.push(sub.where);
+      }
+    }
+    if (resolvedAnd.length > 0) cleaned.AND = resolvedAnd;
+    else delete cleaned.AND;
+  }
+
+  if (Array.isArray(cleaned.OR)) {
+    const resolvedOr: WhereInput[] = [];
+    for (const cond of cleaned.OR as WhereInput[]) {
+      const sub = await resolveRelationWhereFilters(tableName, cond, client);
+      if (!sub.impossible && sub.where) {
+        resolvedOr.push(sub.where);
+      }
+    }
+    if (resolvedOr.length === 0) return { where, impossible: true };
+    cleaned.OR = resolvedOr;
+  }
+
+  for (const [field, value] of Object.entries(where)) {
+    if (field === 'AND' || field === 'OR' || field === 'NOT' || value === undefined) continue;
+    const rel = modelRelations[field];
+    if (!rel || value === null || typeof value !== 'object' || Array.isArray(value) || value instanceof Date) {
+      continue;
+    }
+
+    const relOp = value as {
+      some?: WhereInput;
+      none?: WhereInput;
+      every?: WhereInput;
+      is?: WhereInput | null;
+      isNot?: WhereInput | null;
+    };
+
+    const isRelationFilter =
+      'some' in relOp || 'none' in relOp || 'every' in relOp || 'is' in relOp || 'isNot' in relOp;
+    if (!isRelationFilter) continue;
+
+    delete cleaned[field];
+
+    const collectTargetKeys = async (subWhere?: WhereInput): Promise<{ ids: string[]; impossible: boolean }> => {
+      const resolvedSub = await resolveRelationWhereFilters(rel.targetTable, subWhere, client);
+      if (resolvedSub.impossible) return { ids: [], impossible: true };
+
+      const keyCol = rel.targetFkColumn || 'id';
+      let q = client.from(rel.targetTable).select(keyCol);
+      if (resolvedSub.where) applyWhereFilters(q, resolvedSub.where);
+      const { data, error } = await q.range(0, 4999);
+      if (error || !Array.isArray(data)) {
+        if (error) {
+          console.warn(`[SupabaseDB] relation filter lookup on ${rel.targetTable} failed:`, error.message);
+        }
+        return { ids: [], impossible: false };
+      }
+      const uniqueIds = new Set<string>();
+      for (const row of data as unknown as Record<string, unknown>[]) {
+        const val = row[keyCol];
+        if (typeof val === 'string' && val.length > 0) uniqueIds.add(val);
+      }
+      return { ids: [...uniqueIds], impossible: false };
+    };
+
+    // Handle `some` or `is: { ... }` (positive match)
+    const positiveWhere =
+      relOp.some !== undefined
+        ? relOp.some
+        : relOp.is !== undefined && relOp.is !== null
+          ? relOp.is
+          : relOp.isNot === null
+            ? {}
+            : undefined;
+
+    if (positiveWhere !== undefined) {
+      if (relOp.isNot === null && !rel.targetFkColumn && rel.fkColumn) {
+        extraAnd.push({ [rel.fkColumn]: { not: null } });
+      } else {
+        const { ids } = await collectTargetKeys(positiveWhere);
+        if (ids.length === 0) return { where, impossible: true };
+        const parentField = rel.targetFkColumn ? 'id' : rel.fkColumn!;
+        if (ids.length <= 250) {
+          extraAnd.push({ [parentField]: { in: ids } });
+        } else {
+          // Chunk large IN lists into an OR of bounded IN groups so PostgREST URL limits stay safe
+          const chunks: WhereInput[] = [];
+          for (let i = 0; i < ids.length; i += 250) {
+            chunks.push({ [parentField]: { in: ids.slice(i, i + 250) } });
+          }
+          extraAnd.push({ OR: chunks });
+        }
+      }
+    }
+
+    // Handle `none` or `is: null` (negative match)
+    if (relOp.none !== undefined || relOp.is === null) {
+      if (relOp.is === null && !rel.targetFkColumn && rel.fkColumn) {
+        extraAnd.push({ [rel.fkColumn]: null });
+      } else {
+        const negSub = relOp.is === null ? {} : relOp.none;
+        const { ids, impossible: subImpossible } = await collectTargetKeys(negSub);
+        if (!subImpossible && ids.length > 0) {
+          const parentField = rel.targetFkColumn ? 'id' : rel.fkColumn!;
+          if (ids.length <= 250) {
+            extraAnd.push({ [parentField]: { notIn: ids } });
+          } else {
+            for (let i = 0; i < ids.length; i += 250) {
+              extraAnd.push({ [parentField]: { notIn: ids.slice(i, i + 250) } });
+            }
+          }
+        }
+      }
+    }
+
+    // Handle `every` as `none: { NOT: every }`
+    if (relOp.every !== undefined) {
+      const { ids, impossible: subImpossible } = await collectTargetKeys({ NOT: relOp.every });
+      if (!subImpossible && ids.length > 0) {
+        const parentField = rel.targetFkColumn ? 'id' : rel.fkColumn!;
+        for (let i = 0; i < ids.length; i += 250) {
+          extraAnd.push({ [parentField]: { notIn: ids.slice(i, i + 250) } });
+        }
+      }
+    }
+  }
+
+  if (extraAnd.length > 0) {
+    const existingAnd = Array.isArray(cleaned.AND) ? (cleaned.AND as WhereInput[]) : [];
+    cleaned.AND = [...existingAnd, ...extraAnd];
+  }
+
+  return { where: cleaned, impossible: false };
+}
 
 export function applyWhereFilters(
   query: QueryMethods,
@@ -1438,8 +1615,11 @@ async function resolveIncludes(
     }
 
     const rel = modelRelations[relName];
-    const relInclude = relConfig as Record<string, unknown>;
+    const relInclude = (relConfig && typeof relConfig === 'object' ? relConfig : {}) as Record<string, unknown>;
     const relSelect = (relInclude?.select as Record<string, boolean>) || undefined;
+    const relWhere = (relInclude?.where as WhereInput) || undefined;
+    const relOrderBy = (relInclude?.orderBy as Record<string, string> | Record<string, string>[]) || undefined;
+    const relTake = typeof relInclude?.take === 'number' && relInclude.take >= 0 ? relInclude.take : undefined;
     // Nested `include` (e.g. properties: { include: { contacts: true } })
     // — recursively resolveIncludes on the related rows after we fetch them.
     const nestedInclude = (relInclude?.include as Record<string, unknown>) || undefined;
@@ -1492,10 +1672,13 @@ async function resolveIncludes(
         const mainIds = results.map(r => r.id).filter(Boolean) as string[];
         if (mainIds.length === 0) return;
 
-        const { data: related, error } = await client
+        let relQuery = client
           .from(rel.targetTable)
           .select(finalSelectStr)
           .in(targetFkCol, mainIds);
+        if (relWhere) applyWhereFilters(relQuery, relWhere);
+        if (relOrderBy) applyOrderBy(relQuery, relOrderBy);
+        const { data: related, error } = await relQuery;
 
         if (error || !related) return;
 
@@ -1517,16 +1700,20 @@ async function resolveIncludes(
         }
 
         for (const main of results) {
-          main[relName] = grouped.get(main.id as string) || [];
+          const list = grouped.get(main.id as string) || [];
+          main[relName] = relTake !== undefined ? list.slice(0, relTake) : list;
         }
       } else if (rel.targetFkColumn) {
         const mainIds = results.map(r => r.id).filter(Boolean) as string[];
         if (mainIds.length === 0) return;
 
-        const { data: related, error } = await client
+        let relQuery = client
           .from(rel.targetTable)
           .select(finalSelectStr)
           .in(rel.targetFkColumn, mainIds);
+        if (relWhere) applyWhereFilters(relQuery, relWhere);
+        if (relOrderBy) applyOrderBy(relQuery, relOrderBy);
+        const { data: related, error } = await relQuery;
 
         if (error || !related) return;
 
@@ -1694,7 +1881,39 @@ class SupabaseModel {
       return [];
     }
 
-    const { where, include, orderBy, skip, take, select, distinct } = options;
+    const { where, include, orderBy, skip, take, cursor, select, distinct } = options;
+
+    // Resolve Prisma relation filters (e.g. socialAccounts: { some: { isActive: true } })
+    const resolvedRelWhere = await resolveRelationWhereFilters(this.tableName, where, this.client);
+    if (resolvedRelWhere.impossible) {
+      return [];
+    }
+
+    // Translate Prisma keyset `cursor` + `skip` into an indexed range predicate
+    let effectiveSkip = skip;
+    let cursorWhere: WhereInput | undefined;
+    if (cursor && typeof cursor === 'object') {
+      const entries = Object.entries(cursor).filter(([, v]) => v !== undefined && v !== null);
+      if (entries.length === 1) {
+        const [cursorField, cursorVal] = entries[0];
+        const orderList = Array.isArray(orderBy) ? orderBy : orderBy ? [orderBy] : [];
+        const matchingOrder = orderList.find((o) => cursorField in o);
+        const dir = matchingOrder ? matchingOrder[cursorField] : 'asc';
+        const isDesc = String(dir).toLowerCase() === 'desc';
+        const skipCursorRow = (skip ?? 0) >= 1;
+        const op = skipCursorRow ? (isDesc ? 'lt' : 'gt') : (isDesc ? 'lte' : 'gte');
+        cursorWhere = { [cursorField]: { [op]: cursorVal as WhereValue } };
+        if (skipCursorRow) {
+          effectiveSkip = Math.max(0, (skip || 0) - 1);
+        }
+      }
+    }
+
+    const effectiveWhere = cursorWhere
+      ? resolvedRelWhere.where
+        ? { AND: [resolvedRelWhere.where, cursorWhere] }
+        : cursorWhere
+      : resolvedRelWhere.where;
 
     // Build select string: use specific columns if `select` is provided,
     // otherwise '*'. This mirrors findFirst/findUnique behavior and keeps
@@ -1719,10 +1938,10 @@ class SupabaseModel {
 
     let query = this.client.from(this.tableName).select(selectStr);
 
-    if (where) applyWhereFilters(query, where);
+    if (effectiveWhere) applyWhereFilters(query, effectiveWhere);
     if (orderBy) applyOrderBy(query, orderBy);
-    if (skip !== undefined || take !== undefined) {
-      const from = skip || 0;
+    if (effectiveSkip !== undefined || take !== undefined) {
+      const from = effectiveSkip || 0;
       const to = take !== undefined ? from + take - 1 : from + 49;
       query.range(from, to);
     }
@@ -1746,10 +1965,10 @@ class SupabaseModel {
       )) {
         console.warn(`[SupabaseDB] findMany on ${this.tableName} failed on select="${selectStr}" (${error.message}), retrying with select('*')...`);
         let fallbackQuery = this.client.from(this.tableName).select('*');
-        if (where) applyWhereFilters(fallbackQuery, where);
+        if (effectiveWhere) applyWhereFilters(fallbackQuery, effectiveWhere);
         if (orderBy) applyOrderBy(fallbackQuery, orderBy);
-        if (skip !== undefined || take !== undefined) {
-          const from = skip || 0;
+        if (effectiveSkip !== undefined || take !== undefined) {
+          const from = effectiveSkip || 0;
           const to = take !== undefined ? from + take - 1 : from + 49;
           fallbackQuery.range(from, to);
         }
@@ -1880,6 +2099,10 @@ class SupabaseModel {
 
     const { where, include, orderBy, select } = options;
 
+    const resolvedRelWhere = await resolveRelationWhereFilters(this.tableName, where, this.client);
+    if (resolvedRelWhere.impossible) return null;
+    const effectiveWhere = resolvedRelWhere.where;
+
     // Split relation entries out of `select` (same logic as findMany —
     // see comment there). PostgREST rejects relation names as columns.
     const { columnSelect, relationInclude } = splitSelectAndRelations(this.tableName, select as Record<string, unknown> | undefined);
@@ -1895,7 +2118,7 @@ class SupabaseModel {
     }
     let query = this.client.from(this.tableName).select(selectStr);
 
-    if (where) applyWhereFilters(query, where);
+    if (effectiveWhere) applyWhereFilters(query, effectiveWhere);
     if (orderBy) applyOrderBy(query, orderBy);
 
     let { data, error } = await withCircuitBreaker(this.tableName, () =>
@@ -1912,7 +2135,7 @@ class SupabaseModel {
       )) {
         console.warn(`[SupabaseDB] findFirst on ${this.tableName} failed on select="${selectStr}" (${error.message}), retrying with select('*')...`);
         let fallbackQuery = this.client.from(this.tableName).select('*');
-        if (where) applyWhereFilters(fallbackQuery, where);
+        if (effectiveWhere) applyWhereFilters(fallbackQuery, effectiveWhere);
         if (orderBy) applyOrderBy(fallbackQuery, orderBy);
         const fallbackRes = await withCircuitBreaker(this.tableName, () => fallbackQuery.limit(1).single());
         if (fallbackRes.error && fallbackRes.error.code === 'PGRST116') return null;
@@ -2383,9 +2606,13 @@ class SupabaseModel {
     if (this.isMissingTable) return 0;
 
     const { where } = options;
+    const resolvedRelWhere = await resolveRelationWhereFilters(this.tableName, where, this.client);
+    if (resolvedRelWhere.impossible) return 0;
+    const effectiveWhere = resolvedRelWhere.where;
+
     let query = this.client.from(this.tableName).select('*', { count: 'exact', head: true });
 
-    if (where) applyWhereFilters(query, where);
+    if (effectiveWhere) applyWhereFilters(query, effectiveWhere);
 
     const { count, error } = await withCircuitBreaker(this.tableName, () => query);
     if (error) {
@@ -2400,6 +2627,9 @@ class SupabaseModel {
     if (this.isMissingTable) return { count: 0 };
 
     const { where, data } = options;
+    const resolvedRelWhere = await resolveRelationWhereFilters(this.tableName, where, this.client);
+    if (resolvedRelWhere.impossible) return { count: 0 };
+    const effectiveWhere = resolvedRelWhere.where;
 
     // Handle Prisma atomic operators ({ increment }, { decrement }, { multiply },
     // { divide }) per matching row so PostgREST receives computed numeric values
@@ -2419,7 +2649,7 @@ class SupabaseModel {
 
     if (hasAtomicOp) {
       const fetchQuery = this.client.from(this.tableName).select('*');
-      if (where) applyWhereFilters(fetchQuery, where);
+      if (effectiveWhere) applyWhereFilters(fetchQuery, effectiveWhere);
       const { data: rows, error: fetchError } = await fetchQuery;
       if (fetchError) {
         console.error(`[SupabaseDB] updateMany pre-fetch error on ${this.tableName}:`, fetchError.message);
@@ -2435,7 +2665,7 @@ class SupabaseModel {
         if (row.id !== undefined) {
           rowQuery = rowQuery.eq('id', row.id as string | number);
         }
-        if (where) applyWhereFilters(rowQuery, where);
+        if (effectiveWhere) applyWhereFilters(rowQuery, effectiveWhere);
 
         let { count: rowCount, error: rowError } = await rowQuery;
         let retryCount = 0;
@@ -2453,7 +2683,7 @@ class SupabaseModel {
           if (row.id !== undefined) {
             retryRowQuery = retryRowQuery.eq('id', row.id as string | number);
           }
-          if (where) applyWhereFilters(retryRowQuery, where);
+          if (effectiveWhere) applyWhereFilters(retryRowQuery, effectiveWhere);
           const retry = await retryRowQuery;
           rowCount = retry.count;
           rowError = retry.error;
@@ -2473,7 +2703,7 @@ class SupabaseModel {
 
     let query = this.client.from(this.tableName).update(serialized, { count: 'exact' });
 
-    if (where) applyWhereFilters(query, where);
+    if (effectiveWhere) applyWhereFilters(query, effectiveWhere);
 
     let { count, error } = await query;
 
@@ -2490,7 +2720,7 @@ class SupabaseModel {
       delete serialized[badCol];
       retryCount++;
       let retryQuery = this.client.from(this.tableName).update(serialized, { count: 'exact' });
-      if (where) applyWhereFilters(retryQuery, where);
+      if (effectiveWhere) applyWhereFilters(retryQuery, effectiveWhere);
       const retry = await retryQuery;
       count = retry.count;
       error = retry.error;
@@ -2508,9 +2738,13 @@ class SupabaseModel {
     if (this.isMissingTable) return { count: 0 };
 
     const { where } = options;
+    const resolvedRelWhere = await resolveRelationWhereFilters(this.tableName, where, this.client);
+    if (resolvedRelWhere.impossible) return { count: 0 };
+    const effectiveWhere = resolvedRelWhere.where;
+
     let query = this.client.from(this.tableName).delete({ count: 'exact' });
 
-    if (where) applyWhereFilters(query, where);
+    if (effectiveWhere) applyWhereFilters(query, effectiveWhere);
 
     const { count, error } = await query;
     if (error) {

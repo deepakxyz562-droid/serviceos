@@ -144,7 +144,10 @@ export async function POST(request: NextRequest) {
     const updates: Record<string, any> = {};
     if (accountIds !== undefined) updates.accountIds = [...new Set(accountIds)];
     if (effectiveTemplateIds !== undefined) updates.templateIds = [...new Set(effectiveTemplateIds)];
-    if (typeof timeZone === 'string') updates.timeZone = timeZone;
+    if (typeof timeZone === 'string' && timeZone !== current.timeZone) {
+      updates.timeZone = timeZone;
+      updates.timeZoneExplicit = true;
+    }
     if (typeof enabled === 'boolean') updates.enabled = enabled;
     if (duration) updates.duration = duration;
     if (typeof customDays === 'number' && customDays > 0) updates.customDays = customDays;

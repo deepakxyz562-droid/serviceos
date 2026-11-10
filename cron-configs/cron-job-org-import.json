@@ -126,6 +126,18 @@
         "x-cron-secret": "YOUR_CRON_SECRET"
       },
       "_comment": "Polls active Google Business Profile accounts every 30 min to import new reviews and dispatch in-app + web/mobile push alerts immediately (also included in daily master as a daily safety net)."
+    },
+    {
+      "name": "social-autopilot-and-publish-due",
+      "url": "https://YOUR-DOMAIN.com/api/cron/social-autopilot",
+      "schedule": "*/5 * * * *",
+      "scheduleHuman": "Every 5 minutes",
+      "method": "POST",
+      "headers": {
+        "Authorization": "Bearer YOUR_CRON_SECRET"
+      },
+      "timeout": 120,
+      "_comment": "Safety net for both scheduled SocialPosts (drains status='scheduled' where scheduledAt <= now) and daily Marketing Autopilot runs. Requires Authorization: Bearer CRON_SECRET."
     }
   ],
   "_daily_subcrons_handled_by_master": [

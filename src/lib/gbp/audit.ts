@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { resolveBusinessPresenceMode, type BusinessPresenceMode } from '@/lib/seo/presence-mode';
 
 export interface AuditCheckItem {
   id: string;
@@ -20,6 +21,8 @@ export interface GbpAuditResult {
   recommendations: string[];
   connectedToGoogle: boolean;
   reviewsCount: number;
+  presenceMode?: BusinessPresenceMode;
+  websiteSeoScore?: number | null;
 }
 
 function safeParseArray(json: string | null | undefined): string[] {
@@ -60,11 +63,13 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
   ]);
 
   const [reviewsCount, photosCount, servicesCount] = await Promise.all([
-    db.review.count({ where: { tenantId, ...reviewScope } }),
-    db.socialPost.count({
-      where: { tenantId, mediaUrls: { not: '[]' } },
-    }),
-    db.service.count({ where: { tenantId } }),
+    db.review?.count?.({ where: { tenantId, ...reviewScope } }).catch(() => 0) ?? 0,
+    db.socialPost
+      ?.count?.({
+        where: { tenantId, mediaUrls: { not: '[]' } },
+      })
+      .catch(() => 0) ?? 0,
+    db.service?.count?.({ where: { tenantId } }).catch(() => 0) ?? 0,
   ]);
 
   const brand = tenant.brandProfile;
@@ -72,6 +77,7 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
   try {
     settings = JSON.parse(tenant.settingsJson || '{}');
   } catch {}
+  const presence = resolveBusinessPresenceMode({ tenant });
 
   const checks: AuditCheckItem[] = [
     {
@@ -130,9 +136,19 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
       id: 'booking_link',
       category: 'Conversion',
       label: 'Instant Appointment / Direct Booking Link',
-      passed: Boolean(settings.bookingLink || (brand as any)?.bookingLink || settings.onlineBookingEnabled === true),
+      passed: Boolean(
+        settings.bookingLink ||
+          (brand as any)?.bookingLink ||
+          settings.onlineBookingEnabled === true ||
+          (tenant as any).publicProfileEnabled === true
+      ),
       scoreWeight: 15,
-      currentValue: settings.bookingLink || (brand as any)?.bookingLink ? 'Booking link configured' : 'Not configured',
+      currentValue:
+        settings.bookingLink || (brand as any)?.bookingLink
+          ? 'Booking link configured'
+          : (tenant as any).publicProfileEnabled
+            ? 'Hosted BGOS booking profile active'
+            : 'Not configured',
       recommendation: 'Direct appointment links turn Maps searchers into booked revenue immediately.',
       actionRequired: 'Add your booking link in Settings → Business Profile, then sync it to your GBP profile.',
     },
@@ -172,5 +188,10 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
     recommendations: missingChecks.map((m) => m.recommendation),
     connectedToGoogle: Boolean(googleAccount),
     reviewsCount,
+    presenceMode: presence.mode,
+    websiteSeoScore:
+      typeof settings.seoAuditSnapshot?.websiteScore === 'number'
+        ? settings.seoAuditSnapshot.websiteScore
+        : null,
   };
 }

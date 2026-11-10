@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
-import { googleBusinessAdapter } from '@/lib/social/adapters/googlebusiness';
+import { publishPost } from '@/lib/social/publisher';
 import { logActivity } from '@/lib/activity-log';
 
 export const dynamic = 'force-dynamic';
@@ -111,11 +111,14 @@ Requirements:
 
       let postContent = '';
       try {
-        const aiRes = await callAI([
-          { role: 'system', content: 'You are an expert Google Business Profile copywriter.' },
-          { role: 'user', content: prompt },
-        ]);
-        postContent = typeof aiRes === 'string' ? aiRes : (aiRes as any)?.text || '';
+        const aiRes = await callAI({
+          messages: [
+            { role: 'system', content: 'You are an expert Google Business Profile copywriter.' },
+            { role: 'user', content: prompt },
+          ],
+          usageContext: { tenantId: tenant.id, feature: 'gbp_auto_post' },
+        });
+        postContent = typeof aiRes === 'string' ? aiRes : (aiRes as any)?.content || (aiRes as any)?.text || '';
       } catch {
         postContent = `Looking for trusted ${industry} in ${location}? ${businessName} delivers reliable, top-rated service backed by 5-star customer reviews. Contact our team today for fast quotes and priority appointment slots! #LocalUpdate`;
       }
@@ -130,7 +133,7 @@ Requirements:
         where: {
           tenantId: tenant.id,
           status: 'scheduled',
-          mediaUrls: { not: null },
+          mediaUrls: { not: '[]' },
         },
         orderBy: { createdAt: 'asc' },
         select: { id: true, mediaUrls: true },
@@ -151,22 +154,25 @@ Requirements:
           tenantId: tenant.id,
           content: postContent.trim(),
           mediaUrls: JSON.stringify(mediaUrls),
-          status: 'publishing',
+          publishTargets: JSON.stringify([
+            { platform: 'googlebusiness', socialAccountId: gbpAccount.id, status: 'pending' },
+          ]),
+          gbpPostType: 'whats_new',
+          status: 'scheduled',
+          createdById: 'system-gbp-autopost',
         },
       });
 
-      // 4. Publish directly to Google Business Profile via adapter
+      // 4. Publish via orchestrator (decrypts + refreshes OAuth token automatically)
       try {
-        await googleBusinessAdapter.publish(gbpAccount, {
-          content: postContent.trim(),
-          mediaUrls,
-          gbpPostType: 'whats_new',
-        });
-
-        await db.socialPost.update({
+        await publishPost(postRecord.id);
+        const finalized = await db.socialPost.findUnique({
           where: { id: postRecord.id },
-          data: { status: 'published' },
+          select: { status: true, failureReason: true },
         });
+        if (finalized?.status !== 'published') {
+          throw new Error(finalized?.failureReason || `GBP publish status: ${finalized?.status || 'failed'}`);
+        }
 
         publishedCount++;
 
@@ -176,7 +182,8 @@ Requirements:
             action: 'auto_gbp_post_published',
             entityType: 'social_post',
             entityId: postRecord.id,
-            details: { platform: 'googlebusiness', contentLength: postContent.length },
+            description: `Auto-posted GBP update (${postContent.length} chars).`,
+            metadataJson: JSON.stringify({ platform: 'googlebusiness', contentLength: postContent.length }),
           });
         } catch {}
       } catch (publishErr) {

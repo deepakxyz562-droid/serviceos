@@ -2,6 +2,7 @@ import { autopilotDue } from '@/lib/social/autopilot-schedule';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { generateDailyAutopilotPost, getTenantAutopilotConfig } from '@/lib/social/autopilot';
+import { publishDueSocialPosts } from '@/lib/social/due-publisher';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,9 +10,9 @@ export const dynamic = 'force-dynamic';
  * GET/POST /api/cron/social-autopilot
  *
  * Daily Autopilot Posting Engine:
- * Scans all tenants with active autopilot configurations for Google Business,
- * Instagram, and Facebook. Automatically generates and publishes their daily
- * post if not already posted today.
+ * - On the initial batch (no cursor), drains any due manually scheduled SocialPosts.
+ * - Scans all tenants with active autopilot configurations for Google Business,
+ *   Instagram, and Facebook and publishes their daily post if due.
  */
 export async function GET(request: NextRequest) {
   return handleCronAutopilot(request);
@@ -27,6 +28,18 @@ async function handleCronAutopilot(request: NextRequest) {
     const cronSecret = process.env.CRON_SECRET;
     if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) return NextResponse.json({error:'Unauthorized'},{status:401});
 
+    const now = new Date();
+    const cursor = request.nextUrl.searchParams.get('cursor');
+
+    // 0. Drain due scheduled SocialPosts on the initial pass (no cursor)
+    let dueSummary = { processed: 0, succeeded: 0, failed: 0, recoveredStale: 0, errors: [] as Array<{ postId: string; error: string }> };
+    if (!cursor) {
+      dueSummary = await publishDueSocialPosts({ now }).catch((err) => {
+        console.warn('[cron/social-autopilot] Due post dispatch warning:', err instanceof Error ? err.message : err);
+        return dueSummary;
+      });
+    }
+
     // 1. Fetch tenants with social accounts
     const tenants = await db.tenant.findMany({
       where: {
@@ -40,12 +53,11 @@ async function handleCronAutopilot(request: NextRequest) {
       },
       take: 25,
       orderBy:{id:'asc'},
-      ...(request.nextUrl.searchParams.get('cursor')?{cursor:{id:request.nextUrl.searchParams.get('cursor')!},skip:1}:{}),
+      ...(cursor?{cursor:{id:cursor},skip:1}:{}),
     });
 
     let processedCount = 0;
     let publishedCount = 0;
-    const now = new Date();
 
     for (const tenant of tenants) {
       const config = await getTenantAutopilotConfig(tenant.id);
@@ -64,6 +76,9 @@ async function handleCronAutopilot(request: NextRequest) {
       tenantsChecked: tenants.length,
       processedCount,
       publishedCount,
+      duePostsProcessed: dueSummary.processed,
+      duePostsPublished: dueSummary.succeeded,
+      duePostsFailed: dueSummary.failed,
       timestamp: now.toISOString(),
     });
   } catch (error: any) {

@@ -175,6 +175,12 @@ export default function ToolsScreen() {
           onPress={() => router.push('/keyword-planner')}
         />
         <MenuRow
+          title="AI Search & SEO Audit"
+          detail="Website audit, Maps Geo-Grid & ChatGPT/Gemini visibility"
+          icon="query-stats"
+          onPress={() => router.push('/seo-growth')}
+        />
+        <MenuRow
           title="4-Tier Growth Report"
           detail="Interactions → Enquiries → Qualified Leads → Revenue"
           icon="insights"

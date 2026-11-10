@@ -3,12 +3,13 @@ import { getAuthUser } from '@/lib/auth';
 import { requireBgosEntitled } from '@/lib/bgos-entitlement';
 import { db } from '@/lib/db';
 import { isMissingTableError } from '@/lib/gbp/marketing-score';
+import { resolveTenantLocale } from '@/lib/locale-timezone';
 
 export const dynamic = 'force-dynamic';
 
 const MAX_TRACKED_KEYWORDS = 20;
 
-interface TrackedKeywordRow {
+export interface TrackedKeywordRow {
   id: string;
   keyword: string;
   city: string | null;
@@ -16,25 +17,57 @@ interface TrackedKeywordRow {
   score: number | null;
   position: number | null;
   source: string;
+  mapsRank?: number | null;
+  organicRank?: number | null;
+  aiOverviewCited?: boolean | null;
+  lastCheckedAt?: string | null;
 }
 
-const DEFAULT_KEYWORDS: TrackedKeywordRow[] = [
-  { id: 'kw-1', keyword: 'software development company in Patna', city: 'Patna', country: 'India', score: 100, position: 1, source: 'ai' },
-  { id: 'kw-2', keyword: 'software company in Patna', city: 'Patna', country: 'India', score: 100, position: 2, source: 'ai' },
-  { id: 'kw-3', keyword: 'best crm software for small businesses', city: 'Patna', country: 'India', score: 500, position: 3, source: 'ai' },
-  { id: 'kw-4', keyword: 'sales software for small business', city: 'Patna', country: 'India', score: 500, position: 4, source: 'ai' },
-  { id: 'kw-5', keyword: 'business software solutions Patna', city: 'Patna', country: 'India', score: 100, position: 5, source: 'ai' },
-  { id: 'kw-6', keyword: 'software development company', city: 'Patna', country: 'India', score: 500, position: 6, source: 'ai' },
-];
-
-function readSettingsJson(raw: string | null | undefined): Record<string, unknown> {
+function readSettingsJson(raw: string | null | undefined): Record<string, any> {
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, any>) : {};
   } catch {
     return {};
   }
+}
+
+function buildStarterKeywordSuggestions(params: {
+  industry?: string | null;
+  city?: string | null;
+  nativeKeywords?: Array<{ keyword: string; count?: number }>;
+}): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (kw: string) => {
+    const clean = kw.trim().toLowerCase();
+    if (!clean || seen.has(clean)) return;
+    if (clean === 'direct brand searches' || clean === 'maps navigation & directions') return;
+    seen.add(clean);
+    out.push(clean);
+  };
+
+  if (Array.isArray(params.nativeKeywords)) {
+    for (const nk of params.nativeKeywords) {
+      if (nk?.keyword) add(nk.keyword);
+    }
+  }
+
+  const industry = (params.industry || '').trim();
+  const city = (params.city || '').trim();
+  if (industry) {
+    if (city) {
+      add(`best ${industry.toLowerCase()} in ${city.toLowerCase()}`);
+      add(`${industry.toLowerCase()} near ${city.toLowerCase()}`);
+      add(`affordable ${industry.toLowerCase()} ${city.toLowerCase()}`);
+    } else {
+      add(`best ${industry.toLowerCase()} near me`);
+      add(`trusted ${industry.toLowerCase()} services`);
+    }
+  }
+
+  return out.slice(0, 6);
 }
 
 /** GET /api/gbp/keyword-plan — ranked tracked keywords for the planner list. */
@@ -45,39 +78,105 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
+    const tenant = await db.tenant
+      .findUnique({
+        where: { id: user.tenantId },
+        select: {
+          settingsJson: true,
+          city: true,
+          country: true,
+          industry: true,
+          name: true,
+          brandProfile: { select: { industry: true, location: true } },
+        },
+      })
+      .catch(() => null);
+
+    const settings = readSettingsJson(tenant?.settingsJson);
+    const resolvedLocale = resolveTenantLocale({
+      tenantCountry: tenant?.country,
+      settingsJson: settings,
+    });
+    const defaultCity = (tenant?.brandProfile?.location || tenant?.city || '').trim() || null;
+    const defaultIndustry = (tenant?.brandProfile?.industry || tenant?.industry || '').trim() || null;
+
     let keywords: TrackedKeywordRow[] = [];
-    let migrationRequired = false;
+    const migrationRequired = false;
     try {
       const rows = await db.trackedKeyword.findMany({
         where: { tenantId: user.tenantId },
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
         take: MAX_TRACKED_KEYWORDS,
       });
-      keywords = rows as unknown as TrackedKeywordRow[];
+      keywords = (rows as any[]).map((r) => ({
+        id: r.id,
+        keyword: r.keyword,
+        city: r.city ?? null,
+        country: r.country || resolvedLocale.countryName,
+        score: r.score ?? null,
+        position: r.position ?? null,
+        source: r.source || 'manual',
+        mapsRank: r.mapsRank ?? null,
+        organicRank: r.organicRank ?? null,
+        aiOverviewCited: r.aiOverviewCited ?? null,
+        lastCheckedAt: r.lastCheckedAt ? new Date(r.lastCheckedAt).toISOString() : null,
+      }));
     } catch (err: any) {
-      if (isMissingTableError(err)) {
-        migrationRequired = false;
+      if (!isMissingTableError(err)) {
+        // Fallback retry selecting legacy columns only in case migration is pending
+        try {
+          const legacyRows = await db.trackedKeyword.findMany({
+            where: { tenantId: user.tenantId },
+            select: {
+              id: true,
+              keyword: true,
+              city: true,
+              country: true,
+              score: true,
+              position: true,
+              source: true,
+            },
+            orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+            take: MAX_TRACKED_KEYWORDS,
+          });
+          keywords = legacyRows as unknown as TrackedKeywordRow[];
+        } catch {}
       }
     }
 
-    // If database table is empty or unpopulated, use tenant settingsJson or defaults
-    if (keywords.length === 0) {
-      const tenant = await db.tenant.findUnique({
-        where: { id: user.tenantId },
-        select: { settingsJson: true },
-      });
-      const settings = readSettingsJson(tenant?.settingsJson);
-      if (Array.isArray(settings.trackedKeywords) && settings.trackedKeywords.length > 0) {
-        keywords = settings.trackedKeywords as TrackedKeywordRow[];
-      } else {
-        keywords = DEFAULT_KEYWORDS;
-      }
+    // Fallback to tenant settingsJson when table is unpopulated
+    if (keywords.length === 0 && Array.isArray(settings.trackedKeywords) && settings.trackedKeywords.length > 0) {
+      keywords = settings.trackedKeywords as TrackedKeywordRow[];
     }
 
-    return NextResponse.json({ keywords, migrationRequired });
+    const suggestedStarterKeywords =
+      keywords.length === 0
+        ? buildStarterKeywordSuggestions({
+            industry: defaultIndustry,
+            city: defaultCity,
+            nativeKeywords: settings.googleDiscovery?.keywords,
+          })
+        : [];
+
+    return NextResponse.json({
+      keywords,
+      suggestedStarterKeywords,
+      locale: {
+        country: resolvedLocale.country,
+        countryName: resolvedLocale.countryName,
+        flag: resolvedLocale.flag,
+      },
+      defaultCity,
+      defaultIndustry,
+      migrationRequired,
+    });
   } catch (error: unknown) {
     console.error('[keyword-plan] GET failed:', error instanceof Error ? error.message : error);
-    return NextResponse.json({ keywords: DEFAULT_KEYWORDS, migrationRequired: false });
+    return NextResponse.json({
+      keywords: [],
+      suggestedStarterKeywords: [],
+      migrationRequired: false,
+    });
   }
 }
 
@@ -104,51 +203,84 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'keyword too long (max 160 chars)' }, { status: 400 });
     }
 
-    const city = body.city ? String(body.city).slice(0, 80) : 'Patna';
-    const country = body.country ? String(body.country).slice(0, 60) : 'India';
-    const score = body.score != null ? Number(body.score) : 500;
-    const newId = `kw-${Date.now()}`;
-
-    // Update settingsJson fallback list
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { settingsJson: true },
+      select: {
+        settingsJson: true,
+        city: true,
+        country: true,
+        brandProfile: { select: { location: true } },
+      },
     });
     const settings = readSettingsJson(tenant?.settingsJson);
-    const existingList: TrackedKeywordRow[] = Array.isArray(settings.trackedKeywords)
+    const resolvedLocale = resolveTenantLocale({
+      tenantCountry: tenant?.country,
+      settingsJson: settings,
+    });
+
+    const city = body.city
+      ? String(body.city).trim().slice(0, 80)
+      : (tenant?.brandProfile?.location || tenant?.city || '').trim().slice(0, 80) || null;
+    const country = body.country
+      ? String(body.country).trim().slice(0, 60)
+      : resolvedLocale.countryName;
+    const score = body.score != null && Number.isFinite(Number(body.score)) ? Number(body.score) : null;
+    const newId = `kw-${Date.now()}`;
+
+    let existingList: TrackedKeywordRow[] = Array.isArray(settings.trackedKeywords)
       ? (settings.trackedKeywords as TrackedKeywordRow[])
-      : [...DEFAULT_KEYWORDS];
+      : [];
+
+    if (existingList.length === 0) {
+      try {
+        const dbRows = await db.trackedKeyword.findMany({
+          where: { tenantId: user.tenantId },
+          select: { id: true, keyword: true, city: true, country: true, score: true, position: true, source: true },
+          take: MAX_TRACKED_KEYWORDS,
+        });
+        if (Array.isArray(dbRows) && dbRows.length > 0) {
+          existingList = dbRows as unknown as TrackedKeywordRow[];
+        }
+      } catch {}
+    }
 
     const foundIdx = existingList.findIndex((k) => k.keyword.toLowerCase() === keyword);
+    let savedEntry: TrackedKeywordRow;
     if (foundIdx >= 0) {
-      existingList[foundIdx] = {
+      savedEntry = {
         ...existingList[foundIdx],
         city,
         country,
-        score,
+        score: score ?? existingList[foundIdx].score,
       };
+      existingList[foundIdx] = savedEntry;
     } else {
       if (existingList.length >= MAX_TRACKED_KEYWORDS) {
-        return NextResponse.json({ error: `Keyword list is full (max ${MAX_TRACKED_KEYWORDS}). Remove one first.` }, { status: 409 });
+        return NextResponse.json(
+          { error: `Keyword list is full (max ${MAX_TRACKED_KEYWORDS}). Remove one first.` },
+          { status: 409 },
+        );
       }
-      existingList.push({
+      savedEntry = {
         id: newId,
         keyword,
         city,
         country,
         score,
         position: existingList.length + 1,
-        source: body.source === 'ai' ? 'ai' : 'manual',
-      });
+        source: body.source === 'ai' ? 'ai' : body.source === 'gbp_native' ? 'gbp_native' : 'manual',
+      };
+      existingList.push(savedEntry);
     }
 
     settings.trackedKeywords = existingList;
-    await db.tenant.update({
-      where: { id: user.tenantId },
-      data: { settingsJson: JSON.stringify(settings) },
-    }).catch(() => {});
+    await db.tenant
+      .update({
+        where: { id: user.tenantId },
+        data: { settingsJson: JSON.stringify(settings) },
+      })
+      .catch(() => {});
 
-    // Try saving to DB table if available
     try {
       await db.trackedKeyword.upsert({
         where: { tenantId_keyword: { tenantId: user.tenantId, keyword } },
@@ -158,14 +290,14 @@ export async function POST(request: NextRequest) {
           city,
           country,
           score,
-          position: existingList.length,
-          source: body.source === 'ai' ? 'ai' : 'manual',
+          position: savedEntry.position ?? existingList.length,
+          source: savedEntry.source,
         },
         update: { city, country, score },
       });
     } catch {}
 
-    return NextResponse.json({ success: true, keyword });
+    return NextResponse.json({ success: true, keyword, entry: savedEntry });
   } catch (error: unknown) {
     console.error('[keyword-plan] POST failed:', error instanceof Error ? error.message : error);
     return NextResponse.json(
@@ -193,7 +325,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'id query param is required' }, { status: 400 });
     }
 
-    // Remove from settingsJson
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
       select: { settingsJson: true },
@@ -201,15 +332,16 @@ export async function DELETE(request: NextRequest) {
     const settings = readSettingsJson(tenant?.settingsJson);
     const existingList: TrackedKeywordRow[] = Array.isArray(settings.trackedKeywords)
       ? (settings.trackedKeywords as TrackedKeywordRow[])
-      : [...DEFAULT_KEYWORDS];
+      : [];
 
-    const filtered = existingList.filter((k) => k.id !== id);
-    settings.trackedKeywords = filtered;
+    settings.trackedKeywords = existingList.filter((k) => k.id !== id);
 
-    await db.tenant.update({
-      where: { id: user.tenantId },
-      data: { settingsJson: JSON.stringify(settings) },
-    }).catch(() => {});
+    await db.tenant
+      .update({
+        where: { id: user.tenantId },
+        data: { settingsJson: JSON.stringify(settings) },
+      })
+      .catch(() => {});
 
     try {
       await db.trackedKeyword.deleteMany({

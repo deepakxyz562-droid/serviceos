@@ -355,9 +355,13 @@ model Tenant {
   socialPosts         SocialPost[]
 
   // GBP Marketing Score history, competitor tracking, keyword planner
-  gbpScoreSnapshots   GbpScoreSnapshot[]
-  competitors         Competitor[]
-  trackedKeywords     TrackedKeyword[]
+  gbpScoreSnapshots     GbpScoreSnapshot[]
+  competitors           Competitor[]
+  trackedKeywords       TrackedKeyword[]
+  websiteAuditSnapshots WebsiteAuditSnapshot[]
+  rankGridScans         RankGridScan[]
+  aiVisibilityScans     AiVisibilityScan[]
+  seoFixTasks           SeoFixTask[]
 
   @@index([slug])
   @@index([plan])
@@ -8012,7 +8016,7 @@ model GbpScoreSnapshot {
 // Local competitor businesses (within ~5 KM) shown in the Competitor Analysis
 // table. Sourced from Google Places Nearby Search or entered manually.
 model Competitor {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   tenantId        String
   name            String
   rating          Float?
@@ -8022,11 +8026,15 @@ model Competitor {
   category        String?
   placeId         String?
   mapsUrl         String?
-  source          String   @default("manual") // "places" | "manual"
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  websiteUrl      String?
+  lastSeoScore    Int?
+  seoSummaryJson  String?
+  lastAuditedAt   DateTime?
+  source          String    @default("manual") // "places" | "manual"
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -8034,18 +8042,22 @@ model Competitor {
 
 // User-tracked SEO keywords in the Keyword Planner (ranked list with score + city).
 model TrackedKeyword {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   tenantId        String
   keyword         String
   city            String?
-  country         String   @default("India")
-  score           Int?     // monthly search volume band (e.g. 100 / 500)
-  position        Int?     // display rank
-  source          String   @default("manual") // "manual" | "ai"
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  country         String    @default("India")
+  score           Int?      // monthly search volume band (e.g. 100 / 500)
+  position        Int?      // display rank
+  mapsRank        Int?
+  organicRank     Int?
+  aiOverviewCited Boolean?
+  lastCheckedAt   DateTime?
+  source          String    @default("manual") // "manual" | "ai"
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, keyword])
   @@index([tenantId])
@@ -9602,4 +9614,103 @@ model DesignGenerationJob {
   updatedAt DateTime @updatedAt
   @@index([tenantId, createdAt])
   @@index([status, createdAt])
+}
+
+// ==========================================
+// BGOS 2.0 — AI SEARCH & WEBSITE SEO MODULE
+// ==========================================
+
+model WebsiteAuditSnapshot {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  presenceMode        String   // 'no_website' | 'bgos_hosted' | 'custom_domain'
+  targetUrl           String?
+  overallScore        Int
+  gbpScore            Int
+  websiteScore        Int?
+  aiReadinessScore    Int
+  cwvLcpMs            Float?
+  cwvCls              Float?
+  cwvPerformanceScore Int?
+  issuesJson          String   @default("[]")
+  recommendationsJson String   @default("[]")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+}
+
+model RankGridScan {
+  id                String   @id @default(cuid())
+  tenantId          String
+  scanType          String   // 'maps_grid' | 'organic_serp'
+  keyword           String
+  placeId           String?
+  targetDomain      String?
+  gridSize          Int      @default(3)
+  radiusKm          Float?
+  centerLat         Float?
+  centerLng         Float?
+  avgRank           Float?
+  top3Pct           Float?
+  organicRank       Int?
+  aiOverviewPresent Boolean?
+  aiOverviewCited   Boolean?
+  citedDomainsJson  String   @default("[]")
+  pointsJson        String   @default("[]")
+  providerCost      Float    @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, scanType, createdAt])
+}
+
+model AiVisibilityScan {
+  id                       String   @id @default(cuid())
+  tenantId                 String
+  platform                 String   // 'gemini' | 'perplexity' | 'openai' | 'google_ai_overview'
+  status                   String   @default("measured") // 'measured' | 'not_configured' | 'error'
+  prompt                   String
+  mentioned                Boolean  @default(false)
+  websiteCited             Boolean  @default(false)
+  citedUrlsJson            String   @default("[]")
+  position                 Int?
+  sentiment                String?
+  competitorsMentionedJson String   @default("[]")
+  answerExcerpt            String?
+  locationContext          String?
+  sourceMode               String   @default("grounded_search")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  tenant                   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+}
+
+model SeoFixTask {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  source               String    // 'audit' | 'ai_gap'
+  category             String    // 'ai_crawlability' | 'structured_data' | 'on_page' | 'presence' | 'gbp'
+  title                String
+  description          String
+  severity             String    @default("medium") // 'high' | 'medium' | 'low'
+  targetMode           String    // 'no_website' | 'bgos_hosted' | 'custom_domain'
+  autoFixable          Boolean   @default(false)
+  fixActionKey         String?
+  fixPayloadJson       String    @default("{}")
+  rollbackSnapshotJson String?
+  status               String    @default("open") // 'open' | 'applied' | 'dismissed' | 'rolled_back'
+  appliedAt            DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, createdAt])
 }

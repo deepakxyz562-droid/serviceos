@@ -144,6 +144,7 @@ import { UrgentReviewCard } from '@/components/bgos/urgent-review-card';
 import { UpcomingPostsCarousel } from '@/components/bgos/upcoming-posts-carousel';
 import { WebMediaMetadataDialog, type WebMediaItem } from '@/components/bgos/media-metadata-dialog';
 import { WebMediaThumb, WebMediaPreviewDialog } from '@/components/bgos/web-media-preview-dialog';
+import { AiCompetitorGapCard } from '@/components/bgos/ai-competitor-gap-card';
 
 type SocialTab =
   | 'overview'
@@ -649,6 +650,8 @@ interface CompetitorRow {
   address?: string | null;
   category?: string | null;
   mapsUrl?: string | null;
+  websiteUrl?: string | null;
+  lastSeoScore?: number | null;
   source?: string;
 }
 
@@ -666,6 +669,9 @@ interface TrackedKeywordRow {
   country?: string;
   score?: number | null;
   position?: number | null;
+  mapsRank?: number | null;
+  organicRank?: number | null;
+  aiOverviewCited?: boolean | null;
   source?: string;
 }
 
@@ -1545,6 +1551,7 @@ function CompetitorAnalysisCard({
   onRefresh: () => void;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [gapDialogOpen, setGapDialogOpen] = useState(false);
   const rows = useMemo(() => (Array.isArray(data?.competitors) ? data!.competitors : []), [data]);
 
   return (
@@ -1554,16 +1561,27 @@ function CompetitorAnalysisCard({
           <Target className="size-4 text-rose-500" />
           <h2 className="text-sm font-bold text-foreground">Competitor Analysis</h2>
         </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={refreshing}
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-60"
-          title="Refresh local competitors from Google Places"
-          aria-label="Refresh competitors"
-        >
-          <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setGapDialogOpen(true)}
+            className="px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 text-[10px] font-bold inline-flex items-center gap-1 transition-colors"
+            title="Compare competitor websites & sampled AI Search recommendations"
+          >
+            <Bot className="size-3" />
+            <span>Website &amp; AI Gap</span>
+          </button>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-60"
+            title="Refresh local competitors from Google Places"
+            aria-label="Refresh competitors"
+          >
+            <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       <div className="py-2">
@@ -1654,6 +1672,17 @@ function CompetitorAnalysisCard({
                       </span>
                       <span>{comp.reviewCount != null ? `${comp.reviewCount} reviews` : null}</span>
                     </div>
+                    {comp.websiteUrl && (
+                      <a
+                        href={comp.websiteUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline mr-3"
+                      >
+                        <Globe className="size-3" />
+                        Visit Website
+                      </a>
+                    )}
                     {comp.mapsUrl && (
                       <a
                         href={comp.mapsUrl}
@@ -1684,6 +1713,20 @@ function CompetitorAnalysisCard({
           Outrank them with 5-star Google review replies
         </span>
       </div>
+
+      {gapDialogOpen && (
+        <Dialog open={gapDialogOpen} onOpenChange={setGapDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[88vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>AI Search Visibility &amp; Competitor SEO Gap</DialogTitle>
+              <DialogDescription>
+                Compare how ChatGPT Search, Gemini, Perplexity, and Google AI Overviews mention your business versus local competitors.
+              </DialogDescription>
+            </DialogHeader>
+            <AiCompetitorGapCard />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -1921,6 +1964,12 @@ export function SocialMediaView({
   const [keywords, setKeywords] = useState<TrackedKeywordRow[]>([]);
   const [keywordsLoading, setKeywordsLoading] = useState(true);
   const [keywordsMigration, setKeywordsMigration] = useState(false);
+  const [keywordLocale, setKeywordLocale] = useState<{ country: string; countryName: string; flag: string }>({
+    country: 'GLOBAL',
+    countryName: 'Local Market',
+    flag: '🌍',
+  });
+  const [suggestedStarterKeywords, setSuggestedStarterKeywords] = useState<string[]>([]);
   const [keywordSuggestions, setKeywordSuggestions] = useState<KeywordSuggestion[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [suggestionsSource, setSuggestionsSource] = useState<'ai' | 'fallback'>('ai');
@@ -2105,6 +2154,19 @@ export function SocialMediaView({
         const json = await res.json();
         setKeywords(Array.isArray(json?.keywords) ? json.keywords : []);
         setKeywordsMigration(Boolean(json?.migrationRequired));
+        if (json?.locale?.countryName) {
+          setKeywordLocale({
+            country: json.locale.country || 'GLOBAL',
+            countryName: json.locale.countryName,
+            flag: json.locale.flag || '🌍',
+          });
+        }
+        setSuggestedStarterKeywords(
+          Array.isArray(json?.suggestedStarterKeywords) ? json.suggestedStarterKeywords : [],
+        );
+        if (json?.defaultCity) {
+          setSearchCity((prev) => prev || String(json.defaultCity));
+        }
       }
     } catch {
       // keep previous state
@@ -2968,7 +3030,7 @@ export function SocialMediaView({
         body: JSON.stringify({
           keyword,
           city: city || undefined,
-          country: 'India',
+          country: keywordLocale.country !== 'GLOBAL' ? keywordLocale.countryName : undefined,
           source: source || 'manual',
         }),
       });
@@ -5166,7 +5228,7 @@ export function SocialMediaView({
                           Looking for trusted {businessName} services?
                         </p>
                         <p className="text-[10px] text-white/80">
-                          Get top-tier quality and fast turnaround in Patna!
+                          Get top-tier quality and fast turnaround {searchCity ? `in ${searchCity}` : 'right near you'}!
                         </p>
                       </div>
                     )}
@@ -5347,12 +5409,12 @@ export function SocialMediaView({
                 </Button>
               </div>
 
-              {/* KEYWORD SEARCH mini-form: Country fixed India + locality → suggest */}
+              {/* KEYWORD SEARCH mini-form: Dynamic workspace locale + locality → suggest */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                 <div className="sm:col-span-3">
                   <div className="h-9 px-3 rounded-xl border border-border bg-muted/30 flex items-center gap-2 text-xs font-medium text-foreground">
-                    <span>🇮🇳</span>
-                    <span>India</span>
+                    <span>{keywordLocale.flag}</span>
+                    <span className="truncate">{keywordLocale.countryName}</span>
                   </div>
                 </div>
                 <div className="sm:col-span-9 flex gap-2">
@@ -5483,12 +5545,28 @@ export function SocialMediaView({
                   ))}
                 </div>
               ) : keywords.length === 0 ? (
-                <div className="py-6 text-center">
-                  <p className="text-sm font-bold text-foreground">No keywords tracked yet</p>
-                  <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                    Search a locality above or add a keyword — BGOS will use them for daily Google
-                    posts.
-                  </p>
+                <div className="py-6 text-center space-y-3">
+                  <div>
+                    <p className="text-sm font-bold text-foreground">No keywords tracked yet</p>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                      Search a locality above or pick a starter keyword below — BGOS will use them for daily Google posts and rank checks.
+                    </p>
+                  </div>
+                  {suggestedStarterKeywords.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-1.5 pt-1">
+                      {suggestedStarterKeywords.map((starter) => (
+                        <button
+                          key={starter}
+                          type="button"
+                          disabled={keywordSaving}
+                          onClick={() => void handleAddKeyword(starter, searchCity || null, 'ai')}
+                          className="px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 text-[11px] font-semibold text-primary transition-colors"
+                        >
+                          + {starter}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -5503,9 +5581,28 @@ export function SocialMediaView({
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-foreground truncate">{kw.keyword}</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {kw.city || kw.country || 'India'}
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {kw.city || kw.country || keywordLocale.countryName}
                           </p>
+                          {(kw.mapsRank != null || kw.organicRank != null || kw.aiOverviewCited) && (
+                            <div className="flex items-center gap-1 flex-wrap mt-1">
+                              {kw.mapsRank != null && (
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-bold">
+                                  Maps #{kw.mapsRank}
+                                </span>
+                              )}
+                              {kw.organicRank != null && (
+                                <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-bold">
+                                  Web #{kw.organicRank}
+                                </span>
+                              )}
+                              {kw.aiOverviewCited && (
+                                <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[9px] font-bold">
+                                  AI Cited
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
