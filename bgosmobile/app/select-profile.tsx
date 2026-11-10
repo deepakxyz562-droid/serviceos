@@ -22,6 +22,7 @@ interface DiscoverResponse {
   email: string;
   phone: string;
   version: string;
+  hasConnectedGbp?: boolean;
   activeProfileId: string;
   activeProfile?: GbpProfile;
   profiles: GbpProfile[];
@@ -51,7 +52,8 @@ export default function SelectProfileScreen() {
   const activeId = discover.data?.activeProfileId || profiles[0]?.id || '';
   const email = discover.data?.email || '';
   const phone = discover.data?.phone || '';
-  const version = discover.data?.version || 'v2.83';
+  const version = discover.data?.version || 'BGOS v2.0';
+  const isConnected = Boolean(discover.data?.hasConnectedGbp || profiles.length > 0);
 
   async function handleSelectProfile(p: GbpProfile) {
     if (switchingId) return;
@@ -172,25 +174,52 @@ export default function SelectProfileScreen() {
       onRefresh={discover.refresh}
     >
       <ScrollView contentContainerStyle={{ gap: 18, paddingBottom: 32 }}>
-        {/* Email Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 }}>
-          <MaterialIcons name="check-circle" size={18} color="#2563EB" />
-          <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A' }}>
-            {email}
-          </Text>
-          <View
-            style={{
-              backgroundColor: '#E2E8F0',
-              paddingHorizontal: 8,
-              paddingVertical: 2,
-              borderRadius: 12,
-            }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
-              {profiles.length}
+        {/* Account Connection Status Header */}
+        {isConnected ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: '#EFF6FF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '900', color: '#2563EB' }}>G</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14.5, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>
+                  {email || 'Google Business Account'}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#16A34A', fontWeight: '600' }}>
+                  ✓ Connected &amp; Verified
+                </Text>
+              </View>
+            </View>
+            <View
+              style={{
+                backgroundColor: '#DCFCE7',
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 12,
+              }}
+            >
+              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#16A34A' }}>
+                {profiles.length} {profiles.length === 1 ? 'Location' : 'Locations'}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 }}>
+            <MaterialIcons name="link-off" size={20} color="#94A3B8" />
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#64748B' }}>
+              No Google Business Profile Connected
             </Text>
           </View>
-        </View>
+        )}
 
         {/* Profiles Card */}
         <View
@@ -286,97 +315,164 @@ export default function SelectProfileScreen() {
           )}
         </View>
 
-        {/* Connect with Google Button */}
-        <View style={{ gap: 8 }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Connect with Google"
-            disabled={connectingGoogle}
-            onPress={() => void handleConnectGoogle()}
-            style={({ pressed }) => ({
-              width: '100%',
-              height: 50,
-              borderRadius: 14,
-              overflow: 'hidden',
-              opacity: pressed || connectingGoogle ? 0.85 : 1,
-            })}
-          >
-            <View
-              style={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                left: 0,
-                right: 0,
-                flexDirection: 'row',
-              }}
-            >
-              <View style={{ flex: 1, backgroundColor: '#9333EA' }} />
-              <View style={{ flex: 1, backgroundColor: '#EA580C' }} />
-            </View>
-            <View
-              style={{
-                flex: 1,
+        {/* Connection Action Section */}
+        {isConnected ? (
+          <View style={{ gap: 8 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add Another Google Account"
+              disabled={connectingGoogle}
+              onPress={() => void handleConnectGoogle()}
+              style={({ pressed }) => ({
+                width: '100%',
+                height: 48,
+                borderRadius: 14,
+                backgroundColor: '#FFFFFF',
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 10,
-              }}
+                gap: 8,
+                opacity: pressed || connectingGoogle ? 0.75 : 1,
+              })}
             >
               {connectingGoogle ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                  <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>
+                  <ActivityIndicator size="small" color="#2563EB" />
+                  <Text style={{ color: '#2563EB', fontSize: 14, fontWeight: '700' }}>
                     Connecting Google…
                   </Text>
                 </View>
               ) : (
                 <>
-                  <View
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: 13,
-                      backgroundColor: '#FFFFFF',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text style={{ fontSize: 15, fontWeight: '900', color: '#2563EB' }}>G</Text>
-                  </View>
-                  <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
-                    Connect with Google
+                  <MaterialIcons name="add" size={20} color="#2563EB" />
+                  <Text style={{ color: '#2563EB', fontSize: 14, fontWeight: '700' }}>
+                    Add Another Google Account
                   </Text>
                 </>
               )}
-            </View>
-          </Pressable>
-          {statusNotice ? (
-            <View
-              style={{
-                backgroundColor: '#DCFCE7',
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: '#86EFAC',
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-              }}
-            >
-              <MaterialIcons name="check-circle" size={16} color="#16A34A" />
-              <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#16A34A' }}>
-                {statusNotice}
+            </Pressable>
+
+            {statusNotice ? (
+              <View
+                style={{
+                  backgroundColor: '#DCFCE7',
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#86EFAC',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <MaterialIcons name="check-circle" size={16} color="#16A34A" />
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#16A34A' }}>
+                  {statusNotice}
+                </Text>
+              </View>
+            ) : (
+              <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>
+                Connected to {email || 'Google'}. Tap above to link another Google account or switch.
               </Text>
-            </View>
-          ) : (
-            <Text style={{ fontSize: 12.5, color: '#64748B', textAlign: 'center' }}>
-              Use Google to add more emails
-            </Text>
-          )}
-        </View>
+            )}
+          </View>
+        ) : (
+          <View style={{ gap: 8 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Connect with Google"
+              disabled={connectingGoogle}
+              onPress={() => void handleConnectGoogle()}
+              style={({ pressed }) => ({
+                width: '100%',
+                height: 50,
+                borderRadius: 14,
+                overflow: 'hidden',
+                opacity: pressed || connectingGoogle ? 0.85 : 1,
+              })}
+            >
+              <View
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  flexDirection: 'row',
+                }}
+              >
+                <View style={{ flex: 1, backgroundColor: '#9333EA' }} />
+                <View style={{ flex: 1, backgroundColor: '#EA580C' }} />
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                }}
+              >
+                {connectingGoogle ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>
+                      Connecting Google…
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    <View
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 13,
+                        backgroundColor: '#FFFFFF',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ fontSize: 15, fontWeight: '900', color: '#2563EB' }}>G</Text>
+                    </View>
+                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+                      Connect with Google
+                    </Text>
+                  </>
+                )}
+              </View>
+            </Pressable>
+
+            {statusNotice ? (
+              <View
+                style={{
+                  backgroundColor: '#DCFCE7',
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#86EFAC',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <MaterialIcons name="check-circle" size={16} color="#16A34A" />
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#16A34A' }}>
+                  {statusNotice}
+                </Text>
+              </View>
+            ) : (
+              <Text style={{ fontSize: 12.5, color: '#64748B', textAlign: 'center' }}>
+                Connect your Google account to discover all verified business locations on Google Maps
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* Security Reassurance Card (Screenshot 6) */}
         <View

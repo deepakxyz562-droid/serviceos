@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       orderBy: { updatedAt: 'desc' },
     });
 
-    let googleEmail = user.email || '';
+    let googleEmail = '';
     const profiles: GbpDiscoveredProfile[] = [];
 
     for (const sa of socialAccounts) {
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       if (sa.metadata) {
         try {
           meta = typeof sa.metadata === 'string' ? JSON.parse(sa.metadata) : sa.metadata;
-          if (meta.googleEmail && !googleEmail) googleEmail = meta.googleEmail;
+          if (meta.googleEmail && !googleEmail) googleEmail = String(meta.googleEmail);
         } catch {}
       }
 
@@ -76,6 +76,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    if (!googleEmail) {
+      googleEmail = user.email || '';
+    }
+
     // Honest handling: if no genuine Google Business account is connected, return empty
     if (profiles.length === 0) {
       return NextResponse.json({
@@ -87,7 +91,7 @@ export async function GET(request: NextRequest) {
         activeProfile: null,
         profiles: [],
         phone: tenant?.phone || '',
-        version: 'v2.83',
+        version: 'BGOS v2.0',
       });
     }
 
@@ -125,7 +129,7 @@ export async function GET(request: NextRequest) {
       activeProfile,
       profiles,
       phone: tenant?.phone || '',
-      version: 'v2.83',
+      version: 'BGOS v2.0',
     });
   } catch (err: unknown) {
     console.error('[api/gbp/accounts/discover] GET error:', err);
