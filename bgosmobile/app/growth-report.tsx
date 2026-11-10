@@ -40,6 +40,7 @@ interface PostWeekItem {
 interface ReportData {
   businessName: string;
   businessPhone: string;
+  storeId?: string;
   appVersion: string;
   period: {
     key: string;
@@ -217,9 +218,9 @@ export default function GrowthReportScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#070E1E" />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* ── Header Matching Dhanda v2.86 ── */}
+      {/* ── Light Header Matching BGOS Design System ── */}
       <View style={[styles.headerContainer, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.headerLeft}>
           <Pressable
@@ -229,7 +230,7 @@ export default function GrowthReportScreen() {
             hitSlop={10}
             style={({ pressed }) => [{ padding: 4, opacity: pressed ? 0.6 : 1 }]}
           >
-            <MaterialIcons name="chevron-left" size={30} color="#FFFFFF" />
+            <MaterialIcons name="chevron-left" size={30} color="#0F172A" />
           </Pressable>
 
           <View style={styles.avatarCircle}>
@@ -239,7 +240,9 @@ export default function GrowthReportScreen() {
           <View style={styles.headerTextGroup}>
             <Text style={styles.headerTitle}>Report</Text>
             <Text style={styles.headerSubtitle} numberOfLines={1}>
-              {report?.businessPhone || '8505945123'} | 5008 | {report?.appVersion || 'v2.86'}
+              {[report?.businessPhone, report?.storeId, report?.appVersion || 'BGOS v2.0']
+                .filter(Boolean)
+                .join(' | ')}
             </Text>
           </View>
         </View>
@@ -250,7 +253,7 @@ export default function GrowthReportScreen() {
           onPress={handleDownload}
           style={({ pressed }) => [styles.downloadButton, { opacity: pressed ? 0.75 : 1 }]}
         >
-          <MaterialIcons name="file-download" size={16} color="#FFFFFF" />
+          <MaterialIcons name="file-download" size={16} color="#0F172A" />
           <Text style={styles.downloadButtonText}>Download</Text>
         </Pressable>
       </View>
@@ -397,7 +400,9 @@ export default function GrowthReportScreen() {
                         {k.keyword}
                       </Text>
                       <View style={{ width: 70, alignItems: 'center' }}>
-                        <Text style={styles.keywordVolumeText}>{k.volume}</Text>
+                        <Text style={styles.keywordVolumeText}>
+                          {k.volume > 0 ? k.volume.toLocaleString() : '—'}
+                        </Text>
                       </View>
                       <View style={{ width: 50, alignItems: 'flex-end' }}>
                         <Text style={styles.keywordUsedText}>{k.usedCount}</Text>
@@ -608,33 +613,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   headerContainer: {
-    backgroundColor: '#081120',
-    paddingHorizontal: 14,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
     paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: '#EEF2F6',
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     flex: 1,
   },
   avatarCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#1E1B4B',
+    backgroundColor: '#EFF6FF',
     borderWidth: 1.5,
-    borderColor: '#EC4899',
+    borderColor: '#BFDBFE',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
-    color: '#FFFFFF',
+    color: '#2563EB',
     fontSize: 16,
     fontWeight: '900',
   },
@@ -642,13 +647,13 @@ const styles = StyleSheet.create({
     gap: 1.5,
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   headerSubtitle: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -657,14 +662,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderColor: '#E2E8F0',
     borderRadius: 18,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#F8FAFC',
   },
   downloadButtonText: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 12,
     fontWeight: '700',
   },

@@ -26,8 +26,8 @@ function computeDelta(cur: number, prev: number): MetricDelta {
   if (prev <= 0) {
     return {
       value: cur,
-      prevValue: prev,
-      deltaPct: cur > 0 ? 100 : 0,
+      prevValue: 0,
+      deltaPct: 0,
     };
   }
   const pct = Number((((cur - prev) / prev) * 100).toFixed(1));
@@ -160,8 +160,11 @@ export async function GET(request: NextRequest) {
         }).catch(() => []),
       ]);
 
-    const businessName = tenant?.brandProfile?.businessName || tenant?.name || 'Our Business';
-    const businessPhone = (tenant as any)?.phone || tenant?.brandProfile?.contactPhone || '8505945123';
+    const businessName = tenant?.brandProfile?.businessName || tenant?.name || 'My Business';
+    const rawPhone = (tenant as any)?.phone || tenant?.brandProfile?.contactPhone || user?.phone || null;
+    const businessPhone = rawPhone ? String(rawPhone) : '';
+    const storeId = tenant?.publicSlug || (tenantId ? `#${tenantId.slice(-4).toUpperCase()}` : '');
+    const appVersion = 'BGOS v2.0';
 
     // ── GBP Real Performance ──
     let searchImpressions = 0;
@@ -183,10 +186,10 @@ export async function GET(request: NextRequest) {
     }
 
     const curProfileViews = searchImpressions + mapsImpressions;
-    // Honest previous GBP views comparison (using snapshots if available, or 0)
+    // Honest previous GBP views comparison (using real snapshots if available, or 0)
     const prevProfileViews = prevSnapshots.length > 0
       ? Math.round(prevSnapshots.reduce((acc, s) => acc + (s.engagementScore * 2 || 0), 0) / prevSnapshots.length)
-      : Math.round(curProfileViews * 0.95);
+      : 0;
 
     // ── Metrics Calculation ──
     const curLeadsCount = curLeads.length;
@@ -240,14 +243,15 @@ export async function GET(request: NextRequest) {
       }
     }).length;
 
+    // Honest baseline: only use prior month records if they exist, zero synthetic multipliers
     const curCalls = callClicks;
-    const prevCalls = Math.round(callClicks * 0.9);
+    const prevCalls = 0;
 
     const curDirections = directionRequests;
-    const prevDirections = Math.round(directionRequests * 0.9);
+    const prevDirections = 0;
 
     const curWebsiteVisits = websiteClicks;
-    const prevWebsiteVisits = Math.round(websiteClicks * 0.9);
+    const prevWebsiteVisits = 0;
 
     // Engagement rate = (calls + directions + websiteVisits) / max(views, 1)
     const curEngagementNum = curCalls + curDirections + curWebsiteVisits;
@@ -259,7 +263,7 @@ export async function GET(request: NextRequest) {
       ? Number(((prevEngagementNum / prevProfileViews) * 100).toFixed(1))
       : 0;
 
-    // ── Build Performance Summary (Grid of 9 KPIs matching Dhanda v2.86) ──
+    // ── Build Performance Summary (Grid of 9 KPIs) ──
     const summary = {
       profileViews: computeDelta(curProfileViews, prevProfileViews),
       leads: computeDelta(curLeadsCount, prevLeadsCount),
@@ -272,39 +276,52 @@ export async function GET(request: NextRequest) {
       websiteVisits: computeDelta(curWebsiteVisits, prevWebsiteVisits),
     };
 
-    // ── Keywords Used Table ──
+    // ── Keywords Used Table (100% Dynamic from Tenant Brand Profile & Live Search Terms) ──
+    const brandServices: string[] = [];
+    try {
+      const parsed = JSON.parse(tenant?.brandProfile?.services || '[]');
+      if (Array.isArray(parsed)) {
+        brandServices.push(...parsed.filter((s) => typeof s === 'string' && s.trim().length > 0));
+      }
+    } catch {}
+
+    const industry = (tenant?.brandProfile?.industry || tenant?.industry || '').trim();
+    const city = (tenant?.city || tenant?.brandProfile?.location || '').trim();
+
     let candidateKeywords = trackedKeywords.map((k) => ({
       keyword: k.keyword,
-      volume: k.score || 500,
+      volume: k.searchVolume || k.score || 0,
     }));
 
-    // If tenant has no tracked keywords yet, derive starter keywords from Brand Profile
+    // If tenant has no tracked keywords yet, derive real local keywords from the tenant's actual services & city
     if (candidateKeywords.length === 0) {
-      const brandServices: string[] = [];
-      try {
-        const parsed = JSON.parse(tenant?.brandProfile?.services || '[]');
-        if (Array.isArray(parsed)) brandServices.push(...parsed);
-      } catch {}
+      const dynamicList: string[] = [];
+      if (brandServices.length > 0) {
+        for (const s of brandServices.slice(0, 5)) {
+          dynamicList.push(city ? `${s.toLowerCase()} in ${city.toLowerCase()}` : `${s.toLowerCase()} near me`);
+        }
+      }
+      if (industry) {
+        dynamicList.push(city ? `best ${industry.toLowerCase()} in ${city.toLowerCase()}` : `best ${industry.toLowerCase()} near me`);
+        dynamicList.push(city ? `${industry.toLowerCase()} services ${city.toLowerCase()}` : `${industry.toLowerCase()} services`);
+      }
+      if (dynamicList.length === 0) {
+        dynamicList.push(city ? `local services in ${city.toLowerCase()}` : 'local services near me');
+      }
 
-      const industry = tenant?.brandProfile?.industry || tenant?.industry || 'Services';
-      const city = tenant?.city || tenant?.brandProfile?.location || '';
-
-      const fallbackList = [
-        `best ${industry.toLowerCase()} ${city ? `in ${city.toLowerCase()}` : 'near me'}`,
-        `${industry.toLowerCase()} services ${city ? city.toLowerCase() : 'near me'}`,
-        `affordable ${industry.toLowerCase()}`,
-        ...brandServices.slice(0, 3).map((s) => `${s.toLowerCase()} ${city ? city.toLowerCase() : ''}`),
-      ];
-
-      candidateKeywords = fallbackList.map((kw, i) => ({
+      candidateKeywords = dynamicList.map((kw) => ({
         keyword: kw.trim(),
-        volume: [500, 250, 100, 500, 250, 100][i] || 100,
+        volume: 0,
       }));
     }
 
     const keywordsUsed = candidateKeywords.map((kw) => {
       const lower = kw.keyword.toLowerCase();
-      const usedCount = curPosts.filter((p) => (p.content || '').toLowerCase().includes(lower)).length;
+      const usedCount = curPosts.filter((p) => {
+        const textMatch = (p.content || '').toLowerCase().includes(lower);
+        const mediaMatch = (p.mediaUrls || '').toLowerCase().includes(lower);
+        return textMatch || mediaMatch;
+      }).length;
       return {
         keyword: kw.keyword,
         volume: kw.volume,
@@ -447,7 +464,8 @@ Write exactly 2 concise, executive sentences for the owner. Highlight one growth
     return NextResponse.json({
       businessName,
       businessPhone,
-      appVersion: 'v2.86',
+      storeId,
+      appVersion,
       period: {
         key: periodParam,
         label: `${boundaries.curLabel} Performance Summary`,
@@ -560,7 +578,7 @@ function generatePrintableReportHtml(data: {
   <div class="header">
     <div>
       <div class="brand-title">${data.businessName}</div>
-      <div class="brand-sub">${data.businessPhone} • BGOS Report v2.86</div>
+      <div class="brand-sub">${data.businessPhone ? `${data.businessPhone} • ` : ''}BGOS v2.0</div>
     </div>
     <div style="text-align: right;">
       <div style="font-weight: 800; color: #0F172A; font-size: 14px;">Reputation: ${data.reputationSummary.avgRating} ★</div>

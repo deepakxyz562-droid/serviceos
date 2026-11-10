@@ -14,15 +14,12 @@ import { Speedometer, WeekScoreBars, scoreBandColor } from '../../src/components
 import { WeeklyScoreLineChart } from '../../src/components/gbp/growth-charts';
 import { MarketingTrackerSlide, type TrackerItem } from '../../src/components/gbp/marketing-tracker';
 import { GooglePerformanceCard } from '../../src/components/gbp/google-performance';
-import { SocialCalendarCard } from '../../src/components/gbp/social-calendar';
 import { SidebarDrawer } from '../../src/components/navigation/sidebar-drawer';
 import { PushPromptModal } from '../../src/components/notifications/push-prompt';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import { GrowthActionSheet } from '../../src/components/gbp/growth-action-sheet';
-import { UrgentReviewCard } from '../../src/components/gbp/urgent-review-card';
-import { AiAgentUpdatesSheet } from '../../src/components/gbp/ai-agent-updates-sheet';
-import { HomeStoryBubblesStrip, GbpAiAgentHomeCard } from '../../src/components/gbp/ai-agent-home-card';
-import type { GbpPlaceResult, PhotosResponse } from '../../src/components/gbp/types';
+import { HomeStoryBubblesStrip } from '../../src/components/gbp/ai-agent-home-card';
+import type { GbpPlaceResult } from '../../src/components/gbp/types';
 import type { BgosConversation, BgosWorkspace } from '../../src/types/bgos-contracts';
 
 type Booking = { id: string; title?: string; customerName?: string; scheduledAt?: string; status: string };
@@ -496,7 +493,6 @@ export default function HomeScreen() {
   const [growthModalOpen, setGrowthModalOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewModalTab, setReviewModalTab] = useState<'single' | 'bulk'>('single');
-  const [seoUpdatesOpen, setSeoUpdatesOpen] = useState(false);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [expandedCompetitor, setExpandedCompetitor] = useState<string | null>(null);
   const { width, fontScale } = useWindowDimensions();
@@ -516,7 +512,6 @@ export default function HomeScreen() {
   const competitors = useResource<CompetitorsResponse>('/api/gbp/competitors');
   const growthActions = useResource<GrowthActionsResponse>('/api/gbp/growth-actions');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
-  const photosRes = useResource<PhotosResponse>('/api/social/photos');
   const socialPosts = useResource<{ data?: Array<{ id?: string; status?: string }> }>(
     '/api/social/posts?platform=googlebusiness&limit=20',
   );
@@ -543,7 +538,6 @@ export default function HomeScreen() {
       competitors.refresh(),
       growthActions.refresh(),
       discover.refresh(),
-      photosRes.refresh(),
       socialPosts.refresh(),
       reviewQueue.refresh(),
     ].map((p) => Promise.resolve(p).catch(() => {})));
@@ -558,64 +552,6 @@ export default function HomeScreen() {
   const unreadCount = inbox.data ? inbox.data.reduce((s, c) => s + c.unreadCount, 0) : '—';
   const leadTotal = leads.data?.pagination?.total ?? '—';
   const callCount = calls.data?.stats?.todayCount ?? '—';
-  const avgRating = perf?.avgRating
-    ? Number(perf.avgRating).toFixed(1)
-    : reviews.data?.reviews?.length
-      ? (reviews.data.reviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0) / reviews.data.reviews.length).toFixed(1)
-      : null;
-  const reviewDetail = avgRating
-    ? `${avgRating} ★ rating · Ask customers via WhatsApp`
-    : 'Ask customers for Google reviews via WhatsApp';
-
-  const thisWeekReviewsCount = useMemo(() => {
-    const list = reviews.data?.reviews || [];
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return list.filter((r) => {
-      const raw = r.createTime || r.publishedAt || r.createdAt;
-      if (!raw) return false;
-      const t = new Date(raw).getTime();
-      return !isNaN(t) && t >= sevenDaysAgo;
-    }).length;
-  }, [reviews.data?.reviews]);
-
-  const lastReviewDate = useMemo(() => {
-    const list = reviews.data?.reviews || [];
-    if (!list.length) return null;
-    const sorted = [...list].sort((a, b) => {
-      const tA = new Date(a.createTime || a.publishedAt || a.createdAt || 0).getTime();
-      const tB = new Date(b.createTime || b.publishedAt || b.createdAt || 0).getTime();
-      return tB - tA;
-    });
-    return sorted[0]?.createTime || sorted[0]?.publishedAt || sorted[0]?.createdAt || null;
-  }, [reviews.data?.reviews]);
-
-  const publishedPhotosCount = useMemo(() => {
-    if (photosRes.data?.liveCount != null) return photosRes.data.liveCount;
-    return (photosRes.data?.photos || []).filter((p) => p.source === 'google').length;
-  }, [photosRes.data]);
-
-  const scheduledPhotosCount = useMemo(
-    () =>
-      (photosRes.data?.photos || []).filter(
-        (p) => p.source === 'queue' && (p.status === 'scheduled' || p.status === 'publishing'),
-      ).length,
-    [photosRes.data],
-  );
-
-  const scheduledPostsCount = useMemo(
-    () => (socialPosts.data?.data || []).filter((p) => p.status === 'scheduled').length,
-    [socialPosts.data?.data],
-  );
-  const perfCells = useMemo(
-    () => [
-      { label: 'Profile Views', value: perf ? (perf.searchImpressions || 0) + (perf.mapsImpressions || 0) : null },
-      { label: 'Phone Calls', value: perf ? perf.callClicks || 0 : null },
-      { label: 'Directions', value: perf ? perf.directionRequests || 0 : null },
-      { label: 'Website Clicks', value: perf ? perf.websiteClicks || 0 : null },
-    ],
-    [perf],
-  );
-
   const competitorList = competitors.data?.competitors || [];
   const actions = (growthActions.data?.actions || []).filter((a) => !a.dismissed);
   const totalDone = growthActions.data?.totalDone ?? 0;
@@ -912,6 +848,61 @@ export default function HomeScreen() {
       onRefresh={refresh}
       floatingAction={growthActionFloatingDock}
     >
+      {/* Sleek Trial Promotional Banner — only shown when workspace is on trial */}
+      {workspace.data?.plan?.status === 'trial' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="7 Days Free Trial Active. Tap to upgrade."
+          onPress={() => router.push('/my-plan')}
+          style={({ pressed }) => ({
+            backgroundColor: '#FFFBEB',
+            borderColor: '#FDE68A',
+            borderWidth: 1,
+            borderRadius: 14,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            marginBottom: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#FEF3C7',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <MaterialIcons name="local-offer" size={18} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#92400E', fontSize: 13, fontWeight: '800' }}>
+                7 Days Free Trial Active
+              </Text>
+              <Text style={{ color: '#B45309', fontSize: 11, fontWeight: '500', marginTop: 1 }}>
+                Full access to Google Growth &amp; AI · Upgrade anytime
+              </Text>
+            </View>
+          </View>
+          <View
+            style={{
+              backgroundColor: '#F59E0B',
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>Upgrade →</Text>
+          </View>
+        </Pressable>
+      ) : null}
+
       {/* Dynamic local time greeting hero matching UI kit */}
       <View style={{ paddingTop: 2, paddingBottom: 2 }}>
         <Text style={{ fontSize: 21, fontWeight: '800', color: colors.ink, letterSpacing: -0.45 }}>
@@ -977,47 +968,7 @@ export default function HomeScreen() {
         onPhotoBoost={() => router.push('/(tabs)/photos')}
       />
 
-      {/* Urgent Review Engine Card */}
-      <UrgentReviewCard
-        businessName={profileName || workspace.data?.name || 'My Business'}
-        countryCode={workspace.data?.locale?.country}
-        reviewUrl={
-          gbpPlace.data?.place?.reviewUrl ||
-          (gbpPlace.data?.place?.placeId
-            ? `https://search.google.com/local/writereview?placeid=${gbpPlace.data.place.placeId}`
-            : gbpPlace.data?.place?.mapsUrl ||
-              `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                profileName || workspace.data?.name || 'Google Business'
-              )}`)
-        }
-        totalReviews={reviews.data?.reviews?.length || 0}
-        thisWeekCount={thisWeekReviewsCount}
-        lastReviewDate={lastReviewDate}
-        onOpenQr={() => router.push('/qr-standee')}
-        onOpenBulk={() => {
-          setReviewModalTab('bulk');
-          setReviewModalOpen(true);
-        }}
-        onOpenSeoUpdates={() => setSeoUpdatesOpen(true)}
-      />
-
-      {/* Active GBP AI Agent Checklist Card (Light UI + Live Stats) */}
-      <GbpAiAgentHomeCard
-        businessName={profileName || workspace.data?.name || 'My Business'}
-        publishedPhotosCount={publishedPhotosCount}
-        scheduledPhotosCount={scheduledPhotosCount}
-        newReviewsCount={thisWeekReviewsCount}
-        totalReviewsCount={reviews.data?.reviews?.length || 0}
-        replyRate={perf?.responseRate ?? null}
-        queuedInvitesCount={reviewQueue.data?.queue?.pending ?? 0}
-        sentInvitesCount={reviewQueue.data?.queue?.sent ?? 0}
-        scheduledPostsCount={scheduledPostsCount}
-        onOpenSeoUpdates={() => setSeoUpdatesOpen(true)}
-        onAddPhotos={() => router.push('/(tabs)/photos')}
-        onOpenReviews={() => router.push('/(tabs)/reviews')}
-        onOpenPosts={() => router.push('/(tabs)/marketing')}
-      />
-
+      {/* Quick Actions Bar */}
       <Card style={{padding:14, gap:10}}>
         <Text style={ui.heading}>Quick Actions</Text>
         <View style={{flexDirection:'row', flexWrap:'wrap', gap:8}}>
@@ -1038,41 +989,6 @@ export default function HomeScreen() {
             </Pressable>
           ))}
         </View>
-      </Card>
-
-      {/* Workspace Hub Menu */}
-      <Card>
-        <Text style={ui.heading}>Growth Operations</Text>
-        <MenuRow
-          title="Google Business & Reviews"
-          detail={reviewDetail}
-          icon="storefront"
-          onPress={() => router.push('/(tabs)/growth')}
-        />
-        <MenuRow
-          title="Marketing Studio"
-          detail="Create multi-channel posts with AI"
-          icon="auto-awesome"
-          onPress={() => router.push('/(tabs)/marketing')}
-        />
-        <MenuRow
-          title="Call Tracker & Leads"
-          detail="Track calls, 1-tap CRM leads & WhatsApp"
-          icon="phone"
-          onPress={() => router.push('/(tabs)/phone')}
-        />
-        <MenuRow
-          title="AI Chat Assistant"
-          detail="Train knowledge and test sandbox chat"
-          icon="smart-toy"
-          onPress={() => router.push('/(tabs)/agents')}
-        />
-        <MenuRow
-          title="Digital Card & Share Tools"
-          detail="Share direct booking and chat links"
-          icon="share"
-          onPress={() => router.push('/(tabs)/tools')}
-        />
       </Card>
 
       <Text style={ui.heading}>Today</Text>
@@ -1165,11 +1081,6 @@ export default function HomeScreen() {
           onPress={() => router.push('/(tabs)/appointments')}
         />
       </Card>
-
-      {/* Social Calendar */}
-      <SocialCalendarCard
-        pendingApprovalCount={growthActions.data?.pendingApprovalCount || 0}
-      />
 
       {/* Competitor Analysis — real /api/gbp/competitors from Google Places (New) */}
       <Card style={{ gap: 10 }}>
@@ -1308,137 +1219,6 @@ export default function HomeScreen() {
         )}
       </Card>
 
-      {/* AI Assistant Live Banner */}
-      <Card style={{ backgroundColor: colors.hero, borderColor: colors.hero, padding: 18 }}>
-        <View style={[ui.row, { justifyContent: 'space-between' }]}>
-          <View style={[ui.row, { gap: 10 }]}>
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <MaterialIcons name="smart-toy" size={26} color={colors.accent} />
-            </View>
-            <View>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF' }}>Your AI Assistant</Text>
-              <Text style={{ fontSize: 12, color: colors.accent, fontWeight: '600' }}>Review setup and connected channels</Text>
-            </View>
-          </View>
-          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent }} />
-        </View>
-
-        <View style={{ gap: 6, marginTop: 10 }}>
-          <View style={[ui.row, { gap: 8 }]}>
-            <MaterialIcons name="check-circle" size={16} color={colors.accent} />
-            <Text style={{ color: '#E8F8EF', fontSize: 13 }}>Configure customer chat channels</Text>
-          </View>
-          <View style={[ui.row, { gap: 8 }]}>
-            <MaterialIcons name="check-circle" size={16} color={colors.accent} />
-            <Text style={{ color: '#E8F8EF', fontSize: 13 }}>Manage phone routing and booking actions</Text>
-          </View>
-          <View style={[ui.row, { gap: 8 }]}>
-            <MaterialIcons name="check-circle" size={16} color={colors.accent} />
-            <Text style={{ color: '#E8F8EF', fontSize: 13 }}>Review captured leads in CRM</Text>
-          </View>
-        </View>
-      </Card>
-
-      {/* Plan Status Banner — dynamic based on real workspace plan status */}
-      {workspace.data?.plan?.status === 'trial' ? (
-        <View
-          style={{
-            borderRadius: 14,
-            overflow: 'hidden',
-            marginBottom: 10,
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: '#4F46E5',
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-              <MaterialIcons name="auto-awesome" size={18} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
-                7 Days Free Trial Active
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => router.push('/my-plan')}
-              style={{
-                backgroundColor: '#FFFFFF',
-                paddingHorizontal: 12,
-                paddingVertical: 5,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: '#4F46E5', fontSize: 12, fontWeight: '800' }}>My Plan →</Text>
-            </Pressable>
-          </View>
-          <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 14, paddingVertical: 6 }}>
-            <Text style={{ fontSize: 11, color: '#3730A3', fontWeight: '600' }}>
-              Full access to Google Growth, 1-Tap Reviews & AI · Upgrade anytime from{' '}
-              {workspace.data?.billing?.startingPriceLabel ||
-                (detectDeviceCountryAndTimezone().country.code === 'IN' ? '₹499/mo' : '$9/mo')}
-            </Text>
-          </View>
-        </View>
-      ) : workspace.data?.plan?.status === 'active' ? (
-        <View
-          style={{
-            borderRadius: 14,
-            overflow: 'hidden',
-            marginBottom: 10,
-            borderWidth: 1,
-            borderColor: '#A7F3D0',
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: '#ECFDF5',
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-              <MaterialIcons name="verified" size={18} color="#059669" />
-              <View>
-                <Text style={{ color: '#065F46', fontSize: 13, fontWeight: '800' }}>
-                  {(workspace.data.plan.code || 'STARTER').toUpperCase()} Plan Active
-                </Text>
-                <Text style={{ color: '#047857', fontSize: 11, fontWeight: '500' }}>
-                  All Growth Hubs & AI automations unlocked
-                </Text>
-              </View>
-            </View>
-            <Pressable
-              onPress={() => router.push('/my-plan')}
-              style={{
-                backgroundColor: '#059669',
-                paddingHorizontal: 12,
-                paddingVertical: 5,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Manage →</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
       {/* More Tools — everything that left the bottom bar stays one tap away */}
       <MoreToolsGrid />
 
@@ -1471,13 +1251,6 @@ export default function HomeScreen() {
 
       {/* Half-Screen Slide-Over Sidebar Drawer (Screenshot 08.55 benchmark, no Growth & Marketing) */}
       <SidebarDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
-
-      {/* GBP AI Agent Profile SEO Updates Sheet (Grexa Benchmark Screenshot 6) */}
-      <AiAgentUpdatesSheet
-        visible={seoUpdatesOpen}
-        onClose={() => setSeoUpdatesOpen(false)}
-        businessName={profileName || workspace.data?.name || 'My Business'}
-      />
 
       {/* Push Notification First-Launch Prompt */}
       <PushPromptModal />
