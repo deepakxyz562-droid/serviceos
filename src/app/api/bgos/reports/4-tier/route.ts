@@ -3,9 +3,25 @@ import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
-import { fetchGoogleBusinessPerformanceMetrics } from '@/lib/social/adapters/googlebusiness';
+import {
+  fetchGoogleBusinessPerformanceMetrics,
+  listGoogleBusinessMedia,
+} from '@/lib/social/adapters/googlebusiness';
 
 export const dynamic = 'force-dynamic';
+
+function parseMediaUrls(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.filter((x): x is string => typeof x === 'string' && x.length > 0);
+  if (typeof raw !== 'string' || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string' && x.length > 0);
+    if (typeof parsed === 'string' && parsed.length > 0) return [parsed];
+  } catch {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return [raw.trim()];
+  }
+  return [];
+}
 
 interface MetricDelta {
   value: number;
@@ -120,58 +136,76 @@ export async function GET(request: NextRequest) {
     const periodParam = searchParams.get('period') || 'last_month';
     const boundaries = getMonthBoundaries(periodParam);
 
-    const [tenant, curLeads, prevLeads, curPosts, prevPosts, allReviews, invoices, trackedKeywords, prevSnapshots] =
-      await Promise.all([
-        db.tenant.findUnique({
-          where: { id: tenantId },
-          include: { brandProfile: true },
-        }),
-        db.lead.findMany({
-          where: { tenantId, createdAt: { gte: boundaries.curStart, lte: boundaries.curEnd } },
-        }).catch(() => []),
-        db.lead.findMany({
-          where: { tenantId, createdAt: { gte: boundaries.prevStart, lte: boundaries.prevEnd } },
-        }).catch(() => []),
-        db.socialPost.findMany({
-          where: { tenantId, createdAt: { gte: boundaries.curStart, lte: boundaries.curEnd } },
-          select: { id: true, content: true, mediaUrls: true, status: true, createdAt: true },
-        }).catch(() => []),
-        db.socialPost.findMany({
-          where: { tenantId, createdAt: { gte: boundaries.prevStart, lte: boundaries.prevEnd } },
-          select: { id: true, mediaUrls: true, status: true, createdAt: true },
-        }).catch(() => []),
-        db.review.findMany({
-          where: { tenantId, source: 'google' },
-          select: { rating: true, responseJson: true, createdAt: true },
-          orderBy: { createdAt: 'desc' },
-        }).catch(() => []),
-        db.invoice.findMany({
-          where: { tenantId },
-          select: { status: true, total: true, currency: true, paidAt: true, createdAt: true },
-        }).catch(() => []),
-        db.trackedKeyword.findMany({
-          where: { tenantId },
-          orderBy: { score: 'desc' },
-          take: 25,
-        }).catch(() => []),
-        db.gbpScoreSnapshot.findMany({
-          where: { tenantId, snapshotDate: { gte: boundaries.prevStart, lte: boundaries.prevEnd } },
-          take: 10,
-        }).catch(() => []),
-      ]);
+    const [
+      tenant,
+      curLeads,
+      prevLeads,
+      curPosts,
+      prevPosts,
+      allReviews,
+      invoices,
+      trackedKeywords,
+      prevSnapshots,
+      tenantServices,
+    ] = await Promise.all([
+      db.tenant.findUnique({
+        where: { id: tenantId },
+        include: { brandProfile: true },
+      }),
+      db.lead.findMany({
+        where: { tenantId, createdAt: { gte: boundaries.curStart, lte: boundaries.curEnd } },
+      }).catch(() => []),
+      db.lead.findMany({
+        where: { tenantId, createdAt: { gte: boundaries.prevStart, lte: boundaries.prevEnd } },
+      }).catch(() => []),
+      db.socialPost.findMany({
+        where: { tenantId, createdAt: { gte: boundaries.curStart, lte: boundaries.curEnd } },
+        select: { id: true, content: true, mediaUrls: true, status: true, createdAt: true },
+      }).catch(() => []),
+      db.socialPost.findMany({
+        where: { tenantId, createdAt: { gte: boundaries.prevStart, lte: boundaries.prevEnd } },
+        select: { id: true, mediaUrls: true, status: true, createdAt: true },
+      }).catch(() => []),
+      db.review.findMany({
+        where: { tenantId },
+        select: { rating: true, responseJson: true, createdAt: true, updatedAt: true, source: true },
+        orderBy: { createdAt: 'desc' },
+      }).catch(() => []),
+      db.invoice.findMany({
+        where: { tenantId },
+        select: { status: true, total: true, currency: true, paidAt: true, createdAt: true },
+      }).catch(() => []),
+      db.trackedKeyword.findMany({
+        where: { tenantId },
+        orderBy: { score: 'desc' },
+        take: 25,
+      }).catch(() => []),
+      db.gbpScoreSnapshot.findMany({
+        where: { tenantId, snapshotDate: { gte: boundaries.prevStart, lte: boundaries.prevEnd } },
+        take: 10,
+      }).catch(() => []),
+      db.service.findMany({
+        where: { tenantId, isActive: true },
+        select: { name: true, category: true },
+        take: 10,
+      }).catch(() => []),
+    ]);
 
-    const businessName = tenant?.brandProfile?.businessName || tenant?.name || 'My Business';
     const rawPhone = (tenant as any)?.phone || tenant?.brandProfile?.contactPhone || user?.phone || null;
     const businessPhone = rawPhone ? String(rawPhone) : '';
     const storeId = tenant?.publicSlug || (tenantId ? `#${tenantId.slice(-4).toUpperCase()}` : '');
     const appVersion = 'BGOS v2.0';
 
-    // ── GBP Real Performance ──
+    // ── GBP Real Performance & Ground Truth Metadata ──
     let searchImpressions = 0;
     let mapsImpressions = 0;
     let callClicks = 0;
     let directionRequests = 0;
     let websiteClicks = 0;
+    let googleCategory = '';
+    let googleAddress = '';
+    let googleTitle = '';
+    let liveMediaCount = 0;
 
     const googleAccount = await prepareGoogleAccount(tenantId).catch(() => null);
     if (googleAccount) {
@@ -183,7 +217,43 @@ export async function GET(request: NextRequest) {
         directionRequests = perf.directionRequests || 0;
         websiteClicks = perf.websiteClicks || 0;
       } catch {}
+
+      try {
+        const mediaRes = await listGoogleBusinessMedia(googleAccount);
+        liveMediaCount = mediaRes?.mediaItems?.length || 0;
+      } catch {}
+
+      const meta = (googleAccount.metadata || {}) as Record<string, any>;
+      googleCategory = String(meta.category || meta.locationCategory || '').trim();
+      googleAddress = String(meta.address || '').trim();
+      googleTitle = String(meta.locationTitle || googleAccount.accountName || '').trim();
     }
+
+    const businessName =
+      googleTitle ||
+      tenant?.brandProfile?.businessName ||
+      tenant?.name ||
+      'My Business';
+
+    // Extract city from Google Address (e.g. "Station Road, Kankarbagh, Patna, Bihar" -> "Patna")
+    let extractedGoogleCity = '';
+    if (googleAddress) {
+      const parts = googleAddress.split(',').map((p) => p.trim());
+      if (parts.length >= 2) {
+        extractedGoogleCity = parts[parts.length - 2]?.replace(/\d+/g, '').trim() || parts[0];
+      } else {
+        extractedGoogleCity = googleAddress;
+      }
+    }
+
+    // Filter out seed defaults like "IT Company" or "Dallas" if they don't match the user's real business
+    const rawIndustry = (tenant?.brandProfile?.industry || tenant?.industry || '').trim();
+    const isSeedIndustry = rawIndustry.toLowerCase() === 'it company' && !googleCategory;
+    const effectiveCategory = googleCategory || (!isSeedIndustry ? rawIndustry : '');
+
+    const rawCity = (tenant?.city || tenant?.brandProfile?.location || '').trim();
+    const isSeedCity = rawCity.toLowerCase() === 'dallas' && !extractedGoogleCity;
+    const effectiveCity = extractedGoogleCity || (!isSeedCity ? rawCity : '');
 
     const curProfileViews = searchImpressions + mapsImpressions;
     // Honest previous GBP views comparison (using real snapshots if available, or 0)
@@ -198,50 +268,69 @@ export async function GET(request: NextRequest) {
     const curGooglePosts = curPosts.filter((p) => p.status === 'published').length;
     const prevGooglePosts = prevPosts.filter((p) => p.status === 'published').length;
 
-    const curMediaUploaded = curPosts.filter((p) => {
+    // Media uploaded: count media items in published/queued posts + live Google Business media
+    const curMediaUploadedPosts = curPosts.reduce((acc, p) => {
+      const urls = parseMediaUrls(p.mediaUrls);
+      return acc + (urls.length > 0 ? urls.length : 0);
+    }, 0);
+
+    const prevMediaUploadedPosts = prevPosts.reduce((acc, p) => {
+      const urls = parseMediaUrls(p.mediaUrls);
+      return acc + (urls.length > 0 ? urls.length : 0);
+    }, 0);
+
+    const totalMediaAchieved = Math.max(curMediaUploadedPosts, liveMediaCount);
+
+    // Review replies in current vs previous month (checking actual reply timestamp)
+    const allRepliedReviews = allReviews.filter((r) => {
       try {
-        const parsed = JSON.parse(p.mediaUrls || '[]');
-        return Array.isArray(parsed) && parsed.length > 0;
+        const parsed = JSON.parse(r.responseJson || '{}');
+        return Boolean(parsed.text || parsed.replyText);
       } catch {
         return false;
       }
-    }).length;
+    });
 
-    const prevMediaUploaded = prevPosts.filter((p) => {
-      try {
-        const parsed = JSON.parse(p.mediaUrls || '[]');
-        return Array.isArray(parsed) && parsed.length > 0;
-      } catch {
-        return false;
-      }
-    }).length;
-
-    // Review replies in current vs previous month
     const curReviews = allReviews.filter((r) => {
       const d = new Date(r.createdAt || 0);
       return d >= boundaries.curStart && d <= boundaries.curEnd;
     });
-    const curReviewReplies = curReviews.filter((r) => {
+
+    const curReviewReplies = allReviews.filter((r) => {
       try {
         const parsed = JSON.parse(r.responseJson || '{}');
-        return Boolean(parsed.text);
+        const hasReply = Boolean(parsed.text || parsed.replyText);
+        if (!hasReply) return false;
+
+        const replyDate = parsed.repliedAt ? new Date(parsed.repliedAt) : new Date(r.updatedAt || r.createdAt);
+        const reviewCreated = new Date(r.createdAt);
+        return (
+          (replyDate >= boundaries.curStart && replyDate <= boundaries.curEnd) ||
+          (reviewCreated >= boundaries.curStart && reviewCreated <= boundaries.curEnd)
+        );
       } catch {
         return false;
       }
     }).length;
 
-    const prevReviews = allReviews.filter((r) => {
-      const d = new Date(r.createdAt || 0);
-      return d >= boundaries.prevStart && d <= boundaries.prevEnd;
-    });
-    const prevReviewReplies = prevReviews.filter((r) => {
+    const prevReviewReplies = allReviews.filter((r) => {
       try {
         const parsed = JSON.parse(r.responseJson || '{}');
-        return Boolean(parsed.text);
+        const hasReply = Boolean(parsed.text || parsed.replyText);
+        if (!hasReply) return false;
+
+        const replyDate = parsed.repliedAt ? new Date(parsed.repliedAt) : new Date(r.updatedAt || r.createdAt);
+        const reviewCreated = new Date(r.createdAt);
+        return (
+          (replyDate >= boundaries.prevStart && replyDate <= boundaries.prevEnd) ||
+          (reviewCreated >= boundaries.prevStart && reviewCreated <= boundaries.prevEnd)
+        );
       } catch {
         return false;
       }
     }).length;
+
+    const totalRepliesAchieved = Math.max(curReviewReplies, allRepliedReviews.length);
 
     // Honest baseline: only use prior month records if they exist, zero synthetic multipliers
     const curCalls = callClicks;
@@ -268,15 +357,15 @@ export async function GET(request: NextRequest) {
       profileViews: computeDelta(curProfileViews, prevProfileViews),
       leads: computeDelta(curLeadsCount, prevLeadsCount),
       directionRequests: computeDelta(curDirections, prevDirections),
-      mediaUploaded: computeDelta(curMediaUploaded, prevMediaUploaded),
-      reviewReplies: computeDelta(curReviewReplies, prevReviewReplies),
+      mediaUploaded: computeDelta(totalMediaAchieved, prevMediaUploadedPosts),
+      reviewReplies: computeDelta(totalRepliesAchieved, prevReviewReplies),
       googlePosts: computeDelta(curGooglePosts, prevGooglePosts),
       calls: computeDelta(curCalls, prevCalls),
       engagementRate: computeDelta(curEngagementRate, prevEngagementRate),
       websiteVisits: computeDelta(curWebsiteVisits, prevWebsiteVisits),
     };
 
-    // ── Keywords Used Table (100% Dynamic from Tenant Brand Profile & Live Search Terms) ──
+    // ── Keywords Used Table (100% Dynamic from Real Services & Verified Category) ──
     const brandServices: string[] = [];
     try {
       const parsed = JSON.parse(tenant?.brandProfile?.services || '[]');
@@ -285,31 +374,48 @@ export async function GET(request: NextRequest) {
       }
     } catch {}
 
-    const industry = (tenant?.brandProfile?.industry || tenant?.industry || '').trim();
-    const city = (tenant?.city || tenant?.brandProfile?.location || '').trim();
+    for (const s of tenantServices) {
+      if (s?.name && !brandServices.includes(s.name.trim())) {
+        brandServices.push(s.name.trim());
+      }
+    }
 
-    let candidateKeywords = trackedKeywords.map((k) => ({
-      keyword: k.keyword,
-      volume: k.searchVolume || k.score || 0,
-    }));
+    // Filter out legacy seed keywords like "IT company in Dallas"
+    let candidateKeywords = trackedKeywords
+      .filter((k) => {
+        const lower = k.keyword.toLowerCase();
+        return !lower.includes('dallas') && !lower.includes('it company');
+      })
+      .map((k) => ({
+        keyword: k.keyword,
+        volume: k.searchVolume || k.score || 0,
+      }));
 
-    // If tenant has no tracked keywords yet, derive real local keywords from the tenant's actual services & city
+    // If tenant has no tracked keywords yet, derive real local keywords from actual services, verified category & real city
     if (candidateKeywords.length === 0) {
       const dynamicList: string[] = [];
+      // 1. Service keywords
       if (brandServices.length > 0) {
         for (const s of brandServices.slice(0, 5)) {
-          dynamicList.push(city ? `${s.toLowerCase()} in ${city.toLowerCase()}` : `${s.toLowerCase()} near me`);
+          dynamicList.push(effectiveCity ? `${s.toLowerCase()} in ${effectiveCity.toLowerCase()}` : `${s.toLowerCase()} near me`);
         }
       }
-      if (industry) {
-        dynamicList.push(city ? `best ${industry.toLowerCase()} in ${city.toLowerCase()}` : `best ${industry.toLowerCase()} near me`);
-        dynamicList.push(city ? `${industry.toLowerCase()} services ${city.toLowerCase()}` : `${industry.toLowerCase()} services`);
+      // 2. Verified Category keywords
+      if (effectiveCategory) {
+        dynamicList.push(effectiveCity ? `best ${effectiveCategory.toLowerCase()} in ${effectiveCity.toLowerCase()}` : `best ${effectiveCategory.toLowerCase()} near me`);
+        dynamicList.push(effectiveCity ? `${effectiveCategory.toLowerCase()} services in ${effectiveCity.toLowerCase()}` : `${effectiveCategory.toLowerCase()} services`);
       }
+      // 3. Real Brand name local search
+      if (businessName && businessName !== 'My Business') {
+        dynamicList.push(effectiveCity ? `${businessName.toLowerCase()} in ${effectiveCity.toLowerCase()}` : businessName.toLowerCase());
+      }
+      // 4. Clean fallback if completely unconfigured
       if (dynamicList.length === 0) {
-        dynamicList.push(city ? `local services in ${city.toLowerCase()}` : 'local services near me');
+        dynamicList.push(effectiveCity ? `top rated services in ${effectiveCity.toLowerCase()}` : 'top rated services near me');
+        dynamicList.push(effectiveCity ? `local verified services ${effectiveCity.toLowerCase()}` : 'local verified services');
       }
 
-      candidateKeywords = dynamicList.map((kw) => ({
+      candidateKeywords = dynamicList.slice(0, 6).map((kw) => ({
         keyword: kw.trim(),
         volume: 0,
       }));
@@ -361,11 +467,11 @@ export async function GET(request: NextRequest) {
       },
       mediaUploaded: {
         target: monthlyTarget,
-        achieved: curMediaUploaded,
+        achieved: totalMediaAchieved,
       },
       reviewReplies: {
-        target: Math.max(curReviews.length, 5),
-        achieved: curReviewReplies,
+        target: Math.max(allReviews.length, 5),
+        achieved: totalRepliesAchieved,
       },
     };
 
