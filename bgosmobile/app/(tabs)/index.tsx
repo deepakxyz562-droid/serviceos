@@ -501,7 +501,6 @@ export default function HomeScreen() {
   const [expandedCompetitor, setExpandedCompetitor] = useState<string | null>(null);
   const { width, fontScale } = useWindowDimensions();
   const compactActions = width < 375 || fontScale > 1.2;
-  const [showInsights,setShowInsights] = useState(false);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const inbox = useResource<BgosConversation[]>('/api/omnichannel/conversations', 15000);
   const dayStart = new Date();
@@ -512,9 +511,9 @@ export default function HomeScreen() {
   const leads = useResource<{ leads: unknown[]; pagination?: { total: number } }>('/api/leads?limit=1');
   const calls = useResource<{ stats: { todayCount: number; total: number; missedCount?: number } | null }>('/api/calls?limit=1');
   const reviews = useResource<{ reviews: Array<{ id?: string; rating?: number; createdAt?: string; createTime?: string; publishedAt?: string }> }>('/api/reviews?limit=30');
-  const marketingScore = useResource<MarketingScoreResponse>('/api/gbp/marketing-score', 0, showInsights);
+  const marketingScore = useResource<MarketingScoreResponse>('/api/gbp/marketing-score');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
-  const competitors = useResource<CompetitorsResponse>('/api/gbp/competitors', 0, showInsights);
+  const competitors = useResource<CompetitorsResponse>('/api/gbp/competitors');
   const growthActions = useResource<GrowthActionsResponse>('/api/gbp/growth-actions');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
   const photosRes = useResource<PhotosResponse>('/api/social/photos');
@@ -539,9 +538,9 @@ export default function HomeScreen() {
       leads.refresh(),
       calls.refresh(),
       reviews.refresh(),
-      showInsights && marketingScore.refresh(),
+      marketingScore.refresh(),
       gbpPlace.refresh(),
-      showInsights && competitors.refresh(),
+      competitors.refresh(),
       growthActions.refresh(),
       discover.refresh(),
       photosRes.refresh(),
@@ -930,6 +929,43 @@ export default function HomeScreen() {
 
       <GrowthCockpitQuickStrip />
 
+      {/* Marketing Score — unified 3-slide carousel (Gauge, Growth line chart, Marketing tracker) */}
+      <MarketingScoreCard
+        res={marketingScore}
+        trackerItems={[
+          {
+            id: '1',
+            name: 'AI Post Approved',
+            target: 5,
+            achieved: growthActions.data?.actions?.find((a) => a.id === 'approve_post')?.doneCount || 0,
+            route: '/(tabs)/marketing',
+          },
+          {
+            id: '2',
+            name: 'AI Post Published',
+            target: 5,
+            achieved: (socialPosts.data?.data || []).filter((p) => p.status === 'published').length,
+            route: '/(tabs)/posts',
+          },
+          {
+            id: '3',
+            name: 'Media Uploaded',
+            target: 5,
+            achieved: growthActions.data?.actions?.find((a) => a.id === 'upload_media')?.doneCount || 0,
+            route: '/(tabs)/photos',
+          },
+        ]}
+      />
+
+      {/* Google's Performance (Real GBP Metrics) */}
+      <GooglePerformanceCard
+        metrics={{
+          views: (perf?.searchImpressions || 0) + (perf?.mapsImpressions || 0),
+          leads: (perf?.directionRequests || 0) + (perf?.websiteClicks || 0),
+          calls: perf?.callClicks || 0,
+        }}
+      />
+
       {/* Benchmark Action Story Bubbles (Screenshot 2) */}
       <HomeStoryBubblesStrip
         onAddPhotos={() => router.push('/(tabs)/photos')}
@@ -1130,48 +1166,7 @@ export default function HomeScreen() {
         />
       </Card>
 
-      <Pressable accessibilityRole="button" accessibilityState={{expanded:showInsights}} onPress={()=>setShowInsights(!showInsights)} style={{padding:16,backgroundColor:'#fff',borderRadius:14}}>
-        <Text style={ui.heading}>{showInsights ? 'Hide growth insights' : 'View growth insights'}</Text>
-      </Pressable>
-      {showInsights && <>
-      {/* Marketing Score — unified 3-slide carousel (Gauge, Growth line chart, Marketing tracker) */}
-      <MarketingScoreCard
-        res={marketingScore}
-        trackerItems={[
-          {
-            id: '1',
-            name: 'AI Post Approved',
-            target: 5,
-            achieved: growthActions.data?.actions?.find((a) => a.id === 'approve_post')?.doneCount || 0,
-            route: '/(tabs)/marketing',
-          },
-          {
-            id: '2',
-            name: 'AI Post Published',
-            target: 5,
-            achieved: 0,
-            route: '/(tabs)/posts',
-          },
-          {
-            id: '3',
-            name: 'Media Uploaded',
-            target: 5,
-            achieved: growthActions.data?.actions?.find((a) => a.id === 'upload_media')?.doneCount || 0,
-            route: '/(tabs)/photos',
-          },
-        ]}
-      />
-
-      {/* Google's Performance (Screenshot 08.55.28 (2)) */}
-      <GooglePerformanceCard
-        metrics={{
-          views: (perf?.searchImpressions || 0) + (perf?.mapsImpressions || 0) || 54,
-          leads: (perf?.directionRequests || 0) + (perf?.websiteClicks || 0) || 22,
-          calls: perf?.callClicks || 0,
-        }}
-      />
-
-      {/* Social Calendar (Screenshot 08.55.28 (2)) */}
+      {/* Social Calendar */}
       <SocialCalendarCard
         pendingApprovalCount={growthActions.data?.pendingApprovalCount || 0}
       />
@@ -1313,7 +1308,6 @@ export default function HomeScreen() {
         )}
       </Card>
 
-      </>}
       {/* AI Assistant Live Banner */}
       <Card style={{ backgroundColor: colors.hero, borderColor: colors.hero, padding: 18 }}>
         <View style={[ui.row, { justifyContent: 'space-between' }]}>
