@@ -535,6 +535,7 @@ export function MediaMetadataSheet({
       );
       const startRes = await apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
         method: 'POST',
+        retryTransient: 2,
         body: {
           requestId,
           prompt: trimmedPrompt || undefined,
@@ -554,7 +555,7 @@ export function MediaMetadataSheet({
       const pollStart = Date.now();
       let generated: string | null = null;
       let transientPollErrors = 0;
-      while (Date.now() - pollStart < 75000) {
+      while (Date.now() - pollStart < 95000) {
         if (reqKey !== sessionKeyRef.current) return;
         let statusRes: {
           status: string;
@@ -573,9 +574,9 @@ export function MediaMetadataSheet({
             typeof (pollErr as { statusCode?: unknown })?.statusCode === 'number'
               ? (pollErr as { statusCode: number }).statusCode
               : 0;
-          if (statusCode === 0 || statusCode === 408 || statusCode === 503 || statusCode === 504) {
+          if (statusCode === 0 || statusCode === 408 || statusCode === 502 || statusCode === 503 || statusCode === 504) {
             transientPollErrors += 1;
-            if (transientPollErrors <= 2) {
+            if (transientPollErrors <= 4) {
               await new Promise((r) => setTimeout(r, 2000));
               continue;
             }

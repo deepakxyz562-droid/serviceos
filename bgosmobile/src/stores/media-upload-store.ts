@@ -1,8 +1,8 @@
 import { Platform } from 'react-native';
 import { create } from 'zustand';
-import * as Notifications from 'expo-notifications';
 import { apiRequest } from '../lib/api';
 import { uploadFileToStorage, type PendingUpload } from '../lib/upload';
+import { getNotificationsModule, isExpoGoRuntime } from '../lib/notifications-runtime';
 
 export type BackgroundScheduleMode = 'daily' | 'weekly' | 'instant' | 'draft';
 
@@ -188,6 +188,10 @@ async function fireUploadNotification(job: MediaUploadJob) {
     } catch {}
     return;
   }
+
+  if (isExpoGoRuntime) return;
+  const Notifications = getNotificationsModule();
+  if (!Notifications) return;
 
   try {
     await Notifications.scheduleNotificationAsync({

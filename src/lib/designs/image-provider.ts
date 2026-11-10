@@ -7,6 +7,173 @@ import path from 'node:path';
 
 export type ImageProvider = 'gemini' | 'openrouter' | 'cloudflare' | 'siliconflow' | 'nvidia';
 
+const IS_TEST_ENV = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
+const KEY_CACHE_TTL_MS = 30_000;
+const QUOTA_COOLDOWN_MS = 120_000;
+
+type ApiKeyProvider = 'gemini' | 'openrouter' | 'siliconflow' | 'nvidia';
+
+interface ResolvedCredential {
+  secret: string;
+  keyRowId: string | null;
+  baseUrl?: string;
+  modelOverride?: string;
+}
+
+interface CachedCloudflareConfig {
+  accountId?: string;
+  authKey?: string;
+  email?: string;
+  keyRowId: string | null;
+}
+
+let warmKeyCacheExpiresAt = 0;
+const providerCredCache = new Map<string, ResolvedCredential | null>();
+let cloudflareCredCache: CachedCloudflareConfig | null | undefined;
+const providerCooldowns = new Map<ImageProvider, { until: number; reason: string }>();
+
+export function invalidateImageProviderCache(): void {
+  warmKeyCacheExpiresAt = 0;
+  providerCredCache.clear();
+  cloudflareCredCache = undefined;
+  providerCooldowns.clear();
+}
+
+if (!IS_TEST_ENV) {
+  (globalThis as Record<string, unknown>).__bgosInvalidateImageProviderCache = invalidateImageProviderCache;
+}
+
+class ProviderRequestError extends Error {
+  status: number;
+  accountQuotaExhausted: boolean;
+  constructor(message: string, status: number, accountQuotaExhausted = false) {
+    super(message);
+    this.name = 'ProviderRequestError';
+    this.status = status;
+    this.accountQuotaExhausted = accountQuotaExhausted;
+  }
+}
+
+function getActiveProviderCooldown(provider: ImageProvider): string | null {
+  if (IS_TEST_ENV) return null;
+  const entry = providerCooldowns.get(provider);
+  if (!entry) return null;
+  if (Date.now() >= entry.until) {
+    providerCooldowns.delete(provider);
+    return null;
+  }
+  return entry.reason;
+}
+
+function recordProviderFailureCooldown(provider: ImageProvider, err: unknown): void {
+  if (IS_TEST_ENV) return;
+  if (err instanceof ProviderRequestError && (err.status === 402 || (err.status === 429 && err.accountQuotaExhausted))) {
+    providerCooldowns.set(provider, {
+      until: Date.now() + QUOTA_COOLDOWN_MS,
+      reason: err.message,
+    });
+  }
+}
+
+function parseCredentialValue(decrypted: string): {
+  secret: string;
+  baseUrl?: string;
+  modelOverride?: string;
+} {
+  const trimmed = decrypted.trim();
+  let secret = trimmed;
+  let baseUrl: string | undefined;
+  let modelOverride: string | undefined;
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed.apiKey === 'string' && parsed.apiKey.trim()) {
+        secret = parsed.apiKey.trim();
+      } else if (typeof parsed.key === 'string' && parsed.key.trim()) {
+        secret = parsed.key.trim();
+      }
+      if (typeof parsed.baseUrl === 'string' && parsed.baseUrl.trim()) {
+        baseUrl = parsed.baseUrl.trim().replace(/\/+$/, '');
+      }
+      if (typeof parsed.model === 'string' && parsed.model.trim()) {
+        modelOverride = parsed.model.trim();
+      }
+    } catch {}
+  }
+  return { secret, baseUrl, modelOverride };
+}
+
+function envSecretForProvider(provider: ApiKeyProvider): string | undefined {
+  const raw =
+    provider === 'gemini'
+      ? process.env.GEMINI_API_KEY
+      : provider === 'openrouter'
+        ? process.env.OPENROUTER_API_KEY
+        : provider === 'siliconflow'
+          ? process.env.SILICONFLOW_API_KEY
+          : process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY;
+  return raw && raw.trim() ? raw.trim() : undefined;
+}
+
+async function warmImageKeyCache(): Promise<void> {
+  if (IS_TEST_ENV) return;
+  if (Date.now() < warmKeyCacheExpiresAt) return;
+  const findMany = (db.aiProviderKey as unknown as { findMany?: (args: any) => Promise<any[]> })?.findMany;
+  if (typeof findMany !== 'function') return;
+  try {
+    const rows = await findMany({
+      where: {
+        isActive: true,
+        provider: { in: ['cloudflare', 'gemini', 'openrouter', 'siliconflow', 'nvidia'] },
+      },
+      orderBy: { priority: 'asc' },
+    });
+    providerCredCache.clear();
+    let cfRow: any | null = null;
+    for (const prov of ['gemini', 'openrouter', 'siliconflow', 'nvidia'] as ApiKeyProvider[]) {
+      const match = (rows || []).find((r: any) => r?.provider === prov && r?.encryptedKey);
+      if (match?.encryptedKey) {
+        const parsed = parseCredentialValue(decryptKey(match.encryptedKey));
+        providerCredCache.set(
+          prov,
+          parsed.secret
+            ? { secret: parsed.secret, keyRowId: match.id, baseUrl: parsed.baseUrl, modelOverride: parsed.modelOverride }
+            : null,
+        );
+      } else {
+        const envSecret = envSecretForProvider(prov);
+        providerCredCache.set(prov, envSecret ? { secret: envSecret, keyRowId: null } : null);
+      }
+    }
+    cfRow = (rows || []).find((r: any) => r?.provider === 'cloudflare' && r?.encryptedKey) || null;
+    if (cfRow?.encryptedKey) {
+      let accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+      let authKey = process.env.CLOUDFLARE_AUTH_KEY || process.env.CLOUDFLARE_API_TOKEN;
+      let email = process.env.CLOUDFLARE_AUTH_EMAIL;
+      try {
+        const decrypted = decryptKey(cfRow.encryptedKey);
+        const parsed = JSON.parse(decrypted);
+        if (parsed.accountId) accountId = parsed.accountId;
+        if (parsed.authKey) authKey = parsed.authKey;
+        if (parsed.email) email = parsed.email;
+      } catch {
+        authKey = decryptKey(cfRow.encryptedKey);
+      }
+      cloudflareCredCache = { accountId, authKey, email, keyRowId: cfRow.id };
+    } else {
+      cloudflareCredCache = {
+        accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+        authKey: process.env.CLOUDFLARE_AUTH_KEY || process.env.CLOUDFLARE_API_TOKEN,
+        email: process.env.CLOUDFLARE_AUTH_EMAIL,
+        keyRowId: null,
+      };
+    }
+    warmKeyCacheExpiresAt = Date.now() + KEY_CACHE_TTL_MS;
+  } catch {
+    // Fallback cleanly to individual findFirst calls
+  }
+}
+
 export interface GenerateDesignImageOptions {
   referenceImageUrls?: string[];
   autoFromBusiness?: boolean;
@@ -113,54 +280,59 @@ export async function fetchReferenceImages(
     ),
   ).slice(0, MAX_REFERENCE_IMAGES);
 
-  const results: Array<{ url: string; mimeType: 'image/png' | 'image/jpeg' | 'image/webp'; base64: string }> = [];
   const publicUploadsRoot = path.resolve(process.cwd(), 'public', 'uploads');
 
-  for (const refUrl of cleaned) {
-    if (refUrl.startsWith('/uploads/')) {
-      const relativeSubPath = refUrl.replace(/^\/uploads\//, '');
-      const resolvedPath = path.resolve(publicUploadsRoot, relativeSubPath);
-      if (resolvedPath !== publicUploadsRoot && !resolvedPath.startsWith(publicUploadsRoot + path.sep)) {
-        throw new Error('Blocked path traversal in reference image path');
-      }
-      try {
-        const bytes = await fs.readFile(resolvedPath);
-        if (bytes.length > 0 && bytes.length <= MAX_REFERENCE_IMAGE_BYTES) {
-          const mime = detectImageMime(null, resolvedPath, bytes);
-          if (mime) {
-            results.push({ url: refUrl, mimeType: mime, base64: bytes.toString('base64') });
-          }
+  const loaded = await Promise.all(
+    cleaned.map(async (refUrl) => {
+      if (refUrl.startsWith('/uploads/')) {
+        const relativeSubPath = refUrl.replace(/^\/uploads\//, '');
+        const resolvedPath = path.resolve(publicUploadsRoot, relativeSubPath);
+        if (resolvedPath !== publicUploadsRoot && !resolvedPath.startsWith(publicUploadsRoot + path.sep)) {
+          throw new Error('Blocked path traversal in reference image path');
         }
+        try {
+          const bytes = await fs.readFile(resolvedPath);
+          if (bytes.length > 0 && bytes.length <= MAX_REFERENCE_IMAGE_BYTES) {
+            const mime = detectImageMime(null, resolvedPath, bytes);
+            if (mime) {
+              return { url: refUrl, mimeType: mime, base64: bytes.toString('base64') };
+            }
+          }
+        } catch (err) {
+          console.warn('[image-provider] Failed reading local reference image:', refUrl, err instanceof Error ? err.message : err);
+        }
+        return null;
+      }
+
+      const safeUrl = await assertSafeRemoteUrl(refUrl);
+      try {
+        const fetchSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(8000)]) : AbortSignal.timeout(8000);
+        const res = await fetch(safeUrl.toString(), { signal: fetchSignal, redirect: 'follow' });
+        if (!res.ok) return null;
+        if (res.url) {
+          await assertSafeRemoteUrl(res.url);
+        }
+        const cl = Number(res.headers.get('content-length') || 0);
+        if (cl > MAX_REFERENCE_IMAGE_BYTES) return null;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length === 0 || buf.length > MAX_REFERENCE_IMAGE_BYTES) return null;
+        const mime = detectImageMime(res.headers.get('content-type'), refUrl, buf);
+        if (!mime) return null;
+        return { url: refUrl, mimeType: mime, base64: buf.toString('base64') };
       } catch (err) {
-        console.warn('[image-provider] Failed reading local reference image:', refUrl, err instanceof Error ? err.message : err);
+        if (err instanceof Error && (err.message.includes('Blocked') || err.message.includes('Credentials') || err.message.includes('Unsupported'))) {
+          throw err;
+        }
+        console.warn('[image-provider] Skipping unreachable reference image:', refUrl, err instanceof Error ? err.message : err);
+        return null;
       }
-      continue;
-    }
+    }),
+  );
 
-    const safeUrl = await assertSafeRemoteUrl(refUrl);
-    try {
-      const fetchSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000);
-      const res = await fetch(safeUrl.toString(), { signal: fetchSignal, redirect: 'follow' });
-      if (!res.ok) continue;
-      if (res.url) {
-        await assertSafeRemoteUrl(res.url);
-      }
-      const cl = Number(res.headers.get('content-length') || 0);
-      if (cl > MAX_REFERENCE_IMAGE_BYTES) continue;
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length === 0 || buf.length > MAX_REFERENCE_IMAGE_BYTES) continue;
-      const mime = detectImageMime(res.headers.get('content-type'), refUrl, buf);
-      if (!mime) continue;
-      results.push({ url: refUrl, mimeType: mime, base64: buf.toString('base64') });
-    } catch (err) {
-      if (err instanceof Error && (err.message.includes('Blocked') || err.message.includes('Credentials') || err.message.includes('Unsupported'))) {
-        throw err;
-      }
-      console.warn('[image-provider] Skipping unreachable reference image:', refUrl, err instanceof Error ? err.message : err);
-    }
-  }
-
-  return results;
+  return loaded.filter(
+    (item): item is { url: string; mimeType: 'image/png' | 'image/jpeg' | 'image/webp'; base64: string } =>
+      item !== null,
+  );
 }
 
 interface ImageDimensions {
@@ -302,14 +474,24 @@ async function callCloudflareSingleModel(params: {
     `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`,
     {
       method: 'POST',
-      signal: combineSignals(signal, 40000),
+      signal: combineSignals(signal, 18000),
       headers,
       body,
     },
   );
 
   if (!response.ok) {
-    throw new Error(`Cloudflare image generation failed (${response.status})`);
+    const errText = await response.text().catch(() => '');
+    const accountQuotaExhausted =
+      response.status === 401 ||
+      response.status === 402 ||
+      response.status === 403 ||
+      (response.status === 429 && /neuron|daily|allocation|quota|exceeded|limit\s+reached|3036|4006/i.test(errText));
+    throw new ProviderRequestError(
+      `Cloudflare image generation failed (${response.status})`,
+      response.status,
+      accountQuotaExhausted,
+    );
   }
 
   const contentType = response.headers.get('content-type') || '';
@@ -348,21 +530,29 @@ async function callCloudflareImage(
   let email = process.env.CLOUDFLARE_AUTH_EMAIL;
   let keyRowId: string | null = null;
 
-  const key = await db.aiProviderKey.findFirst({
-    where: { provider: 'cloudflare', isActive: true },
-    orderBy: { priority: 'asc' },
-  }).catch(() => null);
+  await warmImageKeyCache();
+  if (!IS_TEST_ENV && Date.now() < warmKeyCacheExpiresAt && cloudflareCredCache) {
+    accountId = cloudflareCredCache.accountId || accountId;
+    authKey = cloudflareCredCache.authKey || authKey;
+    email = cloudflareCredCache.email || email;
+    keyRowId = cloudflareCredCache.keyRowId;
+  } else {
+    const key = await db.aiProviderKey.findFirst({
+      where: { provider: 'cloudflare', isActive: true },
+      orderBy: { priority: 'asc' },
+    }).catch(() => null);
 
-  if (key) {
-    keyRowId = key.id;
-    try {
-      const decrypted = decryptKey(key.encryptedKey);
-      const parsed = JSON.parse(decrypted);
-      if (parsed.accountId) accountId = parsed.accountId;
-      if (parsed.authKey) authKey = parsed.authKey;
-      if (parsed.email) email = parsed.email;
-    } catch {
-      authKey = decryptKey(key.encryptedKey);
+    if (key) {
+      keyRowId = key.id;
+      try {
+        const decrypted = decryptKey(key.encryptedKey);
+        const parsed = JSON.parse(decrypted);
+        if (parsed.accountId) accountId = parsed.accountId;
+        if (parsed.authKey) authKey = parsed.authKey;
+        if (parsed.email) email = parsed.email;
+      } catch {
+        authKey = decryptKey(key.encryptedKey);
+      }
     }
   }
 
@@ -389,6 +579,9 @@ async function callCloudflareImage(
       return { bytes, model, cost: 0 };
     } catch (err) {
       lastError = err;
+      if (err instanceof ProviderRequestError && err.accountQuotaExhausted) {
+        break;
+      }
     }
   }
 
@@ -615,6 +808,10 @@ export async function synthesizeDynamicVisualPrompt(
 ): Promise<string> {
   const cleanPrompt = cleanMarketingTopic(rawPrompt);
 
+  if (signal?.aborted) {
+    return buildHighQualityImagePrompt(rawPrompt, isPosterMode, context);
+  }
+
   try {
     const { callAI } = await import('@/lib/ai-client');
     const systemPrompt = `You are an expert commercial advertising art director and photorealistic visual prompt engineer.
@@ -645,6 +842,7 @@ Rules:
         { role: 'user', content: userPayload },
       ],
       temperature: 0.3,
+      timeoutMs: 8_000,
     });
 
     let synthesized = (aiRes.content || '').trim().replace(/^["']|["']$/g, '');
@@ -662,56 +860,32 @@ Rules:
   return buildHighQualityImagePrompt(rawPrompt, isPosterMode, context);
 }
 
-type ApiKeyProvider = 'gemini' | 'openrouter' | 'siliconflow' | 'nvidia';
+async function resolveProviderCredential(provider: ApiKeyProvider): Promise<ResolvedCredential | null> {
+  await warmImageKeyCache();
+  if (!IS_TEST_ENV && Date.now() < warmKeyCacheExpiresAt && providerCredCache.has(provider)) {
+    return providerCredCache.get(provider) ?? null;
+  }
 
-async function resolveProviderCredential(provider: ApiKeyProvider): Promise<{
-  secret: string;
-  keyRowId: string | null;
-  baseUrl?: string;
-  modelOverride?: string;
-} | null> {
   const key = await db.aiProviderKey.findFirst({
     where: { provider, isActive: true },
     orderBy: { priority: 'asc' },
   }).catch(() => null);
 
   if (key?.encryptedKey) {
-    const decrypted = decryptKey(key.encryptedKey);
-    const trimmed = decrypted.trim();
-    let secret = trimmed;
-    let baseUrl: string | undefined;
-    let modelOverride: string | undefined;
-    if (trimmed.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (typeof parsed.apiKey === 'string' && parsed.apiKey.trim()) {
-          secret = parsed.apiKey.trim();
-        } else if (typeof parsed.key === 'string' && parsed.key.trim()) {
-          secret = parsed.key.trim();
-        }
-        if (typeof parsed.baseUrl === 'string' && parsed.baseUrl.trim()) {
-          baseUrl = parsed.baseUrl.trim().replace(/\/+$/, '');
-        }
-        if (typeof parsed.model === 'string' && parsed.model.trim()) {
-          modelOverride = parsed.model.trim();
-        }
-      } catch {}
-    }
-    if (secret) {
-      return { secret, keyRowId: key.id, baseUrl, modelOverride };
+    const parsed = parseCredentialValue(decryptKey(key.encryptedKey));
+    if (parsed.secret) {
+      return {
+        secret: parsed.secret,
+        keyRowId: key.id,
+        baseUrl: parsed.baseUrl,
+        modelOverride: parsed.modelOverride,
+      };
     }
   }
 
-  const envSecret =
-    provider === 'gemini'
-      ? process.env.GEMINI_API_KEY
-      : provider === 'openrouter'
-        ? process.env.OPENROUTER_API_KEY
-        : provider === 'siliconflow'
-          ? process.env.SILICONFLOW_API_KEY
-          : process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY;
-  if (envSecret && envSecret.trim()) {
-    return { secret: envSecret.trim(), keyRowId: null };
+  const envSecret = envSecretForProvider(provider);
+  if (envSecret) {
+    return { secret: envSecret, keyRowId: null };
   }
   return null;
 }
@@ -796,25 +970,43 @@ async function callGeminiOrOpenRouterImage(params: {
           modalities: ['image', 'text'],
         };
 
-  const response = await fetch(
-    params.provider === 'gemini'
-      ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`
-      : 'https://openrouter.ai/api/v1/chat/completions',
-    {
-      method: 'POST',
-      signal: params.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(params.provider === 'gemini'
-          ? { 'x-goog-api-key': cred.secret }
-          : { Authorization: `Bearer ${cred.secret}` }),
+  let response: Response;
+  try {
+    response = await fetch(
+      params.provider === 'gemini'
+        ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`
+        : 'https://openrouter.ai/api/v1/chat/completions',
+      {
+        method: 'POST',
+        signal: combineSignals(params.signal, 20_000),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(params.provider === 'gemini'
+            ? { 'x-goog-api-key': cred.secret }
+            : { Authorization: `Bearer ${cred.secret}` }),
+        },
+        body: JSON.stringify(requestBody),
       },
-      body: JSON.stringify(requestBody),
-    },
-  );
+    );
+  } catch (err) {
+    if (!params.signal.aborted && err instanceof Error && /timeout|aborted/i.test(err.name + ' ' + err.message)) {
+      throw new ProviderRequestError(`${params.provider} image generation failed (504)`, 504);
+    }
+    throw err;
+  }
 
   if (!response.ok) {
-    throw new Error(`${params.provider} image generation failed (${response.status})`);
+    const errText = await response.text().catch(() => '');
+    const accountQuotaExhausted =
+      response.status === 401 ||
+      response.status === 402 ||
+      response.status === 403 ||
+      (response.status === 429 && /quota|exceeded|RESOURCE_EXHAUSTED|exhausted|credit|balance|limit/i.test(errText));
+    throw new ProviderRequestError(
+      `${params.provider} image generation failed (${response.status})`,
+      response.status,
+      accountQuotaExhausted,
+    );
   }
 
   const data = await response.json();
@@ -856,22 +1048,40 @@ async function callSiliconFlowImage(params: {
     process.env.BGOS_SILICONFLOW_IMAGE_MODEL?.trim() ||
     'Tongyi-MAI/Z-Image-Turbo';
 
-  const response = await fetch(`${baseUrl}/images/generations`, {
-    method: 'POST',
-    signal: combineSignals(params.signal, 45000),
-    headers: {
-      Authorization: `Bearer ${cred.secret}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      prompt: params.promptText,
-      image_size: params.dims.siliconflowSize,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/images/generations`, {
+      method: 'POST',
+      signal: combineSignals(params.signal, 20_000),
+      headers: {
+        Authorization: `Bearer ${cred.secret}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        prompt: params.promptText,
+        image_size: params.dims.siliconflowSize,
+      }),
+    });
+  } catch (err) {
+    if (!params.signal.aborted && err instanceof Error && /timeout|aborted/i.test(err.name + ' ' + err.message)) {
+      throw new ProviderRequestError('siliconflow image generation failed (504)', 504);
+    }
+    throw err;
+  }
 
   if (!response.ok) {
-    throw new Error(`siliconflow image generation failed (${response.status})`);
+    const errText = await response.text().catch(() => '');
+    const accountQuotaExhausted =
+      response.status === 401 ||
+      response.status === 402 ||
+      response.status === 403 ||
+      (response.status === 429 && /quota|exceeded|insufficient|balance|credit|limit/i.test(errText));
+    throw new ProviderRequestError(
+      `siliconflow image generation failed (${response.status})`,
+      response.status,
+      accountQuotaExhausted,
+    );
   }
 
   const data = await response.json();
@@ -890,7 +1100,7 @@ async function callSiliconFlowImage(params: {
       } else {
         const safeImgUrl = await assertSafeRemoteUrl(imageUrl.trim());
         const imgRes = await fetch(safeImgUrl.toString(), {
-          signal: combineSignals(params.signal, 25000),
+          signal: combineSignals(params.signal, 12_000),
           redirect: 'follow',
         });
         if (!imgRes.ok) {
@@ -982,7 +1192,7 @@ async function callNvidiaImage(params: {
   try {
     response = await fetch(`${baseUrl}/${modelPath}`, {
       method: 'POST',
-      signal: combineSignals(params.signal, 25000),
+      signal: combineSignals(params.signal, 15_000),
       headers: {
         Authorization: `Bearer ${cred.secret}`,
         Accept: 'application/json',
@@ -992,13 +1202,23 @@ async function callNvidiaImage(params: {
     });
   } catch (err) {
     if (!params.signal.aborted && err instanceof Error && /timeout|aborted/i.test(err.name + ' ' + err.message)) {
-      throw new Error('nvidia image generation failed (504)');
+      throw new ProviderRequestError('nvidia image generation failed (504)', 504);
     }
     throw err;
   }
 
   if (!response.ok) {
-    throw new Error(`nvidia image generation failed (${response.status})`);
+    const errText = await response.text().catch(() => '');
+    const accountQuotaExhausted =
+      response.status === 401 ||
+      response.status === 402 ||
+      response.status === 403 ||
+      (response.status === 429 && /quota|exceeded|credit|balance|limit/i.test(errText));
+    throw new ProviderRequestError(
+      `nvidia image generation failed (${response.status})`,
+      response.status,
+      accountQuotaExhausted,
+    );
   }
 
   const data = await response.json();
@@ -1085,6 +1305,7 @@ export async function generateDesignImage(
     let lastMultimodalError: unknown = null;
     for (const mmProvider of multimodalOrder) {
       if (signal.aborted) break;
+      if (getActiveProviderCooldown(mmProvider)) continue;
       try {
         return await callGeminiOrOpenRouterImage({
           provider: mmProvider,
@@ -1093,6 +1314,7 @@ export async function generateDesignImage(
           signal,
         });
       } catch (err) {
+        recordProviderFailureCooldown(mmProvider, err);
         lastMultimodalError = err;
       }
     }
@@ -1100,6 +1322,7 @@ export async function generateDesignImage(
     // Fallback to text-to-image providers with descriptive prompt when Gemini & OpenRouter are unavailable
     for (const textFallback of ['cloudflare', 'siliconflow', 'nvidia'] as const) {
       if (signal.aborted) break;
+      if (getActiveProviderCooldown(textFallback)) continue;
       try {
         return await callSingleTextImageProvider({
           provider: textFallback,
@@ -1107,41 +1330,55 @@ export async function generateDesignImage(
           dims,
           signal,
         });
-      } catch {}
+      } catch (err) {
+        recordProviderFailureCooldown(textFallback, err);
+      }
     }
 
     if (lastMultimodalError instanceof Error) {
       throw lastMultimodalError;
     }
-    throw new Error('Multimodal image generation failed across configured providers');
+    throw new Error('Multimodal image generation failed across configured providers (or cooldown)');
   }
 
-  try {
-    return await callSingleTextImageProvider({
-      provider,
-      promptText: promptWithAspect,
-      dims,
-      signal,
-    });
-  } catch (primaryErr) {
-    if (primaryErr instanceof UnsupportedImagePayloadError || signal.aborted) {
-      throw primaryErr;
+  let primaryErr: unknown = null;
+  const cooldownReason = getActiveProviderCooldown(provider);
+  if (cooldownReason) {
+    primaryErr = new ProviderRequestError(`${provider} skipped during quota cooldown: ${cooldownReason}`, 429, true);
+  } else {
+    try {
+      return await callSingleTextImageProvider({
+        provider,
+        promptText: promptWithAspect,
+        dims,
+        signal,
+      });
+    } catch (err) {
+      recordProviderFailureCooldown(provider, err);
+      primaryErr = err;
     }
+  }
 
-    for (const fallbackProvider of IMAGE_FALLBACK_ORDER[provider] || []) {
-      if (signal.aborted) break;
-      try {
-        return await callSingleTextImageProvider({
-          provider: fallbackProvider,
-          promptText: promptWithAspect,
-          dims,
-          signal,
-        });
-      } catch {}
-    }
-
+  if (primaryErr instanceof UnsupportedImagePayloadError || signal.aborted) {
     throw primaryErr;
   }
+
+  for (const fallbackProvider of IMAGE_FALLBACK_ORDER[provider] || []) {
+    if (signal.aborted) break;
+    if (getActiveProviderCooldown(fallbackProvider)) continue;
+    try {
+      return await callSingleTextImageProvider({
+        provider: fallbackProvider,
+        promptText: promptWithAspect,
+        dims,
+        signal,
+      });
+    } catch (fallbackErr) {
+      recordProviderFailureCooldown(fallbackProvider, fallbackErr);
+    }
+  }
+
+  throw primaryErr;
 }
 
 export async function resolveCuratedImageFallback(

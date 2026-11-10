@@ -1,4 +1,4 @@
-import { validateDesign, type MarketingDesign, type DesignLayer } from './marketing-design';
+import { validateDesign, type MarketingDesign, type DesignLayer } from './marketing-design-core';
 
 export interface StudioPosterInput {
   brand: string; headline: string; subtitle?: string; badge?: string; cta?: string;

@@ -95,8 +95,11 @@ const OPENROUTER_MODELS = [
   'dots-studio/dots-3-note-preview:free',
 ]
 
-/** Per-attempt timeout (15s). Fast failure allows rapid fallback to next model or Gemini. */
-const REQUEST_TIMEOUT_MS = 15_000
+/** Per-attempt timeout (10s). Fast failure allows rapid fallback to next model or Gemini within proxy limits. */
+const REQUEST_TIMEOUT_MS = 10_000
+
+/** Total end-to-end callAI waterfall budget (28s) so synchronous routes never exceed 60s reverse-proxy timeouts. */
+const DEFAULT_CALL_AI_BUDGET_MS = 28_000
 
 /** Provider order — OpenRouter is tried first (free pool), followed immediately
  *  by Gemini (where active DB key is configured), then OpenAI/Anthropic/ZAI. */
@@ -113,9 +116,8 @@ const DEFAULT_MODELS: Record<ProviderName, string[]> = {
   anthropic: ['claude-3-5-haiku-20241022'],
   gemini: [
     'gemini-flash-lite-latest',
-    'gemini-3.5-flash',
-    'gemini-3.1-flash-lite',
-    'gemini-3.8-flash',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
   ],
   zai: ['glm-4-plus'],
 }
@@ -249,6 +251,12 @@ export async function loadAiKeyChain(): Promise<KeyChain> {
  */
 export function invalidateAiKeyChainCache(): void {
   keyChainCache = null
+  const hook = (globalThis as Record<string, unknown>).__bgosInvalidateImageProviderCache
+  if (typeof hook === 'function') {
+    try {
+      (hook as () => void)()
+    } catch {}
+  }
 }
 
 // ─── Provider adapters ──────────────────────────────────────────────────────
@@ -298,7 +306,8 @@ function classifyHttpError(
   body: string,
 ): Extract<ProviderResult, { ok: false }> {
   const error = `${provider} HTTP ${status}: ${body.slice(0, 250)}`
-  if (status === 401 || status === 403) {
+  if (status === 401 || status === 402 || status === 403) {
+    // 401/403 = bad key; 402 = insufficient credits/balance on this key — do not walk more models on it
     return {
       ok: false,
       status,
@@ -732,12 +741,32 @@ const zaiAdapter: AiProviderAdapter = {
           }
         }
       }
-      const response = await zaiInstance.chat.completions.create({
-        messages,
-        temperature,
-        maxTokens,
-        ...(json ? { response_format: { type: 'json_object' } } : {}),
-      })
+      if (signal.aborted) {
+        return {
+          ok: false,
+          status: 408,
+          error: 'Aborted before ZAI SDK call',
+          shouldRotateKey: false,
+          shouldSwitchProvider: true,
+        }
+      }
+      const response = await new Promise<Awaited<ReturnType<typeof zaiInstance.chat.completions.create>>>(
+        (resolve, reject) => {
+          const onAbort = () => reject(new Error('ZAI SDK request timed out'))
+          signal.addEventListener('abort', onAbort, { once: true })
+          zaiInstance.chat.completions
+            .create({
+              messages,
+              temperature,
+              maxTokens,
+              ...(json ? { response_format: { type: 'json_object' } } : {}),
+            })
+            .then(resolve, reject)
+            .finally(() => {
+              signal.removeEventListener('abort', onAbort)
+            })
+        },
+      )
       const content = response.choices?.[0]?.message?.content || ''
       if (!content || content.trim().length < 1) {
         return {
@@ -869,15 +898,18 @@ export async function callAI(
         maxTokens?: number
         json?: boolean
         preferredModel?: string
+        timeoutMs?: number
         usageContext?: { tenantId: string; feature: string }
       }
     | ChatMessage[],
 ): Promise<CallAIResult> {
   const opts = Array.isArray(options) ? { messages: options } : options
-  const { messages, temperature, maxTokens, json, preferredModel, usageContext } = opts
+  const { messages, temperature, maxTokens, json, preferredModel, timeoutMs, usageContext } = opts
 
   const chain = await loadAiKeyChain()
   let lastErrorMsg = ''
+  const totalBudgetMs = Math.max(3_000, Math.min(timeoutMs ?? DEFAULT_CALL_AI_BUDGET_MS, 55_000))
+  const deadline = Date.now() + totalBudgetMs
 
   // Dynamically order providers by their highest-priority (lowest priority number) active key,
   // falling back to PROVIDER_ORDER for ties.
@@ -891,6 +923,7 @@ export async function callAI(
     });
 
   for (const provider of activeProviders) {
+    if (Date.now() >= deadline) break
     const keys = chain[provider].slice().sort((a, b) => a.priority - b.priority);
     if (keys.length === 0) continue;
     const adapter = ADAPTERS[provider];
@@ -903,12 +936,15 @@ export async function callAI(
 
     let switchProvider = false
     for (const key of keys) {
-      if (switchProvider) break
+      if (switchProvider || Date.now() >= deadline) break
 
+      let modelFailuresForKey = 0
       for (const model of models) {
-        // 60s timeout per attempt. Free models can be slow on cold starts.
+        const remainingMs = deadline - Date.now()
+        if (remainingMs <= 400) break
+        const attemptTimeoutMs = Math.min(REQUEST_TIMEOUT_MS, remainingMs)
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+        const timeoutId = setTimeout(() => controller.abort(), attemptTimeoutMs)
 
         // Use `const` + `.catch().finally()` so TypeScript can narrow the
         // discriminated union after the `result.ok` check (a `let` assigned
@@ -981,11 +1017,13 @@ export async function callAI(
           break // break model loop; continue to next key.
         }
 
-        // Neither rotate nor switch — model-specific failure, try next model.
+        // Neither rotate nor switch — model-specific failure, try up to 3 models per key so fallback stays fast.
+        modelFailuresForKey += 1
         console.warn(
           `[ai-client] ${provider}/${model} (key ${key.id}): ` +
-            `"${result.error.slice(0, 120)}" → trying next model`,
+            `"${result.error.slice(0, 120)}" → ${modelFailuresForKey >= 3 ? 'moving to next key/provider' : 'trying next model'}`,
         )
+        if (modelFailuresForKey >= 3) break
       }
     }
   }

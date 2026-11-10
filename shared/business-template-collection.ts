@@ -1,5 +1,5 @@
 import type { PosterAspect, PosterCategoryId, PosterTemplate } from './poster-templates';
-import type { CommercialTheme } from './marketing-design';
+import type { CommercialTheme } from './marketing-design-core';
 
 export const BUSINESS_GROUPS = {
   'Health & wellness': 'dental clinic|skin clinic|physiotherapy|gym|yoga|nutritionist|pathology lab|eye clinic',

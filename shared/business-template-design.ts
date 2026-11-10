@@ -1,7 +1,7 @@
 import { posterAdvances } from './poster-font-advances';
 import { BUSINESS_EDITIONS } from './business-template-collection';
 import type { StudioPosterInput } from './poster-composition';
-import { validateDesign, type DesignLayer } from './marketing-design';
+import { validateDesign, type DesignLayer } from './marketing-design-core';
 
 const editions = new Map(BUSINESS_EDITIONS.map(template => [String(template.layout), template]));
 // Paper, text and solid action colour. The action label always sits on the ink colour.

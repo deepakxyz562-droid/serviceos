@@ -23,6 +23,11 @@ interface RequestOptions {
   headers?: Record<string, string>;
   skipAuth?: boolean;
   retryAuth?: boolean;
+  retryTransient?: number;
+}
+
+export function isTransientGatewayStatus(status: number): boolean {
+  return status === 0 || status === 408 || status === 502 || status === 503 || status === 504;
 }
 
 let refreshing: Promise<void> | null = null;
@@ -67,6 +72,30 @@ export function formatNetworkError(error: unknown, baseUrl = API_BASE_URL): ApiE
 }
 
 export async function apiRequest<T = any>(
+  path: string,
+  options: RequestOptions = {}
+): Promise<T> {
+  const maxTransientRetries = Math.max(0, Math.min(options.retryTransient ?? 0, 3));
+  let attempt = 0;
+  while (true) {
+    try {
+      return await performApiRequest<T>(path, options);
+    } catch (err) {
+      if (options.signal?.aborted) throw err;
+      const status = err instanceof ApiError ? err.statusCode : -1;
+      if (attempt < maxTransientRetries && isTransientGatewayStatus(status)) {
+        const backoffMs = attempt === 0 ? 450 : 1000;
+        attempt += 1;
+        await new Promise((r) => setTimeout(r, backoffMs));
+        if (options.signal?.aborted) throw err;
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+async function performApiRequest<T = any>(
   path: string,
   options: RequestOptions = {}
 ): Promise<T> {
@@ -143,7 +172,7 @@ export async function apiRequest<T = any>(
   if (response.status === 401 && !skipAuth && options.retryAuth !== false) {
     const latest = await getToken();
     if (!latest || latest === requestToken) await refreshSession();
-    return apiRequest<T>(path, { ...options, retryAuth: false });
+    return performApiRequest<T>(path, { ...options, retryAuth: false });
   }
   const contentType = response.headers?.get?.('content-type') || '';
   let rawText = '';

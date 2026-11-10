@@ -55,7 +55,7 @@ import {
   colors,
 } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
-import { apiRequest } from '../../src/lib/api';
+import { apiRequest, isTransientGatewayStatus } from '../../src/lib/api';
 import { WEB_URL } from '../../src/lib/constants';
 import { validateSocialPost } from '../../src/lib/social-validation';
 import { futureLocalTime } from '../../src/lib/dates';
@@ -1529,11 +1529,13 @@ export default function MarketingScreen() {
       setLastBgGenPrompt(computedPrompt);
       const res = await apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
         method: 'POST',
+        retryTransient: 2,
         body: {
           prompt: computedPrompt,
           provider: effectiveProv,
           requestId,
           isPoster: true,
+          aspectRatio,
           businessName: effectiveBusinessName,
           category: brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category || '',
           products: brandProfile.data?.profile?.products || '',
@@ -1547,6 +1549,7 @@ export default function MarketingScreen() {
       if (res?.jobId) {
         const targetJobId = res.jobId;
         const pollStart = Date.now();
+        let transientPollErrors = 0;
         let checking=false;
         const pollInterval = setInterval(async () => {
           if(checking)return;checking=true;
@@ -1555,6 +1558,7 @@ export default function MarketingScreen() {
             const check = await apiRequest<{ status: string; error?: string; result?: { url?: string; assetId?: string } }>(
               `/api/social/designs/image?id=${encodeURIComponent(targetJobId)}`
             );
+            transientPollErrors = 0;
             if(epoch!==generationEpoch.current){clearInterval(pollInterval);return;}
             if (check?.status === 'completed' && check.result?.url) {
               clearInterval(pollInterval);
@@ -1580,12 +1584,20 @@ export default function MarketingScreen() {
               setIsGeneratingImage(false);
               const reason = check?.error || 'Image generation could not be completed.';
               setError(`${reason} You can retry with another provider or select a template photo.`);
-            } else if (Date.now() - pollStart > 75000) {
+            } else if (Date.now() - pollStart > 95000) {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
-              setError('Image generation timed out after 75s. Your existing design is unchanged.');
+              setError('Image generation timed out after 95s. Your existing design is unchanged.');
             }
           } catch (pollErr: unknown) {
+            const statusCode =
+              typeof (pollErr as { statusCode?: unknown })?.statusCode === 'number'
+                ? (pollErr as { statusCode: number }).statusCode
+                : 0;
+            if (isTransientGatewayStatus(statusCode) && transientPollErrors < 4 && Date.now() - pollStart < 95000) {
+              transientPollErrors += 1;
+              return;
+            }
             clearInterval(pollInterval);
             setIsGeneratingImage(false);
             setError((pollErr as Error)?.message || 'Could not check image generation status. Please try again.');
@@ -2058,25 +2070,37 @@ export default function MarketingScreen() {
     setActiveUserPrompt(topicToUse);
     try {
       const requestId = `mob-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      // 1. Generate campaign copy, headline, and alternative headlines with resilient fallback
+      const shouldGenerateAiImage = generationMode === 'poster' || generationMode === 'image_only';
+      const usedBrief = backgroundBrief({
+        template: activeTemplateId ? getTemplateById(activeTemplateId) : undefined,
+        headline,
+        instruction: topicToUse,
+        ratio: aspectRatio,
+      });
+
+      // 1. Generate campaign copy, headline, and alternative headlines with transient gateway retries
       const genPromise = apiRequest<{ design: MarketingDesign; caption: string; alternativeHeadlines?: string[] }>('/api/social/designs/generate', {
         method: 'POST',
+        retryTransient: 2,
         body: { prompt: topicToUse, design, caption: caption || effectiveCaption, mode: generationMode },
       });
 
-      // 2. If in poster mode, trigger AI image generation asynchronously (with optional previous business photo references)
-      let imagePromise: Promise<any> | null = null;
-      if (generationMode === 'poster') {
+      // 2. For poster & image_only modes, trigger AI image generation asynchronously (with optional previous business photo references)
+      let imagePromise: Promise<{ jobId: string; status: string } | null> = Promise.resolve(null);
+      let imageInitError: unknown = null;
+      if (shouldGenerateAiImage) {
         setIsGeneratingImage(true);
         const effectiveGenProvider: ImageProviderChoice =
           selectedRefUrls.length > 0 && isTextOnlyImageProvider(imageProvider) ? 'gemini' : imageProvider;
         imagePromise = apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
           method: 'POST',
+          retryTransient: 2,
           body: {
-            prompt: backgroundBrief({template:activeTemplateId?getTemplateById(activeTemplateId):undefined,headline,instruction:topicToUse,ratio:aspectRatio}),
+            prompt: usedBrief,
             provider: effectiveGenProvider,
             requestId,
-            isPoster: true,
+            isPoster: generationMode === 'poster',
+            aspectRatio,
             businessName: effectiveBusinessName,
             category: brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category || '',
             products: brandProfile.data?.profile?.products || '',
@@ -2085,65 +2109,75 @@ export default function MarketingScreen() {
             autoFromBusiness: false,
             referenceImageUrls: selectedRefUrls,
           },
-        }).catch(() => null);
+        }).catch((err) => {
+          imageInitError = err;
+          return null;
+        });
       }
 
-      const [data, imageInit] = await Promise.all([genPromise, imagePromise]);
+      const [genOutcome, imageOutcome] = await Promise.allSettled([genPromise, imagePromise]);
       if(epoch!==generationEpoch.current)return;
 
-      setCaption(data.caption);
-      setCaptionDraft(data.caption);
-      if (Array.isArray(data.alternativeHeadlines) && data.alternativeHeadlines.length > 0) {
-        setAlternativeHeadlines(data.alternativeHeadlines);
-      }
-      const hlLayer = data.design?.layers?.find((l) => l.id === 'headline' || l.type === 'text');
-      if (hlLayer?.text) {
-        setHeadline(hlLayer.text);
-      }
-      const bdLayer = data.design?.layers?.find((l) => l.id === 'badge');
-      if (bdLayer?.text) {
-        setDiscountBadge(bdLayer.text);
-      }
-      const subLayer = data.design?.layers?.find((l) => l.id === 'subtitle');
-      if (subLayer?.text) {
-        setSubtitle(subLayer.text);
-      }
-      setCustomDesign(data.design);
+      const imageInit = imageOutcome.status === 'fulfilled' ? imageOutcome.value : null;
 
-      setPromptInput('');
-      setSuccessNotice(
-        generationMode === 'poster'
-          ? 'Design and copy are ready. The background image may still be generating.'
-          : generationMode === 'image_only'
-          ? 'AI generated background image without text overlays!'
-          : 'AI generated fresh design and copy directly to canvas!'
-      );
-      setTimeout(() => setSuccessNotice(null), 3500);
+      if (genOutcome.status === 'fulfilled' && genOutcome.value) {
+        const data = genOutcome.value;
+        setCaption(data.caption);
+        setCaptionDraft(data.caption);
+        if (Array.isArray(data.alternativeHeadlines) && data.alternativeHeadlines.length > 0) {
+          setAlternativeHeadlines(data.alternativeHeadlines);
+        }
+        const hlLayer = data.design?.layers?.find((l) => l.id === 'headline' || l.type === 'text');
+        if (hlLayer?.text) {
+          setHeadline(hlLayer.text);
+        }
+        const bdLayer = data.design?.layers?.find((l) => l.id === 'badge');
+        if (bdLayer?.text) {
+          setDiscountBadge(bdLayer.text);
+        }
+        const subLayer = data.design?.layers?.find((l) => l.id === 'subtitle');
+        if (subLayer?.text) {
+          setSubtitle(subLayer.text);
+        }
+        setCustomDesign(data.design);
+        setPromptInput('');
+        setSuccessNotice(
+          generationMode === 'poster'
+            ? 'Design and copy are ready. The background image may still be generating.'
+            : generationMode === 'image_only'
+            ? imageInit?.jobId
+              ? 'Generating clean AI background image without text overlays...'
+              : 'AI generated background image without text overlays!'
+            : 'AI generated fresh design and copy directly to canvas!'
+        );
+        setTimeout(() => setSuccessNotice(null), 3500);
+      } else {
+        if (!imageInit?.jobId) {
+          throw (genOutcome.status === 'rejected' ? genOutcome.reason : imageInitError) || new Error('AI generation failed.');
+        }
+        setError('Copy AI was temporarily busy, while your AI image continues generating below.');
+      }
 
-      // 3. Poll for AI poster image if job was queued
+      // 3. Poll for AI image if job was queued
       if (imageInit?.jobId) {
         const targetJobId = imageInit.jobId;
         const pollStart = Date.now();
+        let transientPollErrors = 0;
         let checking=false;
         const pollInterval = setInterval(async () => {
           if(checking)return;checking=true;
           if(epoch!==generationEpoch.current){clearInterval(pollInterval);return;}
           try {
-            const check = await apiRequest<{ status: string; result?: { url?: string;assetId?:string } }>(
+            const check = await apiRequest<{ status: string; error?: string; result?: { url?: string;assetId?:string } }>(
               `/api/social/designs/image?id=${encodeURIComponent(targetJobId)}`
             );
+            transientPollErrors = 0;
             if(epoch!==generationEpoch.current){clearInterval(pollInterval);return;}
             if (check?.status === 'completed' && check.result?.url) {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
               const generatedUrl = check.result.url;
               applySelectedBgImage(generatedUrl, check.result?.assetId);
-              const usedBrief = backgroundBrief({
-                template: activeTemplateId ? getTemplateById(activeTemplateId) : undefined,
-                headline,
-                instruction: topicToUse,
-                ratio: aspectRatio,
-              });
               setLastBgGenPrompt(usedBrief);
               setBgImageCandidates((prev) =>
                 appendImageCandidate(prev, {
@@ -2156,12 +2190,26 @@ export default function MarketingScreen() {
                   aspectRatio,
                 }),
               );
-            } else if (check?.status === 'failed' || check?.status === 'cancelled' || check?.status === 'uncertain' || Date.now() - pollStart > 75000) {
+              setSuccessNotice(
+                generationMode === 'image_only'
+                  ? '✨ Clean AI image generated without text overlays!'
+                  : '✨ AI poster visual ready!',
+              );
+              setTimeout(() => setSuccessNotice(null), 3500);
+            } else if (check?.status === 'failed' || check?.status === 'cancelled' || check?.status === 'uncertain' || Date.now() - pollStart > 95000) {
               clearInterval(pollInterval);
               setIsGeneratingImage(false);
               setError((check as { error?: string } | undefined)?.error || 'The image did not complete. Your editable design and copy are preserved.');
             }
           } catch (pollErr: unknown) {
+            const statusCode =
+              typeof (pollErr as { statusCode?: unknown })?.statusCode === 'number'
+                ? (pollErr as { statusCode: number }).statusCode
+                : 0;
+            if (isTransientGatewayStatus(statusCode) && transientPollErrors < 4 && Date.now() - pollStart < 95000) {
+              transientPollErrors += 1;
+              return;
+            }
             clearInterval(pollInterval);
             setIsGeneratingImage(false);
             setError((pollErr as Error)?.message || 'The image check failed. Your editable design and copy are preserved.');

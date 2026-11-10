@@ -11,26 +11,27 @@ export async function runDesignJob(id:string){
  const job=await db.designGenerationJob.findUnique({where:{id}});if(!job)return;
  let reserved:string|undefined;let generated=false;
  try{
-  const subscriptionsRaw =
+  const [subscriptionsRaw, tenant, bgosWorkspaces] = await Promise.all([
     typeof (db as any).subscription?.findMany === 'function'
-      ? await (db as any).subscription
+      ? (db as any).subscription
           .findMany({ where: { tenantId: job.tenantId }, orderBy: { createdAt: 'desc' }, take: 10 })
           .catch(() => [])
       : typeof (db as any).subscription?.findFirst === 'function'
-        ? await (db as any).subscription
+        ? (db as any).subscription
             .findFirst({ where: { tenantId: job.tenantId }, orderBy: { createdAt: 'desc' } })
             .then((row: any) => (row ? [row] : []))
             .catch(() => [])
-        : [];
+        : Promise.resolve([]),
+    (db as any).tenant?.findUnique?.({ where: { id: job.tenantId } }).catch?.(() => null) ?? Promise.resolve(null),
+    (db as any).productWorkspace?.findMany?.({
+      where: { tenantId: job.tenantId, product: 'bgos' },
+      select: { workspaceId: true },
+    }).catch?.(() => []) ?? Promise.resolve([]),
+  ]);
   let subscription: any = pickBestSubscriptionRow(
     Array.isArray(subscriptionsRaw) ? subscriptionsRaw : [],
   );
-  const tenant = await (db as any).tenant?.findUnique?.({ where: { id: job.tenantId } }).catch?.(() => null) ?? null;
   let productSubscription: any = null;
-  const bgosWorkspaces = await (db as any).productWorkspace?.findMany?.({
-    where: { tenantId: job.tenantId, product: 'bgos' },
-    select: { workspaceId: true },
-  }).catch?.(() => []) ?? [];
   const wsIds = Array.isArray(bgosWorkspaces) ? bgosWorkspaces.map((w: any) => w.workspaceId).filter(Boolean) : [];
   if (wsIds.length > 0) {
     if (typeof (db as any).productSubscription?.findMany === 'function') {
@@ -185,7 +186,7 @@ export async function runDesignJob(id:string){
     result = await generateDesignImage(
       job.prompt,
       (job.provider || 'cloudflare') as ImageProvider,
-      AbortSignal.timeout(150000),
+      AbortSignal.timeout(55000),
       isPoster,
       visualContext,
       {
@@ -198,9 +199,9 @@ export async function runDesignJob(id:string){
     );
   } catch (err: any) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    const isProviderExhausted = /429|402|503|504|quota|rate|exhausted|credit|balance|Superadmin|neurons|Bad input|fetch failed/i.test(errMsg);
-    if (isProviderExhausted) {
-      console.warn(`[runDesignJob] AI image provider quota/error (${errMsg}), resolving curated occasion fallback`);
+    const isProviderExhausted = /429|402|503|504|quota|rate|exhausted|credit|balance|Superadmin|neurons|Bad input|fetch failed|timeout|timed out|aborted|TimeoutError|AbortError|cooldown/i.test(errMsg);
+    if (isProviderExhausted && typeof resolveCuratedImageFallback === 'function') {
+      console.warn(`[runDesignJob] AI image provider quota/timeout (${errMsg}), resolving curated occasion fallback`);
       result = await resolveCuratedImageFallback(job.prompt, visualContext);
     } else {
       throw err;

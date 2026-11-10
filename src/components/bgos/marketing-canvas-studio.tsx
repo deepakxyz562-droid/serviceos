@@ -76,7 +76,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/api';
+import { authFetch, authFetchWithRetry } from '@/lib/api';
 
 // ─── Visual Direction Types ─────────────────────────────────────────────────
 
@@ -740,7 +740,7 @@ export function MarketingCanvasStudio({
     setActiveUserPrompt(text);
     setPromptInput('');
 
-    if (generationMode === 'poster') {
+    if (generationMode === 'poster' || generationMode === 'image_only') {
       try {
         const initialProvider: ImageProviderChoice =
           selectedRefUrls.length > 0 && isTextOnlyImageProvider(aiProviderChoice)
@@ -749,20 +749,28 @@ export function MarketingCanvasStudio({
         setLastBgPromptUsed(text);
         setAiLightboxError(null);
         const requestId = `web-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        const [genRes, imageRes] = await Promise.all([
-          authFetch('/api/social/designs/generate', {
+        const [genOutcome, imageOutcome] = await Promise.allSettled([
+          authFetchWithRetry('/api/social/designs/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: text, design, caption: caption || effectiveCaption, mode: 'graphic' }),
+            maxTransientRetries: 1,
+            body: JSON.stringify({
+              prompt: text,
+              design,
+              caption: caption || effectiveCaption,
+              mode: generationMode === 'image_only' ? 'image_only' : 'graphic',
+            }),
           }),
-          authFetch('/api/social/designs/image', {
+          authFetchWithRetry('/api/social/designs/image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            maxTransientRetries: 2,
             body: JSON.stringify({
               prompt: text,
               provider: initialProvider,
               requestId,
-              isPoster: true,
+              isPoster: generationMode === 'poster',
+              aspectRatio,
               autoFromBusiness: false,
               referenceImageUrls: selectedRefUrls,
               businessName: effectiveBusinessName,
@@ -772,7 +780,8 @@ export function MarketingCanvasStudio({
           }),
         ]);
 
-        if (genRes.ok) {
+        const genRes = genOutcome.status === 'fulfilled' ? genOutcome.value : null;
+        if (genRes?.ok) {
           const json = await genRes.json();
           setCaption(json.caption);
           if (Array.isArray(json.alternativeHeadlines) && json.alternativeHeadlines.length > 0) {
@@ -789,15 +798,25 @@ export function MarketingCanvasStudio({
           }
         }
 
-        if (imageRes.ok) {
+        const imageRes = imageOutcome.status === 'fulfilled' ? imageOutcome.value : null;
+        if (imageRes?.ok) {
           const imageJson = await imageRes.json().catch(() => null);
           const targetJobId = imageJson?.jobId || requestId;
-          setGeneratingStage('Rendering high-resolution AI poster graphic (1080 × 1350)...');
+          setGeneratingStage(
+            generationMode === 'image_only'
+              ? 'Rendering clean high-resolution AI commercial image...'
+              : 'Rendering high-resolution AI poster graphic (1080 × 1350)...',
+          );
           const pollStart = Date.now();
+          let transientPollErrors = 0;
+          let checking = false;
           const poll = setInterval(async () => {
+            if (checking) return;
+            checking = true;
             try {
               const check = await authFetch(`/api/social/designs/image?id=${encodeURIComponent(targetJobId)}`);
               if (check.ok) {
+                transientPollErrors = 0;
                 const job = await check.json();
                 if (job.status === 'completed' && job.result?.url) {
                   clearInterval(poll);
@@ -816,31 +835,59 @@ export function MarketingCanvasStudio({
                   setActiveVisualFormat('poster');
                   setIsGenerating(false);
                   setGeneratingStage('');
-                  toast.success('Finished AI Poster generated successfully!');
+                  toast.success(
+                    generationMode === 'image_only'
+                      ? 'Clean AI commercial image generated!'
+                      : 'Finished AI Poster generated successfully!',
+                  );
+                  return;
                 } else if (job.status === 'failed' || job.status === 'cancelled' || job.status === 'uncertain') {
                   clearInterval(poll);
                   setIsGenerating(false);
                   setGeneratingStage('');
                   toast.info(job.error || 'AI generation key pending. Retaining sample.');
+                  return;
                 }
-              }
-              if (Date.now() - pollStart > 60000) {
+              } else if (check.status === 408 || check.status === 502 || check.status === 503 || check.status === 504) {
+                transientPollErrors += 1;
+                if (transientPollErrors <= 4 && Date.now() - pollStart < 95000) {
+                  return;
+                }
                 clearInterval(poll);
                 setIsGenerating(false);
                 setGeneratingStage('');
+                toast.error(`Server gateway error (HTTP ${check.status}). Please try again.`);
+                return;
+              }
+              if (Date.now() - pollStart > 95000) {
+                clearInterval(poll);
+                setIsGenerating(false);
+                setGeneratingStage('');
+                toast.error('Image generation timed out after 95s. Please try again.');
               }
             } catch {
+              transientPollErrors += 1;
+              if (transientPollErrors <= 4 && Date.now() - pollStart < 95000) {
+                return;
+              }
               clearInterval(poll);
               setIsGenerating(false);
               setGeneratingStage('');
+              toast.error('Connection interrupted while checking image status. Please retry.');
+            } finally {
+              checking = false;
             }
           }, 2500);
           return;
         } else {
-          setActiveVisualFormat('poster');
-          setIsGenerating(false);
-          setGeneratingStage('');
-          toast.success('Campaign copy updated! Ready for publishing.');
+          if (genRes?.ok) {
+            setActiveVisualFormat('poster');
+            setIsGenerating(false);
+            setGeneratingStage('');
+            toast.success('Campaign copy updated! Ready for publishing.');
+          } else {
+            throw new Error('Could not generate poster copy or image');
+          }
         }
       } catch {
         setIsGenerating(false);
@@ -852,9 +899,10 @@ export function MarketingCanvasStudio({
 
     try {
       setGeneratingStage('Synthesizing canvas design layers...');
-      const res = await authFetch('/api/social/designs/generate', {
+      const res = await authFetchWithRetry('/api/social/designs/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        maxTransientRetries: 1,
         body: JSON.stringify({ prompt: text, design, caption: caption || effectiveCaption, mode: generationMode }),
       });
       const json = await res.json();
@@ -868,11 +916,7 @@ export function MarketingCanvasStudio({
       if (hlLayer?.text) {
         setHeadline(hlLayer.text);
       }
-      toast.success(
-        generationMode === 'image_only'
-          ? 'Image background generated without text overlays.'
-          : 'Design updated. Every layer remains editable.'
-      );
+      toast.success('Design updated. Every layer remains editable.');
     } catch {
       setPromptInput(text);
       toast.error('Generation failed. Your design is unchanged. Please retry.');
@@ -924,14 +968,16 @@ export function MarketingCanvasStudio({
     );
     try {
       const requestId = `web-img-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      const res = await authFetch('/api/social/designs/image', {
+      const res = await authFetchWithRetry('/api/social/designs/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        maxTransientRetries: 2,
         body: JSON.stringify({
           prompt: effectivePrompt,
           provider: effectiveProvider,
           requestId,
           isPoster: true,
+          aspectRatio,
           autoFromBusiness: false,
           referenceImageUrls: selectedRefUrls,
           businessName: effectiveBusinessName,
@@ -944,10 +990,15 @@ export function MarketingCanvasStudio({
         const imageJson = await res.json().catch(() => null);
         const targetJobId = imageJson?.jobId || requestId;
         const pollStart = Date.now();
+        let transientPollErrors = 0;
+        let checking = false;
         const poll = setInterval(async () => {
+          if (checking) return;
+          checking = true;
           try {
             const check = await authFetch(`/api/social/designs/image?id=${encodeURIComponent(targetJobId)}`);
             if (check.ok) {
+              transientPollErrors = 0;
               const job = await check.json();
               if (job.status === 'completed' && job.result?.url) {
                 clearInterval(poll);
@@ -968,6 +1019,7 @@ export function MarketingCanvasStudio({
                 setGeneratingStage('');
                 setInspectLightboxMode('photo');
                 toast.success('✨ Fresh AI commercial photo background generated!');
+                return;
               } else if (job.status === 'failed' || job.status === 'cancelled' || job.status === 'uncertain') {
                 clearInterval(poll);
                 setIsGenerating(false);
@@ -975,19 +1027,41 @@ export function MarketingCanvasStudio({
                 const errMsg = job.error || 'Image generation failed';
                 setAiLightboxError(errMsg);
                 toast.error(errMsg);
+                return;
               }
-            }
-            if (Date.now() - pollStart > 60000) {
+            } else if (check.status === 408 || check.status === 502 || check.status === 503 || check.status === 504) {
+              transientPollErrors += 1;
+              if (transientPollErrors <= 4 && Date.now() - pollStart < 95000) {
+                return;
+              }
               clearInterval(poll);
               setIsGenerating(false);
               setGeneratingStage('');
-              setAiLightboxError('Image generation timed out');
-              toast.error('Image generation timed out');
+              const errMsg = `Server gateway error (HTTP ${check.status}). Please try again.`;
+              setAiLightboxError(errMsg);
+              toast.error(errMsg);
+              return;
+            }
+            if (Date.now() - pollStart > 95000) {
+              clearInterval(poll);
+              setIsGenerating(false);
+              setGeneratingStage('');
+              setAiLightboxError('Image generation timed out after 95s');
+              toast.error('Image generation timed out after 95s');
             }
           } catch {
+            transientPollErrors += 1;
+            if (transientPollErrors <= 4 && Date.now() - pollStart < 95000) {
+              return;
+            }
             clearInterval(poll);
             setIsGenerating(false);
             setGeneratingStage('');
+            const errMsg = 'Could not check image status. Please try again.';
+            setAiLightboxError(errMsg);
+            toast.error(errMsg);
+          } finally {
+            checking = false;
           }
         }, 1500);
       } else {

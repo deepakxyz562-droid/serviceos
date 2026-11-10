@@ -4,7 +4,7 @@ import {
   type DesignLayer,
   type MarketingDesign,
   type PosterTemplateLayout,
-} from './marketing-design';
+} from './marketing-design-core';
 import type { StudioPosterInput } from './poster-composition';
 import { KIT_HIGH_RES_PHOTOS, KIT_SVG_EMBLEMS } from './template-graphic-assets';
 

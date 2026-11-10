@@ -110,6 +110,34 @@ export function authFetch(url: string, options?: RequestInit): Promise<Response>
   return fetch(addTransformPort(url), finalOptions);
 }
 
+const TRANSIENT_GATEWAY_STATUSES = new Set([408, 502, 503, 504]);
+
+export async function authFetchWithRetry(
+  url: string,
+  options?: RequestInit & { maxTransientRetries?: number },
+): Promise<Response> {
+  const maxRetries = Math.max(0, Math.min(options?.maxTransientRetries ?? 1, 3));
+  let attempt = 0;
+  while (true) {
+    try {
+      const res = await authFetch(url, options);
+      if (attempt < maxRetries && TRANSIENT_GATEWAY_STATUSES.has(res.status)) {
+        attempt += 1;
+        await new Promise((r) => setTimeout(r, attempt === 1 ? 500 : 1000));
+        if (options?.signal?.aborted) return res;
+        continue;
+      }
+      return res;
+    } catch (err) {
+      if (options?.signal?.aborted || attempt >= maxRetries) {
+        throw err;
+      }
+      attempt += 1;
+      await new Promise((r) => setTimeout(r, attempt === 1 ? 500 : 1000));
+    }
+  }
+}
+
 /**
  * Convenience wrappers
  */

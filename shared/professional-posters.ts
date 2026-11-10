@@ -1,5 +1,5 @@
 import type { PosterTemplate } from './poster-templates';
-import { validateDesign, type DesignLayer, type MarketingDesign } from './marketing-design';
+import { validateDesign, type DesignLayer, type MarketingDesign } from './marketing-design-core';
 import type { StudioPosterInput } from './poster-composition';
 
 type Direction = { id:string; name:string; industry:string; headline:string; services:string[]; cta:string; ink:string; paper:string; accent:string; font:'sans'|'editorial'|'display'; arrangement:'list'|'strip'|'hero'|'festival'; category:PosterTemplate['category'] };

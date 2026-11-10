@@ -34,7 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/api';
+import { authFetch, authFetchWithRetry } from '@/lib/api';
 import { FullscreenImageLightbox } from './fullscreen-image-lightbox';
 import {
   appendImageCandidate,
@@ -667,9 +667,10 @@ export function WebMediaMetadataDialog({
         }
         return undefined;
       };
-      const res = await authFetch('/api/social/designs/image', {
+      const res = await authFetchWithRetry('/api/social/designs/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        maxTransientRetries: 2,
         body: JSON.stringify({
           prompt: promptForRequest || (effectiveAuto ? undefined : `Showcase ${resolvedBusinessName}`),
           provider: effectiveProvider,
@@ -692,18 +693,43 @@ export function WebMediaMetadataDialog({
         error?: string;
       };
       if (!res.ok || !initData.jobId) {
-        throw new Error(initData.error || 'Could not start AI image generation');
+        throw new Error(
+          initData.error ||
+            (res.status === 502 || res.status === 503 || res.status === 504
+              ? `Server gateway error (HTTP ${res.status}). Please try again in a moment.`
+              : 'Could not start AI image generation'),
+        );
       }
 
       const jobId = initData.jobId;
       const startedAt = Date.now();
-      while (Date.now() - startedAt < 60000) {
+      let transientPollErrors = 0;
+      while (Date.now() - startedAt < 95000) {
         if (reqSession !== sessionRef.current) return;
         await new Promise((r) => setTimeout(r, 2000));
         if (reqSession !== sessionRef.current) return;
-        const pollRes = await authFetch(
-          `/api/social/designs/image?id=${encodeURIComponent(jobId)}`,
-        );
+        let pollRes: Response;
+        try {
+          pollRes = await authFetch(`/api/social/designs/image?id=${encodeURIComponent(jobId)}`);
+        } catch (pollErr) {
+          transientPollErrors += 1;
+          if (transientPollErrors <= 4) {
+            continue;
+          }
+          throw pollErr;
+        }
+        if (!pollRes.ok) {
+          if (pollRes.status === 408 || pollRes.status === 502 || pollRes.status === 503 || pollRes.status === 504) {
+            transientPollErrors += 1;
+            if (transientPollErrors <= 4) {
+              continue;
+            }
+            throw new Error(`Server gateway error (HTTP ${pollRes.status}). Please try again in a moment.`);
+          }
+          const errPayload = (await pollRes.json().catch(() => ({}))) as { error?: string };
+          throw new Error(errPayload.error || `Failed to check image generation status (${pollRes.status})`);
+        }
+        transientPollErrors = 0;
         const check = (await pollRes.json().catch(() => ({}))) as {
           status?: string;
           error?: string;
@@ -734,11 +760,11 @@ export function WebMediaMetadataDialog({
           );
           return;
         }
-        if (check.status === 'failed' || check.status === 'cancelled') {
+        if (check.status === 'failed' || check.status === 'cancelled' || check.status === 'uncertain') {
           throw new Error(check.error || 'AI image generation failed');
         }
       }
-      throw new Error('AI image generation timed out after 60s. Please try again.');
+      throw new Error('AI image generation timed out after 95s. Please try again.');
     } catch (err) {
       if (reqSession === sessionRef.current) {
         const msg = err instanceof Error ? err.message : 'AI image generation failed';

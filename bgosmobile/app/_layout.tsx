@@ -4,24 +4,28 @@ import { Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
-import * as Notifications from 'expo-notifications';
+import type { NotificationResponse } from 'expo-notifications';
+import { getNotificationsModule, isExpoGoRuntime } from '../src/lib/notifications-runtime';
 import { notificationDestination } from '../src/lib/notification-routing';
 import { useAuthStore } from '../src/stores/auth-store';
 import { RootErrorBoundary } from '../src/components/navigation/error-boundary';
 import { AnimatedSplash } from '../src/components/navigation/animated-splash';
 
 try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => {
-      const isAuth = useAuthStore.getState().isAuthenticated;
-      return {
-        shouldShowBanner: isAuth,
-        shouldShowList: isAuth,
-        shouldPlaySound: isAuth,
-        shouldSetBadge: false,
-      };
-    },
-  });
+  const Notifications = getNotificationsModule();
+  if (Notifications) {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => {
+        const isAuth = useAuthStore.getState().isAuthenticated;
+        return {
+          shouldShowBanner: isAuth,
+          shouldShowList: isAuth,
+          shouldPlaySound: isAuth,
+          shouldSetBadge: false,
+        };
+      },
+    });
+  }
 } catch {
   // Silent fallback for headless or background environments
 }
@@ -42,7 +46,9 @@ export default function RootLayout() {
 
   // Ensure default Android notification channel exists early on app startup
   useEffect(() => {
-    if (Platform.OS === 'android') {
+    if (Platform.OS === 'android' && !isExpoGoRuntime) {
+      const Notifications = getNotificationsModule();
+      if (!Notifications) return;
       void Notifications.setNotificationChannelAsync('default', {
         name: 'Customer & Lead Updates',
         importance: Notifications.AndroidImportance.HIGH,
@@ -53,11 +59,13 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (isLoading || !isAuthenticated || onboardingRequired) return;
+    if (isLoading || !isAuthenticated || onboardingRequired || isExpoGoRuntime) return;
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
     let active = true;
     let listener: { remove: () => void } | null = null;
     try {
-      const receive = (response: Notifications.NotificationResponse) => {
+      const receive = (response: NotificationResponse) => {
         if (!active) return;
         try {
           const destination = notificationDestination(response.notification.request.content.data || {});

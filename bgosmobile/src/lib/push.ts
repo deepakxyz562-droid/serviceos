@@ -1,19 +1,17 @@
-import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { apiRequest } from './api';
 import * as SecureStore from 'expo-secure-store';
+import { getNotificationsModule, isExpoGoRuntime } from './notifications-runtime';
 
 const PUSH_TOKEN_KEY = 'bgos_push_token';
 const PUSH_ENABLED_KEY = 'bgos_push_enabled';
 
-const isExpoGo =
-  Constants.appOwnership === 'expo' ||
-  (Constants as Record<string, unknown>)?.executionEnvironment === 'storeClient';
-
 export async function isPushPermissionGranted(): Promise<boolean> {
-  if (isExpoGo) return false;
+  if (isExpoGoRuntime) return false;
+  const Notifications = getNotificationsModule();
+  if (!Notifications) return false;
   try {
     const settings = await Notifications.getPermissionsAsync();
     return settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
@@ -23,7 +21,9 @@ export async function isPushPermissionGranted(): Promise<boolean> {
 }
 
 export async function requestPushPermissions(): Promise<boolean> {
-  if (isExpoGo) return false;
+  if (isExpoGoRuntime) return false;
+  const Notifications = getNotificationsModule();
+  if (!Notifications) return false;
   try {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
@@ -66,14 +66,17 @@ export async function enablePush(): Promise<{ success: boolean; message: string 
       Constants.expoConfig?.extra?.eas?.projectId ||
       '30078807-9b75-42c3-97c3-41fb166c40f2';
 
-    if (Device.isDevice && projectId && !isExpoGo) {
-      try {
-        const tokenRes = await Notifications.getExpoPushTokenAsync({ projectId });
-        token = tokenRes.data || null;
-      } catch (fcmError) {
-        // Firebase not configured in native build (or google-services.json missing).
-        // Fall back seamlessly to in-app & local notifications without surfacing raw developer errors.
-        console.log('[push] Native FCM not initialized; operating in In-App & Local notification mode:', fcmError);
+    if (Device.isDevice && projectId && !isExpoGoRuntime) {
+      const Notifications = getNotificationsModule();
+      if (Notifications) {
+        try {
+          const tokenRes = await Notifications.getExpoPushTokenAsync({ projectId });
+          token = tokenRes.data || null;
+        } catch (fcmError) {
+          // Firebase not configured in native build (or google-services.json missing).
+          // Fall back seamlessly to in-app & local notifications without surfacing raw developer errors.
+          console.log('[push] Native FCM not initialized; operating in In-App & Local notification mode:', fcmError);
+        }
       }
     }
 
@@ -110,7 +113,9 @@ export async function enablePush(): Promise<{ success: boolean; message: string 
  * if the user has already granted notification permissions.
  */
 export async function autoSyncPushToken(): Promise<void> {
-  if (isExpoGo) return;
+  if (isExpoGoRuntime) return;
+  const Notifications = getNotificationsModule();
+  if (!Notifications) return;
   try {
     const granted = await isPushPermissionGranted();
     if (!granted) return;

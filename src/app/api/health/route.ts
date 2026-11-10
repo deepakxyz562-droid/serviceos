@@ -31,11 +31,23 @@ export async function GET(request: NextRequest) {
   // DB probe — single round-trip, swallow all errors.
   let dbStatus: 'connected' | 'disconnected' = 'disconnected'
   try {
-    await db.$queryRaw`SELECT 1`
+    if (process.env.USE_SUPABASE_DB === 'true') {
+      await db.tenant.findFirst({ select: { id: true } })
+    } else if (typeof (db as any).$queryRaw === 'function') {
+      await (db as any).$queryRaw`SELECT 1`
+    } else {
+      await db.tenant.findFirst({ select: { id: true } })
+    }
     dbStatus = 'connected'
   } catch (err) {
-    // Keep `disconnected` — do NOT throw. LB still needs 200.
-    log.warn({ err }, 'Health check: DB probe failed')
+    // Fallback to ORM read if $queryRaw is unsupported (e.g. Supabase PostgREST proxy).
+    try {
+      await db.tenant.findFirst({ select: { id: true } })
+      dbStatus = 'connected'
+    } catch (fallbackErr) {
+      // Keep `disconnected` — do NOT throw. LB still needs 200.
+      log.warn({ err: fallbackErr ?? err }, 'Health check: DB probe failed')
+    }
   }
 
   log.info({ db: dbStatus, uptime: Math.round(process.uptime()) }, 'Health check')

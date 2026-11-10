@@ -136,6 +136,7 @@ export async function POST(request: NextRequest) {
         },
       ],
       temperature: 0.4,
+      timeoutMs: 25_000,
       usageContext: { tenantId: user.tenantId, feature: 'bgos_design_edit' },
     });
 
@@ -206,10 +207,17 @@ export async function POST(request: NextRequest) {
       alternativeHeadlines: alts,
     });
   } catch (error) {
-    console.error('[designs/generate]', error instanceof Error ? error.message : 'Generation failed');
+    const errMsg = error instanceof Error ? error.message : 'Generation failed';
+    console.error('[designs/generate]', errMsg);
+    const isUpstreamUnavailable =
+      /All AI providers exhausted|timeout|timed out|aborted|ECONNREFUSED|ENOTFOUND|fetch failed/i.test(errMsg);
     return NextResponse.json(
-      { error: 'The design could not be generated. Your current design is unchanged; please retry.' },
-      { status: 502 },
+      {
+        error: isUpstreamUnavailable
+          ? 'AI design service is temporarily busy or upstream providers timed out. Please retry in a moment.'
+          : 'The design could not be generated. Your current design is unchanged; please retry.',
+      },
+      { status: isUpstreamUnavailable ? 503 : 502 },
     );
   }
 }

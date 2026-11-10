@@ -6,7 +6,7 @@ import { isUnsafeReferenceHostname } from '@/lib/designs/image-provider';
 import { requireBgosEntitled } from '@/lib/bgos-entitlement';
 import { IMAGE_PROVIDER_CHOICES, type ImageProviderChoice } from '../../../../../../shared/image-review';
 
-export const maxDuration = 180;
+export const maxDuration = 120;
 
 function scheduleDesignJob(id: string, source: string) {
   const exec = () =>
