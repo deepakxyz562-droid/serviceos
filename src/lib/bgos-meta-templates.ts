@@ -9,6 +9,7 @@ export interface BgosMetaTemplateButton {
   type: 'QUICK_REPLY' | 'URL' | 'CALL';
   text: string;
   url?: string;
+  example?: string[];
   phoneNumber?: string;
 }
 
@@ -26,6 +27,7 @@ export interface BgosMetaTemplate {
   variableDescriptions: string[];
   defaultExampleValues: string[];
   serviceTouchpoint: 'booking' | 'reminder' | 'completion' | 'invoice' | 'dispatch' | 'support' | 'marketing';
+  supportsCustomNote?: boolean;
 }
 
 /**
@@ -222,11 +224,78 @@ export const BGOS_CANONICAL_META_TEMPLATES: BgosMetaTemplate[] = [
     status: 'PENDING',
     bodyText: 'Hi {{1}}, thank you for choosing {{2}}! How was your service experience with {{3}}? Tap below to share a quick Google review and help us improve.',
     variableDescriptions: ['Customer Name', 'Business Name', 'Service Name'],
-    defaultExampleValues: ['Priya Sharma', 'BGOS Services', 'AC Deep Cleaning'],
+    defaultExampleValues: ['Priya Sharma', 'BGOS Services', 'your recent service'],
     serviceTouchpoint: 'completion',
     buttons: [
-      { type: 'URL', text: 'Leave Google Review ★★★★★', url: 'https://g.page/r/fieseros/review' },
+      {
+        type: 'URL',
+        text: 'Leave Google Review',
+        url: 'https://fieseros.com/r/{{1}}',
+        example: ['https://fieseros.com/r/sample-business'],
+      },
       { type: 'QUICK_REPLY', text: 'Contact Manager' },
+    ],
+  },
+  {
+    name: 'bgos_review_invite_en',
+    displayName: 'Google Review Invite (Friendly)',
+    category: 'MARKETING',
+    language: 'en_US',
+    status: 'PENDING',
+    bodyText: 'Hi {{1}}, thank you for choosing {{2}}! Could you take 30 seconds to share your experience on Google? Your review helps local customers find us.',
+    variableDescriptions: ['Customer Name', 'Business Name'],
+    defaultExampleValues: ['Priya Sharma', 'BGOS Services'],
+    serviceTouchpoint: 'completion',
+    buttons: [
+      {
+        type: 'URL',
+        text: 'Leave Google Review',
+        url: 'https://fieseros.com/r/{{1}}',
+        example: ['https://fieseros.com/r/sample-business'],
+      },
+    ],
+  },
+  {
+    name: 'bgos_review_invite_hi',
+    displayName: 'Google Review Invite (Hindi)',
+    category: 'MARKETING',
+    language: 'hi',
+    status: 'PENDING',
+    bodyText: 'नमस्ते {{1}}, {{2}} को सेवा का अवसर देने के लिए धन्यवाद! कृपया 30 सेकंड निकालकर Google पर अपना अनुभव शेयर करें। आपका रिव्यू हमारे लिए बहुत महत्वपूर्ण है।',
+    variableDescriptions: ['Customer Name', 'Business Name'],
+    defaultExampleValues: ['Priya Sharma', 'BGOS Services'],
+    serviceTouchpoint: 'completion',
+    buttons: [
+      {
+        type: 'URL',
+        text: 'Google Review Likhen',
+        url: 'https://fieseros.com/r/{{1}}',
+        example: ['https://fieseros.com/r/sample-business'],
+      },
+    ],
+  },
+  {
+    name: 'bgos_review_invite_note',
+    displayName: 'Google Review Invite + Note',
+    category: 'MARKETING',
+    language: 'en_US',
+    status: 'PENDING',
+    bodyText: 'Hi {{1}}, thank you for choosing {{2}}! {{3}} Tap below whenever you have a moment to leave us a quick Google review.',
+    variableDescriptions: ['Customer Name', 'Business Name', 'Personal Closing Note (1-line, optional)'],
+    defaultExampleValues: [
+      'Priya Sharma',
+      'BGOS Services',
+      'We truly appreciated serving you today and hope everything went smoothly.',
+    ],
+    serviceTouchpoint: 'completion',
+    supportsCustomNote: true,
+    buttons: [
+      {
+        type: 'URL',
+        text: 'Leave Google Review',
+        url: 'https://fieseros.com/r/{{1}}',
+        example: ['https://fieseros.com/r/sample-business'],
+      },
     ],
   },
   {
@@ -314,6 +383,140 @@ export function isInsideMeta24HourWindow(lastInboundTimestamp?: string | Date | 
   };
 }
 
+export const REVIEW_INVITE_TEMPLATE_NAMES = [
+  'bgos_review_invite_en',
+  'bgos_review_invite_hi',
+  'bgos_review_invite_note',
+  'bgos_review_request',
+] as const;
+
+export const DEFAULT_REVIEW_PERSONAL_NOTE =
+  'We truly appreciated serving you today and hope everything went smoothly.';
+
+/**
+ * Meta Cloud API rejects template parameter text containing newlines (`\n`/`\r`),
+ * tabs (`\t`), or 4+ consecutive spaces (error #132018 / #132000), as well as empty strings.
+ */
+export function sanitizeMetaTemplateParam(
+  raw: unknown,
+  fallback: string,
+  maxLen = 180,
+): string {
+  const input = typeof raw === 'string' ? raw : raw == null ? '' : String(raw);
+  const cleaned = input
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!cleaned) return fallback;
+  return cleaned.length > maxLen ? `${cleaned.slice(0, Math.max(1, maxLen - 1)).trimEnd()}…` : cleaned;
+}
+
+/**
+ * Sanitize optional user-supplied closing note for Meta review invite templates.
+ * Removes URLs (preventing unapproved link spoofing inside template text), newlines, tabs,
+ * and excessive whitespace, and bounds to 120 chars.
+ */
+export function sanitizeReviewPersonalNote(raw: unknown, maxLen = 120): string {
+  const input = typeof raw === 'string' ? raw : '';
+  const withoutUrls = input
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/\bwww\.\S+/gi, '');
+  return sanitizeMetaTemplateParam(withoutUrls, DEFAULT_REVIEW_PERSONAL_NOTE, maxLen);
+}
+
+export function isReviewInviteTemplateName(name: string): boolean {
+  const clean = name.trim().toLowerCase();
+  return (
+    (REVIEW_INVITE_TEMPLATE_NAMES as readonly string[]).includes(clean) ||
+    clean.includes('review')
+  );
+}
+
+/**
+ * Checks if a template button array contains a dynamic URL suffix placeholder (`{{1}}`).
+ */
+export function hasDynamicUrlButton(
+  buttons?: Array<{ type?: string; url?: string }>,
+): boolean {
+  if (!Array.isArray(buttons)) return false;
+  return buttons.some(
+    (b) => String(b?.type || '').toUpperCase() === 'URL' && typeof b?.url === 'string' && /\{\{\d+\}\}/.test(b.url),
+  );
+}
+
+/**
+ * Builds deterministic parameter array and optional dynamic URL button suffix
+ * for sending an official Meta review invite template.
+ */
+export function buildReviewInviteTemplateParams(options: {
+  templateName: string;
+  customerName?: string | null;
+  businessName: string;
+  serviceName?: string | null;
+  customNote?: string | null;
+  shortRedirectCode?: string | null;
+  reviewLink?: string | null;
+  bodyText?: string | null;
+  buttons?: Array<{ type?: string; url?: string }>;
+}): {
+  parameters: string[];
+  buttonUrlParam?: string;
+} {
+  const firstName = sanitizeMetaTemplateParam(
+    (options.customerName || '').trim().split(/\s+/)[0] || '',
+    'there',
+    60,
+  );
+  const business = sanitizeMetaTemplateParam(options.businessName, 'our team', 80);
+  const service = sanitizeMetaTemplateParam(options.serviceName, 'your recent visit', 80);
+  const note = sanitizeReviewPersonalNote(options.customNote, 120);
+  const shortCode = sanitizeMetaTemplateParam(options.shortRedirectCode, '', 120);
+
+  const tplName = options.templateName.trim();
+  const canonical = BGOS_CANONICAL_META_TEMPLATES.find((t) => t.name === tplName);
+  const effectiveBody = options.bodyText || canonical?.bodyText || '';
+  const effectiveButtons = options.buttons ?? canonical?.buttons;
+  const usesDynamicUrlButton = hasDynamicUrlButton(effectiveButtons);
+
+  let parameters: string[];
+  if (tplName === 'bgos_review_invite_en' || tplName === 'bgos_review_invite_hi') {
+    parameters = [firstName, business];
+  } else if (tplName === 'bgos_review_invite_note') {
+    parameters = [firstName, business, note];
+  } else if (tplName === 'bgos_review_request') {
+    parameters = [firstName, business, service];
+  } else {
+    // Custom BYO approved review template: detect {{1}}..{{N}} slots
+    const matches = effectiveBody.match(/\{\{(\d+)\}\}/g) || [];
+    const maxVar = matches.reduce((max, tok) => {
+      const n = Number.parseInt(tok.replace(/[{}]/g, ''), 10);
+      return Number.isFinite(n) && n > max ? n : max;
+    }, 0);
+
+    const reviewUrlFallback = sanitizeMetaTemplateParam(
+      options.reviewLink || (shortCode ? `https://fieseros.com/r/${shortCode}` : ''),
+      'https://fieseros.com',
+      240,
+    );
+
+    if (maxVar <= 0) {
+      parameters = [];
+    } else if (maxVar === 1) {
+      parameters = [firstName];
+    } else if (maxVar === 2) {
+      parameters = [firstName, business];
+    } else {
+      const defaults = [firstName, business, options.customNote?.trim() ? note : reviewUrlFallback, service];
+      parameters = Array.from({ length: maxVar }, (_, idx) => defaults[idx] || service);
+    }
+  }
+
+  return {
+    parameters,
+    buttonUrlParam: usesDynamicUrlButton && shortCode ? shortCode : undefined,
+  };
+}
+
 /**
  * Builds Meta Cloud API template component payload for /api/whatsapp/send.
  */
@@ -321,19 +524,212 @@ export function buildMetaTemplateSendPayload(
   templateName: string,
   parameters: string[],
   language = 'en_US',
+  buttonUrlParam?: string,
 ) {
+  const sanitizedParams = parameters.map((param) =>
+    sanitizeMetaTemplateParam(param, '-', 500),
+  );
+  const components: Array<Record<string, unknown>> = [];
+
+  if (sanitizedParams.length > 0) {
+    components.push({
+      type: 'body',
+      parameters: sanitizedParams.map((param) => ({
+        type: 'text',
+        text: param,
+      })),
+    });
+  }
+
+  const cleanButtonSuffix = typeof buttonUrlParam === 'string'
+    ? sanitizeMetaTemplateParam(buttonUrlParam, '', 512)
+    : '';
+  if (cleanButtonSuffix) {
+    components.push({
+      type: 'button',
+      sub_type: 'url',
+      index: '0',
+      parameters: [{ type: 'text', text: cleanButtonSuffix }],
+    });
+  }
+
   return {
-    type: 'template',
+    type: 'template' as const,
     templateName,
     templateLanguage: language,
-    templateComponents: [
-      {
-        type: 'body',
-        parameters: parameters.map((param) => ({
-          type: 'text',
-          text: param,
-        })),
-      },
-    ],
+    templateComponents: components,
   };
+}
+
+/**
+ * Strip ALL emojis and emoji-like characters from a string.
+ */
+function stripTemplateEmojis(text: string): string {
+  return text
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
+    .replace(/[\u{2600}-\u{27BF}]/gu, '')
+    .replace(/[\u{FE00}-\u{FE0F}]/gu, '')
+    .replace(/[\u{1F900}-\u{1F9FF}]/gu, '')
+    .replace(/[\u{1FA00}-\u{1FA6F}]/gu, '')
+    .replace(/[\u{1FA70}-\u{1FAFF}]/gu, '')
+    .replace(/[\u{2702}-\u{27B0}]/gu, '')
+    .replace(/[\u{200D}]/gu, '')
+    .replace(/[\u{20E3}]/gu, '')
+    .replace(/[\u{E0020}-\u{E007F}]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * Ensure body text does not start or end with a variable {{N}}.
+ */
+function ensureBodyNotStartsOrEndsWithVariable(bodyText: string): string {
+  let text = bodyText;
+  if (/^\{\{\d+\}\}/.test(text)) {
+    text = 'Hello, ' + text;
+  }
+  if (/\{\{\d+\}\}$/.test(text)) {
+    text = text + ' thank you.';
+  }
+  return text;
+}
+
+/**
+ * Strip variable patterns {{N}} from footer text (Meta rejects variables in footers).
+ */
+export function stripVariablesFromMetaFooter(footerText: string): string {
+  return footerText.replace(/\{\{\d+\}\}/g, '').replace(/\s{2,}/g, ' ').trim();
+}
+
+/**
+ * Build Meta Cloud API template creation/submission payload for Graph `/message_templates`.
+ */
+export function buildMetaTemplatePayload(
+  template: {
+    name: string;
+    content: string;
+    headerText: string | null;
+    footerText: string | null;
+    buttonsJson: string;
+    templateType: string;
+    language: string;
+  },
+  metaCategory: string,
+): Record<string, unknown> {
+  const cleanName = template.name
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 512);
+
+  const payload: Record<string, unknown> = {
+    name: cleanName,
+    category: metaCategory,
+    language: template.language === 'en' ? 'en_US' : template.language,
+  };
+
+  const components: Record<string, unknown>[] = [];
+
+  if (template.headerText) {
+    const cleanHeader = stripTemplateEmojis(template.headerText)
+      .replace(/[*_~`]/g, '')
+      .replace(/\n/g, ' ')
+      .trim();
+    if (cleanHeader) {
+      components.push({
+        type: 'HEADER',
+        format: 'TEXT',
+        text: cleanHeader.slice(0, 60),
+      });
+    }
+  }
+
+  if (metaCategory === 'AUTHENTICATION') {
+    components.push({
+      type: 'BODY',
+      add_safety_recommendation: true,
+    });
+  } else {
+    let bodyText = stripTemplateEmojis(template.content);
+    bodyText = ensureBodyNotStartsOrEndsWithVariable(bodyText);
+    const bodyComp: Record<string, unknown> = {
+      type: 'BODY',
+      text: bodyText,
+    };
+    const varMatches = bodyText.match(/\{\{\d+\}\}/g);
+    if (varMatches && varMatches.length > 0) {
+      const uniqueIndices = Array.from(
+        new Set(
+          varMatches
+            .map((m) => Number.parseInt(m.replace(/[{}]/g, ''), 10))
+            .filter((n) => Number.isFinite(n) && n > 0),
+        ),
+      ).sort((a, b) => a - b);
+      const maxIndex = uniqueIndices[uniqueIndices.length - 1] || uniqueIndices.length;
+      const sampleVals = Array.from({ length: maxIndex }, (_, idx) => `Sample ${idx + 1}`);
+      bodyComp.example = {
+        body_text: [sampleVals],
+      };
+    }
+    components.push(bodyComp);
+  }
+
+  if (template.footerText) {
+    const cleanFooter = stripTemplateEmojis(stripVariablesFromMetaFooter(template.footerText));
+    if (cleanFooter) {
+      components.push({
+        type: 'FOOTER',
+        text: cleanFooter.slice(0, 60),
+      });
+    }
+  }
+
+  try {
+    const buttons = JSON.parse(template.buttonsJson) as Array<{
+      type: string;
+      text: string;
+      url?: string;
+      example?: string[];
+      phoneNumber?: string;
+    }>;
+    if (buttons.length > 0) {
+      const metaButtons = buttons.slice(0, 3).map((btn) => {
+        let cleanBtnText = stripTemplateEmojis(btn.text)
+          .replace(/[*_~`]/g, '')
+          .trim()
+          .slice(0, 25);
+
+        if (!cleanBtnText) cleanBtnText = 'Option';
+
+        const btnPayload: Record<string, unknown> = {
+          type: btn.type === 'quick_reply' ? 'QUICK_REPLY' : btn.type.toUpperCase(),
+          text: cleanBtnText,
+        };
+
+        if (btn.type.toUpperCase() === 'URL' && btn.url) {
+          btnPayload.url = btn.url;
+          if (/\{\{\d+\}\}/.test(btn.url)) {
+            const exampleUrls = Array.isArray(btn.example) && btn.example.length > 0
+              ? btn.example
+              : [btn.url.replace(/\{\{\d+\}\}/g, 'sample-business')];
+            btnPayload.example = exampleUrls;
+          }
+        }
+        if (btn.type.toUpperCase() === 'CALL' && btn.phoneNumber) {
+          btnPayload.phone_number = btn.phoneNumber;
+        }
+        if (btn.type.toUpperCase() === 'COPY_CODE') {
+          btnPayload.type = 'COPY_CODE';
+          btnPayload.otp_type = 'ONE_TIME_AUTH_CODE';
+        }
+
+        return btnPayload;
+      });
+      components.push({ type: 'BUTTONS', buttons: metaButtons });
+    }
+  } catch { /* no buttons */ }
+
+  payload.components = components;
+  return payload;
 }

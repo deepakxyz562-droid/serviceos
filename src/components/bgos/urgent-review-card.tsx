@@ -2,15 +2,19 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertCircle,
   Calendar,
   CheckCircle2,
   ExternalLink,
   FileSpreadsheet,
   HelpCircle,
   Loader2,
+  Lock,
   MessageSquare,
   Phone,
+  Play,
   QrCode,
+  RefreshCw,
   Send,
   Sparkles,
   Trash2,
@@ -30,6 +34,10 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
+import {
+  DEFAULT_REVIEW_PERSONAL_NOTE,
+  sanitizeReviewPersonalNote,
+} from '@/lib/bgos-meta-templates';
 
 export interface SeoUpdateMilestone {
   id: string;
@@ -106,12 +114,89 @@ const DEFAULT_MILESTONES: SeoUpdateMilestone[] = [
   },
 ];
 
+export interface ReviewMetaTemplatePreset {
+  name: string;
+  displayName: string;
+  language: string;
+  status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'DRAFT';
+  bodyText: string;
+  supportsCustomNote?: boolean;
+  hasDynamicUrlButton?: boolean;
+  buttonText?: string;
+}
+
+const FALLBACK_META_TEMPLATES: ReviewMetaTemplatePreset[] = [
+  {
+    name: 'bgos_review_invite_en',
+    displayName: 'Friendly (EN)',
+    language: 'en_US',
+    status: 'PENDING',
+    bodyText:
+      'Hi {{1}}, thank you for choosing {{2}}! Could you take 30 seconds to share your experience on Google? Your review helps local customers find us.',
+    supportsCustomNote: false,
+    hasDynamicUrlButton: true,
+    buttonText: 'Leave Google Review',
+  },
+  {
+    name: 'bgos_review_invite_hi',
+    displayName: 'Hindi (हिन्दी)',
+    language: 'hi',
+    status: 'PENDING',
+    bodyText:
+      'नमस्ते {{1}}, {{2}} को सेवा का अवसर देने के लिए धन्यवाद! कृपया 30 सेकंड निकालकर Google पर अपना अनुभव शेयर करें। आपका रिव्यू हमारे लिए बहुत महत्वपूर्ण है।',
+    supportsCustomNote: false,
+    hasDynamicUrlButton: true,
+    buttonText: 'Google Review Likhen',
+  },
+  {
+    name: 'bgos_review_invite_note',
+    displayName: 'Friendly + Note',
+    language: 'en_US',
+    status: 'PENDING',
+    bodyText:
+      'Hi {{1}}, thank you for choosing {{2}}! {{3}} Tap below whenever you have a moment to leave us a quick Google review.',
+    supportsCustomNote: true,
+    hasDynamicUrlButton: true,
+    buttonText: 'Leave Google Review',
+  },
+  {
+    name: 'bgos_review_request',
+    displayName: 'Service Feedback',
+    language: 'en_US',
+    status: 'PENDING',
+    bodyText:
+      'Hi {{1}}, thank you for choosing {{2}}! How was your service experience with {{3}}? Tap below to share a quick Google review and help us improve.',
+    supportsCustomNote: false,
+    hasDynamicUrlButton: true,
+    buttonText: 'Leave Google Review',
+  },
+];
+
+function renderLockedMetaPreview(
+  tpl: ReviewMetaTemplatePreset,
+  businessName: string,
+  customNote: string,
+): string {
+  const safeBiz = businessName.trim() || 'Our Business';
+  const noteVal = customNote.trim()
+    ? sanitizeReviewPersonalNote(customNote, 120)
+    : DEFAULT_REVIEW_PERSONAL_NOTE;
+  const thirdVal = tpl.supportsCustomNote ? noteVal : 'your recent visit';
+  return tpl.bodyText
+    .replace(/\{\{1\}\}/g, 'Priya')
+    .replace(/\{\{2\}\}/g, safeBiz)
+    .replace(/\{\{3\}\}/g, thirdVal)
+    .replace(/\{\{4\}\}/g, safeBiz);
+}
+
 interface QueueItem {
   id: string;
   channel: string;
   phone: string;
   customerName: string;
   batchDay?: number;
+  metaTemplateName?: string | null;
+  metaTemplateStatus?: string | null;
   message: string;
   dueAt: string;
   status: string;
@@ -135,10 +220,16 @@ interface QueueLocale {
 
 interface QueueApiResponse {
   hasWhatsAppProvider?: boolean;
+  waConfigSource?: string;
   smsAvailable?: boolean;
   locale?: QueueLocale;
   businessName?: string;
   reviewLink?: string;
+  shortRedirectCode?: string;
+  shortReviewUrl?: string;
+  hasApprovedReviewTemplate?: boolean;
+  activeMetaTemplateStatus?: string;
+  metaTemplates?: ReviewMetaTemplatePreset[];
   queue?: {
     pending: number;
     sent: number;
@@ -241,7 +332,23 @@ export function UrgentReviewCard({
   const [queueData, setQueueData] = useState<QueueApiResponse | null>(null);
   const [queueLoading, setQueueLoading] = useState(false);
   const [schedulingBulk, setSchedulingBulk] = useState(false);
+  const [runningQueueAction, setRunningQueueAction] = useState(false);
+  const [selectedTemplateName, setSelectedTemplateName] = useState('bgos_review_invite_en');
+  const [customNote, setCustomNote] = useState('');
+  const [customFreeformMessage, setCustomFreeformMessage] = useState(
+    () =>
+      `Hi {firstName}, thank you for choosing ${businessName}! Could you take 30 seconds to share your Google review? ${reviewUrl}`,
+  );
+  const hasEditedFreeformRef = useRef(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!hasEditedFreeformRef.current) {
+      setCustomFreeformMessage(
+        `Hi {firstName}, thank you for choosing ${businessName}! Could you take 30 seconds to share your Google review? ${reviewUrl}`,
+      );
+    }
+  }, [businessName, reviewUrl]);
 
   const loadQueue = useCallback(async () => {
     setQueueLoading(true);
@@ -250,6 +357,15 @@ export function UrgentReviewCard({
       if (res.ok) {
         const json = (await res.json()) as QueueApiResponse;
         setQueueData(json);
+        if (Array.isArray(json.metaTemplates) && json.metaTemplates.length > 0) {
+          const approved = json.metaTemplates.find((t) => t.status === 'APPROVED');
+          if (approved) {
+            setSelectedTemplateName((prev) => {
+              const currentMatch = json.metaTemplates?.find((t) => t.name === prev);
+              return currentMatch && currentMatch.status === 'APPROVED' ? prev : approved.name;
+            });
+          }
+        }
       }
     } catch {
       // silent fallback
@@ -261,6 +377,28 @@ export function UrgentReviewCard({
   useEffect(() => {
     void loadQueue();
   }, [loadQueue]);
+
+  const waCloudConnected = Boolean(queueData?.hasWhatsAppProvider);
+  const isLockedMetaMode = channel === 'whatsapp' && waCloudConnected;
+  const availableTemplates = useMemo<ReviewMetaTemplatePreset[]>(
+    () =>
+      queueData?.metaTemplates && queueData.metaTemplates.length > 0
+        ? queueData.metaTemplates
+        : FALLBACK_META_TEMPLATES,
+    [queueData?.metaTemplates],
+  );
+  const selectedTemplate = useMemo<ReviewMetaTemplatePreset>(
+    () =>
+      availableTemplates.find((t) => t.name === selectedTemplateName) ||
+      availableTemplates.find((t) => t.status === 'APPROVED') ||
+      availableTemplates[0],
+    [availableTemplates, selectedTemplateName],
+  );
+  const displayShortCtaUrl = useMemo(() => {
+    if (queueData?.shortReviewUrl) return queueData.shortReviewUrl;
+    if (queueData?.shortRedirectCode) return `https://fieseros.com/r/${queueData.shortRedirectCode}`;
+    return reviewUrl;
+  }, [queueData?.shortReviewUrl, queueData?.shortRedirectCode, reviewUrl]);
 
   const activeCallingCode = queueData?.locale?.callingCode || '+91';
   const activeTimeZone = useMemo(() => {
@@ -347,11 +485,13 @@ export function UrgentReviewCard({
     }
     setSchedulingBulk(true);
     try {
+      const cleanClosing = customNote.trim() ? sanitizeReviewPersonalNote(customNote, 120) : '';
       const res = await authFetch('/api/reviews/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode: 'scheduled',
+          waDeliveryMode: isLockedMetaMode ? 'template' : 'direct_queue',
           channel,
           dailyLimit: 5,
           preferredTime,
@@ -361,6 +501,15 @@ export function UrgentReviewCard({
           reviewLink: reviewUrl,
           businessName,
           includeDirectLink: true,
+          ...(isLockedMetaMode
+            ? {
+                templateName: selectedTemplate.name,
+                templateLanguage: selectedTemplate.language,
+                customNote: selectedTemplate.supportsCustomNote && cleanClosing ? cleanClosing : undefined,
+              }
+            : {
+                messageTemplate: customFreeformMessage.trim() || undefined,
+              }),
           recipients: activeRecipients,
         }),
       });
@@ -384,6 +533,32 @@ export function UrgentReviewCard({
       toast.error(err instanceof Error ? err.message : 'Bulk scheduling failed');
     } finally {
       setSchedulingBulk(false);
+    }
+  };
+
+  const handleRunQueueAction = async (action: 'dispatch_now' | 'retry_failed') => {
+    setRunningQueueAction(true);
+    try {
+      const res = await authFetch('/api/reviews/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (!res.ok || data.success === false) {
+        toast.error(data.error || data.message || 'Could not dispatch queued invites.');
+      } else {
+        toast.success(data.message || 'Dispatched review invites!');
+      }
+      await loadQueue();
+    } catch {
+      toast.error('Network error while dispatching review queue.');
+    } finally {
+      setRunningQueueAction(false);
     }
   };
 
@@ -756,6 +931,128 @@ export function UrgentReviewCard({
               </div>
             )}
 
+            {/* Channel-Aware Invite Message Preview */}
+            {isLockedMetaMode ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                    <Lock className="size-3.5 text-emerald-700" />
+                    <span>Meta Cloud API Template Preview</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900/5 border border-border text-foreground inline-flex items-center gap-1">
+                      <Lock className="size-2.5" /> Locked for Meta Cloud API
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        selectedTemplate.status === 'APPROVED'
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                          : selectedTemplate.status === 'REJECTED'
+                            ? 'bg-rose-100 text-rose-800 border-rose-200'
+                            : 'bg-amber-100 text-amber-800 border-amber-200'
+                      }`}
+                    >
+                      {selectedTemplate.status === 'APPROVED'
+                        ? 'Approved'
+                        : selectedTemplate.status === 'REJECTED'
+                          ? 'Rejected'
+                          : 'Pending Meta Approval'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {availableTemplates.map((tpl) => {
+                    const active = tpl.name === selectedTemplate.name;
+                    return (
+                      <button
+                        key={tpl.name}
+                        type="button"
+                        onClick={() => setSelectedTemplateName(tpl.name)}
+                        className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-colors ${
+                          active
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background text-muted-foreground border-border hover:border-primary/50'
+                        }`}
+                      >
+                        {tpl.displayName}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {selectedTemplate.status !== 'APPROVED' && (
+                  <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-2 text-[11px] text-amber-800">
+                    <AlertCircle className="size-3.5 shrink-0 mt-0.5" />
+                    <span>
+                      Wording is locked by Meta template rules. Sync/approve{' '}
+                      <code className="font-mono font-bold">{selectedTemplate.name}</code> in Marketing → Meta Templates before live Cloud API delivery, or use 1-Tap &ldquo;Send WA&rdquo; on queued rows.
+                    </span>
+                  </div>
+                )}
+
+                <div className="rounded-xl bg-[#ECE5DD] p-3 border border-border/60">
+                  <div className="rounded-lg bg-white p-2.5 shadow-2xs space-y-2">
+                    <p className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap">
+                      {renderLockedMetaPreview(selectedTemplate, businessName, customNote)}
+                    </p>
+                    <div className="pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-[#128C7E]">
+                      <ExternalLink className="size-3 shrink-0" />
+                      <span className="truncate">
+                        {selectedTemplate.buttonText || 'Leave Google Review'} → {displayShortCtaUrl}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {selectedTemplate.supportsCustomNote ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-foreground">
+                      <label>Optional 1-Line Closing Note</label>
+                      <span className="text-muted-foreground">{customNote.length}/120</span>
+                    </div>
+                    <Input
+                      value={customNote}
+                      maxLength={120}
+                      onChange={(e) =>
+                        setCustomNote(e.target.value.replace(/[\r\n\t]+/g, ' ').slice(0, 120))
+                      }
+                      placeholder={DEFAULT_REVIEW_PERSONAL_NOTE}
+                      className="h-8 text-xs bg-background border-border"
+                    />
+                    <p className="text-[10.5px] text-muted-foreground">
+                      Only this 1-line note can be personalized — URLs and line breaks are stripped automatically for Meta compliance.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[10.5px] text-muted-foreground">
+                    Meta Cloud API locks template wording so invites deliver 24/7. Choose &ldquo;Friendly + Note&rdquo; above if you want a custom closing line.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-border bg-muted/20 p-3.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-foreground">Invite Message Preview</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                    Editable ({channel === 'sms' ? 'SMS' : '1-Tap WhatsApp'})
+                  </span>
+                </div>
+                <Textarea
+                  value={customFreeformMessage}
+                  onChange={(e) => {
+                    hasEditedFreeformRef.current = true;
+                    setCustomFreeformMessage(e.target.value);
+                  }}
+                  rows={3}
+                  className="text-xs bg-background border-border rounded-xl"
+                />
+                <p className="text-[10.5px] text-muted-foreground">
+                  Use <code className="font-mono">{'{firstName}'}</code> to personalize each invite with the customer&apos;s first name.
+                </p>
+              </div>
+            )}
+
             {activeRecipients.length > 0 && (
               <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-900 font-medium">
                 {activeRecipients.length} customer{activeRecipients.length === 1 ? '' : 's'} ready → scheduled over{' '}
@@ -775,15 +1072,38 @@ export function UrgentReviewCard({
 
             {/* Existing Queue Tracker */}
             <div className="border-t border-border pt-3 space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold">
+              <div className="flex items-center justify-between gap-2 text-xs font-bold flex-wrap">
                 <span>
-                  Scheduled Queue ({pendingItems.length} pending · {queueData?.queue?.sent ?? 0} sent)
+                  Scheduled Queue ({pendingItems.length} pending · {queueData?.queue?.sent ?? 0} sent
+                  {(queueData?.queue?.failed ?? 0) > 0 ? ` · ${queueData?.queue?.failed} failed` : ''})
                 </span>
+                <div className="flex items-center gap-1.5">
+                  {pendingItems.length > 0 && (waCloudConnected || queueData?.smsAvailable) && (
+                    <button
+                      type="button"
+                      disabled={runningQueueAction}
+                      onClick={() => void handleRunQueueAction('dispatch_now')}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/10 text-primary text-[10.5px] font-bold hover:bg-primary/20 disabled:opacity-50"
+                    >
+                      <Play className="size-2.5" /> Run Due
+                    </button>
+                  )}
+                  {(queueData?.queue?.failed ?? 0) > 0 && (
+                    <button
+                      type="button"
+                      disabled={runningQueueAction}
+                      onClick={() => void handleRunQueueAction('retry_failed')}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-100 text-amber-800 text-[10.5px] font-bold hover:bg-amber-200 disabled:opacity-50"
+                    >
+                      <RefreshCw className="size-2.5" /> Retry Failed
+                    </button>
+                  )}
+                </div>
               </div>
               {!(queueData?.queue?.items?.length) ? (
                 <p className="text-[11px] text-muted-foreground">No queued review invites yet.</p>
               ) : (
-                <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
                   {queueData.queue.items.slice(0, 15).map((item) => {
                     const cleanDigits = item.phone.replace(/[^\d]/g, '');
                     const waUrl = `https://wa.me/${cleanDigits}?text=${encodeURIComponent(item.message)}`;
@@ -793,8 +1113,15 @@ export function UrgentReviewCard({
                         className="flex items-center justify-between gap-2 p-2 rounded-xl border border-border bg-muted/20 text-xs"
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="font-semibold truncate">
-                            {item.customerName || item.phone}
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold truncate">
+                              {item.customerName || item.phone}
+                            </span>
+                            {item.metaTemplateName && (
+                              <span className="text-[9.5px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                                {item.metaTemplateName}
+                              </span>
+                            )}
                           </div>
                           <div className="text-[10.5px] text-muted-foreground truncate">
                             {item.phone} · {item.channel.toUpperCase()} ·{' '}
@@ -807,6 +1134,9 @@ export function UrgentReviewCard({
                             })}
                             {item.batchDay ? ` · Day ${item.batchDay}` : ''}
                           </div>
+                          {item.lastError && (
+                            <p className="text-[10px] text-rose-600 truncate mt-0.5">{item.lastError}</p>
+                          )}
                         </div>
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${

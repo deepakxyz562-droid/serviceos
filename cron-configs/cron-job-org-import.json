@@ -115,6 +115,17 @@
       "url": "https://YOUR-DOMAIN.com/api/cron/gbp-auto-post",
       "schedule": "0 */6 * * *",
       "title": "GBP Auto Post (every 6h, 72h cadence, opt-in only)"
+    },
+    {
+      "name": "gbp-reviews-sync",
+      "url": "https://YOUR-DOMAIN.com/api/cron/gbp-reviews-sync",
+      "schedule": "*/30 * * * *",
+      "scheduleHuman": "Every 30 minutes",
+      "method": "POST",
+      "headers": {
+        "x-cron-secret": "YOUR_CRON_SECRET"
+      },
+      "_comment": "Polls active Google Business Profile accounts every 30 min to import new reviews and dispatch in-app + web/mobile push alerts immediately (also included in daily master as a daily safety net)."
     }
   ],
   "_daily_subcrons_handled_by_master": [
@@ -128,7 +139,8 @@
     "renewal (downgrades, PayPal sync, expired subs)",
     "past-due-escalation (1d/3d/7d escalation + daily digest to platform owner)",
     "data-retention (archives or deletes old data per tenant config)",
-    "bgos-lifecycle (BGOS review 0->5 nudges, trial ending/expired, post-trial unpaid inactivity rescue & win-back)",
+    "gbp-reviews-sync (syncs Google reviews + triggers push/in-app notifications)",
+    "bgos-lifecycle (BGOS review 0->5 nudges, trial ending/expired, post-trial unpaid inactivity rescue & win-back, plus push/in-app reminders for >48h unreplied reviews)",
     "sitemap-regeneration (incremental \u2014 only dirty files)"
   ],
   "_hourly_standalone_crons": [

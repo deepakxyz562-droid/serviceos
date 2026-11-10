@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { checkWhatsAppCredits, deductWhatsAppCredit } from '@/lib/credit-management'
+import { normalizeWhatsAppAccessToken } from '@/lib/whatsapp-config'
 
 const WHATSAPP_API_BASE = 'https://graph.facebook.com/v25.0'
 
@@ -36,13 +37,13 @@ function resolveWACreds(prov: {
   credential: { encryptedData: string | null } | null
 }): { accessToken: string; phoneNumberId: string } | null {
   const cfg = safeJsonParse(prov.configJson, {}) as Record<string, string>
-  let accessToken = cfg.accessToken || ''
-  let phoneNumberId = cfg.phoneNumberId || ''
+  let accessToken = normalizeWhatsAppAccessToken(cfg.accessToken || '')
+  let phoneNumberId = (cfg.phoneNumberId || '').trim()
 
   if (!accessToken && prov.credential) {
     const credData = safeJsonParse(prov.credential.encryptedData, {}) as Record<string, string>
-    accessToken = credData.accessToken || credData.apiKey || ''
-    if (!phoneNumberId) phoneNumberId = credData.phoneNumberId || ''
+    accessToken = normalizeWhatsAppAccessToken(credData.accessToken || credData.apiKey || '')
+    if (!phoneNumberId) phoneNumberId = (credData.phoneNumberId || '').trim()
   }
 
   if (accessToken && phoneNumberId) {
@@ -109,9 +110,11 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
       const credential = await db.credential.findUnique({ where: { id: credentialId } })
       if (credential) {
         const credData = safeJsonParse(credential.encryptedData, {}) as Record<string, string>
-        if (credData.accessToken && credData.phoneNumberId) {
-          accessToken = credData.accessToken
-          phoneNumberId = credData.phoneNumberId
+        const cleanedToken = normalizeWhatsAppAccessToken(credData.accessToken || credData.apiKey || '')
+        const cleanPhoneId = (credData.phoneNumberId || '').trim()
+        if (cleanedToken && cleanPhoneId) {
+          accessToken = cleanedToken
+          phoneNumberId = cleanPhoneId
           credentialSource = `credential:${credential.id}`
         }
       }
@@ -213,9 +216,11 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
       })
       for (const cred of whatsappCreds) {
         const credData = safeJsonParse(cred.encryptedData, {}) as Record<string, string>
-        if (credData.accessToken && credData.phoneNumberId) {
-          accessToken = credData.accessToken
-          phoneNumberId = credData.phoneNumberId
+        const cleanedToken = normalizeWhatsAppAccessToken(credData.accessToken || credData.apiKey || '')
+        const cleanPhoneId = (credData.phoneNumberId || '').trim()
+        if (cleanedToken && cleanPhoneId) {
+          accessToken = cleanedToken
+          phoneNumberId = cleanPhoneId
           credentialSource = `credential:${cred.id}(${cred.name})`
           break
         }
@@ -225,8 +230,8 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
 
   // 3b. Environment variables fallback
   if (!accessToken || !phoneNumberId) {
-    const envToken = process.env.WHATSAPP_ACCESS_TOKEN
-    const envPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID
+    const envToken = normalizeWhatsAppAccessToken(process.env.WHATSAPP_ACCESS_TOKEN || '')
+    const envPhoneId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim()
     if (envToken && envPhoneId) {
       accessToken = envToken
       phoneNumberId = envPhoneId
@@ -296,10 +301,18 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
 
       if (errorCode === 131030) {
         errorMessage = `Recipient "${recipientPhone}" not in allowed list. Add as test contact in Meta Business Suite, or use a template message.`
+      } else if (errorCode === 131047) {
+        errorMessage = `Outside 24-hour customer care window for "${recipientPhone}". An approved Meta template is required.`
       } else if (errorCode === 131000) {
         errorMessage = `Invalid phone number "${recipientPhone}". Include country code (e.g., 91XXXXXXXXXX).`
       } else if (errorCode === 132000) {
-        errorMessage = `Template parameter mismatch. Check your template definition in Meta Business Suite.`
+        errorMessage = `Template parameter mismatch. Check variable counts and button parameters in Meta Business Suite.`
+      } else if (errorCode === 132001) {
+        errorMessage = `Meta template "${templateName || 'unknown'}" (${templateLanguage || 'en_US'}) does not exist or is not approved yet in Meta Business Suite.`
+      } else if (errorCode === 132015 || errorCode === 132016) {
+        errorMessage = `Meta template "${templateName || 'unknown'}" is currently paused or disabled in Meta Business Suite.`
+      } else if (errorCode === 132018) {
+        errorMessage = `Template parameter contains unsupported formatting (line breaks, tabs, or 4+ consecutive spaces).`
       } else if (errorCode === 190 || response.status === 401) {
         errorMessage = `Access token expired or invalid. Please update your WhatsApp API access token.`
       } else if (errorCode === 100) {

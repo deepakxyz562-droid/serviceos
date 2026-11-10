@@ -395,11 +395,17 @@ export async function GET(request: NextRequest) {
     const originHostLower = (state.originHost || '').toLowerCase();
     const redirectParam = state.redirect || '';
 
+    const isBgosApp =
+      state.app === 'bos'
+        ? false
+        : (state.app === 'bgos' || originHostLower.includes('bgos.') || redirectParam.includes('product=bgos'));
+
     const isCustomerApp =
-      state.app === 'customer' ||
-      redirectParam.startsWith('/app') ||
-      redirectParam.startsWith('fieseros://') ||
-      originHostLower.includes('://app.');
+      !isBgosApp &&
+      (state.app === 'customer' ||
+        redirectParam.startsWith('/app') ||
+        redirectParam.startsWith('fieseros://') ||
+        originHostLower.includes('://app.'));
 
     const isProApp =
       state.app === 'pro' ||
@@ -411,9 +417,6 @@ export async function GET(request: NextRequest) {
       state.app === 'admin' ||
       redirectParam.startsWith('/admin') ||
       originHostLower.includes('://admin.');
-
-    const isBgosApp =
-      state.app === 'bos' ? false : (state.app === 'bgos' || originHostLower.includes('bgos.'));
 
     const isBosApp =
       !isBgosApp &&
@@ -512,6 +515,17 @@ export async function GET(request: NextRequest) {
         return `${baseUrl}${targetPath}${sep}google_login=success`;
       }
       if (isBgosApp) {
+        if (
+          state.redirect &&
+          state.redirect.startsWith('/') &&
+          !state.redirect.startsWith('//')
+        ) {
+          const cleanRedirect = state.redirect.split('?')[0];
+          if (cleanRedirect !== '/login' && cleanRedirect !== '/register') {
+            const sep = state.redirect.includes('?') ? '&' : '?';
+            return `${baseUrl}${state.redirect}${sep}google_login=success`;
+          }
+        }
         return `${baseUrl}/?google_login=success`;
       }
       if (isBosApp) {

@@ -298,6 +298,7 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
   const [dailyDigest, setDailyDigest] = useState(true);
   const [bgosProductNudges, setBgosProductNudges] = useState(true);
   const [bgosMarketingEmails, setBgosMarketingEmails] = useState(true);
+  const [reviewPushAlerts, setReviewPushAlerts] = useState(true);
   const [dailyGrowthTips, setDailyGrowthTips] = useState(true);
   const [rawTypePrefs, setRawTypePrefs] = useState<Record<string, unknown>>({});
   const [autoAssignLeads, setAutoAssignLeads] = useState(true);
@@ -419,6 +420,7 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
               const rec = parsed as Record<string, unknown>;
               setRawTypePrefs(rec);
+              setReviewPushAlerts(rec.customer_review !== false);
               setDailyGrowthTips(rec.daily_growth_tips !== false);
             }
           }
@@ -499,6 +501,7 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
       if (res.ok) {
         const mergedTypePrefs = {
           ...rawTypePrefs,
+          customer_review: reviewPushAlerts,
           daily_growth_tips: dailyGrowthTips,
         };
         setRawTypePrefs(mergedTypePrefs);
@@ -1806,9 +1809,9 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
               </label>
               <label className="flex items-center justify-between rounded-xl border border-slate-200 p-4">
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">BGOS Growth Tips &amp; Review Nudges</p>
+                  <p className="text-sm font-semibold text-slate-900">BGOS Growth Tips &amp; Onboarding Nudges</p>
                   <p className="text-xs text-slate-500">
-                    Helpful emails to reach 5+ Google reviews, reply to pending feedback, and publish updates.
+                    Helpful emails on GBP setup, reaching 5+ Google reviews, and publishing your first update.
                   </p>
                 </div>
                 <input
@@ -1834,6 +1837,36 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
               </label>
               <label className="flex items-center justify-between rounded-xl border border-slate-200 p-4">
                 <div>
+                  <p className="text-sm font-semibold text-slate-900">Google Review Push &amp; In-App Alerts</p>
+                  <p className="text-xs text-slate-500">
+                    Real-time push and in-app notifications when new Google reviews arrive or stay unreplied, so you can reply in 1 click without alert emails.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={reviewPushAlerts}
+                  onChange={(e) => {
+                    const nextVal = e.target.checked;
+                    setReviewPushAlerts(nextVal);
+                    const mergedTypePrefs = {
+                      ...rawTypePrefs,
+                      customer_review: nextVal,
+                      daily_growth_tips: dailyGrowthTips,
+                    };
+                    setRawTypePrefs(mergedTypePrefs);
+                    void authFetch('/api/notifications/preferences', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        typePrefsJson: JSON.stringify(mergedTypePrefs),
+                      }),
+                    }).catch(() => {});
+                  }}
+                  className="size-4 accent-[#009F50]"
+                />
+              </label>
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 p-4">
+                <div>
                   <p className="text-sm font-semibold text-slate-900">Daily Post &amp; Promo Push Reminders</p>
                   <p className="text-xs text-slate-500">
                     Morning push reminder in your local timezone when no Google post or promo is scheduled yet today.
@@ -1845,7 +1878,11 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
                   onChange={(e) => {
                     const nextVal = e.target.checked;
                     setDailyGrowthTips(nextVal);
-                    const mergedTypePrefs = { ...rawTypePrefs, daily_growth_tips: nextVal };
+                    const mergedTypePrefs = {
+                      ...rawTypePrefs,
+                      customer_review: reviewPushAlerts,
+                      daily_growth_tips: nextVal,
+                    };
                     setRawTypePrefs(mergedTypePrefs);
                     void authFetch('/api/notifications/preferences', {
                       method: 'PUT',

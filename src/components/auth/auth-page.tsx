@@ -685,7 +685,12 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                     // (canonical app URL) so login always round-trips through
                     // fieseros.com, even if the user is browsing on a stale
                     // serviceos.cc link or a parked alias domain.
-                    window.location.href = `/api/auth/google?mode=login${isBgos ? '&app=bgos' : ''}&XTransformPort=3000`;
+                    const currentRelative =
+                      typeof window !== 'undefined' && (window.location.search || window.location.pathname !== '/')
+                        ? `${window.location.pathname}${window.location.search}`
+                        : '';
+                    const redirectQuery = currentRelative ? `&redirect=${encodeURIComponent(currentRelative)}` : '';
+                    window.location.href = `/api/auth/google?mode=login${isBgos ? '&app=bgos' : ''}${redirectQuery}&XTransformPort=3000`;
                   }}
                 >
                   <GoogleIcon />
@@ -795,7 +800,12 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                   onClick={() => {
                     // Do NOT pass `window.location.origin` here — see comment
                     // on the login button above.
-                    window.location.href = `/api/auth/google?mode=register${isBgos ? '&app=bgos' : ''}&XTransformPort=3000`;
+                    const currentRelative =
+                      typeof window !== 'undefined' && (window.location.search || window.location.pathname !== '/')
+                        ? `${window.location.pathname}${window.location.search}`
+                        : '';
+                    const redirectQuery = currentRelative ? `&redirect=${encodeURIComponent(currentRelative)}` : '';
+                    window.location.href = `/api/auth/google?mode=register${isBgos ? '&app=bgos' : ''}${redirectQuery}&XTransformPort=3000`;
                   }}
                 >
                   <GoogleIcon />

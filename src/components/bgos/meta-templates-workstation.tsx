@@ -47,7 +47,9 @@ import { authFetch } from '@/lib/api';
 import {
   BGOS_CANONICAL_META_TEMPLATES,
   META_ACCOUNT_CONFIG,
+  buildMetaTemplateSendPayload,
   formatBgosMetaTemplateBody,
+  hasDynamicUrlButton,
   type BgosMetaTemplate,
 } from '@/lib/bgos-meta-templates';
 
@@ -99,7 +101,15 @@ export function BgosMetaTemplatesWorkstation() {
   // the API returns nothing, the canonical catalog stays as the fallback.
   const loadTemplateStatus = useCallback(
     async (manual: boolean) => {
-      if (manual) setSyncing(true);
+      if (manual) {
+        setSyncing(true);
+        // Trigger live sync from Meta Graph API before reading CampaignTemplate rows
+        await authFetch('/api/whatsapp/templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'sync_status' }),
+        }).catch(() => null);
+      }
       try {
         const res = await authFetch('/api/whatsapp/templates');
         if (res.status === 401) {
@@ -123,14 +133,18 @@ export function BgosMetaTemplatesWorkstation() {
         if (rows.length === 0) {
           if (manual) {
             toast.info(
-              'No templates in your library yet — showing the BGOS canonical catalog. Import templates from the web to sync live approval status.'
+              'No templates in your library yet — showing the BGOS canonical catalog. Import templates from WhatsApp Setup to sync live approval status.'
             );
           }
           return;
         }
 
-        const mapped: BgosMetaTemplate[] = rows.map((t: any) => {
-          const canonical = BGOS_CANONICAL_META_TEMPLATES.find((c) => c.name === t.name);
+        const byName = new Map<string, any>();
+        for (const r of rows) {
+          if (r?.name) byName.set(String(r.name), r);
+        }
+
+        const toBgosTemplate = (t: any, canonical?: BgosMetaTemplate): BgosMetaTemplate => {
           const rawStatus = String(t.status || '').toUpperCase();
           const resolvedStatus: BgosMetaTemplate['status'] =
             rawStatus === 'APPROVED' || t.isApproved === true
@@ -141,6 +155,15 @@ export function BgosMetaTemplatesWorkstation() {
               ? 'DRAFT'
               : 'PENDING';
           const rawCategory = String(t.category || '').toUpperCase();
+          let parsedButtons = canonical?.buttons;
+          if (typeof t.buttonsJson === 'string' && t.buttonsJson.trim().startsWith('[')) {
+            try {
+              const rawBtns = JSON.parse(t.buttonsJson);
+              if (Array.isArray(rawBtns) && rawBtns.length > 0) {
+                parsedButtons = rawBtns;
+              }
+            } catch { /* keep canonical buttons */ }
+          }
           return {
             ...(canonical || {}),
             name: t.name,
@@ -154,20 +177,36 @@ export function BgosMetaTemplatesWorkstation() {
             status: resolvedStatus,
             bodyText: t.content || t.bodyText || canonical?.bodyText || '',
             footerText: t.footerText || canonical?.footerText,
+            buttons: parsedButtons,
             variableDescriptions: canonical?.variableDescriptions || [],
             defaultExampleValues: canonical?.defaultExampleValues || [],
             serviceTouchpoint: canonical?.serviceTouchpoint || 'marketing',
+            supportsCustomNote: canonical?.supportsCustomNote,
           };
+        };
+
+        // Start from canonical catalog overridden with any matching DB row, plus custom tenant templates
+        const seen = new Set<string>();
+        const merged: BgosMetaTemplate[] = BGOS_CANONICAL_META_TEMPLATES.map((canon) => {
+          seen.add(canon.name);
+          const dbMatch = byName.get(canon.name);
+          return dbMatch ? toBgosTemplate(dbMatch, canon) : canon;
         });
 
-        setTemplates(mapped);
+        for (const r of rows) {
+          if (r?.name && !seen.has(String(r.name))) {
+            merged.push(toBgosTemplate(r));
+          }
+        }
+
+        setTemplates(merged);
         setSelectedTemplate(
-          (prev) => mapped.find((m) => m.name === prev?.name) || mapped[0]
+          (prev) => merged.find((m) => m.name === prev?.name) || merged[0]
         );
         if (manual) {
-          const liveApproved = mapped.filter((m) => m.status === 'APPROVED').length;
+          const liveApproved = merged.filter((m) => m.status === 'APPROVED').length;
           toast.success(
-            `Synced ${mapped.length} templates — ${liveApproved} approved, ${mapped.length - liveApproved} awaiting approval`
+            `Synced ${rows.length} templates from library — ${liveApproved} approved overall`
           );
         }
       } catch {
@@ -221,26 +260,29 @@ export function BgosMetaTemplatesWorkstation() {
     }
     setSendingTest(true);
     try {
-      const templateComponents = currentParamValues.length > 0 ? [
-        {
-          type: 'body',
-          parameters: currentParamValues.map((val) => ({
-            type: 'text',
-            text: val,
-          })),
-        },
-      ] : undefined;
+      const buttonUrlParam = hasDynamicUrlButton(selectedTemplate.buttons)
+        ? 'sample-business'
+        : undefined;
+      const sendPayload = buildMetaTemplateSendPayload(
+        selectedTemplate.name,
+        currentParamValues,
+        selectedTemplate.language,
+        buttonUrlParam,
+      );
 
       const res = await authFetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: testRecipientPhone,
-          message: previewBodyFormatted,
+          message: previewBodyFormatted || selectedTemplate.name,
           type: 'template',
-          templateName: selectedTemplate.name,
-          templateLanguage: selectedTemplate.language,
-          templateComponents,
+          templateName: sendPayload.templateName,
+          templateLanguage: sendPayload.templateLanguage,
+          templateComponents:
+            sendPayload.templateComponents.length > 0
+              ? sendPayload.templateComponents
+              : undefined,
         }),
       });
       if (res.ok) {
@@ -269,42 +311,74 @@ export function BgosMetaTemplatesWorkstation() {
       return;
     }
 
-    const cleanName = newTemplateName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    const cleanName = newTemplateName
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+    if (!cleanName) {
+      toast.error('Template key must use letters, numbers, or underscores');
+      return;
+    }
     setCreatingTemplate(true);
 
     try {
+      const res = await authFetch('/api/whatsapp/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          name: cleanName,
+          category: newCategory,
+          metaCategory: newCategory,
+          language: 'en_US',
+          bodyText: newBodyText.trim(),
+          footerText: newFooterText.trim() || undefined,
+          submitToMeta: true,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error || `Failed to submit template "${cleanName}" to Meta`);
+        return;
+      }
+
+      const rawStatus = String(data?.status || data?.template?.status || 'DRAFT').toUpperCase();
+      const resolvedStatus: BgosMetaTemplate['status'] =
+        rawStatus === 'APPROVED'
+          ? 'APPROVED'
+          : rawStatus === 'REJECTED'
+            ? 'REJECTED'
+            : rawStatus === 'PENDING'
+              ? 'PENDING'
+              : 'DRAFT';
+
+      const varMatches = newBodyText.trim().match(/\{\{\d+\}\}/g) || [];
+      const uniqueCount = new Set(varMatches).size;
       const created: BgosMetaTemplate = {
         name: cleanName,
         displayName: newDisplayName.trim() || cleanName,
         category: newCategory,
         language: 'en_US',
-        status: 'PENDING',
+        status: resolvedStatus,
         bodyText: newBodyText.trim(),
         footerText: newFooterText.trim() || undefined,
-        variableDescriptions: ['Variable 1', 'Variable 2'],
-        defaultExampleValues: ['Customer Name', 'Service'],
+        variableDescriptions: Array.from({ length: uniqueCount }, (_, i) => `Variable ${i + 1}`),
+        defaultExampleValues: Array.from({ length: uniqueCount }, (_, i) => `Sample ${i + 1}`),
         serviceTouchpoint: 'marketing',
       };
 
-      setTemplates((prev) => [created, ...prev]);
+      setTemplates((prev) => [created, ...prev.filter((p) => p.name !== cleanName)]);
       setSelectedTemplate(created);
       setCreateModalOpen(false);
       setNewTemplateName('');
       setNewDisplayName('');
       setNewBodyText('');
-      toast.success(`Template "${cleanName}" submitted to Meta for approval`);
-
-      await authFetch('/api/whatsapp/templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: cleanName,
-          category: newCategory,
-          language: 'en_US',
-          bodyText: newBodyText.trim(),
-          footerText: newFooterText.trim(),
-        }),
-      }).catch(() => null);
+      toast.success(data?.message || `Template "${cleanName}" saved (${resolvedStatus})`);
+      void loadTemplateStatus(false);
+    } catch {
+      toast.error('Network error while creating template');
     } finally {
       setCreatingTemplate(false);
     }

@@ -193,13 +193,100 @@ async function dispatchScheduledMessage(msg: ScheduledMessageRow): Promise<boole
         throw new Error('No recipient phone number available')
       }
       const { sendWhatsAppMessage } = await import('@/lib/whatsapp-send')
-      const r = await sendWhatsAppMessage({
-        to: recipientPhone,
-        message: msg.bodyText || msg.subject || '',
-        tenantId: msg.tenantId || undefined,
-      })
-      dispatchOk = !!r.success
-      if (!dispatchOk) dispatchError = r.error || 'WhatsApp provider returned failure'
+      const {
+        BGOS_CANONICAL_META_TEMPLATES,
+        buildMetaTemplateSendPayload,
+        buildReviewInviteTemplateParams,
+      } = await import('@/lib/bgos-meta-templates')
+
+      let meta: Record<string, unknown> = {}
+      try {
+        meta = JSON.parse(msg.metadataJson || '{}') as Record<string, unknown>
+      } catch {
+        meta = {}
+      }
+
+      let r
+      const explicitTplName = typeof meta.metaTemplateName === 'string' ? meta.metaTemplateName.trim() : ''
+      if (explicitTplName) {
+        const params = Array.isArray(meta.metaTemplateParams)
+          ? meta.metaTemplateParams.map((p) => String(p ?? ''))
+          : []
+        const lang = typeof meta.metaTemplateLanguage === 'string' && meta.metaTemplateLanguage.trim()
+          ? meta.metaTemplateLanguage.trim()
+          : 'en_US'
+        const buttonParam = typeof meta.metaButtonUrlParam === 'string' && meta.metaButtonUrlParam.trim()
+          ? meta.metaButtonUrlParam.trim()
+          : undefined
+        const built = buildMetaTemplateSendPayload(explicitTplName, params, lang, buttonParam)
+        r = await sendWhatsAppMessage({
+          to: recipientPhone,
+          message: msg.bodyText || msg.subject || explicitTplName,
+          type: 'template',
+          templateName: built.templateName,
+          templateLanguage: built.templateLanguage,
+          templateComponents: built.templateComponents,
+          tenantId: msg.tenantId || undefined,
+        })
+      } else if (msg.messageType === 'review_request') {
+        // Backfill template dispatch for legacy review_request rows queued prior to metadata storage
+        let businessName = 'our team'
+        let shortCode = msg.tenantId || ''
+        if (msg.tenantId) {
+          try {
+            const tenant = await db.tenant.findUnique({
+              where: { id: msg.tenantId },
+              select: { name: true, slug: true },
+            })
+            if (tenant?.name) businessName = tenant.name
+            if (tenant?.slug) shortCode = tenant.slug
+          } catch {
+            // keep defaults
+          }
+        }
+        const tplName = 'bgos_review_invite_en'
+        const canon = BGOS_CANONICAL_META_TEMPLATES.find((t) => t.name === tplName)
+        const tplParams = buildReviewInviteTemplateParams({
+          templateName: tplName,
+          customerName: typeof meta.customerName === 'string' ? meta.customerName : undefined,
+          businessName,
+          customNote: typeof meta.customNote === 'string' ? meta.customNote : undefined,
+          shortRedirectCode: shortCode,
+          reviewLink: typeof meta.reviewLink === 'string' ? meta.reviewLink : undefined,
+          bodyText: canon?.bodyText,
+          buttons: canon?.buttons,
+        })
+        const built = buildMetaTemplateSendPayload(
+          tplName,
+          tplParams.parameters,
+          canon?.language || 'en_US',
+          tplParams.buttonUrlParam,
+        )
+        r = await sendWhatsAppMessage({
+          to: recipientPhone,
+          message: msg.bodyText || msg.subject || tplName,
+          type: 'template',
+          templateName: built.templateName,
+          templateLanguage: built.templateLanguage,
+          templateComponents: built.templateComponents,
+          tenantId: msg.tenantId || undefined,
+        })
+      } else {
+        r = await sendWhatsAppMessage({
+          to: recipientPhone,
+          message: msg.bodyText || msg.subject || '',
+          tenantId: msg.tenantId || undefined,
+        })
+      }
+
+      if (r.simulated) {
+        dispatchOk = false
+        dispatchError =
+          'WhatsApp Cloud API credentials are not configured (simulated send skipped). Connect Meta Cloud API or use 1-Tap Send WA.'
+      } else {
+        dispatchOk = !!r.success
+        if (!dispatchOk) dispatchError = r.error || 'WhatsApp provider returned failure'
+      }
     } else if (channel === 'sms') {
       if (!recipientPhone) {
         throw new Error('No recipient phone number available')

@@ -67,6 +67,7 @@ import {
   AlertCircle,
   Film,
   Wand2,
+  Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -82,6 +83,13 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { authFetch, getAuthToken } from '@/lib/api';
+import {
+  BGOS_CANONICAL_META_TEMPLATES,
+  DEFAULT_REVIEW_PERSONAL_NOTE,
+  REVIEW_INVITE_TEMPLATE_NAMES,
+  hasDynamicUrlButton,
+  sanitizeReviewPersonalNote,
+} from '@/lib/bgos-meta-templates';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 import { parseAddress, formatAddress } from '@/components/bgos/settings';
@@ -982,6 +990,99 @@ export function ReviewsView({
   const [createPostModalOpen, setCreatePostModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Request Reviews Modal state (channel-aware Cloud API Meta Template vs 1-Tap WA / SMS)
+  const [requestChannel, setRequestChannel] = useState<'whatsapp' | 'sms'>('whatsapp');
+  const [requestHasWhatsApp, setRequestHasWhatsApp] = useState(false);
+  const [requestSmsAvailable, setRequestSmsAvailable] = useState(true);
+  const [requestShortReviewUrl, setRequestShortReviewUrl] = useState('');
+  const [requestAudience, setRequestAudience] = useState<'recent_completed' | 'all_crm'>('recent_completed');
+  const [requestCandidates, setRequestCandidates] = useState<
+    Array<{ name: string; phone: string; source: 'booking' | 'crm'; alreadyQueued: boolean }>
+  >([]);
+  const [requestMetaTemplates, setRequestMetaTemplates] = useState<
+    Array<{
+      name: string;
+      displayName: string;
+      language: string;
+      status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'DRAFT';
+      bodyText: string;
+      supportsCustomNote?: boolean;
+      hasDynamicUrlButton?: boolean;
+      buttonText?: string;
+    }>
+  >(() =>
+    REVIEW_INVITE_TEMPLATE_NAMES.map((name) => {
+      const t = BGOS_CANONICAL_META_TEMPLATES.find((c) => c.name === name)!;
+      return {
+        name: t.name,
+        displayName: t.displayName,
+        language: t.language,
+        status: t.status,
+        bodyText: t.bodyText,
+        supportsCustomNote: Boolean(t.supportsCustomNote),
+        hasDynamicUrlButton: hasDynamicUrlButton(t.buttons),
+        buttonText: t.buttons?.find((b) => b.type === 'URL')?.text || 'Leave Google Review',
+      };
+    }),
+  );
+  const [requestTemplateName, setRequestTemplateName] = useState('bgos_review_invite_en');
+  const [requestCustomNote, setRequestCustomNote] = useState('');
+  const [requestCustomMessage, setRequestCustomMessage] = useState('');
+  const requestEditedMessageRef = useRef(false);
+
+  const openRequestReviewsModal = (preferredChannel: 'whatsapp' | 'sms' = 'whatsapp') => {
+    setRequestChannel(preferredChannel);
+    setRequestReviewsOpen(true);
+  };
+
+  useEffect(() => {
+    if (!requestReviewsOpen) return;
+    if (!requestEditedMessageRef.current) {
+      setRequestCustomMessage(
+        `Hi {firstName}, thank you for choosing ${profileTitle || businessName}! If you loved our service, would you take 30 seconds to leave us a quick Google review? ${reviewLink}`,
+      );
+    }
+    if (isDemo) return;
+    let mounted = true;
+    authFetch('/api/reviews/request')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!mounted || !data) return;
+        setRequestHasWhatsApp(Boolean(data.hasWhatsAppProvider));
+        setRequestSmsAvailable(data.smsAvailable !== false);
+        if (typeof data.shortReviewUrl === 'string') {
+          setRequestShortReviewUrl(data.shortReviewUrl);
+        }
+        if (Array.isArray(data.candidates)) {
+          setRequestCandidates(data.candidates);
+        }
+        if (Array.isArray(data.metaTemplates) && data.metaTemplates.length > 0) {
+          setRequestMetaTemplates(data.metaTemplates);
+          const approved = data.metaTemplates.find((t: { status?: string }) => t.status === 'APPROVED');
+          if (approved?.name) {
+            setRequestTemplateName((prev) => {
+              const currentMatch = data.metaTemplates.find((t: { name: string }) => t.name === prev);
+              return currentMatch && currentMatch.status === 'APPROVED' ? prev : approved.name;
+            });
+          }
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [requestReviewsOpen, isDemo, profileTitle, businessName, reviewLink]);
+
+  const selectedRequestTemplate = useMemo(
+    () =>
+      requestMetaTemplates.find((t) => t.name === requestTemplateName) ||
+      requestMetaTemplates.find((t) => t.status === 'APPROVED') ||
+      requestMetaTemplates[0],
+    [requestMetaTemplates, requestTemplateName],
+  );
+  const isRequestLockedMeta = requestChannel === 'whatsapp' && requestHasWhatsApp;
+  const isRequestWaDirectQueue = requestChannel === 'whatsapp' && !requestHasWhatsApp;
+
   // Copied review link handler
   const handleCopyReviewLink = () => {
     navigator.clipboard.writeText(reviewLink);
@@ -1462,27 +1563,73 @@ export function ReviewsView({
     }
   };
 
-  // ─── Review Requests: real WhatsApp review invites to recent completed jobs ────
+  // ─── Review Requests: Meta Template (Cloud API) vs Freeform (SMS / 1-Tap WA Queue) ────
   const handleSendReviewRequests = async () => {
     setIsSendingRequests(true);
     try {
+      const cleanClosingNote = requestCustomNote.trim()
+        ? sanitizeReviewPersonalNote(requestCustomNote, 120)
+        : '';
+      const selectedRecipients =
+        requestAudience === 'all_crm' && requestCandidates.length > 0
+          ? requestCandidates.map((c) => ({ name: c.name, phone: c.phone }))
+          : undefined;
+
+      const payload = isRequestLockedMeta
+        ? {
+            mode: 'instant',
+            channel: 'whatsapp',
+            reviewLink,
+            businessName: profileTitle || businessName,
+            includeDirectLink,
+            templateName: selectedRequestTemplate.name,
+            templateLanguage: selectedRequestTemplate.language,
+            customNote:
+              selectedRequestTemplate.supportsCustomNote && cleanClosingNote
+                ? cleanClosingNote
+                : undefined,
+            ...(selectedRecipients ? { recipients: selectedRecipients } : {}),
+          }
+        : isRequestWaDirectQueue
+          ? {
+              mode: 'scheduled',
+              waDeliveryMode: 'direct_queue',
+              channel: 'whatsapp',
+              dailyLimit: 5,
+              source: 'reviews_modal',
+              reviewLink,
+              businessName: profileTitle || businessName,
+              includeDirectLink,
+              messageTemplate: requestCustomMessage.trim() || undefined,
+              ...(selectedRecipients ? { recipients: selectedRecipients } : {}),
+            }
+          : {
+              channel: 'sms',
+              reviewLink,
+              businessName: profileTitle || businessName,
+              includeDirectLink,
+              messageTemplate: requestCustomMessage.trim() || undefined,
+              ...(selectedRecipients ? { recipients: selectedRecipients } : {}),
+            };
+
       const res = await authFetch('/api/reviews/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reviewLink,
-          businessName: profileTitle || businessName,
-          includeDirectLink,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        toast.success(data.message || 'Review requests sent!');
+      if (res.ok && data.success !== false) {
+        toast.success(
+          data.message ||
+            (isRequestWaDirectQueue
+              ? 'Queued 1-Tap WhatsApp review invites!'
+              : 'Review requests sent!'),
+        );
         setRequestReviewsOpen(false);
       } else {
         toast.error(
           data.error ||
-            'Could not send review requests. Connect WhatsApp (Settings → Channels) or share your review link / QR code directly.'
+            'Could not send review requests. Connect WhatsApp Cloud API / SMS (Settings → Channels) or share your review link / QR code directly.',
         );
       }
     } catch {
@@ -3846,7 +3993,7 @@ export function ReviewsView({
             </div>
             <Button
               size="sm"
-              onClick={() => setRequestReviewsOpen(true)}
+              onClick={() => openRequestReviewsModal('whatsapp')}
               className="bg-[#009F50] hover:bg-[#008A45] text-white text-xs font-semibold rounded-xl gap-1.5 shadow-xs"
             >
               <Send className="size-3.5" /> New Campaign
@@ -3865,7 +4012,7 @@ export function ReviewsView({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setRequestReviewsOpen(true)}
+                onClick={() => openRequestReviewsModal('sms')}
                 className="w-full text-xs rounded-xl"
               >
                 Send SMS Campaign
@@ -3878,12 +4025,12 @@ export function ReviewsView({
               </div>
               <h3 className="text-sm font-bold">WhatsApp Messages</h3>
               <p className="text-xs text-slate-500 leading-relaxed">
-                98% open rate. Send a warm, branded WhatsApp greeting with direct Google review invitation.
+                98% open rate. Send an approved Meta Cloud API template or queue 1-tap WhatsApp invites.
               </p>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setRequestReviewsOpen(true)}
+                onClick={() => openRequestReviewsModal('whatsapp')}
                 className="w-full text-xs rounded-xl"
               >
                 Send WhatsApp Invites
@@ -4717,34 +4864,201 @@ export function ReviewsView({
 
       {/* 4. Request Reviews Modal */}
       <Dialog open={requestReviewsOpen} onOpenChange={setRequestReviewsOpen}>
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="sm:max-w-[460px] max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               <Send className="size-4 text-[#009F50]" /> Request Customer Reviews
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Send personalized review links directly to recent clients via SMS, WhatsApp, and Email.
+              Send Google review invites to recent customers via Meta Cloud API, 1-Tap WhatsApp Queue, or SMS.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2 text-xs">
+            {/* Delivery Channel Picker */}
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-700 dark:text-slate-300">Delivery Channel</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRequestChannel('whatsapp')}
+                  className={cn(
+                    'flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-bold transition-colors',
+                    requestChannel === 'whatsapp'
+                      ? 'bg-[#E8F8EF] dark:bg-emerald-950/40 border-[#009F50] text-[#009F50]'
+                      : 'bg-background border-border text-muted-foreground',
+                  )}
+                >
+                  <MessageCircle className="size-3.5" />
+                  WhatsApp ({requestHasWhatsApp ? 'Cloud API' : '1-Tap Queue'})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRequestChannel('sms')}
+                  className={cn(
+                    'flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-bold transition-colors',
+                    requestChannel === 'sms'
+                      ? 'bg-[#E8F8EF] dark:bg-emerald-950/40 border-[#009F50] text-[#009F50]'
+                      : 'bg-background border-border text-muted-foreground',
+                  )}
+                >
+                  <Phone className="size-3.5" />
+                  SMS ({requestSmsAvailable ? 'Auto' : 'Gateway Needed'})
+                </button>
+              </div>
+            </div>
+
+            {/* Audience Segment */}
             <div className="space-y-1">
               <label className="font-semibold text-slate-700 dark:text-slate-300">Audience Segment</label>
-              <select className="w-full h-8 text-xs rounded-md border border-input bg-background px-2">
-                <option>Completed Jobs (Last 7 days)</option>
-                <option>Repeat Residential Clients</option>
-                <option>Commercial Accounts</option>
+              <select
+                value={requestAudience}
+                onChange={(e) => setRequestAudience(e.target.value as 'recent_completed' | 'all_crm')}
+                className="w-full h-8 text-xs rounded-md border border-input bg-background px-2"
+              >
+                <option value="recent_completed">Recent Completed Bookings (Last 30 days)</option>
+                <option value="all_crm">
+                  All CRM &amp; Booking Contacts ({requestCandidates.length})
+                </option>
               </select>
             </div>
 
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Message Preview</label>
-              <Textarea
-                rows={3}
-                defaultValue={`Hi {FirstName}, thank you for choosing ${profileTitle}! If you loved our service, would you take 30 seconds to leave us a quick Google review? ${reviewLink}`}
-                className="text-xs resize-none bg-slate-50 dark:bg-slate-800"
-              />
-            </div>
+            {/* Message Section */}
+            {isRequestLockedMeta && selectedRequestTemplate ? (
+              <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/20 p-3 space-y-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <Lock className="size-3.5 text-[#009F50]" />
+                    Meta Cloud API Template
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900/5 dark:bg-white/10 border border-border inline-flex items-center gap-1">
+                      <Lock className="size-2.5" /> Locked for Meta Cloud API
+                    </span>
+                    <span
+                      className={cn(
+                        'text-[10px] font-bold px-2 py-0.5 rounded-full border',
+                        selectedRequestTemplate.status === 'APPROVED'
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                          : selectedRequestTemplate.status === 'REJECTED'
+                            ? 'bg-rose-100 text-rose-800 border-rose-200'
+                            : 'bg-amber-100 text-amber-800 border-amber-200',
+                      )}
+                    >
+                      {selectedRequestTemplate.status === 'APPROVED'
+                        ? 'Approved'
+                        : selectedRequestTemplate.status === 'REJECTED'
+                          ? 'Rejected'
+                          : 'Pending Meta Approval'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {requestMetaTemplates.map((tpl) => {
+                    const active = tpl.name === selectedRequestTemplate.name;
+                    return (
+                      <button
+                        key={tpl.name}
+                        type="button"
+                        onClick={() => setRequestTemplateName(tpl.name)}
+                        className={cn(
+                          'px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-colors',
+                          active
+                            ? 'bg-[#009F50] text-white border-[#009F50]'
+                            : 'bg-background text-muted-foreground border-border hover:border-[#009F50]/50',
+                        )}
+                      >
+                        {tpl.displayName}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {selectedRequestTemplate.status !== 'APPROVED' && (
+                  <p className="text-[11px] text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
+                    Wording is fixed by Meta template rules. Approve{' '}
+                    <code className="font-mono font-bold">{selectedRequestTemplate.name}</code> in Marketing → Meta Templates before live Cloud API delivery.
+                  </p>
+                )}
+
+                <div className="rounded-xl bg-[#ECE5DD] p-2.5">
+                  <div className="rounded-lg bg-white p-2.5 shadow-2xs space-y-1.5">
+                    <p className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap">
+                      {selectedRequestTemplate.bodyText
+                        .replace(/\{\{1\}\}/g, 'Priya')
+                        .replace(/\{\{2\}\}/g, profileTitle || businessName || 'Our Business')
+                        .replace(
+                          /\{\{3\}\}/g,
+                          selectedRequestTemplate.supportsCustomNote
+                            ? requestCustomNote.trim()
+                              ? sanitizeReviewPersonalNote(requestCustomNote, 120)
+                              : DEFAULT_REVIEW_PERSONAL_NOTE
+                            : 'your recent visit',
+                        )
+                        .replace(/\{\{4\}\}/g, profileTitle || businessName || 'Our Business')}
+                    </p>
+                    <div className="pt-1.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-[#128C7E]">
+                      <ExternalLink className="size-3 shrink-0" />
+                      <span className="truncate">
+                        {selectedRequestTemplate.buttonText || 'Leave Google Review'} →{' '}
+                        {requestShortReviewUrl || reviewLink}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {selectedRequestTemplate.supportsCustomNote ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] font-semibold">
+                      <label>Optional 1-Line Closing Note</label>
+                      <span className="text-muted-foreground">{requestCustomNote.length}/120</span>
+                    </div>
+                    <Input
+                      value={requestCustomNote}
+                      maxLength={120}
+                      onChange={(e) =>
+                        setRequestCustomNote(e.target.value.replace(/[\r\n\t]+/g, ' ').slice(0, 120))
+                      }
+                      placeholder={DEFAULT_REVIEW_PERSONAL_NOTE}
+                      className="h-8 text-xs bg-background"
+                    />
+                  </div>
+                ) : (
+                  <p className="text-[10.5px] text-slate-500">
+                    Template wording is locked for Meta Cloud API compliance. Choose &ldquo;Google Review Invite + Note&rdquo; above to add a personal closing line.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {isRequestWaDirectQueue && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
+                    WhatsApp Cloud API is not connected — submitting queues 1-tap WhatsApp invites so you can send with your custom wording.
+                  </p>
+                )}
+                {requestChannel === 'sms' && !requestSmsAvailable && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
+                    SMS gateway is not configured in Integrations — switch to WhatsApp or configure Twilio/SMS first.
+                  </p>
+                )}
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-slate-700 dark:text-slate-300">Message Preview</label>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                    Editable ({requestChannel === 'sms' ? 'SMS' : '1-Tap WhatsApp'})
+                  </span>
+                </div>
+                <Textarea
+                  rows={3}
+                  value={requestCustomMessage}
+                  onChange={(e) => {
+                    requestEditedMessageRef.current = true;
+                    setRequestCustomMessage(e.target.value);
+                  }}
+                  className="text-xs resize-none bg-slate-50 dark:bg-slate-800"
+                />
+              </div>
+            )}
           </div>
 
           <DialogFooter className="gap-2">
@@ -4762,11 +5076,19 @@ export function ReviewsView({
               disabled={isSendingRequests}
               className="h-8 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-bold"
             >
-              {isSendingRequests ? 'Sending...' : 'Send via WhatsApp'}
+              {isSendingRequests
+                ? 'Sending...'
+                : isRequestLockedMeta
+                  ? 'Send via WhatsApp Cloud API'
+                  : isRequestWaDirectQueue
+                    ? 'Queue 1-Tap WhatsApp'
+                    : 'Send via SMS'}
             </Button>
           </DialogFooter>
           <p className="text-[11px] text-slate-400 text-center pb-1">
-            Review invites are sent to customers from your recent completed jobs via your connected WhatsApp number. You can also share the review link or print the QR code from the Overview tab.
+            {isRequestLockedMeta
+              ? 'Official Meta Cloud API templates include a dynamic 1-tap review CTA button pointing to your workspace Google review link.'
+              : 'You can also schedule 5/day drip invites or share/print the Google Review QR code from the Overview tab.'}
           </p>
         </DialogContent>
       </Dialog>

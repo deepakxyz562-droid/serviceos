@@ -14,6 +14,17 @@ function safeJsonParse(str: string | null, fallback: unknown = {}) {
 }
 
 /**
+ * Strip accidental label prefixes (e.g. "Access Token: EAA..." or "Bearer EAA...")
+ * and surrounding whitespace when reading or storing Meta Graph access tokens.
+ */
+export function normalizeWhatsAppAccessToken(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  let cleaned = raw.trim()
+  cleaned = cleaned.replace(/^(access\s*token\s*:\s*|bearer\s+)/i, '').trim()
+  return cleaned
+}
+
+/**
  * Resolve WhatsApp credentials from the database with fallback chain:
  *
  * 1. Tenant's own (non-platform) WhatsApp CommunicationProvider
@@ -76,23 +87,21 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
 
     // 2. Platform (shared) WhatsApp provider — ONLY for tenants who have
     //    NOT attempted BYO (no whatsapp row at all). Used for trial mode.
-    let platformProvider = null
-    if (tenantId) {
-      platformProvider = await db.communicationProvider.findFirst({
-        where: {
-          type: 'whatsapp',
-          status: 'active',
-          sendingEnabled: true,
-          isPlatform: true,
-          tenantId,
-        },
-        orderBy: { updatedAt: 'desc' },
-        include: { credential: true },
-      })
-    }
-    if (!platformProvider) {
-      // Find the shared platform-managed provider (isPlatform: true)
-      platformProvider = await db.communicationProvider.findFirst({
+    const platformProvider =
+      (tenantId
+        ? await db.communicationProvider.findFirst({
+            where: {
+              type: 'whatsapp',
+              status: 'active',
+              sendingEnabled: true,
+              isPlatform: true,
+              tenantId,
+            },
+            orderBy: { updatedAt: 'desc' },
+            include: { credential: true },
+          })
+        : null) ||
+      (await db.communicationProvider.findFirst({
         where: {
           type: 'whatsapp',
           status: 'active',
@@ -101,8 +110,7 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
         },
         orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
         include: { credential: true },
-      })
-    }
+      }))
     if (platformProvider) {
       const resolved = resolveWACredsFromProvider(platformProvider)
       if (resolved) {
@@ -136,15 +144,15 @@ function resolveWACredsFromProvider(prov: {
   credential: { encryptedData: string | null } | null
 }): { accessToken: string; phoneNumberId: string; verifyToken?: string; wabaId?: string } | null {
   const cfg = safeJsonParse(prov.configJson, {}) as Record<string, string>
-  let accessToken = cfg.accessToken || ''
-  let phoneNumberId = cfg.phoneNumberId || ''
-  const verifyToken = cfg.webhookVerifyToken || cfg.verifyToken || ''
-  const wabaId = cfg.wabaId || ''
+  let accessToken = normalizeWhatsAppAccessToken(cfg.accessToken || '')
+  let phoneNumberId = (cfg.phoneNumberId || '').trim()
+  const verifyToken = (cfg.webhookVerifyToken || cfg.verifyToken || '').trim()
+  const wabaId = (cfg.wabaId || '').trim()
 
   if (!accessToken && prov.credential) {
     const credData = safeJsonParse(prov.credential.encryptedData, {}) as Record<string, string>
-    accessToken = credData.accessToken || credData.apiKey || ''
-    if (!phoneNumberId) phoneNumberId = credData.phoneNumberId || ''
+    accessToken = normalizeWhatsAppAccessToken(credData.accessToken || credData.apiKey || '')
+    if (!phoneNumberId) phoneNumberId = (credData.phoneNumberId || '').trim()
   }
 
   if (accessToken && phoneNumberId) {
@@ -158,8 +166,8 @@ function resolveWACredsFromProvider(prov: {
  */
 export function getWhatsAppConfigFromEnv(): WhatsAppConfig {
   return {
-    accessToken: process.env.WHATSAPP_ACCESS_TOKEN || '',
-    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+    accessToken: normalizeWhatsAppAccessToken(process.env.WHATSAPP_ACCESS_TOKEN || ''),
+    phoneNumberId: (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim(),
     verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || 'fieseros_verify_token',
   };
 }

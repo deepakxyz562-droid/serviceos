@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { recordEmailEvent } from '@/lib/email-consent'
+import { normalizeClickDestination, recordEmailEvent } from '@/lib/email-consent'
 
 /**
  * Click-redirect endpoint — NO AUTH.
@@ -20,10 +20,15 @@ export async function GET(
 ) {
   const { token } = await params
   const url = new URL(request.url)
-  const destination = url.searchParams.get('u')
+  const rawDestination = url.searchParams.get('u')
 
-  if (!destination) {
+  if (!rawDestination) {
     return NextResponse.json({ ok: false, error: 'missing u param' }, { status: 400 })
+  }
+
+  const destination = normalizeClickDestination(rawDestination)
+  if (!destination) {
+    return NextResponse.json({ ok: false, error: 'invalid destination url' }, { status: 400 })
   }
 
   try {

@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  *   - Trial expired summary
  *   - Day +3 post-trial unpaid & inactive rescue ("not adding money + not using product")
  *   - Day +10–14 feature-led win-back
- *   - Unreplied Google reviews alert (>48h)
+ *   - Unreplied Google reviews alert (>48h) via Push & In-App notifications (no unsolicited email)
  *   - Connect GBP nudge (24h+ after signup)
  *   - "Go from X to more than 5 reviews" growth nudge (<5 reviews, with direct Google review link)
  *   - First post nudge (4d+ post-signup, 0 published posts)

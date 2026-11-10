@@ -1,5 +1,6 @@
 'use client';
-import { isViewType } from '@/types/workflow';
+import type { ViewType } from '@/types/workflow';
+import { resolveRequestedView, shouldAutoOpenAuthForDeepLink } from '@/lib/view-deep-link';
 import { isGptFormWorkspace, isChatbotlyWorkspace, isBosWorkspace, getAppProduct, productForHostname } from '../../../shared/product-context';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -246,6 +247,7 @@ export default function HomePageClient() {
   // must survive the URL-stripping replaceState below and be read once in
   // onAuthSuccess — it is NOT reactive state.
   const returnUrlRef = useRef<string | null>(null);
+  const pendingViewRef = useRef<ViewType | null>(null);
   // Ref to the latest handleLogout callback, so the ?logout=1 effect (which
   // runs on mount, before handleLogout is defined) can call it without a
   // stale closure. Updated on every render via the effect below.
@@ -278,18 +280,27 @@ export default function HomePageClient() {
         toast.error('Authentication failed', {
           description: decodeURIComponent(authError),
         });
-        window.history.replaceState({}, '', window.location.pathname);
+        params.delete('auth_error');
+        const nextUrl = params.toString()
+          ? `${window.location.pathname}?${params.toString()}`
+          : window.location.pathname;
+        window.history.replaceState({}, '', nextUrl);
         return;
       }
 
       if (googleLogin === 'success') {
-        if (viewParam === 'forms' || viewParam === 'formBuilder') {
-          useAppStore.getState().setCurrentView('formBuilder');
-        } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
-          useAppStore.getState().setCurrentView('aiReceptionist');
+        const requested = resolveRequestedView(viewParam);
+        if (requested && requested !== 'superadmin') {
+          pendingViewRef.current = requested;
+          useAppStore.getState().setCurrentView(requested);
         }
         toast.success('Successfully signed in with Google!');
-        window.history.replaceState({}, '', window.location.pathname);
+        params.delete('google_login');
+        params.delete('auth_error');
+        const nextUrl = params.toString()
+          ? `${window.location.pathname}?${params.toString()}`
+          : window.location.pathname;
+        window.history.replaceState({}, '', nextUrl);
       }
     } catch (err) {
       console.error('OAuth callback error:', err);
@@ -401,9 +412,12 @@ export default function HomePageClient() {
           // Auto-redirect based on role (for admin/superadmin in AppLayout)
           const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
           const urlView = params?.get('view') || params?.get('tab');
+          const resolvedInitialView =
+            resolveRequestedView(urlView, { isPlatformAdmin: isPlatformAdmin(data.user) }) ||
+            pendingViewRef.current;
           if (data.user.role === 'customer') {
             // Customer portal layout handled by page.tsx based on role
-          } else if (urlView === 'superadmin' || isPlatformAdmin(data.user)) {
+          } else if (resolvedInitialView === 'superadmin' || (!resolvedInitialView && isPlatformAdmin(data.user))) {
             useAppStore.getState().setCurrentView('superadmin');
           }
 
@@ -424,6 +438,9 @@ export default function HomePageClient() {
             data.user.role !== 'employee';
 
           if (needsOnboarding) {
+            if (resolvedInitialView && resolvedInitialView !== 'superadmin') {
+              pendingViewRef.current = resolvedInitialView;
+            }
             if (isBgos) {
               setOnboardingView('bgos');
             } else if (hostProduct === 'chatbotly') {
@@ -445,14 +462,14 @@ export default function HomePageClient() {
             if (typeof window !== 'undefined') {
               const params = new URLSearchParams(window.location.search);
               const viewParam = params.get('view') || params.get('tab');
-              if (viewParam) {
-                if (viewParam === 'forms' || viewParam === 'formBuilder') {
-                  useAppStore.getState().setCurrentView('formBuilder');
-                } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
-                  useAppStore.getState().setCurrentView('aiReceptionist');
-                } else if (viewParam === 'superadmin' || isPlatformAdmin(data.user)) {
-                  useAppStore.getState().setCurrentView('superadmin');
-                }
+              const requestedView =
+                resolveRequestedView(viewParam, { isPlatformAdmin: isPlatformAdmin(data.user) }) ||
+                pendingViewRef.current;
+              if (requestedView) {
+                pendingViewRef.current = requestedView;
+                useAppStore.getState().setCurrentView(requestedView);
+              } else if (isPlatformAdmin(data.user)) {
+                useAppStore.getState().setCurrentView('superadmin');
               } else if (hostProduct === 'chatbotly') {
                 useAppStore.getState().setCurrentView('formBuilder');
               } else if (hostProduct === 'bos') {
@@ -601,20 +618,20 @@ export default function HomePageClient() {
                 setShowOnboarding(false);
                 setOnboardingView(null);
 
-                if (isStandalone) {
-                  if (typeof window !== 'undefined') {
-                    const params = new URLSearchParams(window.location.search);
-                    const viewParam = params.get('view') || params.get('tab');
-                    if (viewParam === 'forms' || viewParam === 'formBuilder') {
-                      useAppStore.getState().setCurrentView('formBuilder');
-                    } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
-                      useAppStore.getState().setCurrentView('aiReceptionist');
-                    } else if (!viewParam || viewParam === 'dashboard' || viewParam === 'marketplaceDashboard') {
-                      useAppStore.getState().setCurrentView('formsDashboard');
-                    }
-                  } else {
+                if (typeof window !== 'undefined') {
+                  const params = new URLSearchParams(window.location.search);
+                  const viewParam = params.get('view') || params.get('tab');
+                  const requestedView =
+                    resolveRequestedView(viewParam, { isPlatformAdmin: isPlatformAdmin(parsed.user) }) ||
+                    pendingViewRef.current;
+                  if (requestedView) {
+                    pendingViewRef.current = requestedView;
+                    useAppStore.getState().setCurrentView(requestedView);
+                  } else if (isStandalone) {
                     useAppStore.getState().setCurrentView('formsDashboard');
                   }
+                } else if (isStandalone) {
+                  useAppStore.getState().setCurrentView('formsDashboard');
                 }
               }
               return;
@@ -766,6 +783,18 @@ export default function HomePageClient() {
               ? `${window.location.pathname}?${params.toString()}`
               : window.location.pathname;
             window.history.replaceState({}, '', cleanUrl);
+          } else if (
+            shouldAutoOpenAuthForDeepLink(
+              window.location.search,
+              window.location.hostname,
+              window.location.pathname,
+            )
+          ) {
+            // Unauthenticated BGOS deep-link (e.g. /app?product=bgos&view=reviews):
+            // show BGOS Login directly instead of Fieseros CRM landing page while
+            // preserving ?view= and ?product= in the URL for post-login routing.
+            setInitialAuthTab('login');
+            setUnauthView('auth');
           }
         }
 
@@ -812,7 +841,7 @@ export default function HomePageClient() {
   // either ignore setCurrentView or use a different navigation model, and
   // applying a tenant view to them would be a no-op at best.
   useEffect(() => {
-    if (!auth.isAuthenticated || typeof window === 'undefined') return;
+    if (!auth.isAuthenticated || showOnboarding || onboardingView || typeof window === 'undefined') return;
     const userRole = auth.user?.role;
     const isPortalUser =
       userRole === 'customer' ||
@@ -824,7 +853,10 @@ export default function HomePageClient() {
     if (isPortalUser || isSuperAdmin) return;
 
     const params = new URLSearchParams(window.location.search);
-    const view = params.get('view');
+    const viewParam = params.get('view') || params.get('tab');
+    const resolvedView =
+      resolveRequestedView(viewParam, { isPlatformAdmin: isPlatformAdmin(auth.user) }) ||
+      pendingViewRef.current;
     const templateId = params.get('templateId') || params.get('template');
 
     if (templateId) {
@@ -832,8 +864,8 @@ export default function HomePageClient() {
         sessionStorage.setItem('pendingTemplateId', templateId);
       } catch {}
       useAppStore.getState().setCurrentView('formBuilder');
-    } else if (view && isViewType(view)) {
-      useAppStore.getState().setCurrentView(view);
+    } else if (resolvedView) {
+      useAppStore.getState().setCurrentView(resolvedView);
     } else {
       // Check if a template was picked prior to login/redirect
       try {
@@ -844,18 +876,22 @@ export default function HomePageClient() {
       } catch {}
     }
 
-    // Apply + strip. Use replaceState so we don't create a new history entry
-    // (pressing browser-back should leave the app, not re-strip the param).
-    const paramsCopy = new URLSearchParams(params);
-    paramsCopy.delete('view');
-    paramsCopy.delete('templateId');
-    paramsCopy.delete('template');
-    const remaining = paramsCopy.toString();
-    const newUrl = remaining
-      ? `${window.location.pathname}?${remaining}`
-      : window.location.pathname;
-    window.history.replaceState({}, '', newUrl);
-  }, [auth.isAuthenticated, auth.user]);
+    pendingViewRef.current = null;
+
+    // Apply + strip `view` / template params. Use replaceState so we don't
+    // create a new history entry (pressing browser-back leaves the app).
+    if (params.has('view') || params.has('templateId') || params.has('template')) {
+      const paramsCopy = new URLSearchParams(params);
+      paramsCopy.delete('view');
+      paramsCopy.delete('templateId');
+      paramsCopy.delete('template');
+      const remaining = paramsCopy.toString();
+      const newUrl = remaining
+        ? `${window.location.pathname}?${remaining}`
+        : window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [auth.isAuthenticated, auth.user, showOnboarding, onboardingView]);
 
   // Global error handler
   useEffect(() => {
@@ -905,7 +941,10 @@ export default function HomePageClient() {
 
     clearAuthAndCache();
     useAppStore.getState().setCurrentView('dashboard'); // Reset view
-    setUnauthView('landing');
+    const openAuth =
+      typeof window !== 'undefined' &&
+      shouldAutoOpenAuthForDeepLink(window.location.search, window.location.hostname, window.location.pathname);
+    setUnauthView(openAuth ? 'auth' : 'landing');
     toast.success('You have been signed out');
   }, [clearAuthAndCache]);
 
@@ -1015,10 +1054,32 @@ export default function HomePageClient() {
         const tenantPlan = (tenant as any)?.plan as string | null | undefined;
         const sm = (tenant as any)?.signupMode as string | null | undefined;
         const isStandalone = isGptFormWorkspace(authData);
+        const queryProduct =
+          typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('product')
+            : null;
+        const isBgos =
+          queryProduct === 'bgos' ||
+          hostProduct === 'bgos' ||
+          getAppProduct(authData) === 'bgos' ||
+          (workspace as any)?.productType === 'bgos' ||
+          (tenant as any)?.productType === 'bgos' ||
+          (typeof tenantPlan === 'string' && tenantPlan.startsWith('bgos'));
 
-        const isCompleted = isProductOnboardingCompleted(authData, hostProduct);
+        const isCompleted = isProductOnboardingCompleted(authData, isBgos ? 'bgos' : hostProduct);
         if (!tenant || !isCompleted) {
-          if (hostProduct === 'chatbotly') {
+          if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const requested = resolveRequestedView(params.get('view') || params.get('tab'), {
+              isPlatformAdmin: isPlatformAdmin(user),
+            });
+            if (requested && requested !== 'superadmin') {
+              pendingViewRef.current = requested;
+            }
+          }
+          if (isBgos) {
+            setOnboardingView('bgos');
+          } else if (hostProduct === 'chatbotly') {
             setOnboardingView('standalone');
           } else if (hostProduct === 'bos') {
             setOnboardingView('bos');
@@ -1038,10 +1099,12 @@ export default function HomePageClient() {
           if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
             const viewParam = params.get('view') || params.get('tab');
-            if (viewParam === 'forms' || viewParam === 'formBuilder') {
-              useAppStore.getState().setCurrentView('formBuilder');
-            } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
-              useAppStore.getState().setCurrentView('aiReceptionist');
+            const requestedView =
+              resolveRequestedView(viewParam, { isPlatformAdmin: isPlatformAdmin(user) }) ||
+              pendingViewRef.current;
+            if (requestedView) {
+              pendingViewRef.current = requestedView;
+              useAppStore.getState().setCurrentView(requestedView);
             } else if (hostProduct === 'chatbotly') {
               useAppStore.getState().setCurrentView('formBuilder');
             } else if (hostProduct === 'bos') {
@@ -1265,7 +1328,9 @@ export default function HomePageClient() {
             onComplete={() => {
               setOnboardingView(null);
               setShowOnboarding(false);
-              useAppStore.getState().setCurrentView('dashboard');
+              if (!pendingViewRef.current) {
+                useAppStore.getState().setCurrentView('dashboard');
+              }
             }}
           />
           <PWAInstallBanner />

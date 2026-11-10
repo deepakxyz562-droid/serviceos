@@ -6,6 +6,18 @@ import { sendSmsMessage } from '@/lib/sms-send';
 import { checkWhatsAppCredits } from '@/lib/credit-management';
 import { logActivity } from '@/lib/activity-log';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
+import { getAppUrl } from '@/lib/brand';
+import { resolveWhatsAppConfig } from '@/lib/whatsapp-config';
+import {
+  BGOS_CANONICAL_META_TEMPLATES,
+  REVIEW_INVITE_TEMPLATE_NAMES,
+  buildMetaTemplateSendPayload,
+  buildReviewInviteTemplateParams,
+  formatBgosMetaTemplateBody,
+  hasDynamicUrlButton,
+  isReviewInviteTemplateName,
+  sanitizeReviewPersonalNote,
+} from '@/lib/bgos-meta-templates';
 import {
   resolveTenantLocale,
   normalizePhoneWithCountry,
@@ -17,6 +29,22 @@ import {
 interface RecipientInput {
   name?: string;
   phone: string;
+}
+
+export interface ReviewMetaTemplateOption {
+  name: string;
+  displayName: string;
+  language: string;
+  status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'DRAFT';
+  category: 'MARKETING' | 'UTILITY';
+  bodyText: string;
+  variableDescriptions: string[];
+  defaultExampleValues: string[];
+  supportsCustomNote: boolean;
+  hasDynamicUrlButton: boolean;
+  buttonText?: string;
+  buttons?: Array<{ type: string; text: string; url?: string; example?: string[] }>;
+  isCustom?: boolean;
 }
 
 function toIsoStringSafe(val: unknown): string | null {
@@ -47,7 +75,9 @@ async function resolveWorkspaceReviewContext(
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
     select: {
+      id: true,
       name: true,
+      slug: true,
       country: true,
       settingsJson: true,
       googlePlaceId: true,
@@ -94,7 +124,201 @@ async function resolveWorkspaceReviewContext(
     reviewLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(businessName)}`;
   }
 
-  return { businessName, reviewLink, locale };
+  const shortRedirectCode = (tenant?.slug || tenantId || '').trim();
+  const appOrigin = getAppUrl().replace(/\/+$/, '');
+  const shortReviewUrl = shortRedirectCode
+    ? `${appOrigin}/r/${encodeURIComponent(shortRedirectCode)}`
+    : reviewLink;
+
+  return { businessName, reviewLink, shortRedirectCode, shortReviewUrl, locale };
+}
+
+function normalizeCampaignStatus(
+  status?: string | null,
+  isApproved?: boolean | null,
+): 'APPROVED' | 'PENDING' | 'REJECTED' | 'DRAFT' {
+  if (isApproved) return 'APPROVED';
+  const s = String(status || '').trim().toLowerCase();
+  if (s === 'approved') return 'APPROVED';
+  if (s === 'rejected') return 'REJECTED';
+  if (s === 'pending') return 'PENDING';
+  return 'DRAFT';
+}
+
+function parseButtonsSafe(
+  raw: string | null | undefined,
+): Array<{ type: string; text: string; url?: string; example?: string[] }> {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function getReviewTemplateCatalog(tenantId: string): Promise<ReviewMetaTemplateOption[]> {
+  let dbRows: Array<{
+    id: string;
+    name: string;
+    description?: string | null;
+    category: string;
+    language: string;
+    status: string;
+    isApproved: boolean;
+    content: string;
+    buttonsJson: string;
+    tagsJson?: string;
+  }> = [];
+
+  try {
+    const findMany = (
+      db as unknown as {
+        campaignTemplate?: {
+          findMany?: (args: unknown) => Promise<typeof dbRows>;
+        };
+      }
+    )?.campaignTemplate?.findMany;
+
+    if (typeof findMany === 'function') {
+      const rows = await findMany({
+        where: { tenantId },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          category: true,
+          language: true,
+          status: true,
+          isApproved: true,
+          content: true,
+          buttonsJson: true,
+          tagsJson: true,
+        },
+      });
+      if (Array.isArray(rows)) {
+        dbRows = rows;
+      }
+    }
+  } catch {
+    dbRows = [];
+  }
+
+  const dbByName = new Map<string, (typeof dbRows)[number]>();
+  for (const row of dbRows) {
+    const key = String(row.name || '').trim().toLowerCase();
+    if (!key) continue;
+    const prev = dbByName.get(key);
+    // Prefer approved records if duplicate template names exist across languages
+    if (!prev || (!prev.isApproved && (row.isApproved || row.status === 'approved'))) {
+      dbByName.set(key, row);
+    }
+  }
+
+  const options: ReviewMetaTemplateOption[] = [];
+  const seenNames = new Set<string>();
+
+  for (const name of REVIEW_INVITE_TEMPLATE_NAMES) {
+    const canon = BGOS_CANONICAL_META_TEMPLATES.find((t) => t.name === name);
+    if (!canon) continue;
+    const dbRow = dbByName.get(name.toLowerCase());
+    const dbButtons = dbRow ? parseButtonsSafe(dbRow.buttonsJson) : [];
+    const effectiveButtons = dbButtons.length > 0 ? dbButtons : canon.buttons || [];
+    const effectiveBody = dbRow?.content?.trim() ? dbRow.content.trim() : canon.bodyText;
+    const status = dbRow ? normalizeCampaignStatus(dbRow.status, dbRow.isApproved) : canon.status;
+    const urlBtn = effectiveButtons.find((b) => String(b.type || '').toUpperCase() === 'URL');
+
+    seenNames.add(canon.name.toLowerCase());
+    options.push({
+      name: canon.name,
+      displayName: canon.displayName,
+      language: dbRow?.language || canon.language,
+      status,
+      category: canon.category === 'UTILITY' ? 'UTILITY' : 'MARKETING',
+      bodyText: effectiveBody,
+      variableDescriptions: canon.variableDescriptions,
+      defaultExampleValues: canon.defaultExampleValues,
+      supportsCustomNote: Boolean(canon.supportsCustomNote),
+      hasDynamicUrlButton: hasDynamicUrlButton(effectiveButtons),
+      buttonText: urlBtn?.text || 'Leave Google Review',
+      buttons: effectiveButtons,
+      isCustom: false,
+    });
+  }
+
+  // Include tenant's own APPROVED custom review templates created in Meta Templates Studio
+  for (const row of dbRows) {
+    const key = String(row.name || '').trim().toLowerCase();
+    if (!key || seenNames.has(key)) continue;
+    const status = normalizeCampaignStatus(row.status, row.isApproved);
+    if (status !== 'APPROVED') continue;
+    if (!row.content?.trim()) continue;
+
+    const categoryLower = String(row.category || '').toLowerCase();
+    const isReviewCandidate =
+      isReviewInviteTemplateName(row.name) ||
+      categoryLower === 'reviews';
+    if (!isReviewCandidate) continue;
+
+    const buttons = parseButtonsSafe(row.buttonsJson);
+    const urlBtn = buttons.find((b) => String(b.type || '').toUpperCase() === 'URL');
+    const varMatches = row.content.match(/\{\{(\d+)\}\}/g) || [];
+    const maxVar = varMatches.reduce((max, tok) => {
+      const n = Number.parseInt(tok.replace(/[{}]/g, ''), 10);
+      return Number.isFinite(n) && n > max ? n : max;
+    }, 0);
+    const variableDescriptions = Array.from({ length: maxVar }, (_, idx) => {
+      if (idx === 0) return 'Customer Name';
+      if (idx === 1) return 'Business Name';
+      if (idx === 2) return 'Review Link or Note';
+      return `Variable ${idx + 1}`;
+    });
+
+    seenNames.add(key);
+    options.push({
+      name: row.name,
+      displayName: row.description?.trim() || row.name.replace(/_/g, ' '),
+      language: row.language || 'en_US',
+      status,
+      category: categoryLower === 'general' ? 'UTILITY' : 'MARKETING',
+      bodyText: row.content.trim(),
+      variableDescriptions,
+      defaultExampleValues: variableDescriptions.map((_, idx) => `Sample ${idx + 1}`),
+      supportsCustomNote: maxVar >= 3,
+      hasDynamicUrlButton: hasDynamicUrlButton(buttons),
+      buttonText: urlBtn?.text,
+      buttons,
+      isCustom: true,
+    });
+  }
+
+  return options;
+}
+
+function resolveSelectedReviewTemplate(
+  catalog: ReviewMetaTemplateOption[],
+  requestedName?: unknown,
+  requestedLanguage?: unknown,
+): ReviewMetaTemplateOption {
+  const reqName = typeof requestedName === 'string' ? requestedName.trim() : '';
+  if (reqName) {
+    const exact = catalog.find((t) => t.name.toLowerCase() === reqName.toLowerCase());
+    if (exact) return exact;
+  }
+
+  const reqLang = typeof requestedLanguage === 'string' ? requestedLanguage.trim().toLowerCase() : '';
+  if (reqLang === 'hi') {
+    const hiApproved = catalog.find((t) => t.language.toLowerCase().startsWith('hi') && t.status === 'APPROVED');
+    if (hiApproved) return hiApproved;
+    const hiTpl = catalog.find((t) => t.language.toLowerCase().startsWith('hi'));
+    if (hiTpl) return hiTpl;
+  }
+
+  return (
+    catalog.find((t) => t.status === 'APPROVED') ||
+    catalog.find((t) => t.name === 'bgos_review_invite_en') ||
+    catalog[0]
+  );
 }
 
 function buildReviewInviteMessage(options: {
@@ -125,22 +349,42 @@ function buildReviewInviteMessage(options: {
   return `${greeting}\n\nThank you for choosing ${businessName}. We truly appreciate your trust and hope you had an exceptional experience with our team.\n\nIf you have a brief moment, we would be deeply grateful if you could share your feedback on our official Google Business Profile:${linkBlock}\n\nWarm regards,\n${businessName}`;
 }
 
-async function isWhatsAppCloudReady(tenantId: string): Promise<boolean> {
+function buildTemplatePreviewMessage(options: {
+  template: ReviewMetaTemplateOption;
+  parameters: string[];
+  reviewLink: string;
+}): string {
+  const rendered = formatBgosMetaTemplateBody(
+    {
+      name: options.template.name,
+      displayName: options.template.displayName,
+      category: options.template.category,
+      language: options.template.language,
+      status: options.template.status,
+      bodyText: options.template.bodyText,
+      variableDescriptions: options.template.variableDescriptions,
+      defaultExampleValues: options.template.defaultExampleValues,
+      serviceTouchpoint: 'completion',
+    },
+    options.parameters,
+  );
+  if (options.reviewLink && !rendered.includes(options.reviewLink)) {
+    return `${rendered}\n\n🔗 Review Link: ${options.reviewLink}`;
+  }
+  return rendered;
+}
+
+async function isWhatsAppCloudReady(tenantId: string): Promise<{ ready: boolean; source: string }> {
   try {
     const credit = await checkWhatsAppCredits(tenantId);
-    if (!credit.allowed) return false;
-    const provider = await db.communicationProvider.findFirst({
-      where: {
-        type: 'whatsapp',
-        status: 'active',
-        sendingEnabled: true,
-        tenantId,
-      },
-      select: { id: true },
-    });
-    return Boolean(provider);
+    if (!credit.allowed) return { ready: false, source: 'blocked' };
+    const waConfig = await resolveWhatsAppConfig(tenantId);
+    if (waConfig.accessToken && waConfig.phoneNumberId) {
+      return { ready: true, source: waConfig.source || 'provider' };
+    }
+    return { ready: false, source: waConfig.source || 'none' };
   } catch {
-    return false;
+    return { ready: false, source: 'none' };
   }
 }
 
@@ -185,9 +429,10 @@ export async function GET(request: NextRequest) {
     const tenantId = user.tenantId;
     const ctx = await resolveWorkspaceReviewContext(tenantId, undefined, undefined, overrideCountry, overrideTimeZone);
 
-    const [hasWhatsAppProvider, smsAvailable, scheduledRows, recentBookings, crmCustomers] = await Promise.all([
+    const [waStatus, smsAvailable, metaTemplates, scheduledRows, recentBookings, crmCustomers] = await Promise.all([
       isWhatsAppCloudReady(tenantId),
       isSmsGatewayReady(tenantId),
+      getReviewTemplateCatalog(tenantId),
       db.scheduledMessage
         .findMany({
           where: { tenantId, messageType: 'review_request' },
@@ -229,6 +474,11 @@ export async function GET(request: NextRequest) {
         })
         .catch(() => []),
     ]);
+
+    const hasWhatsAppProvider = waStatus.ready;
+    const hasApprovedReviewTemplate = metaTemplates.some((t) => t.status === 'APPROVED');
+    const activeMetaTemplateStatus =
+      metaTemplates.find((t) => t.status === 'APPROVED')?.status || metaTemplates[0]?.status || 'PENDING';
 
     const pendingPhones = new Set(
       scheduledRows
@@ -277,6 +527,8 @@ export async function GET(request: NextRequest) {
         batchDay: typeof meta.batchDay === 'number' ? meta.batchDay : undefined,
         timeZone: typeof meta.timeZone === 'string' ? meta.timeZone : ctx.locale.timeZone,
         country: typeof meta.country === 'string' ? meta.country : ctx.locale.country,
+        metaTemplateName: typeof meta.metaTemplateName === 'string' ? meta.metaTemplateName : null,
+        metaTemplateStatus: typeof meta.metaTemplateStatus === 'string' ? meta.metaTemplateStatus : null,
         message: row.bodyText || '',
         dueAt: toIsoStringSafe(row.dueAt) || new Date().toISOString(),
         sentAt: toIsoStringSafe(row.sentAt),
@@ -292,9 +544,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       hasWhatsAppProvider,
+      waConfigSource: waStatus.source,
       smsAvailable,
       businessName: ctx.businessName,
       reviewLink: ctx.reviewLink,
+      shortRedirectCode: ctx.shortRedirectCode,
+      shortReviewUrl: ctx.shortReviewUrl,
+      metaTemplates,
+      hasApprovedReviewTemplate,
+      activeMetaTemplateStatus,
       locale: ctx.locale,
       queue: {
         pending: pendingCount,
@@ -350,19 +608,23 @@ export async function POST(request: NextRequest) {
           ? [body.id]
           : [];
 
-      const rows = await db.scheduledMessage.findMany({
-        where: {
-          tenantId: user.tenantId,
-          messageType: 'review_request',
-          ...(targetIds.length > 0
-            ? { id: { in: targetIds } }
-            : action === 'retry_failed'
-              ? { status: 'failed' }
-              : { status: 'pending' }),
-        },
-        orderBy: { dueAt: 'asc' },
-        take: 10,
-      });
+      const [rows, ctx, metaTemplates] = await Promise.all([
+        db.scheduledMessage.findMany({
+          where: {
+            tenantId: user.tenantId,
+            messageType: 'review_request',
+            ...(targetIds.length > 0
+              ? { id: { in: targetIds } }
+              : action === 'retry_failed'
+                ? { status: 'failed' }
+                : { status: 'pending' }),
+          },
+          orderBy: { dueAt: 'asc' },
+          take: 10,
+        }),
+        resolveWorkspaceReviewContext(user.tenantId),
+        getReviewTemplateCatalog(user.tenantId),
+      ]);
 
       if (!rows.length) {
         return NextResponse.json({ success: true, sentCount: 0, failedCount: 0, message: 'No matching invites to send right now.' });
@@ -377,20 +639,73 @@ export async function POST(request: NextRequest) {
           continue;
         }
         try {
-          const result =
-            row.channel === 'sms'
-              ? await sendSmsMessage({
-                  to: row.recipientPhone,
-                  message: row.bodyText || row.subject || '',
-                  tenantId: user.tenantId,
-                })
-              : await sendWhatsAppMessage({
-                  to: row.recipientPhone,
-                  message: row.bodyText || row.subject || '',
-                  type: 'text',
-                  tenantId: user.tenantId,
-                });
-          if (result.success) {
+          let rowMeta: Record<string, any> = {};
+          try {
+            rowMeta = JSON.parse(row.metadataJson || '{}');
+          } catch {}
+
+          let result;
+          if (row.channel === 'sms') {
+            result = await sendSmsMessage({
+              to: row.recipientPhone,
+              message: row.bodyText || row.subject || '',
+              tenantId: user.tenantId,
+              countryCode: typeof rowMeta.country === 'string' ? rowMeta.country : ctx.locale.country,
+            });
+          } else {
+            const tplName =
+              (typeof rowMeta.metaTemplateName === 'string' && rowMeta.metaTemplateName.trim()) ||
+              'bgos_review_invite_en';
+            const matchedTpl =
+              metaTemplates.find((t) => t.name.toLowerCase() === tplName.toLowerCase()) ||
+              BGOS_CANONICAL_META_TEMPLATES.find((t) => t.name === tplName);
+            const computed = buildReviewInviteTemplateParams({
+              templateName: tplName,
+              customerName: typeof rowMeta.customerName === 'string' ? rowMeta.customerName : undefined,
+              businessName: ctx.businessName,
+              serviceName: typeof rowMeta.serviceName === 'string' ? rowMeta.serviceName : undefined,
+              customNote: typeof rowMeta.customNote === 'string' ? rowMeta.customNote : undefined,
+              shortRedirectCode: ctx.shortRedirectCode,
+              reviewLink: typeof rowMeta.reviewLink === 'string' ? rowMeta.reviewLink : ctx.reviewLink,
+              bodyText: matchedTpl?.bodyText,
+              buttons: matchedTpl?.buttons,
+            });
+            const tplParams =
+              Array.isArray(rowMeta.metaTemplateParams) && rowMeta.metaTemplateParams.length > 0
+                ? rowMeta.metaTemplateParams.map((p: unknown) => String(p ?? ''))
+                : computed.parameters;
+            const tplLang =
+              (typeof rowMeta.metaTemplateLanguage === 'string' && rowMeta.metaTemplateLanguage.trim()) ||
+              matchedTpl?.language ||
+              'en_US';
+            const buttonUrlParam =
+              typeof rowMeta.metaButtonUrlParam === 'string' && rowMeta.metaButtonUrlParam.trim()
+                ? rowMeta.metaButtonUrlParam.trim()
+                : !Array.isArray(rowMeta.metaTemplateParams)
+                  ? computed.buttonUrlParam
+                  : undefined;
+
+            const payload = buildMetaTemplateSendPayload(tplName, tplParams, tplLang, buttonUrlParam);
+            result = await sendWhatsAppMessage({
+              to: row.recipientPhone,
+              message: row.bodyText || row.subject || tplName,
+              type: 'template',
+              templateName: payload.templateName,
+              templateLanguage: payload.templateLanguage,
+              templateComponents: payload.templateComponents,
+              tenantId: user.tenantId,
+            });
+          }
+
+          if (row.channel !== 'sms' && 'simulated' in result && result.simulated) {
+            failedCount++;
+            lastErrorMsg =
+              'WhatsApp Cloud API credentials are not configured (simulated send skipped). Connect Meta Cloud API or use 1-Tap Send WA.';
+            await db.scheduledMessage.update({
+              where: { id: row.id },
+              data: { status: 'failed', lastError: lastErrorMsg.slice(0, 500), attempts: { increment: 1 }, updatedAt: new Date() },
+            });
+          } else if (result.success) {
             sentCount++;
             await db.scheduledMessage.update({
               where: { id: row.id },
@@ -431,19 +746,43 @@ export async function POST(request: NextRequest) {
     const channel: 'whatsapp' | 'sms' = body.channel === 'sms' ? 'sms' : 'whatsapp';
     const dailyLimit = Math.min(25, Math.max(1, Number.parseInt(String(body.dailyLimit || 5), 10) || 5));
     const customTemplate = typeof body.messageTemplate === 'string' ? body.messageTemplate : undefined;
+    const serviceName = typeof body.serviceName === 'string' && body.serviceName.trim() ? body.serviceName.trim() : undefined;
+    const sanitizedCustomNote =
+      typeof body.customNote === 'string' && body.customNote.trim()
+        ? sanitizeReviewPersonalNote(body.customNote, 120)
+        : undefined;
+    const waDeliveryMode = body.waDeliveryMode === 'direct_queue' ? 'direct_queue' : 'template';
     const sourceLabel = typeof body.source === 'string' ? body.source : 'manual';
     const overrideCountry = typeof body.country === 'string' ? body.country.trim().toUpperCase() : undefined;
     const overrideTimeZone = typeof body.timeZone === 'string' ? body.timeZone.trim() : undefined;
     const preferredTime = typeof body.preferredTime === 'string' ? body.preferredTime : '10:00';
     const sendFirstBatchToday = body.startToday !== false;
 
-    const { businessName, reviewLink, locale } = await resolveWorkspaceReviewContext(
-      user.tenantId,
-      body.reviewLink,
-      body.businessName,
-      overrideCountry,
-      overrideTimeZone,
+    const [{ businessName, reviewLink, shortRedirectCode, shortReviewUrl, locale }, waStatus, smsReady, metaTemplates] =
+      await Promise.all([
+        resolveWorkspaceReviewContext(
+          user.tenantId,
+          body.reviewLink,
+          body.businessName,
+          overrideCountry,
+          overrideTimeZone,
+        ),
+        channel === 'whatsapp' ? isWhatsAppCloudReady(user.tenantId) : Promise.resolve({ ready: false, source: 'sms' }),
+        channel === 'sms' ? isSmsGatewayReady(user.tenantId) : Promise.resolve(true),
+        getReviewTemplateCatalog(user.tenantId),
+      ]);
+
+    const hasWhatsAppProvider = waStatus.ready;
+    const selectedTemplate = resolveSelectedReviewTemplate(
+      metaTemplates,
+      body.templateName,
+      body.templateLanguage,
     );
+    const selectedTemplateLanguage =
+      (typeof body.templateLanguage === 'string' && body.templateLanguage.trim()) ||
+      selectedTemplate.language ||
+      'en_US';
+    const hasApprovedReviewTemplate = metaTemplates.some((t) => t.status === 'APPROVED');
 
     if (!reviewLink) {
       return NextResponse.json(
@@ -551,6 +890,12 @@ export async function POST(request: NextRequest) {
       let firstBatchAt: string | null = null;
       const createdIds: string[] = [];
 
+      const useFreeformCustom = Boolean(
+        customTemplate &&
+          customTemplate.trim() &&
+          (channel === 'sms' || waDeliveryMode === 'direct_queue' || !hasWhatsAppProvider),
+      );
+
       for (let idx = 0; idx < newEntries.length; idx++) {
         const [phone, customerName] = newEntries[idx];
         const batchDay = Math.floor(idx / dailyLimit);
@@ -591,13 +936,39 @@ export async function POST(request: NextRequest) {
         }
         daySlots[dayKey].count += 1;
 
-        const messageText = buildReviewInviteMessage({
+        const tplParams = buildReviewInviteTemplateParams({
+          templateName: selectedTemplate.name,
           customerName,
           businessName,
+          serviceName,
+          customNote: sanitizedCustomNote,
+          shortRedirectCode,
           reviewLink,
-          includeDirectLink,
-          customTemplate,
+          bodyText: selectedTemplate.bodyText,
+          buttons: selectedTemplate.buttons,
         });
+
+        const messageText = useFreeformCustom
+          ? buildReviewInviteMessage({
+              customerName,
+              businessName,
+              reviewLink,
+              includeDirectLink,
+              customTemplate,
+            })
+          : channel === 'whatsapp'
+            ? buildTemplatePreviewMessage({
+                template: selectedTemplate,
+                parameters: tplParams.parameters,
+                reviewLink: includeDirectLink ? (shortReviewUrl || reviewLink) : '',
+              })
+            : buildReviewInviteMessage({
+                customerName,
+                businessName,
+                reviewLink,
+                includeDirectLink,
+                customTemplate,
+              });
 
         const row = await db.scheduledMessage.create({
           data: {
@@ -613,19 +984,22 @@ export async function POST(request: NextRequest) {
               customerName: customerName || '',
               source: sourceLabel,
               reviewLink,
+              shortReviewUrl,
               batchDay: batchDay + 1,
               timeZone: locale.timeZone,
               country: locale.country,
+              serviceName: serviceName || null,
+              customNote: sanitizedCustomNote || null,
+              metaTemplateName: selectedTemplate.name,
+              metaTemplateLanguage: selectedTemplateLanguage,
+              metaTemplateStatus: selectedTemplate.status,
+              metaTemplateParams: tplParams.parameters,
+              metaButtonUrlParam: tplParams.buttonUrlParam || null,
             }),
           },
         });
         createdIds.push(row.id);
       }
-
-      const [hasWhatsAppProvider, smsReady] = await Promise.all([
-        channel === 'whatsapp' ? isWhatsAppCloudReady(user.tenantId) : Promise.resolve(true),
-        channel === 'sms' ? isSmsGatewayReady(user.tenantId) : Promise.resolve(true),
-      ]);
 
       await logActivity({
         tenantId: user.tenantId,
@@ -654,6 +1028,11 @@ export async function POST(request: NextRequest) {
         country: locale.country,
         hasWhatsAppProvider,
         smsAvailable: smsReady,
+        metaTemplateName: selectedTemplate.name,
+        metaTemplateLanguage: selectedTemplateLanguage,
+        activeMetaTemplateStatus: selectedTemplate.status,
+        hasApprovedReviewTemplate,
+        shortReviewUrl,
         batches: Object.entries(daySlots).map(([dayIdx, info]) => ({
           day: Number(dayIdx) + 1,
           date: info.date,
@@ -673,30 +1052,67 @@ export async function POST(request: NextRequest) {
     const failures: Array<{ phone: string; error: string }> = [];
 
     for (const [phone, customerName] of byPhone) {
-      const message = buildReviewInviteMessage({
+      const tplParams = buildReviewInviteTemplateParams({
+        templateName: selectedTemplate.name,
         customerName,
         businessName,
+        serviceName,
+        customNote: sanitizedCustomNote,
+        shortRedirectCode,
         reviewLink,
-        includeDirectLink,
-        customTemplate,
+        bodyText: selectedTemplate.bodyText,
+        buttons: selectedTemplate.buttons,
       });
 
+      const message =
+        channel === 'sms'
+          ? buildReviewInviteMessage({
+              customerName,
+              businessName,
+              reviewLink,
+              includeDirectLink,
+              customTemplate,
+            })
+          : buildTemplatePreviewMessage({
+              template: selectedTemplate,
+              parameters: tplParams.parameters,
+              reviewLink: includeDirectLink ? (shortReviewUrl || reviewLink) : '',
+            });
+
       try {
-        const result =
-          channel === 'sms'
-            ? await sendSmsMessage({
-                to: phone,
-                message,
-                tenantId: user.tenantId || undefined,
-                countryCode: locale.country,
-              })
-            : await sendWhatsAppMessage({
-                to: phone,
-                message,
-                type: 'text',
-                tenantId: user.tenantId || undefined,
-              });
-        if (result.success) {
+        let result;
+        if (channel === 'sms') {
+          result = await sendSmsMessage({
+            to: phone,
+            message,
+            tenantId: user.tenantId || undefined,
+            countryCode: locale.country,
+          });
+        } else {
+          const payload = buildMetaTemplateSendPayload(
+            selectedTemplate.name,
+            tplParams.parameters,
+            selectedTemplateLanguage,
+            tplParams.buttonUrlParam,
+          );
+          result = await sendWhatsAppMessage({
+            to: phone,
+            message,
+            type: 'template',
+            templateName: payload.templateName,
+            templateLanguage: payload.templateLanguage,
+            templateComponents: payload.templateComponents,
+            tenantId: user.tenantId || undefined,
+          });
+        }
+
+        if (channel !== 'sms' && 'simulated' in result && result.simulated) {
+          failures.push({
+            phone,
+            error:
+              'WhatsApp Cloud API credentials are not configured (simulated send skipped). Connect Meta Cloud API or save to Queue for 1-Tap Send WA.',
+          });
+        } else if (result.success) {
           sentCount++;
         } else {
           failures.push({ phone, error: result.error || 'Send failed' });
@@ -742,6 +1158,7 @@ export async function POST(request: NextRequest) {
       sentCount,
       failedCount: failures.length,
       recipients: byPhone.size,
+      metaTemplateName: channel === 'whatsapp' ? selectedTemplate.name : undefined,
       message: `Review requests sent to ${sentCount} customer${sentCount === 1 ? '' : 's'} via ${channel}${failures.length > 0 ? ` (${failures.length} failed).` : '.'}`,
       failures: failures.slice(0, 5),
     });

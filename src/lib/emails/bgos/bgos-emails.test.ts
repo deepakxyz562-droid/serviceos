@@ -77,7 +77,9 @@ import {
 } from './lifecycle';
 import {
   applyUnsubscribe,
+  decodeHtmlUrlEntities,
   injectTracking,
+  normalizeClickDestination,
   unsubscribeUrl,
 } from '@/lib/email-consent';
 
@@ -259,6 +261,13 @@ describe('BGOS Email Templates & Helpers', () => {
     expect(winback.html).toContain('$9/mo');
     expect(winback.html).toContain('{{unsubscribe_url}}');
     expect(winback.html).not.toMatch(/\b\d+%\s*off\b/i);
+
+    const unrepliedRendered = renderBgosUnrepliedReviewsEmail({
+      businessName: 'Abc kirana',
+      pendingCount: 2,
+    });
+    expect(unrepliedRendered.html).toContain('bgos.fieseros.com/app?product=bgos&amp;view=reviews');
+    expect(unrepliedRendered.html).toContain('{{unsubscribe_url}}');
 
     const promo = renderBgosPromoEmail({
       businessName: 'Abc kirana',
@@ -463,7 +472,7 @@ describe('BGOS Email Preferences & Lifecycle Engine', () => {
     expect(d2).toEqual({ action: 'skip', reason: 'opted_out_nudges' });
   });
 
-  it('triggers connect-GBP, <5 review growth, unreplied reviews, and first-post nudges cleanly', () => {
+  it('triggers connect-GBP, <5 review growth, and first-post nudges cleanly, while keeping unreplied reviews push/in-app only', () => {
     const connectSnap = makeSnapshot({
       gbpConnected: false,
       createdAt: new Date(NOW.getTime() - 36 * HOUR),
@@ -484,15 +493,17 @@ describe('BGOS Email Preferences & Lifecycle Engine', () => {
     expect(rg.emailKey).toBe('bgos_review_growth_0_to_5');
     expect(rg.rendered?.html).toContain('Go from 1 to more than 5 reviews');
 
+    // Unreplied review alerts moved out of unsolicited emails to Push + In-App Notifications
     const unrepliedSnap = makeSnapshot({
       gbpConnected: true,
       totalReviewsCount: 8,
       unrepliedOldReviewsCount: 2,
       publishedPostsCount: 2,
     });
-    expect(evaluateBgosLifecycleDecision(unrepliedSnap, NOW).emailKey).toBe(
-      'bgos_unreplied_reviews',
-    );
+    const unrepliedDecision = evaluateBgosLifecycleDecision(unrepliedSnap, NOW);
+    expect(unrepliedDecision.action).toBe('skip');
+    expect(unrepliedDecision.reason).toBe('no_rule_matched');
+    expect(unrepliedDecision.emailKey).not.toBe('bgos_unreplied_reviews');
 
     const firstPostSnap = makeSnapshot({
       gbpConnected: true,
@@ -644,13 +655,25 @@ describe('BGOS Sender Guardrails, Idempotency & Context Detection', () => {
     expect(uUrl).toBe('https://bgos.fieseros.com/api/public/unsubscribe?t=tok123');
 
     const tracked = injectTracking(
-      `<a href="https://bgos.fieseros.com/app">Open</a><a href="${uUrl}">Unsub</a></body>`,
+      `<a href="https://bgos.fieseros.com/app?product=bgos&amp;view=reviews">Reply</a><a href="${uUrl}">Unsub</a></body>`,
       'tok123',
       'https://bgos.fieseros.com',
     );
-    expect(tracked).toContain('https://bgos.fieseros.com/api/email/click/tok123?u=');
+    expect(tracked).toContain(
+      `https://bgos.fieseros.com/api/email/click/tok123?u=${encodeURIComponent('https://bgos.fieseros.com/app?product=bgos&view=reviews')}`,
+    );
+    expect(tracked).not.toContain('%26amp%3B');
     expect(tracked).toContain(`href="${uUrl}"`);
     expect(tracked).toContain('https://bgos.fieseros.com/api/email/open/tok123/pixel.png');
+
+    expect(
+      decodeHtmlUrlEntities('https://bgos.fieseros.com/app?product=bgos&amp;view=reviews&#x26;tab=pending'),
+    ).toBe('https://bgos.fieseros.com/app?product=bgos&view=reviews&tab=pending');
+    expect(
+      normalizeClickDestination('https://bgos.fieseros.com/app?product=bgos&amp;view=reviews'),
+    ).toBe('https://bgos.fieseros.com/app?product=bgos&view=reviews');
+    expect(normalizeClickDestination('javascript:alert(1)')).toBeNull();
+    expect(normalizeClickDestination('   ')).toBeNull();
 
     vi.mocked(db.user.findMany).mockResolvedValueOnce([{ tenantId: 't-bgos' }] as any);
     vi.mocked(db.tenant.findMany)

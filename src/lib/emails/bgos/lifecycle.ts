@@ -19,7 +19,6 @@ import {
   renderBgosReviewGrowthEmail,
   renderBgosTrialEndingEmail,
   renderBgosTrialExpiredEmail,
-  renderBgosUnrepliedReviewsEmail,
   renderBgosWinBackEmail,
   resolveBgosBaseUrl,
   type BgosEmailKey,
@@ -32,6 +31,10 @@ import {
   parseBgosEmailPrefs,
   safeParseMeta,
 } from './sender';
+import {
+  dispatchUnrepliedReviewNotifications,
+  type UnrepliedReviewNotificationReport,
+} from '@/lib/reviews/unreplied-review-notifications';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -82,15 +85,6 @@ function isoDay(d: Date): string {
 
 function isoMonth(d: Date): string {
   return d.toISOString().slice(0, 7);
-}
-
-function isoWeekKey(d: Date): string {
-  const copy = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dayNum = copy.getUTCDay() || 7;
-  copy.setUTCDate(copy.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(copy.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(((copy.getTime() - yearStart.getTime()) / DAY_MS + 1) / 7);
-  return `${copy.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
 }
 
 function wasSentInHistory(
@@ -302,29 +296,12 @@ export function evaluateBgosLifecycleDecision(
 
   const ageHours = (now.getTime() - snapshot.createdAt.getTime()) / HOUR_MS;
 
-  // ── 5. Unreplied Google Reviews (> 48h old) ────────────────────────────
-  if (snapshot.gbpConnected && snapshot.unrepliedOldReviewsCount >= 1) {
-    const recentlySent = wasSentInHistory(snapshot.sentHistory, 'bgos_unreplied_reviews', {
-      withinMs: 14 * DAY_MS,
-      now,
-    });
-    if (!recentlySent) {
-      const cycleKey = `unreplied:${isoWeekKey(now)}`;
-      return {
-        action: 'send',
-        emailKey: 'bgos_unreplied_reviews',
-        cycleKey,
-        category: 'nudge',
-        rendered: renderBgosUnrepliedReviewsEmail({
-          businessName: snapshot.businessName,
-          pendingCount: snapshot.unrepliedOldReviewsCount,
-          appUrl: baseUrl,
-        }),
-      };
-    }
-  }
+  // NOTE: Unreplied Google reviews (> 48h old) are now delivered exclusively via
+  // Push + In-App Notifications (see `dispatchUnrepliedReviewNotifications` in
+  // `runBgosLifecycleBatch` and real-time `/api/cron/gbp-reviews-sync`) rather than
+  // unsolicited Review Alert emails.
 
-  // ── 6. Connect GBP Nudge (24h+ after signup, GBP still disconnected) ───
+  // ── 5. Connect GBP Nudge (24h+ after signup, GBP still disconnected) ───
   if (!snapshot.gbpConnected && ageHours >= 24 && !isMarkedExpired && !isTrialPastEnd) {
     const cycleKey = `connect_gbp:${snapshot.tenantId}`;
     if (!wasSentInHistory(snapshot.sentHistory, 'bgos_connect_gbp_nudge', { cycleKey })) {
@@ -419,6 +396,7 @@ export interface BgosBatchRunReport {
   skipped: number;
   failed: number;
   results: BgosBatchItemResult[];
+  unrepliedReviewNotifications?: UnrepliedReviewNotificationReport;
 }
 
 function parseJsonSafe(str?: string | null): Record<string, unknown> {
@@ -646,7 +624,9 @@ export async function loadBgosTenantSnapshots(
         const rCreated = new Date(r.createdAt).getTime();
         if (rCreated > latestReviewMs) latestReviewMs = rCreated;
         const resp = parseJsonSafe(r.responseJson);
-        const hasReply = typeof resp.text === 'string' && resp.text.trim().length > 0;
+        const hasReply =
+          (typeof resp.text === 'string' && resp.text.trim().length > 0) ||
+          (typeof resp.replyText === 'string' && resp.replyText.trim().length > 0);
         if (!hasReply && rCreated <= cutoff48hMs) {
           unrepliedOldReviewsCount++;
         }
@@ -811,6 +791,11 @@ export async function runBgosLifecycleBatch(
     }
   }
 
+  const unrepliedReviewNotifications = await dispatchUnrepliedReviewNotifications(capped, {
+    dryRun,
+    now,
+  });
+
   return {
     ranAt: now.toISOString(),
     dryRun,
@@ -820,5 +805,6 @@ export async function runBgosLifecycleBatch(
     skipped: results.filter((r) => r.action === 'skipped').length,
     failed: results.filter((r) => r.action === 'failed').length,
     results,
+    unrepliedReviewNotifications,
   };
 }

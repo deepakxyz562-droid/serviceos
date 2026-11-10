@@ -116,9 +116,14 @@ const DAILY_CRONS: Array<{ name: string; path: string; description: string }> = 
     description: 'Enforces data retention policies — archives or deletes old data per tenant config',
   },
   {
+    name: 'gbp-reviews-sync',
+    path: '/api/cron/gbp-reviews-sync',
+    description: 'Syncs latest Google Business Profile reviews and dispatches push/in-app alerts for unreplied reviews',
+  },
+  {
     name: 'bgos-lifecycle',
     path: '/api/cron/bgos-lifecycle',
-    description: 'Evaluates BGOS registered tenants and sends trial, review-growth, and post-trial inactivity rescue emails',
+    description: 'Evaluates BGOS registered tenants and sends trial, review-growth, post-trial rescue emails, plus unreplied-review push/in-app notifications',
   },
 ]
 

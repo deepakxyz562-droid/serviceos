@@ -4,58 +4,12 @@ import { getAuthUser } from '@/lib/auth';
 import { PRE_BUILT_WHATSAPP_TEMPLATES, type WhatsAppPreBuiltTemplate } from '@/lib/whatsapp-prebuilt-templates';
 import { detectVariablesFromContent } from '@/lib/template-vars';
 import { resolveWhatsAppConfig } from '@/lib/whatsapp-config';
+import {
+  buildMetaTemplatePayload,
+  stripVariablesFromMetaFooter,
+} from '@/lib/bgos-meta-templates';
 
 const WHATSAPP_API_BASE = 'https://graph.facebook.com/v25.0';
-
-/**
- * Strip ALL emojis and emoji-like characters from a string.
- * Covers Unicode emoji ranges comprehensively.
- */
-function stripEmojis(text: string): string {
-  return text
-    // Remove emoji modifiers, symbols, and pictographs
-    .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
-    .replace(/[\u{2600}-\u{27BF}]/gu, '')   // Misc symbols, dingbats
-    .replace(/[\u{FE00}-\u{FE0F}]/gu, '')   // Variation selectors
-    .replace(/[\u{1F900}-\u{1F9FF}]/gu, '') // Supplemental symbols
-    .replace(/[\u{1FA00}-\u{1FA6F}]/gu, '') // Chess symbols, etc.
-    .replace(/[\u{1FA70}-\u{1FAFF}]/gu, '') // Symbols extended
-    .replace(/[\u{2702}-\u{27B0}]/gu, '')   // Dingbats
-    .replace(/[\u{200D}]/gu, '')             // Zero-width joiner
-    .replace(/[\u{20E3}]/gu, '')             // Combining enclosing keycap
-    .replace(/[\u{E0020}-\u{E007F}]/gu, '') // Tags
-    // Clean up any resulting double spaces
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
-
-/**
- * Ensure body text does not start or end with a variable {{N}}.
- * If it does, wrap with surrounding text.
- */
-function ensureBodyNotStartsOrEndsWithVariable(bodyText: string): string {
-  let text = bodyText;
-
-  // Check if body starts with a variable like {{1}}
-  if (/^\{\{\d+\}\}/.test(text)) {
-    text = 'Hello, ' + text;
-  }
-
-  // Check if body ends with a variable like {{1}}
-  if (/\{\{\d+\}\}$/.test(text)) {
-    text = text + ' thank you.';
-  }
-
-  return text;
-}
-
-/**
- * Strip variable patterns {{N}} from footer text.
- * Meta does not allow variables in footer.
- */
-function stripVariablesFromFooter(footerText: string): string {
-  return footerText.replace(/\{\{\d+\}\}/g, '').replace(/\s{2,}/g, ' ').trim();
-}
 
 /**
  * GET /api/whatsapp/templates
@@ -159,6 +113,154 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const action = body.action || 'import';
 
+    // ─── CREATE & optionally SUBMIT a custom template ───────────
+    if (action === 'create') {
+      const rawName = String(body.name || '').trim();
+      const rawBodyText = String(body.bodyText || body.content || '').trim();
+      if (!rawName || !rawBodyText) {
+        return NextResponse.json(
+          { error: 'Template name and bodyText are required' },
+          { status: 400 },
+        );
+      }
+
+      const cleanName = rawName
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '')
+        .slice(0, 512);
+      if (!cleanName) {
+        return NextResponse.json({ error: 'Template name must contain alphanumeric characters' }, { status: 400 });
+      }
+
+      const rawMetaCategory = String(body.metaCategory || body.category || 'UTILITY').toUpperCase();
+      const metaCategory = ['UTILITY', 'MARKETING', 'AUTHENTICATION'].includes(rawMetaCategory)
+        ? rawMetaCategory
+        : 'UTILITY';
+      const businessCategory = metaCategory === 'MARKETING'
+        ? (cleanName.includes('review') ? 'reviews' : 'promotions')
+        : metaCategory === 'AUTHENTICATION'
+          ? 'auth'
+          : 'general';
+      const language = String(body.language || 'en_US').trim() || 'en_US';
+      const headerText = typeof body.headerText === 'string' && body.headerText.trim() ? body.headerText.trim() : null;
+      const rawFooter = typeof body.footerText === 'string' && body.footerText.trim()
+        ? stripVariablesFromMetaFooter(body.footerText.trim())
+        : null;
+      const footerText = rawFooter || null;
+      const buttons = Array.isArray(body.buttons) ? body.buttons : [];
+      const buttonsJson = JSON.stringify(buttons);
+      const detectedVars = detectVariablesFromContent(rawBodyText, headerText, footerText);
+
+      const existing = await db.campaignTemplate.findFirst({
+        where: { tenantId, name: cleanName },
+      });
+
+      const savedRecord = existing
+        ? await db.campaignTemplate.update({
+            where: { id: existing.id },
+            data: {
+              category: businessCategory,
+              content: rawBodyText,
+              variablesJson: JSON.stringify(detectedVars),
+              language,
+              headerText,
+              footerText,
+              buttonsJson,
+              tagsJson: JSON.stringify([metaCategory.toLowerCase(), businessCategory]),
+              isApproved: false,
+              status: 'draft',
+            },
+          })
+        : await db.campaignTemplate.create({
+            data: {
+              name: cleanName,
+              description: typeof body.description === 'string' ? body.description.trim() : `Custom ${metaCategory.toLowerCase()} template`,
+              category: businessCategory,
+              content: rawBodyText,
+              variablesJson: JSON.stringify(detectedVars),
+              isApproved: false,
+              tenantId,
+              workspaceId: user.workspaceId || null,
+              language,
+              templateType: 'text',
+              headerText,
+              footerText,
+              buttonsJson,
+              status: 'draft',
+              tagsJson: JSON.stringify([metaCategory.toLowerCase(), businessCategory]),
+            },
+          });
+
+      const shouldSubmitToMeta = body.submitToMeta !== false;
+      if (shouldSubmitToMeta) {
+        const waConfig = await resolveWhatsAppConfig(tenantId);
+        if (waConfig.accessToken && waConfig.wabaId) {
+          const metaPayload = buildMetaTemplatePayload(savedRecord, metaCategory);
+          try {
+            const response = await fetch(`${WHATSAPP_API_BASE}/${waConfig.wabaId}/message_templates`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${waConfig.accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(metaPayload),
+            });
+            const responseData = await response.json();
+            if (!response.ok) {
+              const errMsg = responseData?.error?.error_user_msg || responseData?.error?.message || `Meta API error: ${response.status}`;
+              const updatedRejected = await db.campaignTemplate.update({
+                where: { id: savedRecord.id },
+                data: { status: 'rejected', isApproved: false },
+              });
+              return NextResponse.json(
+                { error: errMsg, metaError: responseData?.error, template: updatedRejected },
+                { status: 400 },
+              );
+            }
+            const metaTemplateId = responseData?.id || '';
+            const metaStatus = responseData?.status || 'PENDING';
+            const updatedSubmitted = await db.campaignTemplate.update({
+              where: { id: savedRecord.id },
+              data: {
+                externalId: metaTemplateId,
+                status: mapMetaStatusToLocal(metaStatus),
+                isApproved: metaStatus === 'APPROVED',
+              },
+            });
+            return NextResponse.json({
+              success: true,
+              metaSubmitted: true,
+              metaId: metaTemplateId,
+              status: metaStatus,
+              template: updatedSubmitted,
+              message: metaStatus === 'APPROVED'
+                ? 'Template approved by Meta and ready to send!'
+                : 'Template submitted to Meta for approval.',
+            }, { status: 201 });
+          } catch (fetchErr) {
+            console.error('[WhatsApp Templates] create/submit fetch error:', fetchErr);
+            return NextResponse.json(
+              {
+                error: 'Saved template locally, but failed to reach Meta Graph API.',
+                template: savedRecord,
+              },
+              { status: 502 },
+            );
+          }
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        metaSubmitted: false,
+        status: 'DRAFT',
+        template: savedRecord,
+        message: 'Template saved to library as draft. Connect a Meta WABA with WABA ID to submit for approval.',
+      }, { status: 201 });
+    }
+
     // ─── IMPORT pre-built templates ───────────────────────────────
     if (action === 'import') {
       const requestedKeys = body.templateKeys as string[] | undefined;
@@ -180,14 +282,14 @@ export async function POST(request: NextRequest) {
       });
       const existingNameSet = new Set(existingNames.map(e => e.name));
 
-      const created = [];
+      const created: Array<Awaited<ReturnType<typeof db.campaignTemplate.create>>> = [];
       for (const tmpl of templatesToImport) {
         if (existingNameSet.has(tmpl.name)) continue; // Skip duplicates
 
         // Replace {{company.name}} style references in footer — also strip any remaining variables
         let footerText = tmpl.footerText?.replace(/\{\{2\}\}|\{\{1\}\}/g, companyName) || null;
         if (footerText) {
-          footerText = stripVariablesFromFooter(footerText) || null;
+          footerText = stripVariablesFromMetaFooter(footerText) || null;
         }
 
         const detectedVars = detectVariablesFromContent(tmpl.bodyText, tmpl.headerText, footerText);
@@ -469,7 +571,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ error: 'Invalid action. Use: import, submit, submit_all, sync_status' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid action. Use: create, import, submit, submit_all, sync_status' }, { status: 400 });
   } catch (error) {
     console.error('[WhatsApp Templates] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -515,128 +617,4 @@ function mapMetaStatusToLocal(metaStatus: string): string {
     PAUSED: 'paused',
   };
   return map[metaStatus] || 'pending';
-}
-
-function buildMetaTemplatePayload(
-  template: {
-    name: string;
-    content: string;
-    headerText: string | null;
-    footerText: string | null;
-    buttonsJson: string;
-    templateType: string;
-    language: string;
-  },
-  metaCategory: string
-): Record<string, unknown> {
-  // Clean template name for Meta (lowercase, underscores, no spaces)
-  const cleanName = template.name
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
-    .slice(0, 512);
-
-  const payload: Record<string, unknown> = {
-    name: cleanName,
-    category: metaCategory,
-    language: template.language === 'en' ? 'en_US' : template.language,
-  };
-
-  // Build components
-  const components: Record<string, unknown>[] = [];
-
-  // Header — Meta doesn't allow emojis, formatting, or newlines in headers
-  if (template.headerText) {
-    const cleanHeader = stripEmojis(template.headerText)
-      .replace(/[*_~`]/g, '')    // Remove markdown formatting
-      .replace(/\n/g, ' ')       // Replace newlines with space
-      .trim();
-    if (cleanHeader) {
-      components.push({
-        type: 'HEADER',
-        format: 'TEXT',
-        text: cleanHeader.slice(0, 60), // Meta limit: 60 chars
-      });
-    }
-  }
-
-  // Body — different format for AUTHENTICATION vs others
-  if (metaCategory === 'AUTHENTICATION') {
-    // AUTHENTICATION category: BODY must NOT have a text field
-    // Instead use add_safety_recommendation
-    components.push({
-      type: 'BODY',
-      add_safety_recommendation: true,
-    });
-  } else {
-    // UTILITY / MARKETING: body with text, ensuring compliance
-    let bodyText = stripEmojis(template.content);
-    bodyText = ensureBodyNotStartsOrEndsWithVariable(bodyText);
-    const bodyComp: Record<string, unknown> = {
-      type: 'BODY',
-      text: bodyText,
-    };
-    // Meta requires an example object for any template containing positional variables {{1}}, {{2}}
-    const varMatches = bodyText.match(/\{\{\d+\}\}/g);
-    if (varMatches && varMatches.length > 0) {
-      const sampleVals = varMatches.map((_, idx) => `Sample ${idx + 1}`);
-      bodyComp.example = {
-        body_text: [sampleVals],
-      };
-    }
-    components.push(bodyComp);
-  }
-
-  // Footer — strip emojis and variables (Meta doesn't allow variables in footer)
-  if (template.footerText) {
-    const cleanFooter = stripEmojis(stripVariablesFromFooter(template.footerText));
-    if (cleanFooter) {
-      components.push({
-        type: 'FOOTER',
-        text: cleanFooter.slice(0, 60), // Meta limit: 60 chars
-      });
-    }
-  }
-
-  // Buttons
-  try {
-    const buttons = JSON.parse(template.buttonsJson) as Array<{ type: string; text: string; url?: string; phoneNumber?: string }>;
-    if (buttons.length > 0) {
-      const metaButtons = buttons.slice(0, 3).map((btn) => {
-        // Strip emojis and special chars from button text (Meta restriction)
-        let cleanBtnText = stripEmojis(btn.text)
-          .replace(/[*_~`]/g, '')   // Remove markdown
-          .trim()
-          .slice(0, 25);
-
-        // Fallback if button text becomes empty after stripping
-        if (!cleanBtnText) cleanBtnText = 'Option';
-
-        const btnPayload: Record<string, unknown> = {
-          type: btn.type === 'quick_reply' ? 'QUICK_REPLY' : btn.type.toUpperCase(),
-          text: cleanBtnText,
-        };
-
-        if (btn.type.toUpperCase() === 'URL' && btn.url) {
-          btnPayload.url = btn.url;
-        }
-        if (btn.type.toUpperCase() === 'CALL' && btn.phoneNumber) {
-          btnPayload.phone_number = btn.phoneNumber;
-        }
-        if (btn.type.toUpperCase() === 'COPY_CODE') {
-          // COPY_CODE button for AUTHENTICATION templates
-          // Meta requires the button type to be COPY_CODE with otp_type
-          btnPayload.type = 'COPY_CODE';
-          btnPayload.otp_type = 'ONE_TIME_AUTH_CODE';
-        }
-
-        return btnPayload;
-      });
-      components.push({ type: 'BUTTONS', buttons: metaButtons });
-    }
-  } catch { /* no buttons */ }
-
-  payload.components = components;
-  return payload;
 }

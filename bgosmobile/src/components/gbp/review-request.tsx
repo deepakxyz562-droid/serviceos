@@ -49,6 +49,8 @@ interface ReviewQueueItem {
   customerName: string;
   source: string;
   batchDay?: number;
+  metaTemplateName?: string | null;
+  metaTemplateStatus?: string | null;
   message: string;
   dueAt: string;
   sentAt: string | null;
@@ -63,11 +65,104 @@ interface CrmCandidate {
   alreadyQueued: boolean;
 }
 
+export interface ReviewMetaTemplatePreset {
+  name: string;
+  displayName: string;
+  language: string;
+  status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'DRAFT';
+  bodyText: string;
+  supportsCustomNote?: boolean;
+  hasDynamicUrlButton?: boolean;
+  buttonText?: string;
+}
+
+const DEFAULT_META_CLOSING_NOTE =
+  'We truly appreciated serving you today and hope everything went smoothly.';
+
+const FALLBACK_META_TEMPLATES: ReviewMetaTemplatePreset[] = [
+  {
+    name: 'bgos_review_invite_en',
+    displayName: 'Friendly (EN)',
+    language: 'en_US',
+    status: 'PENDING',
+    bodyText:
+      'Hi {{1}}, thank you for choosing {{2}}! Could you take 30 seconds to share your experience on Google? Your review helps local customers find us.',
+    supportsCustomNote: false,
+    hasDynamicUrlButton: true,
+    buttonText: 'Leave Google Review',
+  },
+  {
+    name: 'bgos_review_invite_hi',
+    displayName: 'Hindi (हिन्दी)',
+    language: 'hi',
+    status: 'PENDING',
+    bodyText:
+      'नमस्ते {{1}}, {{2}} को सेवा का अवसर देने के लिए धन्यवाद! कृपया 30 सेकंड निकालकर Google पर अपना अनुभव शेयर करें। आपका रिव्यू हमारे लिए बहुत महत्वपूर्ण है।',
+    supportsCustomNote: false,
+    hasDynamicUrlButton: true,
+    buttonText: 'Google Review Likhen',
+  },
+  {
+    name: 'bgos_review_invite_note',
+    displayName: 'Friendly + Note',
+    language: 'en_US',
+    status: 'PENDING',
+    bodyText:
+      'Hi {{1}}, thank you for choosing {{2}}! {{3}} Tap below whenever you have a moment to leave us a quick Google review.',
+    supportsCustomNote: true,
+    hasDynamicUrlButton: true,
+    buttonText: 'Leave Google Review',
+  },
+  {
+    name: 'bgos_review_request',
+    displayName: 'Service Feedback',
+    language: 'en_US',
+    status: 'PENDING',
+    bodyText:
+      'Hi {{1}}, thank you for choosing {{2}}! How was your service experience with {{3}}? Tap below to share a quick Google review and help us improve.',
+    supportsCustomNote: false,
+    hasDynamicUrlButton: true,
+    buttonText: 'Leave Google Review',
+  },
+];
+
+function sanitizeMetaClosingNote(raw: string): string {
+  return raw
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/\bwww\.\S+/gi, '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .slice(0, 120);
+}
+
+function renderLockedMetaBody(
+  tpl: ReviewMetaTemplatePreset,
+  previewFirstName: string,
+  businessName: string,
+  customNote: string,
+): string {
+  const safeName = previewFirstName || 'Priya';
+  const safeBiz = businessName || 'Our Business';
+  const cleanNote = sanitizeMetaClosingNote(customNote).trim() || DEFAULT_META_CLOSING_NOTE;
+  const thirdVal = tpl.supportsCustomNote ? cleanNote : 'your recent visit';
+  return tpl.bodyText
+    .replace(/\{\{1\}\}/g, safeName)
+    .replace(/\{\{2\}\}/g, safeBiz)
+    .replace(/\{\{3\}\}/g, thirdVal)
+    .replace(/\{\{4\}\}/g, safeBiz);
+}
+
 interface QueueGetResponse {
   hasWhatsAppProvider?: boolean;
+  waConfigSource?: string;
   smsAvailable?: boolean;
   businessName?: string;
   reviewLink?: string;
+  shortRedirectCode?: string;
+  shortReviewUrl?: string;
+  hasApprovedReviewTemplate?: boolean;
+  activeMetaTemplateStatus?: string;
+  metaTemplates?: ReviewMetaTemplatePreset[];
   locale?: {
     country: string;
     countryName: string;
@@ -254,6 +349,24 @@ export function ReviewRequestSheet({
   const [queueActionBusy, setQueueActionBusy] = useState(false);
   const [bulkNote, setBulkNote] = useState<string | null>(null);
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [selectedMetaTemplateName, setSelectedMetaTemplateName] = useState<string>('bgos_review_invite_en');
+  const [customCloudNote, setCustomCloudNote] = useState<string>('');
+
+  const waConnected = Boolean(queueData?.hasWhatsAppProvider);
+  const smsReady = queueData?.smsAvailable !== false;
+  const availableMetaTemplates = useMemo<ReviewMetaTemplatePreset[]>(() => {
+    return queueData?.metaTemplates && queueData.metaTemplates.length > 0
+      ? queueData.metaTemplates
+      : FALLBACK_META_TEMPLATES;
+  }, [queueData?.metaTemplates]);
+
+  const selectedMetaTemplate = useMemo<ReviewMetaTemplatePreset>(() => {
+    return (
+      availableMetaTemplates.find((t) => t.name === selectedMetaTemplateName) ||
+      availableMetaTemplates.find((t) => t.status === 'APPROVED') ||
+      availableMetaTemplates[0]
+    );
+  }, [availableMetaTemplates, selectedMetaTemplateName]);
 
   const cleanBusinessName = businessName?.trim() || 'Our Business';
   const trimmedName = customerName.trim();
@@ -270,6 +383,12 @@ export function ReviewRequestSheet({
     );
   }, [reviewUrl, queueData?.reviewLink, cleanBusinessName]);
 
+  const displayShortCtaUrl = useMemo(() => {
+    if (queueData?.shortReviewUrl) return queueData.shortReviewUrl;
+    if (queueData?.shortRedirectCode) return `https://fieseros.com/r/${queueData.shortRedirectCode}`;
+    return 'https://fieseros.com/r/your-business';
+  }, [queueData?.shortReviewUrl, queueData?.shortRedirectCode]);
+
   const loadQueue = useCallback(async () => {
     setQueueLoading(true);
     try {
@@ -282,6 +401,15 @@ export function ReviewRequestSheet({
       }
       if (res?.locale?.timeZone) {
         setSelectedTimeZone(res.locale.timeZone);
+      }
+      if (Array.isArray(res?.metaTemplates) && res.metaTemplates.length > 0) {
+        const approved = res.metaTemplates.find((t) => t.status === 'APPROVED');
+        if (approved) {
+          setSelectedMetaTemplateName((prev) => {
+            const currentMatch = res.metaTemplates?.find((t) => t.name === prev);
+            return currentMatch && currentMatch.status === 'APPROVED' ? prev : approved.name;
+          });
+        }
       }
     } catch {
       // Keep UI interactive offline
@@ -307,6 +435,15 @@ export function ReviewRequestSheet({
         : `Hi {firstName}, thank you for choosing ${cleanBusinessName}! Could you take 30 seconds to share your Google review? ${effectiveReviewUrl}`;
     setCustomBulkMessage(defaultTpl);
   }, [lang, cleanBusinessName, effectiveReviewUrl]);
+
+  useEffect(() => {
+    if (lang === 'hi') {
+      const hiTpl = availableMetaTemplates.find((t) => t.language.toLowerCase().startsWith('hi'));
+      if (hiTpl) setSelectedMetaTemplateName(hiTpl.name);
+    } else if (selectedMetaTemplateName === 'bgos_review_invite_hi') {
+      setSelectedMetaTemplateName('bgos_review_invite_en');
+    }
+  }, [lang, availableMetaTemplates, selectedMetaTemplateName]);
 
   const inviteText = useMemo(() => {
     if (lang === 'hi') {
@@ -463,37 +600,73 @@ export function ReviewRequestSheet({
       if (!typedNorm) {
         throw new Error(`Enter a valid ${selectedCountry.name} phone number (${selectedCountry.placeholder}).`);
       }
-      const data = await apiRequest<{
-        success?: boolean;
-        sentCount?: number;
-        queuedCount?: number;
-        error?: string;
-        message?: string;
-      }>('/api/reviews/request', {
-        method: 'POST',
-        body: {
-          mode: 'instant',
-          channel: 'whatsapp',
-          country: selectedCountry.code,
-          timeZone: selectedTimeZone,
-          reviewLink: effectiveReviewUrl,
-          businessName: cleanBusinessName,
-          includeDirectLink: true,
-          messageTemplate: inviteText,
-          recipients: [{ name: customerName.trim() || undefined, phone: typedNorm }],
-        },
-      });
-      if (data && data.error) throw new Error(data.error);
-      const sent = data?.sentCount ?? 0;
-      const queued = data?.queuedCount ?? 0;
-      setNote(
-        sent > 0
-          ? `Sent invite to ${typedNorm} via WhatsApp Cloud API.`
-          : queued > 0
-            ? `Saved invite to queue for ${typedNorm}. Tap "Send on WhatsApp (Direct)" below or view it in Bulk Queue.`
+
+      if (waConnected) {
+        const cleanClosing = sanitizeMetaClosingNote(customCloudNote).trim();
+        const data = await apiRequest<{
+          success?: boolean;
+          sentCount?: number;
+          queuedCount?: number;
+          error?: string;
+          message?: string;
+        }>('/api/reviews/request', {
+          method: 'POST',
+          body: {
+            mode: 'instant',
+            channel: 'whatsapp',
+            country: selectedCountry.code,
+            timeZone: selectedTimeZone,
+            reviewLink: effectiveReviewUrl,
+            businessName: cleanBusinessName,
+            includeDirectLink: true,
+            templateName: selectedMetaTemplate.name,
+            templateLanguage: selectedMetaTemplate.language,
+            customNote: selectedMetaTemplate.supportsCustomNote && cleanClosing ? cleanClosing : undefined,
+            recipients: [{ name: customerName.trim() || undefined, phone: typedNorm }],
+          },
+        });
+        if (data && data.error) throw new Error(data.error);
+        const sent = data?.sentCount ?? 0;
+        setNote(
+          sent > 0
+            ? `Sent "${selectedMetaTemplate.displayName}" template to ${typedNorm} via WhatsApp Cloud API.`
             : data?.message || 'Invite processed.',
-      );
+        );
+      } else {
+        const data = await apiRequest<{
+          success?: boolean;
+          scheduledCount?: number;
+          queuedCount?: number;
+          error?: string;
+          message?: string;
+        }>('/api/reviews/request', {
+          method: 'POST',
+          body: {
+            mode: 'scheduled',
+            waDeliveryMode: 'direct_queue',
+            channel: 'whatsapp',
+            dailyLimit: 5,
+            country: selectedCountry.code,
+            timeZone: selectedTimeZone,
+            source: 'single',
+            reviewLink: effectiveReviewUrl,
+            businessName: cleanBusinessName,
+            includeDirectLink: true,
+            messageTemplate: inviteText,
+            recipients: [{ name: customerName.trim() || undefined, phone: typedNorm }],
+          },
+        });
+        if (data && data.error) throw new Error(data.error);
+        const queued = data?.queuedCount ?? data?.scheduledCount ?? 0;
+        setNote(
+          queued > 0
+            ? `Saved invite to queue for ${typedNorm}. Tap "Send on WhatsApp (Direct)" below or view it in Bulk Queue.`
+            : data?.message || 'Saved invite to queue.',
+        );
+      }
+
       await loadQueue();
+      await onQueueUpdated?.();
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'Could not send automated invite.');
     } finally {
@@ -551,6 +724,8 @@ export function ReviewRequestSheet({
 
     setBulkBusy(true);
     try {
+      const isLockedMetaMode = channel === 'whatsapp' && waConnected;
+      const cleanClosing = sanitizeMetaClosingNote(customCloudNote).trim();
       const res = await apiRequest<{
         success?: boolean;
         scheduledCount?: number;
@@ -562,6 +737,7 @@ export function ReviewRequestSheet({
         method: 'POST',
         body: {
           mode: 'scheduled',
+          waDeliveryMode: isLockedMetaMode ? 'template' : 'direct_queue',
           channel,
           dailyLimit,
           preferredTime,
@@ -571,7 +747,16 @@ export function ReviewRequestSheet({
           reviewLink: effectiveReviewUrl,
           businessName: cleanBusinessName,
           includeDirectLink: true,
-          messageTemplate: customBulkMessage.trim() || undefined,
+          ...(isLockedMetaMode
+            ? {
+                templateName: selectedMetaTemplate.name,
+                templateLanguage: selectedMetaTemplate.language,
+                customNote:
+                  selectedMetaTemplate.supportsCustomNote && cleanClosing ? cleanClosing : undefined,
+              }
+            : {
+                messageTemplate: customBulkMessage.trim() || undefined,
+              }),
           recipients: activeBulkRecipients,
         },
       });
@@ -661,8 +846,6 @@ export function ReviewRequestSheet({
   const pendingCount = queueData?.queue?.pending ?? allQueueItems.filter((i) => i.status === 'pending').length;
   const sentCount = queueData?.queue?.sent ?? allQueueItems.filter((i) => i.status === 'sent').length;
   const failedCount = queueData?.queue?.failed ?? allQueueItems.filter((i) => i.status === 'failed').length;
-  const waConnected = Boolean(queueData?.hasWhatsAppProvider);
-  const smsReady = queueData?.smsAvailable !== false;
 
   const filteredQueueItems = useMemo(() => {
     if (queueFilter === 'all') return allQueueItems;
@@ -877,6 +1060,84 @@ export function ReviewRequestSheet({
                     />
                   </View>
                 </View>
+
+                {waConnected ? (
+                  <View style={styles.metaCloudBox}>
+                    <View style={styles.cardHeaderLine}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <MaterialIcons name="lock-outline" size={14} color={colors.brandDark} />
+                        <Text style={styles.metaCloudTitle}>Cloud API Meta Template</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.metaStatusPill,
+                          selectedMetaTemplate.status === 'APPROVED'
+                            ? styles.metaStatusApproved
+                            : styles.metaStatusPending,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.metaStatusText,
+                            selectedMetaTemplate.status === 'APPROVED'
+                              ? styles.metaStatusTextApproved
+                              : styles.metaStatusTextPending,
+                          ]}
+                        >
+                          {selectedMetaTemplate.status === 'APPROVED' ? 'Approved' : 'Pending Approval'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ gap: 6 }}
+                    >
+                      {availableMetaTemplates.map((tpl) => {
+                        const active = tpl.name === selectedMetaTemplate.name;
+                        return (
+                          <Pressable
+                            key={tpl.name}
+                            onPress={() => setSelectedMetaTemplateName(tpl.name)}
+                            style={[styles.metaPresetPill, active && styles.metaPresetPillActive]}
+                          >
+                            <Text
+                              style={[
+                                styles.metaPresetPillText,
+                                active && styles.metaPresetPillTextActive,
+                              ]}
+                            >
+                              {tpl.displayName}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+
+                    {selectedMetaTemplate.supportsCustomNote ? (
+                      <View style={{ gap: 4 }}>
+                        <Text style={styles.microLabel}>
+                          Optional 1-Line Note ({customCloudNote.length}/120)
+                        </Text>
+                        <TextInput
+                          value={customCloudNote}
+                          onChangeText={(txt) =>
+                            setCustomCloudNote(txt.replace(/[\r\n\t]+/g, ' ').slice(0, 120))
+                          }
+                          maxLength={120}
+                          placeholder={DEFAULT_META_CLOSING_NOTE}
+                          placeholderTextColor={colors.muted}
+                          style={styles.metaNoteInput}
+                        />
+                      </View>
+                    ) : null}
+
+                    <Text style={styles.channelHint}>
+                      &ldquo;Send on WhatsApp (Direct)&rdquo; uses your tone preview above. &ldquo;Send via Cloud API&rdquo; uses this locked Meta template.
+                    </Text>
+                  </View>
+                ) : null}
 
                 {note ? (
                   <View style={styles.noteCard}>
@@ -1209,19 +1470,146 @@ export function ReviewRequestSheet({
                   )}
                 </View>
 
-                {/* ── Card 3: Editable Bulk Message Preview ── */}
-                <View style={styles.bulkInputCard}>
-                  <Text style={styles.bulkLabel}>3. Invite Message Preview</Text>
-                  <TextInput
-                    value={customBulkMessage}
-                    onChangeText={setCustomBulkMessage}
-                    multiline
-                    style={styles.bulkMsgInput}
-                  />
-                  <Text style={styles.channelHint}>
-                    Use {'{firstName}'} to personalize each customer automatically.
-                  </Text>
-                </View>
+                {/* ── Card 3: Channel-Aware Invite Message Preview ── */}
+                {channel === 'whatsapp' && waConnected ? (
+                  <View style={styles.bulkInputCard}>
+                    <View style={styles.cardHeaderLine}>
+                      <Text style={styles.bulkLabel}>3. Meta Template Preview</Text>
+                      <View style={styles.lockedBadge}>
+                        <MaterialIcons name="lock-outline" size={12} color={colors.brandDark} />
+                        <Text style={styles.lockedBadgeText}>Locked for Meta Cloud API</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.cardHeaderLine}>
+                      <Text style={styles.microLabel}>Select Approved Preset</Text>
+                      <View
+                        style={[
+                          styles.metaStatusPill,
+                          selectedMetaTemplate.status === 'APPROVED'
+                            ? styles.metaStatusApproved
+                            : styles.metaStatusPending,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.metaStatusText,
+                            selectedMetaTemplate.status === 'APPROVED'
+                              ? styles.metaStatusTextApproved
+                              : styles.metaStatusTextPending,
+                          ]}
+                        >
+                          {selectedMetaTemplate.status === 'APPROVED'
+                            ? 'Approved'
+                            : 'Pending Meta Approval'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ gap: 6 }}
+                    >
+                      {availableMetaTemplates.map((tpl) => {
+                        const active = tpl.name === selectedMetaTemplate.name;
+                        return (
+                          <Pressable
+                            key={tpl.name}
+                            onPress={() => setSelectedMetaTemplateName(tpl.name)}
+                            style={[styles.metaPresetPill, active && styles.metaPresetPillActive]}
+                          >
+                            <Text
+                              style={[
+                                styles.metaPresetPillText,
+                                active && styles.metaPresetPillTextActive,
+                              ]}
+                            >
+                              {tpl.displayName}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+
+                    {selectedMetaTemplate.status !== 'APPROVED' ? (
+                      <View style={styles.infoBannerSoft}>
+                        <MaterialIcons name="info-outline" size={14} color={colors.noteText} />
+                        <Text style={styles.infoBannerSoftText}>
+                          Wording is fixed by Meta template rules. Sync/approve &ldquo;{selectedMetaTemplate.name}&rdquo; in Marketing → Meta Templates before Cloud API delivery, or use 1-Tap Send WA on queued rows.
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {/* Read-only Meta Template WhatsApp Bubble Preview */}
+                    <View style={styles.metaReadOnlyBubbleWrap}>
+                      <View style={styles.metaReadOnlyBubble}>
+                        <Text style={styles.bubbleMessageText}>
+                          {renderLockedMetaBody(
+                            selectedMetaTemplate,
+                            'Priya',
+                            cleanBusinessName,
+                            customCloudNote,
+                          )}
+                        </Text>
+                        {selectedMetaTemplate.buttonText ? (
+                          <View style={styles.metaCtaPreviewRow}>
+                            <MaterialIcons name="open-in-new" size={13} color={WA_GREEN_DARK} />
+                            <Text style={styles.metaCtaPreviewText} numberOfLines={1}>
+                              {selectedMetaTemplate.buttonText} → {displayShortCtaUrl}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+
+                    {selectedMetaTemplate.supportsCustomNote ? (
+                      <View style={{ gap: 4 }}>
+                        <View style={styles.cardHeaderLine}>
+                          <Text style={styles.microLabel}>Optional 1-Line Closing Note</Text>
+                          <Text style={styles.microLabel}>{customCloudNote.length}/120</Text>
+                        </View>
+                        <TextInput
+                          value={customCloudNote}
+                          onChangeText={(txt) =>
+                            setCustomCloudNote(txt.replace(/[\r\n\t]+/g, ' ').slice(0, 120))
+                          }
+                          maxLength={120}
+                          placeholder={DEFAULT_META_CLOSING_NOTE}
+                          placeholderTextColor={colors.muted}
+                          style={styles.metaNoteInput}
+                        />
+                        <Text style={styles.channelHint}>
+                          Only this closing line is customized (URLs and line breaks are automatically removed for Meta compliance).
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.channelHint}>
+                        Meta Cloud API keeps template wording fixed to guarantee 24/7 template delivery. Pick &ldquo;Friendly + Note&rdquo; above if you want a customizable closing line.
+                      </Text>
+                    )}
+                  </View>
+                ) : (
+                  <View style={styles.bulkInputCard}>
+                    <View style={styles.cardHeaderLine}>
+                      <Text style={styles.bulkLabel}>3. Invite Message Preview</Text>
+                      <View style={styles.editableBadge}>
+                        <Text style={styles.editableBadgeText}>
+                          Editable ({channel === 'sms' ? 'SMS' : '1-Tap WhatsApp'})
+                        </Text>
+                      </View>
+                    </View>
+                    <TextInput
+                      value={customBulkMessage}
+                      onChangeText={setCustomBulkMessage}
+                      multiline
+                      style={styles.bulkMsgInput}
+                    />
+                    <Text style={styles.channelHint}>
+                      Use {'{firstName}'} to personalize each customer automatically.
+                    </Text>
+                  </View>
+                )}
 
                 {/* Live Schedule Breakdown Banner */}
                 {activeBulkRecipients.length > 0 ? (
@@ -1359,6 +1747,7 @@ export function ReviewRequestSheet({
                               <Text style={styles.queueSub} numberOfLines={1}>
                                 {item.phone} · {item.channel.toUpperCase()} · {whenStr || 'Soon'}
                                 {item.batchDay ? ` · Day ${item.batchDay}` : ''}
+                                {item.metaTemplateName ? ` · ${item.metaTemplateName}` : ''}
                               </Text>
                               {item.lastError ? (
                                 <Text style={{ fontSize: 10.5, color: colors.danger }} numberOfLines={2}>
@@ -2192,5 +2581,126 @@ const styles = StyleSheet.create({
   },
   countryRowActive: {
     backgroundColor: colors.brandSoft,
+  },
+  metaCloudBox: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: 11,
+    gap: 8,
+  },
+  metaCloudTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9,
+    backgroundColor: colors.brandSoft,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  lockedBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: colors.brandDark,
+  },
+  editableBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  editableBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: colors.muted,
+  },
+  metaStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 9,
+  },
+  metaStatusApproved: {
+    backgroundColor: colors.successSoft,
+  },
+  metaStatusPending: {
+    backgroundColor: colors.note,
+  },
+  metaStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  metaStatusTextApproved: {
+    color: colors.success,
+  },
+  metaStatusTextPending: {
+    color: colors.noteText,
+  },
+  metaPresetPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  metaPresetPillActive: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brand,
+  },
+  metaPresetPillText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: colors.muted,
+  },
+  metaPresetPillTextActive: {
+    color: colors.brandDark,
+    fontWeight: '800',
+  },
+  metaReadOnlyBubbleWrap: {
+    backgroundColor: WA_BG,
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#D4DDD6',
+  },
+  metaReadOnlyBubble: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 10,
+    gap: 8,
+  },
+  metaCtaPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingTop: 7,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF2F6',
+  },
+  metaCtaPreviewText: {
+    flex: 1,
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: WA_GREEN_DARK,
+  },
+  metaNoteInput: {
+    height: 40,
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingHorizontal: 10,
+    fontSize: 12,
+    color: colors.ink,
   },
 });

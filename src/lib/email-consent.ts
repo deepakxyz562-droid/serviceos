@@ -67,9 +67,61 @@ export function openPixelUrl(token: string, baseUrl?: string | null): string {
   return `${publicBaseUrl(baseUrl)}/api/email/open/${token}/pixel.png`
 }
 
+const HTML_URL_ENTITY_MAP: Record<string, string> = {
+  '&amp;': '&',
+  '&#38;': '&',
+  '&#x26;': '&',
+  '&quot;': '"',
+  '&#34;': '"',
+  '&#x22;': '"',
+  '&#39;': "'",
+  '&#x27;': "'",
+  '&apos;': "'",
+  '&lt;': '<',
+  '&#60;': '<',
+  '&#x3c;': '<',
+  '&gt;': '>',
+  '&#62;': '>',
+  '&#x3e;': '>',
+}
+
+/**
+ * Decode HTML character entities inside an extracted href URL in a single pass
+ * so HTML-escaped `&amp;` separators in multi-parameter URLs don't get
+ * double-encoded when wrapped for click tracking.
+ */
+export function decodeHtmlUrlEntities(raw: string): string {
+  if (!raw || typeof raw !== 'string') return ''
+  return raw.replace(
+    /&(?:amp|#38|#x26|quot|#34|#x22|#39|#x27|apos|lt|#60|#x3c|gt|#62|#x3e);/gi,
+    (entity) => HTML_URL_ENTITY_MAP[entity.toLowerCase()] ?? entity,
+  )
+}
+
+/**
+ * Normalize and validate an email click-tracking destination URL (`u` param).
+ * Decodes HTML entities (including legacy `&amp;` in already-sent emails) and
+ * rejects non-http(s) URLs.
+ */
+export function normalizeClickDestination(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const decoded = decodeHtmlUrlEntities(trimmed)
+  try {
+    const parsed = new URL(decoded)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null
+    }
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
 /** Click-redirect URL that wraps an outbound link. */
 export function clickRedirectUrl(token: string, destination: string, baseUrl?: string | null): string {
-  return `${publicBaseUrl(baseUrl)}/api/email/click/${token}?u=${encodeURIComponent(destination)}`
+  return `${publicBaseUrl(baseUrl)}/api/email/click/${token}?u=${encodeURIComponent(decodeHtmlUrlEntities(destination))}`
 }
 
 /**
@@ -86,10 +138,11 @@ export function injectTracking(html: string, token: string, baseUrl?: string | n
   out = out.replace(
     /(<a\b[^>]*\shref=["'])(https?:\/\/[^"']+)/gi,
     (match, prefix: string, url: string) => {
-      if (url.includes('/api/public/unsubscribe') || url.includes('/api/public/preferences')) {
+      const cleanUrl = decodeHtmlUrlEntities(url)
+      if (cleanUrl.includes('/api/public/unsubscribe') || cleanUrl.includes('/api/public/preferences')) {
         return match
       }
-      return `${prefix}${clickRedirectUrl(token, url, baseUrl)}`
+      return `${prefix}${clickRedirectUrl(token, cleanUrl, baseUrl)}`
     },
   )
   const pixel = `<img src="${openPixelUrl(token, baseUrl)}" width="1" height="1" alt="" style="display:none !important;border:0;outline:none;width:1px;height:1px;"/>`

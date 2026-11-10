@@ -95,8 +95,10 @@ export default function PreferencesScreen() {
   const [weeklyPosts, setWeeklyPosts] = useState('2');
   const [weeklyPhotos, setWeeklyPhotos] = useState('3');
   const [forbiddenPhrases, setForbiddenPhrases] = useState('');
+  const [reviewPushAlerts, setReviewPushAlerts] = useState(true);
   const [dailyGrowthTips, setDailyGrowthTips] = useState(true);
   const [rawTypePrefs, setRawTypePrefs] = useState<Record<string, unknown>>({});
+  const [savingReviewToggle, setSavingReviewToggle] = useState(false);
   const [savingDailyToggle, setSavingDailyToggle] = useState(false);
 
   useEffect(() => {
@@ -107,22 +109,56 @@ export default function PreferencesScreen() {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         const rec = parsed as Record<string, unknown>;
         setRawTypePrefs(rec);
+        setReviewPushAlerts(rec.customer_review !== false);
         setDailyGrowthTips(rec.daily_growth_tips !== false);
       }
     } catch {}
   }, [notifPrefRes.data]);
+
+  async function handleToggleReviewPushAlerts(nextVal: boolean) {
+    const prev = reviewPushAlerts;
+    setReviewPushAlerts(nextVal);
+    setSavingReviewToggle(true);
+    try {
+      const merged = {
+        ...rawTypePrefs,
+        customer_review: nextVal,
+        daily_growth_tips: dailyGrowthTips,
+      };
+      setRawTypePrefs(merged);
+      await apiRequest('/api/notifications/preferences', {
+        method: 'PUT',
+        body: {
+          pushEnabled: notifPrefRes.data?.pushEnabled ?? true,
+          typePrefsJson: JSON.stringify(merged),
+        },
+      });
+    } catch (err) {
+      setReviewPushAlerts(prev);
+      Alert.alert(
+        'Could not save notification preference',
+        err instanceof Error ? err.message : 'Please try again.',
+      );
+    } finally {
+      setSavingReviewToggle(false);
+    }
+  }
 
   async function handleToggleDailyGrowthTips(nextVal: boolean) {
     const prev = dailyGrowthTips;
     setDailyGrowthTips(nextVal);
     setSavingDailyToggle(true);
     try {
-      const merged = { ...rawTypePrefs, daily_growth_tips: nextVal };
+      const merged = {
+        ...rawTypePrefs,
+        customer_review: reviewPushAlerts,
+        daily_growth_tips: nextVal,
+      };
       setRawTypePrefs(merged);
       await apiRequest('/api/notifications/preferences', {
         method: 'PUT',
         body: {
-          pushEnabled: true,
+          pushEnabled: notifPrefRes.data?.pushEnabled ?? true,
           typePrefsJson: JSON.stringify(merged),
         },
       });
@@ -231,9 +267,10 @@ export default function PreferencesScreen() {
       await apiRequest('/api/notifications/preferences', {
         method: 'PUT',
         body: {
-          pushEnabled: true,
+          pushEnabled: notifPrefRes.data?.pushEnabled ?? true,
           typePrefsJson: JSON.stringify({
             ...rawTypePrefs,
+            customer_review: reviewPushAlerts,
             daily_growth_tips: dailyGrowthTips,
           }),
         },
@@ -608,6 +645,34 @@ export default function PreferencesScreen() {
             <Text style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
               Deterministic filter blocks these phrases before any post reaches approval.
             </Text>
+          </View>
+
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              paddingTop: 12,
+              borderTopWidth: 1,
+              borderTopColor: colors.line,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13.5, fontWeight: '700', color: colors.ink }}>
+                Google Review Push Alerts
+              </Text>
+              <Text style={{ fontSize: 11.5, color: colors.muted, marginTop: 2 }}>
+                Real-time push and in-app notifications when new Google reviews arrive or await a reply.
+              </Text>
+            </View>
+            <Switch
+              value={reviewPushAlerts}
+              disabled={savingReviewToggle}
+              onValueChange={(val) => void handleToggleReviewPushAlerts(val)}
+              trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+              thumbColor={reviewPushAlerts ? '#009F50' : '#F8FAFC'}
+            />
           </View>
 
           <View

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { normalizeWhatsAppAccessToken } from '@/lib/whatsapp-config';
 
 /**
  * POST /api/whatsapp/manual-config
@@ -34,7 +35,8 @@ export async function POST(request: NextRequest) {
       accessToken?: string;
     };
 
-    if (!phoneNumber || !phoneNumberId || !wabaId || !accessToken) {
+    const cleanedToken = normalizeWhatsAppAccessToken(accessToken);
+    if (!phoneNumber || !phoneNumberId || !wabaId || !cleanedToken) {
       return NextResponse.json(
         { error: 'phoneNumber, phoneNumberId, wabaId, and accessToken are all required' },
         { status: 400 },
@@ -42,10 +44,10 @@ export async function POST(request: NextRequest) {
     }
 
     const configJson = JSON.stringify({
-      accessToken,
-      phoneNumberId,
-      wabaId,
-      displayPhoneNumber: phoneNumber,
+      accessToken: cleanedToken,
+      phoneNumberId: phoneNumberId.trim(),
+      wabaId: wabaId.trim(),
+      displayPhoneNumber: phoneNumber.trim(),
       apiVersion: 'v21.0',
       source: 'manual_config',
       connectedAt: new Date().toISOString(),
