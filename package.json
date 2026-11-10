@@ -126,6 +126,7 @@
     "date-fns": "^4.1.0",
     "dexie": "^4.4.4",
     "embla-carousel-react": "^8.6.0",
+    "firebase": "^13.2.0",
     "framer-motion": "^12.23.2",
     "googleapis": "^181.0.0",
     "idb-keyval": "^6.3.0",

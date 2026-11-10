@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from 'firebase/auth';
 import { BgosBrand } from '@/components/bgos/brand';
 import { useBgosDocumentBrand } from '@/components/bgos/document-brand';
 import { getAppProduct } from '../../../shared/product-context';
@@ -61,6 +62,8 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { INDUSTRY_CATALOG } from '@/lib/industry-catalog';
 import { setToken } from '@/lib/client-auth';
+import { getFirebaseWebAuth, getFirebaseErrorCode, mapFirebasePhoneError } from '@/lib/firebase-web';
+import { formatToE164, isValidPhoneNumber } from '@/lib/phone-utils';
 
 interface AuthPageProps {
   onAuthSuccess: (user: any, tenant: any, workspace?: any) => void;
@@ -147,8 +150,34 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
   const [loginPhone, setLoginPhone] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
-  const [sessionInfo, setSessionInfo] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
+  const confirmationResultRef = useRef<ConfirmationResult | null>(null);
+  const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+
+  const clearRecaptcha = useCallback(() => {
+    if (recaptchaVerifierRef.current) {
+      try {
+        recaptchaVerifierRef.current.clear();
+      } catch {
+        // ignore cleanup failure if verifier already cleared
+      }
+      recaptchaVerifierRef.current = null;
+    }
+    if (recaptchaContainerRef.current) {
+      recaptchaContainerRef.current.innerHTML = '';
+    }
+  }, []);
+
+  useEffect(() => {
+    if (businessTab !== 'login' || loginMethod !== 'phone') {
+      clearRecaptcha();
+      confirmationResultRef.current = null;
+    }
+    return () => {
+      clearRecaptcha();
+    };
+  }, [businessTab, loginMethod, clearRecaptcha]);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -251,39 +280,54 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
     }
   };
 
-  // ─── Business Phone OTP Handlers ───
-  const handleSendWebOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanDigits = loginPhone.replace(/\D/g, '');
-    if (cleanDigits.length < 10) {
-      toast.error('Please enter a valid 10-digit mobile number.');
+  // ─── Business Phone OTP Handlers (Firebase Web SDK + Invisible reCAPTCHA) ───
+  const handleSendWebOtp = async (e?: React.SyntheticEvent) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+    const cleanPhone = formatToE164(loginPhone, 'IN');
+    if (!cleanPhone || !isValidPhoneNumber(cleanPhone, 'IN')) {
+      toast.error('Please enter a valid mobile number.');
       return;
     }
+    const hostContainer = recaptchaContainerRef.current;
+    if (!hostContainer) {
+      toast.error('Unable to initialize security check. Please reload the page and try again.');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDLMfL0psz7RPx_V9BC0q9nLSV5bj5V930';
-      const cleanPhone = loginPhone.startsWith('+') ? loginPhone : `+91${cleanDigits.slice(-10)}`;
-      const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendVerificationCode?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: cleanPhone }),
+      clearRecaptcha();
+
+      const widgetHost = document.createElement('div');
+      hostContainer.appendChild(widgetHost);
+
+      const auth = getFirebaseWebAuth();
+      const verifier = new RecaptchaVerifier(auth, widgetHost, {
+        size: 'invisible',
+        'expired-callback': () => {
+          clearRecaptcha();
+        },
+        'error-callback': () => {
+          clearRecaptcha();
+        },
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.sessionInfo) {
-        const msg = data.error?.message || '';
-        if (msg.includes('BILLING_NOT_ENABLED') || msg.includes('MISSING_CLIENT_IDENTIFIER')) {
-          toast.error('Unable to send verification SMS right now. Please check your phone number and try again.');
-        } else {
-          toast.error(msg || 'Failed to send OTP code.');
-        }
-        return;
-      }
-      setSessionInfo(data.sessionInfo);
+      recaptchaVerifierRef.current = verifier;
+
+      const confirmation = await signInWithPhoneNumber(auth, cleanPhone, verifier);
+      confirmationResultRef.current = confirmation;
       setOtpSent(true);
+      setOtpCode('');
       setCountdown(30);
       toast.success(`Verification code sent to ${cleanPhone}`);
-    } catch {
-      toast.error('Failed to contact verification service.');
+    } catch (err) {
+      clearRecaptcha();
+      if (!otpSent) {
+        confirmationResultRef.current = null;
+      }
+      console.warn('[Firebase Web Auth] send OTP failed:', getFirebaseErrorCode(err), err);
+      toast.error(mapFirebasePhoneError(err));
     } finally {
       setIsLoading(false);
     }
@@ -291,35 +335,31 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
 
   const handleVerifyWebOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sessionInfo || otpCode.trim().length < 4) {
+    const cleanOtp = otpCode.replace(/\D/g, '');
+    const confirmation = confirmationResultRef.current;
+    if (!confirmation || cleanOtp.length !== 6) {
       toast.error('Please enter the 6-digit verification code.');
       return;
     }
     setIsLoading(true);
     try {
-      const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDLMfL0psz7RPx_V9BC0q9nLSV5bj5V930';
-      const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionInfo, code: otpCode.trim() }),
-      });
-      const verifyData = await verifyRes.json().catch(() => ({}));
-      if (!verifyRes.ok || !verifyData.idToken) {
-        toast.error('Invalid OTP verification code.');
-        return;
-      }
+      const credential = await confirmation.confirm(cleanOtp);
+      const idToken = await credential.user.getIdToken(true);
+      const verifiedPhone = credential.user.phoneNumber || formatToE164(loginPhone, 'IN');
+      clearRecaptcha();
 
       const res = await fetch('/api/bgos/mobile-auth/phone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ idToken: verifyData.idToken, phoneNumber: loginPhone, product: 'bgos' }),
+        body: JSON.stringify({ idToken, phoneNumber: verifiedPhone, product: 'bgos' }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error(data.error || 'Failed to sign in with phone.');
         return;
       }
+      confirmationResultRef.current = null;
       if (data.token) {
         setToken(data.token);
       }
@@ -337,8 +377,15 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
       }));
       toast.success('Signed in successfully!');
       onAuthSuccess(data.user, resolvedTenant, data.workspace);
-    } catch {
-      toast.error('Sign-in failed. Please try again.');
+    } catch (err) {
+      const code = getFirebaseErrorCode(err);
+      if (code.includes('code-expired') || code.includes('SESSION_EXPIRED')) {
+        setOtpSent(false);
+        setOtpCode('');
+        confirmationResultRef.current = null;
+        clearRecaptcha();
+      }
+      toast.error(code ? mapFirebasePhoneError(err) : 'Sign-in failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -584,7 +631,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                   <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label htmlFor="login-phone" className="text-slate-700">Mobile Number</Label>
-                      <span className="text-[11px] font-mono text-slate-500">10 digits required</span>
+                      <span className="text-[11px] font-mono text-slate-500">SMS OTP via Firebase</span>
                     </div>
                     <PhoneInput
                       id="login-phone"
@@ -593,8 +640,9 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                         setLoginPhone(val);
                         if (otpSent) {
                           setOtpSent(false);
-                          setSessionInfo(null);
                           setOtpCode('');
+                          confirmationResultRef.current = null;
+                          clearRecaptcha();
                         }
                       }}
                       defaultCountry="IN"
@@ -603,6 +651,8 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                       disabled={isLoading || otpSent}
                     />
                   </motion.div>
+
+                  <div ref={recaptchaContainerRef} id="firebase-recaptcha-container" className="min-h-[1px]" />
 
                   {otpSent ? (
                     <>
@@ -613,8 +663,10 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                             type="button"
                             onClick={() => {
                               setOtpSent(false);
-                              setSessionInfo(null);
                               setOtpCode('');
+                              setCountdown(0);
+                              confirmationResultRef.current = null;
+                              clearRecaptcha();
                             }}
                             className="text-xs text-emerald-600 hover:underline font-semibold cursor-pointer"
                           >
@@ -637,7 +689,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                       <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
                         <Button
                           type="submit"
-                          disabled={isLoading || otpCode.trim().length < 4}
+                          disabled={isLoading || otpCode.replace(/\D/g, '').length !== 6}
                           className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer"
                         >
                           {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</> : 'Verify & Continue'}
@@ -657,7 +709,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                     <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-3">
                       <Button
                         type="submit"
-                        disabled={isLoading || loginPhone.replace(/\D/g, '').length < 10}
+                        disabled={isLoading || !isValidPhoneNumber(loginPhone, 'IN')}
                         className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer"
                       >
                         {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending Code...</> : 'Send Verification Code'}

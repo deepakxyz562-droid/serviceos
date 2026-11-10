@@ -5,6 +5,12 @@ export const Platform = {
   select: <T>(objs: { ios?: T; android?: T; default?: T }) => objs.ios ?? objs.default,
 };
 
+export const TurboModuleRegistry = {
+  get: () => null,
+};
+
+export const NativeModules = {};
+
 export const Dimensions = {
   get: () => ({ width: 390, height: 844, scale: 2, fontScale: 1 }),
   addEventListener: () => ({ remove: () => {} }),
@@ -109,6 +115,8 @@ export const PanResponder = {
 
 const reactNativeMock = {
   Platform,
+  TurboModuleRegistry,
+  NativeModules,
   Dimensions,
   useWindowDimensions,
   StatusBar,

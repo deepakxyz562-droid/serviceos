@@ -1,10 +1,19 @@
-import type { ExpoConfig, ConfigContext } from 'expo/config';
+import type { ConfigContext } from 'expo/config';
 
 const APP_NAME = 'BGOS';
 const FULL_TITLE = 'BGOS — Business Growth Operating System';
 const SCHEME = 'bgos';
 
-export default ({ config }: ConfigContext): any => ({
+export default ({ config, projectRoot }: ConfigContext): any => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require('node:fs') as { existsSync: (targetPath: string) => boolean };
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const path = require('node:path') as { resolve: (...segments: string[]) => string };
+  const hasIosGoogleServicesPlist = fs.existsSync(
+    path.resolve(projectRoot || '.', 'GoogleService-Info.plist'),
+  );
+
+  return {
   ...config,
   name: APP_NAME,
   description: FULL_TITLE,
@@ -20,6 +29,7 @@ export default ({ config }: ConfigContext): any => ({
     supportsTablet: true,
     bundleIdentifier: 'com.fieseros.bgos',
     usesAppleSignIn: true,
+    ...(hasIosGoogleServicesPlist ? { googleServicesFile: './GoogleService-Info.plist' } : {}),
     infoPlist: {
       CFBundleDisplayName: 'BGOS',
       NSNotificationsUsageDescription: 'BGOS sends instant push notifications when new leads, messages, or appointment requests arrive.',
@@ -46,10 +56,14 @@ export default ({ config }: ConfigContext): any => ({
     'expo-web-browser',
     'expo-apple-authentication',
     './plugins/withAndroidReleaseOptimizations',
+    ...(hasIosGoogleServicesPlist
+      ? ['@react-native-firebase/app', '@react-native-firebase/auth']
+      : ['./plugins/withAndroidFirebase']),
   ],
   extra: {
     eas: {
       projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID || '30078807-9b75-42c3-97c3-41fb166c40f2',
     },
   },
-});
+  };
+};

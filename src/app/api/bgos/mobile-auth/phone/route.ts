@@ -16,11 +16,15 @@ const phoneInputSchema = z.object({
 });
 
 const FIREBASE_API_KEY =
+  process.env.BGOS_FIREBASE_WEB_API_KEY ||
+  process.env.NEXT_PUBLIC_BGOS_FIREBASE_API_KEY ||
   process.env.FIREBASE_WEB_API_KEY ||
   process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
   'AIzaSyDLMfL0psz7RPx_V9BC0q9nLSV5bj5V930';
 
 const FIREBASE_PROJECT_ID =
+  process.env.BGOS_FIREBASE_PROJECT_ID ||
+  process.env.NEXT_PUBLIC_BGOS_FIREBASE_PROJECT_ID ||
   process.env.FIREBASE_PROJECT_ID ||
   process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
   'fir-rn-49534';
@@ -38,7 +42,7 @@ interface FirebaseLookupResponse {
 }
 
 /**
- * Verify Firebase ID Token via Google Identity Toolkit
+ * Verify Firebase ID Token via JWT claim validation + Google Identity Toolkit
  */
 async function verifyFirebaseIdToken(idToken: string): Promise<{
   uid: string;
@@ -46,15 +50,26 @@ async function verifyFirebaseIdToken(idToken: string): Promise<{
   email?: string;
 } | null> {
   try {
-    // 1. Basic JWT sanity check
+    // 1. Strict JWT structure + project claim verification (fail-closed)
     const parts = idToken.split('.');
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
+    if (parts.length !== 3 || !parts[1]) return null;
 
-    // Verify audience and issuer match our Firebase project
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8')) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+    if (!payload || typeof payload !== 'object') return null;
+
     const expectedIssuer = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
-    if (payload.iss !== expectedIssuer && payload.aud !== FIREBASE_PROJECT_ID) {
-      console.warn('[Firebase Auth] Issuer/Aud mismatch:', { iss: payload.iss, aud: payload.aud });
+    if (payload.iss !== expectedIssuer || payload.aud !== FIREBASE_PROJECT_ID) {
+      console.warn('[Firebase Auth] Issuer/Aud mismatch:', {
+        iss: payload.iss,
+        aud: payload.aud,
+        expectedProjectId: FIREBASE_PROJECT_ID,
+      });
+      return null;
     }
 
     // 2. Cryptographic verification via Google Identity Toolkit
@@ -81,7 +96,17 @@ async function verifyFirebaseIdToken(idToken: string): Promise<{
       return null;
     }
 
-    const verifiedPhone = user.phoneNumber || payload.phone_number || '';
+    if (
+      (typeof payload.sub === 'string' && payload.sub !== user.localId) ||
+      (typeof payload.user_id === 'string' && payload.user_id !== user.localId)
+    ) {
+      console.warn('[Firebase Auth] UID mismatch between token claims and lookup');
+      return null;
+    }
+
+    const verifiedPhone =
+      user.phoneNumber ||
+      (typeof payload.phone_number === 'string' ? payload.phone_number : '');
     if (!verifiedPhone) {
       console.warn('[Firebase Auth] No phone number present in token');
       return null;
@@ -90,7 +115,7 @@ async function verifyFirebaseIdToken(idToken: string): Promise<{
     return {
       uid: user.localId,
       phoneNumber: verifiedPhone,
-      email: user.email || payload.email,
+      email: user.email || (typeof payload.email === 'string' ? payload.email : undefined),
     };
   } catch (error) {
     console.error('[Firebase Auth] ID Token verification failed:', error);

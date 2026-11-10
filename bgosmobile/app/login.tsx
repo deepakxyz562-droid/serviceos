@@ -1,11 +1,15 @@
 import { Redirect, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuthStore } from '../src/stores/auth-store';
 import { isAppleAuthAvailable } from '../src/lib/apple-auth';
-import { sendFirebaseOtp, verifyFirebaseOtp, formatPhoneNumber } from '../src/lib/firebase-auth';
+import { sendFirebaseOtp, verifyFirebaseOtp, clearPendingNativeOtpSession } from '../src/lib/firebase-auth';
+import {
+  FirebaseRecaptchaModal,
+  type FirebaseRecaptchaModalHandle,
+} from '../src/components/auth/firebase-recaptcha-modal';
 import {
   COUNTRIES,
   DEFAULT_COUNTRY,
@@ -39,6 +43,7 @@ export default function LoginScreen() {
   const [appleAvailable, setAppleAvailable] = useState(false);
   const { login, loginPhone, loginGoogle, loginApple, logout, checkAuth, error, isAuthenticated, isLoading, onboardingRequired } = useAuthStore();
   const [localError, setLocalError] = useState<string | null>(null);
+  const recaptchaModalRef = useRef<FirebaseRecaptchaModalHandle>(null);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -90,13 +95,21 @@ export default function LoginScreen() {
     setBusy(true);
     setLocalError(null);
     try {
-      const res = await sendFirebaseOtp(fullE164);
+      const res = await sendFirebaseOtp(fullE164, {
+        requestRecaptchaToken: (formatted) => {
+          if (!recaptchaModalRef.current) {
+            return Promise.reject(new Error('Security verification modal is not ready. Please try again.'));
+          }
+          return recaptchaModalRef.current.verify(formatted);
+        },
+      });
       if (!res.success || !res.sessionInfo) {
         setLocalError(res.error || 'Failed to send verification code.');
         return;
       }
       setSessionInfo(res.sessionInfo);
       setOtpSent(true);
+      setOtp('');
       setCountdown(30);
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : 'Error sending verification code');
@@ -111,7 +124,7 @@ export default function LoginScreen() {
       return;
     }
     const cleanCode = otp.trim().replace(/\D/g, '');
-    if (cleanCode.length < 4) {
+    if (cleanCode.length !== 6) {
       setLocalError('Enter the 6-digit verification code.');
       return;
     }
@@ -205,8 +218,22 @@ export default function LoginScreen() {
   return (
     <Screen customHeader={loginHeader}>
       <View style={[ui.row, { justifyContent: 'center', marginBottom: 12 }]}>
-        <Chip label="Email & Password" selected={method === 'email'} onPress={() => setMethod('email')} />
-        <Chip label="Mobile OTP" selected={method === 'phone'} onPress={() => setMethod('phone')} />
+        <Chip
+          label="Email & Password"
+          selected={method === 'email'}
+          onPress={() => {
+            setMethod('email');
+            setLocalError(null);
+          }}
+        />
+        <Chip
+          label="Mobile OTP"
+          selected={method === 'phone'}
+          onPress={() => {
+            setMethod('phone');
+            setLocalError(null);
+          }}
+        />
       </View>
 
       <Card>
@@ -262,6 +289,7 @@ export default function LoginScreen() {
                       const rawDigits = val.replace(/\D/g, '').slice(0, selectedCountry.digits);
                       setPhoneDigits(rawDigits);
                       if (otpSent) {
+                        clearPendingNativeOtpSession(sessionInfo);
                         setOtpSent(false);
                         setSessionInfo(null);
                         setOtp('');
@@ -299,9 +327,12 @@ export default function LoginScreen() {
                     hitSlop={8}
                     disabled={busy}
                     onPress={() => {
+                      clearPendingNativeOtpSession(sessionInfo);
                       setOtpSent(false);
                       setSessionInfo(null);
                       setOtp('');
+                      setCountdown(0);
+                      setLocalError(null);
                     }}
                   >
                     <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>
@@ -313,18 +344,18 @@ export default function LoginScreen() {
                 <Field
                   label="Enter 6-digit Code"
                   value={otp}
-                  onChangeText={setOtp}
+                  onChangeText={(val) => setOtp(val.replace(/\D/g, '').slice(0, 6))}
                   keyboardType="number-pad"
                   placeholder="123456"
                   maxLength={6}
                   onSubmitEditing={() => {
-                    if (otp.trim().length >= 4 && !busy) handleVerifyOtp();
+                    if (otp.replace(/\D/g, '').length === 6 && !busy) handleVerifyOtp();
                   }}
                 />
 
                 <Action
                   label={busy ? 'Verifying…' : 'Verify & Continue'}
-                  disabled={busy || otp.trim().length < 4}
+                  disabled={busy || otp.replace(/\D/g, '').length !== 6}
                   onPress={handleVerifyOtp}
                 />
 
@@ -511,6 +542,8 @@ export default function LoginScreen() {
           </View>
         </View>
       </Modal>
+
+      <FirebaseRecaptchaModal ref={recaptchaModalRef} />
     </Screen>
   );
 }
