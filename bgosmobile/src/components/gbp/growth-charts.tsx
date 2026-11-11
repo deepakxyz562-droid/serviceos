@@ -130,76 +130,144 @@ export function WeeklyScoreLineChart({
   );
 }
 
+function formatCompactTick(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (n >= 10_000) return `${Math.round(n / 1_000)}k`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}k`;
+  return String(n);
+}
+
+function buildYAxisTicks(rawMax: number): { ticks: number[]; maxVal: number } {
+  if (rawMax <= 4) {
+    return { ticks: [4, 3, 2, 1, 0], maxVal: 4 };
+  }
+  const roughStep = rawMax / 4;
+  const mag = Math.pow(10, Math.floor(Math.log10(Math.max(1, roughStep))));
+  const norm = roughStep / mag;
+  const mult = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+  const step = Math.max(1, Math.ceil(mult * mag));
+  const maxVal = step * 4;
+  return {
+    ticks: [step * 4, step * 3, step * 2, step, 0],
+    maxVal,
+  };
+}
+
 /**
- * "Google's Performance" Spline / Line chart matching Screenshot 08.55.28 (2):
- * Y-axis: 0, 2, 4, 6, 8, 10
- * Wavy smoothed line with peaks and valleys
- * Left date: 2026-09-26 | Right date: 2026-10-25
+ * Dynamically scaled trend chart for Google Performance metrics.
+ * Scales Y-axis ticks automatically to the dataset and renders an honest
+ * empty state when there is no telemetry yet (zero fabricated wave data).
  */
 export function PerformanceSplineChart({
   points,
-  startDate = '2026-09-26',
-  endDate = '2026-10-25',
+  labels,
+  startDate,
+  endDate,
+  accentColor = '#1A73E8',
+  emptyTitle = 'No Google activity recorded yet',
+  emptySubtitle = 'Search views, calls, and actions will chart here once synced.',
 }: {
   points?: number[];
+  labels?: string[];
   startDate?: string;
   endDate?: string;
+  accentColor?: string;
+  emptyTitle?: string;
+  emptySubtitle?: string;
 }) {
-  const chartHeight = 140;
+  const chartHeight = 136;
+  const data = Array.isArray(points)
+    ? points.map((v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0))
+    : [];
+  const hasActivity = data.some((v) => v > 0);
 
-  // Default wavy data points matching Screenshot 08.55.28 (2)
-  const defaultWave = [3.0, 2.0, 5.0, 1.2, 0.0, 1.0, 4.0, 0.0, 5.0, 1.0, 1.0, 5.0, 0.5, 0.0, 4.0, 2.0, 4.0, 1.0, 2.5, 3.0, 1.5, 2.0, 0.0, 2.0, 0.0];
-  const data = points && points.length > 0 ? points : defaultWave;
-  const maxVal = 10.0;
+  if (data.length === 0 || !hasActivity) {
+    return (
+      <View
+        style={{
+          minHeight: 112,
+          borderRadius: 12,
+          backgroundColor: '#F8FAFC',
+          borderWidth: 1,
+          borderColor: '#E2E8F0',
+          borderStyle: 'dashed',
+          paddingHorizontal: 16,
+          paddingVertical: 18,
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 4,
+        }}
+      >
+        <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569', textAlign: 'center' }}>
+          {emptyTitle}
+        </Text>
+        <Text style={{ fontSize: 11.5, color: '#64748B', textAlign: 'center', lineHeight: 16 }}>
+          {emptySubtitle}
+        </Text>
+      </View>
+    );
+  }
+
+  const rawMax = Math.max(...data, 1);
+  const { ticks, maxVal } = buildYAxisTicks(rawMax);
+  const peakVal = Math.max(...data);
+  const barWidth = data.length <= 7 ? 20 : data.length <= 14 ? 10 : 4;
+  const hasPerPointLabels = Array.isArray(labels) && labels.length === data.length;
 
   return (
-    <View style={{ gap: 8, paddingVertical: 4 }}>
-      {/* Grid with Y-axis numbers: 10, 8, 6, 4, 2, 0 */}
+    <View style={{ gap: 6, paddingVertical: 2 }}>
       <View style={{ height: chartHeight, justifyContent: 'space-between', paddingVertical: 4, position: 'relative' }}>
-        {[10, 8, 6, 4, 2, 0].map((num) => (
-          <View key={num} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 11, color: '#94A3B8', width: 20, textAlign: 'right' }}>
-              {num}
+        {ticks.map((num, idx) => (
+          <View key={`${num}-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: 10.5, color: '#94A3B8', width: 32, textAlign: 'right', fontWeight: '600' }}>
+              {formatCompactTick(num)}
             </Text>
             <View
               style={{
                 flex: 1,
                 height: 1,
                 borderBottomWidth: 1,
-                borderBottomColor: '#F1F5F9',
-                borderStyle: 'dashed',
+                borderBottomColor: idx === ticks.length - 1 ? '#CBD5E1' : '#F1F5F9',
+                borderStyle: idx === ticks.length - 1 ? 'solid' : 'dashed',
               }}
             />
           </View>
         ))}
 
-        {/* Wavy segments container */}
+        {/* Dynamic Scaled Bars */}
         <View
           style={{
             position: 'absolute',
-            left: 28,
-            right: 8,
+            left: 40,
+            right: 6,
             top: 10,
-            bottom: 12,
+            bottom: 8,
             flexDirection: 'row',
             alignItems: 'flex-end',
             justifyContent: 'space-between',
           }}
         >
           {data.map((val, idx) => {
-            const h = Math.max(3, Math.min(chartHeight - 24, (val / maxVal) * (chartHeight - 24)));
-            const nextVal = data[idx + 1] ?? val;
-            const isPeak = val >= 3.5;
+            const usableHeight = chartHeight - 28;
+            const barHeight = val > 0 ? Math.max(6, Math.round((val / maxVal) * usableHeight)) : 3;
+            const isPeak = val === peakVal && val > 0;
             return (
-              <View key={idx} style={{ flex: 1, alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
+              <View key={idx} style={{ flex: 1, alignItems: 'center', height: '100%', justifyContent: 'flex-end', gap: 3 }}>
+                {isPeak ? (
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: accentColor }} numberOfLines={1}>
+                    {formatCompactTick(val)}
+                  </Text>
+                ) : null}
                 <View
                   style={{
-                    width: 2.5,
-                    height: h,
-                    backgroundColor: '#2563EB',
-                    borderTopLeftRadius: 2,
-                    borderTopRightRadius: 2,
-                    opacity: isPeak ? 1 : 0.85,
+                    width: barWidth,
+                    height: barHeight,
+                    backgroundColor: val === 0 ? '#E2E8F0' : accentColor,
+                    opacity: val === 0 ? 0.7 : isPeak ? 1 : 0.42,
+                    borderTopLeftRadius: Math.min(6, barWidth / 2),
+                    borderTopRightRadius: Math.min(6, barWidth / 2),
+                    borderBottomLeftRadius: val === 0 ? 2 : 0,
+                    borderBottomRightRadius: val === 0 ? 2 : 0,
                   }}
                 />
               </View>
@@ -208,11 +276,31 @@ export function PerformanceSplineChart({
         </View>
       </View>
 
-      {/* Date Range Labels at bottom */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 28, paddingRight: 8, marginTop: 4 }}>
-        <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>{startDate}</Text>
-        <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>{endDate}</Text>
-      </View>
+      {/* Real X-Axis Month / Range Labels */}
+      {hasPerPointLabels ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 40, paddingRight: 6 }}>
+          {labels!.map((lbl, idx) => (
+            <Text
+              key={`${lbl}-${idx}`}
+              style={{
+                flex: 1,
+                textAlign: 'center',
+                fontSize: 10.5,
+                color: data[idx] === peakVal && peakVal > 0 ? '#0F172A' : '#64748B',
+                fontWeight: data[idx] === peakVal && peakVal > 0 ? '700' : '500',
+              }}
+              numberOfLines={1}
+            >
+              {lbl}
+            </Text>
+          ))}
+        </View>
+      ) : startDate || endDate ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 40, paddingRight: 6 }}>
+          <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '500' }}>{startDate || ''}</Text>
+          <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '500' }}>{endDate || ''}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }

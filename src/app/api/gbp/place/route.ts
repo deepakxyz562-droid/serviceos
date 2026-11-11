@@ -21,6 +21,97 @@ export function invalidatePlacePayloadCache(tenantId?: string) {
   invalidatePlacePayloadCacheForTenant(tenantId);
 }
 
+type PlacesBackfillResult = {
+  rating?: number;
+  userRatingCount?: number;
+  formattedAddress?: string;
+  category?: string;
+  phone?: string;
+  website?: string;
+  mapsUri?: string;
+  openNow?: boolean;
+  regularHours?: Record<string, { open: boolean; openTime: string; closeTime: string }>;
+};
+
+const PLACES_DAY_KEYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+
+function parsePlacesRegularHours(
+  periods?: Array<{
+    open?: { day?: number; hour?: number; minute?: number };
+    close?: { day?: number; hour?: number; minute?: number };
+  }>,
+): Record<string, { open: boolean; openTime: string; closeTime: string }> | undefined {
+  if (!Array.isArray(periods) || periods.length === 0) return undefined;
+  const hours: Record<string, { open: boolean; openTime: string; closeTime: string }> = {
+    Monday: { open: false, openTime: '09:00', closeTime: '17:00' },
+    Tuesday: { open: false, openTime: '09:00', closeTime: '17:00' },
+    Wednesday: { open: false, openTime: '09:00', closeTime: '17:00' },
+    Thursday: { open: false, openTime: '09:00', closeTime: '17:00' },
+    Friday: { open: false, openTime: '09:00', closeTime: '17:00' },
+    Saturday: { open: false, openTime: '09:00', closeTime: '17:00' },
+    Sunday: { open: false, openTime: '09:00', closeTime: '17:00' },
+  };
+  const fmt = (t?: { hour?: number; minute?: number }) =>
+    `${String(typeof t?.hour === 'number' ? t.hour : 0).padStart(2, '0')}:${String(
+      typeof t?.minute === 'number' ? t.minute : 0,
+    ).padStart(2, '0')}`;
+  for (const p of periods) {
+    const dayIdx = p.open?.day;
+    if (typeof dayIdx !== 'number' || dayIdx < 0 || dayIdx > 6) continue;
+    const key = PLACES_DAY_KEYS[dayIdx];
+    const openTime = fmt(p.open);
+    const closeTime = p.close ? fmt(p.close) : '23:59';
+    hours[key] = { open: true, openTime, closeTime };
+  }
+  return hours;
+}
+
+/**
+ * Safely backfill public Google Place rating, review count, hours, and address
+ * when Google Business Profile API quota is limited or local cache is empty.
+ */
+async function fetchPublicPlacesBackfill(placeId?: string | null): Promise<PlacesBackfillResult | null> {
+  const apiKey = process.env.GOOGLE_MAPS_SERVER_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey || !placeId || placeId.startsWith('demo_') || placeId.startsWith('places/')) {
+    const normalizedId = placeId?.startsWith('places/') ? placeId.slice('places/'.length) : placeId;
+    if (!apiKey || !normalizedId || normalizedId.startsWith('demo_')) return null;
+    placeId = normalizedId;
+  }
+
+  try {
+    const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+      headers: {
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask':
+          'rating,userRatingCount,formattedAddress,primaryTypeDisplayName,nationalPhoneNumber,websiteUri,googleMapsUri,regularOpeningHours,currentOpeningHours',
+      },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as any;
+    const regularHours = parsePlacesRegularHours(data.regularOpeningHours?.periods);
+    const openNow =
+      typeof data.currentOpeningHours?.openNow === 'boolean'
+        ? data.currentOpeningHours.openNow
+        : typeof data.regularOpeningHours?.openNow === 'boolean'
+          ? data.regularOpeningHours.openNow
+          : undefined;
+    return {
+      rating: typeof data.rating === 'number' ? data.rating : undefined,
+      userRatingCount: typeof data.userRatingCount === 'number' ? data.userRatingCount : undefined,
+      formattedAddress: typeof data.formattedAddress === 'string' ? data.formattedAddress : undefined,
+      category: typeof data.primaryTypeDisplayName?.text === 'string' ? data.primaryTypeDisplayName.text : undefined,
+      phone: typeof data.nationalPhoneNumber === 'string' ? data.nationalPhoneNumber : undefined,
+      website: typeof data.websiteUri === 'string' ? data.websiteUri : undefined,
+      mapsUri: typeof data.googleMapsUri === 'string' ? data.googleMapsUri : undefined,
+      openNow,
+      regularHours,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GET /api/gbp/place
  * Returns the genuine connected Google Place details, location metadata,
@@ -102,11 +193,24 @@ export async function GET(request: NextRequest) {
       tenant?.name ||
       'Business Profile';
     const fallbackCategory =
+      (typeof tenantSettings.activeGbpCategory === 'string' && tenantSettings.activeGbpCategory.trim()) ||
       tenant?.brandProfile?.industry ||
       (tenant as any)?.industry ||
       'Professional Services';
     const fallbackAddress =
-      tenant?.brandProfile?.location || tenant?.city || '';
+      (typeof tenantSettings.activeGbpAddress === 'string' && tenantSettings.activeGbpAddress.trim()) ||
+      (tenant as any)?.address ||
+      tenant?.brandProfile?.location ||
+      (tenant as any)?.city ||
+      '';
+    const fallbackCity =
+      (typeof tenantSettings.activeGbpCity === 'string' && tenantSettings.activeGbpCity.trim()) ||
+      (tenant as any)?.city ||
+      null;
+    const fallbackPlaceId =
+      (typeof tenantSettings.activeGbpPlaceId === 'string' && tenantSettings.activeGbpPlaceId.trim()) ||
+      (tenant as any)?.googlePlaceId ||
+      null;
     const fallbackPhone = tenant?.phone || '';
     const fallbackWebsite = tenant?.website || '';
     const fallbackDescription = tenant?.brandProfile?.aiGeneratedSummary || (tenant as any)?.description || '';
@@ -114,7 +218,10 @@ export async function GET(request: NextRequest) {
     let regularHours: any = null;
     if ((tenant as any)?.businessHoursJson) {
       try {
-        regularHours = JSON.parse((tenant as any).businessHoursJson);
+        const parsed = JSON.parse((tenant as any).businessHoursJson);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          regularHours = parsed;
+        }
       } catch {}
     }
 
@@ -130,6 +237,7 @@ export async function GET(request: NextRequest) {
       logoPresent?: boolean,
       openingDatePresent?: boolean,
       attributesPresent?: boolean,
+      hoursPresent?: boolean,
     ) => {
       let score = 0;
       const missing: string[] = [];
@@ -138,7 +246,7 @@ export async function GET(request: NextRequest) {
       if (a) score += 15; else missing.push('Address / Location');
       if (p) score += 15; else missing.push('Phone Number');
       if (w) score += 8; else missing.push('Website');
-      if (regularHours) score += 8; else missing.push('Regular Hours');
+      if (hoursPresent ?? Boolean(regularHours)) score += 8; else missing.push('Regular Hours');
       if (d && d.trim().length >= 30) score += 5; else missing.push('Description');
       if (sCount && sCount >= 3) score += 5; else missing.push('Services');
       if (logoPresent) score += 5; else missing.push('Logo');
@@ -157,17 +265,27 @@ export async function GET(request: NextRequest) {
     const hasAttributes = Boolean(tenantSettings.attributes && Object.keys(tenantSettings.attributes).length > 0);
 
     if (!googleAccount) {
+      const placesBackfill = await fetchPublicPlacesBackfill(fallbackPlaceId);
+      const resolvedFallbackCategory = placesBackfill?.category || fallbackCategory;
+      const resolvedFallbackAddress = fallbackAddress || placesBackfill?.formattedAddress || '';
+      const resolvedFallbackPhone = fallbackPhone || placesBackfill?.phone || '';
+      const resolvedFallbackWebsite = fallbackWebsite || placesBackfill?.website || '';
+      const resolvedFallbackHours = regularHours || placesBackfill?.regularHours || null;
+      const resolvedFallbackReviews = totalReviews > 0 ? totalReviews : (placesBackfill?.userRatingCount ?? 0);
+      const resolvedFallbackRating = totalReviews > 0 ? avgRating : (placesBackfill?.rating ?? 0);
+
       const { score, missing } = computeCompleteness(
         fallbackName,
-        fallbackCategory,
-        fallbackAddress,
-        fallbackPhone,
-        fallbackWebsite,
+        resolvedFallbackCategory,
+        resolvedFallbackAddress,
+        resolvedFallbackPhone,
+        resolvedFallbackWebsite,
         fallbackDescription,
         tenantSettings.services?.length,
         hasLogo,
         hasOpeningDate,
         hasAttributes,
+        Boolean(resolvedFallbackHours),
       );
 
       const disconnectedPayload = {
@@ -176,16 +294,23 @@ export async function GET(request: NextRequest) {
         place: null,
         tenantFallback: {
           name: fallbackName,
-          category: fallbackCategory,
-          address: fallbackAddress,
-          phone: fallbackPhone,
-          website: fallbackWebsite,
+          category: resolvedFallbackCategory,
+          address: resolvedFallbackAddress,
+          city: fallbackCity,
+          phone: resolvedFallbackPhone,
+          website: resolvedFallbackWebsite,
           description: fallbackDescription,
-          placeId: (tenant as any)?.googlePlaceId || null,
-          reviewUrl: (tenant as any)?.googlePlaceId
-            ? `https://search.google.com/local/writereview?placeid=${(tenant as any).googlePlaceId}`
+          placeId: fallbackPlaceId,
+          mapsUrl:
+            placesBackfill?.mapsUri ||
+            (fallbackPlaceId
+              ? `https://www.google.com/maps/place/?q=place_id:${fallbackPlaceId}`
+              : null),
+          reviewUrl: fallbackPlaceId
+            ? `https://search.google.com/local/writereview?placeid=${fallbackPlaceId}`
             : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallbackName)}`,
-          regularHours,
+          regularHours: resolvedFallbackHours,
+          openNow: placesBackfill?.openNow ?? null,
           completionScore: score,
           missingFields: missing,
           communicationPhone: tenantSettings.communicationPhone || null,
@@ -206,10 +331,12 @@ export async function GET(request: NextRequest) {
           callClicks: 0,
           directionRequests: 0,
           websiteClicks: 0,
-          totalReviews,
-          avgRating,
+          bookings: 0,
+          totalReviews: resolvedFallbackReviews,
+          avgRating: resolvedFallbackRating,
           responseRate,
           sourceBreakdown,
+          last30Days: null,
         },
       };
 
@@ -226,7 +353,16 @@ export async function GET(request: NextRequest) {
       fetchGoogleBusinessPerformanceMetrics(googleAccount),
     ]);
 
-    const placeDetails = placeDetailsResult.status === 'fulfilled'
+    const placeDetails: {
+      title: string;
+      category?: string;
+      address?: string;
+      phone?: string;
+      website?: string;
+      placeId?: string | null;
+      mapsUri?: string;
+      regularHours?: Record<string, { open: boolean; openTime: string; closeTime: string }>;
+    } = placeDetailsResult.status === 'fulfilled'
       ? placeDetailsResult.value
       : {
           title: fallbackName,
@@ -234,7 +370,7 @@ export async function GET(request: NextRequest) {
           address: fallbackAddress,
           phone: fallbackPhone,
           website: fallbackWebsite,
-          placeId: (tenant as any)?.googlePlaceId || null,
+          placeId: fallbackPlaceId,
           mapsUri: undefined,
         };
 
@@ -243,14 +379,27 @@ export async function GET(request: NextRequest) {
     let callClicks = 0;
     let directionRequests = 0;
     let websiteClicks = 0;
+    let bookings = 0;
+    let last30Days: {
+      searchImpressions: number;
+      mapsImpressions: number;
+      totalViews: number;
+      callClicks: number;
+      directionRequests: number;
+      websiteClicks: number;
+      bookings: number;
+      conversations: number;
+    } | null = null;
 
     if (perfResult.status === 'fulfilled') {
-      const perf = perfResult.value;
-      searchImpressions = perf.searchImpressions;
-      mapsImpressions = perf.mapsImpressions;
-      callClicks = perf.callClicks;
-      directionRequests = perf.directionRequests;
-      websiteClicks = perf.websiteClicks;
+      const perf = perfResult.value as any;
+      searchImpressions = perf.searchImpressions || 0;
+      mapsImpressions = perf.mapsImpressions || 0;
+      callClicks = perf.callClicks || 0;
+      directionRequests = perf.directionRequests || 0;
+      websiteClicks = perf.websiteClicks || 0;
+      bookings = perf.bookings || 0;
+      last30Days = perf.last30Days || null;
     }
 
     const meta = (googleAccount.metadata || {}) as Record<string, any>;
@@ -258,6 +407,21 @@ export async function GET(request: NextRequest) {
     const googleEmail = (meta.googleEmail as string) || '';
     const googleName = (meta.googleName as string) || '';
     const googlePicture = (meta.googlePicture as string) || '';
+
+    const candidatePlaceId =
+      placeDetails.placeId ||
+      meta.placeId ||
+      fallbackPlaceId ||
+      null;
+    const needsPlacesBackfill =
+      Boolean(candidatePlaceId) &&
+      (totalReviews === 0 ||
+        (!regularHours && !placeDetails.regularHours) ||
+        !placeDetails.address ||
+        !placeDetails.category);
+    const placesBackfill = needsPlacesBackfill
+      ? await fetchPublicPlacesBackfill(candidatePlaceId)
+      : null;
 
     const totalViews = searchImpressions + mapsImpressions;
     const resolvedTitle =
@@ -269,15 +433,15 @@ export async function GET(request: NextRequest) {
                 ? placeDetails.title
                 : (googleName ? `${googleName}${googleEmail ? ` (${googleEmail})` : ''}` : (googleEmail || placeDetails.title || fallbackName)))
             : (placeDetails.title || fallbackName));
-    const resolvedCategory = placeDetails.category || fallbackCategory;
-    const resolvedAddress = placeDetails.address || fallbackAddress;
-    const resolvedPhone = placeDetails.phone || fallbackPhone;
-    const resolvedWebsite = placeDetails.website || fallbackWebsite;
-    const resolvedPlaceId =
-      placeDetails.placeId ||
-      meta.placeId ||
-      (tenant as any)?.googlePlaceId ||
-      null;
+    const resolvedCategory = placeDetails.category || placesBackfill?.category || fallbackCategory;
+    const resolvedAddress = placeDetails.address || placesBackfill?.formattedAddress || fallbackAddress;
+    const resolvedPhone = placeDetails.phone || placesBackfill?.phone || fallbackPhone;
+    const resolvedWebsite = placeDetails.website || placesBackfill?.website || fallbackWebsite;
+    const resolvedHours = regularHours || placeDetails.regularHours || placesBackfill?.regularHours || null;
+    const resolvedMapsUrl = placeDetails.mapsUri || placesBackfill?.mapsUri;
+    const resolvedTotalReviews = totalReviews > 0 ? totalReviews : (placesBackfill?.userRatingCount ?? 0);
+    const resolvedAvgRating = totalReviews > 0 ? avgRating : (placesBackfill?.rating ?? 0);
+    const resolvedPlaceId = candidatePlaceId;
 
     const { score, missing } = computeCompleteness(
       resolvedTitle,
@@ -290,11 +454,12 @@ export async function GET(request: NextRequest) {
       hasLogo,
       hasOpeningDate,
       hasAttributes,
+      Boolean(resolvedHours),
     );
 
     const reviewUrl = resolvedPlaceId
       ? `https://search.google.com/local/writereview?placeid=${resolvedPlaceId}`
-      : placeDetails.mapsUri ||
+      : resolvedMapsUrl ||
         meta.mapsUri ||
         (resolvedTitle
           ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
@@ -314,12 +479,14 @@ export async function GET(request: NextRequest) {
         title: resolvedTitle,
         category: resolvedCategory,
         address: resolvedAddress,
+        city: fallbackCity,
         phone: resolvedPhone,
         website: resolvedWebsite,
         description: fallbackDescription,
-        regularHours,
+        regularHours: resolvedHours,
+        openNow: placesBackfill?.openNow ?? null,
         placeId: resolvedPlaceId,
-        mapsUrl: placeDetails.mapsUri,
+        mapsUrl: resolvedMapsUrl,
         reviewUrl,
         isVerified: !isPendingApproval,
         isPendingApproval,
@@ -350,10 +517,12 @@ export async function GET(request: NextRequest) {
         callClicks,
         directionRequests,
         websiteClicks,
-        totalReviews,
-        avgRating,
+        bookings,
+        totalReviews: resolvedTotalReviews,
+        avgRating: resolvedAvgRating,
         responseRate,
         sourceBreakdown,
+        last30Days,
       },
     };
 

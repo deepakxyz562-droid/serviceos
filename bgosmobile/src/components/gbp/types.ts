@@ -56,6 +56,7 @@ export type AnalyticsResult = {
     callClicks: number;
     directionRequests: number;
     websiteClicks: number;
+    bookings?: number;
     totalReviews: number;
     avgRating?: number;
     responseRate: number;
@@ -75,6 +76,9 @@ export type AnalyticsResult = {
     views: number[];
     calls: number[];
     directions: number[];
+    website?: number[];
+    bookings?: number[];
+    interactions?: number[];
   };
   weeklyTrends?: Record<string, string> | null;
   trendsAvailable: boolean;
@@ -112,12 +116,14 @@ export type GbpPlaceResult = {
     title: string;
     category: string;
     address: string;
+    city?: string | null;
     phone?: string;
     website?: string;
     description?: string;
     placeId?: string;
     mapsUrl?: string;
     reviewUrl?: string;
+    openNow?: boolean | null;
     isVerified?: boolean;
     isPendingApproval?: boolean;
     status?: string;
@@ -140,9 +146,14 @@ export type GbpPlaceResult = {
     name?: string;
     category?: string;
     address?: string;
+    city?: string | null;
     phone?: string;
     website?: string;
     description?: string;
+    placeId?: string | null;
+    mapsUrl?: string | null;
+    reviewUrl?: string | null;
+    openNow?: boolean | null;
     completionScore?: number;
     missingFields?: string[];
     communicationPhone?: string | null;
@@ -164,9 +175,20 @@ export type GbpPlaceResult = {
     callClicks: number;
     directionRequests: number;
     websiteClicks: number;
+    bookings?: number;
     totalReviews: number;
     avgRating: number;
     responseRate: number;
+    last30Days?: {
+      searchImpressions: number;
+      mapsImpressions: number;
+      totalViews: number;
+      callClicks: number;
+      directionRequests: number;
+      websiteClicks: number;
+      bookings: number;
+      conversations: number;
+    } | null;
   };
 };
 

@@ -20,7 +20,7 @@ import { PushPromptModal } from '../../src/components/notifications/push-prompt'
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import { GrowthActionSheet } from '../../src/components/gbp/growth-action-sheet';
 import { HomeStoryBubblesStrip } from '../../src/components/gbp/ai-agent-home-card';
-import type { GbpPlaceResult } from '../../src/components/gbp/types';
+import type { AnalyticsResult, GbpPlaceResult } from '../../src/components/gbp/types';
 import type { BgosConversation, BgosWorkspace } from '../../src/types/bgos-contracts';
 
 type Booking = { id: string; title?: string; customerName?: string; scheduledAt?: string; status: string };
@@ -530,6 +530,7 @@ export default function HomeScreen() {
   const reviews = useResource<{ reviews: Array<{ id?: string; rating?: number; createdAt?: string; createTime?: string; publishedAt?: string }> }>('/api/reviews?limit=30');
   const marketingScore = useResource<MarketingScoreResponse>('/api/gbp/marketing-score');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
+  const gbpAnalytics = useResource<AnalyticsResult>('/api/gbp/analytics');
   const competitors = useResource<CompetitorsResponse>('/api/gbp/competitors');
   const growthActions = useResource<GrowthActionsResponse>('/api/gbp/growth-actions');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
@@ -556,6 +557,7 @@ export default function HomeScreen() {
       reviews.refresh(),
       marketingScore.refresh(),
       gbpPlace.refresh(),
+      gbpAnalytics.refresh(),
       competitors.refresh(),
       growthActions.refresh(),
       discover.refresh(),
@@ -1169,20 +1171,68 @@ export default function HomeScreen() {
         ]}
       />
 
-      {/* Google's Performance (Real GBP Metrics - Zero Hardcoded Data) */}
+      {/* Google's Performance & Search Preview (100% Real GBP & Analytics Data) */}
       <GooglePerformanceCard
         metrics={{
-          views: (perf?.searchImpressions || 0) + (perf?.mapsImpressions || 0),
-          leads: (perf?.directionRequests || 0) + (perf?.websiteClicks || 0),
-          calls: perf?.callClicks || 0,
-          directions: perf?.directionRequests || 0,
-          websiteClicks: perf?.websiteClicks || 0,
-          interactions: (perf?.callClicks || 0) + (perf?.directionRequests || 0) + (perf?.websiteClicks || 0),
+          views: perf?.totalViews ?? gbpAnalytics.data?.metrics?.totalViews ?? ((perf?.searchImpressions || 0) + (perf?.mapsImpressions || 0)),
+          searchImpressions: perf?.searchImpressions ?? gbpAnalytics.data?.metrics?.searchImpressions ?? 0,
+          mapsImpressions: perf?.mapsImpressions ?? gbpAnalytics.data?.metrics?.mapsImpressions ?? 0,
+          calls: perf?.callClicks ?? gbpAnalytics.data?.metrics?.callClicks ?? 0,
+          directions: perf?.directionRequests ?? gbpAnalytics.data?.metrics?.directionRequests ?? 0,
+          websiteClicks: perf?.websiteClicks ?? gbpAnalytics.data?.metrics?.websiteClicks ?? 0,
+          bookings: perf?.bookings ?? gbpAnalytics.data?.metrics?.bookings ?? 0,
+          interactions:
+            (perf?.callClicks ?? gbpAnalytics.data?.metrics?.callClicks ?? 0) +
+            (perf?.directionRequests ?? gbpAnalytics.data?.metrics?.directionRequests ?? 0) +
+            (perf?.websiteClicks ?? gbpAnalytics.data?.metrics?.websiteClicks ?? 0) +
+            (perf?.bookings ?? gbpAnalytics.data?.metrics?.bookings ?? 0),
           businessName: profileName,
           category,
           locality: city,
+          address,
+          phone: place?.phone || '',
+          website: place?.website || '',
+          mapsUrl: (place as any)?.mapsUrl || '',
+          reviewUrl: (place as any)?.reviewUrl || '',
+          rating: perf?.avgRating || gbpAnalytics.data?.metrics?.avgRating || 0,
+          reviewCount: perf?.totalReviews || gbpAnalytics.data?.metrics?.totalReviews || 0,
+          isConnected: Boolean(gbpPlace.data?.isConnected),
+          isVerified: Boolean(
+            gbpPlace.data?.isConnected &&
+              !gbpPlace.data?.isPendingApproval &&
+              gbpPlace.data?.place?.isVerified !== false,
+          ),
+          isPendingApproval: Boolean(
+            gbpPlace.data?.isPendingApproval ?? gbpPlace.data?.place?.isPendingApproval,
+          ),
+          connectionState: gbpPlace.data?.connectionState,
+          regularHours: place?.regularHours || null,
+          specialHours: place?.specialHours || null,
+          openNow: (place as any)?.openNow ?? null,
+          timeZone: workspace.data?.locale?.timeZone || null,
+          lastUpdated: gbpAnalytics.data?.lastUpdated,
+          last30Days: perf?.last30Days
+            ? {
+                views: perf.last30Days.totalViews,
+                searchImpressions: perf.last30Days.searchImpressions,
+                mapsImpressions: perf.last30Days.mapsImpressions,
+                calls: perf.last30Days.callClicks,
+                directions: perf.last30Days.directionRequests,
+                websiteClicks: perf.last30Days.websiteClicks,
+                bookings: perf.last30Days.bookings,
+              }
+            : null,
+          monthlyTrends: gbpAnalytics.data?.sixMonthTrends || null,
         }}
         onBoostPost={() => router.push('/(tabs)/marketing?generate=1')}
+        onEditProfile={() => router.push('/manage-profile')}
+        onConnectGoogle={() =>
+          router.push(
+            gbpPlace.data?.connectionState === 'select_profile'
+              ? '/select-profile'
+              : '/integrations',
+          )
+        }
       />
 
       {/* Benchmark Action Story Bubbles (Screenshot 2) */}

@@ -1100,6 +1100,19 @@ export async function fetchGoogleBusinessPerformanceMetrics(
     views: number[];
     calls: number[];
     directions: number[];
+    website: number[];
+    bookings: number[];
+    interactions: number[];
+  };
+  last30Days: {
+    searchImpressions: number;
+    mapsImpressions: number;
+    totalViews: number;
+    callClicks: number;
+    directionRequests: number;
+    websiteClicks: number;
+    bookings: number;
+    conversations: number;
   };
 }> {
   const { locationId } = await extractLocationRef(account);
@@ -1136,6 +1149,12 @@ export async function fetchGoogleBusinessPerformanceMetrics(
   const monthlyViews = [0, 0, 0, 0, 0, 0];
   const monthlyCalls = [0, 0, 0, 0, 0, 0];
   const monthlyDirections = [0, 0, 0, 0, 0, 0];
+  const monthlyWebsite = [0, 0, 0, 0, 0, 0];
+  const monthlyBookings = [0, 0, 0, 0, 0, 0];
+  const monthlyInteractions = [0, 0, 0, 0, 0, 0];
+
+  const endMs = Date.UTC(eYear, eMonth - 1, eDay);
+  const start30Ms = endMs - 29 * 24 * 60 * 60 * 1000;
 
   const url = `https://businessprofileperformance.googleapis.com/v1/locations/${locationId}:fetchMultiDailyMetricsTimeSeries?dailyMetrics=BUSINESS_IMPRESSIONS_DESKTOP_MAPS&dailyMetrics=BUSINESS_IMPRESSIONS_MOBILE_MAPS&dailyMetrics=BUSINESS_IMPRESSIONS_DESKTOP_SEARCH&dailyMetrics=BUSINESS_IMPRESSIONS_MOBILE_SEARCH&dailyMetrics=CALL_CLICKS&dailyMetrics=BUSINESS_DIRECTION_REQUESTS&dailyMetrics=WEBSITE_CLICKS&dailyMetrics=BUSINESS_BOOKINGS&dailyMetrics=BUSINESS_CONVERSATIONS&dailyRange.startDate.year=${sYear}&dailyRange.startDate.month=${sMonth}&dailyRange.startDate.day=${sDay}&dailyRange.endDate.year=${eYear}&dailyRange.endDate.month=${eMonth}&dailyRange.endDate.day=${eDay}`;
 
@@ -1169,6 +1188,14 @@ export async function fetchGoogleBusinessPerformanceMetrics(
   let bookings = 0;
   let conversations = 0;
 
+  let l30SearchImpressions = 0;
+  let l30MapsImpressions = 0;
+  let l30CallClicks = 0;
+  let l30DirectionRequests = 0;
+  let l30WebsiteClicks = 0;
+  let l30Bookings = 0;
+  let l30Conversations = 0;
+
   const seriesList = data.multiDailyMetricTimeSeries?.[0]?.dailyMetricTimeSeries || [];
   for (const s of seriesList) {
     const metric = s.dailyMetric || '';
@@ -1178,6 +1205,28 @@ export async function fetchGoogleBusinessPerformanceMetrics(
     for (const item of datedVals) {
       const val = parseInt(item.value || '0', 10) || 0;
       if (val <= 0 || !item.date?.year || !item.date?.month) continue;
+
+      if (item.date.day) {
+        const itemMs = Date.UTC(item.date.year, item.date.month - 1, item.date.day);
+        if (itemMs >= start30Ms && itemMs <= endMs) {
+          if (metric.includes('SEARCH')) {
+            l30SearchImpressions += val;
+          } else if (metric.includes('MAPS')) {
+            l30MapsImpressions += val;
+          } else if (metric === 'CALL_CLICKS') {
+            l30CallClicks += val;
+          } else if (metric === 'BUSINESS_DIRECTION_REQUESTS') {
+            l30DirectionRequests += val;
+          } else if (metric === 'WEBSITE_CLICKS') {
+            l30WebsiteClicks += val;
+          } else if (metric === 'BUSINESS_BOOKINGS') {
+            l30Bookings += val;
+          } else if (metric === 'BUSINESS_CONVERSATIONS') {
+            l30Conversations += val;
+          }
+        }
+      }
+
       const key = `${item.date.year}-${String(item.date.month).padStart(2, '0')}`;
       const mIdx = monthKeys.indexOf(key);
       if (mIdx >= 0) {
@@ -1185,8 +1234,18 @@ export async function fetchGoogleBusinessPerformanceMetrics(
           monthlyViews[mIdx] += val;
         } else if (metric === 'CALL_CLICKS') {
           monthlyCalls[mIdx] += val;
+          monthlyInteractions[mIdx] += val;
         } else if (metric === 'BUSINESS_DIRECTION_REQUESTS') {
           monthlyDirections[mIdx] += val;
+          monthlyInteractions[mIdx] += val;
+        } else if (metric === 'WEBSITE_CLICKS') {
+          monthlyWebsite[mIdx] += val;
+          monthlyInteractions[mIdx] += val;
+        } else if (metric === 'BUSINESS_BOOKINGS') {
+          monthlyBookings[mIdx] += val;
+          monthlyInteractions[mIdx] += val;
+        } else if (metric === 'BUSINESS_CONVERSATIONS') {
+          monthlyInteractions[mIdx] += val;
         }
       }
     }
@@ -1222,6 +1281,19 @@ export async function fetchGoogleBusinessPerformanceMetrics(
       views: monthlyViews,
       calls: monthlyCalls,
       directions: monthlyDirections,
+      website: monthlyWebsite,
+      bookings: monthlyBookings,
+      interactions: monthlyInteractions,
+    },
+    last30Days: {
+      searchImpressions: l30SearchImpressions,
+      mapsImpressions: l30MapsImpressions,
+      totalViews: l30SearchImpressions + l30MapsImpressions,
+      callClicks: l30CallClicks,
+      directionRequests: l30DirectionRequests,
+      websiteClicks: l30WebsiteClicks,
+      bookings: l30Bookings,
+      conversations: l30Conversations,
     },
   };
   PERF_METRICS_CACHE.set(cacheKey, { data: perfResult, expiresAt: Date.now() + CACHE_TTL_MS });
@@ -1317,6 +1389,7 @@ export async function fetchGoogleBusinessPlaceDetails(
   website?: string;
   placeId?: string;
   mapsUri?: string;
+  regularHours?: Record<string, { open: boolean; openTime: string; closeTime: string }>;
 }> {
   const { accountName, locationId } = await extractLocationRef(account);
   const meta = (account.metadata || {}) as Record<string, any>;
@@ -1339,6 +1412,8 @@ export async function fetchGoogleBusinessPlaceDetails(
   let website = meta.website || undefined;
   let placeId = meta.placeId || undefined;
   let mapsUri = meta.mapsUri || undefined;
+  let regularHours: Record<string, { open: boolean; openTime: string; closeTime: string }> | undefined =
+    undefined;
 
   try {
     const detailUrl = new URL(
@@ -1346,7 +1421,7 @@ export async function fetchGoogleBusinessPlaceDetails(
     );
     detailUrl.searchParams.set(
       'readMask',
-      'name,title,phoneNumbers,websiteUri,storefrontAddress,categories,metadata',
+      'name,title,phoneNumbers,websiteUri,storefrontAddress,categories,metadata,regularHours',
     );
     const detailRes = await fetch(detailUrl.toString(), {
       method: 'GET',
@@ -1370,7 +1445,9 @@ export async function fetchGoogleBusinessPlaceDetails(
       } else if (placeId) {
         mapsUri = `https://www.google.com/maps/place/?q=place_id:${placeId}`;
       }
-      if (detail.phoneNumbers?.[0]?.phoneNumber) {
+      if (detail.phoneNumbers?.primaryPhone) {
+        phone = detail.phoneNumbers.primaryPhone;
+      } else if (detail.phoneNumbers?.[0]?.phoneNumber) {
         phone = detail.phoneNumbers[0].phoneNumber;
       }
       if (detail.websiteUri) {
@@ -1385,6 +1462,41 @@ export async function fetchGoogleBusinessPlaceDetails(
         if (detail.storefrontAddress.country) parts.push(detail.storefrontAddress.country);
         if (parts.length > 0) address = parts.join(', ');
       }
+      const periods = detail.regularHours?.periods;
+      if (Array.isArray(periods) && periods.length > 0) {
+        const dayMap: Record<string, string> = {
+          MONDAY: 'Monday',
+          TUESDAY: 'Tuesday',
+          WEDNESDAY: 'Wednesday',
+          THURSDAY: 'Thursday',
+          FRIDAY: 'Friday',
+          SATURDAY: 'Saturday',
+          SUNDAY: 'Sunday',
+        };
+        const padClock = (t?: { hours?: number; minutes?: number }) => {
+          const hh = String(typeof t?.hours === 'number' ? t.hours : 0).padStart(2, '0');
+          const mm = String(typeof t?.minutes === 'number' ? t.minutes : 0).padStart(2, '0');
+          return `${hh}:${mm}`;
+        };
+        const parsedHours: Record<string, { open: boolean; openTime: string; closeTime: string }> = {
+          Monday: { open: false, openTime: '09:00', closeTime: '17:00' },
+          Tuesday: { open: false, openTime: '09:00', closeTime: '17:00' },
+          Wednesday: { open: false, openTime: '09:00', closeTime: '17:00' },
+          Thursday: { open: false, openTime: '09:00', closeTime: '17:00' },
+          Friday: { open: false, openTime: '09:00', closeTime: '17:00' },
+          Saturday: { open: false, openTime: '09:00', closeTime: '17:00' },
+          Sunday: { open: false, openTime: '09:00', closeTime: '17:00' },
+        };
+        for (const p of periods) {
+          const key = dayMap[String(p.openDay || '').toUpperCase()];
+          if (!key) continue;
+          const openTime = padClock(p.openTime);
+          let closeTime = padClock(p.closeTime);
+          if (p.closeTime?.hours === 24) closeTime = '23:59';
+          parsedHours[key] = { open: true, openTime, closeTime };
+        }
+        regularHours = parsedHours;
+      }
     }
   } catch (err) {
     console.warn('[googlebusiness] Failed to fetch live place details, falling back to account metadata:', err);
@@ -1396,7 +1508,7 @@ export async function fetchGoogleBusinessPlaceDetails(
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(title || 'Google Business')}`;
   }
 
-  const placeResult = { title, category, address, phone, website, placeId, mapsUri };
+  const placeResult = { title, category, address, phone, website, placeId, mapsUri, regularHours };
   PLACE_DETAILS_CACHE.set(cacheKey, { data: placeResult, expiresAt: Date.now() + CACHE_TTL_MS });
   return placeResult;
 }

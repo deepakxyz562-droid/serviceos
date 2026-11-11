@@ -119,7 +119,15 @@ export async function GET(request: NextRequest) {
     let directionRequests = 0;
     let websiteClicks = 0;
     let isLiveGoogleApi = false;
-    let liveMonthlyTrends: { months: string[]; views: number[]; calls: number[]; directions: number[] } | null = null;
+    let liveMonthlyTrends: {
+      months: string[];
+      views: number[];
+      calls: number[];
+      directions: number[];
+      website?: number[];
+      bookings?: number[];
+      interactions?: number[];
+    } | null = null;
 
     const requestedLocationId = request.nextUrl.searchParams.get('locationId') || undefined;
     const googleAccount = await prepareGoogleAccount(user.tenantId, requestedLocationId);
@@ -149,6 +157,9 @@ export async function GET(request: NextRequest) {
       views: [0, 0, 0, 0, 0, totalViews],
       calls: [0, 0, 0, 0, 0, callClicks],
       directions: [0, 0, 0, 0, 0, directionRequests],
+      website: [0, 0, 0, 0, 0, websiteClicks],
+      bookings: [0, 0, 0, 0, 0, 0],
+      interactions: [0, 0, 0, 0, 0, callClicks + directionRequests + websiteClicks],
     };
 
     // Weekly trends are only computed when live Google data exists — never fabricated.
@@ -187,11 +198,6 @@ export async function GET(request: NextRequest) {
           deltaPct8Weeks: reviewsDeltaPct8Wks,
         },
         sixMonthTrends,
-        weeklyTrends,
-        trendsAvailable: isLiveGoogleApi,
-        lastUpdated: new Date().toISOString(),
-      },
-        },
         weeklyTrends,
         trendsAvailable: isLiveGoogleApi,
         lastUpdated: new Date().toISOString(),
