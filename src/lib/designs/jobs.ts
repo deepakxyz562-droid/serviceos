@@ -185,7 +185,7 @@ export async function runDesignJob(id:string){
   try {
     result = await generateDesignImage(
       job.prompt,
-      (job.provider || 'cloudflare') as ImageProvider,
+      (job.provider || 'gemini') as ImageProvider,
       AbortSignal.timeout(55000),
       isPoster,
       visualContext,

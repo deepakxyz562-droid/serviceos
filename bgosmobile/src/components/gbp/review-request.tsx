@@ -32,7 +32,7 @@ const WA_HEADER = '#075E54';
 const WA_BG = '#ECE5DD';
 const WA_BLUE_TICKS = '#53BDEB';
 
-type TemplateKey = 'executive' | 'excellence' | 'gratitude' | '5star' | 'experience' | 'thankyou';
+type TemplateKey = 'clean' | 'executive' | 'excellence' | 'gratitude' | '5star' | 'experience' | 'thankyou';
 type SheetTab = 'single' | 'bulk';
 type BulkSourceTab = 'paste' | 'csv' | 'crm';
 type QueueFilterTab = 'all' | 'pending' | 'sent' | 'failed';
@@ -80,6 +80,17 @@ const DEFAULT_META_CLOSING_NOTE =
   'We truly appreciated serving you today and hope everything went smoothly.';
 
 const FALLBACK_META_TEMPLATES: ReviewMetaTemplatePreset[] = [
+  {
+    name: 'bgos_review_clean_feedback',
+    displayName: 'Clean Feedback (Recommended)',
+    language: 'en_US',
+    status: 'APPROVED',
+    bodyText:
+      'Hello {{1}},\n\nPlease share your feedback on your recent experience at {{2}}:\n{{3}}\n\n{{2}} Team',
+    supportsCustomNote: false,
+    hasDynamicUrlButton: false,
+    buttonText: 'Leave Google Review',
+  },
   {
     name: 'bgos_review_invite_en',
     displayName: 'Friendly (EN)',
@@ -318,7 +329,7 @@ export function ReviewRequestSheet({
   const [sheetTab, setSheetTab] = useState<SheetTab>(initialTab);
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
-  const [template, setTemplate] = useState<TemplateKey>('executive');
+  const [template, setTemplate] = useState<TemplateKey>('clean');
   const [lang, setLang] = useState<'en' | 'hi'>('en');
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -431,8 +442,8 @@ export function ReviewRequestSheet({
   useEffect(() => {
     const defaultTpl =
       lang === 'hi'
-        ? `नमस्ते {firstName}, ${cleanBusinessName} को सेवा का अवसर देने के लिए धन्यवाद! कृपया Google पर अपना अनुभव शेयर करें: ${effectiveReviewUrl}`
-        : `Hi {firstName}, thank you for choosing ${cleanBusinessName}! Could you take 30 seconds to share your Google review? ${effectiveReviewUrl}`;
+        ? `नमस्ते {firstName},\n\nकृपया *${cleanBusinessName}* में अपने हाल के अनुभव पर अपना फीडबैक शेयर करें:\n${effectiveReviewUrl}\n\n*${cleanBusinessName}* टीम`
+        : `Hello {firstName},\n\nPlease share your feedback on your recent experience at *${cleanBusinessName}*:\n${effectiveReviewUrl}\n\n*${cleanBusinessName}* Team`;
     setCustomBulkMessage(defaultTpl);
   }, [lang, cleanBusinessName, effectiveReviewUrl]);
 
@@ -441,14 +452,26 @@ export function ReviewRequestSheet({
       const hiTpl = availableMetaTemplates.find((t) => t.language.toLowerCase().startsWith('hi'));
       if (hiTpl) setSelectedMetaTemplateName(hiTpl.name);
     } else if (selectedMetaTemplateName === 'bgos_review_invite_hi') {
-      setSelectedMetaTemplateName('bgos_review_invite_en');
+      setSelectedMetaTemplateName('bgos_review_clean_feedback');
     }
   }, [lang, availableMetaTemplates, selectedMetaTemplateName]);
 
   const inviteText = useMemo(() => {
     if (lang === 'hi') {
+      const cleanGreetingHi = firstName ? `नमस्ते ${firstName},` : 'नमस्ते,';
       const formalGreetingHi = firstName ? `सादर नमस्ते ${firstName} जी,` : 'सादर नमस्ते,';
       const warmGreetingHi = firstName ? `नमस्ते ${firstName} जी,` : 'नमस्ते प्रिय ग्राहक जी,';
+
+      if (template === 'clean') {
+        return [
+          cleanGreetingHi,
+          '',
+          `कृपया *${cleanBusinessName}* में अपने हाल के अनुभव पर अपना फीडबैक शेयर करें:`,
+          effectiveReviewUrl,
+          '',
+          `*${cleanBusinessName}* टीम`,
+        ].join('\n');
+      }
 
       if (template === 'executive' || template === '5star') {
         return [
@@ -490,8 +513,20 @@ export function ReviewRequestSheet({
       ].join('\n');
     }
 
+    const cleanGreetingEn = firstName ? `Hello ${firstName},` : 'Hello there,';
     const formalGreetingEn = firstName ? `Dear ${firstName},` : 'Dear Valued Client,';
     const warmGreetingEn = firstName ? `Hello ${firstName},` : 'Hello,';
+
+    if (template === 'clean') {
+      return [
+        cleanGreetingEn,
+        '',
+        `Please share your feedback on your recent experience at *${cleanBusinessName}*:`,
+        effectiveReviewUrl,
+        '',
+        `*${cleanBusinessName}* Team`,
+      ].join('\n');
+    }
 
     if (template === 'executive' || template === '5star') {
       return [
@@ -967,6 +1002,7 @@ export function ReviewRequestSheet({
                 {/* Template Selector Chips */}
                 <View style={styles.templateGroup}>
                   {([
+                    { key: 'clean', icon: 'bolt', label: 'Clean Feedback' },
                     { key: 'executive', icon: 'verified', label: 'Executive' },
                     { key: 'excellence', icon: 'workspace-premium', label: 'Excellence' },
                     { key: 'gratitude', icon: 'thumb-up', label: 'Gratitude' },
@@ -1598,6 +1634,50 @@ export function ReviewRequestSheet({
                           Editable ({channel === 'sms' ? 'SMS' : '1-Tap WhatsApp'})
                         </Text>
                       </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          const tpl =
+                            lang === 'hi'
+                              ? `नमस्ते {firstName},\n\nकृपया *${cleanBusinessName}* में अपने हाल के अनुभव पर अपना फीडबैक शेयर करें:\n${effectiveReviewUrl}\n\n*${cleanBusinessName}* टीम`
+                              : `Hello {firstName},\n\nPlease share your feedback on your recent experience at *${cleanBusinessName}*:\n${effectiveReviewUrl}\n\n*${cleanBusinessName}* Team`;
+                          setCustomBulkMessage(tpl);
+                        }}
+                        style={[styles.smallChip, styles.smallChipActive]}
+                      >
+                        <MaterialIcons name="bolt" size={13} color={colors.brand} />
+                        <Text style={[styles.smallChipText, styles.smallChipTextActive]}>Clean Feedback</Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          const tpl =
+                            lang === 'hi'
+                              ? `सादर नमस्ते {firstName} जी,\n\n${cleanBusinessName} को सेवा का अवसर देने के लिए आपका हार्दिक धन्यवाद। कृपया Google Maps पर अपना बहुमूल्य रिव्यू अवश्य साझा करें:\n\n👉 ${effectiveReviewUrl}\n\nसादर,\n${cleanBusinessName}`
+                              : `Dear {firstName},\n\nThank you for choosing ${cleanBusinessName}. If you have a brief moment, we would be deeply grateful if you could share your feedback on Google:\n\n🔗 ${effectiveReviewUrl}\n\nWarm regards,\n${cleanBusinessName}`;
+                          setCustomBulkMessage(tpl);
+                        }}
+                        style={styles.smallChip}
+                      >
+                        <MaterialIcons name="verified" size={13} color={colors.muted} />
+                        <Text style={styles.smallChipText}>Executive</Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          const tpl =
+                            lang === 'hi'
+                              ? `नमस्ते {firstName} जी,\n\n${cleanBusinessName} से जुड़ने के लिए बहुत धन्यवाद। कृपया अपना अनुभव रेट करें:\n\n⭐ ${effectiveReviewUrl}\n\nधन्यवाद,\n${cleanBusinessName} टीम`
+                              : `Hello {firstName},\n\nThank you for trusting ${cleanBusinessName}. Could you please take 30 seconds to rate your experience on Google Maps?\n\n⭐ ${effectiveReviewUrl}\n\nBest regards,\n${cleanBusinessName} Team`;
+                          setCustomBulkMessage(tpl);
+                        }}
+                        style={styles.smallChip}
+                      >
+                        <MaterialIcons name="workspace-premium" size={13} color={colors.muted} />
+                        <Text style={styles.smallChipText}>Excellence</Text>
+                      </Pressable>
                     </View>
                     <TextInput
                       value={customBulkMessage}

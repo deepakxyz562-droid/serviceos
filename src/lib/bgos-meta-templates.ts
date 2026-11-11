@@ -237,6 +237,17 @@ export const BGOS_CANONICAL_META_TEMPLATES: BgosMetaTemplate[] = [
     ],
   },
   {
+    name: 'bgos_review_clean_feedback',
+    displayName: 'Clean Review Feedback (Direct)',
+    category: 'MARKETING',
+    language: 'en_US',
+    status: 'APPROVED',
+    bodyText: 'Hello {{1}},\n\nPlease share your feedback on your recent experience at {{2}}:\n{{3}}\n\n{{2}} Team',
+    variableDescriptions: ['Customer Name', 'Business Name', 'Review Link'],
+    defaultExampleValues: ['there', 'Delhi Farm', 'https://fieseros.com/r/delhi-farm'],
+    serviceTouchpoint: 'completion',
+  },
+  {
     name: 'bgos_review_invite_en',
     displayName: 'Google Review Invite (Friendly)',
     category: 'MARKETING',
@@ -384,6 +395,7 @@ export function isInsideMeta24HourWindow(lastInboundTimestamp?: string | Date | 
 }
 
 export const REVIEW_INVITE_TEMPLATE_NAMES = [
+  'bgos_review_clean_feedback',
   'bgos_review_invite_en',
   'bgos_review_invite_hi',
   'bgos_review_invite_note',
@@ -479,7 +491,14 @@ export function buildReviewInviteTemplateParams(options: {
   const usesDynamicUrlButton = hasDynamicUrlButton(effectiveButtons);
 
   let parameters: string[];
-  if (tplName === 'bgos_review_invite_en' || tplName === 'bgos_review_invite_hi') {
+  if (tplName === 'bgos_review_clean_feedback') {
+    const reviewUrlFallback = sanitizeMetaTemplateParam(
+      options.reviewLink || (shortCode ? `https://fieseros.com/r/${shortCode}` : ''),
+      'https://fieseros.com',
+      240,
+    );
+    parameters = [firstName, business, reviewUrlFallback];
+  } else if (tplName === 'bgos_review_invite_en' || tplName === 'bgos_review_invite_hi') {
     parameters = [firstName, business];
   } else if (tplName === 'bgos_review_invite_note') {
     parameters = [firstName, business, note];

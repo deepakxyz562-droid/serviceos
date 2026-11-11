@@ -4,6 +4,7 @@ import dns from 'node:dns/promises';
 import fs from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
+import { getCategoryVisualPool } from './dynamic-visual-resolver';
 
 export type ImageProvider = 'gemini' | 'openrouter' | 'cloudflare' | 'siliconflow' | 'nvidia';
 
@@ -1047,7 +1048,7 @@ async function callGeminiOrOpenRouterImage(params: {
   const model =
     cred.modelOverride ||
     (params.provider === 'gemini'
-      ? process.env.BGOS_GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image'
+      ? process.env.BGOS_GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image'
       : process.env.BGOS_OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image');
 
   const requestBody =
@@ -1522,12 +1523,8 @@ export async function resolveCuratedImageFallback(
 
   const pickOne = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
 
-  let stockUrl = pickOne([
-    'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1400&q=85',
-    'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1400&q=85',
-    'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1400&q=85',
-    'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=1400&q=85',
-  ]);
+  const dynamicFallbackPool = getCategoryVisualPool(`${category} ${offerings} ${pLower}`);
+  let stockUrl = pickOne(dynamicFallbackPool);
 
   if (isDiwali) {
     stockUrl = pickOne([

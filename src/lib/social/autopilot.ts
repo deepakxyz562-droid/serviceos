@@ -331,20 +331,20 @@ Requirements:
       content = template.content?.trim() || '';
       if (!content) throw new Error('Add a caption to the selected saved poster before publishing.');
     } else {
-      const key = await db.aiProviderKey.findFirst({where:{isActive:true,provider:{in:['cloudflare','siliconflow','nvidia','gemini','openrouter']}},orderBy:{priority:'asc'},select:{provider:true}});
+      const key = await db.aiProviderKey.findFirst({where:{isActive:true,provider:{in:['gemini','cloudflare','siliconflow','nvidia','openrouter']}},orderBy:{priority:'asc'},select:{provider:true}});
       const envProvider =
-        process.env.CLOUDFLARE_ACCOUNT_ID && (process.env.CLOUDFLARE_AUTH_KEY || process.env.CLOUDFLARE_API_TOKEN)
-          ? 'cloudflare'
-          : process.env.SILICONFLOW_API_KEY?.trim()
-            ? 'siliconflow'
-            : (process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY)?.trim()
-              ? 'nvidia'
-              : process.env.GEMINI_API_KEY?.trim()
-                ? 'gemini'
+        process.env.GEMINI_API_KEY?.trim()
+          ? 'gemini'
+          : process.env.CLOUDFLARE_ACCOUNT_ID && (process.env.CLOUDFLARE_AUTH_KEY || process.env.CLOUDFLARE_API_TOKEN)
+            ? 'cloudflare'
+            : process.env.SILICONFLOW_API_KEY?.trim()
+              ? 'siliconflow'
+              : (process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY)?.trim()
+                ? 'nvidia'
                 : process.env.OPENROUTER_API_KEY?.trim()
                   ? 'openrouter'
                   : null;
-      const selectedProvider = (key?.provider || envProvider) as 'cloudflare'|'siliconflow'|'nvidia'|'gemini'|'openrouter'|null;
+      const selectedProvider = (key?.provider || envProvider) as 'gemini'|'cloudflare'|'siliconflow'|'nvidia'|'openrouter'|null;
       if (!selectedProvider) throw new Error('Configure an image provider in Superadmin.');
       const generated = await generateDesignImage(imagePrompt,selectedProvider,AbortSignal.timeout(60000),true);
       if (!generated?.bytes) throw new Error('Image generation returned no image.');

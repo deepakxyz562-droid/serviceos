@@ -316,6 +316,7 @@ function resolveSelectedReviewTemplate(
 
   return (
     catalog.find((t) => t.status === 'APPROVED') ||
+    catalog.find((t) => t.name === 'bgos_review_clean_feedback') ||
     catalog.find((t) => t.name === 'bgos_review_invite_en') ||
     catalog[0]
   );
@@ -335,18 +336,17 @@ function buildReviewInviteMessage(options: {
   if (customTemplate && customTemplate.trim()) {
     let text = customTemplate
       .replace(/\{firstName\}|\{FirstName\}/g, firstName || 'there')
-      .replace(/\{name\}|\{Name\}/g, trimmedName || 'Valued Customer')
+      .replace(/\{name\}|\{Name\}/g, trimmedName || 'there')
       .replace(/\{businessName\}/g, businessName)
       .replace(/\{reviewLink\}/g, reviewLink);
     if (includeDirectLink && !text.includes(reviewLink)) {
-      text += `\n\n🔗 Review Link: ${reviewLink}`;
+      text += `\n\n${reviewLink}`;
     }
     return text.trim();
   }
 
-  const greeting = firstName ? `Dear ${firstName},` : 'Dear Valued Client,';
-  const linkBlock = includeDirectLink ? `\n\n🔗 Review Link: ${reviewLink}` : '';
-  return `${greeting}\n\nThank you for choosing ${businessName}. We truly appreciate your trust and hope you had an exceptional experience with our team.\n\nIf you have a brief moment, we would be deeply grateful if you could share your feedback on our official Google Business Profile:${linkBlock}\n\nWarm regards,\n${businessName}`;
+  const greeting = firstName ? `Hello ${firstName},` : 'Hello there,';
+  return `${greeting}\n\nPlease share your feedback on your recent experience at *${businessName}*:\n${reviewLink}\n\n*${businessName}* Team`;
 }
 
 function buildTemplatePreviewMessage(options: {

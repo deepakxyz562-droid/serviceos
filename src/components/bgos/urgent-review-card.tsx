@@ -127,6 +127,17 @@ export interface ReviewMetaTemplatePreset {
 
 const FALLBACK_META_TEMPLATES: ReviewMetaTemplatePreset[] = [
   {
+    name: 'bgos_review_clean_feedback',
+    displayName: 'Clean Feedback (Recommended)',
+    language: 'en_US',
+    status: 'APPROVED',
+    bodyText:
+      'Hello {{1}},\n\nPlease share your feedback on your recent experience at {{2}}:\n{{3}}\n\n{{2}} Team',
+    supportsCustomNote: false,
+    hasDynamicUrlButton: false,
+    buttonText: 'Leave Review',
+  },
+  {
     name: 'bgos_review_invite_en',
     displayName: 'Friendly (EN)',
     language: 'en_US',
@@ -333,11 +344,11 @@ export function UrgentReviewCard({
   const [queueLoading, setQueueLoading] = useState(false);
   const [schedulingBulk, setSchedulingBulk] = useState(false);
   const [runningQueueAction, setRunningQueueAction] = useState(false);
-  const [selectedTemplateName, setSelectedTemplateName] = useState('bgos_review_invite_en');
+  const [selectedTemplateName, setSelectedTemplateName] = useState('bgos_review_clean_feedback');
   const [customNote, setCustomNote] = useState('');
   const [customFreeformMessage, setCustomFreeformMessage] = useState(
     () =>
-      `Hi {firstName}, thank you for choosing ${businessName}! Could you take 30 seconds to share your Google review? ${reviewUrl}`,
+      `Hello {firstName},\n\nPlease share your feedback on your recent experience at *${businessName}*:\n${reviewUrl}\n\n*${businessName}* Team`,
   );
   const hasEditedFreeformRef = useRef(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
@@ -345,7 +356,7 @@ export function UrgentReviewCard({
   useEffect(() => {
     if (!hasEditedFreeformRef.current) {
       setCustomFreeformMessage(
-        `Hi {firstName}, thank you for choosing ${businessName}! Could you take 30 seconds to share your Google review? ${reviewUrl}`,
+        `Hello {firstName},\n\nPlease share your feedback on your recent experience at *${businessName}*:\n${reviewUrl}\n\n*${businessName}* Team`,
       );
     }
   }, [businessName, reviewUrl]);

@@ -348,7 +348,10 @@ async function gatherContextAndPhotos(
   }
 
   // Detect owner's personal name to avoid displaying person name instead of business name
-  const ownerUser = await db.user.findFirst({ where: { tenantId }, select: { name: true } }).catch(() => null);
+  const ownerUser =
+    typeof (db as any).user?.findFirst === 'function'
+      ? await (db as any).user.findFirst({ where: { tenantId }, select: { name: true } }).catch(() => null)
+      : null;
   const ownerNameLower = (ownerUser?.name || '').toLowerCase().trim();
 
   const isPersonalOrGeneric = (candidate?: string | null): boolean => {

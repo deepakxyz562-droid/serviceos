@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { listGoogleBusinessMedia } from '@/lib/social/adapters/googlebusiness';
+import { getCategoryVisualPool } from '@/lib/designs/dynamic-visual-resolver';
 
 export const dynamic = 'force-dynamic';
 
@@ -143,9 +144,8 @@ export function generate20PostsForBusiness(params: {
 }): GeneratedPostItem[] {
   const { businessName, category, city, phone, website, photos } = params;
   const catKey = resolveCategoryKey(`${businessName} ${category}`);
-  const presetPhotos = CATEGORY_IMAGE_PRESETS[catKey] || CATEGORY_IMAGE_PRESETS.generic;
-  const shuffledPresets = [...presetPhotos].sort(() => Math.random() - 0.5);
-  const allImages = photos.length > 0 ? [...photos, ...shuffledPresets] : shuffledPresets;
+  const dynamicVisualPool = getCategoryVisualPool(`${businessName} ${category}`);
+  const allImages = photos.length > 0 ? [...photos, ...dynamicVisualPool] : dynamicVisualPool;
 
   const cityToken = city || 'your local area';
   const bizClean = cleanHash(businessName);

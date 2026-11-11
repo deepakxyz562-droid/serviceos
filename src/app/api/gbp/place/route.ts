@@ -118,13 +118,6 @@ export async function GET(request: NextRequest) {
       } catch {}
     }
 
-    let tenantSettings: Record<string, any> = {};
-    if ((tenant as any)?.settingsJson) {
-      try {
-        tenantSettings = JSON.parse((tenant as any).settingsJson);
-      } catch {}
-    }
-
     // Calculate genuine profile completeness matching Google Profile Strength gauge (e.g. 76% when secondary info is pending)
     const computeCompleteness = (
       t: string,
