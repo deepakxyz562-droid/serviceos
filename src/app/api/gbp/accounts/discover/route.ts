@@ -150,9 +150,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Profile ID is required' }, { status: 400 });
     }
 
+    const customBusinessName = typeof body.businessName === 'string' ? body.businessName.trim() : '';
+    const customCategory = typeof body.category === 'string' ? body.category.trim() : '';
+    const customProducts = Array.isArray(body.products)
+      ? body.products.filter((p): p is string => typeof p === 'string' && p.trim().length > 0).map((p) => p.trim())
+      : undefined;
+    const customServices = Array.isArray(body.services)
+      ? body.services.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).map((s) => s.trim())
+      : undefined;
+
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { id: true, name: true, settingsJson: true },
+      select: { id: true, name: true, settingsJson: true, industry: true },
     });
 
     let tenantSettings: Record<string, any> = {};
@@ -173,12 +182,14 @@ export async function POST(request: NextRequest) {
     });
 
     let targetName = 'Google Business';
+    let gbpCategory = '';
     if (targetAccount) {
       let meta: Record<string, any> = {};
       try {
         meta = typeof targetAccount.metadata === 'string' ? JSON.parse(targetAccount.metadata) : (targetAccount.metadata || {});
       } catch {}
       targetName = meta.locationTitle || targetAccount.accountName.replace(/\s*\([^)]*\)$/, '').trim();
+      gbpCategory = meta.category || '';
 
       // Touch updatedAt so it sorts to the top
       await db.socialAccount.update({
@@ -187,32 +198,88 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const finalName = customBusinessName || targetName;
+
+    // Resolve intelligent category: user input > GBP category (if not generic) > inferred from name
+    let finalCategory = customCategory;
+    if (!finalCategory) {
+      if (gbpCategory && !/corporate|holding|community centre/i.test(gbpCategory)) {
+        finalCategory = gbpCategory;
+      } else if (/(market|grocery|supermarket|mart|kirana|retail|store|bazaar|provisions)/i.test(finalName)) {
+        finalCategory = 'Grocery & Supermarket';
+      } else if (/(pool|swimming|farmhouse|resort|villa|cottage|homestay|retreat)/i.test(finalName)) {
+        finalCategory = 'Farmhouse & Resort';
+      } else if (/(cake|bakery|pastry|dessert|mithai|sweet|patisserie)/i.test(finalName)) {
+        finalCategory = 'Bakery & Cake Shop';
+      } else if (/(hardware|tool|fastener|plumbing|sanitary|pipe)/i.test(finalName)) {
+        finalCategory = 'Hardware & Tools';
+      } else if (/(paint|color|wall finish|coating|decor)/i.test(finalName)) {
+        finalCategory = 'Paint & Home Decor';
+      } else if (gbpCategory) {
+        finalCategory = gbpCategory;
+      } else {
+        finalCategory = 'Retail & Local Services';
+      }
+    }
+
     // Update tenant settings with active profile
     tenantSettings.activeGbpLocationId = profileId;
-    tenantSettings.activeGbpTitle = targetName;
+    tenantSettings.activeGbpTitle = finalName;
+    tenantSettings.activeGbpCategory = finalCategory;
+    if (customProducts) tenantSettings.activeGbpProducts = customProducts;
+    if (customServices) tenantSettings.activeGbpServices = customServices;
 
-    await db.tenant.update({
-      where: { id: user.tenantId },
-      data: {
-        settingsJson: JSON.stringify(tenantSettings),
-      },
-    });
+    // Atomically synchronize Tenant and BrandProfile
+    await Promise.all([
+      db.tenant.update({
+        where: { id: user.tenantId },
+        data: {
+          settingsJson: JSON.stringify(tenantSettings),
+          industry: finalCategory,
+          name: finalName,
+        },
+      }),
+      (async () => {
+        const existingBp = await db.brandProfile.findUnique({ where: { tenantId: user.tenantId } }).catch(() => null);
+        const dataToSave: any = {
+          businessName: finalName,
+          industry: finalCategory,
+        };
+        if (customProducts) dataToSave.products = JSON.stringify(customProducts);
+        if (customServices) dataToSave.services = JSON.stringify(customServices);
+
+        if (existingBp) {
+          await db.brandProfile.update({
+            where: { id: existingBp.id },
+            data: dataToSave,
+          });
+        } else {
+          await db.brandProfile.create({
+            data: {
+              tenantId: user.tenantId,
+              ...dataToSave,
+            },
+          });
+        }
+      })(),
+    ]);
 
     invalidatePlacePayloadCache(user.tenantId);
 
     const targetShortId = `#${profileId.slice(-4)}`;
     const targetProfile: GbpDiscoveredProfile = {
       id: profileId,
-      name: targetName,
+      name: finalName,
       shortId: targetShortId,
-      initial: targetName.charAt(0).toUpperCase() || 'B',
+      initial: finalName.charAt(0).toUpperCase() || 'B',
+      category: finalCategory,
     };
 
     return NextResponse.json({
       success: true,
       activeProfileId: profileId,
       activeProfile: targetProfile,
-      message: `Switched active Google Business Profile to ${targetName} (${targetShortId})`,
+      message: `Switched active Google Business Profile to ${finalName} (${targetShortId})`,
     });
   } catch (err: unknown) {
     console.error('[api/gbp/accounts/discover] POST error:', err);

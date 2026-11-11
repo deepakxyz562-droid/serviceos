@@ -430,9 +430,44 @@ async function gatherContextAndPhotos(
     }).catch(() => {});
   }
 
+  let resolvedCategory = (tenantSettings.activeGbpCategory || '').trim();
+  if (!resolvedCategory) {
+    const rawBpCat = (brandProfile?.industry || tenant?.industry || '').trim();
+    // If raw category is "It company" / "Software" but business name has market, store, clinic, salon, etc., do NOT use IT!
+    if (/it company|software|tech/i.test(rawBpCat) && /(market|grocery|supermarket|mart|store|kirana|bazaar|farm|pool|resort|clinic|salon|jewel|paint|hardware)/i.test(resolvedBusinessName)) {
+      if (/(market|grocery|supermarket|mart|store|kirana|bazaar)/i.test(resolvedBusinessName)) {
+        resolvedCategory = 'Grocery & Supermarket';
+      } else if (/(pool|swimming|farmhouse|resort|villa|cottage|homestay)/i.test(resolvedBusinessName)) {
+        resolvedCategory = 'Farmhouse & Resort';
+      } else if (/(hardware|tool|sanitary|pipe)/i.test(resolvedBusinessName)) {
+        resolvedCategory = 'Hardware & Tools';
+      } else if (/(paint|color|decor)/i.test(resolvedBusinessName)) {
+        resolvedCategory = 'Paint & Home Decor';
+      } else {
+        resolvedCategory = 'Retail & Local Services';
+      }
+    } else if (rawBpCat) {
+      resolvedCategory = rawBpCat;
+    } else if (gbpMeta.category && !/community centre|corporate/i.test(gbpMeta.category)) {
+      resolvedCategory = gbpMeta.category;
+    } else if (/(market|grocery|supermarket|mart|store|kirana|bazaar)/i.test(resolvedBusinessName)) {
+      resolvedCategory = 'Grocery & Supermarket';
+    } else {
+      resolvedCategory = gbpMeta.category || 'Retail & Local Services';
+    }
+  }
+
+  // Auto-sync brandProfile if it was holding a mismatched category
+  if (brandProfile && brandProfile.industry !== resolvedCategory && resolvedCategory) {
+    void db.brandProfile.update({
+      where: { id: brandProfile.id },
+      data: { industry: resolvedCategory, businessName: resolvedBusinessName },
+    }).catch(() => {});
+  }
+
   const business: BusinessAiContext = {
     name: resolvedBusinessName,
-    category: brandProfile?.industry || tenant?.industry || gbpMeta.category || 'Local Business',
+    category: resolvedCategory,
     location: brandProfile?.location || tenant?.address || gbpMeta.address || '',
     products: Array.from(
       new Set([...parseStringArray(brandProfile?.products), ...brandBrainProducts]),

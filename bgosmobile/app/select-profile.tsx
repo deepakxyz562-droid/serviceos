@@ -1,6 +1,18 @@
 import { invalidateResourceScope } from '../src/lib/resource-cache';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -15,6 +27,8 @@ interface GbpProfile {
   name: string;
   shortId: string;
   initial: string;
+  category?: string;
+  address?: string;
   isPrimary?: boolean;
 }
 
@@ -35,6 +49,75 @@ const AVATAR_COLORS: Record<string, { bg: string; text: string }> = {
   D: { bg: '#DCFCE7', text: '#16A34A' }, // green
 };
 
+const CATEGORY_SUGGESTIONS = [
+  'Grocery & Supermarket',
+  'Retail & Department Store',
+  'Bakery & Cake Shop',
+  'Restaurant & Cafe',
+  'Hardware & Tools',
+  'Paint & Home Decor',
+  'Fashion & Boutique',
+  'Farmhouse & Resort',
+  'Clinic & Healthcare',
+  'Software & IT Services',
+];
+
+function inferCategoryFromName(name: string, fallbackCategory?: string): string {
+  if (fallbackCategory && !/corporate|holding|community centre/i.test(fallbackCategory)) {
+    return fallbackCategory;
+  }
+  const n = name.toLowerCase();
+  if (/(market|grocery|supermarket|mart|kirana|retail|store|bazaar|provisions)/i.test(n)) {
+    return 'Grocery & Supermarket';
+  }
+  if (/(bakery|cake|pastry|mithai|sweet)/i.test(n)) {
+    return 'Bakery & Sweets';
+  }
+  if (/(hardware|tool|pipe|sanitary|plywood)/i.test(n)) {
+    return 'Hardware & Tools';
+  }
+  if (/(paint|color|wall decor)/i.test(n)) {
+    return 'Paint & Home Decor';
+  }
+  if (/(pool|farmhouse|resort|villa|cottage|homestay)/i.test(n)) {
+    return 'Farmhouse & Resort';
+  }
+  if (/(restaurant|cafe|dining|bistro|kitchen)/i.test(n)) {
+    return 'Restaurant & Cafe';
+  }
+  if (/(fashion|boutique|clothing|saree|garment)/i.test(n)) {
+    return 'Fashion & Boutique';
+  }
+  if (fallbackCategory) return fallbackCategory;
+  return 'Retail & Local Services';
+}
+
+function getSuggestedOfferings(category: string, name: string): string[] {
+  const c = `${category} ${name}`.toLowerCase();
+  if (/(market|grocery|supermarket|mart|kirana|retail)/i.test(c)) {
+    return ['Fresh Produce', 'Daily Groceries', 'Packaged Food', 'Household Essentials'];
+  }
+  if (/(bakery|cake|pastry|sweet)/i.test(c)) {
+    return ['Designer Celebration Cakes', 'Fresh Pastries', 'Handcrafted Cookies', 'Custom Birthday Orders'];
+  }
+  if (/(hardware|tool|pipe)/i.test(c)) {
+    return ['Power Tools', 'Plumbing Fixtures', 'Fasteners & Screws', 'Electrical Supplies'];
+  }
+  if (/(paint|color|decor)/i.test(c)) {
+    return ['Interior Wall Emulsion', 'Exterior Weatherproof Coat', 'Texture Finishes', 'Waterproofing'];
+  }
+  if (/(pool|farmhouse|resort|villa)/i.test(c)) {
+    return ['Private Villa Stay', 'Swimming Pool Access', 'Lawn Event Booking', 'Family Day Outing'];
+  }
+  if (/(restaurant|cafe|dining)/i.test(c)) {
+    return ['Dine-in Service', 'Specialty Coffee', 'Takeaway Orders', 'Party Catering'];
+  }
+  if (/(fashion|boutique|saree)/i.test(c)) {
+    return ['Designer Sarees', 'Bridal Wear', 'Custom Tailoring', 'Festive Collection'];
+  }
+  return ['In-Store Shopping', 'Home Delivery', 'Customer Support', 'Consultation'];
+}
+
 /**
  * Select profile screen — matches Dhanda AI benchmark (Screenshot 6).
  * Displays all Google Business listings linked to the authenticated Gmail account,
@@ -48,6 +131,13 @@ export default function SelectProfileScreen() {
   const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
 
+  // Verification & Edit Profile Modal State
+  const [verifyModalProfile, setVerifyModalProfile] = useState<GbpProfile | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [offerings, setOfferings] = useState<string[]>([]);
+  const [customTagInput, setCustomTagInput] = useState('');
+
   const profiles = discover.data?.profiles || [];
   const activeId = discover.data?.activeProfileId || profiles[0]?.id || '';
   const email = discover.data?.email || '';
@@ -55,29 +145,59 @@ export default function SelectProfileScreen() {
   const version = discover.data?.version || 'BGOS v2.0';
   const isConnected = Boolean(discover.data?.hasConnectedGbp || profiles.length > 0);
 
-  async function handleSelectProfile(p: GbpProfile) {
+  function handleCardPress(p: GbpProfile) {
+    const cat = inferCategoryFromName(p.name, p.category);
+    setVerifyModalProfile(p);
+    setEditName(p.name);
+    setEditCategory(cat);
+    setOfferings(getSuggestedOfferings(cat, p.name));
+    setCustomTagInput('');
+  }
+
+  async function handleConfirmProfile(p: GbpProfile, name: string, category: string, prods: string[]) {
     if (switchingId) return;
     setSwitchingId(p.id);
     try {
       await apiRequest('/api/gbp/accounts/discover', {
         method: 'POST',
-        body: { profileId: p.id },
+        body: {
+          profileId: p.id,
+          businessName: name.trim() || p.name,
+          category: category.trim(),
+          products: prods,
+          services: prods,
+        },
       });
       invalidateResourceScope();
-      Alert.alert('Profile Switched', `Active profile is now ${p.name} (${p.shortId})`, [
-        {
-          text: 'OK',
-          onPress: () => {
-            if (router.canGoBack?.()) router.back();
-            else router.replace('/(tabs)');
+      setVerifyModalProfile(null);
+      Alert.alert(
+        'Profile & Services Verified',
+        `Active profile is now ${name.trim() || p.name} (${category || 'Local Business'}).\n\nAI posts, designs, and captions are now calibrated to this business.`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              if (router.canGoBack?.()) router.back();
+              else router.replace('/(tabs)');
+            },
           },
-        },
-      ]);
+        ]
+      );
     } catch (err: unknown) {
-      Alert.alert('Switch Failed', (err as Error).message || 'Could not switch profile.');
+      Alert.alert('Update Failed', (err as Error).message || 'Could not verify profile.');
     } finally {
       setSwitchingId(null);
     }
+  }
+
+  async function handleQuickSelect(p: GbpProfile) {
+    const cat = inferCategoryFromName(p.name, p.category);
+    const defaults = getSuggestedOfferings(cat, p.name);
+    await handleConfirmProfile(p, p.name, cat, defaults);
+  }
+
+  async function handleSelectProfile(p: GbpProfile) {
+    handleCardPress(p);
   }
 
   const handleOAuthReturn = useCallback(
@@ -246,12 +366,13 @@ export default function SelectProfileScreen() {
               const isSelected = p.id === activeId;
               const isSwitching = switchingId === p.id;
               const colorScheme = AVATAR_COLORS[p.initial] || { bg: '#F1F5F9', text: '#0F172A' };
+              const inferredCat = inferCategoryFromName(p.name, p.category);
 
               return (
                 <Pressable
                   key={p.id}
                   accessibilityRole="button"
-                  onPress={() => handleSelectProfile(p)}
+                  onPress={() => handleCardPress(p)}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -284,12 +405,20 @@ export default function SelectProfileScreen() {
                     <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A' }}>
                       {p.name}
                     </Text>
-                    <Text style={{ fontSize: 12.5, color: '#64748B', marginTop: 2, fontWeight: '500' }}>
-                      {p.shortId}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                      <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '500' }}>
+                        {p.shortId}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#CBD5E1' }}>•</Text>
+                      <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 7, paddingVertical: 1.5, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 11, color: '#475569', fontWeight: '600' }} numberOfLines={1}>
+                          {inferredCat}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
 
-                  {/* Indicator / Spinner / Chevron */}
+                  {/* Indicator / Spinner / Action */}
                   {isSwitching ? (
                     <ActivityIndicator size="small" color="#2563EB" />
                   ) : isSelected ? (
@@ -304,7 +433,7 @@ export default function SelectProfileScreen() {
                       >
                         <Text style={{ fontSize: 11, fontWeight: '800', color: '#16A34A' }}>Active</Text>
                       </View>
-                      <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
+                      <MaterialIcons name="edit" size={17} color="#16A34A" />
                     </View>
                   ) : (
                     <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
@@ -582,6 +711,291 @@ export default function SelectProfileScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      {/* Verification & Category Confirmation Modal */}
+      <Modal
+        visible={Boolean(verifyModalProfile)}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          if (!switchingId) setVerifyModalProfile(null);
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'flex-end' }}
+        >
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingHorizontal: 20,
+              paddingTop: 20,
+              paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+              maxHeight: '90%',
+            }}
+          >
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>
+                  Verify Business Profile
+                </Text>
+                <Text style={{ fontSize: 12.5, color: '#64748B', marginTop: 2 }}>
+                  Confirm category &amp; offerings for dynamic AI marketing
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                onPress={() => {
+                  if (!switchingId) setVerifyModalProfile(null);
+                }}
+                style={({ pressed }) => ({
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: pressed ? '#E2E8F0' : '#F1F5F9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                })}
+              >
+                <MaterialIcons name="close" size={20} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={{ gap: 16, paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
+              {/* 1. Business Name */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>
+                  Business Name
+                </Text>
+                <TextInput
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="e.g. shiv-ganga market"
+                  placeholderTextColor="#94A3B8"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    fontSize: 14.5,
+                    color: '#0F172A',
+                    backgroundColor: '#F8FAFC',
+                  }}
+                />
+              </View>
+
+              {/* 2. Business Category */}
+              <View style={{ gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>
+                    Business Category
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>Tap to select or type</Text>
+                </View>
+                <TextInput
+                  value={editCategory}
+                  onChangeText={setEditCategory}
+                  placeholder="e.g. Grocery & Supermarket"
+                  placeholderTextColor="#94A3B8"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    fontSize: 14.5,
+                    color: '#0F172A',
+                    backgroundColor: '#F8FAFC',
+                  }}
+                />
+                {/* Category Chips */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  {CATEGORY_SUGGESTIONS.map((cat) => {
+                    const isCatSelected = editCategory.toLowerCase() === cat.toLowerCase();
+                    return (
+                      <Pressable
+                        key={cat}
+                        onPress={() => {
+                          setEditCategory(cat);
+                          setOfferings(getSuggestedOfferings(cat, editName));
+                        }}
+                        style={({ pressed }) => ({
+                          backgroundColor: isCatSelected ? '#EFF6FF' : pressed ? '#F1F5F9' : '#FFFFFF',
+                          borderWidth: 1,
+                          borderColor: isCatSelected ? '#2563EB' : '#E2E8F0',
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 20,
+                        })}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: isCatSelected ? '700' : '500',
+                            color: isCatSelected ? '#2563EB' : '#475569',
+                          }}
+                        >
+                          {cat}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* 3. Products & Services */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>
+                  Key Products &amp; Services
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                  AI generates photorealistic visuals and captions tailored to these items:
+                </Text>
+
+                {/* Active Offerings Tags */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 4 }}>
+                  {offerings.map((tag, idx) => (
+                    <View
+                      key={`${tag}-${idx}`}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: '#F0FDF4',
+                        borderWidth: 1,
+                        borderColor: '#86EFAC',
+                        paddingLeft: 10,
+                        paddingRight: 6,
+                        paddingVertical: 5,
+                        borderRadius: 16,
+                        gap: 6,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#166534' }}>
+                        {tag}
+                      </Text>
+                      <Pressable
+                        onPress={() => setOfferings(offerings.filter((_, i) => i !== idx))}
+                        hitSlop={8}
+                      >
+                        <MaterialIcons name="cancel" size={16} color="#16A34A" />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Add Tag Input */}
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  <TextInput
+                    value={customTagInput}
+                    onChangeText={setCustomTagInput}
+                    placeholder="Add custom product or service..."
+                    placeholderTextColor="#94A3B8"
+                    onSubmitEditing={() => {
+                      const trimmed = customTagInput.trim();
+                      if (trimmed && !offerings.includes(trimmed)) {
+                        setOfferings([...offerings, trimmed]);
+                        setCustomTagInput('');
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      fontSize: 13.5,
+                      backgroundColor: '#FFFFFF',
+                    }}
+                  />
+                  <Pressable
+                    onPress={() => {
+                      const trimmed = customTagInput.trim();
+                      if (trimmed && !offerings.includes(trimmed)) {
+                        setOfferings([...offerings, trimmed]);
+                        setCustomTagInput('');
+                      }
+                    }}
+                    style={({ pressed }) => ({
+                      backgroundColor: pressed ? '#1D4ED8' : '#2563EB',
+                      paddingHorizontal: 14,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    })}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>+ Add</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Action Buttons */}
+            <View style={{ gap: 10, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={Boolean(switchingId)}
+                onPress={() => {
+                  if (verifyModalProfile) {
+                    void handleConfirmProfile(
+                      verifyModalProfile,
+                      editName,
+                      editCategory,
+                      offerings
+                    );
+                  }
+                }}
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? '#15803D' : '#16A34A',
+                  paddingVertical: 14,
+                  borderRadius: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: switchingId ? 0.7 : 1,
+                })}
+              >
+                {switchingId ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
+                      Saving &amp; Activating Profile…
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+                    Confirm &amp; Set Active Profile
+                  </Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                disabled={Boolean(switchingId)}
+                onPress={() => {
+                  if (verifyModalProfile) {
+                    void handleQuickSelect(verifyModalProfile);
+                  }
+                }}
+                style={({ pressed }) => ({
+                  paddingVertical: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={{ color: '#64748B', fontSize: 13, fontWeight: '600' }}>
+                  Quick Select (Keep Default Category)
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </Screen>
   );
 }

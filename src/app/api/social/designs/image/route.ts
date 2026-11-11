@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { runDesignJob } from '@/lib/designs/jobs';
 import { isUnsafeReferenceHostname } from '@/lib/designs/image-provider';
 import { requireBgosEntitled } from '@/lib/bgos-entitlement';
+import { callAI } from '@/lib/ai-client';
 import { IMAGE_PROVIDER_CHOICES, type ImageProviderChoice } from '../../../../../../shared/image-review';
 
 export const maxDuration = 120;
@@ -59,21 +60,35 @@ function sanitizeAndValidateReferenceUrls(raw: unknown): {
   return { urls };
 }
 
-function buildAutoBusinessPrompt(params: {
+async function buildDynamicBusinessPrompt(params: {
   businessName?: string;
   category?: string;
   products?: string[];
   services?: string[];
   hasRefs: boolean;
   topic?: string;
-}): string {
+}): Promise<string> {
   const name = params.businessName || 'our business';
-  const category = params.category || 'local business';
+  let category = params.category || 'local business';
   const offerings = [...(params.products || []), ...(params.services || [])]
     .filter(Boolean)
-    .slice(0, 4)
+    .slice(0, 6)
     .join(', ');
-  const blob = `${name} ${category} ${offerings} ${params.topic || ''}`.toLowerCase();
+
+  // Auto-correct stale or misconfigured "It company" if the business name clearly denotes physical retail or trade
+  if (/(it company|software)/i.test(category) && /(market|mart|grocery|supermarket|kirana|retail|store|bazaar|provisions|hardware|paint|bakery|cake|pool|farmhouse|resort|clinic|salon)/i.test(name)) {
+    if (/(market|mart|grocery|supermarket|kirana|retail|store|bazaar|provisions)/i.test(name)) {
+      category = 'Grocery & Supermarket';
+    } else if (/(hardware|tool|pipe|sanitary)/i.test(name)) {
+      category = 'Hardware & Tools';
+    } else if (/(paint|color|decor)/i.test(name)) {
+      category = 'Paint & Home Decor';
+    } else if (/(bakery|cake|sweet|pastry)/i.test(name)) {
+      category = 'Bakery & Sweets';
+    } else if (/(pool|farmhouse|resort|villa)/i.test(name)) {
+      category = 'Farmhouse & Resort';
+    }
+  }
 
   const lightingStyles = [
     'crisp natural morning daylight with soft natural reflections',
@@ -96,7 +111,52 @@ function buildAutoBusinessPrompt(params: {
     return `Preserve the authentic physical property, architecture, product appearance, and branding from the reference photos for ${name} (${category}${offerings ? `, featuring ${offerings}` : ''}), upgraded with ${chosenLight}, ${chosenAngle}, spotless presentation, and commercial magazine quality.`;
   }
 
-  // 1. Cake / Bakery / Sweet Shop / Desserts
+  // 1. Try dynamic AI Art Director via callAI
+  try {
+    const aiRes = await callAI({
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are an expert commercial advertising art director and photographer. Write a concise, 1-2 sentence commercial photography scene description for an image diffusion model. The scene MUST authentically represent the physical storefront, products, customer experience, or craft of this exact business type. CRITICAL: Never depict computers, monitors, code, or IT dashboards unless the business is explicitly a software programming company. Do NOT include text, slogans, letters, or logos in the image. Return ONLY the plain text scene description.',
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            businessName: name,
+            category,
+            offerings,
+            topic: params.topic || 'commercial showcase',
+          }),
+        },
+      ],
+      temperature: 0.3,
+      timeoutMs: 6_000,
+    });
+
+    const aiPrompt = (aiRes.content || '').trim().replace(/^["']|["']$/g, '');
+    if (aiPrompt.length > 25) {
+      return `${aiPrompt} Shot on 35mm lens, ${chosenLight}, ${chosenAngle}, immaculate commercial composition, vibrant authentic colors, hyper-realistic depth of field. ABSOLUTELY NO TEXT, NO LOGOS, NO WATERMARKS.`;
+    }
+  } catch (err) {
+    console.warn('[buildDynamicBusinessPrompt] AI prompt generation fallback:', err instanceof Error ? err.message : err);
+  }
+
+  // 2. High-precision semantic category fallback for ANY business
+  const blob = `${name} ${category} ${offerings} ${params.topic || ''}`.toLowerCase();
+
+  // Market / Grocery / Supermarket / Mart / Retail / Provisions
+  if (/(market|grocery|supermarket|mart|kirana|retail store|department store|bazaar|provisions|fmcg|produce)/i.test(blob)) {
+    const scenes = [
+      `Vibrant and bountiful fresh produce market aisle at ${name}, colorful rows of crisp apples, oranges, leafy greens, and farm-fresh vegetables neatly arranged under ${chosenLight}, ${chosenAngle}.`,
+      `Modern, spotless supermarket grocery store interior at ${name}, fully stocked wooden and chrome shelves with premium packaged foods, organic spices, and daily essentials, warm inviting shopping ambiance, ${chosenLight}.`,
+      `Pristine gourmet market display counter at ${name}, featuring freshly packed dry fruits, organic grains, artisanal goods, and vibrant harvest displays in rustic wicker baskets, ${chosenLight}.`,
+      `Welcoming modern retail grocery storefront and entrance display at ${name}, sparkling clean glass entrance, polished floors, and bountiful seasonal merchandise displays, commercial magazine photography.`
+    ];
+    return scenes[Math.floor(Math.random() * scenes.length)];
+  }
+
+  // Cake / Bakery / Sweet Shop / Confectionery
   if (/(cake|bakery|pastry|dessert|mithai|sweet|cupcake|baker|patisserie|confection)/i.test(blob)) {
     const scenes = [
       `Artisanal designer celebration cake with pristine handcrafted fondant frosting, delicate floral accents, and rich layered detail at ${name}, displayed on a marble pedestal with ${chosenLight}, ${chosenAngle}.`,
@@ -107,7 +167,7 @@ function buildAutoBusinessPrompt(params: {
     return scenes[Math.floor(Math.random() * scenes.length)];
   }
 
-  // 2. Hardware / Tools / Fasteners / Building Supplies
+  // Hardware / Tools / Building Supplies
   if (/(hardware|tool|fastener|plumbing|electrical supply|plywood|sanitary|pipe|machinery)/i.test(blob)) {
     const scenes = [
       `Modern, meticulously organized hardware superstore aisle at ${name}, showcasing premium power tools, heavy-duty hand tools, and brass fixtures arranged neatly with ${chosenLight}, ${chosenAngle}.`,
@@ -118,7 +178,7 @@ function buildAutoBusinessPrompt(params: {
     return scenes[Math.floor(Math.random() * scenes.length)];
   }
 
-  // 3. Paint Shop / Coatings / Home Wall Finishes
+  // Paint / Wall Finishes / Home Decor
   if (/(paint|color|wall finish|coating|texture|primer|asian paints|berger|nerolac|decor)/i.test(blob)) {
     const scenes = [
       `Vibrant luxury paint studio showroom at ${name}, featuring designer wall color swatch palettes, premium paint cans neatly displayed, and textured wall samples with ${chosenLight}, ${chosenAngle}.`,
@@ -129,30 +189,55 @@ function buildAutoBusinessPrompt(params: {
     return scenes[Math.floor(Math.random() * scenes.length)];
   }
 
-  // 4. Pool / Farmhouse / Resort / Hospitality / Luxury Staycation
+  // Pool / Farmhouse / Resort / Hospitality
   if (/(pool|swimming pool|farmhouse|resort|villa|cottage|homestay|retreat|staycation|banquet|lawn)/i.test(blob)) {
     const scenes = [
       `Crystal-clear luxury swimming pool with turquoise water ripples, premium poolside deck loungers, and lush green tropical trees at ${name}, ${chosenLight}, ${chosenAngle}.`,
       `Spacious scenic farmhouse estate at ${name} with sprawling manicured green lawn, private pavilion gazebo, and serene open sky, ${chosenLight}, wide-angle perspective.`,
       `Enchanting evening celebration setup at ${name} poolside, illuminated with warm string lights, elegant outdoor seating, and calm water reflections, resort luxury.`,
-      `Private villa poolside patio at ${name} with refreshing shaded daybeds, clean architectural stone deck, and tranquil garden backdrop, travel magazine quality.`,
-      `Sun-dappled morning view of private swimming pool and lush green farmhouse lawns at ${name}, peaceful family getaway setting with crystal-clean water.`
+      `Private villa poolside patio at ${name} with refreshing shaded daybeds, clean architectural stone deck, and tranquil garden backdrop, travel magazine quality.`
     ];
     return scenes[Math.floor(Math.random() * scenes.length)];
   }
 
-  // 5. Software / IT Company / Tech Services / Web & App Development
-  if (/(software|it company|tech|developer|code|web development|app development|cloud|saas|digital marketing)/i.test(blob)) {
+  // Restaurant / Cafe / Dining / Food
+  if (/(restaurant|cafe|coffee|dining|bistro|kitchen|culinary|food)/i.test(blob)) {
+    const scenes = [
+      `Artfully plated gourmet signature dish at ${name}, steaming culinary perfection on a ceramic plate, styled on a rustic wooden dining table with ${chosenLight}, ${chosenAngle}.`,
+      `Warm and inviting modern cafe dining area at ${name}, espresso machine with rich crema, artisanal pastries, and warm ambient pendant lighting, ${chosenLight}.`,
+      `Vibrant chef pass counter at ${name} with beautifully garnished culinary creations, fresh herbs, and sparkling restaurant atmosphere.`
+    ];
+    return scenes[Math.floor(Math.random() * scenes.length)];
+  }
+
+  // Fashion / Apparel / Saree / Boutique
+  if (/(fashion|saree|boutique|clothing|apparel|garment|textile|ethnic)/i.test(blob)) {
+    const scenes = [
+      `Upscale fashion boutique showroom at ${name}, showcasing designer ethnic collections and silk fabrics neatly hung on golden racks, with ${chosenLight}, ${chosenAngle}.`,
+      `Editorial showcase of rich handcrafted textiles, intricate zari embroidery, and luxurious fabric drape at ${name}, high-end fashion catalog aesthetic.`
+    ];
+    return scenes[Math.floor(Math.random() * scenes.length)];
+  }
+
+  // Clinic / Health / Wellness / Salon
+  if (/(clinic|dental|hospital|doctor|health|wellness|spa|salon|beauty)/i.test(blob)) {
+    const scenes = [
+      `Pristine, ultra-clean modern clinic consultation suite at ${name}, soothing ambient lighting, ergonomic design, welcoming health environment, ${chosenLight}, ${chosenAngle}.`,
+      `Luxurious wellness and beauty studio reception at ${name}, modern floral accents, natural wood textures, and calming serene spa ambiance.`
+    ];
+    return scenes[Math.floor(Math.random() * scenes.length)];
+  }
+
+  // Software / Tech ONLY if not physical retail or trade
+  if (/(software|developer|coding|web dev|cloud|saas)/i.test(blob) && !/(market|mart|grocery|supermarket|kirana|retail|store|bazaar|paint|cake|pool|hardware)/i.test(blob)) {
     const scenes = [
       `High-tech modern software engineering office at ${name}, showing sleek dual-monitor workstations displaying code dashboards, clean ergonomic desks, and ambient blue glow, ${chosenLight}, ${chosenAngle}.`,
-      `Collaborative tech team working around interactive smart boards in a bright contemporary tech studio at ${name}, clean glass architecture, high-energy startup atmosphere.`,
-      `Futuristic clean desk setup with sleek laptop, glowing abstract digital cloud network visualization, and high-end smartphone at ${name}, crisp professional tech aesthetic.`,
-      `Modern IT solutions command center at ${name} with analytics graphs, cyber-secure cloud dashboard screens, and elegant minimalist architectural design.`
+      `Collaborative tech team working around interactive smart boards in a bright contemporary tech studio at ${name}, clean glass architecture, high-energy startup atmosphere.`
     ];
     return scenes[Math.floor(Math.random() * scenes.length)];
   }
 
-  // 6. Generic Business Dynamic Fallback
+  // Universal Dynamic Fallback for ANY other industry
   const genericScenes = [
     `Photorealistic commercial showcase for ${name} (${category}) highlighting ${offerings || 'premium quality services'}, authentic inviting atmosphere, ${chosenLight}, ${chosenAngle}.`,
     `Modern pristine storefront and customer service area at ${name} (${category}), spotless commercial presentation with bright inviting ambiance, ${chosenLight}.`,
@@ -237,11 +322,21 @@ export async function POST(request: NextRequest) {
         if (tenant) {
           if (!businessName && tenant.name) businessName = tenant.name;
           if (!category && tenant.industry) category = tenant.industry;
-          if (tenant.settingsJson && (!products || products.length === 0)) {
+          if (tenant.settingsJson) {
             try {
               const parsed = JSON.parse(tenant.settingsJson);
+              if (parsed?.activeGbpTitle) businessName = parsed.activeGbpTitle;
+              if (parsed?.activeGbpCategory && !/corporate|holding|community centre/i.test(parsed.activeGbpCategory)) {
+                category = parsed.activeGbpCategory;
+              }
+              if ((!products || products.length === 0) && Array.isArray(parsed?.activeGbpProducts) && parsed.activeGbpProducts.length > 0) {
+                products = parsed.activeGbpProducts;
+              }
+              if ((!services || services.length === 0) && Array.isArray(parsed?.activeGbpServices) && parsed.activeGbpServices.length > 0) {
+                services = parsed.activeGbpServices;
+              }
               const items = parsed?.brandBrain?.sellingItems;
-              if (Array.isArray(items) && items.length > 0) {
+              if ((!products || products.length === 0) && Array.isArray(items) && items.length > 0) {
                 products = items
                   .map((it: any) => (typeof it?.name === 'string' ? it.name.trim() : ''))
                   .filter(Boolean);
@@ -250,11 +345,18 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch {}
+
+      // Normalize if category is still stale default IT but name denotes retail/market
+      if (businessName && /(market|mart|grocery|supermarket|kirana|retail|store|bazaar|provisions)/i.test(businessName)) {
+        if (!category || /(it company|software|community)/i.test(category)) {
+          category = 'Grocery & Supermarket';
+        }
+      }
     }
 
     let rawPrompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
     if (!rawPrompt && autoFromBusiness) {
-      rawPrompt = buildAutoBusinessPrompt({
+      rawPrompt = await buildDynamicBusinessPrompt({
         businessName,
         category,
         products,

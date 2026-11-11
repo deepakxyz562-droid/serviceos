@@ -684,31 +684,46 @@ export function buildHighQualityImagePrompt(
   // Compute dynamic domain scores based on category (weight 10), offerings (weight 4), and prompt (weight 2)
   const catLower = category.toLowerCase();
   const offLower = offerings.toLowerCase();
+  const nameLower = businessName.toLowerCase();
 
-  const scores = { tech: 0, food: 0, fashion: 0, jewellery: 0, trades: 0, hospitality: 0, paint: 0, hardware: 0 };
+  const scores = { tech: 0, food: 0, fashion: 0, jewellery: 0, trades: 0, hospitality: 0, paint: 0, hardware: 0, market: 0 };
+
+  const isPhysicalRetailOrTrade = hasWord(nameLower, [
+    'market', 'grocery', 'supermarket', 'mart', 'kirana', 'retail', 'store',
+    'bazaar', 'paint', 'cake', 'pool', 'hardware', 'bakery', 'farmhouse', 'resort', 'clinic'
+  ]);
 
   // Category matching (primary signal)
   if (hasWord(catLower, ['jewel', 'jewelry', 'jewellery', 'jeweller', 'jewellers', 'diamond', 'diamonds', 'gold ornament', 'solitaire', 'gemstone', 'gemstones'])) scores.jewellery += 10;
   if (hasWord(catLower, ['sweet', 'sweets', 'mithai', 'bakery', 'confectionery', 'cake', 'cakes', 'restaurant', 'cafe', 'food', 'dessert', 'desserts'])) scores.food += 10;
   if (hasWord(catLower, ['saree', 'sarees', 'ethnic wear', 'bridal lehenga', 'boutique', 'apparel', 'clothing', 'fashion', 'garment', 'garments', 'textile', 'textiles'])) scores.fashion += 10;
-  if (hasWord(catLower, ['software', 'saas', 'tech', 'technology', 'it ', 'cloud', 'app', 'apps', 'telemetry', 'gps', 'developer', 'workforce'])) scores.tech += 10;
+  if (!isPhysicalRetailOrTrade && hasWord(catLower, ['software', 'saas', 'tech', 'technology', 'it ', 'cloud', 'app', 'apps', 'telemetry', 'gps', 'developer', 'workforce'])) scores.tech += 10;
   if (hasWord(catLower, ['paint', 'paints', 'wall finish', 'coating', 'coatings', 'texture', 'primer', 'asian paints', 'berger', 'nerolac', 'wall decor'])) scores.paint += 10;
   if (hasWord(catLower, ['hardware', 'tool', 'tools', 'fastener', 'fasteners', 'plywood', 'sanitary', 'pipe', 'pipes', 'machinery', 'building supply'])) scores.hardware += 10;
   if (hasWord(catLower, ['hvac', 'plumb', 'plumbing', 'electric', 'repair', 'repairs', 'contractor', 'trade', 'clean', 'cleaning', 'heating', 'cooling', 'air conditioning'])) scores.trades += 10;
   if (hasWord(catLower, ['farmhouse', 'farm house', 'resort', 'villa', 'cottage', 'homestay', 'retreat', 'banquet', 'staycation', 'glamping', 'hotel', 'hospitality', 'venue', 'pool', 'swimming'])) scores.hospitality += 10;
+  if (hasWord(catLower, ['market', 'grocery', 'supermarket', 'mart', 'kirana', 'retail', 'provision', 'provisions', 'bazaar', 'store', 'department store', 'fmcg', 'produce', 'daily needs'])) scores.market += 10;
+
+  // Name matching (strong physical identity signal)
+  if (hasWord(nameLower, ['market', 'grocery', 'supermarket', 'mart', 'kirana', 'retail', 'provision', 'provisions', 'bazaar', 'store'])) scores.market += 10;
+  if (hasWord(nameLower, ['bakery', 'cake', 'mithai', 'sweets', 'cafe', 'restaurant'])) scores.food += 10;
+  if (hasWord(nameLower, ['farmhouse', 'resort', 'villa', 'homestay', 'pool'])) scores.hospitality += 10;
+  if (hasWord(nameLower, ['hardware', 'tools', 'fasteners'])) scores.hardware += 10;
+  if (hasWord(nameLower, ['paint', 'paints', 'colors'])) scores.paint += 10;
 
   // Offerings matching (secondary signal)
   if (hasWord(offLower, ['jewel', 'jewelry', 'jewellery', 'diamond', 'diamonds', 'necklace', 'necklaces', 'gold necklace', 'bangles', 'solitaire', 'earrings', 'chokers'])) scores.jewellery += 4;
   if (hasWord(offLower, ['mithai', 'kaju katli', 'gulab jamun', 'ladoo', 'pastry', 'croissant', 'rasgulla', 'sweets'])) scores.food += 4;
   if (hasWord(offLower, ['saree', 'sarees', 'lehenga', 'lehengas', 'dupatta', 'banarasi', 'suit', 'dress'])) scores.fashion += 4;
-  if (hasWord(offLower, ['employee tracking', 'tracking app', 'gps', 'telemetry', 'route map', 'punch in', 'attendance', 'mobile app', 'cloud migration', 'software'])) scores.tech += 4;
+  if (!isPhysicalRetailOrTrade && hasWord(offLower, ['employee tracking', 'tracking app', 'gps', 'telemetry', 'route map', 'punch in', 'attendance', 'mobile app', 'cloud migration', 'software'])) scores.tech += 4;
   if (hasWord(offLower, ['paint', 'emulsion', 'distemper', 'primer', 'enamel', 'texture finish', 'wall painting'])) scores.paint += 4;
   if (hasWord(offLower, ['power tools', 'drill', 'grinder', 'fasteners', 'plumbing pipe', 'sanitary fittings'])) scores.hardware += 4;
   if (hasWord(offLower, ['ac repair', 'furnace', 'duct cleaning', 'plumbing', 'technician', 'boiler'])) scores.trades += 4;
   if (hasWord(offLower, ['farmhouse', 'villa', 'swimming pool', 'lawn', 'staycation', 'weekend stay', 'banquet', 'garden venue', 'private pool'])) scores.hospitality += 4;
+  if (hasWord(offLower, ['grocery', 'groceries', 'fresh produce', 'vegetables', 'fruits', 'packaged food', 'spices', 'pulses', 'household', 'dairy', 'provisions', 'snacks', 'fmcg', 'daily needs'])) scores.market += 6;
 
   // Prompt contextual matching (tertiary signal)
-  if (hasWord(pLower, ['gps', 'attendance', 'punch', 'workforce', 'telemetry', 'route map', 'software', 'mobile app', 'saas'])) scores.tech += 2;
+  if (!isPhysicalRetailOrTrade && hasWord(pLower, ['gps', 'attendance', 'punch', 'workforce', 'telemetry', 'route map', 'software', 'mobile app', 'saas'])) scores.tech += 2;
   if (hasWord(pLower, ['mithai', 'sweets', 'dessert', 'kaju katli', 'cake', 'pastry'])) scores.food += 2;
   if (hasWord(pLower, ['saree', 'lehenga', 'ethnic wear', 'bridal collection', 'couture'])) scores.fashion += 2;
   if (hasWord(pLower, ['diamond', 'solitaires', 'gold necklace', 'jewellery', 'jewels', 'hallmark'])) scores.jewellery += 2;
@@ -716,9 +731,10 @@ export function buildHighQualityImagePrompt(
   if (hasWord(pLower, ['power tool', 'drill', 'screws', 'hardware tools', 'plumbing fixture'])) scores.hardware += 2;
   if (hasWord(pLower, ['repair', 'hvac', 'plumbing', 'technician', 'air conditioning'])) scores.trades += 2;
   if (hasWord(pLower, ['farmhouse', 'villa', 'resort', 'pool', 'lawn', 'garden', 'cottage', 'patio', 'retreat'])) scores.hospitality += 3;
+  if (hasWord(pLower, ['grocery', 'market', 'supermarket', 'fresh produce', 'fruits', 'vegetables', 'daily needs', 'store', 'kirana'])) scores.market += 3;
 
   let maxScore = 0;
-  let winningArchetype: 'tech' | 'food' | 'fashion' | 'jewellery' | 'trades' | 'hospitality' | 'paint' | 'hardware' | 'custom' = 'custom';
+  let winningArchetype: 'tech' | 'food' | 'fashion' | 'jewellery' | 'trades' | 'hospitality' | 'paint' | 'hardware' | 'market' | 'custom' = 'custom';
   for (const [key, score] of Object.entries(scores) as [keyof typeof scores, number][]) {
     if (score > maxScore) {
       maxScore = score;
@@ -851,6 +867,18 @@ export function buildHighQualityImagePrompt(
       'Spacious scenic farmhouse estate with sprawling manicured green lawn, private pavilion gazebo, and serene open sky at sunset',
       'Enchanting evening celebration setup poolside, illuminated with warm fairy string lights, elegant outdoor seating, and calm water reflections',
       'Private villa poolside patio with refreshing shaded daybeds, clean architectural stone deck, and tranquil garden backdrop',
+    ]);
+  } else if (winningArchetype === 'market') {
+    styleDescriptor =
+      'Award-winning commercial grocery & retail supermarket photography, vibrant fresh produce, pristine aisles, authentic bountiful market atmosphere';
+    settingDescriptor =
+      `modern, spotless supermarket and grocery market interior bathed in ${chosenLighting}, with pristine displays and generous negative copy space`;
+    domainSubject = pickScene([
+      `Vibrant and bountiful fresh produce market aisle at ${businessName || 'the supermarket'}, colorful rows of crisp apples, oranges, leafy greens, and farm-fresh vegetables neatly arranged under ${chosenLighting}`,
+      `Modern, spotless supermarket grocery store interior at ${businessName || 'the retail mart'}, fully stocked wooden and chrome shelves with premium packaged foods, organic spices, and daily essentials, warm inviting shopping ambiance`,
+      `Pristine gourmet market display counter at ${businessName || 'the store'}, featuring freshly packed dry fruits, organic grains, artisanal goods, and vibrant harvest displays in rustic wicker baskets`,
+      `Welcoming modern retail grocery storefront and entrance display at ${businessName || 'the market'}, sparkling clean glass entrance, polished floors, and bountiful seasonal merchandise displays`,
+      `Artful close-up commercial display of fresh farm produce, colorful exotic fruits, and premium packaged grocery essentials arranged on an authentic wooden market counter`,
     ]);
   } else {
     // 100% Dynamic Custom Domain for ANY industry (Solar, Legal, Dental, Gym, Logistics, Agriculture, etc.)

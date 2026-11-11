@@ -29,6 +29,7 @@ import {
   resolveBusinessPostVisual,
   CURATED_SMB_IMAGE_REGISTRY,
 } from '@/lib/designs/dynamic-visual-resolver';
+import { buildHighQualityImagePrompt } from '@/lib/designs/image-provider';
 
 describe('Dynamic Visual Resolver', () => {
   const originalEnv = process.env.UNSPLASH_ACCESS_KEY;
@@ -165,6 +166,30 @@ describe('Dynamic Visual Resolver', () => {
 
       // Must be from the solar registry
       expect(CURATED_SMB_IMAGE_REGISTRY.solar_energy).toContain(visual);
+    });
+  });
+
+  describe('buildHighQualityImagePrompt dynamic market archetype', () => {
+    it('builds market/grocery scenes for shiv-ganga market and prevents IT software traps', () => {
+      const prompt = buildHighQualityImagePrompt('', false, {
+        businessName: 'shiv-ganga market',
+        category: 'It company', // Stale signup default
+        products: ['Fresh Produce', 'Daily Groceries'],
+      });
+
+      expect(prompt.toLowerCase()).toMatch(/produce|supermarket|grocery|market|store/);
+      expect(prompt.toLowerCase()).not.toMatch(/workstation|code dashboard|software engineering|dual-monitor/);
+    });
+
+    it('builds market scene when category is Grocery & Supermarket', () => {
+      const prompt = buildHighQualityImagePrompt('Special weekend discounts', false, {
+        businessName: 'shiv-ganga market',
+        category: 'Grocery & Supermarket',
+        products: ['Fresh Vegetables', 'Organic Fruits', 'Spices'],
+      });
+
+      expect(prompt.toLowerCase()).toMatch(/produce|supermarket|grocery|market|store/);
+      expect(prompt.toLowerCase()).not.toMatch(/workstation|code dashboard|software engineering/);
     });
   });
 });
