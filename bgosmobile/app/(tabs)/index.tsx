@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card, Screen, Action, ErrorNotice, MenuRow, Badge, MetricCard, ui, colors, Avatar, Loading } from '../../src/components/ui';
 import { detectDeviceCountryAndTimezone, getGreetingForLocalTime } from '../../src/lib/country-codes';
+import { extractCityOrLocality } from '../../src/lib/address';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const brandMark = require('../../assets/brand-mark.png');
@@ -291,6 +292,7 @@ function GrowthCockpitQuickStrip() {
 function MarketingScoreCard({
   res,
   trackerItems,
+  onImproveScore,
 }: {
   res: {
     data: MarketingScoreResponse | null;
@@ -299,6 +301,7 @@ function MarketingScoreCard({
     refresh: () => Promise<unknown>;
   };
   trackerItems?: TrackerItem[];
+  onImproveScore?: () => void;
 }) {
   const router = useRouter();
   const [slide, setSlide] = useState(0);
@@ -332,7 +335,11 @@ function MarketingScoreCard({
             ) : null}
           </Pressable>
           {connected ? (
-            <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/growth')}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Improve Marketing Score with Growth Actions"
+              onPress={() => (onImproveScore ? onImproveScore() : router.push('/(tabs)/growth'))}
+            >
               <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Improve Score →</Text>
             </Pressable>
           ) : null}
@@ -622,14 +629,14 @@ export default function HomeScreen() {
   const [actionsExpanded, setActionsExpanded] = useState(false);
   const place = gbpPlace.data?.place || gbpPlace.data?.tenantFallback;
   const address = place?.address || '';
-  const city = address ? address.split(',')[0]?.trim() || '' : '';
+  const city = extractCityOrLocality(address, (place as any)?.city || (workspace.data as any)?.tenant?.city);
   const category = place?.category || 'Software company';
   const completionScore = place?.completionScore ?? 76;
 
   const actionIcons = useMemo(
     () => [
       { id: 'edit_profile', label: 'Edit profile', icon: 'edit', onPress: () => router.push('/manage-profile') },
-      { id: 'advertise', label: 'Advertise', icon: 'campaign', onPress: () => router.push('/keyword-planner') },
+      { id: 'qr_standee', label: 'QR Standee', icon: 'qr-code-2', onPress: () => router.push('/qr-standee') },
       { id: 'reviews', label: 'Reviews', icon: 'star-outline', onPress: () => router.push('/(tabs)/reviews') },
       { id: 'add_photo', label: 'Add photo', icon: 'add-a-photo', onPress: () => router.push('/(tabs)/photos') },
       { id: 'performance', label: 'Performance', icon: 'insights', onPress: () => router.push('/growth-report') },
@@ -973,7 +980,7 @@ export default function HomeScreen() {
                 <MaterialIcons name="verified" size={16} color="#2563EB" />
               </View>
               <Text numberOfLines={1} style={{ fontSize: 12, color: '#64748B', marginTop: 1 }}>
-                {address || `${category} • Patna, Bihar`}
+                {address || (city && city !== 'your area' ? `${category} • ${city}` : category)}
               </Text>
             </View>
           </View>
@@ -1109,6 +1116,7 @@ export default function HomeScreen() {
       {/* Marketing Score — unified 3-slide carousel (Gauge, Growth line chart, Marketing tracker) */}
       <MarketingScoreCard
         res={marketingScore}
+        onImproveScore={() => setGrowthModalOpen(true)}
         trackerItems={[
           {
             id: '1',
@@ -1134,118 +1142,21 @@ export default function HomeScreen() {
         ]}
       />
 
-      {/* Google's Performance (Real GBP Metrics) */}
+      {/* Google's Performance (Real GBP Metrics - Zero Hardcoded Data) */}
       <GooglePerformanceCard
         metrics={{
-          views: (perf?.searchImpressions || 0) + (perf?.mapsImpressions || 0) || 289,
-          leads: (perf?.directionRequests || 0) + (perf?.websiteClicks || 0) || 50,
-          calls: perf?.callClicks || 38,
-          directions: perf?.directionRequests || 74,
-          websiteClicks: perf?.websiteClicks || 117,
-          interactions: (perf?.callClicks || 0) + (perf?.directionRequests || 0) + (perf?.websiteClicks || 0) || 229,
+          views: (perf?.searchImpressions || 0) + (perf?.mapsImpressions || 0),
+          leads: (perf?.directionRequests || 0) + (perf?.websiteClicks || 0),
+          calls: perf?.callClicks || 0,
+          directions: perf?.directionRequests || 0,
+          websiteClicks: perf?.websiteClicks || 0,
+          interactions: (perf?.callClicks || 0) + (perf?.directionRequests || 0) + (perf?.websiteClicks || 0),
           businessName: profileName,
           category,
-          locality: city || 'Patna',
+          locality: city,
         }}
-        onPromotePress={() => router.push('/keyword-planner')}
+        onBoostPost={() => router.push('/(tabs)/marketing?generate=1')}
       />
-
-      {/* ── Suggested for you (Screenshots 9 & 10) ── */}
-      <View style={{ gap: 10, marginVertical: 4 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 }}>
-          <Text style={ui.heading}>Suggested for you</Text>
-          <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.brand }}>Things to do</Text>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 12, paddingVertical: 2 }}
-        >
-          {/* Card 1: Promote with Ad */}
-          <View style={{ width: 280, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', padding: 14, gap: 8 }}>
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialIcons name="campaign" size={20} color="#D97706" />
-            </View>
-            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
-              Promote your business with an ad on Google
-            </Text>
-            <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 16 }}>
-              Stand out when people search for {category.toLowerCase()} near {city || 'Patna'}. Start with any budget.
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push('/keyword-planner')}
-              style={({ pressed }) => ({
-                backgroundColor: '#0B9042',
-                borderRadius: 8,
-                paddingVertical: 8,
-                alignItems: 'center',
-                marginTop: 4,
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Create ad</Text>
-            </Pressable>
-          </View>
-
-          {/* Card 2: Add Exterior Photo */}
-          <View style={{ width: 280, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', padding: 14, gap: 8 }}>
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialIcons name="add-a-photo" size={20} color="#2563EB" />
-            </View>
-            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
-              Add exterior photo
-            </Text>
-            <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 16 }}>
-              Help customers locate your shop front or office at {address || '80, Murlichak, Jagdeopath, Patna'}.
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push('/(tabs)/photos')}
-              style={({ pressed }) => ({
-                backgroundColor: '#2563EB',
-                borderRadius: 8,
-                paddingVertical: 8,
-                alignItems: 'center',
-                marginTop: 4,
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Add photo</Text>
-            </Pressable>
-          </View>
-
-          {/* Card 3: Get First Reviews */}
-          <View style={{ width: 280, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', padding: 14, gap: 8 }}>
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FDF2F8', alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialIcons name="star-outline" size={20} color="#DB2777" />
-            </View>
-            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
-              Get more 5-star reviews
-            </Text>
-            <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 16 }}>
-              Share your verified review link with happy clients to boost rank in Patna local pack.
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                setReviewModalTab('single');
-                setReviewModalOpen(true);
-              }}
-              style={({ pressed }) => ({
-                backgroundColor: '#DB2777',
-                borderRadius: 8,
-                paddingVertical: 8,
-                alignItems: 'center',
-                marginTop: 4,
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Share review link</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      </View>
 
       {/* Benchmark Action Story Bubbles (Screenshot 2) */}
       <HomeStoryBubblesStrip

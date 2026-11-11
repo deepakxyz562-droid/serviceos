@@ -113,23 +113,43 @@ export async function GET(request: NextRequest) {
       } catch {}
     }
 
-    // Calculate profile completeness dynamically matching Google Profile Strength gauge
-    const computeCompleteness = (t: string, c: string, a: string, p: string, w: string, d?: string, sCount?: number) => {
+    // Calculate genuine profile completeness matching Google Profile Strength gauge (e.g. 76% when secondary info is pending)
+    const computeCompleteness = (
+      t: string,
+      c: string,
+      a: string,
+      p: string,
+      w: string,
+      d?: string,
+      sCount?: number,
+      logoPresent?: boolean,
+      openingDatePresent?: boolean,
+      attributesPresent?: boolean,
+    ) => {
       let score = 0;
       const missing: string[] = [];
-      if (t && t !== 'Business Profile') score += 18; else missing.push('Business Name');
-      if (c && c !== 'Professional Services') score += 18; else missing.push('Primary Category');
-      if (a) score += 18; else missing.push('Address / Service Area');
+      if (t && t !== 'Business Profile') score += 15; else missing.push('Business Name');
+      if (c && c !== 'Professional Services') score += 15; else missing.push('Primary Category');
+      if (a) score += 15; else missing.push('Address / Location');
       if (p) score += 15; else missing.push('Phone Number');
-      if (w) score += 10; else missing.push('Website');
-      if (d) score += 6; else missing.push('Description');
-      if (sCount && sCount > 0) score += 5; else missing.push('Services');
-      if (regularHours) score += 4; else missing.push('Opening Hours');
+      if (w) score += 8; else missing.push('Website');
+      if (regularHours) score += 8; else missing.push('Regular Hours');
+      if (d && d.trim().length >= 30) score += 5; else missing.push('Description');
+      if (sCount && sCount >= 3) score += 5; else missing.push('Services');
+      if (logoPresent) score += 5; else missing.push('Logo');
+      if (openingDatePresent) score += 5; else missing.push('Opening Date');
+      if (attributesPresent) score += 5; else missing.push('Business Attributes');
+      if (tenantSettings.specialHours && tenantSettings.specialHours.length > 0) score += 4; else missing.push('Special Hours');
+
       return { score: Math.min(100, Math.max(score, 20)), missing };
     };
 
     const googleAccount = await prepareGoogleAccount(user.tenantId, requestedLocationId);
     const { connectionState } = await resolveGoogleConnectionState(user.tenantId, googleAccount);
+
+    const hasLogo = Boolean(tenant?.logo || (tenant as any)?.brandProfile?.logoUrl);
+    const hasOpeningDate = Boolean(tenantSettings.openingDate);
+    const hasAttributes = Boolean(tenantSettings.attributes && Object.keys(tenantSettings.attributes).length > 0);
 
     if (!googleAccount) {
       const { score, missing } = computeCompleteness(
@@ -140,6 +160,9 @@ export async function GET(request: NextRequest) {
         fallbackWebsite,
         fallbackDescription,
         tenantSettings.services?.length,
+        hasLogo,
+        hasOpeningDate,
+        hasAttributes,
       );
 
       const disconnectedPayload = {
@@ -259,6 +282,9 @@ export async function GET(request: NextRequest) {
       resolvedWebsite,
       fallbackDescription,
       tenantSettings.services?.length,
+      hasLogo,
+      hasOpeningDate,
+      hasAttributes,
     );
 
     const reviewUrl = resolvedPlaceId

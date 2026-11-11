@@ -145,7 +145,7 @@ export default function GrowthReportScreen() {
       } else {
         const token = await getToken();
         const pdfLink = `${WEB_URL}/api/bgos/reports/monthly-pdf${token ? `?auth=${encodeURIComponent(token)}` : ''}`;
-        const waMsg = `Hi ${report?.businessName || 'Deepak Chandra'},\n\nYour monthly Google marketing report is ready.\n\n📄 Download PDF: ${pdfLink}`;
+        const waMsg = `Hi ${report?.businessName || 'Business Owner'},\n\nYour monthly Google marketing report is ready.\n\n📄 Download PDF: ${pdfLink}`;
         const waUrl = `whatsapp://send?text=${encodeURIComponent(waMsg)}`;
         const canOpen = await Linking.canOpenURL(waUrl);
         if (canOpen) {
@@ -157,7 +157,7 @@ export default function GrowthReportScreen() {
     } catch {
       const token = await getToken();
       const pdfLink = `${WEB_URL}/api/bgos/reports/monthly-pdf${token ? `?auth=${encodeURIComponent(token)}` : ''}`;
-      const waMsg = `Hi ${report?.businessName || 'Deepak Chandra'},\n\nYour monthly Google marketing report is ready.\n\n📄 Download PDF: ${pdfLink}`;
+      const waMsg = `Hi ${report?.businessName || 'Business Owner'},\n\nYour monthly Google marketing report is ready.\n\n📄 Download PDF: ${pdfLink}`;
       await Share.share({ message: waMsg });
     } finally {
       setSendingWa(false);

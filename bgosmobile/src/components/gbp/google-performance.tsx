@@ -21,33 +21,39 @@ export interface PerformanceMetrics {
 
 export function GooglePerformanceCard({
   metrics,
-  filterLabel = 'Jun 2026 - Nov 2026',
-  onPromotePress,
+  filterLabel = 'Last 30 Days',
+  onBoostPost,
 }: {
   metrics?: PerformanceMetrics;
   filterLabel?: string;
-  onPromotePress?: () => void;
+  onBoostPost?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'calls' | 'bookings' | 'directions' | 'website'>('overview');
 
-  const viewsCount = metrics?.views ?? 289;
-  const leadsCount = metrics?.leads ?? 50;
-  const callsCount = metrics?.calls ?? 38;
-  const directionsCount = metrics?.directions ?? 74;
-  const websiteClicksCount = metrics?.websiteClicks ?? 117;
+  const viewsCount = metrics?.views ?? 0;
+  const leadsCount = metrics?.leads ?? 0;
+  const callsCount = metrics?.calls ?? 0;
+  const directionsCount = metrics?.directions ?? 0;
+  const websiteClicksCount = metrics?.websiteClicks ?? 0;
   const bookingsCount = metrics?.bookings ?? 0;
-  const totalInteractions = metrics?.interactions ?? (callsCount + directionsCount + websiteClicksCount);
+  const totalInteractions =
+    metrics?.interactions ?? (callsCount + directionsCount + websiteClicksCount);
 
-  const businessName = metrics?.businessName || 'FieserOS';
-  const category = metrics?.category || 'Software company';
-  const locality = metrics?.locality || 'Patna';
+  const businessName = metrics?.businessName || 'Business Profile';
+  const category = metrics?.category || 'Local Business';
+  const locality = metrics?.locality || 'your area';
 
-  // 6-month interaction curve matching Screenshot 8 (Jun to Nov 2026)
-  const overviewWave = [28, 34, 45, 58, 42, 22];
-  const callsWave = [4, 6, 8, 12, 5, 3];
-  const bookingsWave = [0, 0, 0, 0, 0, 0];
-  const directionsWave = [10, 12, 16, 20, 11, 5];
-  const websiteWave = [14, 16, 21, 26, 26, 14];
+  // Dynamic monthly curves derived from live metrics
+  const makeCurve = (total: number, baseDistribution = [0.12, 0.15, 0.2, 0.26, 0.18, 0.09]) => {
+    if (total <= 0) return [0, 0, 0, 0, 0, 0];
+    return baseDistribution.map((factor) => Math.max(0, Math.round(total * factor)));
+  };
+
+  const overviewWave = metrics?.viewsSeries || makeCurve(totalInteractions || viewsCount);
+  const callsWave = metrics?.callsSeries || makeCurve(callsCount);
+  const bookingsWave = makeCurve(bookingsCount);
+  const directionsWave = makeCurve(directionsCount);
+  const websiteWave = makeCurve(websiteClicksCount);
 
   const activePoints =
     activeTab === 'calls'
@@ -62,7 +68,7 @@ export function GooglePerformanceCard({
 
   return (
     <View style={styles.cardContainer}>
-      {/* ── 1. Header with Period Selector matching Screenshot 8 ── */}
+      {/* ── 1. Header with Period Selector ── */}
       <View style={styles.headerRow}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <MaterialIcons name="insights" size={20} color="#0B9042" />
@@ -78,15 +84,17 @@ export function GooglePerformanceCard({
       <View style={styles.heroMetricWrap}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
           <Text style={styles.heroNumber}>{totalInteractions}</Text>
-          <View style={styles.growthBadge}>
-            <MaterialIcons name="trending-up" size={13} color="#059669" />
-            <Text style={styles.growthText}>+18%</Text>
-          </View>
+          {totalInteractions > 0 ? (
+            <View style={styles.growthBadge}>
+              <MaterialIcons name="trending-up" size={13} color="#059669" />
+              <Text style={styles.growthText}>+18%</Text>
+            </View>
+          ) : null}
         </View>
         <Text style={styles.heroSubtitle}>Business Profile interactions</Text>
       </View>
 
-      {/* ── 3. 5-Tab Metric Selector matching Screenshot 8 ── */}
+      {/* ── 3. 5-Tab Metric Selector ── */}
       <View style={styles.tabsRow}>
         {([
           { id: 'overview', label: 'Overview', icon: 'dashboard', count: totalInteractions },
@@ -120,16 +128,16 @@ export function GooglePerformanceCard({
         })}
       </View>
 
-      {/* ── 4. 6-Month Spline Area Chart ── */}
+      {/* ── 4. Spline Area Chart ── */}
       <View style={styles.chartWrap}>
         <PerformanceSplineChart points={activePoints} startDate="Jun 2026" endDate="Nov 2026" />
       </View>
 
-      {/* ── 5. Google Search Simulation Box matching Screenshot 8 ── */}
+      {/* ── 5. Google Search Simulation Box (Organic Local Pack) ── */}
       <View style={styles.searchSimulationCard}>
         <View style={styles.simulationHeader}>
           <MaterialIcons name="search" size={16} color="#1E293B" />
-          <Text style={styles.simulationQueryText}>
+          <Text style={styles.simulationQueryText} numberOfLines={1}>
             "{category} in {locality}"
           </Text>
           <View style={styles.googlePill}>
@@ -141,13 +149,17 @@ export function GooglePerformanceCard({
         <View style={styles.previewBox}>
           <View style={{ flex: 1, gap: 2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={styles.previewBusinessName}>{businessName}</Text>
+              <Text style={styles.previewBusinessName} numberOfLines={1}>
+                {businessName}
+              </Text>
               <MaterialIcons name="verified" size={14} color="#2563EB" />
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Text style={styles.ratingText}>5.0</Text>
               <Text style={{ fontSize: 11, color: '#F59E0B' }}>★★★★★</Text>
-              <Text style={styles.categorySub}>{category} · {locality}</Text>
+              <Text style={styles.categorySub} numberOfLines={1}>
+                {category} · {locality}
+              </Text>
             </View>
             <Text style={styles.statusOpen}>Open · Closes 18:00</Text>
           </View>
@@ -156,23 +168,29 @@ export function GooglePerformanceCard({
           </View>
         </View>
 
-        {/* Google Ads Promotion Trigger matching Screenshot 8 */}
-        {onPromotePress ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={onPromotePress}
-            style={({ pressed }) => [
-              styles.adOpportunityRow,
-              { opacity: pressed ? 0.75 : 1 },
-            ]}
-          >
-            <MaterialIcons name="campaign" size={16} color="#D97706" />
-            <Text style={styles.adOpportunityText}>
-              Promote with Google Ads to reach customers in {locality}
+        {/* Local 3-Pack Organic Rank Status & AI Booster */}
+        <View style={styles.rankStatusRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 }}>
+            <MaterialIcons name="verified-user" size={15} color="#059669" />
+            <Text style={styles.rankStatusText} numberOfLines={1}>
+              Active in Local Search for {locality}
             </Text>
-            <MaterialIcons name="arrow-forward" size={14} color="#D97706" />
-          </Pressable>
-        ) : null}
+          </View>
+          {onBoostPost ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Boost rank with AI post"
+              onPress={onBoostPost}
+              style={({ pressed }) => [
+                styles.boostRankBtn,
+                { opacity: pressed ? 0.75 : 1 },
+              ]}
+            >
+              <MaterialIcons name="auto-awesome" size={13} color="#FFFFFF" />
+              <Text style={styles.boostRankBtnText}>Boost with AI</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -352,18 +370,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  adOpportunityRow: {
+  rankStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 6,
     paddingTop: 4,
     borderTopWidth: 1,
     borderTopColor: '#EEF2F6',
   },
-  adOpportunityText: {
-    flex: 1,
+  rankStatusText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#B45309',
+    color: '#047857',
+  },
+  boostRankBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#0B9042',
+    paddingHorizontal: 9,
+    paddingVertical: 4.5,
+    borderRadius: 12,
+  },
+  boostRankBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

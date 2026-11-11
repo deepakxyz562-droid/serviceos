@@ -305,7 +305,8 @@ export async function POST(request: NextRequest) {
       };
 
       const pdfBuffer = await generateMonthlyMarketingReportPdfBuffer(reportData);
-      const pdfFilename = `Marketing_Report_${businessName.replace(/\s+/g, '_')}_${monthNames[now.getMonth()]}.pdf`;
+      const shortYear = String(now.getFullYear()).slice(-2);
+      const pdfFilename = `Marketing Report - ${monthNames[now.getMonth()]}${shortYear}.pdf`;
 
       let emailSuccess = false;
       let whatsappSuccess = false;
@@ -359,16 +360,18 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // 2. Send via WhatsApp matching User Template
+      // 2. Send via WhatsApp matching User Template & Document Attachment
       if (recipientPhone) {
         try {
           const reportPdfUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://bgos.fieseros.com'}/api/bgos/reports/monthly-pdf?tenantId=${tenant.id}`;
-          const waMessage = `Hi ${ownerName},\n\nYour ${curMonthName} Google report is ready.\n\n📄 Download Full 9-Page PDF Report: ${reportPdfUrl}`;
+          const waMessage = `Hi ${ownerName},\n\nYour ${monthNames[now.getMonth()]} ${shortYear} Google report is ready.`;
           const waRes = await sendWhatsAppMessage({
             to: recipientPhone,
             message: waMessage,
             tenantId: tenant.id,
-            type: 'text',
+            type: 'document',
+            mediaUrl: reportPdfUrl,
+            mediaFilename: pdfFilename,
           });
           whatsappSuccess = waRes.success;
         } catch (e) {

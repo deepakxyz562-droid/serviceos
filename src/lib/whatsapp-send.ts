@@ -8,7 +8,9 @@ interface SendWhatsAppOptions {
   to: string
   message: string
   credentialId?: string
-  type?: 'text' | 'template'
+  type?: 'text' | 'template' | 'document' | 'image'
+  mediaUrl?: string
+  mediaFilename?: string
   templateName?: string
   templateLanguage?: string
   templateComponents?: Array<Record<string, unknown>>
@@ -261,7 +263,18 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
 
   // Build payload
   let payload: Record<string, unknown>
-  if (type === 'template') {
+  if (type === 'document' && options.mediaUrl) {
+    payload = {
+      messaging_product: 'whatsapp',
+      to: recipientPhone,
+      type: 'document',
+      document: {
+        link: options.mediaUrl,
+        caption: message,
+        filename: options.mediaFilename || 'Document.pdf',
+      },
+    }
+  } else if (type === 'template') {
     const templateObj: Record<string, unknown> = {
       name: templateName || message,
       language: { code: templateLanguage || 'en_US' },

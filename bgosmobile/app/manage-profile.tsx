@@ -21,6 +21,7 @@ import { Screen, Card, Action, Badge, colors, ui } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
 import { normalizePendingUpload, type PendingUpload } from '../src/lib/upload';
+import { extractCityOrLocality } from '../src/lib/address';
 import { MediaMetadataSheet } from '../src/components/gbp/media-metadata-sheet';
 import type { GbpPhoto, GbpPlaceResult, PhotosResponse, SocialPost } from '../src/components/gbp/types';
 
@@ -144,7 +145,7 @@ export default function ManageGoogleProfileScreen() {
   const website = place?.website || placeRes.data?.tenantFallback?.website || '';
   const description = place?.description || placeRes.data?.tenantFallback?.description || '';
   const mapsUrl = place?.mapsUrl || placeRes.data?.place?.mapsUrl;
-  const city = address ? address.split(',')[0]?.trim() || '' : '';
+  const city = extractCityOrLocality(address);
 
   // Extended settings from API
   const communicationPhone = place?.communicationPhone || placeRes.data?.tenantFallback?.communicationPhone || '';
@@ -704,7 +705,7 @@ export default function ManageGoogleProfileScreen() {
                 <View style={{ flex: 1, gap: 4 }}>
                   <Text style={styles.rowLabel}>Business location</Text>
                   <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A', lineHeight: 19 }}>
-                    {address || '80, Murlichak, Jagdeopath, Patna, Bihar 800014, India'}
+                    {address || 'Add business location'}
                   </Text>
                 </View>
                 <Pressable
@@ -723,11 +724,11 @@ export default function ManageGoogleProfileScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <MaterialIcons name="place" size={20} color="#DC2626" />
                   <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#1E293B' }}>
-                    Patna, Bihar (Pin Location)
+                    {city ? `${city} (Pin Location)` : 'Location Pin'}
                   </Text>
                 </View>
                 <Text style={{ fontSize: 11.5, color: '#64748B' }}>
-                  Customers can find your exact entrance near Hero Honda Showroom, Jagdeopath.
+                  {address ? `Located at ${address}` : 'Set your physical entrance or service radius.'}
                 </Text>
                 {mapsUrl ? (
                   <Pressable
@@ -746,7 +747,7 @@ export default function ManageGoogleProfileScreen() {
               <View style={{ gap: 4, paddingTop: 4 }}>
                 <Text style={styles.rowLabel}>Service area</Text>
                 <Text style={{ fontSize: 13, color: '#334155' }}>
-                  Patna, Danapur, Phulwari Sharif, and surrounding regions in Bihar
+                  {city ? `${city} and surrounding local service areas` : 'Local service area'}
                 </Text>
               </View>
             </Card>
