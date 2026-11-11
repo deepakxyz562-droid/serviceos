@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   Image,
   Linking,
   Modal,
@@ -13,6 +14,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { colors } from '../ui';
+import { apiRequest } from '../../lib/api';
 import type { GbpPhoto } from './types';
 import { FullscreenImageModal } from './fullscreen-image-modal';
 
@@ -95,17 +97,51 @@ export function MediaPreviewModal({
             </Text>
           </View>
           {canEdit ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                onClose();
-                onEdit?.(item);
-              }}
-              style={styles.editTopBtn}
-            >
-              <MaterialIcons name="edit" size={14} color={colors.brandDark} />
-              <Text style={styles.editTopText}>Edit</Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  Alert.alert(
+                    'Delete Photo',
+                    'Are you sure you want to delete this photo?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await apiRequest(`/api/social/photos?id=${encodeURIComponent(item.id)}`, {
+                              method: 'DELETE',
+                            });
+                            onClose();
+                            Alert.alert('Deleted', 'Photo removed.');
+                          } catch (err: unknown) {
+                            Alert.alert('Notice', 'Could not delete item.');
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+                style={[styles.editTopBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
+              >
+                <MaterialIcons name="delete-outline" size={14} color={colors.danger} />
+                <Text style={[styles.editTopText, { color: colors.danger }]}>Delete</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  onClose();
+                  onEdit?.(item);
+                }}
+                style={styles.editTopBtn}
+              >
+                <MaterialIcons name="edit" size={14} color={colors.brandDark} />
+                <Text style={styles.editTopText}>Edit</Text>
+              </Pressable>
+            </View>
           ) : null}
         </View>
 

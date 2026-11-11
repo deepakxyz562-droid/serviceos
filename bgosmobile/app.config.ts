@@ -55,6 +55,8 @@ export default ({ config, projectRoot }: ConfigContext): any => {
     'expo-notifications',
     'expo-web-browser',
     'expo-apple-authentication',
+    'expo-asset',
+    'expo-status-bar',
     './plugins/withAndroidReleaseOptimizations',
     ...(hasIosGoogleServicesPlist
       ? ['@react-native-firebase/app', '@react-native-firebase/auth']

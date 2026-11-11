@@ -115,6 +115,11 @@ export type GbpPlaceResult = {
     additionalCategories?: string[];
     openingDate?: string | null;
     regularHours?: any;
+    secondaryPhone?: string | null;
+    services?: string[];
+    attributes?: Record<string, string[]>;
+    specialHours?: Array<{ date: string; open: boolean; openTime?: string; closeTime?: string }>;
+    moreHours?: Record<string, string>;
   } | null;
   tenantFallback?: {
     name?: string;
@@ -126,11 +131,16 @@ export type GbpPlaceResult = {
     completionScore?: number;
     missingFields?: string[];
     communicationPhone?: string | null;
+    secondaryPhone?: string | null;
     aiReplySalutation?: string | null;
     supportBranding?: boolean;
     additionalCategories?: string[];
     openingDate?: string | null;
     regularHours?: any;
+    services?: string[];
+    attributes?: Record<string, string[]>;
+    specialHours?: Array<{ date: string; open: boolean; openTime?: string; closeTime?: string }>;
+    moreHours?: Record<string, string>;
   } | null;
   metrics?: {
     totalViews: number;

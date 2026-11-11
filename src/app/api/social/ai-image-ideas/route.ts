@@ -108,37 +108,154 @@ function buildIdeasForBusiness(
   const secondOffering = allOfferings[1] || allOfferings[0] || category;
 
   const profileBlob = `${name} ${category} ${allOfferings.join(' ')} ${topic || ''}`.toLowerCase();
-  const isHospitalityVenue =
-    /(farmhouse|farm house|resort|villa|cottage|homestay|retreat|banquet|lawn|staycation|glamping|hotel|lodge|garden venue|poolside)/i.test(
-      profileBlob,
-    );
+  const topicSuffix = topic?.trim() ? `, featuring ${topic.trim()}` : '';
 
-  if (isHospitalityVenue) {
-    const topicSuffix = topic?.trim() ? `, featuring ${topic.trim()}` : '';
+  // 1. Hospitality / Pool / Farmhouse / Resort
+  if (/(farmhouse|farm house|resort|villa|cottage|homestay|retreat|banquet|lawn|staycation|glamping|hotel|lodge|garden venue|poolside|pool)/i.test(profileBlob)) {
     return [
       {
-        id: 'venue-golden-hour',
-        title: 'Golden-Hour Exterior',
-        icon: 'sparkles',
-        prompt: `Keep the real property and architecture of ${name}${loc} from the reference photo, photographed at golden hour with warm fairy lights, lush manicured green lawn, clear evening sky, and inviting luxury getaway atmosphere${topicSuffix}.`,
+        id: 'venue-pool-refresh',
+        title: 'Private Poolside Oasis',
+        icon: 'pool',
+        prompt: `Crystal-clear luxury swimming pool with turquoise water ripples, premium poolside loungers, lush green palm backdrop, and bright natural morning sunlight at ${name}${loc}${topicSuffix}.`,
       },
       {
-        id: 'venue-poolside-lounge',
-        title: 'Pool & Garden Lounge',
-        icon: 'sun',
-        prompt: `Transform the setting of ${name} using the reference photo with crystal-clear water reflections, cozy resort loungers, fresh floral accents, lush palms, and sun-dappled morning relaxation vibes${topicSuffix}.`,
+        id: 'venue-golden-hour',
+        title: 'Golden-Hour Estate',
+        icon: 'sparkles',
+        prompt: `Photographed at golden hour: sprawling green lawns, private pavilion gazebo, warm ambient fairy lights, and serene evening skies at ${name}${loc}${topicSuffix}.`,
       },
       {
         id: 'venue-celebration-decor',
-        title: 'Festive Event Decor',
+        title: 'Festive Celebration Setup',
         icon: 'party',
-        prompt: `Preserve the authentic property structure from the reference photo and stage a welcoming evening celebration setup at ${name} with marigold or warm white floral arches, glowing string lights, and outdoor seating${topicSuffix}.`,
+        prompt: `Welcoming outdoor family celebration setup at ${name}${loc} with glowing string lights, elegant open-air dining tables, and scenic nature views${topicSuffix}.`,
       },
       {
         id: 'venue-morning-brunch',
-        title: 'Patio Brunch Setup',
+        title: 'Patio Brunch & Relax',
         icon: 'coffee',
-        prompt: `Scenic outdoor patio table at ${name}${loc} overlooking the property greenery from the reference photo, dressed with artisanal breakfast coffee service, fresh fruit, linen tableware, and soft natural sunlight.`,
+        prompt: `Scenic outdoor patio table overlooking lush garden greenery at ${name}${loc}, artisanal breakfast service with fresh juice, coffee, and soft morning sunlight.`,
+      },
+    ];
+  }
+
+  // 2. Cake / Bakery / Desserts
+  if (/(cake|bakery|pastry|dessert|mithai|sweet|cupcake|baker|patisserie|confection)/i.test(profileBlob)) {
+    return [
+      {
+        id: 'cake-designer-showcase',
+        title: 'Artisanal Designer Cake',
+        icon: 'cake',
+        prompt: `Spectacular multi-tiered designer celebration cake with delicate handcrafted buttercream frosting, edible florals, and golden accents at ${name}${loc}, marble pedestal, studio lighting${topicSuffix}.`,
+      },
+      {
+        id: 'bakery-fresh-counter',
+        title: 'Freshly Baked Treats',
+        icon: 'bread',
+        prompt: `Warm and inviting gourmet bakery counter at ${name}${loc} showcasing flaky golden croissants, fruit tarts, and artisanal bread loaves in soft morning light.`,
+      },
+      {
+        id: 'cake-birthday-special',
+        title: 'Custom Birthday Masterpiece',
+        icon: 'gift',
+        prompt: `Handmade custom themed birthday cake with colorful festive toppings, rich chocolate drip, and sparkling candles at ${name}${loc}, vibrant celebratory atmosphere.`,
+      },
+      {
+        id: 'dessert-pastry-platter',
+        title: 'Dessert & Pastry Platter',
+        icon: 'sparkles',
+        prompt: `Artfully arranged platter of decadent pastry slices, chocolate truffles, and macarons from ${name}${loc}, fine culinary photography with rich textures.`,
+      },
+    ];
+  }
+
+  // 3. Hardware / Power Tools / Building Materials
+  if (/(hardware|tool|fastener|plumbing|electrical supply|plywood|sanitary|pipe|machinery)/i.test(profileBlob)) {
+    return [
+      {
+        id: 'hardware-power-tools',
+        title: 'Heavy-Duty Power Tools',
+        icon: 'build',
+        prompt: `Commercial product showcase of heavy-duty cordless power tools, drills, and angle grinders at ${name}${loc}, organized workshop setup with crisp industrial lighting${topicSuffix}.`,
+      },
+      {
+        id: 'hardware-store-aisle',
+        title: 'Storefront & Inventory',
+        icon: 'store',
+        prompt: `Spacious, immaculately organized hardware store interior at ${name}${loc}, showing rows of quality hand tools, architectural hardware, and brass fittings.`,
+      },
+      {
+        id: 'hardware-craftsman-gear',
+        title: 'Professional Craftsman Gear',
+        icon: 'handyman',
+        prompt: `Professional contractor toolkit with chrome-plated wrenches, precision calipers, and durable fasteners at ${name}${loc}, ultra-sharp commercial photography.`,
+      },
+      {
+        id: 'hardware-construction-supply',
+        title: 'Building & Plumbing Supplies',
+        icon: 'hardware',
+        prompt: `Premium sanitary, plumbing fixtures, and construction essentials arranged cleanly at ${name}${loc}, showcasing reliability and commercial durability.`,
+      },
+    ];
+  }
+
+  // 4. Paint Shop / Wall Finishes / Home Decor
+  if (/(paint|color|wall finish|coating|texture|primer|asian paints|berger|nerolac|decor)/i.test(profileBlob)) {
+    return [
+      {
+        id: 'paint-color-studio',
+        title: 'Luxury Color Studio',
+        icon: 'palette',
+        prompt: `Vibrant paint studio display at ${name}${loc} with designer color swatch fan decks, premium paint cans, and contemporary textured wall samples${topicSuffix}.`,
+      },
+      {
+        id: 'paint-accent-wall',
+        title: 'Modern Accent Wall',
+        icon: 'format-paint',
+        prompt: `Stunning modern living room featuring rich velvety matte designer wall paint from ${name}${loc}, paired with warm interior lighting and stylish furniture.`,
+      },
+      {
+        id: 'paint-palette-craft',
+        title: 'Artisan Palette & Finishes',
+        icon: 'brush',
+        prompt: `Creative flat-lay composition of colorful paint swatches, wooden brushes with vibrant drips, and waterproof exterior coating textures from ${name}${loc}.`,
+      },
+      {
+        id: 'paint-weatherproof-shield',
+        title: 'All-Weather Exterior Coating',
+        icon: 'shield',
+        prompt: `Pristine modern home exterior featuring weather-proof, rain-resistant exterior paint from ${name}${loc}, bright crisp daylight with spotless finish.`,
+      },
+    ];
+  }
+
+  // 5. Software / Tech / IT Services
+  if (/(software|it company|tech|developer|code|web development|app development|cloud|saas|digital marketing)/i.test(profileBlob)) {
+    return [
+      {
+        id: 'tech-dev-workspace',
+        title: 'Engineering Command Desk',
+        icon: 'laptop',
+        prompt: `Modern sleek software developer workspace at ${name}${loc} with dual 4K monitors displaying clean code and analytics, ergonomic desk, and subtle neon tech glow${topicSuffix}.`,
+      },
+      {
+        id: 'tech-team-collaboration',
+        title: 'Tech Team Brainstorming',
+        icon: 'groups',
+        prompt: `Innovative tech team collaborating around an interactive agile sprint whiteboard in a bright glass-walled studio at ${name}${loc}, dynamic startup energy.`,
+      },
+      {
+        id: 'tech-cloud-platform',
+        title: 'Cloud & AI Architecture',
+        icon: 'cloud',
+        prompt: `Futuristic minimalist desk with ultra-thin laptop showing 3D glowing cloud network connections and cyber-security dashboard at ${name}${loc}, crisp high-tech aesthetic.`,
+      },
+      {
+        id: 'tech-mobile-solutions',
+        title: 'Mobile App & UI Design',
+        icon: 'smartphone',
+        prompt: `High-resolution presentation of modern mobile app interface screens on sleek bezel-less devices at ${name}${loc}, clean graphic design aesthetic.`,
       },
     ];
   }

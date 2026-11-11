@@ -7,10 +7,11 @@ import {
   ActivityIndicator,
   Share,
   Alert,
+  Linking,
   Dimensions,
   StyleSheet,
-  StatusBar,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -119,20 +120,47 @@ export default function GrowthReportScreen() {
     loadReport(period);
   }, [period]);
 
-  const handleDownload = async () => {
+  const [sendingWa, setSendingWa] = useState(false);
+
+  const handleDownload9PagePdf = async () => {
     try {
       const token = await getToken();
-      const printUrl = `${WEB_URL}/api/bgos/reports/4-tier?format=print&period=${period}${
-        token ? `&auth=${encodeURIComponent(token)}` : ''
+      const pdfUrl = `${WEB_URL}/api/bgos/reports/monthly-pdf${
+        token ? `?auth=${encodeURIComponent(token)}` : ''
       }`;
-      await WebBrowser.openBrowserAsync(printUrl);
-    } catch {
-      // Fallback to Share if browser fails
-      if (!report) return;
-      await Share.share({
-        title: `${report.businessName} - Growth Report`,
-        message: `📊 ${report.period.label} ${report.period.comparisonLabel}\n\n• Leads: ${report.summary.leads.value} (${report.summary.leads.deltaPct}%)\n• Profile Views: ${report.summary.profileViews.value} (${report.summary.profileViews.deltaPct}%)\n• Google Posts: ${report.summary.googlePosts.value}\n• Review Replies: ${report.summary.reviewReplies.value}\n\nReputation: ${report.reputationSummary.avgRating}★ (${report.reputationSummary.totalReviews} reviews)`,
+      await WebBrowser.openBrowserAsync(pdfUrl);
+    } catch (err: any) {
+      Alert.alert('Download Error', err?.message || 'Could not open 9-page PDF report.');
+    }
+  };
+
+  const handleSendWhatsAppReport = async () => {
+    try {
+      setSendingWa(true);
+      const res = await apiRequest<{ success: boolean; message?: string }>('/api/cron/monthly-marketing-report', {
+        method: 'POST',
       });
+      if (res?.success) {
+        Alert.alert('Report Sent', 'Your monthly 9-page marketing report was dispatched to your WhatsApp number!');
+      } else {
+        const token = await getToken();
+        const pdfLink = `${WEB_URL}/api/bgos/reports/monthly-pdf${token ? `?auth=${encodeURIComponent(token)}` : ''}`;
+        const waMsg = `Hi ${report?.businessName || 'Deepak Chandra'},\n\nYour monthly Google marketing report is ready.\n\n📄 Download PDF: ${pdfLink}`;
+        const waUrl = `whatsapp://send?text=${encodeURIComponent(waMsg)}`;
+        const canOpen = await Linking.canOpenURL(waUrl);
+        if (canOpen) {
+          await Linking.openURL(waUrl);
+        } else {
+          await Share.share({ message: waMsg });
+        }
+      }
+    } catch {
+      const token = await getToken();
+      const pdfLink = `${WEB_URL}/api/bgos/reports/monthly-pdf${token ? `?auth=${encodeURIComponent(token)}` : ''}`;
+      const waMsg = `Hi ${report?.businessName || 'Deepak Chandra'},\n\nYour monthly Google marketing report is ready.\n\n📄 Download PDF: ${pdfLink}`;
+      await Share.share({ message: waMsg });
+    } finally {
+      setSendingWa(false);
     }
   };
 
@@ -218,7 +246,7 @@ export default function GrowthReportScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar style="dark" />
 
       {/* ── Light Header Matching BGOS Design System ── */}
       <View style={[styles.headerContainer, { paddingTop: Math.max(insets.top, 12) }]}>
@@ -250,11 +278,11 @@ export default function GrowthReportScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Download Report"
-          onPress={handleDownload}
+          onPress={handleDownload9PagePdf}
           style={({ pressed }) => [styles.downloadButton, { opacity: pressed ? 0.75 : 1 }]}
         >
-          <MaterialIcons name="file-download" size={16} color="#0F172A" />
-          <Text style={styles.downloadButtonText}>Download</Text>
+          <MaterialIcons name="picture-as-pdf" size={16} color="#0F172A" />
+          <Text style={styles.downloadButtonText}>PDF Report</Text>
         </Pressable>
       </View>
 
@@ -270,6 +298,67 @@ export default function GrowthReportScreen() {
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) + 20 }}
           showsVerticalScrollIndicator={false}
         >
+          {/* ── 9-Page Monthly Report Card ── */}
+          <View style={{ backgroundColor: '#0A0F1D', borderRadius: 16, padding: 16, marginHorizontal: 16, marginTop: 12, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34D399' }} />
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Monthly AI Marketing Audit
+                </Text>
+              </View>
+              <View style={{ backgroundColor: 'rgba(52, 211, 153, 0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#34D399' }}>9-PAGE PDF</Text>
+              </View>
+            </View>
+
+            <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 }}>
+              Full 9-Page Google Marketing Report
+            </Text>
+            <Text style={{ fontSize: 11.5, color: '#94A3B8', lineHeight: 16, marginBottom: 14 }}>
+              Complete breakdown of your 5 AI Growth Agents, verified keyword impressions, replied reviews, and 6-month growth trajectory.
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                onPress={handleDownload9PagePdf}
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  backgroundColor: '#FFFFFF',
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <MaterialIcons name="picture-as-pdf" size={16} color="#0F172A" />
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>View 9-Page PDF</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={handleSendWhatsAppReport}
+                disabled={sendingWa}
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  backgroundColor: '#25D366',
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <MaterialIcons name="send" size={16} color="#FFFFFF" />
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
+                  {sendingWa ? 'Sending...' : 'Send WhatsApp'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
           {/* ── Performance Summary Heading ── */}
           <View style={styles.sectionHeadingRow}>
             <Text style={styles.sectionHeadingMain}>

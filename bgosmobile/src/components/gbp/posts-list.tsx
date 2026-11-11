@@ -10,6 +10,7 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -42,6 +43,8 @@ export type SocialPostRow = {
   gbpPostType?: string | null;
   permalink?: string | null;
   googleUrl?: string | null;
+  title?: string;
+  badge?: string;
   publishTargets?: {
     platform: string;
     status: string;
@@ -51,6 +54,7 @@ export type SocialPostRow = {
   }[];
   createdAt?: string;
   updatedAt?: string;
+  [key: string]: any;
 };
 
 async function openGooglePostLink(url: string) {
@@ -391,8 +395,96 @@ export function PostCard({
   );
 }
 
+export interface ParsedPostContent {
+  title: string;
+  intro: string;
+  bullets: string[];
+  conclusion: string;
+  hashtags: string[];
+  ctaText: string;
+  phone?: string;
+}
+
+export function parsePostStructure(content: string, fallbackTitle?: string): ParsedPostContent {
+  const lines = (content || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) {
+    return {
+      title: fallbackTitle || 'Local Business Update',
+      intro: '',
+      bullets: [],
+      conclusion: '',
+      hashtags: [],
+      ctaText: 'CALL',
+    };
+  }
+
+  let title = '';
+  let intro = '';
+  const bullets: string[] = [];
+  let conclusion = '';
+  const hashtags: string[] = [];
+  let ctaText = 'CALL';
+  let phone = '';
+
+  let readingSection: 'title' | 'intro' | 'bullets' | 'conclusion' = 'title';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.startsWith('#') || line.includes(' #')) {
+      const tags = line.match(/#[a-zA-Z0-9_]+/g);
+      if (tags) {
+        hashtags.push(...tags);
+        continue;
+      }
+    }
+
+    if (/^(CTA|Action|Button):/i.test(line)) {
+      ctaText = line.replace(/^(CTA|Action|Button):\s*/i, '').trim().toUpperCase() || 'CALL';
+      continue;
+    }
+    if (/^(Phone|Call|Contact|Tel):/i.test(line)) {
+      phone = line.replace(/^(Phone|Call|Contact|Tel):\s*/i, '').trim();
+      continue;
+    }
+
+    if (/^[✓•\-\*]\s*/.test(line)) {
+      readingSection = 'bullets';
+      bullets.push(line.replace(/^[✓•\-\*]\s*/, '').trim());
+      continue;
+    }
+
+    if (readingSection === 'title') {
+      title = line;
+      readingSection = 'intro';
+      continue;
+    }
+
+    if (readingSection === 'intro') {
+      intro = intro ? `${intro}\n\n${line}` : line;
+      continue;
+    }
+
+    if (readingSection === 'bullets') {
+      conclusion = conclusion ? `${conclusion}\n\n${line}` : line;
+    }
+  }
+
+  if (!title) title = fallbackTitle || 'Local Business Update';
+
+  return {
+    title,
+    intro,
+    bullets,
+    conclusion,
+    hashtags,
+    ctaText,
+    phone,
+  };
+}
+
 /**
- * Full Post Inspection Modal
+ * Full Post Inspection & Management Modal (Matches Reference Screenshots 1 & 3)
  */
 export function PostDetailModal({
   post,
@@ -401,6 +493,8 @@ export function PostDetailModal({
   onApprove,
   onReject,
   onRetry,
+  onDelete,
+  onEditSave,
 }: {
   post: SocialPostRow | null;
   visible: boolean;
@@ -408,17 +502,46 @@ export function PostDetailModal({
   onApprove?: (post: SocialPostRow) => void;
   onReject?: (post: SocialPostRow) => void;
   onRetry?: (post: SocialPostRow) => void;
+  onDelete?: (post: SocialPostRow) => void;
+  onEditSave?: (updatedPost: SocialPostRow) => void;
 }) {
   if (!post) return null;
   const badge = statusBadge(post);
   const media = post.mediaUrls?.[0];
   const googlePostUrl = getGooglePostUrl(post);
 
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const parsed = parsePostStructure(post.content || '', post.title || (post.designJson as any)?.headline || 'Standard Post');
+
+  const [editTitle, setEditTitle] = useState(parsed.title);
+  const [editIntro, setEditIntro] = useState(parsed.intro);
+  const [editBullets, setEditBullets] = useState(parsed.bullets.join('\n'));
+  const [editConclusion, setEditConclusion] = useState(parsed.conclusion);
+  const [editCta, setEditCta] = useState(parsed.ctaText || 'CALL');
+  const [editHashtags, setEditHashtags] = useState(parsed.hashtags.join(' '));
+
+  useEffect(() => {
+    if (post) {
+      const p = parsePostStructure(post.content || '', post.title || (post.designJson as any)?.headline || 'Standard Post');
+      setEditTitle(p.title);
+      setEditIntro(p.intro);
+      setEditBullets(p.bullets.join('\n'));
+      setEditConclusion(p.conclusion);
+      setEditCta(p.ctaText || 'CALL');
+      setEditHashtags(p.hashtags.join(' '));
+      setIsEditing(false);
+      setMenuVisible(false);
+    }
+  }, [post]);
+
   const handleCopyCaption = async () => {
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(post.content || '');
-        Alert.alert('Copied', 'Post caption copied to clipboard!');
+        Alert.alert('Copied', 'Post text copied to clipboard!');
       } else {
         await Share.share({ message: post.content || '' });
       }
@@ -427,144 +550,343 @@ export function PostDetailModal({
     }
   };
 
-  return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          {/* Header */}
-          <View style={styles.modalHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View
-                style={[
-                  styles.badgeWrap,
-                  { backgroundColor: badge.bg, borderColor: badge.border },
-                ]}
-              >
-                <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
-              </View>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>
-                {post.status.toUpperCase()}
-              </Text>
-            </View>
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `${parsed.title}\n\n${post.content || ''}`,
+        url: media || undefined,
+      });
+    } catch {}
+  };
 
-            <Pressable hitSlop={10} onPress={onClose} style={styles.closeBtn}>
-              <MaterialIcons name="close" size={20} color="#0F172A" />
+  const handleDeletePost = () => {
+    setMenuVisible(false);
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (onDelete) {
+                onDelete(post);
+              } else if (post.id && !post.id.startsWith('ai_post_')) {
+                await apiRequest(`/api/social/posts/${post.id}`, { method: 'DELETE' });
+              }
+              onClose();
+              Alert.alert('Deleted', 'Post deleted successfully.');
+            } catch (err: unknown) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Could not delete post.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSaveEdit = async () => {
+    setSavingEdit(true);
+    try {
+      const bulletLines = editBullets
+        .split('\n')
+        .map((b) => b.trim())
+        .filter(Boolean)
+        .map((b) => (b.startsWith('✓') ? b : `✓ ${b}`))
+        .join('\n');
+
+      const reconstructed = `${editTitle.trim()}\n\n${editIntro.trim()}\n\n${bulletLines}\n\n${editConclusion.trim()}\n\nCTA: ${editCta.trim().toUpperCase()}\n\n${editHashtags.trim()}`;
+
+      const updatedRow: SocialPostRow = {
+        ...post,
+        content: reconstructed,
+      };
+
+      if (onEditSave) {
+        onEditSave(updatedRow);
+      } else if (post.id && !post.id.startsWith('ai_post_')) {
+        await apiRequest(`/api/social/posts/${post.id}`, {
+          method: 'PATCH',
+          body: { content: reconstructed },
+        });
+      }
+
+      setIsEditing(false);
+      Alert.alert('Saved', 'Post updated successfully!');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to save post changes.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleNativeCall = () => {
+    const rawPhone = parsed.phone || '+919876543210';
+    const cleanPhone = rawPhone.replace(/[^\d+]/g, '');
+    void Linking.openURL(`tel:${cleanPhone}`);
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+        {/* ── App Bar Header (Back Arrow, Title "Post", 3-dots Menu) ── */}
+        <View style={styles.postNavHeader}>
+          <Pressable hitSlop={12} onPress={onClose} style={styles.navIconBtn} accessibilityLabel="Back">
+            <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
+          </Pressable>
+
+          <Text style={styles.navTitle}>Post</Text>
+
+          <Pressable
+            hitSlop={12}
+            onPress={() => setMenuVisible(!menuVisible)}
+            style={styles.navIconBtn}
+            accessibilityLabel="Post options"
+          >
+            <MaterialIcons name="more-vert" size={24} color="#0F172A" />
+          </Pressable>
+        </View>
+
+        {/* ── 3-Dots Dropdown Menu ── */}
+        {menuVisible && (
+          <View style={styles.dropdownMenu}>
+            <Pressable
+              onPress={() => {
+                setMenuVisible(false);
+                setIsEditing(true);
+              }}
+              style={styles.menuItem}
+            >
+              <MaterialIcons name="edit" size={18} color="#0F172A" />
+              <Text style={styles.menuItemText}>Edit Post</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setMenuVisible(false);
+                void handleCopyCaption();
+              }}
+              style={styles.menuItem}
+            >
+              <MaterialIcons name="content-copy" size={18} color="#0F172A" />
+              <Text style={styles.menuItemText}>Copy Caption</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setMenuVisible(false);
+                void handleShare();
+              }}
+              style={styles.menuItem}
+            >
+              <MaterialIcons name="share" size={18} color="#0F172A" />
+              <Text style={styles.menuItemText}>Share Post</Text>
+            </Pressable>
+
+            <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 4 }} />
+
+            <Pressable onPress={handleDeletePost} style={styles.menuItem}>
+              <MaterialIcons name="delete-outline" size={18} color="#DC2626" />
+              <Text style={[styles.menuItemText, { color: '#DC2626' }]}>Delete Post</Text>
             </Pressable>
           </View>
+        )}
 
-          <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-            {/* Full Poster Image */}
-            {media ? (
-              <View style={styles.modalImageContainer}>
-                <Image source={{ uri: media }} style={styles.modalImage} resizeMode="contain" />
+        <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+          {isEditing ? (
+            /* ── EDIT POST MODE ── */
+            <View style={{ padding: 18, gap: 14 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Edit Post Content</Text>
+
+              <View>
+                <Text style={styles.editLabel}>Headline (H1)</Text>
+                <TextInput
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                  style={styles.editInput}
+                  placeholder="Catchy local SEO headline..."
+                />
               </View>
-            ) : null}
 
-            {/* Content & Caption */}
-            <View style={{ gap: 12, paddingVertical: 14 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={styles.sectionHeader}>Post Caption</Text>
-                <Pressable onPress={handleCopyCaption} style={styles.copyBtn}>
-                  <MaterialIcons name="content-copy" size={14} color="#009F50" />
-                  <Text style={styles.copyBtnText}>Copy Text</Text>
+              <View>
+                <Text style={styles.editLabel}>Intro Paragraph</Text>
+                <TextInput
+                  value={editIntro}
+                  onChangeText={setEditIntro}
+                  style={[styles.editInput, { height: 90, textAlignVertical: 'top' }]}
+                  multiline
+                  placeholder="Engaging local intro with keywords..."
+                />
+              </View>
+
+              <View>
+                <Text style={styles.editLabel}>Feature Bullets (1 per line)</Text>
+                <TextInput
+                  value={editBullets}
+                  onChangeText={setEditBullets}
+                  style={[styles.editInput, { height: 120, textAlignVertical: 'top' }]}
+                  multiline
+                  placeholder="One feature per line..."
+                />
+              </View>
+
+              <View>
+                <Text style={styles.editLabel}>Conclusion Paragraph</Text>
+                <TextInput
+                  value={editConclusion}
+                  onChangeText={setEditConclusion}
+                  style={[styles.editInput, { height: 75, textAlignVertical: 'top' }]}
+                  multiline
+                  placeholder="Closing call to action paragraph..."
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.editLabel}>Call-to-Action Text</Text>
+                  <TextInput
+                    value={editCta}
+                    onChangeText={setEditCta}
+                    style={styles.editInput}
+                    placeholder="CALL, BOOK NOW, etc."
+                  />
+                </View>
+              </View>
+
+              <View>
+                <Text style={styles.editLabel}>Hashtags</Text>
+                <TextInput
+                  value={editHashtags}
+                  onChangeText={setEditHashtags}
+                  style={styles.editInput}
+                  placeholder="#LocalSEO #Business #City"
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                <Pressable
+                  onPress={() => setIsEditing(false)}
+                  style={[styles.editActionBtn, { backgroundColor: '#F1F5F9' }]}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#64748B' }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleSaveEdit}
+                  disabled={savingEdit}
+                  style={[styles.editActionBtn, { backgroundColor: '#009F50' }]}
+                >
+                  {savingEdit ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>Save Changes</Text>
+                  )}
                 </Pressable>
               </View>
-
-              <View style={styles.captionBox}>
-                <Text style={styles.captionText}>{post.content || 'No text content.'}</Text>
-              </View>
-
-              {/* Target Platforms Breakdown */}
-              {post.publishTargets && post.publishTargets.length > 0 && (
-                <View style={{ gap: 6, marginTop: 4 }}>
-                  <Text style={styles.sectionHeader}>Publishing Channels</Text>
-                  {post.publishTargets.map((target, idx) => (
-                    <View key={`targ-${idx}`} style={styles.targetRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <MaterialIcons
-                          name={
-                            target.platform === 'googlebusiness'
-                              ? 'place'
-                              : target.platform === 'instagram'
-                              ? 'camera-alt'
-                              : 'public'
-                          }
-                          size={16}
-                          color="#009F50"
-                        />
-                        <Text style={styles.targetName}>
-                          {target.platform === 'googlebusiness'
-                            ? 'Google Business Profile'
-                            : target.platform.toUpperCase()}
-                        </Text>
-                      </View>
-                      <Text
-                        style={[
-                          styles.targetStatus,
-                          target.status === 'published' && { color: '#16A34A' },
-                          target.status === 'failed' && { color: '#DC2626' },
-                        ]}
-                      >
-                        {target.status.toUpperCase()}
-                      </Text>
-                    </View>
-                  ))}
+            </View>
+          ) : (
+            /* ── VIEW POST MODE (Matching Screenshots 1 & 3) ── */
+            <>
+              {/* Full Hero Image */}
+              {media ? (
+                <View style={styles.heroImageWrap}>
+                  <Image source={{ uri: media }} style={styles.heroImage} resizeMode="cover" />
                 </View>
-              )}
-            </View>
-          </ScrollView>
+              ) : null}
 
-          {/* Action Footer */}
-          {post.approvalStatus === 'pending' ? (
-            <View style={styles.modalFooter}>
-              <Pressable
-                onPress={() => {
-                  onReject && onReject(post);
-                  onClose();
-                }}
-                style={[styles.modalActionBtn, styles.modalRejectBtn]}
-              >
-                <MaterialIcons name="close" size={18} color="#DC2626" />
-                <Text style={styles.modalRejectText}>Reject Post</Text>
-              </Pressable>
+              <View style={{ paddingHorizontal: 18, paddingTop: 14, gap: 16 }}>
+                {/* Standard Post Badge */}
+                <View style={styles.standardPostBadge}>
+                  <MaterialIcons name="description" size={15} color="#9A3412" />
+                  <Text style={styles.standardPostBadgeText}>Standard Post</Text>
+                </View>
 
-              <Pressable
-                onPress={() => {
-                  onApprove && onApprove(post);
-                  onClose();
-                }}
-                style={[styles.modalActionBtn, styles.modalApproveBtn]}
-              >
-                <MaterialIcons name="check" size={18} color="#FFFFFF" />
-                <Text style={styles.modalApproveText}>Approve & Queue</Text>
-              </Pressable>
-            </View>
-          ) : post.status === 'failed' ? (
-            <View style={styles.modalFooter}>
-              <Pressable
-                onPress={() => {
-                  onRetry && onRetry(post);
-                  onClose();
-                }}
-                style={[styles.modalActionBtn, styles.modalApproveBtn]}
-              >
-                <MaterialIcons name="refresh" size={18} color="#FFFFFF" />
-                <Text style={styles.modalApproveText}>Retry Publishing</Text>
-              </Pressable>
-            </View>
-          ) : googlePostUrl ? (
-            <View style={styles.modalFooter}>
-              <Pressable
-                accessibilityRole="link"
-                onPress={() => void openGooglePostLink(googlePostUrl)}
-                style={[styles.modalActionBtn, styles.modalApproveBtn]}
-              >
-                <MaterialIcons name="open-in-new" size={18} color="#FFFFFF" />
-                <Text style={styles.modalApproveText}>View Post on Google</Text>
-              </Pressable>
-            </View>
-          ) : null}
-        </View>
+                {/* Bold SEO Headline (H1) */}
+                <Text style={styles.postHeadline}>{parsed.title}</Text>
+
+                {/* Engaging Intro Paragraph */}
+                {parsed.intro ? <Text style={styles.postParagraph}>{parsed.intro}</Text> : null}
+
+                {/* Bullet Points with Checkmarks */}
+                {parsed.bullets.length > 0 && (
+                  <View style={{ gap: 12, marginVertical: 4 }}>
+                    {parsed.bullets.map((bullet, idx) => (
+                      <View key={`bullet-${idx}`} style={styles.bulletRow}>
+                        <Text style={styles.checkIcon}>✓</Text>
+                        <Text style={styles.bulletText}>{bullet}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Concluding Paragraph */}
+                {parsed.conclusion ? (
+                  <Text style={styles.postParagraph}>{parsed.conclusion}</Text>
+                ) : null}
+
+                {/* Hashtag Chips */}
+                {parsed.hashtags.length > 0 && (
+                  <View style={styles.hashtagWrap}>
+                    {parsed.hashtags.map((tag, idx) => (
+                      <View key={`tag-${idx}`} style={styles.hashtagChip}>
+                        <Text style={styles.hashtagText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Native Action Button (CALL) */}
+                <View style={{ marginTop: 8, paddingBottom: 16 }}>
+                  <Pressable
+                    onPress={handleNativeCall}
+                    style={styles.nativeCallBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={parsed.ctaText || 'CALL'}
+                  >
+                    <MaterialIcons name="call" size={18} color="#0F172A" />
+                    <Text style={styles.nativeCallBtnText}>{parsed.ctaText || 'CALL'}</Text>
+                  </Pressable>
+                </View>
+
+                {/* Google Post Live Link or Approval Bar */}
+                {googlePostUrl ? (
+                  <Pressable
+                    onPress={() => void openGooglePostLink(googlePostUrl)}
+                    style={styles.liveGoogleBar}
+                  >
+                    <MaterialIcons name="open-in-new" size={16} color="#009F50" />
+                    <Text style={styles.liveGoogleBarText}>View Live on Google Business</Text>
+                  </Pressable>
+                ) : post.approvalStatus === 'pending' ? (
+                  <View style={styles.approvalBar}>
+                    <Pressable
+                      onPress={() => {
+                        onReject && onReject(post);
+                        onClose();
+                      }}
+                      style={[styles.approvalBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1 }]}
+                    >
+                      <MaterialIcons name="close" size={16} color="#DC2626" />
+                      <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 13 }}>Reject</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => {
+                        onApprove && onApprove(post);
+                        onClose();
+                      }}
+                      style={[styles.approvalBtn, { backgroundColor: '#009F50' }]}
+                    >
+                      <MaterialIcons name="check" size={16} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Approve & Schedule</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+            </>
+          )}
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -1168,5 +1490,197 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+
+  // Full Screen Post Detail styles (matching Screenshots 1 & 3)
+  postNavHeader: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
+  },
+  navIconBtn: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  navTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 54,
+    right: 16,
+    zIndex: 100,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 8,
+    paddingVertical: 6,
+    minWidth: 160,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  menuItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  heroImageWrap: {
+    width: '100%',
+    height: 280,
+    backgroundColor: '#0F172A',
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  standardPostBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  standardPostBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#9A3412',
+  },
+  postHeadline: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    lineHeight: 28,
+    letterSpacing: -0.3,
+  },
+  postParagraph: {
+    fontSize: 14.5,
+    color: '#334155',
+    lineHeight: 22,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  checkIcon: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  bulletText: {
+    flex: 1,
+    fontSize: 14.5,
+    color: '#1E293B',
+    lineHeight: 21,
+  },
+  hashtagWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  hashtagChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  hashtagText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  nativeCallBtn: {
+    width: '100%',
+    height: 48,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  nativeCallBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: 0.5,
+  },
+  liveGoogleBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  liveGoogleBarText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#009F50',
+  },
+  approvalBar: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  approvalBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  editLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 4,
+  },
+  editInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  editActionBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -79,11 +79,11 @@ export default function PreferencesScreen() {
   const [newItemPrice, setNewItemPrice] = useState('');
 
   // Branding State
-  const [brandName, setBrandName] = useState('FieserOS');
+  const [brandName, setBrandName] = useState('');
   const [phoneOnPoster, setPhoneOnPoster] = useState('');
   const [addressOnPoster, setAddressOnPoster] = useState('');
   const [additionalInfo, setAdditionalInfo] = useState('');
-  const [cityName, setCityName] = useState('Patna');
+  const [cityName, setCityName] = useState('');
   const [commPhone, setCommPhone] = useState('');
   const [founderName, setFounderName] = useState('');
   const [founderBio, setFounderBio] = useState('');
@@ -471,6 +471,45 @@ export default function PreferencesScreen() {
       {/* ── TAB 2: BRANDING ── */}
       {activeTab === 'branding' && (
         <View style={{ gap: 14 }}>
+          {/* Logo & Visual Identity Link */}
+          <Pressable
+            onPress={() => router.push('/logo-management' as any)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#EFF6FF',
+              borderRadius: 14,
+              borderWidth: 1.5,
+              borderColor: '#BFDBFE',
+              padding: 14,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 10,
+                  backgroundColor: '#1E6FFB',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <MaterialIcons name="image" size={24} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A' }}>
+                  Logo & Visual Identity
+                </Text>
+                <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                  Upload file, AI generate, brand colors & watermark preview
+                </Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color="#1E6FFB" />
+          </Pressable>
+
           {/* Brand Details */}
           <Card style={{ gap: 12 }}>
             <Text style={ui.heading}>Brand Details</Text>

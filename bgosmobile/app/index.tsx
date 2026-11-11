@@ -7,6 +7,7 @@ import {
   NativeSyntheticEvent,
   Pressable,
   ScrollView,
+  type ScrollViewInstance,
   StyleSheet,
   Text,
   View,
@@ -45,7 +46,7 @@ export default function Index() {
   const { isAuthenticated: authenticated, isLoading, onboardingRequired } = useAuthStore();
   const router = useRouter();
   const [activeSlide, setActiveSlide] = useState(0);
-  const pagerRef = useRef<ScrollView>(null);
+  const pagerRef = useRef<ScrollViewInstance>(null);
   const pageWidth = Math.min(Dimensions.get('window').width - 48, 420);
 
   if (isLoading) {

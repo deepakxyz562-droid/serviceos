@@ -101,9 +101,9 @@ const REQUEST_TIMEOUT_MS = 10_000
 /** Total end-to-end callAI waterfall budget (28s) so synchronous routes never exceed 60s reverse-proxy timeouts. */
 const DEFAULT_CALL_AI_BUDGET_MS = 28_000
 
-/** Provider order — OpenRouter is tried first (free pool), followed immediately
- *  by Gemini (where active DB key is configured), then OpenAI/Anthropic/ZAI. */
-const PROVIDER_ORDER = ['openrouter', 'gemini', 'openai', 'anthropic', 'zai'] as const
+/** Provider order — Google Gemini is tried first as requested for maximum quality,
+ *  followed by OpenRouter, then OpenAI/Anthropic/ZAI. */
+const PROVIDER_ORDER = ['gemini', 'openrouter', 'openai', 'anthropic', 'zai'] as const
 type ProviderName = (typeof PROVIDER_ORDER)[number]
 
 function isProviderName(s: string): s is ProviderName {

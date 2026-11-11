@@ -8,6 +8,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  type ScrollViewInstance,
   Share,
   StyleSheet,
   Switch,
@@ -227,7 +228,7 @@ export default function AgentsScreen() {
     'How do I book an appointment?',
     'What are your prices?',
   ]);
-  const chatScrollRef = useRef<ScrollView>(null);
+  const chatScrollRef = useRef<ScrollViewInstance>(null);
 
   // Synchronize draft when resource loads or selection changes
   useEffect(() => {

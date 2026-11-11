@@ -1246,11 +1246,11 @@ async function callNvidiaImage(params: {
 }
 
 const IMAGE_FALLBACK_ORDER: Record<ImageProvider, ImageProvider[]> = {
-  cloudflare: ['siliconflow', 'nvidia', 'gemini', 'openrouter'],
-  siliconflow: ['cloudflare', 'nvidia', 'gemini', 'openrouter'],
-  nvidia: ['siliconflow', 'cloudflare', 'gemini', 'openrouter'],
-  gemini: ['cloudflare', 'openrouter', 'siliconflow', 'nvidia'],
-  openrouter: ['cloudflare', 'gemini', 'siliconflow', 'nvidia'],
+  gemini: ['cloudflare', 'siliconflow', 'nvidia', 'openrouter'],
+  cloudflare: ['gemini', 'siliconflow', 'nvidia', 'openrouter'],
+  siliconflow: ['gemini', 'cloudflare', 'nvidia', 'openrouter'],
+  nvidia: ['gemini', 'siliconflow', 'cloudflare', 'openrouter'],
+  openrouter: ['gemini', 'cloudflare', 'siliconflow', 'nvidia'],
 };
 
 async function callSingleTextImageProvider(params: {

@@ -113,16 +113,19 @@ export async function GET(request: NextRequest) {
       } catch {}
     }
 
-    // Calculate profile completeness dynamically
-    const computeCompleteness = (t: string, c: string, a: string, p: string, w: string) => {
+    // Calculate profile completeness dynamically matching Google Profile Strength gauge
+    const computeCompleteness = (t: string, c: string, a: string, p: string, w: string, d?: string, sCount?: number) => {
       let score = 0;
       const missing: string[] = [];
-      if (t && t !== 'Business Profile') score += 20; else missing.push('Business Name');
-      if (c && c !== 'Professional Services') score += 20; else missing.push('Primary Category');
-      if (a) score += 20; else missing.push('Address / Service Area');
-      if (p) score += 20; else missing.push('Phone Number');
-      if (w) score += 20; else missing.push('Website');
-      return { score: Math.max(score, 20), missing };
+      if (t && t !== 'Business Profile') score += 18; else missing.push('Business Name');
+      if (c && c !== 'Professional Services') score += 18; else missing.push('Primary Category');
+      if (a) score += 18; else missing.push('Address / Service Area');
+      if (p) score += 15; else missing.push('Phone Number');
+      if (w) score += 10; else missing.push('Website');
+      if (d) score += 6; else missing.push('Description');
+      if (sCount && sCount > 0) score += 5; else missing.push('Services');
+      if (regularHours) score += 4; else missing.push('Opening Hours');
+      return { score: Math.min(100, Math.max(score, 20)), missing };
     };
 
     const googleAccount = await prepareGoogleAccount(user.tenantId, requestedLocationId);
@@ -135,6 +138,8 @@ export async function GET(request: NextRequest) {
         fallbackAddress,
         fallbackPhone,
         fallbackWebsite,
+        fallbackDescription,
+        tenantSettings.services?.length,
       );
 
       const disconnectedPayload = {
@@ -156,10 +161,15 @@ export async function GET(request: NextRequest) {
           completionScore: score,
           missingFields: missing,
           communicationPhone: tenantSettings.communicationPhone || null,
+          secondaryPhone: tenantSettings.secondaryPhone || null,
           aiReplySalutation: tenantSettings.aiReplySalutation || null,
           supportBranding: tenantSettings.supportBranding ?? true,
           additionalCategories: tenantSettings.additionalCategories || [],
           openingDate: tenantSettings.openingDate || null,
+          services: tenantSettings.services || [],
+          attributes: tenantSettings.attributes || {},
+          specialHours: tenantSettings.specialHours || [],
+          moreHours: tenantSettings.moreHours || {},
         },
         metrics: {
           totalViews: 0,
@@ -247,6 +257,8 @@ export async function GET(request: NextRequest) {
       resolvedAddress,
       resolvedPhone,
       resolvedWebsite,
+      fallbackDescription,
+      tenantSettings.services?.length,
     );
 
     const reviewUrl = resolvedPlaceId
@@ -290,10 +302,15 @@ export async function GET(request: NextRequest) {
         completionScore: score,
         missingFields: missing,
         communicationPhone: tenantSettings.communicationPhone || null,
+        secondaryPhone: tenantSettings.secondaryPhone || null,
         aiReplySalutation: tenantSettings.aiReplySalutation || null,
         supportBranding: tenantSettings.supportBranding ?? true,
         additionalCategories: tenantSettings.additionalCategories || [],
         openingDate: tenantSettings.openingDate || null,
+        services: tenantSettings.services || [],
+        attributes: tenantSettings.attributes || {},
+        specialHours: tenantSettings.specialHours || [],
+        moreHours: tenantSettings.moreHours || {},
       },
       metrics: {
         totalViews,
@@ -361,13 +378,18 @@ export async function PATCH(request: NextRequest) {
       updateData.businessHoursJson = JSON.stringify(body.regularHours);
     }
 
-    // Handle settingsJson updates (WhatsApp communication phone, AI salutation, branding, additional categories, opening date)
+    // Handle settingsJson updates (WhatsApp communication phone, secondary phone, AI salutation, branding, additional categories, opening date, services, attributes, special hours, more hours)
     const hasSettingsField =
       typeof body.communicationPhone !== 'undefined' ||
+      typeof body.secondaryPhone !== 'undefined' ||
       typeof body.aiReplySalutation !== 'undefined' ||
       typeof body.supportBranding !== 'undefined' ||
       typeof body.additionalCategories !== 'undefined' ||
-      typeof body.openingDate !== 'undefined';
+      typeof body.openingDate !== 'undefined' ||
+      typeof body.services !== 'undefined' ||
+      typeof body.attributes !== 'undefined' ||
+      typeof body.specialHours !== 'undefined' ||
+      typeof body.moreHours !== 'undefined';
 
     if (hasSettingsField) {
       const currentTenant = await db.tenant.findUnique({
@@ -382,6 +404,9 @@ export async function PATCH(request: NextRequest) {
       if (typeof body.communicationPhone !== 'undefined') {
         currentSettings.communicationPhone = String(body.communicationPhone).trim();
       }
+      if (typeof body.secondaryPhone !== 'undefined') {
+        currentSettings.secondaryPhone = String(body.secondaryPhone).trim();
+      }
       if (typeof body.aiReplySalutation !== 'undefined') {
         currentSettings.aiReplySalutation = String(body.aiReplySalutation).trim();
       }
@@ -393,6 +418,18 @@ export async function PATCH(request: NextRequest) {
       }
       if (typeof body.openingDate !== 'undefined') {
         currentSettings.openingDate = String(body.openingDate).trim();
+      }
+      if (typeof body.services !== 'undefined') {
+        currentSettings.services = Array.isArray(body.services) ? body.services : [];
+      }
+      if (typeof body.attributes !== 'undefined') {
+        currentSettings.attributes = typeof body.attributes === 'object' && body.attributes !== null ? body.attributes : {};
+      }
+      if (typeof body.specialHours !== 'undefined') {
+        currentSettings.specialHours = Array.isArray(body.specialHours) ? body.specialHours : [];
+      }
+      if (typeof body.moreHours !== 'undefined') {
+        currentSettings.moreHours = typeof body.moreHours === 'object' && body.moreHours !== null ? body.moreHours : {};
       }
       updateData.settingsJson = JSON.stringify(currentSettings);
     }

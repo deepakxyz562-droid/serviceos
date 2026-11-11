@@ -58,6 +58,8 @@ export interface SendEmailOptions {
   skipTenantQuota?: boolean
   /** Override base URL for unsubscribe / tracking links (e.g. https://bgos.fieseros.com). */
   trackingBaseUrl?: string
+  /** Attachments for sending documents/PDFs (nodemailer format) */
+  attachments?: Array<{ filename: string; content?: any; path?: string; contentType?: string }>
 }
 
 export interface SendEmailResult {
@@ -664,6 +666,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
       html: finalHtml || finalText,
       text: finalText || undefined,
       replyTo: config.replyTo,
+      ...(options.attachments?.length ? { attachments: options.attachments } : {}),
       ...(Object.keys(mailHeaders).length ? { headers: mailHeaders } : {}),
     })
 

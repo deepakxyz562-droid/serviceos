@@ -128,19 +128,27 @@ export default function ManageGoogleProfileScreen() {
   const [supportBranding, setSupportBranding] = useState<boolean>(true);
   const [updatingBranding, setUpdatingBranding] = useState(false);
 
+  // 5-Tab Business Information Hub State (Screenshots 3, 4, 5, 7)
+  const [infoTab, setInfoTab] = useState<'about' | 'contact' | 'location' | 'hours' | 'more'>('about');
+  const [secondaryPhoneModalOpen, setSecondaryPhoneModalOpen] = useState(false);
+  const [editSecondaryPhone, setEditSecondaryPhone] = useState('');
+  const [savingSecondaryPhone, setSavingSecondaryPhone] = useState(false);
+  const [chatEnabled, setChatEnabled] = useState(true);
+
   const place = placeRes.data?.place;
   const isConnected = Boolean(placeRes.data?.isConnected);
-  const title = place?.title || placeRes.data?.tenantFallback?.name || 'FieserOS';
-  const category = place?.category || placeRes.data?.tenantFallback?.category || 'Software company';
-  const address = place?.address || placeRes.data?.tenantFallback?.address || 'Patna, Bihar';
-  const phone = place?.phone || placeRes.data?.tenantFallback?.phone || '085059 45123';
-  const website = place?.website || placeRes.data?.tenantFallback?.website || 'https://bgos.fieseros.com/b/deepak-chandra';
-  const description = place?.description || placeRes.data?.tenantFallback?.description || 'Fieseros provides business growth operating software, digital marketing tools, automated review management, and CRM solutions for businesses and service providers.';
+  const title = place?.title || placeRes.data?.tenantFallback?.name || '';
+  const category = place?.category || placeRes.data?.tenantFallback?.category || '';
+  const address = place?.address || placeRes.data?.tenantFallback?.address || '';
+  const phone = place?.phone || placeRes.data?.tenantFallback?.phone || '';
+  const website = place?.website || placeRes.data?.tenantFallback?.website || '';
+  const description = place?.description || placeRes.data?.tenantFallback?.description || '';
   const mapsUrl = place?.mapsUrl || placeRes.data?.place?.mapsUrl;
-  const city = address.split(',')[0]?.trim() || 'Patna';
+  const city = address ? address.split(',')[0]?.trim() || '' : '';
 
   // Extended settings from API
   const communicationPhone = place?.communicationPhone || placeRes.data?.tenantFallback?.communicationPhone || '';
+  const secondaryPhone = place?.secondaryPhone || placeRes.data?.tenantFallback?.secondaryPhone || '';
   const aiReplySalutation = place?.aiReplySalutation || placeRes.data?.tenantFallback?.aiReplySalutation || '';
   const additionalCategories = place?.additionalCategories || placeRes.data?.tenantFallback?.additionalCategories || [];
   const openingDate = place?.openingDate || placeRes.data?.tenantFallback?.openingDate || '';
@@ -247,6 +255,23 @@ export default function ManageGoogleProfileScreen() {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update communication phone');
     } finally {
       setSavingCommPhone(false);
+    }
+  }
+
+  async function handleSaveSecondaryPhone() {
+    setSavingSecondaryPhone(true);
+    try {
+      await apiRequest('/api/gbp/place', {
+        method: 'PATCH',
+        body: { secondaryPhone: editSecondaryPhone.trim() },
+      });
+      await placeRes.refresh();
+      setSecondaryPhoneModalOpen(false);
+      Alert.alert('Success', 'Secondary phone number updated.');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update secondary phone');
+    } finally {
+      setSavingSecondaryPhone(false);
     }
   }
 
@@ -444,119 +469,378 @@ export default function ManageGoogleProfileScreen() {
           </View>
         </Card>
 
-        {/* ── 2. Business Basics Section ──────────────────────── */}
-        <View style={{ gap: 8 }}>
-          <Text style={styles.sectionHeader}>Business basics</Text>
-          <Card style={{ paddingVertical: 4, paddingHorizontal: 14 }}>
-            {/* Primary Phone */}
-            <Pressable
-              onPress={() => {
-                setEditPhone(phone);
-                setEditCategory(category);
-                setEditAddress(address);
-                setEditWebsite(website);
-                setBasicsModalOpen(true);
-              }}
-              style={styles.rowItem}
-            >
-              <MaterialIcons name="phone" size={20} color="#64748B" style={styles.rowIcon} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowLabel}>Primary phone</Text>
-                <Text style={styles.rowValue}>{phone || 'Not added'}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
-            </Pressable>
-
-            {/* Primary Category */}
-            <Pressable
-              onPress={() => {
-                setEditPhone(phone);
-                setEditCategory(category);
-                setEditAddress(address);
-                setEditWebsite(website);
-                setBasicsModalOpen(true);
-              }}
-              style={styles.rowItem}
-            >
-              <MaterialIcons name="label-outline" size={20} color="#64748B" style={styles.rowIcon} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowLabel}>Primary category</Text>
-                <Text style={styles.rowValue}>{category || 'Not added'}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
-            </Pressable>
-
-            {/* Additional Categories */}
-            <Pressable
-              onPress={() => {
-                setEditPhone(phone);
-                setEditCategory(category);
-                setEditAdditionalCategories(additionalCategories.join(', '));
-                setBasicsModalOpen(true);
-              }}
-              style={styles.rowItem}
-            >
-              <MaterialIcons name="sell" size={20} color="#64748B" style={styles.rowIcon} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowLabel}>Additional categories</Text>
-                <Text style={[styles.rowValue, additionalCategories.length === 0 && { color: '#94A3B8' }]}>
-                  {additionalCategories.length > 0 ? additionalCategories.join(', ') : 'None added'}
-                </Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
-            </Pressable>
-
-            {/* Opening Date */}
-            <Pressable
-              onPress={() => {
-                setEditOpeningDate(openingDate);
-                setBasicsModalOpen(true);
-              }}
-              style={[styles.rowItem, { borderBottomWidth: 0 }]}
-            >
-              <MaterialIcons name="calendar-today" size={20} color="#D97706" style={styles.rowIcon} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowLabel}>Opening date</Text>
-                <Text style={[styles.rowValue, !openingDate && { color: '#D97706', fontWeight: '700' }]}>
-                  {openingDate || 'Not added'}
-                </Text>
-              </View>
-              {!openingDate ? (
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563EB' }}>Add</Text>
-              ) : (
-                <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
-              )}
-            </Pressable>
-          </Card>
-        </View>
-
-        {/* ── 3. Regular Hours Section ────────────────────────── */}
-        <View style={{ gap: 8 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={styles.sectionHeader}>Regular hours</Text>
-            <Pressable onPress={() => setHoursModalOpen(true)} hitSlop={8}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563EB' }}>Edit</Text>
-            </Pressable>
+        {/* ── 2. Business Information 5-Tab Segmented Hub (Screenshots 3, 4, 5, 7) ── */}
+        <View style={{ gap: 10 }}>
+          {/* Segmented Tab Headers */}
+          <View style={styles.infoTabBar}>
+            {(['about', 'contact', 'location', 'hours', 'more'] as const).map((tab) => {
+              const isActive = infoTab === tab;
+              const label =
+                tab === 'about'
+                  ? 'About'
+                  : tab === 'contact'
+                  ? 'Contact'
+                  : tab === 'location'
+                  ? 'Location'
+                  : tab === 'hours'
+                  ? 'Hours'
+                  : 'More';
+              return (
+                <Pressable
+                  key={tab}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label} tab`}
+                  onPress={() => setInfoTab(tab)}
+                  style={[styles.infoTabButton, isActive && styles.infoTabButtonActive]}
+                >
+                  <Text style={[styles.infoTabText, isActive && styles.infoTabTextActive]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
-          <Card style={{ padding: 14, gap: 10 }}>
-            {/* Status Indicator */}
-            <View style={styles.hoursStatusWrap}>
-              <MaterialIcons name="access-time" size={16} color="#64748B" />
-              <Text style={styles.hoursStatusText}>Closed · opens 9:00 AM</Text>
-            </View>
+          {/* Tab 1: About (Screenshot 5) */}
+          {infoTab === 'about' && (
+            <Card style={{ paddingVertical: 4, paddingHorizontal: 14 }}>
+              {/* Business Name */}
+              <View style={styles.rowItem}>
+                <MaterialIcons name="storefront" size={20} color="#64748B" style={styles.rowIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>Business name</Text>
+                  <Text style={styles.rowValue}>{title}</Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setEditPhone(phone);
+                    setEditCategory(category);
+                    setEditAddress(address);
+                    setEditWebsite(website);
+                    setBasicsModalOpen(true);
+                  }}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="edit" size={18} color="#2563EB" />
+                </Pressable>
+              </View>
 
-            <View style={{ gap: 8, paddingTop: 4 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 13.5, color: '#475569', fontWeight: '500' }}>Mon – Fri</Text>
-                <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>9:00 AM – 6:00 PM</Text>
+              {/* Primary Category */}
+              <View style={styles.rowItem}>
+                <MaterialIcons name="label-outline" size={20} color="#64748B" style={styles.rowIcon} />
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.rowLabel}>Business category</Text>
+                    <View style={styles.primaryBadge}>
+                      <Text style={styles.primaryBadgeText}>PRIMARY</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.rowValue}>{category || 'Not added'}</Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setEditPhone(phone);
+                    setEditCategory(category);
+                    setEditAddress(address);
+                    setEditWebsite(website);
+                    setBasicsModalOpen(true);
+                  }}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="edit" size={18} color="#2563EB" />
+                </Pressable>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 13.5, color: '#475569', fontWeight: '500' }}>Sat – Sun</Text>
-                <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#64748B' }}>Closed</Text>
+
+              {/* Additional Categories */}
+              <View style={styles.rowItem}>
+                <MaterialIcons name="sell" size={20} color="#64748B" style={styles.rowIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>Additional categories</Text>
+                  {additionalCategories.length > 0 ? (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                      {additionalCategories.map((c) => (
+                        <View key={c} style={styles.categoryChip}>
+                          <Text style={styles.categoryChipText}>{c}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={[styles.rowValue, { color: '#94A3B8' }]}>None added</Text>
+                  )}
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setEditPhone(phone);
+                    setEditCategory(category);
+                    setEditAdditionalCategories(additionalCategories.join(', '));
+                    setBasicsModalOpen(true);
+                  }}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="edit" size={18} color="#2563EB" />
+                </Pressable>
               </View>
-            </View>
-          </Card>
+
+              {/* Description */}
+              <View style={styles.rowItem}>
+                <MaterialIcons name="subject" size={20} color="#64748B" style={styles.rowIcon} />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={styles.rowLabel}>Description</Text>
+                  <Text style={[styles.rowValue, { lineHeight: 18 }]}>
+                    {description || 'No description added yet.'}
+                  </Text>
+                </View>
+                <Pressable onPress={handleOpenAiRewrite} hitSlop={8}>
+                  <MaterialIcons name="auto-awesome" size={18} color="#9333EA" />
+                </Pressable>
+              </View>
+
+              {/* Opening Date */}
+              <View style={[styles.rowItem, { borderBottomWidth: 0 }]}>
+                <MaterialIcons name="calendar-today" size={20} color="#D97706" style={styles.rowIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>Opening date</Text>
+                  <Text style={[styles.rowValue, !openingDate && { color: '#D97706', fontWeight: '700' }]}>
+                    {openingDate || 'Not added'}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setEditOpeningDate(openingDate);
+                    setBasicsModalOpen(true);
+                  }}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="edit" size={18} color="#2563EB" />
+                </Pressable>
+              </View>
+            </Card>
+          )}
+
+          {/* Tab 2: Contact (Screenshot 7) */}
+          {infoTab === 'contact' && (
+            <Card style={{ paddingVertical: 4, paddingHorizontal: 14 }}>
+              {/* Primary Phone */}
+              <View style={styles.rowItem}>
+                <MaterialIcons name="phone" size={20} color="#64748B" style={styles.rowIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>Phone numbers (Primary)</Text>
+                  <Text style={styles.rowValue}>{phone || 'Not added'}</Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setEditPhone(phone);
+                    setBasicsModalOpen(true);
+                  }}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="edit" size={18} color="#2563EB" />
+                </Pressable>
+              </View>
+
+              {/* Secondary Phone */}
+              <View style={styles.rowItem}>
+                <MaterialIcons name="phone-iphone" size={20} color="#64748B" style={styles.rowIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>Secondary phone</Text>
+                  <Text style={[styles.rowValue, !secondaryPhone && { color: '#94A3B8' }]}>
+                    {secondaryPhone || 'None added'}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setEditSecondaryPhone(secondaryPhone);
+                    setSecondaryPhoneModalOpen(true);
+                  }}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="edit" size={18} color="#2563EB" />
+                </Pressable>
+              </View>
+
+              {/* Website */}
+              <View style={styles.rowItem}>
+                <MaterialIcons name="language" size={20} color="#64748B" style={styles.rowIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>Website</Text>
+                  <Text numberOfLines={1} style={[styles.rowValue, { color: '#2563EB' }]}>
+                    {website || 'Not added'}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setEditWebsite(website);
+                    setBasicsModalOpen(true);
+                  }}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="edit" size={18} color="#2563EB" />
+                </Pressable>
+              </View>
+
+              {/* Chat on Google Maps Toggle */}
+              <View style={[styles.rowItem, { borderBottomWidth: 0 }]}>
+                <MaterialIcons name="chat" size={20} color="#0B9042" style={styles.rowIcon} />
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={styles.rowLabel}>Chat</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B' }}>
+                    Receive inquiries from customers on Google Maps
+                  </Text>
+                </View>
+                <Switch
+                  value={chatEnabled}
+                  onValueChange={setChatEnabled}
+                  trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+                  thumbColor={chatEnabled ? '#0B9042' : '#FFFFFF'}
+                />
+              </View>
+            </Card>
+          )}
+
+          {/* Tab 3: Location (Screenshot 6) */}
+          {infoTab === 'location' && (
+            <Card style={{ padding: 14, gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={styles.rowLabel}>Business location</Text>
+                  <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A', lineHeight: 19 }}>
+                    {address || '80, Murlichak, Jagdeopath, Patna, Bihar 800014, India'}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setEditAddress(address);
+                    setBasicsModalOpen(true);
+                  }}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="edit" size={18} color="#2563EB" />
+                </Pressable>
+              </View>
+
+              {/* Interactive Map Visual Box */}
+              <View style={styles.mapPreviewCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="place" size={20} color="#DC2626" />
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#1E293B' }}>
+                    Patna, Bihar (Pin Location)
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                  Customers can find your exact entrance near Hero Honda Showroom, Jagdeopath.
+                </Text>
+                {mapsUrl ? (
+                  <Pressable
+                    onPress={() => Linking.openURL(mapsUrl).catch(() => {})}
+                    style={styles.openMapsBtn}
+                  >
+                    <MaterialIcons name="open-in-new" size={14} color="#2563EB" />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB' }}>
+                      Open in Google Maps
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {/* Service Area */}
+              <View style={{ gap: 4, paddingTop: 4 }}>
+                <Text style={styles.rowLabel}>Service area</Text>
+                <Text style={{ fontSize: 13, color: '#334155' }}>
+                  Patna, Danapur, Phulwari Sharif, and surrounding regions in Bihar
+                </Text>
+              </View>
+            </Card>
+          )}
+
+          {/* Tab 4: Hours (Screenshot 4) */}
+          {infoTab === 'hours' && (
+            <Card style={{ padding: 14, gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="access-time" size={18} color="#0B9042" />
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>Regular hours</Text>
+                </View>
+                <Pressable onPress={() => setHoursModalOpen(true)} hitSlop={8}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563EB' }}>Edit</Text>
+                </Pressable>
+              </View>
+
+              <View style={{ gap: 8, paddingTop: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 13.5, color: '#475569', fontWeight: '500' }}>Mon – Fri</Text>
+                  <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>09:00 – 18:00</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 13.5, color: '#475569', fontWeight: '500' }}>Sat – Sun</Text>
+                  <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#64748B' }}>Closed</Text>
+                </View>
+              </View>
+
+              {/* Special hours */}
+              <View style={{ borderTopWidth: 1, borderTopColor: '#EEF2F6', paddingTop: 10, gap: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={styles.rowLabel}>Special hours</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB' }}>Add</Text>
+                </View>
+                <Text style={{ fontSize: 12, color: '#64748B' }}>
+                  Holiday hours, festivals, and exceptional closures.
+                </Text>
+              </View>
+
+              {/* More Hours Chips matching Screenshot 4 */}
+              <View style={{ borderTopWidth: 1, borderTopColor: '#EEF2F6', paddingTop: 10, gap: 8 }}>
+                <Text style={styles.rowLabel}>More hours</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {['Access', 'Breakfast', 'Brunch', 'Delivery', 'Dinner', 'Online operating hours', 'Pickup', 'Senior hours'].map((chip) => (
+                    <View key={chip} style={styles.moreHourChip}>
+                      <MaterialIcons name="add" size={13} color="#475569" />
+                      <Text style={styles.moreHourChipText}>{chip}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </Card>
+          )}
+
+          {/* Tab 5: More (Attributes matching Screenshot 3) */}
+          {infoTab === 'more' && (
+            <Card style={{ padding: 14, gap: 12 }}>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                Business attributes
+              </Text>
+
+              {[
+                { label: 'From the business', detail: 'Identifies as women-owned, veteran-owned' },
+                { label: 'Accessibility', detail: 'Wheelchair-accessible entrance, seating, toilet, car park' },
+                { label: 'Amenities', detail: 'Free Wi-Fi, Restrooms, Air conditioning' },
+                { label: 'Children', detail: 'Good for kids, family friendly' },
+                { label: 'Crowd', detail: 'LGBTQ+ friendly, welcoming to all' },
+                { label: 'Parking', detail: 'Free parking lot, free street parking' },
+                { label: 'Planning', detail: 'Appointment required, online appointments' },
+              ].map((item, idx) => (
+                <View
+                  key={item.label}
+                  style={[
+                    styles.attributeRow,
+                    idx === 6 && { borderBottomWidth: 0 },
+                  ]}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>
+                      {item.label}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#64748B' }}>{item.detail}</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => Alert.alert(item.label, `Manage ${item.label} settings on your Google profile.`)}
+                    hitSlop={8}
+                  >
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#2563EB' }}>Add</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </Card>
+          )}
         </View>
 
         {/* ── 4. Photos & Videos Section ──────────────────────── */}
@@ -1011,7 +1295,7 @@ export default function ManageGoogleProfileScreen() {
                     onChangeText={setEditPhone}
                     style={[ui.input, { marginTop: 4 }]}
                     keyboardType="phone-pad"
-                    placeholder="085059 45123"
+                    placeholder="+91 98765 43210"
                   />
                 </View>
 
@@ -1237,6 +1521,49 @@ export default function ManageGoogleProfileScreen() {
         </View>
       </Modal>
 
+      {/* ── Modal: Secondary Phone ────────────────────────────── */}
+      <Modal visible={secondaryPhoneModalOpen} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
+                Edit Secondary Phone
+              </Text>
+              <Pressable onPress={() => setSecondaryPhoneModalOpen(false)}>
+                <MaterialIcons name="close" size={22} color={colors.muted} />
+              </Pressable>
+            </View>
+
+            <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 12 }}>
+              Add a backup or mobile number for customers contacting {title}.
+            </Text>
+
+            <TextInput
+              style={{
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+                borderRadius: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                fontSize: 14,
+                color: colors.ink,
+                marginBottom: 16,
+              }}
+              value={editSecondaryPhone}
+              onChangeText={setEditSecondaryPhone}
+              placeholder="e.g. 620842086"
+              keyboardType="phone-pad"
+            />
+
+            <Action
+              label={savingSecondaryPhone ? 'Saving…' : 'Save Secondary Phone'}
+              disabled={savingSecondaryPhone}
+              onPress={handleSaveSecondaryPhone}
+            />
+          </View>
+        </View>
+      </Modal>
+
       <MediaMetadataSheet
         visible={mediaComposerOpen}
         onClose={() => setMediaComposerOpen(false)}
@@ -1457,5 +1784,94 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: 20,
     maxHeight: '85%',
+  },
+  infoTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 3,
+  },
+  infoTabButton: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 9,
+  },
+  infoTabButtonActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  infoTabText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  infoTabTextActive: {
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  primaryBadge: {
+    backgroundColor: '#DCFCE7',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  primaryBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  categoryChip: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  categoryChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  mapPreviewCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  openMapsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  moreHourChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  moreHourChipText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  attributeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F6',
   },
 });
