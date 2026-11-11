@@ -30,7 +30,6 @@ const hidden = [
   'growth',
   'leads',
   'inbox',
-  'phone',
   'outreach',
   'automations',
   'appointments',

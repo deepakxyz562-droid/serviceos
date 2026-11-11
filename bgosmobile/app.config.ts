@@ -41,12 +41,14 @@ export default ({ config, projectRoot }: ConfigContext): any => {
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#0B9042' },
     compileSdkVersion: 36,
     targetSdkVersion: 36,
-    permissions: ['POST_NOTIFICATIONS', 'READ_PHONE_STATE', 'READ_CALL_LOG'],
+    permissions: ['POST_NOTIFICATIONS'],
     blockedPermissions: [
       'android.permission.RECORD_AUDIO',
       'android.permission.SYSTEM_ALERT_WINDOW',
       'android.permission.READ_EXTERNAL_STORAGE',
       'android.permission.WRITE_EXTERNAL_STORAGE',
+      'android.permission.READ_PHONE_STATE',
+      'android.permission.READ_CALL_LOG',
     ],
   },
   plugins: [

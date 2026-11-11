@@ -114,7 +114,7 @@ const MORE_TOOLS: {
   { label: 'Photos', route: '/(tabs)/photos', icon: 'photo-library' },
   { label: 'Google Posts', route: '/(tabs)/posts', icon: 'article' },
   { label: 'Inbox', route: '/(tabs)/inbox', icon: 'chat-bubble-outline' },
-  { label: 'Phone', route: '/(tabs)/phone', icon: 'phone-in-talk' },
+  { label: 'Submissions', route: '/(tabs)/submissions', icon: 'assignment' },
   { label: 'Leads', route: '/(tabs)/leads', icon: 'people-outline' },
   { label: 'Keyword Planner', route: '/keyword-planner', icon: 'travel-explore' },
   { label: 'AI SEO & Grid', route: '/seo-growth', icon: 'radar' },
@@ -512,7 +512,7 @@ export default function HomeScreen() {
   dayEnd.setHours(23,59,59,999);
   const bookings = useResource<{ bookings: Booking[] }>(`/api/bookings?dateFrom=${dayStart.toISOString()}&dateTo=${dayEnd.toISOString()}&limit=100`);
   const leads = useResource<{ leads: unknown[]; pagination?: { total: number } }>('/api/leads?limit=1');
-  const calls = useResource<{ stats: { todayCount: number; total: number; missedCount?: number } | null }>('/api/calls?limit=1');
+  const submissions = useResource<{ responses: unknown[] }>('/api/forms/responses?limit=100');
   const reviews = useResource<{ reviews: Array<{ id?: string; rating?: number; createdAt?: string; createTime?: string; publishedAt?: string }> }>('/api/reviews?limit=30');
   const marketingScore = useResource<MarketingScoreResponse>('/api/gbp/marketing-score');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
@@ -538,7 +538,7 @@ export default function HomeScreen() {
       inbox.refresh(),
       bookings.refresh(),
       leads.refresh(),
-      calls.refresh(),
+      submissions.refresh(),
       reviews.refresh(),
       marketingScore.refresh(),
       gbpPlace.refresh(),
@@ -558,7 +558,7 @@ export default function HomeScreen() {
 
   const unreadCount = inbox.data ? inbox.data.reduce((s, c) => s + c.unreadCount, 0) : '—';
   const leadTotal = leads.data?.pagination?.total ?? '—';
-  const callCount = calls.data?.stats?.todayCount ?? '—';
+  const submissionCount = submissions.data?.responses?.length ?? '—';
   const competitorList = competitors.data?.competitors || [];
   const actions = (growthActions.data?.actions || []).filter((a) => !a.dismissed);
   const totalDone = growthActions.data?.totalDone ?? 0;
@@ -1112,7 +1112,7 @@ export default function HomeScreen() {
       </Card>
 
       <ErrorNotice
-        message={workspace.error || inbox.error || bookings.error || leads.error || calls.error}
+        message={workspace.error || inbox.error || bookings.error || leads.error || submissions.error}
         retry={refresh}
       />
 
@@ -1181,7 +1181,7 @@ export default function HomeScreen() {
           {([
             {label:'Create post', icon:'auto-awesome', onPress:()=>router.push('/(tabs)/marketing?generate=1')},
             {label:'Add lead', icon:'person-add', onPress:()=>router.push('/(tabs)/leads?create=1')},
-            {label:'Make call', icon:'dialpad', onPress:()=>router.push('/(tabs)/phone?open=dialpad')},
+            {label:'Book appointment', icon:'event', onPress:()=>router.push('/(tabs)/appointments')},
             {label:'Request review', icon:'star-outline', onPress:()=>{
               setReviewModalTab('single');
               setReviewModalOpen(true);
@@ -1207,10 +1207,10 @@ export default function HomeScreen() {
           icon="people-outline"
         />
         <MetricCard
-          value={callCount}
-          label="Calls Today"
+          value={submissionCount}
+          label="Inquiries"
           trendPositive={true}
-          icon="phone-in-talk"
+          icon="assignment"
         />
         <MetricCard
           value={unreadCount}

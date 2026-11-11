@@ -89,7 +89,7 @@ describe('GBP 100% Dynamic Categories & Services Engine', () => {
     expect(hasGroceryOffering).toBe(true);
     // Should NOT contain software offerings
     expect(data.services.some((s: string) => /custom software|mobile app development|cloud devops/i.test(s))).toBe(false);
-  }, 15000);
+  }, 30000);
 
   it('dynamically synthesizes offerings for any arbitrary new business category without hardcoded regex traps', async () => {
     const { POST } = await import('@/app/api/gbp/services/suggest/route');

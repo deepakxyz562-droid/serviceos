@@ -42,8 +42,6 @@ export async function getToken() { return (await readSession())?.token || null; 
 export async function getRefreshToken() { return (await readSession())?.refreshToken || null; }
 export async function getSavedUser(): Promise<SessionUser | null> { return (await readSession())?.user || null; }
 export async function saveUser(user: SessionUser) {
-  const previous = await getSavedUser();
-  if (previous && (previous.id !== user.id || previous.tenantId !== user.tenantId || previous.workspaceId !== user.workspaceId) && NativeModules.BgosCallTracking) await NativeModules.BgosCallTracking.clearCapture();
   return serialized(async () => {
     const raw = await SecureStore.getItemAsync(SESSION_KEY);
     if (raw) {
@@ -72,9 +70,6 @@ export async function clearTokens() {
   cachedSession = null;
   sessionLoaded = true;
   notifySessionEnded();
-  if (NativeModules?.BgosCallTracking?.clearCapture) {
-    try { await NativeModules.BgosCallTracking.clearCapture(); } catch {}
-  }
   return serialized(async () => {
     const results = await Promise.allSettled([SESSION_KEY, LEGACY_ACCESS, LEGACY_REFRESH].map(key => SecureStore.deleteItemAsync(key)));
     if (results.some(result => result.status === 'rejected')) throw new Error('Could not remove saved credentials from this device. Please retry sign out.');

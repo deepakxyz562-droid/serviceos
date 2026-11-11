@@ -199,16 +199,28 @@ export default function ToolsScreen() {
           onPress={() => router.push('/(tabs)/inbox')}
         />
         <MenuRow
-          title="Call Tracker & Leads"
-          detail="Call logs, 1-tap CRM capture & follow-ups"
-          icon="phone"
-          onPress={() => router.push('/(tabs)/phone')}
-        />
-        <MenuRow
           title="Leads & CRM Pipeline"
           detail="Manage leads, statuses & follow-ups"
           icon="people-outline"
           onPress={() => router.push('/(tabs)/leads')}
+        />
+        <MenuRow
+          title="Appointments Calendar"
+          detail="Schedule, booking slots & customer appointments"
+          icon="event"
+          onPress={() => router.push('/(tabs)/appointments')}
+        />
+        <MenuRow
+          title="Campaigns & Outreach"
+          detail="WhatsApp, email & SMS broadcasts"
+          icon="send"
+          onPress={() => router.push('/(tabs)/outreach')}
+        />
+        <MenuRow
+          title="Form Responses & Surveys"
+          detail="Customer inquiries, quote requests & feedback"
+          icon="assignment"
+          onPress={() => router.push('/(tabs)/submissions')}
         />
       </Card>
 

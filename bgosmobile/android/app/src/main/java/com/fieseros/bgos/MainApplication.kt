@@ -13,7 +13,6 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ExpoReactHostFactory
-import com.fieseros.bgos.calltracking.CallTrackingPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -21,9 +20,7 @@ class MainApplication : Application(), ReactApplication {
     ExpoReactHostFactory.getDefaultReactHost(
       context = applicationContext,
       packageList =
-        PackageList(this).packages.apply {
-          add(CallTrackingPackage())
-        }
+        PackageList(this).packages
     )
   }
 
