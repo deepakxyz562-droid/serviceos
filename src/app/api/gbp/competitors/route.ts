@@ -80,31 +80,40 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Check if stored rows contain legacy hardcoded defaults (e.g. Patna IT companies for a non-software business)
-    const isLegacyCorrupt = storedRows.length > 0 && storedRows.some((r) =>
-      r.address?.toLowerCase().includes('patna') ||
-      r.name?.toLowerCase().includes('mlm software') ||
-      r.name?.toLowerCase().includes('wetsoft infotech')
-    );
-
     const [selfReviewCount, selfReviews, tenant] = await Promise.all([
       db.review.count({ where: { tenantId: user.tenantId } }).catch(() => 0),
       db.review.findMany({ where: { tenantId: user.tenantId }, select: { rating: true }, take: 100 }).catch(() => []),
       db.tenant.findUnique({
         where: { id: user.tenantId },
-        select: { name: true, industry: true, address: true, city: true, googlePlaceId: true, settingsJson: true },
+        select: { name: true, industry: true, address: true, city: true, country: true, googlePlaceId: true, settingsJson: true },
       }),
     ]);
 
     let selfName = tenant?.name || 'My Business';
     let selfCategory = tenant?.industry || 'Local Business';
+    let activeGbpAddress = tenant?.address || '';
     if (tenant?.settingsJson) {
       try {
         const parsed = JSON.parse(tenant.settingsJson);
         if (parsed.activeGbpTitle) selfName = parsed.activeGbpTitle;
         if (parsed.activeGbpCategory) selfCategory = parsed.activeGbpCategory;
+        if (parsed.activeGbpAddress) activeGbpAddress = parsed.activeGbpAddress;
       } catch {}
     }
+
+    // Check if stored rows contain foreign or mismatched competitors (e.g. USA / Dallas addresses for an Indian business)
+    const isIndian = /(india|bihar|patna|delhi|haryana|uttar pradesh|ghaziabad|kanvi|inr|\+91)/i.test(activeGbpAddress) || tenant?.country === 'IN';
+    const isLegacyCorrupt = storedRows.length > 0 && storedRows.some((r) => {
+      const addr = (r.address || '').toLowerCase();
+      const name = (r.name || '').toLowerCase();
+      if (isIndian && (addr.includes('usa') || addr.includes('dallas') || addr.includes(', tx') || addr.includes('united states'))) {
+        return true;
+      }
+      if (name.includes('mlm software') || name.includes('wetsoft infotech')) {
+        return true;
+      }
+      return false;
+    });
 
     const selfRating = selfReviews.length > 0
       ? Number((selfReviews.reduce((acc, r) => acc + (r.rating || 5), 0) / selfReviews.length).toFixed(1))
@@ -479,25 +488,49 @@ async function fetchFromPlacesNew(
   }
 
   // 6. Resolve City / Search Area
-  let queryCity =
-    opts?.city?.trim() ||
-    brandProfile?.location?.trim() ||
-    tenant?.city?.trim() ||
-    '';
-
-  if (!queryCity && (gbpAddress || tenant?.address)) {
-    const rawAddr = gbpAddress || tenant?.address || '';
-    const parts = rawAddr.split(',').map((s) => s.trim());
-    queryCity = parts.length > 2 ? parts[parts.length - 2] : rawAddr;
+  // Extract genuine city from verified address first so stale tenant.city (e.g. "Dallas") never overrides real location
+  function extractCityFromAddress(addr: string | null | undefined): string | null {
+    if (!addr) return null;
+    const parts = addr.split(',').map((s) => s.trim()).filter(Boolean);
+    if (parts.length >= 3) {
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const p = parts[i];
+        if (/^\d{5,6}$/.test(p)) continue;
+        if (/(india|bihar|uttar pradesh|haryana|delhi|maharashtra|karnataka|punjab|gujarat|tamil nadu|rajasthan|texas|california)/i.test(p)) continue;
+        if (p.length > 2 && !/near|opp|behind|floor|suite|road|rd|chowk|street|st|lane|highway|nh/i.test(p)) {
+          return p;
+        }
+      }
+      return parts[parts.length - 2] || parts[parts.length - 3] || null;
+    }
+    return parts[0] || null;
   }
 
-  // Build high-intent local query (never defaults to Patna!)
+  const verifiedAddress = gbpAddress || tenant?.address || '';
+  const cityFromAddress = extractCityFromAddress(verifiedAddress);
+
+  let queryCity =
+    opts?.city?.trim() ||
+    cityFromAddress ||
+    (tenant?.city && !tenant.city.toLowerCase().includes('dallas') ? tenant.city.trim() : '') ||
+    brandProfile?.location?.trim() ||
+    '';
+
+  let regionCode = 'IN';
+  if (verifiedAddress && /(usa|united states|texas|tx|ca|ny|california)/i.test(verifiedAddress)) {
+    regionCode = 'US';
+  } else if (tenant?.country) {
+    regionCode = tenant.country.toUpperCase();
+  }
+
+  // Build high-intent local query
   const query = queryCity ? `${industry} in ${queryCity}`.trim() : `${industry} near me`.trim();
 
   try {
     const payload: any = {
       textQuery: query,
       maxResultCount: 15,
+      regionCode,
     };
 
     if (userLat != null && userLng != null) {

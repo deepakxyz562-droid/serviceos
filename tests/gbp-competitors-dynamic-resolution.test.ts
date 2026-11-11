@@ -5,32 +5,46 @@ describe('GBP Competitors Dynamic Resolution & Cache Protection', () => {
     vi.restoreAllMocks();
   });
 
-  it('correctly flags legacy hardcoded Patna or MLM software competitor rows as corrupt', () => {
+  it('correctly flags foreign or mismatched USA/Dallas competitors as corrupt for an Indian business', () => {
     const corruptRows = [
-      { id: '1', name: 'Redn Technologies Pvt Ltd', address: 'Patna, Bihar', category: 'Software Company' },
+      { id: '1', name: 'HighLevel LLC', address: '1801 N Lamar St Ste 600, Dallas, TX 75202, USA', category: 'Software Company' },
       { id: '2', name: 'MLM Software Company in Patna', address: 'Patna, Bihar', category: 'Software Company' },
     ];
 
-    const isLegacyCorrupt = corruptRows.some((r) =>
-      r.address?.toLowerCase().includes('patna') ||
-      r.name?.toLowerCase().includes('mlm software') ||
-      r.name?.toLowerCase().includes('wetsoft infotech')
-    );
+    const isIndian = true;
+    const isLegacyCorrupt = corruptRows.some((r) => {
+      const addr = (r.address || '').toLowerCase();
+      const name = (r.name || '').toLowerCase();
+      if (isIndian && (addr.includes('usa') || addr.includes('dallas') || addr.includes(', tx') || addr.includes('united states'))) {
+        return true;
+      }
+      if (name.includes('mlm software') || name.includes('wetsoft infotech')) {
+        return true;
+      }
+      return false;
+    });
 
     expect(isLegacyCorrupt).toBe(true);
   });
 
-  it('identifies genuine niche competitor rows as clean', () => {
+  it('identifies genuine Indian competitor rows as clean for an Indian business', () => {
     const cleanRows = [
-      { id: '1', name: 'Tomar Farmhouse', address: 'Bahadurgarh, Haryana', category: 'Farmhouse' },
-      { id: '2', name: 'Asoda swimming pool', address: 'Asoda, Haryana', category: 'Swimming pool' },
+      { id: '1', name: 'Devkant infotech solutions Pvt Ltd', address: 'Nehru Nagar, North Sri Krishna Puri, Patna, Bihar, India', category: 'Software Company' },
+      { id: '2', name: 'Kala Softech Pvt. Ltd.', address: 'Bailey Rd, Khajpura, Patna, Bihar, India', category: 'Software Company' },
     ];
 
-    const isLegacyCorrupt = cleanRows.some((r) =>
-      r.address?.toLowerCase().includes('patna') ||
-      r.name?.toLowerCase().includes('mlm software') ||
-      r.name?.toLowerCase().includes('wetsoft infotech')
-    );
+    const isIndian = true;
+    const isLegacyCorrupt = cleanRows.some((r) => {
+      const addr = (r.address || '').toLowerCase();
+      const name = (r.name || '').toLowerCase();
+      if (isIndian && (addr.includes('usa') || addr.includes('dallas') || addr.includes(', tx') || addr.includes('united states'))) {
+        return true;
+      }
+      if (name.includes('mlm software') || name.includes('wetsoft infotech')) {
+        return true;
+      }
+      return false;
+    });
 
     expect(isLegacyCorrupt).toBe(false);
   });

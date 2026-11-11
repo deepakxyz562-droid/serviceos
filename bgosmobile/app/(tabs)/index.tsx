@@ -109,30 +109,44 @@ const MORE_TOOLS: {
   { label: 'Manage Profile', route: '/manage-profile', icon: 'storefront' },
   { label: 'QR Standee', route: '/qr-standee', icon: 'qr-code-2' },
   { label: 'Growth Report', route: '/growth-report', icon: 'picture-as-pdf' },
-  { label: 'Outreach', route: '/(tabs)/outreach', icon: 'send' },
-  { label: 'GBP Hub', route: '/(tabs)/growth', icon: 'hub' },
+  { label: 'Outreach', route: '/outreach', icon: 'send' },
+  { label: 'GBP Hub', route: '/growth', icon: 'hub' },
   { label: 'Photos', route: '/(tabs)/photos', icon: 'photo-library' },
-  { label: 'Google Posts', route: '/(tabs)/posts', icon: 'article' },
-  { label: 'Inbox', route: '/(tabs)/inbox', icon: 'chat-bubble-outline' },
-  { label: 'Submissions', route: '/(tabs)/submissions', icon: 'assignment' },
-  { label: 'Leads', route: '/(tabs)/leads', icon: 'people-outline' },
+  { label: 'Google Posts', route: '/(tabs)/marketing?mode=posts', icon: 'article' },
+  { label: 'Inbox', route: '/inbox', icon: 'chat-bubble-outline' },
+  { label: 'Submissions', route: '/submissions', icon: 'assignment' },
+  { label: 'Leads', route: '/leads', icon: 'people-outline' },
   { label: 'Keyword Planner', route: '/keyword-planner', icon: 'travel-explore' },
   { label: 'AI SEO & Grid', route: '/seo-growth', icon: 'radar' },
-  { label: 'Appointments', route: '/(tabs)/appointments', icon: 'event' },
-  { label: 'Agents', route: '/(tabs)/agents', icon: 'smart-toy' },
-  { label: 'Integrations', route: '/(tabs)/integrations', icon: 'extension' },
+  { label: 'Appointments', route: '/appointments', icon: 'event' },
+  { label: 'Agents', route: '/agents', icon: 'smart-toy' },
+  { label: 'Integrations', route: '/integrations', icon: 'extension' },
 ];
 
 function MoreToolsGrid() {
   const router = useRouter();
   return (
     <Card style={{ gap: 12 }}>
-      <View style={[ui.row, { justifyContent: 'space-between' }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="All Operations & Tools, See All"
+        onPress={() => router.push('/(tabs)/tools')}
+        style={({ pressed }) => [
+          ui.row,
+          {
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingVertical: 4,
+            opacity: pressed ? 0.7 : 1,
+          },
+        ]}
+      >
         <Text style={ui.heading}>All Operations & Tools</Text>
-        <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/tools')}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>See All →</Text>
-        </Pressable>
-      </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>See All</Text>
+          <MaterialIcons name="chevron-right" size={18} color={colors.brand} />
+        </View>
+      </Pressable>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {MORE_TOOLS.map((tool) => (
           <Pressable
@@ -338,7 +352,7 @@ function MarketingScoreCard({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Improve Marketing Score with Growth Actions"
-              onPress={() => (onImproveScore ? onImproveScore() : router.push('/(tabs)/growth'))}
+              onPress={() => (onImproveScore ? onImproveScore() : router.push('/growth'))}
             >
               <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Improve Score →</Text>
             </Pressable>
@@ -378,7 +392,7 @@ function MarketingScoreCard({
           </View>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push('/(tabs)/growth')}
+            onPress={() => router.push('/growth')}
             style={[ui.row, { gap: 4, marginTop: 2 }]}
           >
             <Text style={{ fontSize: 12, fontWeight: '700', color: colors.muted }}>NOT_CONNECTED</Text>
@@ -485,7 +499,7 @@ function MarketingScoreCard({
           <Action
             label={slide === 2 ? 'View All Growth Tasks →' : 'Improve Marketing Score →'}
             icon="trending-up"
-            onPress={() => router.push('/(tabs)/growth')}
+            onPress={() => router.push('/growth')}
           />
         </>
       )}
@@ -686,10 +700,17 @@ export default function HomeScreen() {
           accessibilityRole="button"
           accessibilityLabel="Operations Menu"
           onPress={() => setDrawerOpen(true)}
-          hitSlop={10}
-          style={({ pressed }) => ({ padding: 2, opacity: pressed ? 0.65 : 1 })}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={({ pressed }) => ({
+            width: 42,
+            height: 42,
+            borderRadius: 21,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: pressed ? '#F1F5F9' : 'transparent',
+          })}
         >
-          <MaterialIcons name="menu" size={23} color="#0F172A" />
+          <MaterialIcons name="menu" size={24} color="#0F172A" />
         </Pressable>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -765,7 +786,7 @@ export default function HomeScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Notifications"
-          onPress={() => router.push('/(tabs)/inbox')}
+          onPress={() => router.push('/inbox')}
           hitSlop={8}
           style={({ pressed }) => ({
             width: 34,
@@ -889,11 +910,12 @@ export default function HomeScreen() {
   );
 
   return (
-    <Screen
-      stickyHeader={homeTopBar}
-      onRefresh={refresh}
-      floatingAction={growthActionFloatingDock}
-    >
+    <>
+      <Screen
+        stickyHeader={homeTopBar}
+        onRefresh={refresh}
+        floatingAction={growthActionFloatingDock}
+      >
       {/* Sleek Trial Promotional Banner — only shown when workspace is on trial */}
       {workspace.data?.plan?.status === 'trial' ? (
         <Pressable
@@ -1135,7 +1157,7 @@ export default function HomeScreen() {
             name: 'AI Post Published',
             target: 5,
             achieved: (socialPosts.data?.data || []).filter((p) => p.status === 'published').length,
-            route: '/(tabs)/posts',
+            route: '/(tabs)/marketing?mode=posts',
           },
           {
             id: '3',
@@ -1180,8 +1202,8 @@ export default function HomeScreen() {
         <View style={{flexDirection:'row', flexWrap:'wrap', gap:8}}>
           {([
             {label:'Create post', icon:'auto-awesome', onPress:()=>router.push('/(tabs)/marketing?generate=1')},
-            {label:'Add lead', icon:'person-add', onPress:()=>router.push('/(tabs)/leads?create=1')},
-            {label:'Book appointment', icon:'event', onPress:()=>router.push('/(tabs)/appointments')},
+            {label:'Add lead', icon:'person-add', onPress:()=>router.push('/leads?create=1')},
+            {label:'Book appointment', icon:'event', onPress:()=>router.push('/appointments')},
             {label:'Request review', icon:'star-outline', onPress:()=>{
               setReviewModalTab('single');
               setReviewModalOpen(true);
@@ -1240,13 +1262,13 @@ export default function HomeScreen() {
               title="Lead Pipeline"
               detail="Review contacts and follow-ups"
               icon="people-outline"
-              onPress={() => router.push('/(tabs)/leads')}
+              onPress={() => router.push('/leads')}
             />
             <MenuRow
               title="Campaign Approvals"
               detail="Review email & WhatsApp broadcasts"
               icon="send"
-              onPress={() => router.push('/(tabs)/outreach')}
+              onPress={() => router.push('/outreach')}
             />
           </>
         ) : bookings.error ? (
@@ -1284,7 +1306,7 @@ export default function HomeScreen() {
           secondary
           label="View Full Calendar"
           icon="event"
-          onPress={() => router.push('/(tabs)/appointments')}
+          onPress={() => router.push('/appointments')}
         />
       </Card>
 
@@ -1455,11 +1477,13 @@ export default function HomeScreen() {
         apiRequest={apiRequest}
       />
 
+      </Screen>
+
       {/* Half-Screen Slide-Over Sidebar Drawer (Screenshot 08.55 benchmark, no Growth & Marketing) */}
       <SidebarDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       {/* Push Notification First-Launch Prompt */}
       <PushPromptModal />
-    </Screen>
+    </>
   );
 }

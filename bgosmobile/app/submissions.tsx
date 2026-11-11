@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Modal, Text } from 'react-native';
-import { Screen, Card, Action, Empty, ErrorNotice, Loading, ui } from '../../src/components/ui';
-import { useResource } from '../../src/hooks/use-resource';
+import { Screen, Card, Action, Empty, ErrorNotice, Loading, ui } from '../src/components/ui';
+import { useResource } from '../src/hooks/use-resource';
+import { withProtectedRoute } from '../src/components/navigation/protected-route';
 type Response = { id: string; form: { name: string }; respondentName: string; respondent?: string; createdAt: string; data: Record<string, unknown> };
-export default function ResponsesScreen() {
+function ResponsesScreen() {
   const resource = useResource<{ responses: Response[] }>('/api/forms/responses?limit=100', 15000);
   const [selected, setSelected] = useState<Response | null>(null);
 
@@ -53,3 +54,5 @@ export default function ResponsesScreen() {
     </Screen>
   );
 }
+
+export default withProtectedRoute(ResponsesScreen);

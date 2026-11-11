@@ -4593,7 +4593,7 @@ export default function MarketingScreen() {
                   accounts={availableAccounts}
                   selectedIds={selectedAccountIds}
                   toggle={togglePublishingAccount}
-                  manage={() => router.push('/(tabs)/integrations')}
+                  manage={() => router.push('/integrations')}
                   onSelectAll={handleSelectAllAccounts}
                   onClearAll={handleClearAllAccounts}
                 />

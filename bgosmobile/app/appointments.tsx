@@ -13,17 +13,18 @@ import {
   ui,
   Badge,
   colors,
-} from '../../src/components/ui';
-import { useResource } from '../../src/hooks/use-resource';
-import { apiRequest } from '../../src/lib/api';
-import { DateTimeField } from '../../src/components/booking/date-time-field';
-import { localDay, futureLocalTime } from '../../src/lib/dates';
-import { WEB_URL } from '../../src/lib/constants';
-import type { BgosWorkspace } from '../../src/types/bgos-contracts';
+} from '../src/components/ui';
+import { useResource } from '../src/hooks/use-resource';
+import { apiRequest } from '../src/lib/api';
+import { DateTimeField } from '../src/components/booking/date-time-field';
+import { localDay, futureLocalTime } from '../src/lib/dates';
+import { WEB_URL } from '../src/lib/constants';
+import { withProtectedRoute } from '../src/components/navigation/protected-route';
+import type { BgosWorkspace } from '../src/types/bgos-contracts';
 
 type Booking = { id: string; title: string; customerName?: string; scheduledAt?: string; status: string };
 
-export default function AppointmentsScreen() {
+function AppointmentsScreen() {
   const router = useRouter();
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -471,3 +472,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
+
+export default withProtectedRoute(AppointmentsScreen);

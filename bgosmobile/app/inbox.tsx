@@ -24,14 +24,15 @@ import {
   Avatar,
   Badge,
   Chip,
-} from '../../src/components/ui';
-import { useResource } from '../../src/hooks/use-resource';
-import { apiRequest } from '../../src/lib/api';
-import { WEB_URL } from '../../src/lib/constants';
-import { getBgosWebUrl } from '../../src/lib/bgos-urls';
-import type { BgosConversation, BgosMessage, BgosWorkspace } from '../../src/types/bgos-contracts';
+} from '../src/components/ui';
+import { useResource } from '../src/hooks/use-resource';
+import { apiRequest } from '../src/lib/api';
+import { WEB_URL } from '../src/lib/constants';
+import { getBgosWebUrl } from '../src/lib/bgos-urls';
+import { withProtectedRoute } from '../src/components/navigation/protected-route';
+import type { BgosConversation, BgosMessage, BgosWorkspace } from '../src/types/bgos-contracts';
 
-export default function InboxScreen() {
+function InboxScreen() {
   const inbox = useResource<BgosConversation[]>('/api/omnichannel/conversations', 10000);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const tickets = useResource<{ tickets: any[] }>('/api/support/tickets?limit=20');
@@ -614,3 +615,5 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
 });
+
+export default withProtectedRoute(InboxScreen);

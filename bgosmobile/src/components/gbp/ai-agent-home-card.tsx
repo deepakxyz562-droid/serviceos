@@ -189,7 +189,7 @@ export function GbpAiAgentHomeCard({
       icon: 'bar-chart' as const,
       iconColor: '#0284C7',
       iconBg: '#E0F2FE',
-      onPress: () => router.push('/(tabs)/growth'),
+      onPress: () => router.push('/growth'),
     },
   ];
 

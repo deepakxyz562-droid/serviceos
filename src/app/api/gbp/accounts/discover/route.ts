@@ -183,6 +183,9 @@ export async function POST(request: NextRequest) {
 
     let targetName = 'Google Business';
     let gbpCategory = '';
+    let gbpAddress = '';
+    let gbpPlaceId = '';
+    let gbpCity = '';
     if (targetAccount) {
       let meta: Record<string, any> = {};
       try {
@@ -190,6 +193,21 @@ export async function POST(request: NextRequest) {
       } catch {}
       targetName = meta.locationTitle || targetAccount.accountName.replace(/\s*\([^)]*\)$/, '').trim();
       gbpCategory = meta.category || '';
+      gbpAddress = meta.address || '';
+      gbpPlaceId = meta.placeId || '';
+      if (gbpAddress) {
+        const parts = gbpAddress.split(',').map((s: string) => s.trim()).filter(Boolean);
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const p = parts[i];
+          if (/^\d{5,6}$/.test(p)) continue;
+          if (/(bihar|uttar pradesh|haryana|delhi|maharashtra|karnataka|punjab|gujarat|tamil nadu|rajasthan|texas|california)/i.test(p)) continue;
+          if (p.length > 2 && !/near|opp|behind|floor|suite|road|rd|chowk|street|st|lane|highway|nh/i.test(p)) {
+            gbpCity = p;
+            break;
+          }
+        }
+        if (!gbpCity && parts.length > 2) gbpCity = parts[parts.length - 2];
+      }
 
       // Touch updatedAt so it sorts to the top
       await db.socialAccount.update({
@@ -226,6 +244,9 @@ export async function POST(request: NextRequest) {
     tenantSettings.activeGbpLocationId = profileId;
     tenantSettings.activeGbpTitle = finalName;
     tenantSettings.activeGbpCategory = finalCategory;
+    if (gbpAddress) tenantSettings.activeGbpAddress = gbpAddress;
+    if (gbpCity) tenantSettings.activeGbpCity = gbpCity;
+    if (gbpPlaceId) tenantSettings.activeGbpPlaceId = gbpPlaceId;
     if (customProducts) tenantSettings.activeGbpProducts = customProducts;
     if (customServices) tenantSettings.activeGbpServices = customServices;
 
@@ -237,13 +258,19 @@ export async function POST(request: NextRequest) {
           settingsJson: JSON.stringify(tenantSettings),
           industry: finalCategory,
           name: finalName,
+          ...(gbpAddress ? { address: gbpAddress } : {}),
+          ...(gbpCity ? { city: gbpCity } : {}),
+          ...(gbpPlaceId ? { googlePlaceId: gbpPlaceId } : {}),
         },
       }),
+      // Purge cached competitors so the new profile loads fresh local competitors
+      db.competitor.deleteMany({ where: { tenantId: user.tenantId } }).catch(() => {}),
       (async () => {
         const existingBp = await db.brandProfile.findUnique({ where: { tenantId: user.tenantId } }).catch(() => null);
         const dataToSave: any = {
           businessName: finalName,
           industry: finalCategory,
+          ...(gbpCity ? { location: gbpCity } : {}),
         };
         if (customProducts) dataToSave.products = JSON.stringify(customProducts);
         if (customServices) dataToSave.services = JSON.stringify(customServices);

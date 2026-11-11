@@ -13,11 +13,12 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { Screen, ErrorNotice, Loading } from '../../src/components/ui';
-import { useResource } from '../../src/hooks/use-resource';
-import { apiRequest } from '../../src/lib/api';
-import { getToken } from '../../src/lib/auth';
-import { WEB_URL } from '../../src/lib/constants';
+import { Screen, ErrorNotice, Loading } from '../src/components/ui';
+import { useResource } from '../src/hooks/use-resource';
+import { apiRequest } from '../src/lib/api';
+import { getToken } from '../src/lib/auth';
+import { WEB_URL } from '../src/lib/constants';
+import { withProtectedRoute } from '../src/components/navigation/protected-route';
 
 interface Account {
   id: string;
@@ -118,7 +119,7 @@ const SUPPORTED_CHANNELS: ChannelDef[] = [
   },
 ];
 
-export default function IntegrationsScreen() {
+function IntegrationsScreen() {
   const router = useRouter();
   const accountsRes = useResource<{ data: Account[] }>('/api/social/accounts?includeInactive=true');
   const waConfig = useResource<WhatsAppConfig>('/api/whatsapp/config');
@@ -680,3 +681,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 });
+
+export default withProtectedRoute(IntegrationsScreen);

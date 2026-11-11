@@ -15,10 +15,11 @@ import {
   Loading,
   ui,
   colors,
-} from '../../src/components/ui';
-import { useResource } from '../../src/hooks/use-resource';
-import { apiRequest } from '../../src/lib/api';
-import { leadLabels, leadStage, leadStages } from '../../src/lib/leads';
+} from '../src/components/ui';
+import { useResource } from '../src/hooks/use-resource';
+import { apiRequest } from '../src/lib/api';
+import { leadLabels, leadStage, leadStages } from '../src/lib/leads';
+import { withProtectedRoute } from '../src/components/navigation/protected-route';
 
 type Lead = {
   id: string;
@@ -32,7 +33,7 @@ type Lead = {
   createdAt?: string;
 };
 
-export default function LeadsScreen() {
+function LeadsScreen() {
   const params = useLocalSearchParams<{ create?: string; phone?: string; name?: string; notes?: string; source?: string }>();
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -149,6 +150,7 @@ export default function LeadsScreen() {
     <Screen
       title="Leads & CRM"
       subtitle="Pipeline stages, quick follow-up & customer history."
+      showBack={true}
       onRefresh={resource.refresh}
       rightAction={
         <Action
@@ -395,3 +397,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
+export default withProtectedRoute(LeadsScreen);

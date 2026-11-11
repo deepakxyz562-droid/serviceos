@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Text, Switch } from 'react-native';
-import { Screen, Card, ErrorNotice, Empty, Loading, ui } from '../../src/components/ui';
-import { apiRequest } from '../../src/lib/api';
-import { useResource } from '../../src/hooks/use-resource';
+import { Screen, Card, ErrorNotice, Empty, Loading, ui } from '../src/components/ui';
+import { apiRequest } from '../src/lib/api';
+import { useResource } from '../src/hooks/use-resource';
+import { withProtectedRoute } from '../src/components/navigation/protected-route';
 type Workflow = { id: string; name: string; description?: string; active: boolean };
-export default function AutomationsScreen() {
+function AutomationsScreen() {
   const resource = useResource<{ workflows: Workflow[] }>('/api/workflows?limit=100'); const [busy,setBusy] = useState(false); const [error,setError] = useState<string | null>(null);
   async function toggle(item: Workflow, active: boolean) { setBusy(true); setError(null); try { await apiRequest(`/api/workflows/${item.id}/activate`, { method: active ? 'POST' : 'DELETE' }); await resource.refresh(); } catch(e) { setError((e as Error).message); } finally { setBusy(false); } }
   return (
@@ -41,3 +42,5 @@ export default function AutomationsScreen() {
     </Screen>
   );
 }
+
+export default withProtectedRoute(AutomationsScreen);

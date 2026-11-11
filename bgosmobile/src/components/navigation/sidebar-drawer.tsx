@@ -59,7 +59,7 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
   const businessName = activeProfile?.name || data?.name || user?.name || 'My Business';
   const shortId = activeProfile?.shortId || '';
   const email = discover.data?.email || user?.email || '';
-  const initial = activeProfile?.initial || businessName.charAt(0).toUpperCase() || 'M';
+  const initial = activeProfile?.initial || (businessName?.trim() ? businessName.trim().charAt(0).toUpperCase() : 'M') || 'M';
 
   function navigate(route: string) {
     onClose();
@@ -243,37 +243,37 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                 icon="chat"
                 title="Unified Inbox & Chat"
                 subtitle="WhatsApp, SMS & web radar"
-                onPress={() => navigate('/(tabs)/inbox')}
+                onPress={() => navigate('/inbox')}
               />
               <DrawerItem
                 icon="send"
                 title="Campaigns & Outreach"
                 subtitle="WhatsApp & email broadcasts"
-                onPress={() => navigate('/(tabs)/outreach')}
+                onPress={() => navigate('/outreach')}
               />
               <DrawerItem
-                icon="phone"
-                title="Business Phone & Keypad"
-                subtitle="Dialpad, call logs & transcripts"
-                onPress={() => navigate('/(tabs)/phone')}
+                icon="grid-view"
+                title="All Operations & Tools"
+                subtitle="Complete business operations hub"
+                onPress={() => navigate('/(tabs)/tools')}
               />
               <DrawerItem
                 icon="people-outline"
                 title="Leads & CRM Pipeline"
                 subtitle="Lead stages & follow-ups"
-                onPress={() => navigate('/(tabs)/leads')}
+                onPress={() => navigate('/leads')}
               />
               <DrawerItem
                 icon="event"
                 title="Appointments Calendar"
                 subtitle="Bookings & agenda"
-                onPress={() => navigate('/(tabs)/appointments')}
+                onPress={() => navigate('/appointments')}
               />
               <DrawerItem
                 icon="description"
                 title="Form Inquiries & Surveys"
                 subtitle="Customer intake submissions"
-                onPress={() => navigate('/(tabs)/submissions')}
+                onPress={() => navigate('/submissions')}
               />
             </View>
 
@@ -286,13 +286,13 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                 icon="smart-toy"
                 title="AI Assistant Studio"
                 subtitle="Bot agents & prompt lab"
-                onPress={() => navigate('/(tabs)/agents')}
+                onPress={() => navigate('/agents')}
               />
               <DrawerItem
                 icon="link"
                 title="Channel Integrations"
                 subtitle="Connected messaging & accounts"
-                onPress={() => navigate('/(tabs)/integrations')}
+                onPress={() => navigate('/integrations')}
               />
             </View>
 
@@ -307,10 +307,7 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                     icon="badge"
                     title="Digital Business Card"
                     subtitle="View, QR & contactless card"
-                    onPress={() => {
-                      onClose();
-                      router.push('/qr-standee');
-                    }}
+                    onPress={() => navigate('/qr-standee')}
                   />
                 )}
                 {data.links.booking && (
@@ -318,10 +315,7 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                     icon="event-available"
                     title="Booking Page & Services"
                     subtitle="Customize booking portal & menu"
-                    onPress={() => {
-                      onClose();
-                      router.push('/booking-page');
-                    }}
+                    onPress={() => navigate('/booking-page')}
                   />
                 )}
               </View>

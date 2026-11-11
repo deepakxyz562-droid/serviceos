@@ -32,18 +32,19 @@ import {
   Badge,
   ui,
   colors,
-} from '../../src/components/ui';
-import { useUnsavedWarning } from '../../src/hooks/use-unsaved-warning';
-import { useResource } from '../../src/hooks/use-resource';
-import { apiRequest } from '../../src/lib/api';
-import { getBgosWebUrl } from '../../src/lib/bgos-urls';
-import { WEB_URL } from '../../src/lib/constants';
+} from '../src/components/ui';
+import { useUnsavedWarning } from '../src/hooks/use-unsaved-warning';
+import { useResource } from '../src/hooks/use-resource';
+import { apiRequest } from '../src/lib/api';
+import { getBgosWebUrl } from '../src/lib/bgos-urls';
+import { WEB_URL } from '../src/lib/constants';
 import {
   AVATAR_CATALOG,
   type FormAgentData,
   type FaqPair,
-} from '../../../src/features/forms/types/agent-types';
-import type { BgosWorkspace } from '../../src/types/bgos-contracts';
+} from '../../src/features/forms/types/agent-types';
+import { withProtectedRoute } from '../src/components/navigation/protected-route';
+import type { BgosWorkspace } from '../src/types/bgos-contracts';
 
 type Tab = 'overview' | 'knowledge' | 'channels' | 'test';
 
@@ -181,7 +182,7 @@ interface ChannelStatusData {
   sms?: { connected: boolean };
 }
 
-export default function AgentsScreen() {
+function AgentsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const resource = useResource<{ agents: FormAgentData[] }>('/api/forms/agents');
@@ -1587,7 +1588,7 @@ export default function AgentsScreen() {
             <Action
               secondary
               label="Review WhatsApp Integrations"
-              onPress={() => router.push('/(tabs)/integrations')}
+              onPress={() => router.push('/integrations')}
             />
           </Card>
 
@@ -2017,3 +2018,5 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 });
+
+export default withProtectedRoute(AgentsScreen);

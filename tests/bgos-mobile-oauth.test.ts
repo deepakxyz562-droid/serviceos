@@ -28,6 +28,6 @@ it('allows BGOS aliases and business workspaces, but rejects customer and admini
   expect(isBgosIdentity({ user: { role: 'superadmin', isSuperAdmin: true }, workspace: { productType: 'bgos' } })).toBe(false);
 });
 it('routes notification taps only to supported BGOS screens', () => {
-  expect(notificationDestination({ url: '/?view=messages&conversation=123' })).toBe('/(tabs)/inbox');
+  expect(notificationDestination({ url: '/?view=messages&conversation=123' })).toBe('/inbox');
   for (const url of ['https://attacker.example', '//attacker.example', '/?view=jobs', '/?view=store']) expect(notificationDestination({ url })).toBeNull();
 });

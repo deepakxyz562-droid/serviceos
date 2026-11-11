@@ -229,7 +229,7 @@ export default function HelpScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Open AI Assistant"
-            onPress={() => router.push('/(tabs)/agents')}
+            onPress={() => router.push('/agents')}
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',

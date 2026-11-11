@@ -22,7 +22,7 @@ export function MarketingTrackerSlide({
 
   const defaultItems: TrackerItem[] = [
     { id: '1', name: 'AI Post Approved', target: 5, achieved: 0, route: '/(tabs)/marketing' },
-    { id: '2', name: 'AI Post Published', target: 5, achieved: 0, route: '/(tabs)/posts' },
+    { id: '2', name: 'AI Post Published', target: 5, achieved: 0, route: '/(tabs)/marketing?mode=posts' },
     { id: '3', name: 'Media Uploaded', target: 5, achieved: 0, route: '/(tabs)/photos' },
   ];
 

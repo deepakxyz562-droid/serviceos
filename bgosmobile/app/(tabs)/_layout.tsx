@@ -1,21 +1,21 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import { Redirect, Tabs } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/components/ui';
 import { usePendingReplies } from '../../src/hooks/use-pending-replies';
-import { useAuthStore } from '../../src/stores/auth-store';
-import { PaywallGate } from '../../src/components/billing/paywall-gate';
+import { ProtectedRoute } from '../../src/components/navigation/protected-route';
 import { GlobalUploadBanner } from '../../src/components/gbp/global-upload-banner';
 
 /**
- * Bottom Navigation — BGOS Growth Employee bar:
+ * Bottom Navigation — BGOS Growth Employee bar (strictly 5 visible tabs;
+ * all secondary operational modules live on the Root Stack in app/).
  *  - Home: Business overview, growth radar & actions
  *  - Reviews: Google reviews stream with pending badge
- *  - AI Post: 1-Tap post creation & marketing studio (prominent center badge)
- *  - Posts: Google Business Posts & articles
+ *  - Marketing: 1-Tap AI Post creation, calendar & marketing studio
  *  - Media: Photos & store asset manager
+ *  - Tools: Operations hub, settings & account tools
  */
 const visible = [
   ['index', 'Home', 'home'],
@@ -25,31 +25,9 @@ const visible = [
   ['tools', 'Tools', 'grid-view'],
 ] as const;
 
-const hidden = [
-  'posts',
-  'growth',
-  'leads',
-  'inbox',
-  'outreach',
-  'automations',
-  'appointments',
-  'submissions',
-  'integrations',
-  'settings',
-  'agents',
-] as const;
-
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const pendingReplies = usePendingReplies(60000);
-  const { isAuthenticated, isLoading, onboardingRequired } = useAuthStore();
-
-  if (!isLoading && !isAuthenticated) {
-    return <Redirect href="/login" />;
-  }
-  if (!isLoading && isAuthenticated && onboardingRequired) {
-    return <Redirect href="/setup" />;
-  }
 
   const tabHeight = Platform.select({
     ios: insets.bottom > 0 ? 60 + insets.bottom : 64,
@@ -58,7 +36,7 @@ export default function TabLayout() {
   const tabPaddingBottom = insets.bottom > 0 ? insets.bottom : 8;
 
   return (
-    <PaywallGate>
+    <ProtectedRoute>
       <View style={{ flex: 1 }}>
       <Tabs
         screenOptions={{
@@ -115,13 +93,10 @@ export default function TabLayout() {
           />
         );
       })}
-      {hidden.map((name) => (
-        <Tabs.Screen key={name} name={name} options={{ href: null }} />
-      ))}
-    </Tabs>
+      </Tabs>
       <GlobalUploadBanner bottomOffset={(tabHeight ?? 66) + 10} />
       </View>
-    </PaywallGate>
+    </ProtectedRoute>
   );
 }
 

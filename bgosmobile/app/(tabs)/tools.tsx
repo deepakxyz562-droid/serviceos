@@ -196,31 +196,31 @@ export default function ToolsScreen() {
           title="Unified Inbox & Chat"
           detail="WhatsApp, Instagram & visitor radar"
           icon="chat"
-          onPress={() => router.push('/(tabs)/inbox')}
+          onPress={() => router.push('/inbox')}
         />
         <MenuRow
           title="Leads & CRM Pipeline"
           detail="Manage leads, statuses & follow-ups"
           icon="people-outline"
-          onPress={() => router.push('/(tabs)/leads')}
+          onPress={() => router.push('/leads')}
         />
         <MenuRow
           title="Appointments Calendar"
           detail="Schedule, booking slots & customer appointments"
           icon="event"
-          onPress={() => router.push('/(tabs)/appointments')}
+          onPress={() => router.push('/appointments')}
         />
         <MenuRow
           title="Campaigns & Outreach"
           detail="WhatsApp, email & SMS broadcasts"
           icon="send"
-          onPress={() => router.push('/(tabs)/outreach')}
+          onPress={() => router.push('/outreach')}
         />
         <MenuRow
           title="Form Responses & Surveys"
           detail="Customer inquiries, quote requests & feedback"
           icon="assignment"
-          onPress={() => router.push('/(tabs)/submissions')}
+          onPress={() => router.push('/submissions')}
         />
       </Card>
 
@@ -406,7 +406,7 @@ export default function ToolsScreen() {
           secondary
           label="Manage Integrations & Channels"
           icon="link"
-          onPress={() => router.push('/(tabs)/integrations')}
+          onPress={() => router.push('/integrations')}
         />
       </Card>
 
@@ -691,7 +691,7 @@ export default function ToolsScreen() {
             )}
 
             <Pressable
-              onPress={() => router.push('/(tabs)/submissions')}
+              onPress={() => router.push('/submissions')}
               style={({ pressed }) => ({
                 backgroundColor: '#7C3AED',
                 paddingVertical: 11,

@@ -14,24 +14,25 @@ import {
   Screen,
   colors,
   ui,
-} from '../../src/components/ui';
-import { useResource } from '../../src/hooks/use-resource';
-import { apiRequest } from '../../src/lib/api';
-import { getToken } from '../../src/lib/auth';
-import { WEB_URL } from '../../src/lib/constants';
-import { useAuthStore } from '../../src/stores/auth-store';
-import type { BgosWorkspace } from '../../src/types/bgos-contracts';
-import { Segmented } from '../../src/components/gbp/segmented';
-import { OptimizationTimeline, OptimizingPill } from '../../src/components/gbp/timeline';
-import { ConnectWizard, useWizardState } from '../../src/components/gbp/wizard';
-import { useGbpAutomations } from '../../src/components/gbp/automations';
-import { ReviewCard } from '../../src/components/gbp/review-card';
-import { PhotosBoard } from '../../src/components/gbp/photos-grid';
-import { PerformancePanel } from '../../src/components/gbp/performance-panel';
-import { AiActionsFeed } from '../../src/components/gbp/ai-actions';
-import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
-import { AgencyComparisonCard } from '../../src/components/gbp/agency-matrix';
-import { AiButton, ChipRow, Pill, SectionHeader, gbpColors } from '../../src/components/gbp/bits';
+} from '../src/components/ui';
+import { useResource } from '../src/hooks/use-resource';
+import { apiRequest } from '../src/lib/api';
+import { getToken } from '../src/lib/auth';
+import { WEB_URL } from '../src/lib/constants';
+import { useAuthStore } from '../src/stores/auth-store';
+import type { BgosWorkspace } from '../src/types/bgos-contracts';
+import { Segmented } from '../src/components/gbp/segmented';
+import { OptimizationTimeline, OptimizingPill } from '../src/components/gbp/timeline';
+import { ConnectWizard, useWizardState } from '../src/components/gbp/wizard';
+import { useGbpAutomations } from '../src/components/gbp/automations';
+import { ReviewCard } from '../src/components/gbp/review-card';
+import { PhotosBoard } from '../src/components/gbp/photos-grid';
+import { PerformancePanel } from '../src/components/gbp/performance-panel';
+import { AiActionsFeed } from '../src/components/gbp/ai-actions';
+import { ReviewRequestSheet } from '../src/components/gbp/review-request';
+import { AgencyComparisonCard } from '../src/components/gbp/agency-matrix';
+import { AiButton, ChipRow, Pill, SectionHeader, gbpColors } from '../src/components/gbp/bits';
+import { withProtectedRoute } from '../src/components/navigation/protected-route';
 import type {
   AiAction,
   AiPostDraft,
@@ -41,7 +42,7 @@ import type {
   PhotosResponse,
   Review,
   SocialPost,
-} from '../../src/components/gbp/types';
+} from '../src/components/gbp/types';
 
 type ToolTab = 'overview' | 'reviews' | 'posts' | 'photos' | 'performance';
 type PostType = 'whats_new' | 'offer' | 'event' | 'product';
@@ -102,7 +103,7 @@ function nextScheduleIso(choice: 'daily' | 'weekly'): string {
   return d.toISOString();
 }
 
-export default function GrowthScreen() {
+function GrowthScreen() {
   const { user } = useAuthStore();
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const reviews = useResource<ReviewsResponse>('/api/reviews?source=google&limit=50');
@@ -1307,6 +1308,7 @@ export default function GrowthScreen() {
     <Screen
       title="GBP AI Hub"
       subtitle="Google Business Profile on autopilot — AI optimisation, replies, posts & photos"
+      showBack={true}
       onRefresh={refreshAll}
       rightAction={
         <Pressable
@@ -1375,3 +1377,5 @@ export default function GrowthScreen() {
     </Screen>
   );
 }
+
+export default withProtectedRoute(GrowthScreen);

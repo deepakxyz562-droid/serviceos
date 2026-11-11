@@ -13,9 +13,10 @@ import {
   Field,
   ui,
   colors,
-} from '../../src/components/ui';
-import { useResource } from '../../src/hooks/use-resource';
-import { apiRequest } from '../../src/lib/api';
+} from '../src/components/ui';
+import { useResource } from '../src/hooks/use-resource';
+import { apiRequest } from '../src/lib/api';
+import { withProtectedRoute } from '../src/components/navigation/protected-route';
 
 type Batch = {
   id: string;
@@ -30,7 +31,7 @@ type Batch = {
   repliedPct?: number;
 };
 
-export default function OutreachScreen() {
+function OutreachScreen() {
   const resource = useResource<{ batches: Batch[] }>('/api/bgos/outreach', 15000);
   const [channel, setChannel] = useState<'all' | 'email' | 'whatsapp' | 'sms' | 'calls'>('all');
   const [busy, setBusy] = useState(false);
@@ -252,3 +253,5 @@ export default function OutreachScreen() {
     </Screen>
   );
 }
+
+export default withProtectedRoute(OutreachScreen);

@@ -1,17 +1,16 @@
 const destinations = {
-  inbox: '/(tabs)/inbox',
-  messages: '/(tabs)/inbox',
-  conversations: '/(tabs)/inbox',
-  leads: '/(tabs)/leads',
-  calendar: '/(tabs)/appointments',
-  appointments: '/(tabs)/appointments',
-  bookings: '/(tabs)/appointments',
+  inbox: '/inbox',
+  messages: '/inbox',
+  conversations: '/inbox',
+  leads: '/leads',
+  calendar: '/appointments',
+  appointments: '/appointments',
+  bookings: '/appointments',
   reviews: '/(tabs)/reviews',
   marketing: '/(tabs)/marketing',
   photos: '/(tabs)/photos',
   tools: '/(tabs)/tools',
-  forms: '/(tabs)/submissions',
-  'ai-call-history': '/(tabs)/phone',
+  forms: '/submissions',
   growth: '/growth-report',
   profile: '/manage-profile',
 } as const;
@@ -23,11 +22,15 @@ const ALLOWED_DIRECT_ROUTES = [
   '/(tabs)/marketing',
   '/(tabs)/photos',
   '/(tabs)/tools',
-  '/(tabs)/inbox',
-  '/(tabs)/leads',
-  '/(tabs)/appointments',
-  '/(tabs)/submissions',
-  '/(tabs)/phone',
+  '/inbox',
+  '/leads',
+  '/appointments',
+  '/submissions',
+  '/outreach',
+  '/agents',
+  '/integrations',
+  '/growth',
+  '/automations',
   '/manage-profile',
   '/growth-report',
   '/reply-settings',
@@ -96,9 +99,9 @@ export function notificationDestination(data: Record<string, unknown>): string |
     return `/(tabs)/marketing${buildDestinationQuery(data, extra)}`;
   }
   if (data.reviewId) return '/(tabs)/reviews';
-  if (data.leadId) return '/(tabs)/leads';
-  if (data.appointmentId || data.bookingId) return '/(tabs)/appointments';
-  if (data.conversationId || data.messageId) return '/(tabs)/inbox';
+  if (data.leadId) return '/leads';
+  if (data.appointmentId || data.bookingId) return '/appointments';
+  if (data.conversationId || data.messageId) return '/inbox';
 
   return null;
 }
