@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { computeGbpAudit } from '@/lib/gbp/audit';
+import {
+  buildAutoOptimizePlan,
+  executeAutoOptimize,
+  rollbackAutoOptimize,
+  type AutoOptimizeStepId,
+} from '@/lib/gbp/auto-optimizer';
+import { generateLocalizedServiceDescriptions } from '@/lib/gbp/service-optimizer';
 import { callAI } from '@/lib/ai-client';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { replyToGoogleBusinessReview } from '@/lib/social/adapters/googlebusiness';
@@ -78,6 +85,7 @@ function readMarketingTargets(settingsJson: string | null, industry?: string): {
  *   - segments.reviews : unreplied Google reviews ready for AI review reply approval
  *   - segments.posts   : AI social posts pending approval
  *   - segments.audit   : failed audit checks with recommended fixes
+ *   - segments.seo     : 1-click AI SEO fixes & uncovered Search Term service suggestions
  */
 export async function GET(request: NextRequest) {
   try {
@@ -89,8 +97,8 @@ export async function GET(request: NextRequest) {
 
     const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const [audit, mediaPosts7d, allPosts, allReviews, tenant] = await Promise.all([
-      computeGbpAudit(tenantId).catch(() => null),
+    const [autoPlan, mediaPosts7d, allPosts, allReviews, tenant] = await Promise.all([
+      buildAutoOptimizePlan(tenantId, { syncCompetitors: false }).catch(() => null),
       db.socialPost.count({ where: { tenantId, mediaUrls: { not: '[]' }, createdAt: { gte: since7d } } }).catch(() => 0),
       db.socialPost.findMany({
         where: { tenantId },
@@ -107,6 +115,8 @@ export async function GET(request: NextRequest) {
         select: { settingsJson: true, name: true, industry: true },
       }),
     ]);
+
+    const audit = autoPlan?.audit ?? (await computeGbpAudit(tenantId).catch(() => null));
 
     const state = readState(tenant?.settingsJson || null);
     const targets = readMarketingTargets(tenant?.settingsJson || null, tenant?.industry || '');
@@ -141,8 +151,8 @@ export async function GET(request: NextRequest) {
         totalCount: checks.length || 8,
         weeklyTarget: null,
         doneThisWeek: 0,
-        cta: 'Complete now',
-        href: '/app?view=settings',
+        cta: 'Auto-Optimize',
+        href: '/app?view=gbpAI',
         dismissed: state.dismissed.includes('complete_profile'),
         completed: passedChecks === checks.length && checks.length > 0,
       },
@@ -172,13 +182,21 @@ export async function GET(request: NextRequest) {
       },
     ];
 
-    const totalTarget = targets.weeklyPosts + targets.weeklyPhotos + (targets.weeklyReviews || 4);
-    const totalDone = Math.min(
-      totalTarget,
+    const seoActions = autoPlan?.actions || [];
+    const seoPendingFixes = seoActions.filter((a) => !a.alreadyOptimal && a.ready);
+    const seoOptimalCount = seoActions.filter((a) => a.alreadyOptimal).length;
+    const uncoveredSearchTerms = autoPlan?.uncoveredSearchTerms || [];
+    const seoPendingCount = seoPendingFixes.length + uncoveredSearchTerms.length;
+
+    const weeklyTotalTarget = targets.weeklyPosts + targets.weeklyPhotos + (targets.weeklyReviews || 4);
+    const weeklyTotalDone = Math.min(
+      weeklyTotalTarget,
       Math.min(mediaPosts7d, targets.weeklyPhotos) +
       Math.max(0, targets.weeklyPosts - pendingPostsCount) +
       Math.max(0, (targets.weeklyReviews || 4) - pendingReviewsCount)
     );
+    const totalTarget = weeklyTotalTarget + seoActions.length;
+    const totalDone = Math.min(totalTarget, weeklyTotalDone + seoOptimalCount);
     const leftCount = Math.max(0, totalTarget - totalDone);
 
     return NextResponse.json({
@@ -186,7 +204,8 @@ export async function GET(request: NextRequest) {
       totalDone,
       totalTarget,
       leftCount,
-      pendingApprovalCount: pendingPostsCount + pendingReviewsCount,
+      pendingApprovalCount: pendingPostsCount + pendingReviewsCount + seoPendingCount,
+      seoPendingCount,
       targets,
       segments: {
         reviews: {
@@ -226,6 +245,18 @@ export async function GET(request: NextRequest) {
             recommendation: c.recommendation,
           })),
         },
+        seo: {
+          pendingCount: seoPendingCount,
+          pendingFixCount: seoPendingFixes.length,
+          score: audit?.score ?? 0,
+          grade: audit?.grade ?? 'C',
+          connectedToGoogle: audit?.connectedToGoogle ?? false,
+          landingUrl: autoPlan?.landingUrl || null,
+          hasRollback: Boolean(autoPlan?.settings?.autoOptimizeRollback),
+          searchTermsUsed: autoPlan?.keywords?.slice(0, 6) || [],
+          items: seoActions,
+          uncoveredSearchTerms,
+        },
       },
     });
   } catch (error: unknown) {
@@ -244,7 +275,9 @@ export async function GET(request: NextRequest) {
  *      { action: 'approve_segment', segment: 'reviews' | 'posts' }
  *   2. Single Item Approval:
  *      { action: 'approve_item', segment: 'reviews' | 'posts', itemId: string, replyText?: string }
- *   3. Legacy task dismiss/undismiss:
+ *   3. Interactive 1-Click SEO Auto-Optimize & Search Demand Actions:
+ *      { action: 'apply_seo_all' | 'apply_seo_step' | 'rollback_seo' | 'create_service_from_term', ... }
+ *   4. Legacy task dismiss/undismiss:
  *      { id: 'complete_profile'|'upload_media'|'approve_post', action: 'dismiss'|'undismiss'|'done'|'undone' }
  */
 export async function POST(request: NextRequest) {
@@ -443,7 +476,92 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'invalid segment' }, { status: 400 });
     }
 
-    // ─── 3. Legacy Task Dismiss / Undismiss ───────────────────────────────────
+    // ─── 3. Interactive 1-Click SEO Fixes & Search Demand Actions ─────────────
+    if (action === 'apply_seo_all') {
+      const steps =
+        Array.isArray(body?.steps) && body.steps.length > 0
+          ? (body.steps as AutoOptimizeStepId[])
+          : undefined;
+      const result = await executeAutoOptimize(user.tenantId, {
+        steps,
+        pushToGoogle: body?.pushToGoogle !== false,
+        locationId: typeof body?.locationId === 'string' ? body.locationId : undefined,
+        syncCompetitors: true,
+      });
+      return NextResponse.json({
+        ...result,
+        message: `Applied ${result.appliedSteps.length} SEO fix(es)${result.syncedToGoogle ? ' & synced to Google' : ' to BGOS'}. Score: ${result.scoreBefore}% → ${result.scoreAfter}%.`,
+      });
+    }
+
+    if (action === 'apply_seo_step') {
+      const stepId = String(body?.stepId || '') as AutoOptimizeStepId;
+      const VALID_STEPS: AutoOptimizeStepId[] = [
+        'description',
+        'categories',
+        'attributes',
+        'services',
+        'landing_page',
+      ];
+      if (!VALID_STEPS.includes(stepId)) {
+        return NextResponse.json({ error: 'invalid stepId' }, { status: 400 });
+      }
+      const result = await executeAutoOptimize(user.tenantId, {
+        steps: [stepId],
+        pushToGoogle: body?.pushToGoogle !== false,
+        locationId: typeof body?.locationId === 'string' ? body.locationId : undefined,
+        syncCompetitors: true,
+      });
+      return NextResponse.json({
+        ...result,
+        stepId,
+        message: `Applied ${stepId.replace('_', ' ')}${result.syncedToGoogle ? ' & synced to Google' : ' to BGOS'}. Score: ${result.scoreBefore}% → ${result.scoreAfter}%.`,
+      });
+    }
+
+    if (action === 'rollback_seo') {
+      const rollbackResult = await rollbackAutoOptimize(user.tenantId);
+      if (rollbackResult.notFound) {
+        return NextResponse.json({ error: rollbackResult.error }, { status: 404 });
+      }
+      return NextResponse.json({
+        ...rollbackResult,
+        message: `Reverted last SEO auto-optimization. Score restored to ${rollbackResult.scoreAfter}%.`,
+      });
+    }
+
+    if (action === 'create_service_from_term') {
+      const keyword = String(body?.keyword || '').trim();
+      const serviceNameInput = String(body?.serviceName || '').trim();
+      if (!keyword && !serviceNameInput) {
+        return NextResponse.json({ error: 'keyword or serviceName is required' }, { status: 400 });
+      }
+      const plan = await buildAutoOptimizePlan(user.tenantId, { syncCompetitors: false });
+      const matchedDemand = plan.uncoveredSearchTerms.find(
+        (t) => t.keyword.toLowerCase() === keyword.toLowerCase(),
+      );
+      const serviceName = serviceNameInput || matchedDemand?.suggestedServiceName || keyword;
+      const targetKeyword = keyword || serviceName;
+
+      const svcRes = await generateLocalizedServiceDescriptions({
+        tenantId: user.tenantId,
+        services: [{ name: serviceName, targetKeyword }],
+        save: true,
+        pushToGoogle: body?.pushToGoogle !== false,
+        locationId: typeof body?.locationId === 'string' ? body.locationId : undefined,
+      });
+
+      return NextResponse.json({
+        success: true,
+        action: 'create_service_from_term',
+        service: svcRes.services[0] || null,
+        syncedToGoogle: svcRes.syncedToGoogle,
+        googleWarnings: svcRes.googleWarnings,
+        message: `Created 300-500 char localized service "${serviceName}"${svcRes.syncedToGoogle ? ' & synced to Google' : ''}.`,
+      });
+    }
+
+    // ─── 4. Legacy Task Dismiss / Undismiss ───────────────────────────────────
     const id = String(body?.id || '');
     const VALID_IDS = ['complete_profile', 'upload_media', 'approve_post'];
     if (!VALID_IDS.includes(id)) {

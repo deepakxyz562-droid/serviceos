@@ -81,6 +81,7 @@ type GrowthActionsResponse = {
   totalTarget: number;
   leftCount: number;
   pendingApprovalCount: number;
+  seoPendingCount?: number;
   targets?: {
     weeklyPosts: number;
     weeklyPhotos: number;
@@ -90,6 +91,18 @@ type GrowthActionsResponse = {
     reviews: { count: number; items: any[] };
     posts: { count: number; items: any[] };
     audit: { count: number; items: any[] };
+    seo?: {
+      pendingCount: number;
+      pendingFixCount: number;
+      score: number;
+      grade: string;
+      connectedToGoogle: boolean;
+      landingUrl: string | null;
+      hasRollback: boolean;
+      searchTermsUsed: string[];
+      items: any[];
+      uncoveredSearchTerms: any[];
+    };
   };
 };
 

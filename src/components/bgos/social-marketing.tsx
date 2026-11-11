@@ -714,12 +714,46 @@ interface GrowthActionDto {
   completed?: boolean;
 }
 
+interface GrowthSegmentSeoItemDto {
+  id: 'description' | 'categories' | 'attributes' | 'services' | 'landing_page';
+  title: string;
+  subtitle: string;
+  ready: boolean;
+  alreadyOptimal: boolean;
+  impact: 'high' | 'medium';
+}
+
+interface GrowthSearchDemandDto {
+  keyword: string;
+  count: number;
+  isThreshold?: boolean;
+  suggestedServiceName: string;
+}
+
 interface GrowthActionsResponse {
   actions?: GrowthActionDto[];
   totalDone?: number;
   totalTarget?: number;
   leftCount?: number;
   pendingApprovalCount?: number;
+  seoPendingCount?: number;
+  segments?: {
+    reviews?: { count?: number; items?: unknown[] };
+    posts?: { count?: number; items?: unknown[] };
+    audit?: { count?: number; items?: unknown[] };
+    seo?: {
+      pendingCount?: number;
+      pendingFixCount?: number;
+      score?: number;
+      grade?: string;
+      connectedToGoogle?: boolean;
+      landingUrl?: string | null;
+      hasRollback?: boolean;
+      searchTermsUsed?: string[];
+      items?: GrowthSegmentSeoItemDto[];
+      uncoveredSearchTerms?: GrowthSearchDemandDto[];
+    };
+  };
 }
 
 interface PlaceMetrics {
@@ -1985,6 +2019,7 @@ export function SocialMediaView({
   const [growthLoading, setGrowthLoading] = useState(true);
   const [growthDrawerOpen, setGrowthDrawerOpen] = useState(false);
   const [dismissingActionId, setDismissingActionId] = useState<string | null>(null);
+  const [growthSeoBusy, setGrowthSeoBusy] = useState<string | null>(null);
 
   // ── Review Replies tab state ──
   const [reviews, setReviews] = useState<ReviewDto[]>([]);
@@ -2801,9 +2836,35 @@ export function SocialMediaView({
     }
   };
 
+  const handleGrowthSeoAction = async (
+    payload: Record<string, unknown>,
+    busyKey: string,
+    fallbackSuccessMessage: string,
+  ) => {
+    setGrowthSeoBusy(busyKey);
+    try {
+      const res = await authFetch('/api/gbp/growth-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const json = await res.json().catch(() => ({}));
+        await fetchGrowthActions();
+        toast.success(json?.message || fallbackSuccessMessage);
+      } else {
+        toastApiError(res, 'Could not run SEO optimization action.');
+      }
+    } catch {
+      toast.error('Network error running SEO optimization.');
+    } finally {
+      setGrowthSeoBusy(null);
+    }
+  };
+
   const growthActionTarget = (id: string) => {
     if (id === 'complete_profile') {
-      setCurrentView('settings');
+      setCurrentView('gbpAI');
       setGrowthDrawerOpen(false);
     } else if (id === 'upload_media') {
       setActiveTab('google-media');
@@ -3351,6 +3412,7 @@ export function SocialMediaView({
   const PRIMARY_TABS: { id: SocialTab; label: string; Icon: LucideIcon }[] = [
     { id: 'composer', label: 'Create', Icon: Sparkles },
     { id: 'autopilot', label: 'Autopilot (30d / 1yr)', Icon: Zap },
+    { id: 'google-post', label: 'Keyword Planner', Icon: Search },
     { id: 'posts', label: 'Content library', Icon: FolderOpen },
     { id: 'overview', label: 'Calendar', Icon: Calendar },
     { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
@@ -6380,6 +6442,201 @@ export function SocialMediaView({
                     </Button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Interactive 1-Click AI SEO Fixes & New Customer Search Demands */}
+            {growthState?.segments?.seo && (
+              <div className="p-3.5 rounded-xl border border-violet-500/30 bg-violet-50/60 dark:bg-violet-950/20 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Wand2 className="size-3.5 text-violet-600 shrink-0" />
+                      <p className="text-xs font-bold text-foreground">
+                        AI Profile Auto-Optimizer
+                      </p>
+                      <Badge variant="secondary" className="text-[10px] font-bold">
+                        {growthState.segments.seo.score ?? 0}% · {growthState.segments.seo.grade ?? 'B'}
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {(growthState.segments.seo.searchTermsUsed?.length || 0) > 0
+                        ? `Backed by ${growthState.segments.seo.searchTermsUsed?.length} live Google Search Terms & local market signals`
+                        : 'Fixes Search Term description, secondary categories, attributes, 300–500 char services & landing page'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {growthState.segments.seo.hasRollback && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={growthSeoBusy === 'rollback_seo'}
+                        onClick={() =>
+                          handleGrowthSeoAction(
+                            { action: 'rollback_seo' },
+                            'rollback_seo',
+                            'Reverted last SEO auto-optimization.',
+                          )
+                        }
+                        className="h-7 px-2 text-xs"
+                        title="Undo last SEO auto-optimization"
+                      >
+                        {growthSeoBusy === 'rollback_seo' ? (
+                          <Loader2 className="size-3 animate-spin" />
+                        ) : (
+                          <>
+                            <RotateCcw className="size-3 mr-1" />
+                            Undo
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      disabled={growthSeoBusy === 'apply_seo_all'}
+                      onClick={() =>
+                        handleGrowthSeoAction(
+                          { action: 'apply_seo_all' },
+                          'apply_seo_all',
+                          'Applied safe GBP SEO fixes!',
+                        )
+                      }
+                      className="bg-violet-600 hover:bg-violet-700 text-white text-xs h-7 rounded-lg"
+                    >
+                      {growthSeoBusy === 'apply_seo_all' ? (
+                        <Loader2 className="size-3.5 animate-spin mr-1" />
+                      ) : (
+                        <Zap className="size-3.5 mr-1" />
+                      )}
+                      {(growthState.segments.seo.pendingFixCount || 0) > 0
+                        ? `Auto-Apply ${growthState.segments.seo.pendingFixCount} Fixes`
+                        : 'Re-Sync Safe SEO'}
+                    </Button>
+                  </div>
+                </div>
+
+                {(growthState.segments.seo.items || []).filter((it) => !it.alreadyOptimal).length > 0 && (
+                  <div className="space-y-1.5">
+                    {(growthState.segments.seo.items || [])
+                      .filter((it) => !it.alreadyOptimal)
+                      .map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-2.5 rounded-lg bg-background/90 border border-border flex items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-foreground truncate">{item.title}</p>
+                            <p className="text-[11px] text-muted-foreground line-clamp-2">{item.subtitle}</p>
+                          </div>
+                          {item.ready ? (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={growthSeoBusy === `step_${item.id}`}
+                              onClick={() =>
+                                handleGrowthSeoAction(
+                                  { action: 'apply_seo_step', stepId: item.id },
+                                  `step_${item.id}`,
+                                  `Applied ${item.title}`,
+                                )
+                              }
+                              className="h-7 text-xs shrink-0"
+                            >
+                              {growthSeoBusy === `step_${item.id}` ? (
+                                <Loader2 className="size-3 animate-spin" />
+                              ) : (
+                                'Apply'
+                              )}
+                            </Button>
+                          ) : item.id === 'services' ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setCurrentView('gbpAI');
+                                setGrowthDrawerOpen(false);
+                              }}
+                              className="h-7 text-xs shrink-0"
+                            >
+                              Setup
+                            </Button>
+                          ) : null}
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {(growthState.segments.seo.uncoveredSearchTerms || []).length > 0 && (
+                  <div className="space-y-1.5 pt-1 border-t border-violet-500/20">
+                    <p className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                      New Customer Search Demands Found
+                    </p>
+                    {(growthState.segments.seo.uncoveredSearchTerms || []).map((term) => (
+                      <div
+                        key={term.keyword}
+                        className="p-2 rounded-lg bg-amber-50/70 dark:bg-amber-950/20 border border-amber-500/30 flex items-center justify-between gap-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-foreground truncate">
+                            “{term.keyword}” → {term.suggestedServiceName}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {term.count > 0 ? `${term.count} real searches` : 'Live Google Search Term'} · Generate 300–500 char localized service
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          disabled={growthSeoBusy === `term_${term.keyword}`}
+                          onClick={() =>
+                            handleGrowthSeoAction(
+                              {
+                                action: 'create_service_from_term',
+                                keyword: term.keyword,
+                                serviceName: term.suggestedServiceName,
+                              },
+                              `term_${term.keyword}`,
+                              `Added 300–500 char service "${term.suggestedServiceName}"`,
+                            )
+                          }
+                          className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white shrink-0"
+                        >
+                          {growthSeoBusy === `term_${term.keyword}` ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            '+ Service'
+                          )}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-0.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setActiveTab('google-post');
+                      setGrowthDrawerOpen(false);
+                    }}
+                    className="h-7 text-[11px] flex-1"
+                  >
+                    <Search className="size-3 mr-1" />
+                    Keyword Planner
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setCurrentView('gbpAI');
+                      setGrowthDrawerOpen(false);
+                    }}
+                    className="h-7 text-[11px] flex-1"
+                  >
+                    <Sparkles className="size-3 mr-1" />
+                    GBP Autopilot Hub
+                  </Button>
+                </div>
               </div>
             )}
 

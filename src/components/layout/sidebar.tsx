@@ -191,6 +191,7 @@ const ownerNavSections: NavSection[] = [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       // Social Media — consolidated into one tabbed page (Accounts, Create Post, Posts, Analytics)
       { view: 'socialMedia', label: 'Social Media', icon: Share2 },
+      { view: 'gbpAI', label: 'GBP Autopilot', icon: Sparkles },
     ],
   },
   {
@@ -419,6 +420,7 @@ const superadminNavSections: NavSection[] = [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'socialMedia', label: 'Social Media', icon: Share2 },
+      { view: 'gbpAI', label: 'GBP Autopilot', icon: Sparkles },
     ],
   },
   {

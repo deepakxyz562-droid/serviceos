@@ -120,7 +120,7 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
           ? `${additionalCats.length} secondary category(ies) set`
           : `${effectiveSecondaryCount} tag(s) — no secondary GBP categories saved yet`,
       recommendation: 'Add 2-5 competitor-backed secondary categories so Google indexes you for related nearby searches.',
-      actionRequired: 'Copy missing categories from Competitor Spy or Profile Settings.',
+      actionRequired: 'Run 1-Click Auto-Optimize inside Growth Actions or AI Growth Autopilot.',
     },
     {
       id: 'optimized_description',

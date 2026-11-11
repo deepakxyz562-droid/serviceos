@@ -152,6 +152,7 @@ vi.mock('@/lib/social/adapters/googlebusiness', () => ({
     appliedMasks: ['profile.description'],
     warnings: [],
   }),
+  replyToGoogleBusinessReview: vi.fn().mockResolvedValue({}),
   fetchGoogleBusinessPlaceDetails: vi.fn().mockResolvedValue(null),
   fetchGoogleBusinessPerformanceMetrics: vi.fn().mockResolvedValue(null),
   fetchGoogleBusinessSearchKeywords: vi.fn().mockResolvedValue([]),
@@ -484,6 +485,157 @@ describe('Option A GBP SEO Engine (DataForSEO-free)', () => {
     } finally {
       mockTenantRecord.value.settingsJson = prevSettings;
       global.fetch = prevFetch;
+    }
+  });
+
+  it('surfaces AI SEO fixes + uncovered Search Demands in Growth Actions and executes 1-tap apply, service creation & rollback', async () => {
+    const prevSnapshot = {
+      description: mockTenantRecord.value.description,
+      website: mockTenantRecord.value.website,
+      publicProfileEnabled: mockTenantRecord.value.publicProfileEnabled,
+      claimed: mockTenantRecord.value.claimed,
+      settingsJson: mockTenantRecord.value.settingsJson,
+      brandSummary: mockTenantRecord.value.brandProfile.aiGeneratedSummary,
+      services: [...mockServices.rows],
+    };
+
+    try {
+      mockTenantRecord.value.description = '';
+      mockTenantRecord.value.website = null;
+      mockTenantRecord.value.publicProfileEnabled = false;
+      mockTenantRecord.value.claimed = false;
+      mockTenantRecord.value.brandProfile.aiGeneratedSummary = '';
+      mockTenantRecord.value.settingsJson = JSON.stringify({
+        googleDiscovery: {
+          updatedAt: '2026-11-01T00:00:00Z',
+          keywords: [
+            { keyword: 'emergency dentist austin', count: 140 },
+            { keyword: 'teeth whitening austin', count: 55 },
+          ],
+        },
+        additionalCategories: ['Cosmetic Dentist'],
+        seoServices: [{ name: 'Emergency Dental Care', description: 'Fast relief.' }],
+        competitorSpyCache: {
+          updatedAt: new Date().toISOString(),
+          queryUsed: 'Dentist',
+          locationUsed: 'Austin',
+          competitors: [
+            {
+              id: 'comp-1',
+              name: 'Capital Dental Group',
+              rating: 4.8,
+              reviewCount: 110,
+              distanceKm: 1.4,
+              primaryCategoryLabel: 'Dentist',
+              secondaryCategories: ['Emergency Dental Service'],
+              attributesList: ['Accepts credit cards'],
+              recentReviews: [{ text: 'Great same day emergency dentist in Austin', rating: 5 }],
+              source: 'places',
+            },
+          ],
+        },
+      });
+      mockServices.rows = [
+        {
+          id: 'svc-1',
+          tenantId: 'tenant-opt-a',
+          name: 'Emergency Dental Care',
+          description: 'Fast relief.',
+          longDescription: null,
+          category: 'Dentist',
+          isActive: true,
+          isPublic: true,
+        },
+      ];
+
+      const { GET, POST } = await import('@/app/api/gbp/growth-actions/route');
+
+      // 1. GET Growth Actions exposes segments.seo + uncoveredSearchTerms
+      const getRes = await GET(new NextRequest('http://localhost:3000/api/gbp/growth-actions'));
+      expect(getRes.status).toBe(200);
+      const getJson = await getRes.json();
+
+      expect(getJson.segments?.seo).toBeDefined();
+      expect(getJson.segments.seo.pendingCount).toBeGreaterThan(0);
+      expect(getJson.segments.seo.items.map((i: any) => i.id)).toEqual(
+        expect.arrayContaining(['description', 'categories', 'attributes', 'services', 'landing_page']),
+      );
+      expect(
+        getJson.segments.seo.uncoveredSearchTerms.some(
+          (t: any) => t.keyword === 'teeth whitening austin' && t.suggestedServiceName === 'Teeth Whitening',
+        ),
+      ).toBe(true);
+
+      // 2. Apply single SEO step ('description')
+      const stepRes = await POST(
+        new NextRequest('http://localhost:3000/api/gbp/growth-actions', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'apply_seo_step', stepId: 'description', pushToGoogle: false }),
+        }),
+      );
+      expect(stepRes.status).toBe(200);
+      const stepJson = await stepRes.json();
+      expect(stepJson.appliedSteps).toEqual(['description']);
+      expect(stepJson.generatedDescription.length).toBeGreaterThanOrEqual(250);
+
+      // 3. Create 300-500 char localized service directly from uncovered Search Term
+      const svcRes = await POST(
+        new NextRequest('http://localhost:3000/api/gbp/growth-actions', {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'create_service_from_term',
+            keyword: 'teeth whitening austin',
+            pushToGoogle: false,
+          }),
+        }),
+      );
+      expect(svcRes.status).toBe(200);
+      const svcJson = await svcRes.json();
+      expect(svcJson.service?.name).toBe('Teeth Whitening');
+      expect(svcJson.service?.description?.length).toBeGreaterThanOrEqual(300);
+      expect(svcJson.service?.description?.length).toBeLessThanOrEqual(500);
+      expect(svcJson.service?.description.toLowerCase()).toContain('austin');
+
+      // Re-fetching Growth Actions confirms 'teeth whitening austin' is now covered
+      const afterSvcGet = await GET(new NextRequest('http://localhost:3000/api/gbp/growth-actions'));
+      const afterSvcJson = await afterSvcGet.json();
+      expect(afterSvcJson.segments.seo.hasRollback).toBe(true);
+      expect(
+        afterSvcJson.segments.seo.uncoveredSearchTerms.some((t: any) => t.keyword === 'teeth whitening austin'),
+      ).toBe(false);
+
+      // 4. Apply all safe SEO fixes in 1 tap
+      const allRes = await POST(
+        new NextRequest('http://localhost:3000/api/gbp/growth-actions', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'apply_seo_all', pushToGoogle: false }),
+        }),
+      );
+      expect(allRes.status).toBe(200);
+      const allJson = await allRes.json();
+      expect(allJson.appliedSteps).toEqual(
+        expect.arrayContaining(['description', 'categories', 'attributes', 'services', 'landing_page']),
+      );
+      expect(allJson.scoreAfter).toBeGreaterThanOrEqual(allJson.scoreBefore);
+
+      // 5. Rollback reverts the auto-optimize changes
+      const rollbackRes = await POST(
+        new NextRequest('http://localhost:3000/api/gbp/growth-actions', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'rollback_seo' }),
+        }),
+      );
+      expect(rollbackRes.status).toBe(200);
+      const rollbackJson = await rollbackRes.json();
+      expect(rollbackJson.rolledBack).toBe(true);
+    } finally {
+      mockTenantRecord.value.description = prevSnapshot.description;
+      mockTenantRecord.value.website = prevSnapshot.website;
+      mockTenantRecord.value.publicProfileEnabled = prevSnapshot.publicProfileEnabled;
+      mockTenantRecord.value.claimed = prevSnapshot.claimed;
+      mockTenantRecord.value.settingsJson = prevSnapshot.settingsJson;
+      mockTenantRecord.value.brandProfile.aiGeneratedSummary = prevSnapshot.brandSummary;
+      mockServices.rows = prevSnapshot.services;
     }
   });
 });
