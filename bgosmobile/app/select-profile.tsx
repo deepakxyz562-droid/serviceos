@@ -49,73 +49,29 @@ const AVATAR_COLORS: Record<string, { bg: string; text: string }> = {
   D: { bg: '#DCFCE7', text: '#16A34A' }, // green
 };
 
-const CATEGORY_SUGGESTIONS = [
-  'Grocery & Supermarket',
-  'Retail & Department Store',
-  'Bakery & Cake Shop',
-  'Restaurant & Cafe',
-  'Hardware & Tools',
-  'Paint & Home Decor',
-  'Fashion & Boutique',
-  'Farmhouse & Resort',
-  'Clinic & Healthcare',
-  'Software & IT Services',
-];
-
-function inferCategoryFromName(name: string, fallbackCategory?: string): string {
-  if (fallbackCategory && !/corporate|holding|community centre/i.test(fallbackCategory)) {
-    return fallbackCategory;
+async function fetchCategorySuggestions(query: string, businessName?: string): Promise<string[]> {
+  try {
+    const params = new URLSearchParams();
+    if (query) params.set('query', query);
+    if (businessName) params.set('businessName', businessName);
+    const res = await apiRequest<{ categories: string[] }>(`/api/gbp/categories?${params.toString()}`);
+    return res.categories || [];
+  } catch {
+    return [];
   }
-  const n = name.toLowerCase();
-  if (/(market|grocery|supermarket|mart|kirana|retail|store|bazaar|provisions)/i.test(n)) {
-    return 'Grocery & Supermarket';
-  }
-  if (/(bakery|cake|pastry|mithai|sweet)/i.test(n)) {
-    return 'Bakery & Sweets';
-  }
-  if (/(hardware|tool|pipe|sanitary|plywood)/i.test(n)) {
-    return 'Hardware & Tools';
-  }
-  if (/(paint|color|wall decor)/i.test(n)) {
-    return 'Paint & Home Decor';
-  }
-  if (/(pool|farmhouse|resort|villa|cottage|homestay)/i.test(n)) {
-    return 'Farmhouse & Resort';
-  }
-  if (/(restaurant|cafe|dining|bistro|kitchen)/i.test(n)) {
-    return 'Restaurant & Cafe';
-  }
-  if (/(fashion|boutique|clothing|saree|garment)/i.test(n)) {
-    return 'Fashion & Boutique';
-  }
-  if (fallbackCategory) return fallbackCategory;
-  return 'Retail & Local Services';
 }
 
-function getSuggestedOfferings(category: string, name: string): string[] {
-  const c = `${category} ${name}`.toLowerCase();
-  if (/(market|grocery|supermarket|mart|kirana|retail)/i.test(c)) {
-    return ['Fresh Produce', 'Daily Groceries', 'Packaged Food', 'Household Essentials'];
+async function fetchDynamicServices(category: string, businessName: string, query?: string): Promise<string[]> {
+  try {
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    if (businessName) params.set('businessName', businessName);
+    if (query) params.set('query', query);
+    const res = await apiRequest<{ services: string[] }>(`/api/gbp/services/suggest?${params.toString()}`);
+    return res.services || [];
+  } catch {
+    return [];
   }
-  if (/(bakery|cake|pastry|sweet)/i.test(c)) {
-    return ['Designer Celebration Cakes', 'Fresh Pastries', 'Handcrafted Cookies', 'Custom Birthday Orders'];
-  }
-  if (/(hardware|tool|pipe)/i.test(c)) {
-    return ['Power Tools', 'Plumbing Fixtures', 'Fasteners & Screws', 'Electrical Supplies'];
-  }
-  if (/(paint|color|decor)/i.test(c)) {
-    return ['Interior Wall Emulsion', 'Exterior Weatherproof Coat', 'Texture Finishes', 'Waterproofing'];
-  }
-  if (/(pool|farmhouse|resort|villa)/i.test(c)) {
-    return ['Private Villa Stay', 'Swimming Pool Access', 'Lawn Event Booking', 'Family Day Outing'];
-  }
-  if (/(restaurant|cafe|dining)/i.test(c)) {
-    return ['Dine-in Service', 'Specialty Coffee', 'Takeaway Orders', 'Party Catering'];
-  }
-  if (/(fashion|boutique|saree)/i.test(c)) {
-    return ['Designer Sarees', 'Bridal Wear', 'Custom Tailoring', 'Festive Collection'];
-  }
-  return ['In-Store Shopping', 'Home Delivery', 'Customer Support', 'Consultation'];
 }
 
 /**
@@ -138,6 +94,17 @@ export default function SelectProfileScreen() {
   const [offerings, setOfferings] = useState<string[]>([]);
   const [customTagInput, setCustomTagInput] = useState('');
 
+  // Dynamic Category Autocomplete Dropdown State
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [categoryResults, setCategoryResults] = useState<string[]>([]);
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [recommendedCategories, setRecommendedCategories] = useState<string[]>([]);
+
+  // Dynamic Service Autocomplete Dropdown State
+  const [servicesLoading, setServicesLoading] = useState(false);
+  const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
+  const [serviceResults, setServiceResults] = useState<string[]>([]);
+
   const profiles = discover.data?.profiles || [];
   const activeId = discover.data?.activeProfileId || profiles[0]?.id || '';
   const email = discover.data?.email || '';
@@ -145,13 +112,96 @@ export default function SelectProfileScreen() {
   const version = discover.data?.version || 'BGOS v2.0';
   const isConnected = Boolean(discover.data?.hasConnectedGbp || profiles.length > 0);
 
-  function handleCardPress(p: GbpProfile) {
-    const cat = inferCategoryFromName(p.name, p.category);
+  // Debounced search for Google categories as user types
+  useEffect(() => {
+    if (!verifyModalProfile) return;
+    const query = editCategory.trim();
+    if (query.length < 2) {
+      setCategoryResults([]);
+      setCategoryDropdownOpen(false);
+      return;
+    }
+
+    setCategoryLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const results = await fetchCategorySuggestions(query, editName);
+        setCategoryResults(results);
+        setCategoryDropdownOpen(results.length > 0);
+      } finally {
+        setCategoryLoading(false);
+      }
+    }, 280);
+
+    return () => clearTimeout(timer);
+  }, [editCategory, editName, verifyModalProfile]);
+
+  // Debounced search for services as user types in add service field
+  useEffect(() => {
+    const q = customTagInput.trim();
+    if (q.length < 1) {
+      setServiceResults([]);
+      setServiceDropdownOpen(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const matches = await fetchDynamicServices(editCategory, editName, q);
+        const filtered = matches.filter((m) => !offerings.includes(m));
+        setServiceResults(filtered);
+        setServiceDropdownOpen(filtered.length > 0);
+      } catch {}
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [customTagInput, editCategory, editName, offerings]);
+
+  async function handleCardPress(p: GbpProfile) {
+    const initialCategory = p.category && !/corporate|holding|community centre/i.test(p.category)
+      ? p.category
+      : '';
     setVerifyModalProfile(p);
     setEditName(p.name);
-    setEditCategory(cat);
-    setOfferings(getSuggestedOfferings(cat, p.name));
+    setEditCategory(initialCategory);
+    setOfferings([]);
     setCustomTagInput('');
+    setCategoryDropdownOpen(false);
+    setServiceDropdownOpen(false);
+
+    // 1. Fetch dynamic category recommendations tailored specifically to this business
+    void fetchCategorySuggestions('', p.name).then((cats) => {
+      setRecommendedCategories(cats);
+      if (!initialCategory && cats.length > 0) {
+        setEditCategory(cats[0]);
+        setServicesLoading(true);
+        void fetchDynamicServices(cats[0], p.name)
+          .then(setOfferings)
+          .finally(() => setServicesLoading(false));
+      }
+    });
+
+    // 2. If profile already had a genuine Google category, dynamically fetch tailored offerings for it
+    if (initialCategory) {
+      setServicesLoading(true);
+      void fetchDynamicServices(initialCategory, p.name)
+        .then(setOfferings)
+        .finally(() => setServicesLoading(false));
+    }
+  }
+
+  async function handleSelectCategory(cat: string) {
+    setEditCategory(cat);
+    setCategoryDropdownOpen(false);
+    setCategoryResults([]);
+    // Regenerate tailored services for this category
+    setServicesLoading(true);
+    try {
+      const prods = await fetchDynamicServices(cat, editName);
+      setOfferings(prods);
+    } finally {
+      setServicesLoading(false);
+    }
   }
 
   async function handleConfirmProfile(p: GbpProfile, name: string, category: string, prods: string[]) {
@@ -191,8 +241,12 @@ export default function SelectProfileScreen() {
   }
 
   async function handleQuickSelect(p: GbpProfile) {
-    const cat = inferCategoryFromName(p.name, p.category);
-    const defaults = getSuggestedOfferings(cat, p.name);
+    let cat = p.category && !/corporate|holding|community centre/i.test(p.category) ? p.category : '';
+    if (!cat) {
+      const recs = await fetchCategorySuggestions('', p.name);
+      cat = recs[0] || 'Local Business';
+    }
+    const defaults = await fetchDynamicServices(cat, p.name);
     await handleConfirmProfile(p, p.name, cat, defaults);
   }
 
@@ -366,7 +420,7 @@ export default function SelectProfileScreen() {
               const isSelected = p.id === activeId;
               const isSwitching = switchingId === p.id;
               const colorScheme = AVATAR_COLORS[p.initial] || { bg: '#F1F5F9', text: '#0F172A' };
-              const inferredCat = inferCategoryFromName(p.name, p.category);
+              const displayCat = p.category && !/corporate|holding/i.test(p.category) ? p.category : 'Google Business Profile';
 
               return (
                 <Pressable
@@ -412,7 +466,7 @@ export default function SelectProfileScreen() {
                       <Text style={{ fontSize: 12, color: '#CBD5E1' }}>•</Text>
                       <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 7, paddingVertical: 1.5, borderRadius: 6 }}>
                         <Text style={{ fontSize: 11, color: '#475569', fontWeight: '600' }} numberOfLines={1}>
-                          {inferredCat}
+                          {displayCat}
                         </Text>
                       </View>
                     </View>
@@ -790,71 +844,163 @@ export default function SelectProfileScreen() {
               </View>
 
               {/* 2. Business Category */}
-              <View style={{ gap: 6 }}>
+              <View style={{ gap: 6, zIndex: 30 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>
                     Business Category
                   </Text>
-                  <Text style={{ fontSize: 11, color: '#64748B' }}>Tap to select or type</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>Search Google categories or select</Text>
                 </View>
-                <TextInput
-                  value={editCategory}
-                  onChangeText={setEditCategory}
-                  placeholder="e.g. Grocery & Supermarket"
-                  placeholderTextColor="#94A3B8"
-                  style={{
-                    borderWidth: 1,
-                    borderColor: '#CBD5E1',
-                    borderRadius: 12,
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
-                    fontSize: 14.5,
-                    color: '#0F172A',
-                    backgroundColor: '#F8FAFC',
-                  }}
-                />
-                {/* Category Chips */}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                  {CATEGORY_SUGGESTIONS.map((cat) => {
-                    const isCatSelected = editCategory.toLowerCase() === cat.toLowerCase();
-                    return (
-                      <Pressable
-                        key={cat}
-                        onPress={() => {
-                          setEditCategory(cat);
-                          setOfferings(getSuggestedOfferings(cat, editName));
-                        }}
-                        style={({ pressed }) => ({
-                          backgroundColor: isCatSelected ? '#EFF6FF' : pressed ? '#F1F5F9' : '#FFFFFF',
-                          borderWidth: 1,
-                          borderColor: isCatSelected ? '#2563EB' : '#E2E8F0',
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 20,
-                        })}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: isCatSelected ? '700' : '500',
-                            color: isCatSelected ? '#2563EB' : '#475569',
-                          }}
-                        >
-                          {cat}
+
+                {/* Category Input */}
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    value={editCategory}
+                    onChangeText={setEditCategory}
+                    placeholder="Search Google categories (e.g. Software company, Bakery...)"
+                    placeholderTextColor="#94A3B8"
+                    onFocus={() => {
+                      if (categoryResults.length > 0) setCategoryDropdownOpen(true);
+                    }}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: categoryDropdownOpen ? '#2563EB' : '#CBD5E1',
+                      borderRadius: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      paddingRight: categoryLoading ? 38 : 14,
+                      fontSize: 14.5,
+                      color: '#0F172A',
+                      backgroundColor: '#F8FAFC',
+                    }}
+                  />
+                  {categoryLoading && (
+                    <View style={{ position: 'absolute', right: 12, top: 12 }}>
+                      <ActivityIndicator size="small" color="#2563EB" />
+                    </View>
+                  )}
+                </View>
+
+                {/* Floating Live Autocomplete Dropdown */}
+                {categoryDropdownOpen && categoryResults.length > 0 && (
+                  <View
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: '#3B82F6',
+                      shadowColor: '#0F172A',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.14,
+                      shadowRadius: 8,
+                      elevation: 6,
+                      maxHeight: 210,
+                      overflow: 'hidden',
+                      marginTop: 2,
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        backgroundColor: '#EFF6FF',
+                        borderBottomWidth: 1,
+                        borderBottomColor: '#DBEAFE',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <MaterialIcons name="search" size={14} color="#2563EB" />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#1D4ED8' }}>
+                          Google Business Categories
                         </Text>
+                      </View>
+                      <Pressable onPress={() => setCategoryDropdownOpen(false)} hitSlop={6}>
+                        <MaterialIcons name="close" size={16} color="#64748B" />
                       </Pressable>
-                    );
-                  })}
-                </View>
+                    </View>
+                    <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 165 }}>
+                      {categoryResults.map((cat, idx) => (
+                        <Pressable
+                          key={`${cat}-${idx}`}
+                          onPress={() => void handleSelectCategory(cat)}
+                          style={({ pressed }) => ({
+                            paddingHorizontal: 14,
+                            paddingVertical: 11,
+                            borderBottomWidth: idx < categoryResults.length - 1 ? 1 : 0,
+                            borderBottomColor: '#F1F5F9',
+                            backgroundColor: pressed ? '#EFF6FF' : '#FFFFFF',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          })}
+                        >
+                          <Text style={{ fontSize: 13.5, fontWeight: '600', color: '#0F172A' }}>
+                            {cat}
+                          </Text>
+                          <MaterialIcons name="check" size={16} color="#2563EB" />
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Dynamic Contextual Recommendations Chips for this Business */}
+                {recommendedCategories.length > 0 && (
+                  <View style={{ gap: 4, marginTop: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>
+                      Suggested categories for {editName || 'your business'}:
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                      {recommendedCategories.map((cat) => {
+                        const isCatSelected = editCategory.toLowerCase() === cat.toLowerCase();
+                        return (
+                          <Pressable
+                            key={cat}
+                            onPress={() => void handleSelectCategory(cat)}
+                            style={({ pressed }) => ({
+                              backgroundColor: isCatSelected ? '#EFF6FF' : pressed ? '#F1F5F9' : '#FFFFFF',
+                              borderWidth: 1,
+                              borderColor: isCatSelected ? '#2563EB' : '#E2E8F0',
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderRadius: 20,
+                            })}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: isCatSelected ? '700' : '500',
+                                color: isCatSelected ? '#2563EB' : '#475569',
+                              }}
+                            >
+                              {cat}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
               </View>
 
               {/* 3. Products & Services */}
-              <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>
-                  Key Products &amp; Services
-                </Text>
+              <View style={{ gap: 6, zIndex: 20 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>
+                    Key Products &amp; Services
+                  </Text>
+                  {servicesLoading && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <ActivityIndicator size="small" color="#2563EB" />
+                      <Text style={{ fontSize: 11, color: '#2563EB', fontWeight: '600' }}>AI generating…</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={{ fontSize: 11.5, color: '#64748B' }}>
-                  AI generates photorealistic visuals and captions tailored to these items:
+                  AI generates photorealistic visuals, posts, and captions tailored specifically to these items:
                 </Text>
 
                 {/* Active Offerings Tags */}
@@ -886,51 +1032,133 @@ export default function SelectProfileScreen() {
                       </Pressable>
                     </View>
                   ))}
+                  {offerings.length === 0 && !servicesLoading && (
+                    <Text style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 4 }}>
+                      Select a category above or add services below.
+                    </Text>
+                  )}
                 </View>
 
-                {/* Add Tag Input */}
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                  <TextInput
-                    value={customTagInput}
-                    onChangeText={setCustomTagInput}
-                    placeholder="Add custom product or service..."
-                    placeholderTextColor="#94A3B8"
-                    onSubmitEditing={() => {
-                      const trimmed = customTagInput.trim();
-                      if (trimmed && !offerings.includes(trimmed)) {
-                        setOfferings([...offerings, trimmed]);
-                        setCustomTagInput('');
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      borderWidth: 1,
-                      borderColor: '#CBD5E1',
-                      borderRadius: 10,
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                      fontSize: 13.5,
-                      backgroundColor: '#FFFFFF',
-                    }}
-                  />
-                  <Pressable
-                    onPress={() => {
-                      const trimmed = customTagInput.trim();
-                      if (trimmed && !offerings.includes(trimmed)) {
-                        setOfferings([...offerings, trimmed]);
-                        setCustomTagInput('');
-                      }
-                    }}
-                    style={({ pressed }) => ({
-                      backgroundColor: pressed ? '#1D4ED8' : '#2563EB',
-                      paddingHorizontal: 14,
-                      borderRadius: 10,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    })}
-                  >
-                    <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>+ Add</Text>
-                  </Pressable>
+                {/* Add Service Input with Autocomplete */}
+                <View style={{ gap: 4 }}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TextInput
+                      value={customTagInput}
+                      onChangeText={setCustomTagInput}
+                      placeholder="Type to search or add a custom service…"
+                      placeholderTextColor="#94A3B8"
+                      onFocus={() => {
+                        if (serviceResults.length > 0) setServiceDropdownOpen(true);
+                      }}
+                      onSubmitEditing={() => {
+                        const trimmed = customTagInput.trim();
+                        if (trimmed && !offerings.includes(trimmed)) {
+                          setOfferings([...offerings, trimmed]);
+                          setCustomTagInput('');
+                          setServiceDropdownOpen(false);
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        borderWidth: 1,
+                        borderColor: serviceDropdownOpen ? '#16A34A' : '#CBD5E1',
+                        borderRadius: 10,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        fontSize: 13.5,
+                        backgroundColor: '#FFFFFF',
+                      }}
+                    />
+                    <Pressable
+                      onPress={() => {
+                        const trimmed = customTagInput.trim();
+                        if (trimmed && !offerings.includes(trimmed)) {
+                          setOfferings([...offerings, trimmed]);
+                          setCustomTagInput('');
+                          setServiceDropdownOpen(false);
+                        }
+                      }}
+                      style={({ pressed }) => ({
+                        backgroundColor: pressed ? '#1D4ED8' : '#2563EB',
+                        paddingHorizontal: 14,
+                        borderRadius: 10,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      })}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>+ Add</Text>
+                    </Pressable>
+                  </View>
+
+                  {/* Service Autocomplete Dropdown */}
+                  {serviceDropdownOpen && serviceResults.length > 0 && (
+                    <View
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: '#86EFAC',
+                        shadowColor: '#0F172A',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 6,
+                        elevation: 5,
+                        maxHeight: 180,
+                        overflow: 'hidden',
+                        marginTop: 2,
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          backgroundColor: '#F0FDF4',
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#DCFCE7',
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <MaterialIcons name="auto-awesome" size={13} color="#16A34A" />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#166534' }}>
+                            Suggested Offerings for {editCategory || 'Business'}
+                          </Text>
+                        </View>
+                        <Pressable onPress={() => setServiceDropdownOpen(false)} hitSlop={6}>
+                          <MaterialIcons name="close" size={15} color="#64748B" />
+                        </Pressable>
+                      </View>
+                      <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 140 }}>
+                        {serviceResults.map((s, idx) => (
+                          <Pressable
+                            key={`${s}-${idx}`}
+                            onPress={() => {
+                              if (!offerings.includes(s)) {
+                                setOfferings([...offerings, s]);
+                              }
+                              setCustomTagInput('');
+                              setServiceDropdownOpen(false);
+                            }}
+                            style={({ pressed }) => ({
+                              paddingHorizontal: 12,
+                              paddingVertical: 9,
+                              borderBottomWidth: idx < serviceResults.length - 1 ? 1 : 0,
+                              borderBottomColor: '#F1F5F9',
+                              backgroundColor: pressed ? '#F0FDF4' : '#FFFFFF',
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                            })}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#1E293B' }}>{s}</Text>
+                            <MaterialIcons name="add-circle-outline" size={16} color="#16A34A" />
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
                 </View>
               </View>
             </ScrollView>

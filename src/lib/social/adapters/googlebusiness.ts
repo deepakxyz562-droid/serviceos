@@ -1089,16 +1089,30 @@ export async function fetchGoogleBusinessPerformanceMetrics(
 ): Promise<{
   searchImpressions: number;
   mapsImpressions: number;
+  totalViews: number;
   callClicks: number;
   directionRequests: number;
   websiteClicks: number;
   bookings: number;
   conversations: number;
+  monthlyTrends: {
+    months: string[];
+    views: number[];
+    calls: number[];
+    directions: number[];
+  };
 }> {
   const { locationId } = await extractLocationRef(account);
   const now = new Date();
-  const start = startDate || new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const end = endDate || now.toISOString().slice(0, 10);
+
+  // Official Google Business Profile Performance API strictly requires the end date
+  // to be at least 3-4 days in the past (72-hour aggregation lag). Using today's date causes
+  // INVALID_ARGUMENT or empty payloads.
+  const fourDaysAgo = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);
+  const sixMonthsAgo = new Date(now.getTime() - 184 * 24 * 60 * 60 * 1000);
+
+  const start = startDate || sixMonthsAgo.toISOString().slice(0, 10);
+  const end = endDate || fourDaysAgo.toISOString().slice(0, 10);
 
   const cacheKey = `${locationId}:${start}:${end}`;
   const cached = PERF_METRICS_CACHE.get(cacheKey);
@@ -1108,6 +1122,20 @@ export async function fetchGoogleBusinessPerformanceMetrics(
 
   const [sYear, sMonth, sDay] = start.split('-').map(Number);
   const [eYear, eMonth, eDay] = end.split('-').map(Number);
+
+  // Generate 6-month historical bucket keys
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months: string[] = [];
+  const monthKeys: string[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(monthNames[d.getMonth()]);
+    monthKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+
+  const monthlyViews = [0, 0, 0, 0, 0, 0];
+  const monthlyCalls = [0, 0, 0, 0, 0, 0];
+  const monthlyDirections = [0, 0, 0, 0, 0, 0];
 
   const url = `https://businessprofileperformance.googleapis.com/v1/locations/${locationId}:fetchMultiDailyMetricsTimeSeries?dailyMetrics=BUSINESS_IMPRESSIONS_DESKTOP_MAPS&dailyMetrics=BUSINESS_IMPRESSIONS_MOBILE_MAPS&dailyMetrics=BUSINESS_IMPRESSIONS_DESKTOP_SEARCH&dailyMetrics=BUSINESS_IMPRESSIONS_MOBILE_SEARCH&dailyMetrics=CALL_CLICKS&dailyMetrics=BUSINESS_DIRECTION_REQUESTS&dailyMetrics=WEBSITE_CLICKS&dailyMetrics=BUSINESS_BOOKINGS&dailyMetrics=BUSINESS_CONVERSATIONS&dailyRange.startDate.year=${sYear}&dailyRange.startDate.month=${sMonth}&dailyRange.startDate.day=${sDay}&dailyRange.endDate.year=${eYear}&dailyRange.endDate.month=${eMonth}&dailyRange.endDate.day=${eDay}`;
 
@@ -1124,7 +1152,10 @@ export async function fetchGoogleBusinessPerformanceMetrics(
       dailyMetricTimeSeries?: Array<{
         dailyMetric?: string;
         timeSeries?: {
-          datedValues?: Array<{ value?: string }>;
+          datedValues?: Array<{
+            date?: { year?: number; month?: number; day?: number };
+            value?: string;
+          }>;
         };
       }>;
     }>;
@@ -1141,7 +1172,24 @@ export async function fetchGoogleBusinessPerformanceMetrics(
   const seriesList = data.multiDailyMetricTimeSeries?.[0]?.dailyMetricTimeSeries || [];
   for (const s of seriesList) {
     const metric = s.dailyMetric || '';
-    const sum = (s.timeSeries?.datedValues || []).reduce((acc, v) => acc + (parseInt(v.value || '0', 10) || 0), 0);
+    const datedVals = s.timeSeries?.datedValues || [];
+    const sum = datedVals.reduce((acc, v) => acc + (parseInt(v.value || '0', 10) || 0), 0);
+
+    for (const item of datedVals) {
+      const val = parseInt(item.value || '0', 10) || 0;
+      if (val <= 0 || !item.date?.year || !item.date?.month) continue;
+      const key = `${item.date.year}-${String(item.date.month).padStart(2, '0')}`;
+      const mIdx = monthKeys.indexOf(key);
+      if (mIdx >= 0) {
+        if (metric.includes('SEARCH') || metric.includes('MAPS')) {
+          monthlyViews[mIdx] += val;
+        } else if (metric === 'CALL_CLICKS') {
+          monthlyCalls[mIdx] += val;
+        } else if (metric === 'BUSINESS_DIRECTION_REQUESTS') {
+          monthlyDirections[mIdx] += val;
+        }
+      }
+    }
 
     if (metric.includes('SEARCH')) {
       searchImpressions += sum;
@@ -1163,11 +1211,18 @@ export async function fetchGoogleBusinessPerformanceMetrics(
   const perfResult = {
     searchImpressions,
     mapsImpressions,
+    totalViews: searchImpressions + mapsImpressions,
     callClicks,
     directionRequests,
     websiteClicks,
     bookings,
     conversations,
+    monthlyTrends: {
+      months,
+      views: monthlyViews,
+      calls: monthlyCalls,
+      directions: monthlyDirections,
+    },
   };
   PERF_METRICS_CACHE.set(cacheKey, { data: perfResult, expiresAt: Date.now() + CACHE_TTL_MS });
   return perfResult;

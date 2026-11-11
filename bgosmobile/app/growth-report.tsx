@@ -19,6 +19,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { apiRequest } from '../src/lib/api';
 import { getToken } from '../src/lib/auth';
 import { WEB_URL } from '../src/lib/constants';
+import { PerformancePanel } from '../src/components/gbp/performance-panel';
 
 interface MetricDelta {
   value: number;
@@ -103,6 +104,31 @@ export default function GrowthReportScreen() {
   const [activeTab, setActiveTab] = useState<'action' | 'performance'>('action');
   const [summaryPage, setSummaryPage] = useState(0);
   const [report, setReport] = useState<ReportData | null>(null);
+
+  const analyticsData = useMemo(() => {
+    if (!report) return undefined;
+    return {
+      isConnected: true,
+      isLiveGoogleApi: true,
+      metrics: {
+        totalViews:
+          report.performanceReport.totalViews ||
+          report.performanceReport.searchImpressions + report.performanceReport.mapsImpressions,
+        searchImpressions: report.performanceReport.searchImpressions,
+        mapsImpressions: report.performanceReport.mapsImpressions,
+        callClicks: report.performanceReport.callClicks,
+        directionRequests: report.performanceReport.directionRequests,
+        websiteClicks: report.performanceReport.websiteClicks,
+        totalReviews: report.reputationSummary.totalReviews,
+        avgRating: report.reputationSummary.avgRating,
+        responseRate: report.reputationSummary.responseRate,
+        reviewsDeltaPct8Wks: -100,
+      },
+      reviewTrends: (report as any).reviewTrends,
+      sixMonthTrends: (report as any).sixMonthTrends,
+      trendsAvailable: true,
+    };
+  }, [report]);
 
   const loadReport = async (p = period) => {
     setLoading(true);
@@ -616,9 +642,9 @@ export default function GrowthReportScreen() {
             </View>
           ) : (
             /* ── TAB 2: Performance Report ── */
-            <View style={{ paddingHorizontal: 16, gap: 16, marginTop: 14 }}>
+            <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
               {/* AI Executive Briefing */}
-              <View style={styles.aiBriefingCard}>
+              <View style={[styles.aiBriefingCard, { marginBottom: 16 }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={{ fontSize: 18 }}>🤖</Text>
                   <Text style={styles.aiBriefingTitle}>AI Growth Officer Executive Briefing</Text>
@@ -626,68 +652,11 @@ export default function GrowthReportScreen() {
                 <Text style={styles.aiBriefingBody}>{report?.aiExecutiveSummary}</Text>
               </View>
 
-              {/* Google Business Profile Telemetry */}
-              <View style={styles.sectionCard}>
-                <Text style={styles.cardHeaderTitle}>Google Business Breakdown</Text>
-                <View style={{ gap: 10, marginTop: 12 }}>
-                  <View style={styles.perfRow}>
-                    <Text style={styles.perfLabel}>Search Impressions</Text>
-                    <Text style={styles.perfVal}>
-                      {report?.performanceReport.searchImpressions.toLocaleString()}
-                    </Text>
-                  </View>
-                  <View style={styles.perfRow}>
-                    <Text style={styles.perfLabel}>Maps Impressions</Text>
-                    <Text style={styles.perfVal}>
-                      {report?.performanceReport.mapsImpressions.toLocaleString()}
-                    </Text>
-                  </View>
-                  <View style={styles.perfRow}>
-                    <Text style={styles.perfLabel}>Phone Call Clicks</Text>
-                    <Text style={styles.perfVal}>
-                      {report?.performanceReport.callClicks.toLocaleString()}
-                    </Text>
-                  </View>
-                  <View style={styles.perfRow}>
-                    <Text style={styles.perfLabel}>Direction Requests</Text>
-                    <Text style={styles.perfVal}>
-                      {report?.performanceReport.directionRequests.toLocaleString()}
-                    </Text>
-                  </View>
-                  <View style={[styles.perfRow, { borderBottomWidth: 0 }]}>
-                    <Text style={styles.perfLabel}>Website Clicks</Text>
-                    <Text style={styles.perfVal}>
-                      {report?.performanceReport.websiteClicks.toLocaleString()}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Reputation & Ratings */}
-              <View style={styles.sectionCard}>
-                <Text style={styles.cardHeaderTitle}>Reputation &amp; Trust</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 }}>
-                  <View style={styles.ratingBox}>
-                    <Text style={styles.ratingNumber}>
-                      {report?.reputationSummary.avgRating.toFixed(1)}
-                    </Text>
-                    <View style={{ flexDirection: 'row', gap: 1, marginTop: 2 }}>
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <MaterialIcons key={i} name="star" size={13} color="#F59E0B" />
-                      ))}
-                    </View>
-                  </View>
-
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E293B' }}>
-                      {report?.reputationSummary.totalReviews} Customer Reviews
-                    </Text>
-                    <Text style={{ fontSize: 12, color: '#64748B' }}>
-                      {report?.reputationSummary.responseRate}% owner reply rate on Google Maps.
-                    </Text>
-                  </View>
-                </View>
-              </View>
+              <PerformancePanel
+                analytics={analyticsData}
+                isConnected={true}
+                aiActions={[]}
+              />
             </View>
           )}
         </ScrollView>

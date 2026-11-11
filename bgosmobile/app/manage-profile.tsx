@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -74,6 +74,9 @@ export default function ManageGoogleProfileScreen() {
   const [editWebsite, setEditWebsite] = useState('');
   const [savingBasics, setSavingBasics] = useState(false);
   const [aiAutoFilling, setAiAutoFilling] = useState(false);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [categoryResults, setCategoryResults] = useState<string[]>([]);
+  const [categoryLoading, setCategoryLoading] = useState(false);
 
   async function handleAiAutoFillProfile() {
     setAiAutoFilling(true);
@@ -146,6 +149,30 @@ export default function ManageGoogleProfileScreen() {
   const description = place?.description || placeRes.data?.tenantFallback?.description || '';
   const mapsUrl = place?.mapsUrl || placeRes.data?.place?.mapsUrl;
   const city = extractCityOrLocality(address);
+
+  // Debounced search for Google categories
+  useEffect(() => {
+    if (!basicsModalOpen) return;
+    const query = editCategory.trim();
+    if (query.length < 2) {
+      setCategoryResults([]);
+      setCategoryDropdownOpen(false);
+      return;
+    }
+    setCategoryLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await apiRequest<{ categories: string[] }>(`/api/gbp/categories?query=${encodeURIComponent(query)}&businessName=${encodeURIComponent(title)}`);
+        setCategoryResults(res.categories || []);
+        setCategoryDropdownOpen((res.categories || []).length > 0);
+      } catch {
+        setCategoryResults([]);
+      } finally {
+        setCategoryLoading(false);
+      }
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [editCategory, basicsModalOpen, title]);
 
   // Extended settings from API
   const communicationPhone = place?.communicationPhone || placeRes.data?.tenantFallback?.communicationPhone || '';
@@ -1300,38 +1327,63 @@ export default function ManageGoogleProfileScreen() {
                   />
                 </View>
 
-                <View>
-                  <Text style={ui.caption}>Primary Category</Text>
+                <View style={{ position: 'relative', zIndex: 40 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={ui.caption}>Primary Category</Text>
+                    {categoryLoading && <ActivityIndicator size="small" color="#2563EB" />}
+                  </View>
                   <TextInput
                     value={editCategory}
                     onChangeText={setEditCategory}
+                    onFocus={() => {
+                      if (categoryResults.length > 0) setCategoryDropdownOpen(true);
+                    }}
                     style={[ui.input, { marginTop: 4 }]}
-                    placeholder="Software company"
+                    placeholder="Search Google categories (e.g. Software company, Bakery...)"
                   />
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 6, marginTop: 4 }}
-                  >
-                    {['Software company', 'Farmhouse / Resort', 'Cafe & Restaurant', 'Dental Clinic', 'Fitness Center', 'Salon & Spa', 'Real Estate'].map((c) => (
-                      <Pressable
-                        key={c}
-                        onPress={() => setEditCategory(c)}
-                        style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 3,
-                          borderRadius: 6,
-                          backgroundColor: editCategory === c ? '#EFF6FF' : '#F1F5F9',
-                          borderWidth: 1,
-                          borderColor: editCategory === c ? '#3B82F6' : '#E2E8F0',
-                        }}
-                      >
-                        <Text style={{ fontSize: 10.5, fontWeight: '600', color: editCategory === c ? '#2563EB' : '#475569' }}>
-                          {c}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
+                  {categoryDropdownOpen && categoryResults.length > 0 && (
+                    <View
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: '#3B82F6',
+                        shadowColor: '#0F172A',
+                        shadowOffset: { width: 0, height: 3 },
+                        shadowOpacity: 0.12,
+                        shadowRadius: 6,
+                        elevation: 5,
+                        maxHeight: 180,
+                        overflow: 'hidden',
+                        marginTop: 4,
+                      }}
+                    >
+                      <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 160 }}>
+                        {categoryResults.map((cat, idx) => (
+                          <Pressable
+                            key={`${cat}-${idx}`}
+                            onPress={() => {
+                              setEditCategory(cat);
+                              setCategoryDropdownOpen(false);
+                            }}
+                            style={({ pressed }) => ({
+                              paddingHorizontal: 12,
+                              paddingVertical: 10,
+                              borderBottomWidth: idx < categoryResults.length - 1 ? 1 : 0,
+                              borderBottomColor: '#F1F5F9',
+                              backgroundColor: pressed ? '#EFF6FF' : '#FFFFFF',
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                            })}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#0F172A' }}>{cat}</Text>
+                            <MaterialIcons name="check" size={15} color="#2563EB" />
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
                 </View>
 
                 <View>

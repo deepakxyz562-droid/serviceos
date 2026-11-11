@@ -60,6 +60,21 @@ export type AnalyticsResult = {
     avgRating?: number;
     responseRate: number;
     postsPublished?: number;
+    reviewsDeltaPct8Wks?: number;
+    ratingDeltaPct8Wks?: number;
+  };
+  reviewTrends?: {
+    avgReviewsPerWeek: number;
+    industryAvg: number;
+    weeks: Array<{ label: string; count: number }>;
+    total8Weeks: number;
+    deltaPct8Weeks: number;
+  };
+  sixMonthTrends?: {
+    months: string[];
+    views: number[];
+    calls: number[];
+    directions: number[];
   };
   weeklyTrends?: Record<string, string> | null;
   trendsAvailable: boolean;
