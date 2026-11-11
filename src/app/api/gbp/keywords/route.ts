@@ -5,6 +5,7 @@ import { callAI } from '@/lib/ai-client';
 import { decryptToken } from '@/lib/social/crypto';
 import { refreshExpiredToken } from '@/lib/social/token-refresh';
 import { updateGoogleBusinessProfile } from '@/lib/social/adapters/googlebusiness';
+import { formatSeoKeywordsPromptSection, getTenantSeoContext } from '@/lib/gbp/seo-context';
 import type { SocialAccountData } from '@/lib/social/types';
 
 /**
@@ -132,6 +133,7 @@ export async function POST(request: NextRequest) {
     const industry = body.industry || tenant.brandProfile?.industry || (tenant as any).businessType || 'Local Services';
     const location = body.location || tenant.brandProfile?.location || tenant.brandProfile?.serviceArea || (tenant as any).city || 'Local Area';
     const services = body.services || tenant.brandProfile?.services || 'Expert installation, repair, and maintenance';
+    const seoSection = formatSeoKeywordsPromptSection(await getTenantSeoContext(user.tenantId));
 
     const aiPrompt = `You are a world-class Google Business Profile (GBP) Local SEO Specialist.
 Your client is:
@@ -139,6 +141,7 @@ Your client is:
 - Industry/Category: ${industry}
 - Location / Service Area: ${location}
 - Core Services: ${typeof services === 'string' ? services : JSON.stringify(services)}
+${seoSection ? `\n${seoSection}` : ''}
 
 Task:
 1. Generate 12 high-converting local SEO search keywords that prospective customers type into Google Search & Maps when they are ready to book. Include "near me" modifiers, emergency modifiers, and geo-targeted phrases.

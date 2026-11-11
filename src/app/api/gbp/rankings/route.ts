@@ -20,6 +20,11 @@ import {
   fetchGoogleBusinessPerformanceMetrics,
   fetchGoogleBusinessSearchKeywords,
 } from '@/lib/social/adapters/googlebusiness';
+import {
+  getGooglePlacesApiKey,
+  scanGeminiGroundedSerpFallback,
+  scanPlacesGridFallback,
+} from '@/lib/gbp/keyword-planner-free';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -274,12 +279,17 @@ export async function GET(request: NextRequest) {
       : defaultGridPoints,
   };
 
+  const dataForSeoConfigured = !!(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
+  const placesConfigured = Boolean(getGooglePlacesApiKey());
+
   return NextResponse.json({
     success: true,
     ...summary,
     cityName: tenant.city,
-    provider: 'dataforseo',
-    configured: !!(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
+    provider: dataForSeoConfigured ? 'dataforseo' : placesConfigured ? 'google_places_grid' : 'none',
+    configured: dataForSeoConfigured || placesConfigured,
+    dataForSeoConfigured,
+    placesConfigured,
     hasGoogleConnection: Boolean(googleAccount),
     nativeDiscovery,
     inTop3PackPct: summary.totalKeywords
@@ -460,16 +470,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!process.env.DATAFORSEO_LOGIN || !process.env.DATAFORSEO_PASSWORD) {
+    const hasDataForSeo = !!(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
+    const hasPlaces = Boolean(getGooglePlacesApiKey());
+
+    if (!hasDataForSeo && !hasPlaces) {
       return NextResponse.json(
-        { error: 'DataForSEO credentials must be configured on the server before running Geo-Grid scans.' },
+        { error: 'Configure Google Places API key or DataForSEO credentials on the server before running Geo-Grid scans.' },
         { status: 503 },
       );
     }
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { settingsJson: true, googlePlaceId: true, latitude: true, longitude: true },
+      select: { settingsJson: true, googlePlaceId: true, latitude: true, longitude: true, country: true },
     });
     if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
@@ -531,14 +544,26 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const gridResult: MapsGridScanResult = await scanMapsGrid({
-        keyword,
-        placeId,
-        centerLat,
-        centerLng,
-        gridSize,
-        radiusKm,
-      });
+      const usePlacesFallback = !(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
+      const gridResult: MapsGridScanResult & { providerMode?: string } = usePlacesFallback
+        ? await scanPlacesGridFallback({
+            keyword,
+            placeId,
+            businessName: (tenant as any)?.brandProfile?.businessName || (tenant as any)?.name || undefined,
+            centerLat,
+            centerLng,
+            gridSize,
+            radiusKm,
+            regionCode: ((tenant as any).country || 'IN').toUpperCase(),
+          })
+        : await scanMapsGrid({
+            keyword,
+            placeId,
+            centerLat,
+            centerLng,
+            gridSize,
+            radiusKm,
+          });
 
       const id = randomUUID();
       const scannedAt = new Date().toISOString();
@@ -648,9 +673,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!process.env.DATAFORSEO_LOGIN || !process.env.DATAFORSEO_PASSWORD) {
+    const hasDataForSeo = !!(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
+    let hasGemini = Boolean(process.env.GEMINI_API_KEY);
+    if (!hasDataForSeo && !hasGemini) {
+      try {
+        const { loadAiKeyChain } = await import('@/lib/ai-client');
+        const chain = await loadAiKeyChain();
+        hasGemini = Array.isArray(chain?.gemini) && chain.gemini.length > 0;
+      } catch {}
+    }
+
+    if (!hasDataForSeo && !hasGemini) {
       return NextResponse.json(
-        { error: 'DataForSEO credentials must be configured on the server before scanning organic SERPs.' },
+        { error: 'Configure GEMINI_API_KEY or DataForSEO credentials on the server before scanning organic SERPs.' },
         { status: 503 },
       );
     }
@@ -708,16 +743,24 @@ export async function POST(request: NextRequest) {
         : null;
 
     try {
-      const results: Array<OrganicSerpScanResult & { id: string; date: string }> = [];
+      const results: Array<OrganicSerpScanResult & { id: string; date: string; providerMode?: string }> = [];
       let totalCost = 0;
+      const useGeminiFallback = !(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
 
       for (const kw of [...new Set(keywords)]) {
-        const res = await scanOrganicSerp({
-          keyword: kw,
-          targetDomain,
-          canonicalPath,
-          locationName: locale.countryName,
-        });
+        const res = useGeminiFallback
+          ? await scanGeminiGroundedSerpFallback({
+              keyword: kw,
+              businessName: tenant.name || 'Business',
+              targetDomain,
+              city: tenant.city,
+            })
+          : await scanOrganicSerp({
+              keyword: kw,
+              targetDomain,
+              canonicalPath,
+              locationName: locale.countryName,
+            });
         totalCost += res.cost;
         const rowId = randomUUID();
         const date = new Date().toISOString();

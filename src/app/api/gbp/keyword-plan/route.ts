@@ -158,9 +158,33 @@ export async function GET(request: NextRequest) {
           })
         : [];
 
+    const searchTerms = Array.isArray(settings.googleDiscovery?.keywords)
+      ? settings.googleDiscovery.keywords
+          .filter((k: any) => k?.keyword)
+          .map((k: any) => ({
+            keyword: String(k.keyword).trim(),
+            count: Number(k.count) || 0,
+            isThreshold: Boolean(k.isThreshold),
+          }))
+          .sort((a: any, b: any) => b.count - a.count)
+      : [];
+
+    const winnabilityCache =
+      settings.keywordWinnabilityCache && typeof settings.keywordWinnabilityCache === 'object'
+        ? settings.keywordWinnabilityCache
+        : {};
+
+    const enrichedKeywords = keywords.map((kw) => {
+      const cached = winnabilityCache[kw.keyword.trim().toLowerCase()];
+      return cached ? { ...kw, winnability: cached } : kw;
+    });
+
     return NextResponse.json({
-      keywords,
+      keywords: enrichedKeywords,
       suggestedStarterKeywords,
+      searchTerms,
+      searchTermsUpdatedAt: settings.googleDiscovery?.updatedAt || null,
+      winnabilityByKeyword: winnabilityCache,
       locale: {
         country: resolvedLocale.country,
         countryName: resolvedLocale.countryName,

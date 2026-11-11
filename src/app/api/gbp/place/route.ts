@@ -11,7 +11,13 @@ import {
 import {
   fetchGoogleBusinessPlaceDetails,
   fetchGoogleBusinessPerformanceMetrics,
+  updateGoogleBusinessProfile,
 } from '@/lib/social/adapters/googlebusiness';
+import {
+  mergeStructuredServices,
+  upsertTenantStructuredServices,
+  type StructuredSeoService,
+} from '@/lib/gbp/seo-context';
 
 export const dynamic = 'force-dynamic';
 
@@ -148,7 +154,7 @@ export async function GET(request: NextRequest) {
 
     const reviewWhere = { tenantId: user.tenantId, ...(await googleReviewScope(user.tenantId)) };
 
-    const [reviews, totalReviews] = await Promise.all([
+    const [reviews, totalReviews, dbServices] = await Promise.all([
       db.review.findMany({
         where: reviewWhere,
         select: { rating: true, createdAt: true, responseJson: true, source: true },
@@ -156,6 +162,14 @@ export async function GET(request: NextRequest) {
       db.review.count({
         where: reviewWhere,
       }),
+      db.service
+        .findMany({
+          where: { tenantId: user.tenantId, isActive: true },
+          orderBy: { createdAt: 'asc' },
+          take: 40,
+          select: { id: true, name: true, description: true, longDescription: true, category: true },
+        })
+        .catch(() => []),
     ]);
 
     const sourceBreakdown: Record<string, number> = { google: 0, internal: 0, website: 0, sms: 0, qr: 0 };
@@ -185,6 +199,11 @@ export async function GET(request: NextRequest) {
         tenantSettings = JSON.parse((tenant as any).settingsJson);
       } catch {}
     }
+    const mergedSeoServices = mergeStructuredServices(tenantSettings, dbServices);
+    const effectiveServicesList =
+      Array.isArray(tenantSettings.services) && tenantSettings.services.length > 0
+        ? tenantSettings.services
+        : mergedSeoServices.map((s) => s.name);
 
     const fallbackName =
       (typeof tenantSettings.activeGbpTitle === 'string' && tenantSettings.activeGbpTitle.trim()) ||
@@ -319,7 +338,8 @@ export async function GET(request: NextRequest) {
           supportBranding: tenantSettings.supportBranding ?? true,
           additionalCategories: tenantSettings.additionalCategories || [],
           openingDate: tenantSettings.openingDate || null,
-          services: tenantSettings.services || [],
+          services: effectiveServicesList,
+          seoServices: mergedSeoServices,
           attributes: tenantSettings.attributes || {},
           specialHours: tenantSettings.specialHours || [],
           moreHours: tenantSettings.moreHours || {},
@@ -505,7 +525,8 @@ export async function GET(request: NextRequest) {
         supportBranding: tenantSettings.supportBranding ?? true,
         additionalCategories: tenantSettings.additionalCategories || [],
         openingDate: tenantSettings.openingDate || null,
-        services: tenantSettings.services || [],
+        services: effectiveServicesList,
+        seoServices: mergedSeoServices,
         attributes: tenantSettings.attributes || {},
         specialHours: tenantSettings.specialHours || [],
         moreHours: tenantSettings.moreHours || {},
@@ -587,9 +608,43 @@ export async function PATCH(request: NextRequest) {
       typeof body.additionalCategories !== 'undefined' ||
       typeof body.openingDate !== 'undefined' ||
       typeof body.services !== 'undefined' ||
+      typeof body.seoServices !== 'undefined' ||
       typeof body.attributes !== 'undefined' ||
       typeof body.specialHours !== 'undefined' ||
       typeof body.moreHours !== 'undefined';
+
+    let resolvedSeoServices: StructuredSeoService[] | null = null;
+    if (Array.isArray(body.seoServices)) {
+      resolvedSeoServices = body.seoServices
+        .filter((s: any) => s && typeof s.name === 'string' && s.name.trim())
+        .map((s: any) => ({
+          id: typeof s.id === 'string' ? s.id : undefined,
+          name: String(s.name).trim(),
+          description: typeof s.description === 'string' ? s.description.trim().slice(0, 500) : '',
+          targetKeyword: typeof s.targetKeyword === 'string' ? s.targetKeyword.trim() : undefined,
+          category: typeof s.category === 'string' ? s.category.trim() : undefined,
+          syncedToGoogle: Boolean(s.syncedToGoogle),
+        }));
+    } else if (Array.isArray(body.services)) {
+      const currentTenantForSvc = await db.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { settingsJson: true },
+      });
+      let existingSettings: Record<string, any> = {};
+      try {
+        existingSettings = JSON.parse(currentTenantForSvc?.settingsJson || '{}');
+      } catch {}
+      const existingByName = new Map(
+        mergeStructuredServices(existingSettings).map((s) => [s.name.toLowerCase(), s]),
+      );
+      resolvedSeoServices = body.services
+        .map((s: unknown) => (typeof s === 'string' ? s.trim() : ''))
+        .filter(Boolean)
+        .map((name: string) => {
+          const prev = existingByName.get(name.toLowerCase());
+          return prev ? prev : { name, description: '' };
+        });
+    }
 
     if (hasSettingsField) {
       const currentTenant = await db.tenant.findUnique({
@@ -619,7 +674,10 @@ export async function PATCH(request: NextRequest) {
       if (typeof body.openingDate !== 'undefined') {
         currentSettings.openingDate = String(body.openingDate).trim();
       }
-      if (typeof body.services !== 'undefined') {
+      if (resolvedSeoServices) {
+        currentSettings.seoServices = resolvedSeoServices;
+        currentSettings.services = resolvedSeoServices.map((s) => s.name);
+      } else if (typeof body.services !== 'undefined') {
         currentSettings.services = Array.isArray(body.services) ? body.services : [];
       }
       if (typeof body.attributes !== 'undefined') {
@@ -639,6 +697,10 @@ export async function PATCH(request: NextRequest) {
         where: { id: user.tenantId },
         data: updateData,
       });
+
+      if (resolvedSeoServices) {
+        await upsertTenantStructuredServices(user.tenantId, resolvedSeoServices);
+      }
 
       // Synchronize phone to owner user record so Phone OTP login automatically recognizes the business owner
       if (updateData.phone) {
@@ -668,12 +730,59 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    // Optional live Google Business Profile writeback (categories, services, description, websiteUri, attributes)
+    let syncedToGoogle = false;
+    let appliedMasks: string[] = [];
+    let googleWarnings: string[] = [];
+
+    if (body.pushToGoogle === true) {
+      try {
+        const googleAccount = await prepareGoogleAccount(
+          user.tenantId,
+          typeof body.locationId === 'string' ? body.locationId : undefined,
+        );
+        if (googleAccount?.accessToken) {
+          const pushRes = await updateGoogleBusinessProfile(googleAccount, {
+            ...(typeof updateData.description === 'string' ? { description: updateData.description } : {}),
+            ...(typeof updateData.website === 'string' && updateData.website
+              ? { websiteUri: updateData.website }
+              : {}),
+            ...(Array.isArray(body.additionalCategories)
+              ? { additionalCategories: body.additionalCategories }
+              : {}),
+            ...(resolvedSeoServices && resolvedSeoServices.length > 0
+              ? {
+                  serviceItems: resolvedSeoServices.map((s) => ({
+                    name: s.name,
+                    description: s.description,
+                  })),
+                }
+              : {}),
+            ...(body.attributes && typeof body.attributes === 'object'
+              ? { attributes: body.attributes }
+              : {}),
+          });
+          appliedMasks = pushRes.appliedMasks;
+          googleWarnings = pushRes.warnings;
+          syncedToGoogle = appliedMasks.length > 0;
+        }
+      } catch (gErr: unknown) {
+        googleWarnings.push(gErr instanceof Error ? gErr.message : 'Google Business sync notice');
+      }
+    }
+
     invalidatePlacePayloadCache(user.tenantId);
 
     return NextResponse.json({
       success: true,
-      message: 'Business profile updated successfully.',
+      message: syncedToGoogle
+        ? 'Business profile saved and synced to Google Business Profile.'
+        : 'Business profile updated successfully.',
       updated: updateData,
+      seoServices: resolvedSeoServices || undefined,
+      syncedToGoogle,
+      appliedMasks,
+      googleWarnings,
     });
   } catch (error: unknown) {
     console.error('Error updating GBP place:', error);

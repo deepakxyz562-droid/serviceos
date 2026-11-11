@@ -649,17 +649,46 @@ interface CompetitorRow {
   distanceKm?: number | null;
   address?: string | null;
   category?: string | null;
+  primaryCategoryLabel?: string | null;
+  secondaryCategories?: string[];
+  attributesList?: string[];
+  photoCount?: number;
+  recentReviews?: Array<{ author?: string; rating: number | null; text: string; relativeTime?: string }>;
+  mapsRank?: number | null;
   mapsUrl?: string | null;
   websiteUrl?: string | null;
   lastSeoScore?: number | null;
   source?: string;
 }
 
+interface CompetitorSpyInsights {
+  queryUsed: string;
+  locationUsed: string;
+  selfMapsRank: number | null;
+  reviewsNeededForTop3: number;
+  missingCategories: Array<{ category: string; competitorCount: number; percentage: number }>;
+  missingAttributes: Array<{ key: string; label: string; competitorCount: number }>;
+  suggestedKeywordsFromReviews: string[];
+  whyTopRank: string[];
+}
+
 interface CompetitorsResponse {
   competitors?: CompetitorRow[];
+  spyInsights?: CompetitorSpyInsights | null;
   source?: string;
   migrationRequired?: boolean;
   placesUnavailable?: boolean;
+}
+
+interface KeywordWinnabilityDto {
+  keyword: string;
+  demandSignal: string;
+  competitionLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  winnabilityScore: number;
+  winnabilityTier: 'Quick Win' | 'Winnable' | 'Competitive';
+  yourPlacesRank: number | null;
+  top3AvgReviews: number | null;
+  reason: string;
 }
 
 interface TrackedKeywordRow {
@@ -672,6 +701,7 @@ interface TrackedKeywordRow {
   mapsRank?: number | null;
   organicRank?: number | null;
   aiOverviewCited?: boolean | null;
+  winnability?: KeywordWinnabilityDto;
   source?: string;
 }
 
@@ -679,6 +709,8 @@ interface KeywordSuggestion {
   keyword: string;
   score?: number;
   city?: string | null;
+  sourceTag?: string;
+  demandSignal?: string;
 }
 
 interface GrowthActionDto {
@@ -1544,15 +1576,44 @@ function CompetitorAnalysisCard({
   loading,
   refreshing,
   onRefresh,
+  onSpyKeyword,
 }: {
   data: CompetitorsResponse | null;
   loading: boolean;
   refreshing: boolean;
   onRefresh: () => void;
+  onSpyKeyword?: (keyword: string) => void;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [gapDialogOpen, setGapDialogOpen] = useState(false);
+  const [spyInput, setSpyInput] = useState('');
+  const [applyingCat, setApplyingCat] = useState<string | null>(null);
   const rows = useMemo(() => (Array.isArray(data?.competitors) ? data!.competitors : []), [data]);
+
+  const handleCopyAdvantage = async (opts: { key: string; addCategories?: string[]; addAttributes?: string[] }) => {
+    setApplyingCat(opts.key);
+    try {
+      const res = await authFetch('/api/gbp/competitors/apply-advantage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          addCategories: opts.addCategories,
+          addAttributes: opts.addAttributes,
+          pushToGoogle: true,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || 'Could not apply competitor advantage');
+      toast.success(
+        `Added ${opts.key}${json?.syncedToGoogle ? ' & synced to Google Business Profile!' : ' to BGOS.'}`,
+      );
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to apply competitor advantage');
+    } finally {
+      setApplyingCat(null);
+    }
+  };
 
   return (
     <div className="lg:col-span-4 bg-card border border-border rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
@@ -1584,10 +1645,39 @@ function CompetitorAnalysisCard({
         </div>
       </div>
 
-      <div className="py-2">
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-[10px]">
-          <span aria-hidden>🎯</span> LOCAL COMPETITORS &bull; WITHIN 5 KM
-        </span>
+      <div className="py-2 space-y-2">
+        <div className="flex items-center justify-between gap-1.5 flex-wrap">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-[10px]">
+            <span aria-hidden>🎯</span> COMPETITOR SPY &bull; TOP LOCAL PACK
+          </span>
+          {data?.spyInsights?.selfMapsRank != null && (
+            <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 font-bold text-[10px]">
+              Your Rank #{data.spyInsights.selfMapsRank}
+            </span>
+          )}
+        </div>
+        {onSpyKeyword && (
+          <div className="flex items-center gap-1.5">
+            <Input
+              placeholder="Spy keyword (e.g. emergency plumber)"
+              value={spyInput}
+              onChange={(e) => setSpyInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onSpyKeyword(spyInput.trim());
+              }}
+              className="h-7 text-[11px] flex-1"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={refreshing}
+              onClick={() => onSpyKeyword(spyInput.trim())}
+              className="h-7 px-2.5 text-[10px] font-bold shrink-0"
+            >
+              Spy
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Column headers */}
@@ -1668,10 +1758,27 @@ function CompetitorAnalysisCard({
                     <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Building2 className="size-3" />
-                        {comp.category || 'Local business'}
+                        {comp.primaryCategoryLabel || comp.category || 'Local business'}
                       </span>
-                      <span>{comp.reviewCount != null ? `${comp.reviewCount} reviews` : null}</span>
+                      <span>
+                        {comp.reviewCount != null ? `${comp.reviewCount} reviews` : ''}
+                        {comp.photoCount != null ? ` · ${comp.photoCount} photos` : ''}
+                      </span>
                     </div>
+                    {(comp.secondaryCategories?.length || 0) > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {comp.secondaryCategories!.slice(0, 4).map((sc) => (
+                          <span key={sc} className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-semibold text-foreground">
+                            {sc}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {comp.recentReviews?.[0]?.text && (
+                      <p className="text-[10px] italic text-muted-foreground line-clamp-2">
+                        &ldquo;{comp.recentReviews[0].text}&rdquo;
+                      </p>
+                    )}
                     {comp.websiteUrl && (
                       <a
                         href={comp.websiteUrl}
@@ -1701,6 +1808,28 @@ function CompetitorAnalysisCard({
           })}
         </div>
       )}
+
+      {data?.spyInsights?.missingCategories?.length ? (
+        <div className="mt-2 pt-2 border-t border-border/50 space-y-1.5">
+          <p className="text-[10px] font-bold text-foreground">Missing Competitor Categories (1-Click Copy)</p>
+          <div className="flex flex-wrap gap-1">
+            {data.spyInsights.missingCategories.slice(0, 4).map((cat) => (
+              <button
+                key={cat.category}
+                type="button"
+                disabled={Boolean(applyingCat)}
+                onClick={() => void handleCopyAdvantage({ key: cat.category, addCategories: [cat.category] })}
+                className="px-2 py-0.5 rounded-md border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[10px] font-bold text-emerald-800"
+              >
+                {applyingCat === cat.category ? 'Copying…' : `+ ${cat.category} (${cat.percentage}%)`}
+              </button>
+            ))}
+          </div>
+          {data.spyInsights.whyTopRank[0] && (
+            <p className="text-[10px] text-muted-foreground leading-snug">{data.spyInsights.whyTopRank[0]}</p>
+          )}
+        </div>
+      ) : null}
 
       {data?.placesUnavailable && rows.length > 0 && (
         <p className="text-[10px] text-muted-foreground text-center pt-2 border-t border-border/40">
@@ -1976,6 +2105,10 @@ export function SocialMediaView({
   const [keywordSaving, setKeywordSaving] = useState(false);
   const [searchCity, setSearchCity] = useState('');
   const [newKeywordInput, setNewKeywordInput] = useState('');
+  const [searchTerms, setSearchTerms] = useState<Array<{ keyword: string; count: number; isThreshold?: boolean }>>([]);
+  const [winnabilityItems, setWinnabilityItems] = useState<KeywordWinnabilityDto[]>([]);
+  const [analyzingKeywords, setAnalyzingKeywords] = useState(false);
+  const [writingServiceKw, setWritingServiceKw] = useState<string | null>(null);
 
   const [googlePosts, setGooglePosts] = useState<SocialPostDto[]>([]);
   const [googlePostsLoading, setGooglePostsLoading] = useState(false);
@@ -2130,11 +2263,15 @@ export function SocialMediaView({
     }
   }, []);
 
-  const fetchCompetitors = useCallback(async (refresh = false) => {
-    if (refresh) setCompetitorsRefreshing(true);
+  const fetchCompetitors = useCallback(async (refresh = false, keyword?: string) => {
+    if (refresh || keyword) setCompetitorsRefreshing(true);
     else setCompetitorsLoading(true);
     try {
-      const res = await authFetch(`/api/gbp/competitors${refresh ? '?refresh=1' : ''}`);
+      const qs = new URLSearchParams();
+      if (refresh || keyword) qs.set('refresh', '1');
+      if (keyword?.trim()) qs.set('keyword', keyword.trim());
+      const query = qs.toString();
+      const res = await authFetch(`/api/gbp/competitors${query ? `?${query}` : ''}`);
       if (res.ok) {
         setCompetitorsData(await res.json());
       }
@@ -2154,6 +2291,14 @@ export function SocialMediaView({
         const json = await res.json();
         setKeywords(Array.isArray(json?.keywords) ? json.keywords : []);
         setKeywordsMigration(Boolean(json?.migrationRequired));
+        setSearchTerms(Array.isArray(json?.searchTerms) ? json.searchTerms : []);
+        if (json?.winnabilityByKeyword && typeof json.winnabilityByKeyword === 'object') {
+          setWinnabilityItems(
+            (Object.values(json.winnabilityByKeyword) as KeywordWinnabilityDto[]).sort(
+              (a, b) => b.winnabilityScore - a.winnabilityScore,
+            ),
+          );
+        }
         if (json?.locale?.countryName) {
           setKeywordLocale({
             country: json.locale.country || 'GLOBAL',
@@ -3099,6 +3244,61 @@ export function SocialMediaView({
     }
   };
 
+  const handleAnalyzeWinnability = async () => {
+    setAnalyzingKeywords(true);
+    try {
+      const pool = [
+        ...searchTerms.slice(0, 4).map((t) => t.keyword),
+        ...keywords.slice(0, 4).map((k) => k.keyword),
+        ...keywordSuggestions.slice(0, 3).map((s) => s.keyword),
+      ].filter((kw, i, arr) => kw && arr.findIndex((x) => x.toLowerCase() === kw.toLowerCase()) === i);
+
+      const res = await authFetch('/api/gbp/keyword-plan/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pool.length > 0 ? { keywords: pool.slice(0, 8) } : {}),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || 'Could not analyze keyword winnability');
+      if (Array.isArray(json?.analyzed)) {
+        setWinnabilityItems(json.analyzed);
+      }
+      toast.success(
+        `Analyzed ${json?.analyzed?.length || 0} keywords (${json?.quickWins?.length || 0} Quick Wins found)!`,
+      );
+      void fetchKeywords();
+    } catch (err: any) {
+      toast.error(err?.message || 'Winnability analysis failed');
+    } finally {
+      setAnalyzingKeywords(false);
+    }
+  };
+
+  const handleCreateServiceFromKeyword = async (kw: string) => {
+    setWritingServiceKw(kw);
+    try {
+      const res = await authFetch('/api/gbp/services/optimize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serviceName: kw,
+          targetKeyword: kw,
+          save: true,
+          pushToGoogle: true,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || 'Failed to generate localized service');
+      toast.success(
+        `Added 300-500 char service "${kw}"${json?.syncedToGoogle ? ' & synced to Google!' : '.'}`,
+      );
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not create localized service');
+    } finally {
+      setWritingServiceKw(null);
+    }
+  };
+
   // ── Post approval actions (AI Post status pills) ──
 
   const handleSetApproval = async (postId: string, approvalStatus: 'approved' | 'rejected') => {
@@ -3861,6 +4061,7 @@ export function SocialMediaView({
               loading={competitorsLoading}
               refreshing={competitorsRefreshing}
               onRefresh={() => fetchCompetitors(true)}
+              onSpyKeyword={(kw) => void fetchCompetitors(true, kw)}
             />
           </div>
 
@@ -5393,20 +5594,35 @@ export function SocialMediaView({
                     </p>
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => requestKeywordSuggestions(searchCity.trim())}
-                  disabled={suggestionsLoading}
-                  className="h-8 text-xs font-semibold rounded-xl gap-1.5 shrink-0"
-                >
-                  {suggestionsLoading ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <SlidersHorizontal className="size-3.5" />
-                  )}
-                  <span>Optimise keywords 🎚</span>
-                </Button>
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                  <Button
+                    size="sm"
+                    onClick={() => void handleAnalyzeWinnability()}
+                    disabled={analyzingKeywords}
+                    className="h-8 text-xs font-bold rounded-xl gap-1.5 bg-[#009F50] hover:bg-[#008A45] text-white"
+                  >
+                    {analyzingKeywords ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-3.5" />
+                    )}
+                    <span>Analyze Winnability</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => requestKeywordSuggestions(searchCity.trim())}
+                    disabled={suggestionsLoading}
+                    className="h-8 text-xs font-semibold rounded-xl gap-1.5 shrink-0"
+                  >
+                    {suggestionsLoading ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <SlidersHorizontal className="size-3.5" />
+                    )}
+                    <span>Google Suggest + AI</span>
+                  </Button>
+                </div>
               </div>
 
               {/* KEYWORD SEARCH mini-form: Dynamic workspace locale + locality → suggest */}
@@ -5507,7 +5723,13 @@ export function SocialMediaView({
                         <div className="min-w-0">
                           <p className="text-[11px] font-semibold text-foreground truncate">{s.keyword}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {s.city ? `${s.city} · ` : ''}~{s.score ?? '—'} searches/mo
+                            {s.city ? `${s.city} · ` : ''}
+                            {s.demandSignal ||
+                              (s.sourceTag === 'gbp_search'
+                                ? 'Real GBP Search Term'
+                                : s.sourceTag === 'google_suggest'
+                                  ? 'Google Autocomplete'
+                                  : 'Local Buyer Intent')}
                           </p>
                         </div>
                         <Button
@@ -5520,6 +5742,83 @@ export function SocialMediaView({
                           <Plus className="size-3" />
                           Add
                         </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Real Google Search Terms (from GBP Performance) + Quick Actions */}
+              {searchTerms.length > 0 && (
+                <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-foreground">Real Google Search Terms (What Customers Actually Type)</p>
+                    <span className="text-[10px] font-bold text-emerald-700">{searchTerms.length} queries</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {searchTerms.slice(0, 8).map((st) => {
+                      const alreadyTracked = keywords.some((k) => k.keyword.toLowerCase() === st.keyword.toLowerCase());
+                      return (
+                        <div
+                          key={st.keyword}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-card text-[11px]"
+                        >
+                          <span className="font-semibold text-foreground">{st.keyword}</span>
+                          <span className="text-[10px] font-bold text-emerald-700">
+                            ({st.isThreshold ? `${st.count}+` : st.count})
+                          </span>
+                          {!alreadyTracked && (
+                            <button
+                              type="button"
+                              onClick={() => void handleAddKeyword(st.keyword, searchCity || null, 'ai')}
+                              className="text-primary font-bold hover:underline"
+                            >
+                              +Track
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={Boolean(writingServiceKw)}
+                            onClick={() => void handleCreateServiceFromKeyword(st.keyword)}
+                            className="text-emerald-700 font-bold hover:underline"
+                          >
+                            {writingServiceKw === st.keyword ? '…' : '+Service'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Winnable Keywords & Top-5 Competition Scorecard */}
+              {winnabilityItems.length > 0 && (
+                <div className="p-3 rounded-xl border border-border bg-muted/20 space-y-2">
+                  <p className="text-xs font-bold text-foreground">
+                    Local Winnability &amp; Competition Analysis (Google Places + Autocomplete)
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {winnabilityItems.slice(0, 6).map((item) => (
+                      <div key={item.keyword} className="p-2.5 rounded-lg border border-border bg-card space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-bold text-foreground truncate">{item.keyword}</span>
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold shrink-0 ${
+                              item.winnabilityTier === 'Quick Win'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : item.winnabilityTier === 'Winnable'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {item.winnabilityTier} ({item.winnabilityScore})
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                          {item.demandSignal} · {item.competitionLevel} comp
+                          {item.yourPlacesRank != null ? ` · Your Rank #${item.yourPlacesRank}` : ''}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground line-clamp-2">{item.reason}</p>
                       </div>
                     ))}
                   </div>

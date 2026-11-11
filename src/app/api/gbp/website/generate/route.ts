@@ -43,18 +43,94 @@ export async function POST(request: NextRequest) {
     const slug = tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const websiteUrl = `https://bgos.fieseros.com/b/${slug}`;
 
-    // Enable public website on tenant
+    const { getTenantSeoContext } = await import('@/lib/gbp/seo-context');
+    const { revalidatePublicBusiness } = await import('@/lib/public-business');
+    const { submitTenantUrlToIndexNow } = await import('@/lib/indexnow');
+
+    const tenantMeta = await db.tenant
+      .findUnique({
+        where: { id: user.tenantId },
+        select: {
+          website: true,
+          industry: true,
+          city: true,
+          seoTitle: true,
+          seoDescription: true,
+          faqsJson: true,
+        },
+      })
+      .catch(() => null);
+    const previousWebsiteUrl = tenantMeta?.website || null;
+    const seoCtx = await getTenantSeoContext(user.tenantId).catch(() => null);
+    const businessName = seoCtx?.businessName || tenant.brandProfile?.businessName || tenant.name;
+    const category = seoCtx?.category || tenantMeta?.industry || 'Local Services';
+    const city = seoCtx?.city || tenantMeta?.city || 'your area';
+    const topKeywords = seoCtx?.priorityKeywords.slice(0, 4) || [];
+    const topServices = seoCtx?.seoServices.slice(0, 4).map((s) => s.name) || [];
+
+    const existingFaqs = (() => {
+      try {
+        const arr = JSON.parse(tenantMeta?.faqsJson || '[]');
+        return Array.isArray(arr) ? arr : [];
+      } catch {
+        return [];
+      }
+    })();
+
+    const enrichedFaqs =
+      existingFaqs.length >= 2
+        ? existingFaqs
+        : [
+            {
+              question: `What ${category.toLowerCase()} services does ${businessName} provide in ${city}?`,
+              answer: `${businessName} offers ${topServices.join(', ') || category} across ${city} with fast local support.`,
+            },
+            {
+              question: `How can I contact ${businessName} for ${topKeywords[0] || category} in ${city}?`,
+              answer: `Book directly through our official Google Business landing page or request a callback for ${topKeywords.slice(0, 2).join(' and ') || category} in ${city}.`,
+            },
+            ...(topKeywords[0]
+              ? [
+                  {
+                    question: `Do you serve ${city} customers searching for ${topKeywords[0]}?`,
+                    answer: `Yes, ${businessName} specializes in ${topKeywords.join(', ')} throughout ${city} and surrounding neighborhoods.`,
+                  },
+                ]
+              : []),
+          ];
+
+    const richDescription =
+      tenant.description && tenant.description.trim().length >= 120
+        ? tenant.description
+        : `${businessName} provides trusted ${category.toLowerCase()} in ${city}. Specializing in ${topServices.join(', ') || topKeywords.join(', ') || category}${topKeywords.length > 0 ? ` — including ${topKeywords.slice(0, 3).join(', ')}` : ''}. Book online or contact our team today.`;
+
+    const seoTitle =
+      tenantMeta?.seoTitle && tenantMeta.seoTitle.trim().length >= 25
+        ? tenantMeta.seoTitle
+        : `${businessName} — ${topKeywords[0] || category} in ${city}`.slice(0, 62);
+
+    const seoDescription =
+      tenantMeta?.seoDescription && tenantMeta.seoDescription.trim().length >= 80
+        ? tenantMeta.seoDescription
+        : `Looking for ${topKeywords.slice(0, 2).join(' or ') || category} in ${city}? Book ${businessName} for localized services, verified info, and quick contact.`.slice(0, 155);
+
+    // Enable dedicated GBP landing page on tenant with Search-Term-aligned metadata & FAQs
     await db.tenant.update({
       where: { id: user.tenantId },
       data: {
         slug,
         website: websiteUrl,
         publicProfileEnabled: true,
-        description:
-          tenant.description ||
-          `Learn about ${tenant.brandProfile?.businessName || tenant.name}, its services and ways to get in touch.`,
+        claimed: true,
+        description: richDescription.slice(0, 740),
+        seoTitle,
+        seoDescription,
+        faqsJson: JSON.stringify(enrichedFaqs),
       },
     });
+
+    revalidatePublicBusiness(slug);
+    void submitTenantUrlToIndexNow({ slug, industry: tenantMeta?.industry || category, city });
 
     let syncedToGoogle = false;
     let googleNotice: string | null = null;
@@ -98,9 +174,10 @@ export async function POST(request: NextRequest) {
 
     settings.businessWebsite = {
       url: websiteUrl,
+      previousWebsiteUrl,
       generatedAt: new Date().toISOString(),
       syncedToGoogle,
-      status: 'published_unverified',
+      status: syncedToGoogle ? 'published' : 'published_unverified',
     };
 
     await db.tenant.update({

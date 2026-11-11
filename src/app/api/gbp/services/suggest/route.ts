@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { callAI } from '@/lib/ai-client';
+import { db } from '@/lib/db';
+import { safeParseJsonObject } from '@/lib/gbp/seo-context';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +19,47 @@ function extractJsonArray(text: string): string[] {
     }
   } catch {}
   return [];
+}
+
+async function resolveRelevantSearchTerms(
+  tenantId: string,
+  businessName: string,
+  category: string,
+): Promise<string[]> {
+  try {
+    const tenant = await Promise.race([
+      db.tenant.findUnique({
+        where: { id: tenantId },
+        select: {
+          name: true,
+          industry: true,
+          settingsJson: true,
+          brandProfile: { select: { businessName: true, industry: true } },
+        },
+      }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 700)),
+    ]);
+    if (!tenant) return [];
+    const bizName = (tenant.brandProfile?.businessName || tenant.name || '').toLowerCase();
+    const catName = (tenant.brandProfile?.industry || tenant.industry || '').toLowerCase();
+    const matchesContext =
+      category === 'Local Business' ||
+      (bizName && businessName.toLowerCase() === bizName) ||
+      (catName && category.toLowerCase().includes(catName));
+    if (!matchesContext) return [];
+
+    const settings = safeParseJsonObject(tenant.settingsJson);
+    const rawKeywords = Array.isArray(settings?.googleDiscovery?.keywords)
+      ? settings.googleDiscovery.keywords
+      : [];
+    return rawKeywords
+      .filter((k: any) => k && typeof k.keyword === 'string' && k.keyword.trim())
+      .sort((a: any, b: any) => (Number(b.count) || 0) - (Number(a.count) || 0))
+      .slice(0, 8)
+      .map((k: any) => String(k.keyword).trim());
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -37,8 +80,14 @@ export async function POST(request: NextRequest) {
     const category = (body.category || '').trim() || 'Local Business';
     const businessName = (body.businessName || '').trim() || 'My Business';
     const query = (body.query || '').trim();
+    const searchTerms = query ? [] : await resolveRelevantSearchTerms(user.tenantId, businessName, category);
 
-    return await generateDynamicServices({ category, businessName, query });
+    return await generateDynamicServices({
+      category,
+      businessName,
+      query,
+      searchTerms,
+    });
   } catch (error: unknown) {
     console.error('[/api/gbp/services/suggest] POST error:', error);
     return NextResponse.json(
@@ -59,8 +108,14 @@ export async function GET(request: NextRequest) {
     const category = (searchParams.get('category') || '').trim() || 'Local Business';
     const businessName = (searchParams.get('businessName') || '').trim() || 'My Business';
     const query = (searchParams.get('query') || '').trim();
+    const searchTerms = query ? [] : await resolveRelevantSearchTerms(user.tenantId, businessName, category);
 
-    return await generateDynamicServices({ category, businessName, query });
+    return await generateDynamicServices({
+      category,
+      businessName,
+      query,
+      searchTerms,
+    });
   } catch (error: unknown) {
     console.error('[/api/gbp/services/suggest] GET error:', error);
     return NextResponse.json(
@@ -74,16 +129,21 @@ async function generateDynamicServices({
   category,
   businessName,
   query,
+  searchTerms = [],
 }: {
   category: string;
   businessName: string;
   query: string;
+  searchTerms?: string[];
 }) {
   try {
+    const searchHint = searchTerms.length > 0
+      ? `\nTop Google Search Terms customers search for this business: ${searchTerms.join(', ')}\nPrioritize clean service offerings matching real customer search demand without stuffing city names into the service titles.`
+      : '';
     const aiPrompt = `You are a local business marketing and Google Business Profile catalog specialist.
 Business Name: "${businessName}"
 Google Category: "${category}"
-${query ? `User is typing in service search: "${query}"` : 'Generate recommended offerings for this profile.'}
+${query ? `User is typing in service search: "${query}"` : 'Generate recommended offerings for this profile.'}${searchHint}
 
 Task:
 Generate 6 to 8 realistic, authentic, and high-converting products and services that this specific business typically offers to local customers on Google Maps.

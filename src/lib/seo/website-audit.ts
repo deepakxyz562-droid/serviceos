@@ -503,10 +503,13 @@ function buildNonTemplatedDescription(params: {
   city: string;
   services: string[];
   phone?: string | null;
+  keywords?: string[];
 }): string {
   const svcList = params.services.length > 0 ? params.services.slice(0, 4).join(', ') : `${params.industry} consultations, installations, and urgent support`;
+  const kwList = (params.keywords || []).filter(Boolean).slice(0, 3);
+  const kwPart = kwList.length > 0 ? ` Specialists in ${kwList.join(', ')}.` : '';
   const contactPart = params.phone ? ` Call ${params.phone} or book online for prompt service in ${params.city}.` : ` Reach out online to schedule your visit in ${params.city}.`;
-  return `${params.businessName} delivers reliable ${params.industry.toLowerCase()} across ${params.city} with upfront estimates and attentive local support. Our team handles ${svcList}, tailored for homes and businesses seeking dependable quality.${contactPart}`.slice(0, 740);
+  return `${params.businessName} delivers reliable ${params.industry.toLowerCase()} across ${params.city} with upfront estimates and attentive local support. Our team handles ${svcList}, tailored for homes and businesses seeking dependable quality.${kwPart}${contactPart}`.slice(0, 740);
 }
 
 function buildDefaultFaqs(params: {
@@ -515,9 +518,11 @@ function buildDefaultFaqs(params: {
   city: string;
   services: string[];
   phone?: string | null;
+  keywords?: string[];
 }): Array<{ question: string; answer: string }> {
   const topServices = params.services.slice(0, 3).join(', ') || params.industry;
-  return [
+  const topKeywords = (params.keywords || []).filter(Boolean).slice(0, 3);
+  const faqs = [
     {
       question: `What ${params.industry.toLowerCase()} services does ${params.businessName} offer in ${params.city}?`,
       answer: `${params.businessName} provides ${topServices} across ${params.city} with clear pricing and scheduled appointments.`,
@@ -533,6 +538,13 @@ function buildDefaultFaqs(params: {
       answer: `${params.businessName} serves customers throughout ${params.city} and nearby neighborhoods.`,
     },
   ];
+  if (topKeywords.length > 0) {
+    faqs.push({
+      question: `Do you help with ${topKeywords[0]} in ${params.city}?`,
+      answer: `Yes, ${params.businessName} assists customers in ${params.city} searching for ${topKeywords.join(', ')}.`,
+    });
+  }
+  return faqs;
 }
 
 function parseJsonArray<T = any>(raw: string | null | undefined): T[] {
@@ -1223,11 +1235,34 @@ export async function applyHostedOrActivationSeoFix(params: {
   const currentDesc = tenant.description?.trim() || '';
   const needsRichDesc = currentDesc.length < 120 || isTemplatedDescription(currentDesc);
 
+  const rawSettings = (() => {
+    try {
+      return JSON.parse((tenant as any).settingsJson || '{}');
+    } catch {
+      return {};
+    }
+  })();
+  const discoveryKeywords: string[] = Array.isArray(rawSettings?.googleDiscovery?.keywords)
+    ? rawSettings.googleDiscovery.keywords
+        .map((k: any) => (typeof k?.keyword === 'string' ? k.keyword.trim() : ''))
+        .filter(Boolean)
+        .slice(0, 6)
+    : [];
+  const mergedServiceNames = [
+    ...serviceNames,
+    ...(Array.isArray(rawSettings?.seoServices)
+      ? rawSettings.seoServices
+          .map((s: any) => (typeof s?.name === 'string' ? s.name.trim() : ''))
+          .filter(Boolean)
+      : []),
+  ].filter((name, idx, arr) => arr.findIndex((n) => n.toLowerCase() === name.toLowerCase()) === idx);
+
   let nextDescription = params.customDescription?.trim() || currentDesc;
   if (!params.customDescription && needsRichDesc) {
     // Try AI generation quickly if available, otherwise crisp non-templated copy
     try {
       const { callAI } = await import('@/lib/ai-client');
+      const kwPrompt = discoveryKeywords.length > 0 ? `, Top Search Terms: ${discoveryKeywords.slice(0, 4).join(', ')}` : '';
       const res: any = await Promise.race([
         callAI([
           {
@@ -1237,7 +1272,7 @@ export async function applyHostedOrActivationSeoFix(params: {
           },
           {
             role: 'user',
-            content: `Business: ${businessName}, Category: ${industry}, City: ${city}, Services: ${serviceNames.join(', ') || industry}`,
+            content: `Business: ${businessName}, Category: ${industry}, City: ${city}, Services: ${mergedServiceNames.join(', ') || industry}${kwPrompt}`,
           },
         ]),
         new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000)),
@@ -1253,8 +1288,9 @@ export async function applyHostedOrActivationSeoFix(params: {
         businessName,
         industry,
         city,
-        services: serviceNames,
+        services: mergedServiceNames,
         phone: tenant.phone,
+        keywords: discoveryKeywords,
       });
     }
   }
@@ -1263,13 +1299,13 @@ export async function applyHostedOrActivationSeoFix(params: {
     params.customSeoTitle?.trim() ||
     (tenant.seoTitle && tenant.seoTitle.length >= 25
       ? tenant.seoTitle
-      : `${businessName} — ${industry} in ${city}`.slice(0, 62));
+      : `${businessName} — ${discoveryKeywords[0] || industry} in ${city}`.slice(0, 62));
 
   const nextSeoDescription =
     params.customSeoDescription?.trim() ||
     (tenant.seoDescription && tenant.seoDescription.length >= 80
       ? tenant.seoDescription
-      : `Book ${businessName} for ${industry.toLowerCase()} in ${city}. View services, verified customer reviews, and instant appointment options.`.slice(0, 155));
+      : `Book ${businessName} for ${discoveryKeywords.slice(0, 2).join(' & ') || industry.toLowerCase()} in ${city}. View services, verified customer reviews, and instant appointment options.`.slice(0, 155));
 
   const existingFaqs = parseJsonArray<{ question: string; answer: string }>(tenant.faqsJson);
   const nextFaqs =
@@ -1279,8 +1315,9 @@ export async function applyHostedOrActivationSeoFix(params: {
           businessName,
           industry,
           city,
-          services: serviceNames,
+          services: mergedServiceNames,
           phone: tenant.phone,
+          keywords: discoveryKeywords,
         });
 
   const hostedShortUrl = `https://bgos.fieseros.com/b/${slug}`;

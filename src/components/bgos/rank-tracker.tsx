@@ -93,6 +93,9 @@ type AutoDefaults = {
 
 type Result = {
   configured: boolean;
+  provider?: 'dataforseo' | 'google_places_grid' | 'none';
+  dataForSeoConfigured?: boolean;
+  placesConfigured?: boolean;
   hasGoogleConnection: boolean;
   nativeDiscovery: NativeDiscovery | null;
   currentAvgRank: number | null;
@@ -512,16 +515,22 @@ export function RankTracker() {
               />
             </label>
             <p className="text-xs text-muted-foreground sm:col-span-2">
-              {data?.configured
+              {data?.dataForSeoConfigured
                 ? 'Each keyword uses a DataForSEO live maps scan (1 per 24 hours per workspace).'
-                : 'DataForSEO is optional for deep 100-result coordinate grid scans. Native Google discovery above is active for free without credentials.'}
+                : data?.placesConfigured
+                  ? 'Google Places Area Grid & Search Grounding are active without DataForSEO fees. Use the Geo-Grid & Organic SERP tabs.'
+                  : 'Native Google discovery above is active for free. Add Google Places API key or DataForSEO credentials for grid scans.'}
             </p>
             <Button
-              disabled={busy || !data?.configured}
+              disabled={busy || !data?.dataForSeoConfigured}
               onClick={() => void scan()}
               className="sm:w-auto"
             >
-              {busy ? 'Scanning…' : data?.configured ? 'Run Paid Ranking Scan' : 'DataForSEO Credentials Needed For Grid Scan'}
+              {busy
+                ? 'Scanning…'
+                : data?.dataForSeoConfigured
+                  ? 'Run DataForSEO Single-Point Scan'
+                  : 'Optional: Single-Point SERP (Use Geo-Grid Tab Free)'}
             </Button>
           </div>
 
@@ -654,9 +663,14 @@ export function RankTracker() {
               </div>
             </div>
 
+            {data?.configured && !data?.dataForSeoConfigured && data?.placesConfigured && (
+              <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                Running with built-in Google Places Area Grid (zero DataForSEO cost).
+              </p>
+            )}
             {!data?.configured && (
               <p className="text-xs text-amber-600 dark:text-amber-400">
-                DataForSEO server credentials are required to run live coordinate Geo-Grid scans.
+                Google Places API key or DataForSEO credentials are required to run Maps Geo-Grid scans.
               </p>
             )}
           </div>

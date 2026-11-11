@@ -8,6 +8,8 @@ import { generateDesignImage } from '@/lib/designs/image-provider';
 import { saveDesignAsset } from '@/lib/designs/assets';
 import { renderDesign } from '@/lib/designs/render';
 import { logActivity } from '@/lib/activity-log';
+import { getBrandContext } from '@/lib/brand-context';
+import { formatSeoKeywordsPromptSection, getTenantSeoContext } from '@/lib/gbp/seo-context';
 
 export type AutopilotDuration = '7_days' | '30_days' | '1_year' | 'custom';
 
@@ -280,11 +282,19 @@ export async function generateDailyAutopilotPost(
     const dayIndex = (new Date(`${slot.date}T12:00:00Z`).getUTCDay()+6)%7;
     const todayTheme = THEMES[dayIndex] || THEMES[0];
 
+    const [brandContext, seoCtx] = await Promise.all([
+      getBrandContext(tenantId),
+      getTenantSeoContext(tenantId),
+    ]);
+    const seoSection = formatSeoKeywordsPromptSection(seoCtx);
+
     const useTemplate = config.contentSource === 'my_templates' ||
       (config.contentSource === 'hybrid' && Number(slot.date.replace(/-/g,'')) % 2 === 0);
     // 1. Generate SEO-optimized copy for the post
     const prompt = `Write a high-converting social media post for ${businessName} (${industry} in ${city}).
 Today's Theme: ${todayTheme.focus} (${todayTheme.angle}).
+Brand Context: ${brandContext}
+${seoSection ? `\n${seoSection}` : ''}
 
 Requirements:
 1. Compelling, professional, and friendly tone suitable for Google Business Profile, Instagram, and Facebook.

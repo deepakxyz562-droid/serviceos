@@ -1,5 +1,14 @@
 /** Shared GBP data contracts (verified against /api route implementations). */
 
+export type StructuredSeoService = {
+  id?: string;
+  name: string;
+  description: string;
+  targetKeyword?: string;
+  category?: string;
+  syncedToGoogle?: boolean;
+};
+
 export type Review = {
   id: string;
   rating: number;
@@ -138,6 +147,7 @@ export type GbpPlaceResult = {
     regularHours?: any;
     secondaryPhone?: string | null;
     services?: string[];
+    seoServices?: StructuredSeoService[];
     attributes?: Record<string, string[]>;
     specialHours?: Array<{ date: string; open: boolean; openTime?: string; closeTime?: string }>;
     moreHours?: Record<string, string>;
@@ -164,6 +174,7 @@ export type GbpPlaceResult = {
     openingDate?: string | null;
     regularHours?: any;
     services?: string[];
+    seoServices?: StructuredSeoService[];
     attributes?: Record<string, string[]>;
     specialHours?: Array<{ date: string; open: boolean; openTime?: string; closeTime?: string }>;
     moreHours?: Record<string, string>;

@@ -19,6 +19,7 @@ import { db } from '@/lib/db';
 // so this file stays free of side-effects and is safe to import from both
 // server routes and (via the type only) any shared module.
 import type { BrandProfile } from '@prisma/client';
+import { formatSeoKeywordsPromptSection, getTenantSeoContext } from '@/lib/gbp/seo-context';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -106,12 +107,14 @@ export async function getBrandContext(tenantId: string | null | undefined): Prom
   const profile = await getBrandContextRaw(tenantId);
 
   if (!profile) {
-    return (
+    const seoCtx = await getTenantSeoContext(tenantId);
+    const seoSection = formatSeoKeywordsPromptSection(seoCtx);
+    const base =
       'You are writing content for a small service business. ' +
       'Keep the tone professional, friendly, and concise. ' +
       'Do not invent prices, dates, or guarantees. ' +
-      'Prefer clear calls-to-action that drive the reader to book or contact the business.'
-    );
+      'Prefer clear calls-to-action that drive the reader to book or contact the business.';
+    return seoSection ? `${base}\n${seoSection}` : base;
   }
 
   const services = parseJsonArray(profile.services);
@@ -205,6 +208,13 @@ export async function getBrandContext(tenantId: string | null | undefined): Prom
   // Competitors (for tone differentiation — never copy them)
   if (competitors.length > 0) {
     lines.push(`Known competitors (differentiate from, do not mention by name unless asked): ${competitors.join(', ')}`);
+  }
+
+  // Real Google Business Search Terms & Tracked Local SEO Keywords
+  const seoCtx = await getTenantSeoContext(tenantId);
+  const seoSection = formatSeoKeywordsPromptSection(seoCtx);
+  if (seoSection) {
+    lines.push(seoSection);
   }
 
   // Closing guidance

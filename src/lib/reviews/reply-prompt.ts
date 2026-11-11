@@ -19,6 +19,7 @@ export interface ReviewReplyParams {
   salutation?: string;
   language?: 'English' | 'Hindi' | string;
   tone?: string;
+  seoKeywords?: string[];
 }
 
 export type ReviewSentiment = 'critical' | 'neutral' | 'positive';
@@ -123,7 +124,11 @@ STRICT GUIDELINES:
     }
   } else {
     // ── 4★ & 5★ PRAISE REPLIES: Genuine Gratitude, SEO & Warm Welcome ──
-    const seoHint = [category, city].filter(Boolean).join(' in ');
+    const keywordHints = Array.isArray(params.seoKeywords)
+      ? params.seoKeywords.map((k) => k.trim()).filter(Boolean).slice(0, 4)
+      : [];
+    const baseHint = [category, city].filter(Boolean).join(' in ');
+    const seoHint = [baseHint, ...keywordHints].filter(Boolean).join(', ');
     if (isHindi) {
       userPrompt = `आप ${businessName} के मालिक हैं। ग्राहक ${author} ने Google पर एक शानदार ${rating}-स्टार समीक्षा दी है:
 "${comment || 'बहुत बढ़िया सेवा!'}"

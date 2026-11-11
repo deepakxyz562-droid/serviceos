@@ -7,6 +7,7 @@ import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { replyToGoogleBusinessReview } from '@/lib/social/adapters/googlebusiness';
 import { buildReviewReplyPrompt } from '@/lib/reviews/reply-prompt';
 import { callAI } from '@/lib/ai-client';
+import { getTenantSeoContext } from '@/lib/gbp/seo-context';
 
 export const dynamic = 'force-dynamic';
 
@@ -225,11 +226,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const defaultKeywords = [
-      { keyword: `${businessName.toLowerCase()} service`, volume: '500 ↗' },
-      { keyword: 'top rated local service', volume: '300 ↗' },
-      { keyword: 'customer satisfaction', volume: '250 ↗' },
-    ];
+    const seoCtx = await getTenantSeoContext(user.tenantId);
+    const reviewSeoKeywords = seoCtx?.priorityKeywords?.slice(0, 6) || [];
 
     let processedCount = 0;
     const processedReviews: Array<{ id: string; replyText: string; publishedToGoogle: boolean }> = [];
@@ -250,6 +248,7 @@ export async function POST(request: NextRequest) {
           phone,
           salutation,
           language: replyLanguage,
+          seoKeywords: reviewSeoKeywords,
         });
 
         const aiRes = await callAI([

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,126 +13,184 @@ import {
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Screen, Action, colors, ui } from '../src/components/ui';
+import { Screen, Action, colors } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
-import type { GbpPlaceResult } from '../src/components/gbp/types';
+import type { GbpPlaceResult, StructuredSeoService } from '../src/components/gbp/types';
 
-// Category-aware service catalog matching Google Business Profile suggestions
-const SERVICE_CATALOG: Record<string, string[]> = {
-  software: [
-    'Application development',
-    'Cloud services',
-    'Computer training',
-    'Hardware support',
-    'IT support',
-    'Machine learning',
-    'Mobile app development',
-    'Networking services',
-    'Software consulting',
-    'Web design',
-    'Web development',
-  ],
-  bakery: [
-    'Custom Cakes',
-    'Birthday Cakes',
-    'Wedding Cakes',
-    'Pastries & Desserts',
-    'Eggless Cakes',
-    'Cupcakes & Muffins',
-    'Home Delivery',
-    'Bulk Party Catering',
-    'Designer Fondant Cakes',
-  ],
-  hardware: [
-    'Interior Painting',
-    'Exterior Painting',
-    'Waterproofing',
-    'Wall Putty & Primer',
-    'Plumbing Supplies & Tools',
-    'Electrical Hardware & Fitting',
-    'Sanitaryware',
-    'Power Tools Support',
-  ],
-  restaurant: [
-    'Dine-in Service',
-    'Curbside Pickup',
-    'No-contact Delivery',
-    'Outdoor Seating',
-    'Private Event Hosting',
-    'Catering & Buffet',
-    'Takeout',
-  ],
-  general: [
-    'Consultation & Advisory',
-    'Installation & Setup',
-    'Maintenance & Repair',
-    'Custom Solutions',
-    'On-site Support',
-    'Emergency 24/7 Assistance',
-  ],
+type KeywordPlanSearchTermsResponse = {
+  searchTerms?: Array<{ keyword: string; count: number; isThreshold?: boolean }>;
 };
 
-function getCategoryServices(category: string): string[] {
-  const cat = (category || '').toLowerCase();
-  if (/software|it|tech|computer|developer|web|app/i.test(cat)) {
-    return SERVICE_CATALOG.software;
-  }
-  if (/bake|cake|pastry|dessert|sweet/i.test(cat)) {
-    return SERVICE_CATALOG.bakery;
-  }
-  if (/paint|hardware|plumb|electric|construct/i.test(cat)) {
-    return SERVICE_CATALOG.hardware;
-  }
-  if (/restaurant|cafe|food|dining|bar|lounge/i.test(cat)) {
-    return SERVICE_CATALOG.restaurant;
-  }
-  return SERVICE_CATALOG.general;
+function formatServiceTitleFromKeyword(keyword: string): string {
+  return keyword
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+    .slice(0, 100);
+}
+
+function getCharHealth(len: number): { label: string; color: string; bg: string } {
+  if (len === 0) return { label: 'Missing description · target 300–500 chars', color: '#64748B', bg: '#F1F5F9' };
+  if (len < 300) return { label: `${len}/500 chars · add ${300 - len} more for SEO`, color: '#B45309', bg: '#FEF3C7' };
+  if (len <= 500) return { label: `${len}/500 chars · SEO Optimal ✓`, color: '#047857', bg: '#ECFDF5' };
+  return { label: `${len}/500 chars · trim ${len - 500} chars`, color: '#B91C1C', bg: '#FEE2E2' };
 }
 
 export default function ServicesManagementScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const placeRes = useResource<GbpPlaceResult>('/api/gbp/place');
+  const keywordPlanRes = useResource<KeywordPlanSearchTermsResponse>('/api/gbp/keyword-plan');
 
   const place = placeRes.data?.place || placeRes.data?.tenantFallback;
-  const category = place?.category || 'Software company';
+  const rawCategory = (place?.category || '').trim();
+  const category = rawCategory || 'Local Business';
+  const businessName =
+    (('title' in (place || {}) ? (place as any)?.title : (place as any)?.name) || '').trim() ||
+    'My Business';
+  const cityLabel = (place?.city || '').trim() || 'Your City';
 
-  // Selected services state
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [descriptionsByName, setDescriptionsByName] = useState<Record<string, string>>({});
+  const [keywordsByName, setKeywordsByName] = useState<Record<string, string>>({});
   const [customServices, setCustomServices] = useState<string[]>([]);
+  const [aiSuggested, setAiSuggested] = useState<string[]>([]);
+  const [serviceQuery, setServiceQuery] = useState('');
+  const [expandedService, setExpandedService] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [optimizingTarget, setOptimizingTarget] = useState<string | null>(null);
+  const [suggestingServices, setSuggestingServices] = useState(false);
 
-  // Custom service input modal
   const [addCustomModalOpen, setAddCustomModalOpen] = useState(false);
   const [customInput, setCustomInput] = useState('');
+  const [customKeyword, setCustomKeyword] = useState('');
 
-  // Initial load from place
+  const autoFetchedKeyRef = useRef<string | null>(null);
+  const suggestReqIdRef = useRef(0);
+
   useEffect(() => {
-    if (place?.services && Array.isArray(place.services)) {
-      setSelectedServices(place.services);
-    } else {
-      // Default initial software services matching Screenshot 1
-      const defaultSuggestions = getCategoryServices(category).slice(0, 5);
-      setSelectedServices(defaultSuggestions);
+    if (placeRes.loading && !place) return;
+    const seoList: StructuredSeoService[] = Array.isArray(place?.seoServices) ? place.seoServices : [];
+    const descMap: Record<string, string> = {};
+    const kwMap: Record<string, string> = {};
+    for (const s of seoList) {
+      descMap[s.name] = s.description || '';
+      if (s.targetKeyword) kwMap[s.name] = s.targetKeyword;
     }
-  }, [place?.services, category]);
 
-  const categorySuggestions = useMemo(() => {
-    return getCategoryServices(category);
-  }, [category]);
+    if (place?.services && Array.isArray(place.services) && place.services.length > 0) {
+      setSelectedServices(place.services);
+      setExpandedService((prev) => prev || place.services?.[0] || null);
+    } else if (seoList.length > 0) {
+      const names = seoList.map((s) => s.name);
+      setSelectedServices(names);
+      setExpandedService((prev) => prev || names[0] || null);
+    } else {
+      setSelectedServices([]);
+    }
+    setDescriptionsByName(descMap);
+    setKeywordsByName(kwMap);
+  }, [placeRes.loading, place, place?.services, place?.seoServices]);
 
-  // Combined list of suggestions + custom added
+  const fetchDynamicSuggestions = useCallback(
+    async (queryText = '', showErrorAlert = false) => {
+      const reqId = ++suggestReqIdRef.current;
+      setSuggestingServices(true);
+      try {
+        const cleanQuery = queryText.trim();
+        const res = await apiRequest<{ services?: string[] }>('/api/gbp/services/suggest', {
+          method: 'POST',
+          body: {
+            category,
+            businessName,
+            ...(cleanQuery ? { query: cleanQuery } : {}),
+          },
+        });
+        if (suggestReqIdRef.current !== reqId) return;
+        if (Array.isArray(res.services) && res.services.length > 0) {
+          setAiSuggested((prev) =>
+            cleanQuery ? Array.from(new Set([...res.services!, ...prev])) : res.services!,
+          );
+        }
+      } catch (err: unknown) {
+        if (showErrorAlert && suggestReqIdRef.current === reqId) {
+          Alert.alert('Suggestion Error', err instanceof Error ? err.message : 'Could not fetch service ideas.');
+        }
+      } finally {
+        if (suggestReqIdRef.current === reqId) {
+          setSuggestingServices(false);
+        }
+      }
+    },
+    [category, businessName],
+  );
+
+  // Auto-load authentic category + Search Term suggestions once profile loads (no hardcoded catalog)
+  useEffect(() => {
+    if (placeRes.loading) return;
+    const key = `${category}::${businessName}`;
+    if (autoFetchedKeyRef.current === key) return;
+    autoFetchedKeyRef.current = key;
+    void fetchDynamicSuggestions('', false);
+  }, [placeRes.loading, category, businessName, fetchDynamicSuggestions]);
+
+  // Debounced dynamic search-as-you-type against /api/gbp/services/suggest
+  useEffect(() => {
+    const cleanQuery = serviceQuery.trim();
+    if (placeRes.loading || cleanQuery.length < 2) return;
+    const timer = setTimeout(() => {
+      void fetchDynamicSuggestions(cleanQuery, false);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [placeRes.loading, serviceQuery, fetchDynamicSuggestions]);
+
+  const searchTerms = useMemo(
+    () =>
+      Array.isArray(keywordPlanRes.data?.searchTerms)
+        ? keywordPlanRes.data.searchTerms.filter((t) => t?.keyword).slice(0, 8)
+        : [],
+    [keywordPlanRes.data?.searchTerms],
+  );
+
   const allAvailable = useMemo(() => {
-    const set = new Set([...categorySuggestions, ...customServices, ...selectedServices]);
-    return Array.from(set);
-  }, [categorySuggestions, customServices, selectedServices]);
+    return Array.from(new Set([...aiSuggested, ...customServices, ...selectedServices]));
+  }, [aiSuggested, customServices, selectedServices]);
+
+  const visibleServices = useMemo(() => {
+    const clean = serviceQuery.trim().toLowerCase();
+    if (!clean) return allAvailable;
+    return allAvailable.filter((item) => item.toLowerCase().includes(clean));
+  }, [allAvailable, serviceQuery]);
+
+  const seoReadyCount = useMemo(
+    () =>
+      selectedServices.filter((name) => {
+        const len = (descriptionsByName[name] || '').trim().length;
+        return len >= 300 && len <= 500;
+      }).length,
+    [selectedServices, descriptionsByName],
+  );
+
+  function addOrSelectService(name: string, keyword?: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setCustomServices((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+    setSelectedServices((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+    if (keyword && keyword.trim()) {
+      setKeywordsByName((prev) => (prev[trimmed] ? prev : { ...prev, [trimmed]: keyword.trim() }));
+    }
+    setExpandedService(trimmed);
+  }
 
   function toggleService(service: string) {
     setSelectedServices((prev) => {
       if (prev.includes(service)) {
         return prev.filter((s) => s !== service);
       }
+      setExpandedService(service);
       return [...prev, service];
     });
   }
@@ -140,27 +198,106 @@ export default function ServicesManagementScreen() {
   function handleAddCustomService() {
     const trimmed = customInput.trim();
     if (!trimmed) return;
-    if (!customServices.includes(trimmed)) {
-      setCustomServices((prev) => [...prev, trimmed]);
-    }
-    if (!selectedServices.includes(trimmed)) {
-      setSelectedServices((prev) => [...prev, trimmed]);
-    }
+    addOrSelectService(trimmed, customKeyword.trim() || undefined);
     setCustomInput('');
+    setCustomKeyword('');
     setAddCustomModalOpen(false);
   }
 
-  async function handleSave() {
+  async function handleSuggestAiServices() {
+    await fetchDynamicSuggestions(serviceQuery.trim(), true);
+  }
+
+  async function handleOptimizeWithAi(singleServiceName?: string, pushToGoogleAfter = false) {
+    const targets = singleServiceName
+      ? [singleServiceName]
+      : selectedServices;
+    if (targets.length === 0) {
+      Alert.alert('Select a Service', 'Select at least one service first.');
+      return;
+    }
+
+    setOptimizingTarget(singleServiceName || '__ALL__');
+    try {
+      const res = await apiRequest<{
+        services: StructuredSeoService[];
+        syncedToGoogle?: boolean;
+        googleWarnings?: string[];
+      }>('/api/gbp/services/optimize', {
+        method: 'POST',
+        body: {
+          services: targets.map((name) => ({
+            name,
+            targetKeyword: keywordsByName[name] || undefined,
+            existingDescription: descriptionsByName[name] || undefined,
+            category,
+          })),
+          save: true,
+          pushToGoogle: pushToGoogleAfter,
+        },
+      });
+
+      const nextDesc = { ...descriptionsByName };
+      const nextKw = { ...keywordsByName };
+      for (const s of res.services || []) {
+        nextDesc[s.name] = s.description;
+        if (s.targetKeyword) nextKw[s.name] = s.targetKeyword;
+      }
+      setDescriptionsByName(nextDesc);
+      setKeywordsByName(nextKw);
+      if (singleServiceName) setExpandedService(singleServiceName);
+
+      if (pushToGoogleAfter) {
+        await placeRes.refresh();
+        const warnNote =
+          res.googleWarnings && res.googleWarnings.length > 0
+            ? `\n\nGoogle notice: ${res.googleWarnings[0]}`
+            : '';
+        Alert.alert(
+          res.syncedToGoogle ? 'Synced to Google!' : 'Saved Locally',
+          res.syncedToGoogle
+            ? `Generated 300–500 char localized SEO descriptions and synced ${targets.length} services to Google.${warnNote}`
+            : `Generated 300–500 char descriptions and saved locally.${warnNote}`,
+        );
+      }
+    } catch (err: unknown) {
+      Alert.alert('AI Writer Error', err instanceof Error ? err.message : 'Could not optimize descriptions.');
+    } finally {
+      setOptimizingTarget(null);
+    }
+  }
+
+  async function handleSave(pushToGoogle: boolean) {
     setSaving(true);
     try {
-      await apiRequest('/api/gbp/place', {
+      const structuredPayload: StructuredSeoService[] = selectedServices.map((name) => ({
+        name,
+        description: (descriptionsByName[name] || '').trim().slice(0, 500),
+        targetKeyword: keywordsByName[name] || undefined,
+        category,
+      }));
+      const res = await apiRequest<{
+        syncedToGoogle?: boolean;
+        googleWarnings?: string[];
+      }>('/api/gbp/place', {
         method: 'PATCH',
         body: {
           services: selectedServices,
+          seoServices: structuredPayload,
+          pushToGoogle,
         },
       });
       await placeRes.refresh();
-      Alert.alert('Services Saved', 'Your services have been synchronized to Google Business Profile.');
+      const warningMsg =
+        res.googleWarnings && res.googleWarnings.length > 0
+          ? `\n\nGoogle notice: ${res.googleWarnings[0]}`
+          : '';
+      Alert.alert(
+        res.syncedToGoogle ? 'Synced to Google!' : 'Services Saved',
+        res.syncedToGoogle
+          ? `Your services and 300–500 char localized SEO descriptions were pushed to Google Business Profile.${warningMsg}`
+          : `Saved ${selectedServices.length} services to your workspace.${warningMsg}`,
+      );
       router.back();
     } catch (err: unknown) {
       Alert.alert('Save Failed', err instanceof Error ? err.message : 'Could not save services.');
@@ -171,32 +308,156 @@ export default function ServicesManagementScreen() {
 
   return (
     <Screen
-      title="Add services"
-      subtitle={`${category} services`}
+      title="Services & Local SEO"
+      subtitle={`${category} · ${cityLabel}`}
       showBack
       onBack={() => router.back()}
     >
       <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100, gap: 16 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 110, gap: 16 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Prompt Matching Screenshot 1 */}
+        {/* Top Strategy Prompt + Dynamic Search + Batch AI Optimizer */}
         <View style={styles.promptCard}>
-          <Text style={styles.categoryHeading}>{category} services</Text>
-          <Text style={styles.promptSub}>
-            Choose from the list below or add your own to appear on Google Search &amp; Maps.
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.categoryHeading}>
+                {rawCategory ? `${category} Services` : 'Your Business Services'}
+              </Text>
+              <Text style={styles.promptSub}>
+                Google ranks listings higher when each service includes a 300–500 character description targeting a real Search Term + {cityLabel}.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.searchBox}>
+            <MaterialIcons name="search" size={18} color="#64748B" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder={`Search or generate services for ${rawCategory || 'your business'}...`}
+              placeholderTextColor="#94A3B8"
+              value={serviceQuery}
+              onChangeText={setServiceQuery}
+              returnKeyType="search"
+              onSubmitEditing={() => {
+                if (serviceQuery.trim()) void fetchDynamicSuggestions(serviceQuery.trim(), true);
+              }}
+            />
+            {serviceQuery.length > 0 && (
+              <Pressable onPress={() => setServiceQuery('')} hitSlop={8}>
+                <MaterialIcons name="close" size={18} color="#64748B" />
+              </Pressable>
+            )}
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+            <Pressable
+              onPress={handleSuggestAiServices}
+              disabled={suggestingServices}
+              style={({ pressed }) => [styles.secondaryBtn, { opacity: pressed ? 0.8 : 1 }]}
+            >
+              {suggestingServices ? (
+                <ActivityIndicator size="small" color="#0F172A" />
+              ) : (
+                <MaterialIcons name="auto-awesome" size={16} color="#0F172A" />
+              )}
+              <Text style={styles.secondaryBtnText}>
+                {serviceQuery.trim() ? 'AI Search Ideas' : 'Refresh AI Ideas'}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => handleOptimizeWithAi(undefined, false)}
+              disabled={Boolean(optimizingTarget)}
+              style={({ pressed }) => [styles.primaryAiBtn, { opacity: pressed ? 0.85 : 1 }]}
+            >
+              {optimizingTarget === '__ALL__' ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <MaterialIcons name="bolt" size={16} color="#FFFFFF" />
+              )}
+              <Text style={styles.primaryAiBtnText}>AI Write All (300–500)</Text>
+            </Pressable>
+          </View>
         </View>
 
+        {/* Real Google Search Terms -> 1-Tap Service */}
+        {searchTerms.length > 0 && (
+          <View style={styles.searchTermsCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={styles.searchTermsTitle}>Top Google Search Terms</Text>
+              <Text style={styles.searchTermsHint}>Tap to add as service</Text>
+            </View>
+            <View style={styles.chipsContainer}>
+              {searchTerms.map((term) => {
+                const serviceTitle = formatServiceTitleFromKeyword(term.keyword);
+                const alreadySelected = selectedServices.some(
+                  (s) => s.toLowerCase() === serviceTitle.toLowerCase(),
+                );
+                return (
+                  <Pressable
+                    key={term.keyword}
+                    accessibilityRole="button"
+                    onPress={() => addOrSelectService(serviceTitle, term.keyword)}
+                    style={({ pressed }) => [
+                      styles.searchTermPill,
+                      alreadySelected && styles.searchTermPillActive,
+                      { opacity: pressed ? 0.75 : 1 },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={alreadySelected ? 'check-circle' : 'trending-up'}
+                      size={14}
+                      color={alreadySelected ? '#047857' : '#0369A1'}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.searchTermText,
+                        alreadySelected && { color: '#047857', fontWeight: '700' },
+                      ]}
+                    >
+                      {term.keyword}
+                      {term.count > 0 ? ` (${term.count})` : ''}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
         {/* Dynamic Service Pills Grid */}
+        {suggestingServices && visibleServices.length === 0 ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="small" color="#059669" />
+            <Text style={styles.loadingText}>
+              Loading {rawCategory ? `${category} ` : ''}service ideas from AI & Search Terms…
+            </Text>
+          </View>
+        ) : visibleServices.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <MaterialIcons name="home-repair-service" size={22} color="#64748B" />
+            <Text style={styles.emptyTitle}>
+              {serviceQuery.trim()
+                ? `No matching suggestions for "${serviceQuery.trim()}"`
+                : 'No services saved yet'}
+            </Text>
+            <Text style={styles.emptySub}>
+              {serviceQuery.trim()
+                ? 'Tap below to add it as a service or search AI ideas.'
+                : `Tap Refresh AI Ideas for tailored ${category} services or add a custom service.`}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.chipsContainer}>
-          {allAvailable.map((item) => {
+          {visibleServices.map((item) => {
             const isSelected = selectedServices.includes(item);
             return (
               <Pressable
                 key={item}
                 accessibilityRole="button"
-                accessibilityLabel={`${isSelected ? 'Remove' : 'Add'} ${item}`}
                 onPress={() => toggleService(item)}
                 style={({ pressed }) => [
                   styles.servicePill,
@@ -210,50 +471,149 @@ export default function ServicesManagementScreen() {
                   color={isSelected ? '#047857' : '#475569'}
                   style={{ marginRight: 4 }}
                 />
-                <Text
-                  style={[
-                    styles.servicePillText,
-                    isSelected && styles.servicePillTextSelected,
-                  ]}
-                >
+                <Text style={[styles.servicePillText, isSelected && styles.servicePillTextSelected]}>
                   {item}
                 </Text>
               </Pressable>
             );
           })}
 
-          {/* Add custom service button matching Screenshot 1 */}
+          {serviceQuery.trim().length > 0 &&
+            !visibleServices.some((s) => s.toLowerCase() === serviceQuery.trim().toLowerCase()) && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  addOrSelectService(serviceQuery.trim(), serviceQuery.trim().toLowerCase());
+                  setServiceQuery('');
+                }}
+                style={({ pressed }) => [styles.addCustomPill, { opacity: pressed ? 0.75 : 1 }]}
+              >
+                <MaterialIcons name="add" size={16} color="#0B9042" style={{ marginRight: 4 }} />
+                <Text style={styles.addCustomPillText}>Add &ldquo;{serviceQuery.trim()}&rdquo;</Text>
+              </Pressable>
+            )}
+
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Add custom service"
             onPress={() => setAddCustomModalOpen(true)}
-            style={({ pressed }) => [
-              styles.addCustomPill,
-              { opacity: pressed ? 0.75 : 1 },
-            ]}
+            style={({ pressed }) => [styles.addCustomPill, { opacity: pressed ? 0.75 : 1 }]}
           >
             <MaterialIcons name="add" size={16} color="#0B9042" style={{ marginRight: 4 }} />
             <Text style={styles.addCustomPillText}>Add custom service</Text>
           </Pressable>
         </View>
 
-        {/* Selected Counter & SEO Note */}
+        {/* SEO Counter Summary */}
         <View style={styles.counterCard}>
-          <MaterialIcons name="info-outline" size={18} color="#0284C7" />
+          <MaterialIcons name="verified" size={18} color="#0284C7" />
           <Text style={styles.counterText}>
-            <Text style={{ fontWeight: '800' }}>{selectedServices.length} services selected.</Text>{' '}
-            Profiles with 8+ services rank higher in local Google 3-pack searches in your area.
+            <Text style={{ fontWeight: '800' }}>
+              {selectedServices.length} selected · {seoReadyCount}/{selectedServices.length} have optimal 300–500 char SEO descriptions.
+            </Text>{' '}
+            Tap any service below to edit or generate keyword + {cityLabel} copy.
           </Text>
+        </View>
+
+        {/* Expandable 300–500 Char Localized SEO Editor per Selected Service */}
+        <View style={{ gap: 10 }}>
+          {selectedServices.map((name) => {
+            const desc = descriptionsByName[name] || '';
+            const kw = keywordsByName[name] || '';
+            const isOpen = expandedService === name;
+            const health = getCharHealth(desc.length);
+            const isBusy = optimizingTarget === name;
+
+            return (
+              <View key={name} style={styles.serviceSeoCard}>
+                <Pressable
+                  onPress={() => setExpandedService(isOpen ? null : name)}
+                  style={styles.serviceSeoHeader}
+                >
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.serviceSeoTitle}>{name}</Text>
+                    <View style={[styles.healthPill, { backgroundColor: health.bg }]}>
+                      <Text style={[styles.healthText, { color: health.color }]}>{health.label}</Text>
+                    </View>
+                  </View>
+                  <MaterialIcons
+                    name={isOpen ? 'expand-less' : 'expand-more'}
+                    size={22}
+                    color="#64748B"
+                  />
+                </Pressable>
+
+                {isOpen && (
+                  <View style={{ gap: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                    <View style={{ gap: 4 }}>
+                      <Text style={styles.fieldLabel}>Target Search Keyword</Text>
+                      <TextInput
+                        style={styles.smallInput}
+                        placeholder={`e.g. ${name.toLowerCase()} in ${cityLabel}`}
+                        placeholderTextColor="#94A3B8"
+                        value={kw}
+                        onChangeText={(val) =>
+                          setKeywordsByName((prev) => ({ ...prev, [name]: val }))
+                        }
+                      />
+                    </View>
+
+                    <View style={{ gap: 4 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.fieldLabel}>Localized Description (300–500 chars)</Text>
+                        <Pressable
+                          onPress={() => handleOptimizeWithAi(name, false)}
+                          disabled={isBusy}
+                          style={styles.miniAiBtn}
+                        >
+                          {isBusy ? (
+                            <ActivityIndicator size="small" color="#047857" />
+                          ) : (
+                            <MaterialIcons name="auto-awesome" size={14} color="#047857" />
+                          )}
+                          <Text style={styles.miniAiBtnText}>AI Write</Text>
+                        </Pressable>
+                      </View>
+
+                      <TextInput
+                        style={styles.descInput}
+                        multiline
+                        maxLength={500}
+                        textAlignVertical="top"
+                        placeholder={`Describe ${name} for customers searching in ${cityLabel} (aim for 300–500 characters)...`}
+                        placeholderTextColor="#94A3B8"
+                        value={desc}
+                        onChangeText={(val) =>
+                          setDescriptionsByName((prev) => ({ ...prev, [name]: val }))
+                        }
+                      />
+                    </View>
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </View>
       </ScrollView>
 
-      {/* Sticky Bottom Save Action Bar */}
+      {/* Bottom Save & Sync Bar */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <Action
-          label={saving ? 'Saving to Google…' : 'Save Services'}
-          disabled={saving}
-          onPress={handleSave}
-        />
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Action
+              label={saving ? 'Saving…' : 'Save Draft'}
+              secondary
+              disabled={saving}
+              onPress={() => handleSave(false)}
+            />
+          </View>
+          <View style={{ flex: 1.4 }}>
+            <Action
+              label={saving ? 'Syncing…' : 'Save & Push to Google'}
+              disabled={saving}
+              onPress={() => handleSave(true)}
+            />
+          </View>
+        </View>
       </View>
 
       {/* Modal: Add Custom Service */}
@@ -267,7 +627,7 @@ export default function ServicesManagementScreen() {
           <View style={styles.modalCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontSize: 18, fontWeight: '800', color: colors.ink }}>
-                Add Custom Service
+                Add Service From Search Term
               </Text>
               <Pressable onPress={() => setAddCustomModalOpen(false)} hitSlop={8}>
                 <MaterialIcons name="close" size={22} color={colors.muted} />
@@ -275,16 +635,24 @@ export default function ServicesManagementScreen() {
             </View>
 
             <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 18 }}>
-              Enter a specialized service name offered by {('title' in (place || {}) ? (place as any).title : (place as any)?.name) || 'your business'}.
+              Enter a service offered by {businessName} and optionally the exact Google Search Term you want it to rank for.
             </Text>
 
             <TextInput
               style={styles.modalInput}
-              placeholder="e.g. AI Workflow Automation, DevOps"
+              placeholder="Service name (e.g. Custom Mobile App Development)"
               placeholderTextColor="#94A3B8"
               value={customInput}
               onChangeText={setCustomInput}
               autoFocus
+            />
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder={`Target search term (optional, e.g. app developer ${cityLabel})`}
+              placeholderTextColor="#94A3B8"
+              value={customKeyword}
+              onChangeText={setCustomKeyword}
             />
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
@@ -309,23 +677,37 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 4,
+    gap: 6,
   },
-  categoryHeading: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  promptSub: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 18,
-  },
-  chipsContainer: {
+  categoryHeading: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  promptSub: { fontSize: 13, color: '#64748B', lineHeight: 18 },
+  secondaryBtn: {
+    flex: 1,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
   },
+  secondaryBtnText: { fontSize: 12, fontWeight: '700', color: '#0F172A' },
+  primaryAiBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#059669',
+  },
+  primaryAiBtnText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
+  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   servicePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -336,19 +718,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
-  servicePillSelected: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#10B981',
-  },
-  servicePillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  servicePillTextSelected: {
-    fontWeight: '700',
-    color: '#047857',
-  },
+  servicePillSelected: { backgroundColor: '#ECFDF5', borderColor: '#10B981' },
+  servicePillText: { fontSize: 13, fontWeight: '600', color: '#334155' },
+  servicePillTextSelected: { fontWeight: '700', color: '#047857' },
   addCustomPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -360,11 +732,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
-  addCustomPillText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0B9042',
-  },
+  addCustomPillText: { fontSize: 13, fontWeight: '700', color: '#0B9042' },
   counterCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -375,11 +743,52 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#BAE6FD',
   },
-  counterText: {
-    flex: 1,
-    fontSize: 12.5,
-    color: '#0369A1',
-    lineHeight: 18,
+  counterText: { flex: 1, fontSize: 12.5, color: '#0369A1', lineHeight: 18 },
+  serviceSeoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 8,
+  },
+  serviceSeoHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  serviceSeoTitle: { fontSize: 14.5, fontWeight: '800', color: '#0F172A' },
+  healthPill: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  healthText: { fontSize: 11, fontWeight: '700' },
+  fieldLabel: { fontSize: 11.5, fontWeight: '700', color: '#475569' },
+  smallInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  miniAiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  miniAiBtnText: { fontSize: 11.5, fontWeight: '700', color: '#047857' },
+  descInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 13,
+    lineHeight: 19,
+    minHeight: 110,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
   },
   bottomBar: {
     position: 'absolute',
@@ -417,4 +826,71 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     backgroundColor: '#F8FAFC',
   },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13.5,
+    color: '#0F172A',
+    paddingVertical: 2,
+  },
+  searchTermsCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 10,
+  },
+  searchTermsTitle: { fontSize: 13.5, fontWeight: '800', color: '#0F172A' },
+  searchTermsHint: { fontSize: 11.5, fontWeight: '600', color: '#0369A1' },
+  searchTermPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 20,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+  },
+  searchTermPillActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#86EFAC',
+  },
+  searchTermText: { fontSize: 12, fontWeight: '600', color: '#0369A1' },
+  loadingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  loadingText: { flex: 1, fontSize: 13, color: '#475569', fontWeight: '600' },
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 18,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#CBD5E1',
+    gap: 6,
+  },
+  emptyTitle: { fontSize: 14, fontWeight: '800', color: '#334155', textAlign: 'center' },
+  emptySub: { fontSize: 12.5, color: '#64748B', textAlign: 'center', lineHeight: 18 },
 });

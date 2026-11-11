@@ -20,6 +20,9 @@ type SeoAuditResponse = {
 
 type RankingsResponse = {
   configured?: boolean;
+  provider?: 'dataforseo' | 'google_places_grid' | 'none';
+  dataForSeoConfigured?: boolean;
+  placesConfigured?: boolean;
   presence?: {
     mode: 'no_website' | 'bgos_hosted' | 'custom_domain';
     hostedCanonicalUrl: string;
@@ -49,6 +52,24 @@ type RankingsResponse = {
     aiOverviewPresent: boolean;
     aiOverviewCited: boolean;
     citedDomains: string[];
+  }>;
+};
+
+type AutoOptimizePlan = {
+  score: number;
+  grade: string;
+  connectedToGoogle: boolean;
+  pendingCount: number;
+  landingUrl: string;
+  searchTermsUsed: string[];
+  hasRollback: boolean;
+  actions: Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    ready: boolean;
+    alreadyOptimal: boolean;
+    impact: 'high' | 'medium';
   }>;
 };
 
@@ -106,9 +127,12 @@ export default function SeoGrowthScreen() {
   const auditRes = useResource<SeoAuditResponse>('/api/seo/audit');
   const rankingsRes = useResource<RankingsResponse>('/api/gbp/rankings');
   const aiGapRes = useResource<AiGapResponse>('/api/seo/ai-competitor-gap');
+  const autoOptRes = useResource<AutoOptimizePlan>('/api/gbp/auto-optimize');
 
   const [auditing, setAuditing] = useState(false);
   const [fixingKey, setFixingKey] = useState<string | null>(null);
+  const [optimizingAll, setOptimizingAll] = useState(false);
+  const [publishingLanding, setPublishingLanding] = useState(false);
   const [gridKeyword, setGridKeyword] = useState('');
   const [gridSize, setGridSize] = useState<3 | 5>(3);
   const [radiusKm, setRadiusKm] = useState<number>(3);
@@ -235,6 +259,55 @@ export default function SeoGrowthScreen() {
       Alert.alert('AI Visibility Scan', (e as Error).message || 'Could not complete scan');
     } finally {
       setScanningGap(false);
+    }
+  }
+
+  async function runAutoOptimize(mode: 'apply' | 'rollback' = 'apply') {
+    setOptimizingAll(true);
+    try {
+      const res = await apiRequest<{
+        scoreBefore?: number;
+        scoreAfter?: number;
+        gradeAfter?: string;
+        appliedSteps?: string[];
+        syncedToGoogle?: boolean;
+        rolledBack?: boolean;
+      }>('/api/gbp/auto-optimize', {
+        method: 'POST',
+        body: { mode, pushToGoogle: true },
+      });
+      await Promise.all([autoOptRes.refresh(), auditRes.refresh(), rankingsRes.refresh()]);
+      if (mode === 'rollback') {
+        Alert.alert('Snapshot Restored', `GBP score is now ${res.scoreAfter ?? '—'}%.`);
+      } else {
+        Alert.alert(
+          'GBP Auto-Optimized',
+          `Score jumped from ${res.scoreBefore ?? '—'}% to ${res.scoreAfter ?? '—'}% (${res.gradeAfter || ''}).\nSteps applied: ${(res.appliedSteps || []).join(', ') || 'all'}.${res.syncedToGoogle ? '\nSynced straight to Google Business Profile!' : ''}`,
+        );
+      }
+    } catch (e) {
+      Alert.alert('Auto-Optimizer', (e as Error).message || 'Could not optimize profile');
+    } finally {
+      setOptimizingAll(false);
+    }
+  }
+
+  async function publishDedicatedLandingPage() {
+    setPublishingLanding(true);
+    try {
+      const res = await apiRequest<{ websiteUrl?: string; syncedToGoogle?: boolean }>('/api/gbp/website/generate', {
+        method: 'POST',
+        body: { syncToGoogle: true },
+      });
+      await Promise.all([autoOptRes.refresh(), auditRes.refresh(), rankingsRes.refresh()]);
+      Alert.alert(
+        'Dedicated GBP Landing Page Ready',
+        `Published ${res?.websiteUrl || autoOptRes.data?.landingUrl || ''}${res?.syncedToGoogle ? ' & linked to Google Business Profile websiteUri.' : '.'}`,
+      );
+    } catch (e) {
+      Alert.alert('Landing Page', (e as Error).message || 'Could not publish GBP landing page');
+    } finally {
+      setPublishingLanding(false);
     }
   }
 
@@ -372,6 +445,128 @@ export default function SeoGrowthScreen() {
             </Pressable>
           </Card>
 
+          {/* 1-Click "Gemini-Style" AI GBP Auto-Optimizer */}
+          <Card style={{ gap: 10, borderColor: colors.brand, borderWidth: 1 }}>
+            <View style={[ui.row, { justifyContent: 'space-between' }]}>
+              <Text style={ui.heading}>1-Click AI GBP Auto-Optimizer</Text>
+              <View style={{ backgroundColor: colors.brandSoft, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                <Text style={{ fontSize: 10.5, fontWeight: '800', color: colors.brandDark }}>
+                  {autoOptRes.data ? `${autoOptRes.data.score}% (${autoOptRes.data.grade})` : 'AI Plan'}
+                </Text>
+              </View>
+            </View>
+            <Text style={ui.caption}>
+              Applies your Search Terms to Business Description, copies missing Competitor Categories &amp; Attributes,
+              writes 300-500 char Localized Services, and pushes to Google Business Profile with safe 1-tap rollback.
+            </Text>
+
+            {autoOptRes.data?.searchTermsUsed?.length ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {autoOptRes.data.searchTermsUsed.slice(0, 4).map((kw) => (
+                  <View key={kw} style={{ backgroundColor: colors.soft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: colors.ink }}>#{kw}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {(autoOptRes.data?.actions || []).map((act) => (
+              <View
+                key={act.id}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  paddingVertical: 4,
+                }}
+              >
+                <MaterialIcons
+                  name={act.alreadyOptimal ? 'check-circle' : act.ready ? 'bolt' : 'radio-button-unchecked'}
+                  size={16}
+                  color={act.alreadyOptimal ? colors.brand : act.ready ? '#D97706' : colors.muted}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>{act.title}</Text>
+                  <Text style={{ fontSize: 10.5, color: colors.muted }}>{act.subtitle}</Text>
+                </View>
+              </View>
+            ))}
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                disabled={optimizingAll}
+                onPress={() => void runAutoOptimize('apply')}
+                style={{
+                  flex: 1,
+                  backgroundColor: colors.brand,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 6,
+                }}
+              >
+                {optimizingAll ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <MaterialIcons name="auto-awesome" size={16} color="#FFFFFF" />
+                )}
+                <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
+                  {optimizingAll ? 'Optimizing…' : 'Optimize & Push to Google'}
+                </Text>
+              </Pressable>
+              {autoOptRes.data?.hasRollback ? (
+                <Pressable
+                  disabled={optimizingAll}
+                  onPress={() => void runAutoOptimize('rollback')}
+                  style={{
+                    backgroundColor: colors.soft,
+                    borderWidth: 1,
+                    borderColor: colors.line,
+                    paddingHorizontal: 14,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.ink }}>Undo</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </Card>
+
+          {/* Dedicated GBP Landing Page Toggle */}
+          <Card style={{ gap: 8 }}>
+            <Text style={ui.heading}>Dedicated GBP Landing Page</Text>
+            <Text style={ui.caption}>
+              Linking a dedicated localized page ({autoOptRes.data?.landingUrl || presence?.hostedCanonicalUrl || 'bgos.fieseros.com/b/...'})
+              instead of a generic homepage matches your GBP Services &amp; Search Terms for higher Maps conversions.
+            </Text>
+            <Pressable
+              disabled={publishingLanding}
+              onPress={() => void publishDedicatedLandingPage()}
+              style={{
+                backgroundColor: colors.ink,
+                paddingVertical: 10,
+                borderRadius: 10,
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'center',
+                gap: 6,
+              }}
+            >
+              {publishingLanding ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <MaterialIcons name="public" size={16} color="#FFFFFF" />
+              )}
+              <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
+                {publishingLanding ? 'Publishing…' : 'Publish & Sync Dedicated GBP Page'}
+              </Text>
+            </Pressable>
+          </Card>
+
           {tasks.length > 0 && (
             <Card style={{ gap: 10 }}>
               <Text style={ui.heading}>Actionable SEO Fix Queue</Text>
@@ -447,7 +642,23 @@ export default function SeoGrowthScreen() {
           <ErrorNotice message={rankingsRes.error} retry={rankingsRes.refresh} />
 
           <Card style={{ gap: 10 }}>
-            <Text style={ui.heading}>Maps Geo-Grid &amp; Web SERP Check</Text>
+            <View style={[ui.row, { justifyContent: 'space-between' }]}>
+              <Text style={ui.heading}>Maps Area Grid &amp; Web SERP</Text>
+              <View style={{ backgroundColor: colors.brandSoft, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: colors.brandDark }}>
+                  {rankingsRes.data?.dataForSeoConfigured
+                    ? 'DataForSEO SERP'
+                    : rankingsRes.data?.placesConfigured
+                      ? 'Places Area Grid (Free)'
+                      : 'Setup Needed'}
+                </Text>
+              </View>
+            </View>
+            {!rankingsRes.data?.dataForSeoConfigured && rankingsRes.data?.placesConfigured ? (
+              <Text style={ui.caption}>
+                Powered natively by Google Places Area Grid + Gemini Search Grounding (zero DataForSEO cost).
+              </Text>
+            ) : null}
             <TextInput
               placeholder="Enter target keyword (e.g. salon near me)"
               placeholderTextColor={colors.muted}

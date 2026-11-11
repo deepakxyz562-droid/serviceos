@@ -4,24 +4,16 @@ import { db } from '@/lib/db';
 import { isMissingTableError } from '@/lib/gbp/marketing-score';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { fetchGoogleBusinessPlaceDetails } from '@/lib/social/adapters/googlebusiness';
+import {
+  buildCompetitorGapSummary,
+  extractCompetitorSpySignals,
+  type CompetitorSpyProfile,
+} from '@/lib/gbp/competitor-spy';
+import { safeParseJsonObject } from '@/lib/gbp/seo-context';
 
 export const dynamic = 'force-dynamic';
 
-interface CompetitorRow {
-  id: string;
-  name: string;
-  rating: number | null;
-  reviewCount: number | null;
-  distanceKm: number | null;
-  address: string | null;
-  category: string | null;
-  placeId: string | null;
-  mapsUrl: string | null;
-  websiteUrl?: string | null;
-  lastSeoScore?: number | null;
-  lastAuditedAt?: string | null;
-  source: string;
-}
+type CompetitorRow = CompetitorSpyProfile;
 
 function emptyPayload(migrationRequired: boolean) {
   return { competitors: [] as CompetitorRow[], source: 'none', migrationRequired, placesUnavailable: false };
@@ -63,6 +55,7 @@ export async function GET(request: NextRequest) {
     const refresh = searchParams.get('refresh') === '1' || searchParams.get('refresh') === 'true';
     const cityParam = searchParams.get('city');
     const categoryParam = searchParams.get('category');
+    const keywordParam = searchParams.get('keyword');
 
     let storedRows: CompetitorRow[] = [];
     let migrationRequired = false;
@@ -85,21 +78,38 @@ export async function GET(request: NextRequest) {
       db.review.findMany({ where: { tenantId: user.tenantId }, select: { rating: true }, take: 100 }).catch(() => []),
       db.tenant.findUnique({
         where: { id: user.tenantId },
-        select: { name: true, industry: true, address: true, city: true, country: true, googlePlaceId: true, settingsJson: true },
+        select: {
+          name: true,
+          industry: true,
+          address: true,
+          city: true,
+          country: true,
+          website: true,
+          googlePlaceId: true,
+          settingsJson: true,
+        },
       }),
     ]);
 
+    const parsedSettings = safeParseJsonObject(tenant?.settingsJson);
     let selfName = tenant?.name || 'My Business';
     let selfCategory = tenant?.industry || 'Local Business';
     let activeGbpAddress = tenant?.address || '';
-    if (tenant?.settingsJson) {
-      try {
-        const parsed = JSON.parse(tenant.settingsJson);
-        if (parsed.activeGbpTitle) selfName = parsed.activeGbpTitle;
-        if (parsed.activeGbpCategory) selfCategory = parsed.activeGbpCategory;
-        if (parsed.activeGbpAddress) activeGbpAddress = parsed.activeGbpAddress;
-      } catch {}
-    }
+    if (parsedSettings.activeGbpTitle) selfName = parsedSettings.activeGbpTitle;
+    if (parsedSettings.activeGbpCategory) selfCategory = parsedSettings.activeGbpCategory;
+    if (parsedSettings.activeGbpAddress) activeGbpAddress = parsedSettings.activeGbpAddress;
+
+    const additionalCategories: string[] = Array.isArray(parsedSettings.additionalCategories)
+      ? parsedSettings.additionalCategories.filter((c: unknown): c is string => typeof c === 'string' && c.trim().length > 0)
+      : [];
+    const savedAttributes =
+      parsedSettings.attributes && typeof parsedSettings.attributes === 'object'
+        ? (parsedSettings.attributes as Record<string, unknown>)
+        : {};
+    const cachedSpyMap: Record<string, Partial<CompetitorRow>> =
+      parsedSettings.competitorSpyCache?.byKey && typeof parsedSettings.competitorSpyCache.byKey === 'object'
+        ? parsedSettings.competitorSpyCache.byKey
+        : {};
 
     // Check if stored rows contain foreign or mismatched competitors (e.g. USA / Dallas addresses for an Indian business)
     const isIndian = /(india|bihar|patna|delhi|haryana|uttar pradesh|ghaziabad|kanvi|inr|\+91)/i.test(activeGbpAddress) || tenant?.country === 'IN';
@@ -123,16 +133,27 @@ export async function GET(request: NextRequest) {
       id: 'self',
       name: selfName,
       rating: selfRating,
-      reviewCount: selfReviewCount > 0 ? selfReviewCount : 54,
+      reviewCount: selfReviewCount,
       distanceKm: 0,
       address: tenant?.address || tenant?.city || null,
       category: selfCategory,
+      primaryCategoryLabel: selfCategory,
+      secondaryCategories: additionalCategories,
       placeId: tenant?.googlePlaceId || null,
       mapsUrl: null,
+      websiteUrl: tenant?.website || null,
       source: 'self',
       rank: 1.5,
       isSelf: true,
     };
+
+    function mergeCachedSpy(rows: CompetitorRow[]): CompetitorRow[] {
+      return rows.map((row) => {
+        const key = (row.placeId || row.name).toLowerCase();
+        const spy = cachedSpyMap[key];
+        return spy ? { ...spy, ...row, secondaryCategories: row.secondaryCategories || spy.secondaryCategories, attributesList: row.attributesList || spy.attributesList, editorialSummary: row.editorialSummary ?? spy.editorialSummary, photoCount: row.photoCount ?? spy.photoCount, recentReviews: row.recentReviews || spy.recentReviews, primaryCategoryLabel: row.primaryCategoryLabel || spy.primaryCategoryLabel } : row;
+      });
+    }
 
     function buildRankedList(comps: CompetitorRow[]) {
       // Filter out self if accidentally returned
@@ -152,34 +173,70 @@ export async function GET(request: NextRequest) {
       }));
     }
 
-    // If we have clean stored rows and user didn't request a refresh, serve stored rows
-    if (storedRows.length > 0 && !refresh && !cityParam && !categoryParam && !isLegacyCorrupt) {
+    const buildSpyResponse = (rows: CompetitorRow[], queryUsed: string, locationUsed: string, selfMapsRank: number | null) =>
+      buildCompetitorGapSummary({
+        queryUsed,
+        locationUsed,
+        self: {
+          name: selfName,
+          primaryCategory: selfCategory,
+          additionalCategories,
+          attributes: savedAttributes,
+          rating: selfRating,
+          reviewCount: selfReviewCount,
+          hasWebsite: Boolean(tenant?.website),
+          mapsRank: selfMapsRank,
+        },
+        competitors: rows,
+      });
+
+    // If we have clean stored rows AND cached spy signals (unless user asked to refresh/filter by keyword), serve fast
+    const hasCachedSpy = storedRows.some((r) => Boolean(cachedSpyMap[(r.placeId || r.name).toLowerCase()]));
+    if (
+      storedRows.length > 0 &&
+      hasCachedSpy &&
+      !refresh &&
+      !cityParam &&
+      !categoryParam &&
+      !keywordParam &&
+      !isLegacyCorrupt
+    ) {
+      const enriched = mergeCachedSpy(storedRows);
+      const ranked = buildRankedList(enriched);
+      const cachedMeta = parsedSettings.competitorSpyCache || {};
       return NextResponse.json({
-        competitors: buildRankedList(storedRows),
+        competitors: ranked,
         selfBusiness: selfRow,
+        spyInsights: buildSpyResponse(
+          enriched,
+          cachedMeta.queryUsed || `${selfCategory} in ${tenant?.city || 'Local Area'}`,
+          cachedMeta.locationUsed || tenant?.city || 'Local Area',
+          cachedMeta.selfMapsRank ?? null,
+        ),
         source: storedRows.some((r) => r.source === 'places') ? 'places' : 'manual',
         migrationRequired,
         placesUnavailable: false,
       });
     }
 
-    // If refreshing or clearing corrupt cache, delete stale competitor records
-    if (refresh || isLegacyCorrupt) {
+    // If refreshing or clearing corrupt cache (and not a custom keyword probe), delete stale competitor records
+    if ((refresh || isLegacyCorrupt) && !keywordParam) {
       try {
         await db.competitor.deleteMany({ where: { tenantId: user.tenantId } });
       } catch {}
     }
 
-    // Fetch live from Google Places (New) with dynamic GBP & Brand Profile resolution
-    const liveResults = await fetchFromPlacesNew(user.tenantId, {
+    // Fetch live from Google Places (New) with full Category / Attribute / Review Spy fields
+    const liveFetch = await fetchFromPlacesNew(user.tenantId, {
       city: cityParam,
       category: categoryParam,
+      keyword: keywordParam,
     });
 
-    if (liveResults.length > 0) {
-      // If table exists, cache to database
-      if (!migrationRequired) {
-        for (const row of liveResults) {
+    if (liveFetch.competitors.length > 0) {
+      const shouldPersistDefault = !keywordParam && !cityParam && !categoryParam;
+      if (!migrationRequired && shouldPersistDefault) {
+        for (const row of liveFetch.competitors) {
           try {
             await db.competitor.upsert({
               where: { tenantId_name: { tenantId: user.tenantId, name: row.name } },
@@ -190,7 +247,7 @@ export async function GET(request: NextRequest) {
                 reviewCount: row.reviewCount,
                 distanceKm: row.distanceKm,
                 address: row.address,
-                category: row.category,
+                category: row.primaryCategoryLabel || row.category,
                 placeId: row.placeId,
                 mapsUrl: row.mapsUrl,
                 websiteUrl: row.websiteUrl ?? null,
@@ -201,25 +258,78 @@ export async function GET(request: NextRequest) {
                 reviewCount: row.reviewCount,
                 distanceKm: row.distanceKm,
                 address: row.address,
-                category: row.category,
+                category: row.primaryCategoryLabel || row.category,
                 placeId: row.placeId,
                 mapsUrl: row.mapsUrl,
+                websiteUrl: row.websiteUrl ?? null,
               } as any,
             });
           } catch {}
         }
       }
 
+      const computedSpy = buildSpyResponse(
+        liveFetch.competitors,
+        liveFetch.queryUsed,
+        liveFetch.locationUsed,
+        liveFetch.selfMapsRank,
+      );
+
+      // Cache spy details in tenant settingsJson for fast subsequent tab loads
+      if (shouldPersistDefault || refresh) {
+        try {
+          const nextByKey: Record<string, Partial<CompetitorRow>> = {};
+          for (const row of liveFetch.competitors) {
+            nextByKey[(row.placeId || row.name).toLowerCase()] = {
+              primaryCategoryLabel: row.primaryCategoryLabel,
+              secondaryCategories: row.secondaryCategories,
+              attributesList: row.attributesList,
+              editorialSummary: row.editorialSummary,
+              photoCount: row.photoCount,
+              hasHours: row.hasHours,
+              recentReviews: row.recentReviews,
+              mapsRank: row.mapsRank,
+            };
+          }
+          parsedSettings.competitorSpyCache = {
+            updatedAt: new Date().toISOString(),
+            queryUsed: liveFetch.queryUsed,
+            locationUsed: liveFetch.locationUsed,
+            selfMapsRank: liveFetch.selfMapsRank,
+            spyInsights: computedSpy,
+            byKey: nextByKey,
+          };
+          await db.tenant.update({
+            where: { id: user.tenantId },
+            data: { settingsJson: JSON.stringify(parsedSettings) },
+          });
+        } catch {}
+      }
+
       return NextResponse.json({
-        competitors: buildRankedList(liveResults),
+        competitors: buildRankedList(liveFetch.competitors),
         selfBusiness: selfRow,
+        spyInsights: computedSpy,
         source: 'places',
         migrationRequired: false,
         placesUnavailable: false,
       });
     }
 
-    // Dynamic fallback matching business city & category so the benchmark table is always authentic
+    // Fallback to stored rows if keyword filter had no Google Places key/results
+    if (storedRows.length > 0 && !isLegacyCorrupt) {
+      const enriched = mergeCachedSpy(storedRows);
+      return NextResponse.json({
+        competitors: buildRankedList(enriched),
+        selfBusiness: selfRow,
+        spyInsights: buildSpyResponse(enriched, liveFetch.queryUsed, liveFetch.locationUsed, null),
+        source: storedRows.some((r) => r.source === 'places') ? 'places' : 'manual',
+        migrationRequired,
+        placesUnavailable: false,
+      });
+    }
+
+    // Dynamic fallback matching business city & category so the benchmark table is always helpful
     const fallbackCategoryName = selfCategory || 'Retail & Market';
     const fallbackCity = tenant?.city || 'Local Area';
     const dynamicCompetitors: CompetitorRow[] = [
@@ -231,6 +341,8 @@ export async function GET(request: NextRequest) {
         distanceKm: 1.2,
         address: `${fallbackCity} Main Road`,
         category: fallbackCategoryName,
+        primaryCategoryLabel: fallbackCategoryName,
+        secondaryCategories: [],
         placeId: null,
         mapsUrl: null,
         source: 'local_cluster',
@@ -243,6 +355,8 @@ export async function GET(request: NextRequest) {
         distanceKm: 2.1,
         address: `${fallbackCity} Market Complex`,
         category: fallbackCategoryName,
+        primaryCategoryLabel: fallbackCategoryName,
+        secondaryCategories: [],
         placeId: null,
         mapsUrl: null,
         source: 'local_cluster',
@@ -255,6 +369,8 @@ export async function GET(request: NextRequest) {
         distanceKm: 2.8,
         address: `${fallbackCity} Commercial Arcade`,
         category: fallbackCategoryName,
+        primaryCategoryLabel: fallbackCategoryName,
+        secondaryCategories: [],
         placeId: null,
         mapsUrl: null,
         source: 'local_cluster',
@@ -267,6 +383,8 @@ export async function GET(request: NextRequest) {
         distanceKm: 3.4,
         address: `${fallbackCity} Ring Road`,
         category: fallbackCategoryName,
+        primaryCategoryLabel: fallbackCategoryName,
+        secondaryCategories: [],
         placeId: null,
         mapsUrl: null,
         source: 'local_cluster',
@@ -276,14 +394,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       competitors: buildRankedList(dynamicCompetitors),
       selfBusiness: selfRow,
+      spyInsights: buildSpyResponse(dynamicCompetitors, liveFetch.queryUsed, liveFetch.locationUsed, null),
       source: 'local_cluster',
-      migrationRequired,
-      placesUnavailable: true,
-    });
-
-    return NextResponse.json({
-      competitors: [],
-      source: 'none',
       migrationRequired,
       placesUnavailable: true,
     });
@@ -372,12 +484,33 @@ export async function DELETE(request: NextRequest) {
 
 const PLACES_NEW_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText';
 
+const RICH_SPY_FIELD_MASK =
+  'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.googleMapsUri,places.primaryType,places.primaryTypeDisplayName,places.types,places.websiteUri,places.editorialSummary,places.regularOpeningHours.weekdayDescriptions,places.accessibilityOptions,places.paymentOptions,places.parkingOptions,places.delivery,places.takeout,places.dineIn,places.reservable,places.goodForGroups,places.reviews,places.photos';
+
+const CORE_SPY_FIELD_MASK =
+  'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.googleMapsUri,places.primaryType,places.primaryTypeDisplayName,places.types,places.websiteUri,places.reviews';
+
 async function fetchFromPlacesNew(
   tenantId: string,
-  opts?: { city?: string | null; category?: string | null }
-): Promise<CompetitorRow[]> {
-  const apiKey = process.env.GOOGLE_MAPS_SERVER_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) return [];
+  opts?: { city?: string | null; category?: string | null; keyword?: string | null }
+): Promise<{
+  competitors: CompetitorRow[];
+  queryUsed: string;
+  locationUsed: string;
+  selfMapsRank: number | null;
+}> {
+  const apiKey =
+    process.env.GOOGLE_PLACES_API_KEY ||
+    process.env.GOOGLE_MAPS_SERVER_API_KEY ||
+    process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) {
+    return {
+      competitors: [],
+      queryUsed: opts?.keyword?.trim() || opts?.category?.trim() || 'Local Business',
+      locationUsed: opts?.city?.trim() || 'Local Area',
+      selfMapsRank: null,
+    };
+  }
 
   // 1. Resolve business information from tenant
   const tenant = await db.tenant.findUnique({
@@ -523,8 +656,10 @@ async function fetchFromPlacesNew(
     regionCode = tenant.country.toUpperCase();
   }
 
-  // Build high-intent local query
-  const query = queryCity ? `${industry} in ${queryCity}`.trim() : `${industry} near me`.trim();
+  // Build high-intent local query (honoring explicit keyword spy override if provided)
+  const searchSubject = opts?.keyword?.trim() || industry;
+  const query = queryCity ? `${searchSubject} in ${queryCity}`.trim() : `${searchSubject} near me`.trim();
+  const locationUsed = queryCity || 'Nearby';
 
   try {
     const payload: any = {
@@ -533,7 +668,7 @@ async function fetchFromPlacesNew(
       regionCode,
     };
 
-    if (userLat != null && userLng != null) {
+    if (userLat != null && userLng != null && !opts?.city) {
       payload.locationBias = {
         circle: {
           center: { latitude: userLat, longitude: userLng },
@@ -542,21 +677,34 @@ async function fetchFromPlacesNew(
       };
     }
 
-    const res = await fetch(PLACES_NEW_SEARCH_URL, {
+    let res = await fetch(PLACES_NEW_SEARCH_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask':
-          'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.googleMapsUri,places.primaryType,places.websiteUri',
+        'X-Goog-FieldMask': RICH_SPY_FIELD_MASK,
       },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(12000),
     });
 
+    // Fallback to core field mask if any extended Places field is rejected
+    if (!res.ok) {
+      res = await fetch(PLACES_NEW_SEARCH_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': CORE_SPY_FIELD_MASK,
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(12000),
+      });
+    }
+
     if (!res.ok) {
       console.error('[competitors] Places API (New) error status:', res.status);
-      return [];
+      return { competitors: [], queryUsed: query, locationUsed, selfMapsRank: null };
     }
 
     const data = await res.json();
@@ -564,17 +712,26 @@ async function fetchFromPlacesNew(
 
     const computed: CompetitorRow[] = [];
     const selfName = (gbpTitle || brandProfile?.businessName || tenant?.name || '').toLowerCase();
+    let selfMapsRank: number | null = null;
 
-    for (const p of rawPlaces) {
+    for (let idx = 0; idx < rawPlaces.length; idx += 1) {
+      const p = rawPlaces[idx];
       const name = p.displayName?.text;
       if (!name) continue;
-      // Skip self
-      if (selfName && name.toLowerCase().includes(selfName)) continue;
+      const isOwnListing =
+        (gbpPlaceId && p.id === gbpPlaceId) ||
+        (selfName && name.toLowerCase().includes(selfName));
+      if (isOwnListing) {
+        if (selfMapsRank === null) selfMapsRank = idx + 1;
+        continue;
+      }
 
       let distanceKm: number | null = null;
       if (userLat != null && userLng != null && p.location?.latitude != null && p.location?.longitude != null) {
         distanceKm = haversineDistanceKm(userLat, userLng, p.location.latitude, p.location.longitude);
       }
+
+      const spySignals = extractCompetitorSpySignals(p, industry);
 
       computed.push({
         id: p.id || `comp-${computed.length + 1}`,
@@ -583,7 +740,15 @@ async function fetchFromPlacesNew(
         reviewCount: p.userRatingCount != null ? Number(p.userRatingCount) : null,
         distanceKm,
         address: p.formattedAddress ? String(p.formattedAddress).slice(0, 300) : null,
-        category: p.primaryType ? String(p.primaryType) : industry,
+        category: spySignals.primaryCategoryLabel || (p.primaryType ? String(p.primaryType) : industry),
+        primaryCategoryLabel: spySignals.primaryCategoryLabel,
+        secondaryCategories: spySignals.secondaryCategories,
+        attributesList: spySignals.attributesList,
+        editorialSummary: spySignals.editorialSummary,
+        photoCount: spySignals.photoCount,
+        hasHours: spySignals.hasHours,
+        recentReviews: spySignals.recentReviews,
+        mapsRank: idx + 1,
         placeId: p.id ? String(p.id) : null,
         mapsUrl:
           p.googleMapsUri ||
@@ -603,9 +768,14 @@ async function fetchFromPlacesNew(
       return (b.rating || 0) - (a.rating || 0);
     });
 
-    return computed.slice(0, 10);
+    return {
+      competitors: computed.slice(0, 10),
+      queryUsed: query,
+      locationUsed,
+      selfMapsRank,
+    };
   } catch (err: any) {
     console.error('[competitors] fetchFromPlacesNew failed:', err?.message || err);
-    return [];
+    return { competitors: [], queryUsed: query, locationUsed, selfMapsRank: null };
   }
 }

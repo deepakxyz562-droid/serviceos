@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
 import { publishPost } from '@/lib/social/publisher';
 import { logActivity } from '@/lib/activity-log';
+import { formatSeoKeywordsPromptSection, getTenantSeoContext } from '@/lib/gbp/seo-context';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,15 +92,17 @@ async function handleAutoPost(request: NextRequest) {
         continue; // Already posted recently this week
       }
 
-      // 2. Generate SEO-rich localized post with AI
+      // 2. Generate SEO-rich localized post with AI (grounded in real Google Search Terms)
       const businessName = tenant.brandProfile?.businessName || tenant.name || 'Our Team';
       const industry = tenant.brandProfile?.industry || 'Professional Services';
       const location = tenant.brandProfile?.location || tenant.city || 'your area';
+      const seoSection = formatSeoKeywordsPromptSection(await getTenantSeoContext(tenant.id));
 
       const prompt = `You are a Google Local SEO copywriter. Write a 1-2 paragraph Google Business Profile update for:
 - Business: ${businessName}
 - Industry: ${industry}
 - Location: ${location}
+${seoSection ? `\n${seoSection}` : ''}
 
 Requirements:
 1. Enthusiastic, professional, trustworthy tone.

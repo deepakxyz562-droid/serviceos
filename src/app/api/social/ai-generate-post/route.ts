@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic';
 
 interface GeneratePostRequest {
   topic?: string;
+  targetKeyword?: string;
   theme?: 'promo' | 'tip' | 'review' | 'announcement' | 'greeting';
   tone?: string;
   platforms?: string[];
@@ -31,7 +32,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json().catch(() => ({}))) as GeneratePostRequest;
-    const topic = (body.topic || '').trim() || 'Weekend exclusive offer & client appreciation';
+    const targetKeyword = (body.targetKeyword || '').trim();
+    const topic = (body.topic || '').trim() || (targetKeyword ? `${targetKeyword} in local area` : 'Weekend exclusive offer & client appreciation');
     const theme = body.theme || 'promo';
     const tone = body.tone || 'engaging, professional, persuasive';
     const platforms = body.platforms && body.platforms.length > 0 ? body.platforms : ['instagram', 'facebook', 'googlebusiness'];
@@ -73,7 +75,7 @@ Industry: ${industry}
 Phone: ${phone}
 Location: ${location}
 Brand Context: ${brandContext}
-Topic / Goal: ${topic}
+Topic / Goal: ${topic}${targetKeyword ? `\nPriority Search Term to weave in naturally: "${targetKeyword}"` : ''}
 Theme: ${theme}
 Target Platforms: ${platforms.join(', ')}
 Tone: ${tone}

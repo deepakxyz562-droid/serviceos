@@ -14,8 +14,20 @@ interface CompetitorItem {
   rating: number | null;
   reviewCount: number | null;
   distanceKm: number | null;
-  rank: number;
+  rank?: number;
+  mapsRank?: number | null;
+  primaryCategoryLabel?: string | null;
+  secondaryCategories?: string[];
+  attributesList?: string[];
+  photoCount?: number;
   isSelf?: boolean;
+}
+
+interface CompetitorSpySummary {
+  reviewsNeededForTop3: number;
+  topAvgReviews: number;
+  missingCategories: Array<{ category: string; competitorCount: number; percentage: number }>;
+  whyTopRank: string[];
 }
 
 interface KeywordRankItem {
@@ -469,8 +481,30 @@ export function PerformancePanel({
   const [showAllKeywords, setShowAllKeywords] = useState(false);
 
   // Fetch competitors and keyword rankings
-  const competitorsRes = useResource<{ competitors: CompetitorItem[]; selfBusiness?: CompetitorItem }>('/api/gbp/competitors');
+  const competitorsRes = useResource<{
+    competitors: CompetitorItem[];
+    selfBusiness?: CompetitorItem;
+    spyInsights?: CompetitorSpySummary | null;
+  }>('/api/gbp/competitors');
   const rankingsRes = useResource<any>('/api/gbp/rankings');
+  const [copyingCat, setCopyingCat] = useState<string | null>(null);
+
+  async function copyMissingCategory(cat: string) {
+    if (copyingCat) return;
+    setCopyingCat(cat);
+    try {
+      await apiRequest('/api/gbp/competitors/apply-advantage', {
+        method: 'POST',
+        body: { addCategories: [cat], pushToGoogle: true },
+      });
+      await competitorsRes.refresh();
+      Alert.alert('Category Added', `"${cat}" saved to your Google Business Profile.`);
+    } catch (e) {
+      Alert.alert('Update Failed', (e as Error).message || 'Could not add category');
+    } finally {
+      setCopyingCat(null);
+    }
+  }
 
   // Email summary state
   const [summaryEnabled, setSummaryEnabled] = useState(false);
@@ -548,14 +582,8 @@ export function PerformancePanel({
     deltaPct8Weeks: -100,
   };
 
-  // Competitors List
-  const competitorsList: CompetitorItem[] = competitorsRes.data?.competitors || [
-    { id: 'self', name: 'My Business', rating: metrics?.avgRating || 4.8, reviewCount: metrics?.totalReviews || 54, distanceKm: 0, rank: 1.5, isSelf: true },
-    { id: 'c1', name: 'Metro Area Super Center', rating: 4.7, reviewCount: 34, distanceKm: 1.2, rank: 4.5 },
-    { id: 'c2', name: 'City Retail Complex', rating: 4.1, reviewCount: 44, distanceKm: 2.1, rank: 4.9 },
-    { id: 'c3', name: 'Prime Commercial Market', rating: 4.3, reviewCount: 103, distanceKm: 2.8, rank: 5.2 },
-    { id: 'c4', name: 'Express Local Hub', rating: 5.0, reviewCount: 3, distanceKm: 3.4, rank: 6.0 },
-  ];
+  // Competitors List (real API rows, no fabricated fallback numbers)
+  const competitorsList: CompetitorItem[] = competitorsRes.data?.competitors || [];
   const displayedCompetitors = showAllCompetitors ? competitorsList : competitorsList.slice(0, 3);
 
   // Targeted Keywords List
@@ -665,10 +693,11 @@ export function PerformancePanel({
             </View>
           </View>
 
+          {/* Reviews count */}
           <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', gap: 4 }}>
             <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#64748B' }}>Reviews</Text>
             <Text style={{ fontSize: 24, fontWeight: '800', color: '#0F172A' }}>
-              {(metrics?.totalReviews ?? 54).toLocaleString()}
+              {(metrics?.totalReviews ?? 0).toLocaleString()}
             </Text>
             <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start', marginTop: 4 }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626' }}>
@@ -732,50 +761,67 @@ export function PerformancePanel({
           </View>
 
           {/* Table Rows */}
-          {displayedCompetitors.map((comp, idx) => {
-            const isSelf = comp.isSelf;
-            return (
-              <View
-                key={comp.id || idx}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                  backgroundColor: isSelf ? '#FFFBEB' : '#FFFFFF',
-                  borderBottomWidth: idx < displayedCompetitors.length - 1 ? 1 : 0,
-                  borderBottomColor: isSelf ? '#FEF3C7' : '#F1F5F9',
-                }}
-              >
-                {/* Competitor Name & Star Rating */}
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: isSelf ? '#78350F' : '#0F172A' }} numberOfLines={1}>
-                    {comp.name}
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                    <MaterialIcons name="star" size={13} color="#F59E0B" />
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#64748B' }}>
-                      {(comp.rating || 4.5).toFixed(1)}
+          {displayedCompetitors.length === 0 ? (
+            <View style={{ padding: 16 }}>
+              <Text style={{ fontSize: 12.5, color: '#64748B' }}>
+                {competitorsRes.loading ? 'Scanning nearby competitors…' : 'No local competitor rows loaded yet.'}
+              </Text>
+            </View>
+          ) : (
+            displayedCompetitors.map((comp, idx) => {
+              const isSelf = comp.isSelf;
+              const rankNum = comp.mapsRank ?? comp.rank ?? idx + 1;
+              return (
+                <View
+                  key={comp.id || idx}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    backgroundColor: isSelf ? '#FFFBEB' : '#FFFFFF',
+                    borderBottomWidth: idx < displayedCompetitors.length - 1 ? 1 : 0,
+                    borderBottomColor: isSelf ? '#FEF3C7' : '#F1F5F9',
+                  }}
+                >
+                  {/* Competitor Name, Categories & Star Rating */}
+                  <View style={{ flex: 1, gap: 2, paddingRight: 8 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: isSelf ? '#78350F' : '#0F172A' }} numberOfLines={1}>
+                      {comp.name}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                        <MaterialIcons name="star" size={13} color="#F59E0B" />
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#64748B' }}>
+                          {comp.rating != null ? comp.rating.toFixed(1) : '—'}
+                        </Text>
+                      </View>
+                      {comp.primaryCategoryLabel ? (
+                        <Text style={{ fontSize: 11, color: '#64748B', flex: 1 }} numberOfLines={1}>
+                          · {comp.primaryCategoryLabel}
+                          {(comp.secondaryCategories?.length || 0) > 0 ? ` (+${comp.secondaryCategories!.length})` : ''}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  {/* Overall Reviews */}
+                  <View style={{ width: 80, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: isSelf ? '#B45309' : '#059669' }}>
+                      {comp.reviewCount ?? 0}
+                    </Text>
+                  </View>
+
+                  {/* Rank */}
+                  <View style={{ width: 50, alignItems: 'flex-end' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: isSelf ? '#B45309' : '#0F172A' }}>
+                      #{Number(rankNum).toFixed(0)}
                     </Text>
                   </View>
                 </View>
-
-                {/* Overall Reviews */}
-                <View style={{ width: 80, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: isSelf ? '#B45309' : '#059669' }}>
-                    {comp.reviewCount || 0}
-                  </Text>
-                </View>
-
-                {/* Rank */}
-                <View style={{ width: 50, alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: isSelf ? '#B45309' : '#0F172A' }}>
-                    {comp.rank.toFixed(1)}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
+              );
+            })
+          )}
 
           {/* Expand / Collapse Button */}
           {competitorsList.length > 3 && (
@@ -798,6 +844,35 @@ export function PerformancePanel({
             </Pressable>
           )}
         </View>
+
+        {competitorsRes.data?.spyInsights?.missingCategories?.length ? (
+          <View style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#BBF7D0', gap: 8 }}>
+            <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#166534' }}>
+              Missing Secondary Categories Used by Competitors
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {competitorsRes.data.spyInsights.missingCategories.slice(0, 4).map((cat) => (
+                <Pressable
+                  key={cat.category}
+                  disabled={Boolean(copyingCat)}
+                  onPress={() => void copyMissingCategory(cat.category)}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 1,
+                    borderColor: '#16A34A',
+                    borderRadius: 8,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                  }}
+                >
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#15803D' }}>
+                    {copyingCat === cat.category ? 'Copying…' : `+ Copy "${cat.category}" (${cat.competitorCount})`}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
       </View>
 
       {/* ════════════════════════════════════════════════════════════════════════

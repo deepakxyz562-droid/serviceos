@@ -90,6 +90,7 @@ import { authFetch, getAuthToken } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 import { GbpManageProfileDialog } from '@/components/bgos/gbp-manage-profile-dialog';
+import { GbpAutoOptimizerPanel } from '@/components/bgos/gbp-auto-optimizer-panel';
 import {
   WebMediaMetadataDialog,
   type WebMediaItem,
@@ -2541,6 +2542,7 @@ export function GbpAiHub() {
               <AiActionsFeed items={aiActions} />
             </div>
           </div>
+          <GbpAutoOptimizerPanel onOptimized={loadAll} />
         </TabsContent>
 
         {/* ── Reviews ── */}

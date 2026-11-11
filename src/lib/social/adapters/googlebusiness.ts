@@ -1307,7 +1307,7 @@ export async function fetchGoogleBusinessPerformanceMetrics(
  */
 export async function fetchGoogleBusinessSearchKeywords(
   account: SocialAccountData,
-): Promise<Array<{ keyword: string; count: number }>> {
+): Promise<Array<{ keyword: string; count: number; isThreshold?: boolean }>> {
   try {
     const { locationId } = await extractLocationRef(account);
     const now = new Date();
@@ -1321,7 +1321,7 @@ export async function fetchGoogleBusinessSearchKeywords(
       startYear -= 1;
     }
 
-    const url = `https://businessprofileperformance.googleapis.com/v1/locations/${locationId}/searchkeywords:fetchSearchKeywordsTimeSeries?monthlyRange.startMonth.year=${startYear}&monthlyRange.startMonth.month=${startMonth}&monthlyRange.endMonth.year=${endYear}&monthlyRange.endMonth.month=${endMonth}&pageSize=50`;
+    const url = `https://businessprofileperformance.googleapis.com/v1/locations/${encodeURIComponent(locationId)}/searchkeywords:fetchSearchKeywordsTimeSeries?monthlyRange.startMonth.year=${startYear}&monthlyRange.startMonth.month=${startMonth}&monthlyRange.endMonth.year=${endYear}&monthlyRange.endMonth.month=${endMonth}&pageSize=50`;
 
     const res = await fetch(url, {
       method: 'GET',
@@ -1338,17 +1338,31 @@ export async function fetchGoogleBusinessSearchKeywords(
     const data = (await res.json().catch(() => ({}))) as {
       searchKeywordsCounts?: Array<{
         searchKeyword?: string;
-        insightsValue?: { value?: string };
+        insightsValue?: { value?: string; threshold?: string };
       }>;
     };
 
     const counts = data.searchKeywordsCounts || [];
     return counts
       .filter((k) => k.searchKeyword)
-      .map((k) => ({
-        keyword: String(k.searchKeyword),
-        count: parseInt(k.insightsValue?.value || '0', 10) || 1,
-      }));
+      .map((k) => {
+        const rawVal = k.insightsValue?.value;
+        const rawThresh = k.insightsValue?.threshold;
+        const parsedVal = rawVal !== undefined ? parseInt(String(rawVal), 10) : NaN;
+        const parsedThresh = rawThresh !== undefined ? parseInt(String(rawThresh), 10) : NaN;
+        const isThreshold = Number.isNaN(parsedVal) && !Number.isNaN(parsedThresh);
+        const count = !Number.isNaN(parsedVal)
+          ? parsedVal
+          : !Number.isNaN(parsedThresh)
+            ? parsedThresh
+            : 1;
+        return {
+          keyword: String(k.searchKeyword).trim(),
+          count,
+          ...(isThreshold ? { isThreshold: true } : {}),
+        };
+      })
+      .sort((a, b) => b.count - a.count);
   } catch (err) {
     console.warn('[googlebusiness] Search keywords fetch warning:', err instanceof Error ? err.message : err);
     return [];
@@ -1523,43 +1537,249 @@ export async function fetchGoogleBusinessPlaceDetails(
  *
  * Returns the updated fields. Throws structured errors with actionable messages.
  */
+export interface GbpProfileUpdateInput {
+  description?: string; // max 750 chars per Google policy
+  websiteUri?: string;
+  additionalCategories?: string[]; // display names or 'categories/gcid:...' / 'gcid:...'
+  serviceItems?: Array<{ name: string; description?: string; categoryName?: string }>;
+  attributes?: Record<string, boolean | string | string[]>;
+  regionCode?: string;
+}
+
+export interface GbpProfileUpdateResult {
+  descriptionApplied: boolean;
+  appliedMasks: string[];
+  warnings: string[];
+}
+
+async function resolveGoogleCategoryRefs(
+  accessToken: string,
+  namesOrIds: string[],
+  regionCode = 'IN',
+): Promise<{ resolved: Array<{ name: string; displayName?: string }>; unmatched: string[] }> {
+  const resolved: Array<{ name: string; displayName?: string }> = [];
+  const unmatched: string[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of namesOrIds.slice(0, 9)) {
+    const clean = String(raw || '').trim();
+    if (!clean) continue;
+
+    if (clean.startsWith('categories/gcid:') || clean.startsWith('gcid:')) {
+      const resourceName = clean.startsWith('categories/') ? clean : `categories/${clean}`;
+      if (!seen.has(resourceName)) {
+        seen.add(resourceName);
+        resolved.push({ name: resourceName });
+      }
+      continue;
+    }
+
+    try {
+      const url = new URL(`${GBP_API_BASE}/categories`);
+      url.searchParams.set('regionCode', regionCode);
+      url.searchParams.set('languageCode', 'en');
+      url.searchParams.set('filter', `displayName=${clean}`);
+      url.searchParams.set('readMask', 'name,displayName');
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {
+          categories?: Array<{ name?: string; displayName?: string }>;
+        };
+        const list = Array.isArray(data.categories) ? data.categories : [];
+        const exact =
+          list.find((c) => c.displayName?.toLowerCase() === clean.toLowerCase()) || list[0];
+        if (exact?.name && !seen.has(exact.name)) {
+          seen.add(exact.name);
+          resolved.push({ name: exact.name, displayName: exact.displayName });
+          continue;
+        }
+      }
+    } catch {
+      // ignore lookup timeout, record unmatched
+    }
+    unmatched.push(clean);
+  }
+
+  return { resolved, unmatched };
+}
+
+async function fetchLocationPrimaryCategoryResource(
+  accessToken: string,
+  locationId: string,
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${GBP_API_BASE}/locations/${encodeURIComponent(locationId)}?readMask=categories`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json().catch(() => ({}))) as {
+      categories?: { primaryCategory?: { name?: string } };
+    };
+    return data.categories?.primaryCategory?.name || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Update live Google Business Profile location fields via Business Information API v1.
+ *
+ * Uses `locations/{locationId}` (canonical v1 PATCH resource) and isolates optional
+ * field groups (description, websiteUri, categories.additionalCategories, serviceItems,
+ * attributes) so non-fatal warnings on one field never discard valid updates.
+ */
 export async function updateGoogleBusinessProfile(
   account: SocialAccountData,
-  updates: {
-    description?: string; // max 750 chars per Google policy
-  },
-): Promise<{ descriptionApplied: boolean }> {
-  const { accountName, locationId } = await extractLocationRef(account);
-  const locationResourceName = accountName.startsWith('accounts/')
-    ? `${accountName}/locations/${locationId}`
-    : `accounts/${accountName}/locations/${locationId}`;
+  updates: GbpProfileUpdateInput,
+): Promise<GbpProfileUpdateResult> {
+  const { locationId } = await extractLocationRef(account);
+  const locationPath = `locations/${encodeURIComponent(locationId)}`;
+  const appliedMasks: string[] = [];
+  const warnings: string[] = [];
+  let descriptionApplied = false;
 
-  const body: Record<string, unknown> = {};
-  const updateMasks: string[] = [];
+  const patchGroup = async (mask: string, body: Record<string, unknown>, label: string): Promise<boolean> => {
+    const res = await fetch(`${GBP_API_BASE}/${locationPath}?updateMask=${encodeURIComponent(mask)}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${account.accessToken}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      const errJson = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+      warnings.push(`${label}: ${errJson.error?.message || `HTTP ${res.status}`}`);
+      return false;
+    }
+    appliedMasks.push(mask);
+    return true;
+  };
 
+  // 1. Core safe profile fields (description & websiteUri)
+  const coreBody: Record<string, unknown> = {};
+  const coreMasks: string[] = [];
   if (updates.description !== undefined) {
-    const desc = updates.description.slice(0, 750);
-    body.profile = { description: desc };
-    updateMasks.push('profile.description');
+    coreBody.profile = { description: updates.description.trim().slice(0, 750) };
+    coreMasks.push('profile.description');
+  }
+  if (updates.websiteUri !== undefined && updates.websiteUri.trim()) {
+    coreBody.websiteUri = updates.websiteUri.trim();
+    coreMasks.push('websiteUri');
+  }
+  if (coreMasks.length > 0) {
+    const res = await fetch(
+      `${GBP_API_BASE}/${locationPath}?updateMask=${encodeURIComponent(coreMasks.join(','))}`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${account.accessToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(coreBody),
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+    await assertOk(res, 'update Google Business Profile');
+    appliedMasks.push(...coreMasks);
+    if (coreMasks.includes('profile.description')) {
+      descriptionApplied = true;
+    }
   }
 
-  if (updateMasks.length === 0) {
-    return { descriptionApplied: false };
+  // 2. Additional (secondary) categories — resolved against Google's live category taxonomy
+  if (Array.isArray(updates.additionalCategories)) {
+    const { resolved, unmatched } = await resolveGoogleCategoryRefs(
+      account.accessToken,
+      updates.additionalCategories,
+      updates.regionCode || 'IN',
+    );
+    if (unmatched.length > 0) {
+      warnings.push(`Skipped unmatched Google categories: ${unmatched.join(', ')}`);
+    }
+    if (resolved.length > 0 || updates.additionalCategories.length === 0) {
+      await patchGroup(
+        'categories.additionalCategories',
+        {
+          categories: {
+            additionalCategories: resolved.map((c) => ({ name: c.name })),
+          },
+        },
+        'Secondary categories',
+      );
+    }
   }
 
-  const res = await fetch(`${GBP_API_BASE}/${locationResourceName}?updateMask=${updateMasks.join(',')}`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${account.accessToken}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  // 3. Service items with localized 300-500 char descriptions
+  if (Array.isArray(updates.serviceItems) && updates.serviceItems.length > 0) {
+    const primaryCat = await fetchLocationPrimaryCategoryResource(account.accessToken, locationId);
+    const fallbackCategory = primaryCat || 'categories/gcid:local_business';
+    const formattedItems = updates.serviceItems
+      .filter((s) => s.name && s.name.trim())
+      .slice(0, 40)
+      .map((s) => ({
+        freeFormServiceItem: {
+          category: s.categoryName || fallbackCategory,
+          label: {
+            displayName: s.name.trim().slice(0, 100),
+            ...(s.description?.trim() ? { description: s.description.trim().slice(0, 500) } : {}),
+            languageCode: 'en',
+          },
+        },
+      }));
+    if (formattedItems.length > 0) {
+      await patchGroup('serviceItems', { serviceItems: formattedItems }, 'Services catalog');
+    }
+  }
 
-  await assertOk(res, 'update Google Business Profile description');
-  invalidateGooglePlaceCache(locationId);
-  return { descriptionApplied: true };
+  // 4. Business attributes (hours/service options/payments)
+  if (updates.attributes && Object.keys(updates.attributes).length > 0) {
+    const attrEntries = Object.entries(updates.attributes)
+      .filter(([key, val]) => key.startsWith('attributes/') || typeof val === 'boolean')
+      .slice(0, 20)
+      .map(([key, val]) => ({
+        name: key.startsWith('attributes/') ? key : `attributes/${key}`,
+        valueType: typeof val === 'boolean' ? 'BOOL' : 'ENUM',
+        values: [val],
+      }));
+    if (attrEntries.length > 0) {
+      const attrMask = attrEntries.map((a) => a.name).join(',');
+      const attrRes = await fetch(
+        `${GBP_API_BASE}/${locationPath}/attributes?attributeMask=${encodeURIComponent(attrMask)}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${account.accessToken}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({ name: `${locationPath}/attributes`, attributes: attrEntries }),
+          signal: AbortSignal.timeout(15000),
+        },
+      );
+      if (attrRes.ok) {
+        appliedMasks.push('attributes');
+      } else {
+        const errJson = (await attrRes.json().catch(() => ({}))) as { error?: { message?: string } };
+        warnings.push(`Attributes: ${errJson.error?.message || `HTTP ${attrRes.status}`}`);
+      }
+    }
+  }
+
+  if (appliedMasks.length > 0) {
+    invalidateGooglePlaceCache(locationId);
+  }
+  return { descriptionApplied, appliedMasks, warnings };
 }
 
 // ─── Self-register ─────────────────────────────────────────────────────────

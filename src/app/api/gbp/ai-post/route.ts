@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic';
 
 interface AiPostRequest {
   topic: string;
+  targetKeyword?: string;
   postType?: 'whats_new' | 'offer' | 'event' | 'product';
   tone?: string;
   offerDetails?: {
@@ -28,7 +29,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json().catch(() => ({}))) as AiPostRequest;
-    const topic = body.topic?.trim() || 'Exciting local service update';
+    const targetKeyword = body.targetKeyword?.trim();
+    const topic = body.topic?.trim() || (targetKeyword ? `${targetKeyword} Update` : 'Exciting local service update');
     const postType = body.postType || 'whats_new';
     const tone = body.tone || 'engaging, professional, local-friendly';
 
@@ -55,7 +57,7 @@ Strict Guidelines:
 4. Brand Context: ${brandContext}
 5. Post Type: ${postType.toUpperCase()}
 6. Desired Tone: ${tone}
-7. Topic / Angle: "${topic}"
+7. Topic / Angle: "${topic}"${targetKeyword ? `\n8. Priority Search Term to target naturally: "${targetKeyword}"` : ''}
 
 Respond ONLY with a valid JSON object with the following schema:
 {
