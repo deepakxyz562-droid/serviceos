@@ -152,9 +152,14 @@ export async function POST(
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { name: true },
+      select: {
+        name: true,
+        brandProfile: {
+          select: { businessName: true },
+        },
+      },
     });
-    const businessName = tenant?.name || 'Local Service';
+    const businessName = tenant?.brandProfile?.businessName || tenant?.name || 'Local Service';
 
     const keywords = Array.isArray(body.keywords) ? body.keywords : [];
 

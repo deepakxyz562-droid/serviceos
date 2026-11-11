@@ -7,7 +7,6 @@ import '../../src/lib/runtime-polyfills';
 import {
   createDesign,
   validateDesign,
-  createFieserosCampaignDesign,
   createCommercialPosterDesign,
   type MarketingDesign,
   type CommercialTheme,
@@ -76,6 +75,9 @@ import {
   type ImageProviderChoice,
 } from '../../../shared/image-review';
 import { normalizePendingUpload, uploadFileToStorage } from '../../src/lib/upload';
+
+const DEFAULT_FALLBACK_PHOTO =
+  'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1080&q=80';
 
 const TIME_SLOTS = [
   { label: '08:00 AM (Early Rush)', value: '08:00' },
@@ -223,7 +225,7 @@ function AutoBrandedPosterCard({
         <View style={{ flex: 1 }}>
           <View style={{ height: '52%', width: '100%', overflow: 'hidden' }}>
             <Image
-              source={photoUri ? { uri: photoUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
+              source={{ uri: photoUri || DEFAULT_FALLBACK_PHOTO }}
               style={{ width: '100%', height: '100%' }}
               resizeMode="cover"
             />
@@ -289,7 +291,7 @@ function AutoBrandedPosterCard({
       ) : (
         <>
           <Image
-            source={photoUri ? { uri: photoUri } : require('../../assets/fieseros-ai-assistant-poster.jpg')}
+            source={{ uri: photoUri || DEFAULT_FALLBACK_PHOTO }}
             style={{ width: '100%', height: '100%' }}
             resizeMode="cover"
           />
@@ -710,7 +712,7 @@ export default function MarketingScreen() {
   const brandProfile = useResource<BrandProfileData>('/api/brand-profile');
   const aiPostsRes = useResource<{
     success: boolean;
-    business: { name: string; category: string; city: string; phone: string; website: string };
+    business: { name: string; category: string; city: string; phone: string; website: string; logoUrl?: string };
     count: number;
     posts: Array<{
       id: string;
@@ -726,6 +728,8 @@ export default function MarketingScreen() {
       website: string;
       imageUrl: string;
       content: string;
+      logoUrl?: string;
+      businessName?: string;
     }>;
   }>('/api/social/ai-posts', 0, activeMode === 'studio');
   const [localAiPosts, setLocalAiPosts] = useState<any[]>([]);
@@ -733,12 +737,76 @@ export default function MarketingScreen() {
   const [activeAiPostIndex, setActiveAiPostIndex] = useState(0);
   const aiPostSliderRef = useRef<ScrollViewInstance | null>(null);
   const [fullscreenPhotoUrl, setFullscreenPhotoUrl] = useState<string | null>(null);
+  const [isRefreshingAiPosts, setIsRefreshingAiPosts] = useState(false);
+  const [aiPostCategoryFilter, setAiPostCategoryFilter] = useState<'ALL' | 'OFFER' | 'STANDARD' | 'EVENT'>('ALL');
 
   useEffect(() => {
-    if (aiPostsRes.data?.posts && localAiPosts.length === 0) {
+    if (aiPostsRes.data?.posts && aiPostsRes.data.posts.length > 0) {
       setLocalAiPosts(aiPostsRes.data.posts);
     }
-  }, [aiPostsRes.data?.posts, localAiPosts.length]);
+  }, [aiPostsRes.data]);
+
+  const handleRefreshAiPosts = useCallback(async () => {
+    setIsRefreshingAiPosts(true);
+    try {
+      await aiPostsRes.refresh();
+      if (aiPostSliderRef.current) {
+        try {
+          aiPostSliderRef.current.scrollTo({ x: 0, animated: true });
+        } catch {}
+      }
+      setActiveAiPostIndex(0);
+    } catch (err) {
+      console.warn('[handleRefreshAiPosts] failed:', err);
+    } finally {
+      setIsRefreshingAiPosts(false);
+    }
+  }, [aiPostsRes]);
+
+  const filteredAiPosts = useMemo(() => {
+    if (aiPostCategoryFilter === 'ALL') return localAiPosts;
+    return localAiPosts.filter((p) => p.postType === aiPostCategoryFilter);
+  }, [localAiPosts, aiPostCategoryFilter]);
+
+  const handlePublishCardDirectly = useCallback(async (item: any) => {
+    try {
+      await apiRequest('/api/social/posts', {
+        method: 'POST',
+        body: {
+          content: item.content,
+          platforms: ['googlebusiness'],
+          mediaUrls: item.imageUrl ? [item.imageUrl] : [],
+          publishNow: true,
+        },
+      });
+      Alert.alert('Published!', `"${item.title}" has been published to Google Business Profile.`);
+    } catch {
+      Alert.alert('Post Scheduled', `"${item.title}" has been submitted for publishing.`);
+    }
+  }, []);
+
+  const handleCopyCardText = useCallback(async (item: any) => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(item.content || '');
+        Alert.alert('Copied', 'Post content copied to clipboard!');
+      } else {
+        await Share.share({ message: item.content || '' });
+      }
+    } catch {
+      Alert.alert('Notice', 'Could not copy content.');
+    }
+  }, []);
+
+  const handleShareCard = useCallback(async (item: any) => {
+    try {
+      await Share.share({
+        title: item.title,
+        message: `${item.title}\n\n${item.content || ''}`,
+        url: item.imageUrl || undefined,
+      });
+    } catch {}
+  }, []);
 
   const promptSuggestions = useResource<{
     business?: { name?: string; category?: string };
@@ -1242,19 +1310,26 @@ export default function MarketingScreen() {
     if (gbpPlace.data?.place?.title && gbpPlace.data.place.title.toLowerCase() !== 'google business profile' && !gbpPlace.data.place.title.toLowerCase().includes('google business')) {
       return gbpPlace.data.place.title;
     }
+    if (gbpPlace.data?.tenantFallback?.name && gbpPlace.data.tenantFallback.name.toLowerCase() !== 'business profile') {
+      return gbpPlace.data.tenantFallback.name;
+    }
     if (brandProfile.data?.profile?.businessName) return brandProfile.data.profile.businessName;
     if (workspace.data?.bookingPageConfig?.businessName) return workspace.data.bookingPageConfig.businessName;
     if (workspace.data?.name && workspace.data.name !== 'Commercial Brand') {
       return workspace.data.name;
     }
     return 'My Business';
-  }, [brandName, discover.data?.activeProfile?.name, gbpAccount?.accountName, gbpPlace.data?.place?.title, brandProfile.data?.profile?.businessName, workspace.data?.bookingPageConfig?.businessName, workspace.data?.name]);
+  }, [brandName, discover.data?.activeProfile?.name, gbpAccount?.accountName, gbpPlace.data?.place?.title, gbpPlace.data?.tenantFallback?.name, brandProfile.data?.profile?.businessName, workspace.data?.bookingPageConfig?.businessName, workspace.data?.name]);
   const effectiveBusinessPhone = brandPhone || workspace.data?.bookingPageConfig?.phone || '';
-  const effectiveBusinessWebsite =
+  const rawSite =
     brandWebsite ||
     brandProfile.data?.profile?.website ||
     workspace.data?.links?.profile ||
     '';
+  const effectiveBusinessWebsite =
+    rawSite && !rawSite.includes('fieseros.com') && !rawSite.includes('serviceos.com')
+      ? rawSite
+      : '';
   const effectiveBusinessTagline =
     brandTagline ||
     brandProfile.data?.brandDetails?.tagline ||
@@ -3329,7 +3404,7 @@ export default function MarketingScreen() {
                         keyboardShouldPersistTaps="handled"
                         showsVerticalScrollIndicator={false}
                       >
-                        {/* Sleek Top Header Bar (No large green banner) */}
+                        {/* Sleek Top Header Bar */}
                         <View
                           style={{
                             flexDirection: 'row',
@@ -3340,34 +3415,35 @@ export default function MarketingScreen() {
                             paddingBottom: 4,
                           }}
                         >
-                          <View style={{ flex: 1 }}>
+                          <View style={{ flex: 1, paddingRight: 8 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <MaterialIcons name="auto-awesome" size={16} color="#009F50" />
-                              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
+                              <MaterialIcons name="auto-awesome" size={17} color="#009F50" />
+                              <Text style={{ fontSize: 16.5, fontWeight: '800', color: '#0F172A' }}>
                                 AI Generated Posts
                               </Text>
-                              {localAiPosts.length > 0 && (
+                              {filteredAiPosts.length > 0 && (
                                 <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}>
                                   <Text style={{ fontSize: 11, fontWeight: '800', color: '#166534' }}>
-                                    {activeAiPostIndex + 1} / {localAiPosts.length}
+                                    {activeAiPostIndex + 1} / {filteredAiPosts.length}
                                   </Text>
                                 </View>
                               )}
                             </View>
                             <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
-                              Swipe to browse dynamic posts tailored for your business
+                              Branded social & Google Business Profile posts for {effectiveBusinessName}
                             </Text>
                           </View>
 
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                             <Pressable
-                              onPress={() => void aiPostsRes.refresh()}
+                              onPress={() => void handleRefreshAiPosts()}
+                              disabled={isRefreshingAiPosts}
                               hitSlop={8}
                               style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
                                 gap: 4,
-                                backgroundColor: '#FFFFFF',
+                                backgroundColor: isRefreshingAiPosts ? '#F1F5F9' : '#FFFFFF',
                                 borderWidth: 1,
                                 borderColor: '#E2E8F0',
                                 paddingHorizontal: 9,
@@ -3375,8 +3451,14 @@ export default function MarketingScreen() {
                                 borderRadius: 8,
                               }}
                             >
-                              <MaterialIcons name="refresh" size={14} color="#0F172A" />
-                              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>Refresh</Text>
+                              {isRefreshingAiPosts ? (
+                                <ActivityIndicator size="small" color="#009F50" />
+                              ) : (
+                                <MaterialIcons name="refresh" size={14} color="#0F172A" />
+                              )}
+                              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>
+                                {isRefreshingAiPosts ? 'Refreshing...' : 'Refresh'}
+                              </Text>
                             </Pressable>
 
                             <Pressable
@@ -3400,134 +3482,294 @@ export default function MarketingScreen() {
                           </View>
                         </View>
 
+                        {/* Category Filter Pills */}
+                        {localAiPosts.length > 0 && (
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={{ paddingHorizontal: 2, paddingVertical: 4, gap: 8 }}
+                          >
+                            {[
+                              { key: 'ALL', label: `All Posts (${localAiPosts.length})`, icon: 'auto-awesome' },
+                              { key: 'OFFER', label: '🏷️ Deals & Offers', icon: 'local-offer' },
+                              { key: 'STANDARD', label: '⭐ Quality & Trust', icon: 'verified' },
+                              { key: 'EVENT', label: '🎉 Seasonal & Events', icon: 'event' },
+                            ].map((filter) => {
+                              const isActive = aiPostCategoryFilter === filter.key;
+                              return (
+                                <Pressable
+                                  key={filter.key}
+                                  onPress={() => {
+                                    setAiPostCategoryFilter(filter.key as any);
+                                    setActiveAiPostIndex(0);
+                                    aiPostSliderRef.current?.scrollTo({ x: 0, animated: true });
+                                  }}
+                                  style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    paddingHorizontal: 11,
+                                    paddingVertical: 6,
+                                    borderRadius: 18,
+                                    backgroundColor: isActive ? '#009F50' : '#FFFFFF',
+                                    borderWidth: 1,
+                                    borderColor: isActive ? '#009F50' : '#E2E8F0',
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      fontSize: 11.5,
+                                      fontWeight: '700',
+                                      color: isActive ? '#FFFFFF' : '#475569',
+                                    }}
+                                  >
+                                    {filter.label}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </ScrollView>
+                        )}
+
                         {/* Loading State */}
                         {aiPostsRes.loading && localAiPosts.length === 0 ? (
                           <View style={{ paddingVertical: 48, alignItems: 'center', gap: 12 }}>
                             <ActivityIndicator size="large" color="#009F50" />
                             <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>
-                              Generating 20 tailored posts for {effectiveBusinessName}...
+                              Generating 20 branded posts for {effectiveBusinessName}...
                             </Text>
                             <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center' }}>
-                              Crafting SEO headlines, bulleted benefits, and local keywords
+                              Tailoring headlines, bulleted benefits, and local keywords
                             </Text>
                           </View>
                         ) : null}
 
                         {/* Horizontal Carousel Slider */}
-                        {localAiPosts.length > 0 && (
-                          <View style={{ marginTop: 8 }}>
+                        {filteredAiPosts.length > 0 && (
+                          <View style={{ marginTop: 4 }}>
                             <ScrollView
                               ref={aiPostSliderRef}
                               horizontal
                               showsHorizontalScrollIndicator={false}
-                              snapToInterval={Math.min(Dimensions.get('window').width - 48, 340) + 14}
+                              snapToInterval={Math.min(Dimensions.get('window').width - 40, 348) + 14}
                               snapToAlignment="start"
                               decelerationRate="fast"
-                              contentContainerStyle={{ paddingHorizontal: 4, paddingVertical: 6, gap: 14 }}
+                              contentContainerStyle={{ paddingHorizontal: 2, paddingVertical: 6, gap: 14 }}
                               onMomentumScrollEnd={(e) => {
-                                const cardStep = Math.min(Dimensions.get('window').width - 48, 340) + 14;
-                                const nextIndex = Math.max(0, Math.min(localAiPosts.length - 1, Math.round(e.nativeEvent.contentOffset.x / cardStep)));
+                                const cardStep = Math.min(Dimensions.get('window').width - 40, 348) + 14;
+                                const nextIndex = Math.max(0, Math.min(filteredAiPosts.length - 1, Math.round(e.nativeEvent.contentOffset.x / cardStep)));
                                 setActiveAiPostIndex(nextIndex);
                               }}
                             >
-                              {localAiPosts.map((item, idx) => {
-                                const cardWidth = Math.min(Dimensions.get('window').width - 48, 340);
+                              {filteredAiPosts.map((item, idx) => {
+                                const cardWidth = Math.min(Dimensions.get('window').width - 40, 348);
+                                const postLogo = effectiveBusinessLogo || item.logoUrl || null;
+                                const postBizName = item.businessName || effectiveBusinessName;
+
                                 return (
-                                  <Pressable
+                                  <View
                                     key={item.id || `post_${idx}`}
-                                    onPress={() => {
-                                      setSelectedAiPostForDetail({
-                                        id: item.id || `ai_post_${idx + 1}`,
-                                        title: item.title,
-                                        badge: item.badge,
-                                        status: 'draft',
-                                        content: item.content,
-                                        mediaUrls: [item.imageUrl],
-                                        linkUrl: item.website,
-                                        publishTargets: [{ platform: 'googlebusiness', status: 'pending' }],
-                                        createdAt: new Date().toISOString(),
-                                        updatedAt: new Date().toISOString(),
-                                        approvalStatus: 'pending',
-                                      });
+                                    style={{
+                                      width: cardWidth,
+                                      backgroundColor: '#FFFFFF',
+                                      borderRadius: 18,
+                                      borderWidth: 1,
+                                      borderColor: '#E2E8F0',
+                                      overflow: 'hidden',
+                                      shadowColor: '#000',
+                                      shadowOpacity: 0.07,
+                                      shadowRadius: 10,
+                                      elevation: 3,
                                     }}
-                                    style={({ pressed }) => [
-                                      {
-                                        width: cardWidth,
-                                        backgroundColor: '#FFFFFF',
-                                        borderRadius: 16,
-                                        borderWidth: 1,
-                                        borderColor: '#E2E8F0',
-                                        overflow: 'hidden',
-                                        shadowColor: '#000',
-                                        shadowOpacity: 0.06,
-                                        shadowRadius: 8,
-                                        elevation: 3,
-                                      },
-                                      pressed && { transform: [{ scale: 0.99 }] },
-                                    ]}
                                   >
-                                    {/* Card Hero Image */}
+                                    {/* ── Business Identity Header Row ── */}
+                                    <View
+                                      style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        paddingHorizontal: 12,
+                                        paddingVertical: 10,
+                                        backgroundColor: '#F8FAFC',
+                                        borderBottomWidth: 1,
+                                        borderBottomColor: '#F1F5F9',
+                                      }}
+                                    >
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, paddingRight: 8 }}>
+                                        {postLogo ? (
+                                          <Image
+                                            source={{ uri: postLogo }}
+                                            style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' }}
+                                            resizeMode="contain"
+                                          />
+                                        ) : (
+                                          <View
+                                            style={{
+                                              width: 34,
+                                              height: 34,
+                                              borderRadius: 17,
+                                              backgroundColor: '#009F50',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                            }}
+                                          >
+                                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                                              {userInitials}
+                                            </Text>
+                                          </View>
+                                        )}
+                                        <View style={{ flex: 1 }}>
+                                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                            <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                                              {postBizName}
+                                            </Text>
+                                            <MaterialIcons name="verified" size={14} color="#009F50" />
+                                          </View>
+                                          <Text numberOfLines={1} style={{ fontSize: 10.5, color: '#64748B' }}>
+                                            Google Business Post • #{idx + 1}
+                                          </Text>
+                                        </View>
+                                      </View>
+
+                                      <View
+                                        style={{
+                                          paddingHorizontal: 8,
+                                          paddingVertical: 3,
+                                          borderRadius: 8,
+                                          backgroundColor: item.postType === 'OFFER' ? '#FEF3C7' : item.postType === 'EVENT' ? '#F3E8FF' : '#DCFCE7',
+                                        }}
+                                      >
+                                        <Text
+                                          style={{
+                                            fontSize: 10.5,
+                                            fontWeight: '800',
+                                            color: item.postType === 'OFFER' ? '#92400E' : item.postType === 'EVENT' ? '#6B21A8' : '#166534',
+                                          }}
+                                        >
+                                          {item.badge || 'Standard Post'}
+                                        </Text>
+                                      </View>
+                                    </View>
+
+                                    {/* ── Card Hero Image with Brand Watermark Overlay ── */}
                                     {item.imageUrl ? (
-                                      <View style={{ width: '100%', height: 180, backgroundColor: '#0F172A', position: 'relative' }}>
+                                      <Pressable
+                                        onPress={() => {
+                                          setSelectedAiPostForDetail({
+                                            id: item.id || `ai_post_${idx + 1}`,
+                                            title: item.title,
+                                            badge: item.badge,
+                                            status: 'draft',
+                                            content: item.content,
+                                            mediaUrls: [item.imageUrl],
+                                            linkUrl: item.website,
+                                            publishTargets: [{ platform: 'googlebusiness', status: 'pending' }],
+                                            createdAt: new Date().toISOString(),
+                                            updatedAt: new Date().toISOString(),
+                                            approvalStatus: 'pending',
+                                            logoUrl: postLogo,
+                                            businessName: postBizName,
+                                          });
+                                        }}
+                                        style={{ width: '100%', height: 185, backgroundColor: '#0F172A', position: 'relative' }}
+                                      >
                                         <Image source={{ uri: item.imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+
+                                        {/* Top-Left Frosted Watermark Pill (Logo + Business Name) */}
+                                        <View
+                                          style={{
+                                            position: 'absolute',
+                                            top: 10,
+                                            left: 10,
+                                            backgroundColor: 'rgba(15, 23, 42, 0.82)',
+                                            paddingHorizontal: 8,
+                                            paddingVertical: 4,
+                                            borderRadius: 14,
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 5,
+                                            maxWidth: '70%',
+                                          }}
+                                        >
+                                          {postLogo ? (
+                                            <Image
+                                              source={{ uri: postLogo }}
+                                              style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#FFFFFF' }}
+                                              resizeMode="contain"
+                                            />
+                                          ) : (
+                                            <MaterialIcons name="storefront" size={13} color="#4ADE80" />
+                                          )}
+                                          <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
+                                            {postBizName}
+                                          </Text>
+                                        </View>
+
+                                        {/* Top-Right Counter Pill */}
                                         <View
                                           style={{
                                             position: 'absolute',
                                             top: 10,
                                             right: 10,
-                                            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                                            backgroundColor: 'rgba(15, 23, 42, 0.82)',
                                             paddingHorizontal: 8,
-                                            paddingVertical: 3,
-                                            borderRadius: 12,
+                                            paddingVertical: 4,
+                                            borderRadius: 14,
                                           }}
                                         >
                                           <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' }}>
-                                            {idx + 1} / {localAiPosts.length}
+                                            {idx + 1} / {filteredAiPosts.length}
                                           </Text>
                                         </View>
-                                      </View>
-                                    ) : null}
 
-                                    <View style={{ padding: 14, gap: 10 }}>
-                                      {/* Badge Row */}
-                                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        {/* Bottom Scrim with Contact Callout */}
                                         <View
                                           style={{
+                                            position: 'absolute',
+                                            bottom: 0,
+                                            left: 0,
+                                            right: 0,
+                                            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                                            paddingHorizontal: 12,
+                                            paddingVertical: 5,
                                             flexDirection: 'row',
                                             alignItems: 'center',
-                                            gap: 5,
-                                            backgroundColor: '#FEF3C7',
-                                            paddingHorizontal: 8,
-                                            paddingVertical: 4,
-                                            borderRadius: 6,
+                                            justifyContent: 'space-between',
                                           }}
                                         >
-                                          <MaterialIcons name="description" size={13} color="#9A3412" />
-                                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#9A3412' }}>
-                                            {item.badge || 'Standard Post'}
+                                          <Text numberOfLines={1} style={{ fontSize: 10.5, fontWeight: '700', color: '#F1F5F9', flex: 1 }}>
+                                            📞 {item.phone || effectiveBusinessPhone || 'Verified Local Store'}
                                           </Text>
+                                          <View style={{ backgroundColor: '#009F50', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF' }}>
+                                              {item.ctaText || 'CALL'}
+                                            </Text>
+                                          </View>
                                         </View>
+                                      </Pressable>
+                                    ) : null}
 
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                          <MaterialIcons name="touch-app" size={12} color="#64748B" />
-                                          <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>
-                                            Tap to edit
-                                          </Text>
-                                        </View>
-                                      </View>
-
-                                      {/* Bold H1 Headline */}
-                                      <Text numberOfLines={2} style={{ fontSize: 15.5, fontWeight: '800', color: '#0F172A', lineHeight: 21 }}>
+                                    {/* ── Card Content Body ── */}
+                                    <View style={{ padding: 14, gap: 8 }}>
+                                      {/* Bold H1 SEO Headline */}
+                                      <Text numberOfLines={2} style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', lineHeight: 21 }}>
                                         {item.title}
                                       </Text>
 
-                                      {/* Checkmark Bullets Snippet */}
+                                      {/* Engaging Intro Snippet */}
+                                      {item.intro ? (
+                                        <Text numberOfLines={2} style={{ fontSize: 12, color: '#475569', lineHeight: 17 }}>
+                                          {item.intro}
+                                        </Text>
+                                      ) : null}
+
+                                      {/* Bullets Snippet with Green Checkmarks */}
                                       {item.bullets && item.bullets.length > 0 && (
-                                        <View style={{ gap: 4 }}>
+                                        <View style={{ gap: 4, marginVertical: 2 }}>
                                           {item.bullets.slice(0, 2).map((b: string, bIdx: number) => (
                                             <View key={`b-${bIdx}`} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
-                                              <Text style={{ fontSize: 13, fontWeight: '900', color: '#009F50' }}>✓</Text>
-                                              <Text numberOfLines={1} style={{ fontSize: 12, color: '#475569', flex: 1 }}>
+                                              <Text style={{ fontSize: 12, fontWeight: '900', color: '#009F50' }}>✓</Text>
+                                              <Text numberOfLines={1} style={{ fontSize: 11.5, color: '#334155', flex: 1 }}>
                                                 {b}
                                               </Text>
                                             </View>
@@ -3535,7 +3777,7 @@ export default function MarketingScreen() {
                                         </View>
                                       )}
 
-                                      {/* Card Footer */}
+                                      {/* ── 1-Tap Quick Action Toolbar ── */}
                                       <View
                                         style={{
                                           flexDirection: 'row',
@@ -3544,37 +3786,108 @@ export default function MarketingScreen() {
                                           paddingTop: 8,
                                           borderTopWidth: 1,
                                           borderTopColor: '#F1F5F9',
-                                          marginTop: 2,
+                                          marginTop: 4,
+                                          gap: 6,
                                         }}
                                       >
-                                        <View
+                                        {/* Direct 1-Tap Publish to Google */}
+                                        <Pressable
+                                          onPress={() => void handlePublishCardDirectly(item)}
+                                          hitSlop={6}
+                                          style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                            backgroundColor: '#009F50',
+                                            paddingHorizontal: 10,
+                                            paddingVertical: 7,
+                                            borderRadius: 8,
+                                            flex: 1,
+                                            justifyContent: 'center',
+                                          }}
+                                        >
+                                          <MaterialIcons name="send" size={13} color="#FFFFFF" />
+                                          <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>
+                                            Publish Now
+                                          </Text>
+                                        </Pressable>
+
+                                        {/* Copy Caption */}
+                                        <Pressable
+                                          onPress={() => void handleCopyCardText(item)}
+                                          hitSlop={6}
                                           style={{
                                             flexDirection: 'row',
                                             alignItems: 'center',
                                             gap: 4,
                                             backgroundColor: '#F8FAFC',
-                                            paddingHorizontal: 10,
-                                            paddingVertical: 5,
-                                            borderRadius: 8,
                                             borderWidth: 1,
                                             borderColor: '#E2E8F0',
+                                            paddingHorizontal: 9,
+                                            paddingVertical: 7,
+                                            borderRadius: 8,
                                           }}
                                         >
-                                          <MaterialIcons name="call" size={13} color="#0F172A" />
-                                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#0F172A' }}>
-                                            {item.ctaText || 'CALL'}
-                                          </Text>
-                                        </View>
+                                          <MaterialIcons name="content-copy" size={13} color="#475569" />
+                                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Copy</Text>
+                                        </Pressable>
 
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50' }}>
-                                            View & Edit
-                                          </Text>
-                                          <MaterialIcons name="chevron-right" size={16} color="#009F50" />
-                                        </View>
+                                        {/* Edit & Customize */}
+                                        <Pressable
+                                          onPress={() => {
+                                            setSelectedAiPostForDetail({
+                                              id: item.id || `ai_post_${idx + 1}`,
+                                              title: item.title,
+                                              badge: item.badge,
+                                              status: 'draft',
+                                              content: item.content,
+                                              mediaUrls: [item.imageUrl],
+                                              linkUrl: item.website,
+                                              publishTargets: [{ platform: 'googlebusiness', status: 'pending' }],
+                                              createdAt: new Date().toISOString(),
+                                              updatedAt: new Date().toISOString(),
+                                              approvalStatus: 'pending',
+                                              logoUrl: postLogo,
+                                              businessName: postBizName,
+                                            });
+                                          }}
+                                          hitSlop={6}
+                                          style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                            backgroundColor: '#F0FDF4',
+                                            borderWidth: 1,
+                                            borderColor: '#BBF7D0',
+                                            paddingHorizontal: 9,
+                                            paddingVertical: 7,
+                                            borderRadius: 8,
+                                          }}
+                                        >
+                                          <MaterialIcons name="edit" size={13} color="#009F50" />
+                                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#009F50' }}>Edit</Text>
+                                        </Pressable>
+
+                                        {/* Share */}
+                                        <Pressable
+                                          onPress={() => void handleShareCard(item)}
+                                          hitSlop={6}
+                                          style={{
+                                            backgroundColor: '#F8FAFC',
+                                            borderWidth: 1,
+                                            borderColor: '#E2E8F0',
+                                            paddingHorizontal: 8,
+                                            paddingVertical: 7,
+                                            borderRadius: 8,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                          }}
+                                        >
+                                          <MaterialIcons name="share" size={14} color="#475569" />
+                                        </Pressable>
                                       </View>
                                     </View>
-                                  </Pressable>
+                                  </View>
                                 );
                               })}
                             </ScrollView>
@@ -3595,7 +3908,7 @@ export default function MarketingScreen() {
                                 hitSlop={10}
                                 onPress={() => {
                                   const nextIndex = Math.max(0, activeAiPostIndex - 1);
-                                  const cardStep = Math.min(Dimensions.get('window').width - 48, 340) + 14;
+                                  const cardStep = Math.min(Dimensions.get('window').width - 40, 348) + 14;
                                   aiPostSliderRef.current?.scrollTo({ x: nextIndex * cardStep, animated: true });
                                   setActiveAiPostIndex(nextIndex);
                                 }}
@@ -3614,15 +3927,15 @@ export default function MarketingScreen() {
                               </Pressable>
 
                               <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#475569' }}>
-                                Post {activeAiPostIndex + 1} of {localAiPosts.length}
+                                Post {activeAiPostIndex + 1} of {filteredAiPosts.length}
                               </Text>
 
                               <Pressable
-                                disabled={activeAiPostIndex >= localAiPosts.length - 1}
+                                disabled={activeAiPostIndex >= filteredAiPosts.length - 1}
                                 hitSlop={10}
                                 onPress={() => {
-                                  const nextIndex = Math.min(localAiPosts.length - 1, activeAiPostIndex + 1);
-                                  const cardStep = Math.min(Dimensions.get('window').width - 48, 340) + 14;
+                                  const nextIndex = Math.min(filteredAiPosts.length - 1, activeAiPostIndex + 1);
+                                  const cardStep = Math.min(Dimensions.get('window').width - 40, 348) + 14;
                                   aiPostSliderRef.current?.scrollTo({ x: nextIndex * cardStep, animated: true });
                                   setActiveAiPostIndex(nextIndex);
                                 }}
@@ -3630,14 +3943,14 @@ export default function MarketingScreen() {
                                   width: 32,
                                   height: 32,
                                   borderRadius: 16,
-                                  backgroundColor: activeAiPostIndex >= localAiPosts.length - 1 ? '#F1F5F9' : '#FFFFFF',
+                                  backgroundColor: activeAiPostIndex >= filteredAiPosts.length - 1 ? '#F1F5F9' : '#FFFFFF',
                                   borderWidth: 1,
                                   borderColor: '#E2E8F0',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                 }}
                               >
-                                <MaterialIcons name="chevron-right" size={20} color={activeAiPostIndex >= localAiPosts.length - 1 ? '#CBD5E1' : '#0F172A'} />
+                                <MaterialIcons name="chevron-right" size={20} color={activeAiPostIndex >= filteredAiPosts.length - 1 ? '#CBD5E1' : '#0F172A'} />
                               </Pressable>
                             </View>
                           </View>

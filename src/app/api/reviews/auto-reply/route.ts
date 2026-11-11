@@ -144,7 +144,14 @@ export async function POST(request: NextRequest) {
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { name: true, phone: true, settingsJson: true },
+      select: {
+        name: true,
+        phone: true,
+        settingsJson: true,
+        brandProfile: {
+          select: { businessName: true, industry: true, location: true },
+        },
+      },
     });
 
     let settings: Record<string, any> = {};
@@ -168,7 +175,13 @@ export async function POST(request: NextRequest) {
         gbpMeta = typeof googleAccount.metadata === 'string' ? JSON.parse(googleAccount.metadata) : googleAccount.metadata;
       } catch {}
     }
-    const businessName = settings.activeGbpTitle || gbpMeta.locationTitle || googleAccount?.accountName || tenant?.name || 'our business';
+    const businessName =
+      settings.activeGbpTitle ||
+      gbpMeta.locationTitle ||
+      googleAccount?.accountName ||
+      tenant?.brandProfile?.businessName ||
+      tenant?.name ||
+      'our business';
     const salutation = settings.aiReplySalutation || settings.replySettings?.salutation || undefined;
     const phone = gbpMeta.phoneNumbers?.primaryPhone || gbpMeta.phone || (tenant as any)?.phone || undefined;
     const address = gbpMeta.storefrontAddress?.addressLines?.join(', ') || gbpMeta.address || (tenant as any)?.address || undefined;

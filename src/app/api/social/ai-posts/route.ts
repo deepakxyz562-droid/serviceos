@@ -21,9 +21,25 @@ export interface GeneratedPostItem {
   website: string;
   imageUrl: string;
   content: string;
+  logoUrl?: string;
+  businessName?: string;
 }
 
 const CATEGORY_IMAGE_PRESETS: Record<string, string[]> = {
+  market: [
+    'https://images.unsplash.com/photo-1542838132-92c53300491e?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1506484381205-f7945653044d?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1608686207856-001b95cf60ca?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1579113800032-c38bd7635818?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1526367790999-0150786686a2?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1200&auto=format&fit=crop&q=80',
+  ],
   pool: [
     'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?w=1200&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1584132967334-10e028bd69f7?w=1200&auto=format&fit=crop&q=80',
@@ -110,13 +126,25 @@ const CATEGORY_IMAGE_PRESETS: Record<string, string[]> = {
   ],
 };
 
-function resolveCategoryKey(blob: string): 'pool' | 'cake' | 'hardware' | 'paint' | 'software' | 'generic' {
+function resolveCategoryKey(blob: string): 'market' | 'pool' | 'cake' | 'hardware' | 'paint' | 'software' | 'fashion' | 'salon' | 'restaurant' | 'generic' {
   const lower = blob.toLowerCase();
+  if (/(market|grocery|supermarket|kirana|general store|provision|mart|vegetable|fruit|bazaar|mandi|retail|departmental)/.test(lower)) {
+    return 'market';
+  }
+  if (/(fashion|boutique|cloth|garment|apparel|saree|lehenga|textile|tailor)/.test(lower)) {
+    return 'fashion';
+  }
+  if (/(salon|spa|beauty|parlour|parlor|haircut|makeup|facial|barber|grooming)/.test(lower)) {
+    return 'salon';
+  }
   if (/(pool|swimming|farmhouse|resort|villa|cottage|homestay|retreat|staycation|banquet|lawn)/.test(lower)) {
     return 'pool';
   }
   if (/(cake|bakery|pastry|dessert|mithai|sweet|cupcake|baker|patisserie|confection)/.test(lower)) {
     return 'cake';
+  }
+  if (/(restaurant|dining|cafe|bistro|diner|food|fast food|dhaba)/.test(lower)) {
+    return 'restaurant';
   }
   if (/(hardware|tool|fastener|plumbing|electrical supply|plywood|sanitary|pipe|machinery)/.test(lower)) {
     return 'hardware';
@@ -141,11 +169,16 @@ export function generate20PostsForBusiness(params: {
   phone: string;
   website: string;
   photos: string[];
+  logoUrl?: string | null;
+  seed?: number;
 }): GeneratedPostItem[] {
-  const { businessName, category, city, phone, website, photos } = params;
+  const { businessName, category, city, phone, website, photos, logoUrl, seed = 0 } = params;
   const catKey = resolveCategoryKey(`${businessName} ${category}`);
   const dynamicVisualPool = getCategoryVisualPool(`${businessName} ${category}`);
-  const allImages = photos.length > 0 ? [...photos, ...dynamicVisualPool] : dynamicVisualPool;
+  const baseImages = photos.length > 0 ? [...photos, ...dynamicVisualPool] : (CATEGORY_IMAGE_PRESETS[catKey] || dynamicVisualPool);
+  // Rotate images if seed is provided for fresh look on refresh
+  const imgShift = seed ? Math.abs(seed) % baseImages.length : 0;
+  const allImages = [...baseImages.slice(imgShift), ...baseImages.slice(0, imgShift)];
 
   const cityToken = city || 'your local area';
   const bizClean = cleanHash(businessName);
@@ -159,7 +192,9 @@ export function generate20PostsForBusiness(params: {
       postType: 'STANDARD' as const,
       ctaText: 'CALL' as const,
       titleFactory: () =>
-        catKey === 'pool'
+        catKey === 'market'
+          ? `Fresh Grocery Essentials & Daily Household Supplies in ${cityToken} at ${businessName}`
+          : catKey === 'pool'
           ? `Private Pool Venues Near ${cityToken} for Stress-Free Family Time`
           : catKey === 'cake'
           ? `Custom Designer Birthday Cakes in ${cityToken} with Fresh Cream & Handcrafted Toppings`
@@ -171,7 +206,9 @@ export function generate20PostsForBusiness(params: {
           ? `Enterprise Web & Custom Mobile App Development Services in ${cityToken}`
           : `Premier ${category} & Professional Trusted Services in ${cityToken}`,
       introFactory: () =>
-        catKey === 'pool'
+        catKey === 'market'
+          ? `Stock up on fresh quality groceries, daily kitchen staples, and trusted packaged goods at ${businessName} in ${cityToken}. From farm-fresh produce to everyday FMCG essentials, we bring you unmatched variety at honest neighborhood prices.`
+          : catKey === 'pool'
           ? `Looking for a peaceful escape from the city rush without driving too far? ${businessName} offers a private swimming pool and green farmhouse setting designed for relaxed, stress-free family time. If you've been searching for a private farmhouse with pool, our property gives you privacy, safety, and pristine space to unwind together.`
           : catKey === 'cake'
           ? `Planning a birthday, anniversary, or milestone celebration in ${cityToken}? ${businessName} specializes in custom designer cakes made fresh from scratch with rich layers, premium ingredients, and stunning edible artistry to make your special moments truly memorable.`
@@ -183,7 +220,16 @@ export function generate20PostsForBusiness(params: {
           ? `Accelerate your business growth with scalable digital engineering from ${businessName} in ${cityToken}. From high-performing web platforms to cloud solutions and custom software, our dedicated engineering team delivers robust technology for modern enterprises.`
           : `Looking for dependable ${category} solutions in ${cityToken}? ${businessName} provides high-quality services with dedicated attention to detail, transparent pricing, and trusted customer care.`,
       bulletFactory: () =>
-        catKey === 'pool'
+        catKey === 'market'
+          ? [
+              'Farm-fresh vegetables, seasonal fruits, and dairy products stocked every morning',
+              'Complete range of packaged staples, pulses, spices, oils, and household essentials',
+              'Best wholesale and retail pricing with unbeatable daily combo savings',
+              '100% genuine products with clear expiry checks and quality hygiene standards',
+              `Convenient neighborhood shopping in ${cityToken} with quick checkout and parking`,
+              'All digital payments accepted: UPI, PhonePe, Google Pay, Cards, and Cash',
+            ]
+          : catKey === 'pool'
           ? [
               'Exclusive private use of the swimming pool so your family never has to share space with strangers',
               'Spacious green lawns perfect for kids to play and elders to relax in clean, fresh air',
@@ -237,7 +283,9 @@ export function generate20PostsForBusiness(params: {
               `Dedicated local customer support based right here in ${cityToken}`,
             ],
       conclusionFactory: () =>
-        catKey === 'pool'
+        catKey === 'market'
+          ? `Visit ${businessName} in ${cityToken} today for all your daily grocery and household needs. Call or message our store desk for quick queries or bulk orders.`
+          : catKey === 'pool'
           ? `If you are searching for a family swimming pool venue or peaceful green retreat near you, book your break at ${businessName} in ${cityToken}. Call our team today to verify slot availability and reserve your date.`
           : catKey === 'cake'
           ? `Celebrate your special milestones with a showstopping handcrafted cake from ${businessName}. Call us or drop a message to discuss your custom design and place your order today.`
@@ -250,37 +298,52 @@ export function generate20PostsForBusiness(params: {
           : `Experience trusted ${category} services in ${cityToken} with ${businessName}. Contact our team today to discuss your requirements.`,
       tagFactory: () => [
         `#${bizClean}`,
-        `#${cityClean}${catKey === 'pool' ? 'Farmhouse' : catKey === 'cake' ? 'Bakery' : catKey === 'hardware' ? 'Hardware' : catKey === 'paint' ? 'Paints' : 'Tech'}`,
-        `#${cityClean}Business`,
-        `#${cleanHash(category)}`,
-        `#LocalSEO`,
+        `#${cityClean}${catKey === 'market' ? 'Market' : catKey === 'pool' ? 'Farmhouse' : catKey === 'cake' ? 'Bakery' : catKey === 'hardware' ? 'Hardware' : catKey === 'paint' ? 'Paints' : 'Services'}`,
+        `#${cityClean}Shopping`,
+        `#DailyEssentials`,
+        `#LocalStore`,
         `#GoogleVerified`,
       ],
     },
     {
-      theme: 'Weekend Special Family Package',
+      theme: 'Weekend Super Saver Offers',
       badge: 'Special Offer' as const,
       postType: 'OFFER' as const,
-      ctaText: 'CALL' as const,
+      ctaText: 'GET OFFER' as const,
       titleFactory: () =>
-        `Weekend Special: Exclusive Package at ${businessName} in ${cityToken}`,
+        catKey === 'market'
+          ? `Weekend Super Saver: Massive Discounts on Daily Essentials at ${businessName}`
+          : `Weekend Special: Exclusive Package at ${businessName} in ${cityToken}`,
       introFactory: () =>
-        `Make your upcoming weekend truly memorable with our limited-capacity exclusive package at ${businessName}. Reserve early to secure preferred timings and personalized service in ${cityToken}.`,
-      bulletFactory: () => [
-        'Special weekend pricing for pre-booked groups and advance reservations',
-        'Complimentary value-added amenities and priority slot allocation',
-        'Dedicated staff on-site to ensure smooth, stress-free hospitality and assistance',
-        'Clean, sanitized, and fully prepared facilities prior to your arrival',
-        'Transparent package pricing with zero unexpected extra charges',
-      ],
+        catKey === 'market'
+          ? `Planning your weekly grocery run? Enjoy exclusive weekend discounts across pantry staples, snacks, personal care, and fresh produce at ${businessName} in ${cityToken}.`
+          : `Make your upcoming weekend truly memorable with our limited-capacity exclusive package at ${businessName}. Reserve early to secure preferred timings and personalized service in ${cityToken}.`,
+      bulletFactory: () =>
+        catKey === 'market'
+          ? [
+              'Up to 20% off on selected grocery bundles and family bulk packs',
+              'Special weekend discounts on fresh seasonal fruits and premium dry fruits',
+              'Extra savings when you buy combos of cooking oils, rice, and pulses',
+              'Loyalty rewards and surprise gift vouchers on minimum purchases',
+              'Fast billing counters to ensure minimum waiting time for weekend shoppers',
+            ]
+          : [
+              'Special weekend pricing for pre-booked groups and advance reservations',
+              'Complimentary value-added amenities and priority slot allocation',
+              'Dedicated staff on-site to ensure smooth, stress-free hospitality and assistance',
+              'Clean, sanitized, and fully prepared facilities prior to your arrival',
+              'Transparent package pricing with zero unexpected extra charges',
+            ],
       conclusionFactory: () =>
-        `Weekend dates fill up quickly. Contact ${businessName} now to check open slots and lock in your weekend booking.`,
+        catKey === 'market'
+          ? `Weekend deals are valid while stock lasts! Drop by ${businessName} in ${cityToken} or call us today to confirm offer items.`
+          : `Weekend dates fill up quickly. Contact ${businessName} now to check open slots and lock in your weekend booking.`,
       tagFactory: () => [
         `#${bizClean}`,
         `#WeekendIn${cityClean}`,
         `#${cityClean}Deals`,
-        `#ExclusivePackage`,
-        `#BookNow`,
+        `#SuperSaver`,
+        `#ShopLocal`,
       ],
     },
     {
@@ -289,83 +352,130 @@ export function generate20PostsForBusiness(params: {
       postType: 'STANDARD' as const,
       ctaText: 'CALL' as const,
       titleFactory: () =>
-        `Why Families & Clients in ${cityToken} Choose ${businessName} for Quality & Safety`,
+        catKey === 'market'
+          ? `100% Quality & Freshness Guarantee at ${businessName} in ${cityToken}`
+          : `Why Families & Clients in ${cityToken} Choose ${businessName} for Quality & Safety`,
       introFactory: () =>
-        `When it comes to ${category}, quality, safety, and hygiene come first. Discover how ${businessName} maintains strict quality benchmarks so you can enjoy complete peace of mind.`,
-      bulletFactory: () => [
-        'Rigorous quality control and sanitation procedures implemented daily',
-        'Certified materials, genuine equipment, and premium-grade supplies',
-        'Trained and courteous team following standard operating safety guidelines',
-        'Clean and inviting ambiance maintained round the clock',
-        'Hundreds of genuine 5-star reviews from satisfied local clients',
-      ],
+        catKey === 'market'
+          ? `Your family deserves pure, hygienic, and fresh essentials every single day. At ${businessName}, every item on our shelves passes thorough quality and freshness checks before you take it home.`
+          : `When it comes to ${category}, quality, safety, and hygiene come first. Discover how ${businessName} maintains strict quality benchmarks so you can enjoy complete peace of mind.`,
+      bulletFactory: () =>
+        catKey === 'market'
+          ? [
+              'Directly sourced fresh vegetables and fruits delivered from trusted farms',
+              'Authorized retailer of certified FSSAI brands and genuine packaged goods',
+              'Clean, organized, and temperature-managed shelves for hygienic storage',
+              'Transparent digital weighing scales and computerized accurate billing',
+              'Friendly store associates ready to assist you in locating your favorite items',
+            ]
+          : [
+              'Rigorous quality control and sanitation procedures implemented daily',
+              'Certified materials, genuine equipment, and premium-grade supplies',
+              'Trained and courteous team following standard operating safety guidelines',
+              'Clean and inviting ambiance maintained round the clock',
+              'Hundreds of genuine 5-star reviews from satisfied local clients',
+            ],
       conclusionFactory: () =>
-        `Choose uncompromising standards for your loved ones and projects. Call ${businessName} today to learn more or schedule your visit.`,
+        catKey === 'market'
+          ? `Choose purity and authentic quality for your home. Visit ${businessName} in ${cityToken} or reach out to our team today.`
+          : `Choose uncompromising standards for your loved ones and projects. Call ${businessName} today to learn more or schedule your visit.`,
       tagFactory: () => [
         `#${bizClean}`,
         `#QualityFirst`,
-        `#${cityClean}Services`,
-        `#SafeAndHygiene`,
+        `#${cityClean}Market`,
+        `#SafeAndFresh`,
         `#CustomerTrust`,
       ],
     },
     {
-      theme: 'Private Events & Celebrations',
-      badge: 'Special Offer' as const,
+      theme: 'Festive Shopping & Bulk Specials',
+      badge: 'Seasonal Event' as const,
       postType: 'EVENT' as const,
-      ctaText: 'CALL' as const,
+      ctaText: 'ORDER' as const,
       titleFactory: () =>
-        `Host Memorable Private Events & Celebrations at ${businessName}`,
+        catKey === 'market'
+          ? `Festive Shopping Festival: Special Combos & Festive Gift Hampers at ${businessName}`
+          : `Host Memorable Private Events & Celebrations at ${businessName}`,
       introFactory: () =>
-        `Looking for the perfect venue or service to host your next private celebration in ${cityToken}? ${businessName} offers custom event setups designed for joyful, intimate gatherings.`,
-      bulletFactory: () => [
-        'Dedicated spaces and customized arrangements for birthdays and anniversaries',
-        'Ample seating and tailored ambiance with ambient lighting',
-        'Catering support and flexible vendor coordination permitted',
-        'Privacy assured with exclusive venue or service booking',
-        'Affordable celebration packages tailored to group size',
-      ],
+        catKey === 'market'
+          ? `Celebrate every festival with joy and savings! ${businessName} brings you custom festive gift packs, premium sweets, dry fruits, and festive essentials in ${cityToken}.`
+          : `Looking for the perfect venue or service to host your next private celebration in ${cityToken}? ${businessName} offers custom event setups designed for joyful, intimate gatherings.`,
+      bulletFactory: () =>
+        catKey === 'market'
+          ? [
+              'Curated gift hampers with premium dry fruits, chocolates, and festive goodies',
+              'Bulk corporate and family orders accepted with customized gift wrapping',
+              'Special festival combo pricing on cooking oils, ghee, flour, and sugar',
+              'Exclusive festive discount vouchers on purchases above eligible thresholds',
+              'Advance booking and timely pickup available for busy festive weeks',
+            ]
+          : [
+              'Dedicated spaces and customized arrangements for birthdays and anniversaries',
+              'Ample seating and tailored ambiance with ambient lighting',
+              'Catering support and flexible vendor coordination permitted',
+              'Privacy assured with exclusive venue or service booking',
+              'Affordable celebration packages tailored to group size',
+            ],
       conclusionFactory: () =>
-        `Let us make your milestone unforgettable. Call ${businessName} in ${cityToken} to discuss your event dates and requirements.`,
+        catKey === 'market'
+          ? `Make your festival truly festive! Visit ${businessName} in ${cityToken} or call us today to order your festive hampers.`
+          : `Let us make your milestone unforgettable. Call ${businessName} in ${cityToken} to discuss your event dates and requirements.`,
       tagFactory: () => [
         `#${bizClean}`,
-        `#${cityClean}Events`,
-        `#PrivateCelebrations`,
-        `#BirthdayVenues`,
+        `#${cityClean}Festivals`,
+        `#FestiveShopping`,
+        `#GiftHampers`,
         `#SpecialMoments`,
       ],
     },
     {
-      theme: 'Expert Tips & Guidance for Customers',
+      theme: 'Customer Trust & Neighborhood Convenience',
       badge: 'Standard Post' as const,
       postType: 'STANDARD' as const,
       ctaText: 'CALL' as const,
       titleFactory: () =>
-        `Expert ${category} Advice: What Every Customer in ${cityToken} Should Know`,
+        catKey === 'market'
+          ? `Why Neighborhood Shoppers in ${cityToken} Rely on ${businessName}`
+          : `Expert ${category} Advice: What Every Customer in ${cityToken} Should Know`,
       introFactory: () =>
-        `Navigating your choices for ${category} can be overwhelming. The experts at ${businessName} share top insights to help you make informed decisions and get the best value in ${cityToken}.`,
-      bulletFactory: () => [
-        'Key factors to check before hiring or purchasing services',
-        'How to maintain quality and longevity for long-term savings',
-        'Common mistakes to avoid and how to spot genuine quality',
-        'Personalized consultation available directly from our experienced specialists',
-      ],
+        catKey === 'market'
+          ? `Serving hundreds of satisfied families every week, ${businessName} is proud to be your trusted neighborhood market in ${cityToken}. Experience hassle-free shopping with genuine warmth and reliability.`
+          : `Navigating your choices for ${category} can be overwhelming. The experts at ${businessName} share top insights to help you make informed decisions and get the best value in ${cityToken}.`,
+      bulletFactory: () =>
+        catKey === 'market'
+          ? [
+              'Decades of trusted service with an outstanding reputation for fair pricing',
+              'Prompt phone order assistance and curbside pickup for local residents',
+              'Stock updated weekly with all popular regional and national brands',
+              'Smooth exchange and replacement policy on unopened packaged goods',
+              'Consistently rated 5 stars for customer friendliness and product freshness',
+            ]
+          : [
+              'Key factors to check before hiring or purchasing services',
+              'How to maintain quality and longevity for long-term savings',
+              'Common mistakes to avoid and how to spot genuine quality',
+              'Personalized consultation available directly from our experienced specialists',
+            ],
       conclusionFactory: () =>
-        `Have questions about your upcoming requirement? Reach out to ${businessName} for honest, expert advice with zero obligations.`,
+        catKey === 'market'
+          ? `Experience the joy of friendly, honest neighborhood shopping. Stop by ${businessName} in ${cityToken} or call us today.`
+          : `Have questions about your upcoming requirement? Reach out to ${businessName} for honest, expert advice with zero obligations.`,
       tagFactory: () => [
         `#${bizClean}`,
-        `#${cityClean}Tips`,
-        `#IndustryAdvice`,
-        `#SmartBuying`,
+        `#${cityClean}Shoppers`,
+        `#NeighborhoodMarket`,
+        `#TrustedStore`,
         `#LocalExperts`,
       ],
     },
   ];
 
   const generatedPosts: GeneratedPostItem[] = [];
+  const blueprintOffset = seed ? Math.abs(seed) % postBlueprints.length : 0;
 
   for (let i = 0; i < 20; i++) {
-    const blueprint = postBlueprints[i % postBlueprints.length];
+    const blueprintIdx = (i + blueprintOffset) % postBlueprints.length;
+    const blueprint = postBlueprints[blueprintIdx];
     const image = allImages[i % allImages.length];
     const title = i < postBlueprints.length ? blueprint.titleFactory() : `${blueprint.titleFactory()} — Feature Edition #${i + 1}`;
     const intro = blueprint.introFactory();
@@ -392,6 +502,8 @@ export function generate20PostsForBusiness(params: {
       website,
       imageUrl: image,
       content: fullContent,
+      logoUrl: logoUrl || undefined,
+      businessName,
     });
   }
 
@@ -405,14 +517,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const [brandProfile, tenant, googleAccount] = await Promise.all([
+    const seedParam = request.nextUrl.searchParams.get('seed');
+    const refreshParam = request.nextUrl.searchParams.get('refresh');
+    const seed = refreshParam ? Math.floor(Math.random() * 1000000) : (seedParam ? parseInt(seedParam, 10) : 0);
+
+    const [brandProfile, tenant, googleAccount, brandKit] = await Promise.all([
       db.brandProfile.findUnique({ where: { tenantId: user.tenantId } }).catch(() => null),
       db.tenant.findUnique({
         where: { id: user.tenantId },
-        select: { name: true, industry: true, city: true, phone: true, website: true },
+        select: { name: true, industry: true, city: true, phone: true, website: true, logo: true },
       }).catch(() => null),
       prepareGoogleAccount(user.tenantId).catch(() => null),
+      db.brandKit.findUnique({ where: { tenantId: user.tenantId } }).catch(() => null),
     ]);
+
+    const resolvedLogoUrl =
+      (brandProfile as any)?.logoUrl ||
+      (brandProfile as any)?.brandDetails?.logoUrl ||
+      brandKit?.logoUrl ||
+      tenant?.logo ||
+      null;
 
     const businessName =
       brandProfile?.businessName || tenant?.name || 'Local Business';
@@ -454,6 +578,8 @@ export async function GET(request: NextRequest) {
       phone,
       website,
       photos: combinedPhotos,
+      logoUrl: resolvedLogoUrl,
+      seed,
     });
 
     return NextResponse.json({
@@ -464,6 +590,7 @@ export async function GET(request: NextRequest) {
         city,
         phone,
         website,
+        logoUrl: resolvedLogoUrl,
       },
       count: posts.length,
       posts,

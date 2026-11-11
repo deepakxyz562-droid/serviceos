@@ -46,13 +46,22 @@ export async function POST(request: NextRequest) {
         industry: true,
         website: true,
         settingsJson: true,
+        brandProfile: {
+          select: {
+            businessName: true,
+            industry: true,
+            location: true,
+            website: true,
+          },
+        },
       },
     });
 
     const brandContext = await getBrandContext(tenantId);
-    const businessName = tenant?.name || 'Our Business';
+    const businessName = tenant?.brandProfile?.businessName || tenant?.name || 'Our Business';
+    const industry = tenant?.brandProfile?.industry || tenant?.industry || 'Services';
     const phone = tenant?.phone || '+91 61279 67087';
-    const location = tenant?.city ? `${tenant.city}, India` : 'Local Store & Online';
+    const location = tenant?.brandProfile?.location || (tenant?.city ? `${tenant.city}, India` : 'Local Store & Online');
 
     // 2. Generate Copy with AI (Gemini / OpenRouter via callAI)
     const prompt = `
@@ -60,7 +69,7 @@ You are an expert social media marketing strategist and copywriter for local bus
 Generate a high-converting, professional, SEO-friendly social media post based on the following context:
 
 Business Name: ${businessName}
-Industry: ${tenant?.industry || 'Services'}
+Industry: ${industry}
 Phone: ${phone}
 Location: ${location}
 Brand Context: ${brandContext}
@@ -129,9 +138,10 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
     const finalSubtitle = generated.subtitle || `Refresh your look with personalized care at ${businessName}.`;
     const finalBadge = (body.badge || generated.badge || 'SPECIAL OFFER').toUpperCase();
     const finalTitle = generated.title || `${businessName} Announcement`;
+    const safeTag = businessName.toLowerCase().replace(/[^a-z0-9]/g, '');
     const hashtagsArray = Array.isArray(generated.hashtags) && generated.hashtags.length > 0
       ? generated.hashtags.map((h) => (h.startsWith('#') ? h : `#${h}`))
-      : ['#localbusiness', '#service', '#toprated', '#fieseros'];
+      : ['#localbusiness', '#service', '#toprated', safeTag ? `#${safeTag}` : '#community'];
     const hashtagsText = hashtagsArray.join(' ');
 
     const finalCaption = generated.caption
@@ -415,7 +425,10 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       imageUrl: imageUrl || chosenPhoto,
       photoUrl: chosenPhoto,
       layouts,
-      bookingUrl: tenant?.website || `https://${tenantId}.fieseros.com/book`,
+      bookingUrl:
+        tenant?.brandProfile?.website ||
+        (tenant?.website && !tenant.website.includes('fieseros.com') ? tenant.website : '') ||
+        '',
       offerDetails: {
         discountText: finalBadge,
         startDate: new Date().toISOString().slice(0, 10),

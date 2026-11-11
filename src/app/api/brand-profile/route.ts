@@ -409,6 +409,20 @@ export async function PUT(request: NextRequest) {
           ...((body as any).faqs !== undefined ? { faqs: (body as any).faqs } : {}),
         };
 
+        // If businessName is not Fieseros, purge old Fieseros brand brain defaults
+        if (businessName && !/fieseros/i.test(businessName)) {
+          if (Array.isArray(mergedBrandBrain.sellingItems)) {
+            mergedBrandBrain.sellingItems = (mergedBrandBrain.sellingItems as any[]).filter(
+              (it) => !/AI Google Business Suite|FieserOS/i.test(it?.name || '')
+            );
+          }
+          if (Array.isArray(mergedBrandBrain.aiReplySalutation)) {
+            mergedBrandBrain.aiReplySalutation = (mergedBrandBrain.aiReplySalutation as any[]).map(
+              (s) => (typeof s === 'string' ? s.replace(/FieserOS/gi, businessName) : s)
+            );
+          }
+        }
+
         let mergedBgosEmailPrefs: unknown = existingSettings.bgosEmailPrefs;
         if (body.bgosEmailPrefs && typeof body.bgosEmailPrefs === 'object') {
           const existingPrefs = parseBgosEmailPrefs(existingTenant?.settingsJson);

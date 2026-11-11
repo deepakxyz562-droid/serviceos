@@ -52,9 +52,14 @@ export async function GET(request: NextRequest) {
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { name: true },
+      select: {
+        name: true,
+        brandProfile: {
+          select: { businessName: true },
+        },
+      },
     });
-    const businessName = tenant?.name || 'our business';
+    const businessName = tenant?.brandProfile?.businessName || tenant?.name || 'our business';
 
     const reviews = await db.review.findMany({
       where: { tenantId: user.tenantId },

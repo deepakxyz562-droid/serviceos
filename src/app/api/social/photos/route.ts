@@ -491,9 +491,16 @@ export async function POST(request: NextRequest) {
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { name: true, country: true, settingsJson: true },
+      select: {
+        name: true,
+        country: true,
+        settingsJson: true,
+        brandProfile: {
+          select: { businessName: true },
+        },
+      },
     });
-    const businessName = tenant?.name || 'our business';
+    const businessName = tenant?.brandProfile?.businessName || tenant?.name || 'our business';
     const locale = resolveTenantLocale({
       tenantCountry: tenant?.country,
       settingsJson: tenant?.settingsJson,

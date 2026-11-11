@@ -36,12 +36,22 @@ interface StandeeData {
   reviewUrl: string;
   qrDataUrl: string;
   defaultSvg: string;
+  logoUrl?: string | null;
   headline?: string;
   templates: StandeeTemplate[];
   sizes: Array<{ id: string; name: string; width: number; height: number }>;
 }
 
 const DEFAULT_TEMPLATES: StandeeTemplate[] = [
+  {
+    id: 'google_grexa_standee',
+    name: 'Google Wave Official (With Logo)',
+    themeColor: '#1A73E8',
+    accentColor: '#EA4335',
+    bgColor: '#FFFFFF',
+    textColor: '#0F172A',
+    cardBorder: '#E2E8F0',
+  },
   {
     id: 'google_verified',
     name: 'Google Verified Blue',
@@ -92,12 +102,14 @@ export default function QrStandeeScreen() {
   const [data, setData] = useState<StandeeData | null>(null);
 
   // Customization state
-  const [selectedTemplateId, setSelectedTemplateId] = useState('google_verified');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('google_grexa_standee');
   const [selectedSize, setSelectedSize] = useState<'a5' | 'table_tent' | 'square_badge'>('a5');
-  const [headline, setHeadline] = useState('Scan to Review Us on Google');
+  const [headline, setHeadline] = useState('Scan to Rate Us on Google');
   const [subheadline, setSubheadline] = useState('Your feedback helps our team grow!');
   const [showRating, setShowRating] = useState(true);
   const [showContact, setShowContact] = useState(true);
+  const [includeLogo, setIncludeLogo] = useState(true);
+  const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null);
 
   // Generated state
   const [generating, setGenerating] = useState(false);
@@ -107,15 +119,21 @@ export default function QrStandeeScreen() {
     setLoading(true);
     try {
       // First attempt: try dedicated /api/bgos/qr/standee
-      const res = await apiRequest<StandeeData>('/api/bgos/qr/standee');
+      const [res, brandRes] = await Promise.all([
+        apiRequest<StandeeData>('/api/bgos/qr/standee'),
+        apiRequest<any>('/api/brand-profile').catch(() => null),
+      ]);
       setData(res);
       if (res.headline) setHeadline(res.headline);
+      const resolvedLogo = res.logoUrl || brandRes?.brandDetails?.logoUrl || null;
+      if (resolvedLogo) setCustomLogoUrl(resolvedLogo);
     } catch (e: any) {
       // Graceful fallback: synthesize standee from existing /api/gbp/place & /api/bgos/qr
       try {
-        const [placeRes, qrRes] = await Promise.all([
+        const [placeRes, qrRes, brandRes] = await Promise.all([
           apiRequest<any>('/api/gbp/place').catch(() => null),
           apiRequest<any>('/api/bgos/qr?target=review').catch(() => null),
+          apiRequest<any>('/api/brand-profile').catch(() => null),
         ]);
 
         const place = placeRes?.place || placeRes?.tenantFallback;
@@ -130,6 +148,8 @@ export default function QrStandeeScreen() {
           qrRes?.url ||
           'https://search.google.com/local/writereview';
         const qrDataUrl = qrRes?.image || '';
+        const resolvedLogo = brandRes?.brandDetails?.logoUrl || null;
+        if (resolvedLogo) setCustomLogoUrl(resolvedLogo);
 
         setData({
           businessName: bName,
@@ -141,6 +161,7 @@ export default function QrStandeeScreen() {
           reviewUrl,
           qrDataUrl,
           defaultSvg: '',
+          logoUrl: resolvedLogo,
           templates: DEFAULT_TEMPLATES,
           sizes: DEFAULT_SIZES,
         });
@@ -168,12 +189,13 @@ export default function QrStandeeScreen() {
           subheadline,
           showRating,
           showContact,
+          logoUrl: includeLogo ? customLogoUrl : null,
         },
       });
       setGeneratedHtml(res.html);
       Alert.alert(
         'Ready to Print',
-        'Your countertop standee has been generated with your verified live Google rating. Tap Share to send or print!',
+        'Your countertop standee has been generated with your verified live Google rating and logo. Tap Share to send or print!',
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -260,12 +282,54 @@ export default function QrStandeeScreen() {
               borderWidth: 2,
             }}
           >
-            {/* Top Accent Stripe */}
-            <View style={{ height: 6, backgroundColor: currentTemplate.themeColor }} />
+            {/* Top Accent Stripe / Google 4-Color Wave Header */}
+            {selectedTemplateId === 'google_grexa_standee' ? (
+              <View style={{ flexDirection: 'row', height: 8, width: '100%' }}>
+                <View style={{ flex: 1, backgroundColor: '#EA4335' }} />
+                <View style={{ flex: 1, backgroundColor: '#FBBC05' }} />
+                <View style={{ flex: 1, backgroundColor: '#34A853' }} />
+                <View style={{ flex: 1, backgroundColor: '#4285F4' }} />
+              </View>
+            ) : (
+              <View style={{ height: 6, backgroundColor: currentTemplate.themeColor }} />
+            )}
 
             <View style={{ padding: 20, alignItems: 'center', gap: 12 }}>
-              {/* Business Name & Tagline */}
+              {/* Google "G" Badge & 5 Golden Stars for Google Grexa Template */}
+              {selectedTemplateId === 'google_grexa_standee' ? (
+                <View style={{ alignItems: 'center', gap: 4 }}>
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: '#FFFFFF',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 1.5,
+                      borderColor: '#F1F5F9',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
+                      elevation: 3,
+                    }}
+                  >
+                    <Text style={{ fontSize: 22, fontWeight: '900', color: '#4285F4' }}>G</Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: '#FBBC05', letterSpacing: 2 }}>★★★★★</Text>
+                </View>
+              ) : null}
+
+              {/* Business Logo & Name & Tagline */}
               <View style={{ alignItems: 'center' }}>
+                {includeLogo && customLogoUrl ? (
+                  <Image
+                    source={{ uri: customLogoUrl }}
+                    style={{ width: 90, height: 26, marginBottom: 4 }}
+                    resizeMode="contain"
+                  />
+                ) : null}
                 <Text style={{ fontSize: 18, fontWeight: '800', color: currentTemplate.themeColor, textAlign: 'center' }}>
                   {data?.businessName}
                 </Text>
@@ -297,7 +361,7 @@ export default function QrStandeeScreen() {
                 </Text>
               </View>
 
-              {/* QR Code Container */}
+              {/* QR Code Container with optional Google 4-Color Corner Brackets */}
               <View
                 style={{
                   backgroundColor: '#FFFFFF',
@@ -310,8 +374,22 @@ export default function QrStandeeScreen() {
                   shadowOpacity: 0.06,
                   shadowRadius: 4,
                   elevation: 2,
+                  position: 'relative',
                 }}
               >
+                {selectedTemplateId === 'google_grexa_standee' ? (
+                  <>
+                    {/* Top-Left Red Bracket */}
+                    <View style={{ position: 'absolute', top: 4, left: 4, width: 16, height: 16, borderTopWidth: 3.5, borderLeftWidth: 3.5, borderColor: '#EA4335', borderTopLeftRadius: 6 }} />
+                    {/* Top-Right Blue Bracket */}
+                    <View style={{ position: 'absolute', top: 4, right: 4, width: 16, height: 16, borderTopWidth: 3.5, borderRightWidth: 3.5, borderColor: '#4285F4', borderTopRightRadius: 6 }} />
+                    {/* Bottom-Left Yellow Bracket */}
+                    <View style={{ position: 'absolute', bottom: 4, left: 4, width: 16, height: 16, borderBottomWidth: 3.5, borderLeftWidth: 3.5, borderColor: '#FBBC05', borderBottomLeftRadius: 6 }} />
+                    {/* Bottom-Right Green Bracket */}
+                    <View style={{ position: 'absolute', bottom: 4, right: 4, width: 16, height: 16, borderBottomWidth: 3.5, borderRightWidth: 3.5, borderColor: '#34A853', borderBottomRightRadius: 6 }} />
+                  </>
+                ) : null}
+
                 {data?.qrDataUrl ? (
                   <Image
                     source={{ uri: data.qrDataUrl }}
@@ -351,13 +429,42 @@ export default function QrStandeeScreen() {
               )}
 
               {/* Scan Guidance */}
-              <View style={{ alignItems: 'center', marginTop: 4 }}>
+              <View style={{ alignItems: 'center', marginTop: 2 }}>
                 <Text style={{ fontSize: 12, fontWeight: '700', color: currentTemplate.themeColor }}>
                   📷 Open Camera & Point at QR Code
                 </Text>
                 <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
                   Takes only 15 seconds • Verified on Google Maps
                 </Text>
+              </View>
+
+              {/* Powered By BGOS Logo with Icon */}
+              <View style={{ alignItems: 'center', marginTop: 4 }}>
+                <Text style={{ fontSize: 9.5, fontWeight: '600', color: '#94A3B8', marginBottom: 4 }}>
+                  Powered By
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: '#F8FAFC',
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                  }}
+                >
+                  <Image
+                    source={require('../assets/brand-mark.png')}
+                    style={{ width: 18, height: 18, borderRadius: 4 }}
+                    resizeMode="contain"
+                  />
+                  <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#0F172A', letterSpacing: -0.3 }}>
+                    BGOS
+                  </Text>
+                </View>
               </View>
 
               {/* Contact Footer */}
@@ -500,7 +607,65 @@ export default function QrStandeeScreen() {
             </View>
           </Card>
 
-          {/* 5. ACTIONS: GENERATE & SHARE */}
+          {/* 5. LOGO & BRANDING */}
+          <Card>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View>
+                <Text style={ui.heading}>Store Logo</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                  Display your store logo alongside &quot;Powered by BGOS&quot;
+                </Text>
+              </View>
+              <Switch value={includeLogo} onValueChange={setIncludeLogo} />
+            </View>
+
+            {includeLogo && (
+              <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9', gap: 10 }}>
+                {customLogoUrl ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Image source={{ uri: customLogoUrl }} style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: '#FFFFFF' }} resizeMode="contain" />
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }}>Store Logo Included</Text>
+                        <Text style={{ fontSize: 11, color: '#64748B' }}>Active on your standee print</Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      onPress={() => router.push('/logo-management')}
+                      style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1D4ED8' }}>Change</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 8 }}>
+                    <Text style={{ fontSize: 12, color: '#64748B' }}>
+                      No custom logo uploaded yet. Your business name and Powered by BGOS will be featured.
+                    </Text>
+                    <Pressable
+                      onPress={() => router.push('/logo-management')}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        backgroundColor: '#1E293B',
+                        paddingVertical: 9,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <MaterialIcons name="add-photo-alternate" size={16} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
+                        Upload Business Logo
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            )}
+          </Card>
+
+          {/* 6. ACTIONS: GENERATE & SHARE */}
           <View style={{ gap: 10, marginBottom: 30 }}>
             <Pressable
               onPress={handleGenerate}

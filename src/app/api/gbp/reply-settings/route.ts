@@ -39,7 +39,14 @@ export async function GET(request: NextRequest) {
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { name: true, phone: true, settingsJson: true },
+      select: {
+        name: true,
+        phone: true,
+        settingsJson: true,
+        brandProfile: {
+          select: { businessName: true },
+        },
+      },
     });
 
     const tenantSettings = readSettingsJson(tenant?.settingsJson);
@@ -95,7 +102,7 @@ export async function GET(request: NextRequest) {
     }
 
     let googleEmail = user.email || '';
-    let locationTitle = tenant?.name || 'My Business';
+    let locationTitle = tenant?.brandProfile?.businessName || tenant?.name || 'My Business';
 
     if (socialAccount?.metadata) {
       try {

@@ -669,12 +669,15 @@ function resolveCapabilities(businessName: string, category: string, location: s
     return { heroService, secondService, usps, currentOffers, baseline };
   }
 
-  // 8. FieserOS SaaS Platform
-  if (nameLower.includes('fieser') || catLower.includes('saas') || catLower.includes('field service platform')) {
+  // 8. FieserOS SaaS Platform / Trade & Field Service Automation
+  if (
+    (nameLower === 'fieseros' || (nameLower.includes('fieser') && !nameLower.includes('market') && !nameLower.includes('store'))) ||
+    catLower.includes('field service platform')
+  ) {
     const heroService = hasCustom ? customServices[0] : 'AI Assistant & Workflow Automation';
     const secondService = hasCustom && customServices[1] ? customServices[1] : 'Smart Job Dispatch & Instant Quotes';
     const usps = uspsOverride || 'Turn one instruction into a connected workflow; save 15+ hours/week; zero missed leads';
-    const currentOffers = offerOverride || 'Explore Fieseros AI Assistant Free — Streamline Your Field Service Operations';
+    const currentOffers = offerOverride || `Explore ${businessName} Free — Streamline Your Field Service Operations`;
 
     const baseline: PromptSuggestion[] = [
       {
@@ -686,7 +689,7 @@ function resolveCapabilities(businessName: string, category: string, location: s
         badge: 'AI WORKFLOW',
         headline: 'Less admin. More jobs.',
         aspectRatio: '4:5',
-        prompt: `Create a professional social media marketing post promoting the Fieseros AI Assistant. Brand: ${businessName} | Website: ${website}. Highlight how trade businesses turn conversation into quotes, jobs, and confirmation. Visit ${website}.`,
+        prompt: `Create a professional social media marketing post promoting the ${businessName.toLowerCase().includes('fieser') ? 'Fieseros AI Assistant' : `${businessName} AI Assistant`}. Brand: ${businessName}${website ? ` | Website: ${website}` : ''}. Highlight how trade businesses turn conversation into quotes, jobs, and confirmation.${website ? ` Visit ${website}.` : ''}`,
       },
       {
         id: 's_dispatch',
@@ -1062,7 +1065,13 @@ async function extractWebsiteHighlights(rawUrl: string): Promise<{ tags: string[
     if (!target.startsWith('http://') && !target.startsWith('https://')) {
       target = `https://${target}`;
     }
-    if (target.includes('localhost') || target.includes('fieseros.com/p/')) {
+    if (
+      target.includes('localhost') ||
+      target.includes('127.0.0.1') ||
+      target.includes('fieseros.com') ||
+      target.includes('serviceos.com') ||
+      target.includes('example.com')
+    ) {
       return { tags: [] };
     }
 
@@ -1155,7 +1164,7 @@ export async function GET(request: NextRequest) {
     const refresh = url.searchParams.get('refresh') === '1';
 
     const cacheKey = `${user.tenantId}:${profileId || ''}:${businessNameOverride || ''}:${categoryOverride || ''}`;
-    if (!refresh && !scan) {
+    if (!refresh && !scan && process.env.NODE_ENV !== 'test') {
       const cached = PROMPT_SUGGESTIONS_CACHE.get(cacheKey);
       if (cached && cached.expires > Date.now()) {
         return NextResponse.json(cached.data);
@@ -1212,7 +1221,7 @@ export async function GET(request: NextRequest) {
       activeGbp?.accountName ||
       tenant?.brandProfile?.businessName ||
       tenant?.name ||
-      'Fieseros';
+      'Local Business';
 
     const industry =
       (categoryOverride && categoryOverride.trim()) ||
@@ -1221,16 +1230,23 @@ export async function GET(request: NextRequest) {
       tenant?.industry ||
       'Professional Services';
 
-    const website =
+    const rawWebsite =
       (websiteOverride && websiteOverride.trim()) ||
       gbpMeta.website ||
       tenant?.brandProfile?.website ||
       tenant?.website ||
-      (tenant?.slug ? `https://fieseros.com/p/${tenant.slug}` : 'https://fieseros.com');
+      '';
 
-    // Extract website highlights & feature tags if website is provided
+    const website = rawWebsite;
+
+    // Extract website highlights & feature tags only if an authentic custom external website is provided (never scrape platform domains)
     let extractedData = { tags: [] as string[], summary: undefined as string | undefined };
-    if (website && !website.includes('localhost') && !website.includes('fieseros.com/p/')) {
+    if (
+      website &&
+      !website.includes('fieseros.com') &&
+      !website.includes('serviceos.com') &&
+      !website.includes('localhost')
+    ) {
       extractedData = await extractWebsiteHighlights(website);
     }
 

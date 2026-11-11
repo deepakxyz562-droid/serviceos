@@ -82,6 +82,9 @@ async function resolveWorkspaceReviewContext(
       settingsJson: true,
       googlePlaceId: true,
       googleBusinessProfileUrl: true,
+      brandProfile: {
+        select: { businessName: true },
+      },
     },
   });
 
@@ -117,7 +120,7 @@ async function resolveWorkspaceReviewContext(
   const businessName =
     typeof bodyBusinessName === 'string' && bodyBusinessName.trim()
       ? bodyBusinessName.trim()
-      : tenant?.name || 'our team';
+      : tenant?.brandProfile?.businessName || tenant?.name || 'our team';
 
   // Fallback to Google Maps search query link if the business has a name so bulk invites don't hard-fail before Place ID sync
   if (!reviewLink && businessName && businessName !== 'our team') {

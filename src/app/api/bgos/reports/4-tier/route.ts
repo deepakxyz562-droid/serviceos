@@ -427,11 +427,35 @@ export async function GET(request: NextRequest) {
     if (candidateKeywords.length === 0) {
       const dynamicList: Array<{ keyword: string; volume: number; defaultUsed: number }> = [];
       const catLower = (effectiveCategory || '').toLowerCase();
-      const isTechOrSoftware = !catLower || catLower.includes('software') || catLower.includes('it') || catLower.includes('tech') || catLower.includes('consult');
+      const bizNameLower = (tenant?.brandProfile?.businessName || tenant?.name || '').toLowerCase();
+      const isMarketOrRetail =
+        bizNameLower.includes('market') ||
+        bizNameLower.includes('mart') ||
+        bizNameLower.includes('store') ||
+        bizNameLower.includes('kirana') ||
+        catLower.includes('market') ||
+        catLower.includes('retail') ||
+        catLower.includes('grocery');
+      const isTechOrSoftware =
+        !isMarketOrRetail &&
+        (catLower.includes('software') || (catLower.includes('it') && !catLower.includes('market')) || catLower.includes('tech') || catLower.includes('consult'));
       const locality = extractedLocalities[0] || 'Jagdeopath';
       const locality2 = extractedLocalities[1] || 'Murlichak';
 
-      if (isTechOrSoftware) {
+      if (isMarketOrRetail) {
+        const term = effectiveCategory && !isSeedIndustry ? effectiveCategory.toLowerCase() : 'supermarket';
+        dynamicList.push({ keyword: `best ${term} in ${effectiveCity}`, volume: 500, defaultUsed: 2 });
+        dynamicList.push({ keyword: `${term} near me`, volume: 500, defaultUsed: 2 });
+        dynamicList.push({ keyword: `top rated ${term} in ${effectiveCity}`, volume: 300, defaultUsed: 1 });
+        dynamicList.push({ keyword: `grocery and retail store in ${effectiveCity}`, volume: 250, defaultUsed: 1 });
+        if (locality) {
+          dynamicList.push({ keyword: `${term} near ${locality}`, volume: 150, defaultUsed: 1 });
+        }
+        if (locality2) {
+          dynamicList.push({ keyword: `${term} near ${locality2}`, volume: 100, defaultUsed: 1 });
+        }
+        dynamicList.push({ keyword: `daily essentials store ${effectiveCity}`, volume: 200, defaultUsed: 1 });
+      } else if (isTechOrSoftware) {
         dynamicList.push({ keyword: 'best crm software for small businesses', volume: 500, defaultUsed: 2 });
         dynamicList.push({ keyword: 'software development company', volume: 500, defaultUsed: 2 });
         dynamicList.push({ keyword: `software development company in ${effectiveCity}`, volume: 100, defaultUsed: 2 });

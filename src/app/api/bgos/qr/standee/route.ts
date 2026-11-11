@@ -18,11 +18,11 @@ export interface StandeeTemplate {
 }
 
 export const TEMPLATES: Record<string, StandeeTemplate> = {
-  minimalist_black: {
-    id: 'minimalist_black',
-    name: 'Classic Minimalist',
-    themeColor: '#0F172A',
-    accentColor: '#334155',
+  google_grexa_standee: {
+    id: 'google_grexa_standee',
+    name: 'Google Official Wave (With Logo)',
+    themeColor: '#1A73E8',
+    accentColor: '#EA4335',
     bgColor: '#FFFFFF',
     textColor: '#0F172A',
     cardBorder: '#E2E8F0',
@@ -35,6 +35,15 @@ export const TEMPLATES: Record<string, StandeeTemplate> = {
     bgColor: '#FFFFFF',
     textColor: '#202124',
     cardBorder: '#DADCE0',
+  },
+  minimalist_black: {
+    id: 'minimalist_black',
+    name: 'Classic Minimalist',
+    themeColor: '#0F172A',
+    accentColor: '#334155',
+    bgColor: '#FFFFFF',
+    textColor: '#0F172A',
+    cardBorder: '#E2E8F0',
   },
   warm_gold: {
     id: 'warm_gold',
@@ -57,6 +66,211 @@ export const TEMPLATES: Record<string, StandeeTemplate> = {
 };
 
 /**
+ * Generates Grexa-style Google Premier Standee with 4-color wave background,
+ * central card, top Google G badge + 5 stars, "Scan to Rate Us on Google",
+ * business name, Google 4-color corner framing brackets around QR code,
+ * and bottom "Powered By [Logo]" branding.
+ */
+function generateGrexaGoogleStandeeSvg(params: {
+  template: StandeeTemplate;
+  size: 'a5' | 'table_tent' | 'square_badge';
+  businessName: string;
+  tagline: string;
+  rating: number;
+  totalReviews: number;
+  qrDataUrl: string;
+  phone: string;
+  address: string;
+  headline: string;
+  subheadline: string;
+  showRating: boolean;
+  showContact: boolean;
+  logoUrl?: string | null;
+}): string {
+  const {
+    size,
+    businessName,
+    rating,
+    totalReviews,
+    qrDataUrl,
+    phone,
+    address,
+    showRating,
+    showContact,
+    logoUrl,
+  } = params;
+
+  let width = 420;
+  let height = 595;
+  if (size === 'table_tent') {
+    width = 288;
+    height = 432;
+  } else if (size === 'square_badge') {
+    width = 320;
+    height = 320;
+  }
+
+  const cardMargin = 22;
+  const cardWidth = width - (cardMargin * 2);
+  const cardHeight = height - (cardMargin * 2);
+  const cardX = cardMargin;
+  const cardY = cardMargin;
+
+  const isSquare = size === 'square_badge';
+  const qrBoxSize = isSquare ? 140 : size === 'table_tent' ? 148 : 176;
+  const qrX = width / 2 - (qrBoxSize / 2);
+  const qrY = isSquare ? 98 : size === 'table_tent' ? 134 : 178;
+
+  const bracketPad = 12;
+  const bLeft = qrX - bracketPad;
+  const bRight = qrX + qrBoxSize + bracketPad;
+  const bTop = qrY - bracketPad;
+  const bBottom = qrY + qrBoxSize + bracketPad;
+  const bLen = isSquare ? 20 : 26;
+  const bRadius = 12;
+
+  const badgeY = cardY + 4;
+  const badgeR = isSquare ? 24 : 28;
+
+  const starsY = badgeY + badgeR + (isSquare ? 16 : 22);
+  const headlineY = starsY + (isSquare ? 20 : 26);
+  const bNameY = headlineY + (isSquare ? 22 : 26);
+
+  const poweredByY = bBottom + (showRating ? (isSquare ? 26 : 34) : (isSquare ? 18 : 22));
+  const logoY = poweredByY + 8;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
+  <defs>
+    <style>
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; font-weight: 800; }
+      .text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
+    </style>
+    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#000000" flood-opacity="0.14" />
+    </filter>
+    <filter id="badgeShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.12" />
+    </filter>
+    <clipPath id="standeeClip">
+      <rect width="${width}" height="${height}" rx="18" />
+    </clipPath>
+  </defs>
+
+  <!-- Outer clipped frame -->
+  <g clip-path="url(#standeeClip)">
+    <rect width="${width}" height="${height}" fill="#F8FAFC" />
+
+    <!-- Google 4-Color Wave Organic Shapes -->
+    <!-- Top Yellow Wave -->
+    <path d="M 0 0 L ${width} 0 L ${width} ${height * 0.3} Q ${width * 0.52} ${height * 0.22} 0 ${height * 0.26} Z" fill="#FBBC05" />
+    
+    <!-- Top Red Wave Overlap -->
+    <path d="M ${width * 0.38} 0 L ${width} 0 L ${width} ${height * 0.36} Q ${width * 0.65} ${height * 0.16} ${width * 0.38} 0 Z" fill="#EA4335" />
+
+    <!-- Bottom-Left Green Wave -->
+    <path d="M 0 ${height * 0.68} Q ${width * 0.32} ${height * 0.74} ${width * 0.36} ${height} L 0 ${height} Z" fill="#34A853" />
+
+    <!-- Bottom-Right Blue Wave -->
+    <path d="M ${width * 0.52} ${height} Q ${width * 0.68} ${height * 0.76} ${width} ${height * 0.72} L ${width} ${height} Z" fill="#4285F4" />
+
+    <!-- Central White Card -->
+    <rect x="${cardX}" y="${cardY}" width="${cardWidth}" height="${cardHeight}" rx="24" fill="#FFFFFF" filter="url(#cardShadow)" />
+
+    <!-- Floating Top Center Circle Badge -->
+    <circle cx="${width / 2}" cy="${badgeY}" r="${badgeR}" fill="#FFFFFF" filter="url(#badgeShadow)" />
+    <circle cx="${width / 2}" cy="${badgeY}" r="${badgeR}" fill="#FFFFFF" stroke="#F1F5F9" stroke-width="1.5" />
+
+    <!-- Google 'G' 4-Color Vector -->
+    <g transform="translate(${width / 2 - 14}, ${badgeY - 14}) scale(${badgeR / 20})">
+      <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.665-5.17 3.665-9.12z" />
+      <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.13C3.26 21.36 7.34 24 12 24z" />
+      <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.57H1.25C.45 8.15 0 9.99 0 12s.45 3.85 1.25 5.43l4.03-3.14z" />
+      <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.57l4.03 3.14c.95-2.83 3.6-4.96 6.72-4.96z" />
+    </g>
+
+    <!-- 5 Golden Review Stars -->
+    <text x="${width / 2}" y="${starsY}" text-anchor="middle" font-size="${isSquare ? 12 : 14}" fill="#FBBC05" letter-spacing="3">★ ★ ★ ★ ★</text>
+
+    <!-- Headline: Scan to Rate Us on Google -->
+    <text x="${width / 2}" y="${headlineY}" text-anchor="middle" class="title" font-size="${isSquare ? 13 : 16}" fill="#1E293B">
+      Scan to Rate Us on <tspan fill="#4285F4">G</tspan><tspan fill="#EA4335">o</tspan><tspan fill="#FBBC05">o</tspan><tspan fill="#4285F4">g</tspan><tspan fill="#34A853">l</tspan><tspan fill="#EA4335">e</tspan>
+    </text>
+
+    <!-- Business Logo (if uploaded) or Business Name -->
+    ${
+      logoUrl
+        ? `<image href="${escapeXml(logoUrl)}" x="${width / 2 - 45}" y="${headlineY + 8}" width="90" height="26" preserveAspectRatio="xMidYMid meet" />
+    <text x="${width / 2}" y="${bNameY + 14}" text-anchor="middle" class="title" font-size="${isSquare ? 13 : 16}" font-weight="900" fill="#0F172A">
+      ${escapeXml(businessName)}
+    </text>`
+        : `<text x="${width / 2}" y="${bNameY}" text-anchor="middle" class="title" font-size="${isSquare ? 15 : 18}" font-weight="900" fill="#0F172A">
+      ${escapeXml(businessName)}
+    </text>`
+    }
+
+    <!-- 4 Google Corner Brackets around QR code -->
+    <!-- Top-Left Bracket (Red) -->
+    <path d="M ${bLeft} ${bTop + bLen} L ${bLeft} ${bTop + bRadius} A ${bRadius} ${bRadius} 0 0 1 ${bLeft + bRadius} ${bTop} L ${bLeft + bLen} ${bTop}" fill="none" stroke="#EA4335" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Top-Right Bracket (Blue) -->
+    <path d="M ${bRight - bLen} ${bTop} L ${bRight - bRadius} ${bTop} A ${bRadius} ${bRadius} 0 0 1 ${bRight} ${bTop + bRadius} L ${bRight} ${bTop + bLen}" fill="none" stroke="#4285F4" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Bottom-Left Bracket (Yellow) -->
+    <path d="M ${bLeft} ${bBottom - bLen} L ${bLeft} ${bBottom - bRadius} A ${bRadius} ${bRadius} 0 0 0 ${bLeft + bRadius} ${bBottom} L ${bLeft + bLen} ${bBottom}" fill="none" stroke="#FBBC05" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Bottom-Right Bracket (Green) -->
+    <path d="M ${bRight - bLen} ${bBottom} L ${bRight - bRadius} ${bBottom} A ${bRadius} ${bRadius} 0 0 0 ${bRight} ${bBottom - bRadius} L ${bRight} ${bBottom - bLen}" fill="none" stroke="#34A853" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Centered QR Code Image -->
+    <image href="${qrDataUrl}" x="${qrX}" y="${qrY}" width="${qrBoxSize}" height="${qrBoxSize}" />
+
+    <!-- Honest Live Google Rating (Optional) -->
+    ${
+      showRating
+        ? `<text x="${width / 2}" y="${bBottom + (isSquare ? 16 : 20)}" text-anchor="middle" class="text" font-size="10.5" font-weight="700" fill="#475569">
+      <tspan fill="#F59E0B">★</tspan> ${rating > 0 ? rating.toFixed(1) : '5.0'} (${totalReviews} review${totalReviews === 1 ? '' : 's'})
+    </text>`
+        : ''
+    }
+
+    <!-- Powered By Text -->
+    <text x="${width / 2}" y="${poweredByY}" text-anchor="middle" class="text" font-size="${isSquare ? 9.5 : 10.5}" font-weight="600" fill="#64748B">
+      Powered By
+    </text>
+
+    <!-- Official BGOS Logo with Icon Lockup -->
+    <g transform="translate(${width / 2 - 47}, ${logoY})">
+      <defs>
+        <linearGradient id="bgosGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#00A859" />
+          <stop offset="100%" stop-color="#0B9042" />
+        </linearGradient>
+      </defs>
+      <!-- Subtle Pill Container -->
+      <rect x="-6" y="-3" width="94" height="28" rx="8" fill="#F8FAFC" stroke="#E2E8F0" />
+      <!-- BGOS Emerald Squircle Icon Mark -->
+      <rect width="22" height="22" rx="6" fill="url(#bgosGrad)" />
+      <!-- White Stylized Growth 'b' & Arrow Mark -->
+      <rect x="5" y="4.5" width="2.4" height="13" rx="1.2" fill="#FFFFFF" />
+      <path d="M 7 11 C 9 9.5, 13.5 10.5, 13.5 13.5 C 13.5 16.5, 9 17.5, 7 16" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" />
+      <path d="M 11.5 7 L 16 4.5 M 16 4.5 L 13 4.5 M 16 4.5 L 16 7.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+      <!-- BGOS Wordmark -->
+      <text x="28" y="16.5" class="title" font-size="14.5" font-weight="900" letter-spacing="-0.3" fill="#0F172A">BGOS</text>
+    </g>
+
+    <!-- Optional Contact Footer -->
+    ${
+      showContact && (phone || address) && !isSquare
+        ? `<text x="${width / 2}" y="${cardY + cardHeight - 12}" text-anchor="middle" class="text" font-size="8.5" fill="#94A3B8">
+      ${escapeXml([phone, address].filter(Boolean).join(' • '))}
+    </text>`
+        : ''
+    }
+  </g>
+</svg>`;
+}
+
+/**
  * Generates print-ready SVG standee markup.
  */
 function generateStandeeSvg(params: {
@@ -73,7 +287,11 @@ function generateStandeeSvg(params: {
   subheadline: string;
   showRating: boolean;
   showContact: boolean;
+  logoUrl?: string | null;
 }): string {
+  if (params.template.id === 'google_grexa_standee') {
+    return generateGrexaGoogleStandeeSvg(params);
+  }
   const {
     template,
     size,
@@ -264,8 +482,10 @@ export async function GET(request: NextRequest) {
       color: { dark: '#0F172A', light: '#FFFFFF' },
     });
 
+    const logoUrl = brandBrain?.brandDetails?.logoUrl || null;
+
     const defaultSvg = generateStandeeSvg({
-      template: TEMPLATES.google_verified,
+      template: TEMPLATES.google_grexa_standee || TEMPLATES.google_verified,
       size: 'a5',
       businessName,
       tagline,
@@ -278,6 +498,7 @@ export async function GET(request: NextRequest) {
       subheadline: 'Your 5-star review helps our local team grow!',
       showRating: true,
       showContact: true,
+      logoUrl,
     });
 
     return NextResponse.json({
@@ -290,6 +511,7 @@ export async function GET(request: NextRequest) {
       reviewUrl,
       qrDataUrl,
       defaultSvg,
+      logoUrl,
       templates: Object.values(TEMPLATES),
       sizes: [
         { id: 'a5', name: 'A5 Table Standee (148 × 210 mm)', width: 148, height: 210 },
@@ -318,14 +540,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const templateId = String(body?.templateId || 'google_verified');
+    const templateId = String(body?.templateId || 'google_grexa_standee');
     const size = (['a5', 'table_tent', 'square_badge'].includes(body?.size) ? body.size : 'a5') as 'a5' | 'table_tent' | 'square_badge';
     const headline = String(body?.headline || 'Scan to Review Us on Google').trim();
     const subheadline = String(body?.subheadline || 'Your feedback helps our team serve you better').trim();
     const showRating = body?.showRating !== false;
     const showContact = body?.showContact !== false;
 
-    const template = TEMPLATES[templateId] || TEMPLATES.google_verified;
+    const template = TEMPLATES[templateId] || TEMPLATES.google_grexa_standee || TEMPLATES.google_verified;
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
@@ -381,6 +603,8 @@ export async function POST(request: NextRequest) {
       color: { dark: template.themeColor, light: '#FFFFFF' },
     });
 
+    const logoUrl = body?.logoUrl !== undefined ? body.logoUrl : (brandBrain?.brandDetails?.logoUrl || null);
+
     const svg = generateStandeeSvg({
       template,
       size,
@@ -395,6 +619,7 @@ export async function POST(request: NextRequest) {
       subheadline,
       showRating,
       showContact,
+      logoUrl,
     });
 
     const html = `<!DOCTYPE html>

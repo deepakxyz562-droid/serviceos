@@ -230,7 +230,37 @@ function buildIdeasForBusiness(
     ];
   }
 
-  // 5. Software / Tech / IT Services
+  // 5. Retail / Market / Grocery / Supermarket / Mart / General Store
+  if (/(market|retail|grocery|supermarket|mart|store|kirana|bazaar|provisions|shopping)/i.test(profileBlob)) {
+    return [
+      {
+        id: 'market-fresh-aisle',
+        title: 'Premium Market Display',
+        icon: 'storefront',
+        prompt: `Vibrant, beautifully organized retail market aisle at ${name}${loc} with stocked shelves, premium products, neat wooden crates, and warm welcoming lighting${topicSuffix}.`,
+      },
+      {
+        id: 'market-special-offer',
+        title: 'Fresh Arrivals & Best Deals',
+        icon: 'local-offer',
+        prompt: `Eye-catching promotional storefront display for ${name}${loc} highlighting top quality ${topOffering}, fresh daily stock, and exclusive customer savings.`,
+      },
+      {
+        id: 'market-customer-experience',
+        title: 'Bustling Shopping Experience',
+        icon: 'shopping-bag',
+        prompt: `Clean, bright, and modern customer shopping atmosphere at ${name}${loc}, friendly staff assisting shoppers, premium retail layout with natural lighting.`,
+      },
+      {
+        id: 'market-festival-specials',
+        title: 'Seasonal Festive Stock',
+        icon: 'sparkles',
+        prompt: `Colorful festive promotional showcase at ${name}${loc} with celebration offers, decorative gift packs, and attractive counter presentation.`,
+      },
+    ];
+  }
+
+  // 6. Software / Tech / IT Services
   if (/(software|it company|tech|developer|code|web development|app development|cloud|saas|digital marketing)/i.test(profileBlob)) {
     return [
       {
@@ -335,7 +365,12 @@ async function gatherContextAndPhotos(
       if (Array.isArray(items)) {
         brandBrainProducts = items
           .map((it: any) => (typeof it?.name === 'string' ? it.name.trim() : ''))
-          .filter(Boolean);
+          .filter((name: string) => {
+            if (!name) return false;
+            // Purge legacy seed items if not explicitly matching the active business
+            if (/AI Google Business Suite|FieserOS/i.test(name)) return false;
+            return true;
+          });
       }
     } catch {}
   }
@@ -403,7 +438,12 @@ async function gatherContextAndPhotos(
       new Set([...parseStringArray(brandProfile?.products), ...brandBrainProducts]),
     ).slice(0, 12),
     services: parseStringArray(brandProfile?.services).slice(0, 12),
-    website: brandProfile?.website || gbpMeta.website || '',
+    website:
+      brandProfile?.website && !brandProfile.website.includes('fieseros.com')
+        ? brandProfile.website
+        : gbpMeta.website && !gbpMeta.website.includes('fieseros.com')
+        ? gbpMeta.website
+        : '',
   };
 
   const seenUrls = new Set<string>();

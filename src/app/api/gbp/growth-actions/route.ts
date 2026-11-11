@@ -288,9 +288,15 @@ export async function POST(request: NextRequest) {
       if (segment === 'reviews') {
         const tenant = await db.tenant.findUnique({
           where: { id: user.tenantId },
-          select: { name: true, settingsJson: true },
+          select: {
+            name: true,
+            settingsJson: true,
+            brandProfile: {
+              select: { businessName: true },
+            },
+          },
         });
-        const businessName = tenant?.name || 'our business';
+        const businessName = tenant?.brandProfile?.businessName || tenant?.name || 'our business';
 
         const reviews = await db.review.findMany({
           where: { tenantId: user.tenantId, source: 'google' },
@@ -398,9 +404,15 @@ export async function POST(request: NextRequest) {
         }
         const tenant = await db.tenant.findUnique({
           where: { id: user.tenantId },
-          select: { name: true },
+          select: {
+            name: true,
+            brandProfile: {
+              select: { businessName: true },
+            },
+          },
         });
-        const replyText = body?.replyText?.trim() || `Thank you so much ${review.authorName || 'valued customer'}! We truly appreciate your support at ${tenant?.name || 'our business'}.`;
+        const businessName = tenant?.brandProfile?.businessName || tenant?.name || 'our business';
+        const replyText = body?.replyText?.trim() || `Thank you so much ${review.authorName || 'valued customer'}! We truly appreciate your support at ${businessName}.`;
 
         const googleAccount = await prepareGoogleAccount(user.tenantId).catch(() => null);
         let publishedToGoogle = false;

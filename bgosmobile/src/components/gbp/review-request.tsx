@@ -397,8 +397,9 @@ export function ReviewRequestSheet({
   const displayShortCtaUrl = useMemo(() => {
     if (queueData?.shortReviewUrl) return queueData.shortReviewUrl;
     if (queueData?.shortRedirectCode) return `https://fieseros.com/r/${queueData.shortRedirectCode}`;
-    return 'https://fieseros.com/r/your-business';
-  }, [queueData?.shortReviewUrl, queueData?.shortRedirectCode]);
+    const slug = cleanBusinessName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'review';
+    return `https://fieseros.com/r/${slug}`;
+  }, [queueData?.shortReviewUrl, queueData?.shortRedirectCode, cleanBusinessName]);
 
   const loadQueue = useCallback(async () => {
     setQueueLoading(true);

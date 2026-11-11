@@ -622,7 +622,12 @@ export default function HomeScreen() {
   }
 
   const activeProfile = discover.data?.activeProfile;
-  const profileName = activeProfile?.name || gbpPlace.data?.place?.title || workspace.data?.name || 'My Business';
+  const profileName =
+    activeProfile?.name ||
+    gbpPlace.data?.place?.title ||
+    gbpPlace.data?.tenantFallback?.name ||
+    workspace.data?.name ||
+    'My Business';
   const greetingText = getGreetingForLocalTime(workspace.data?.locale?.timeZone);
   const firstGreetingName = (user?.name || profileName || 'there').trim().split(/\s+/)[0];
 
@@ -630,7 +635,7 @@ export default function HomeScreen() {
   const place = gbpPlace.data?.place || gbpPlace.data?.tenantFallback;
   const address = place?.address || '';
   const city = extractCityOrLocality(address, (place as any)?.city || (workspace.data as any)?.tenant?.city);
-  const category = place?.category || 'Software company';
+  const category = place?.category || 'Local Business';
   const completionScore = place?.completionScore ?? 76;
 
   const actionIcons = useMemo(

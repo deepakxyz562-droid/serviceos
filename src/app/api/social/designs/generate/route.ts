@@ -4,7 +4,6 @@ import { getAuthUser } from '@/lib/auth';
 import { callAI } from '@/lib/ai-client';
 import {
   validateDesign,
-  createFieserosCampaignDesign,
   createCommercialPosterDesign,
   type MarketingDesign,
 } from '../../../../../../shared/marketing-design';
@@ -101,7 +100,15 @@ export async function POST(request: NextRequest) {
     try {
       design = validateDesign(body.design);
     } catch {
-      design = createFieserosCampaignDesign();
+      design = createCommercialPosterDesign({
+        brand: (typeof body.brand === 'string' && body.brand.trim()) || 'Our Business',
+        headline: (typeof body.headline === 'string' && body.headline.trim()) || 'Special Offer & Quality Service',
+        subtitle: (typeof body.subtitle === 'string' && body.subtitle.trim()) || 'Experience trusted service you can rely on.',
+        badge: (typeof body.badge === 'string' && body.badge.trim()) || 'SPECIAL OFFER',
+        cta: (typeof body.cta === 'string' && body.cta.trim()) || 'Learn More',
+        layout: 'split_card',
+        theme: 'emerald_growth',
+      });
     }
 
     if (typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 4000) {
@@ -189,7 +196,7 @@ export async function POST(request: NextRequest) {
         ? parsed.caption.slice(0, 5000)
         : typeof body.caption === 'string' && body.caption.trim().length > 0
         ? body.caption
-        : 'Transform your workflow with Fieseros AI Assistant.';
+        : `Quality service and exceptional care at ${typeof body.brand === 'string' && body.brand.trim() ? body.brand.trim() : 'our business'}.`;
 
     if (body.mode === 'image_only') {
       next.layers = next.layers.filter((l) => l.type === 'image');

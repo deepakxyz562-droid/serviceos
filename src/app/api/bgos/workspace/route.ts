@@ -52,6 +52,14 @@ export async function GET(request?: NextRequest): Promise<NextResponse> {
         plan: true,
         planStatus: true,
         googlePlaceId: true,
+        brandProfile: {
+          select: {
+            businessName: true,
+            industry: true,
+            website: true,
+            location: true,
+          },
+        },
       },
     });
     if (!tenant) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
@@ -85,6 +93,7 @@ export async function GET(request?: NextRequest): Promise<NextResponse> {
     const effectiveBusinessName =
       (typeof settings.activeGbpTitle === 'string' && settings.activeGbpTitle.trim()) ||
       bookingPageConfig.businessName ||
+      tenant.brandProfile?.businessName ||
       tenant.name;
     const data: BgosWorkspace = {
       name: effectiveBusinessName, mode: settings.bgos?.mode === 'agency' ? 'agency' : 'local',

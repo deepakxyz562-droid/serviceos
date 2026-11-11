@@ -133,7 +133,14 @@ export async function getBrandContext(tenantId: string | null | undefined): Prom
     lines.push(`Service area: ${profile.serviceArea.trim()}`);
   }
   if (profile.website?.trim()) {
-    lines.push(`Website: ${profile.website.trim()}`);
+    const rawSite = profile.website.trim();
+    if (
+      !rawSite.includes('fieseros.com') &&
+      !rawSite.includes('serviceos.com') &&
+      !rawSite.includes('localhost')
+    ) {
+      lines.push(`Website: ${rawSite}`);
+    }
   }
 
   // Target audience

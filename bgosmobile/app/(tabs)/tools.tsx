@@ -805,6 +805,22 @@ export default function ToolsScreen() {
             <Action
               secondary
               disabled={busy}
+              label="Team & Staff Management"
+              icon="groups"
+              onPress={() => router.push('/team-management')}
+            />
+
+            <Action
+              secondary
+              disabled={busy}
+              label="Business Logo & Branding"
+              icon="branding-watermark"
+              onPress={() => router.push('/logo-management')}
+            />
+
+            <Action
+              secondary
+              disabled={busy}
               label="Enable Push Notifications"
               icon="notifications"
               onPress={() =>

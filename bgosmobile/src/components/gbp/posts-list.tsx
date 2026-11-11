@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card, Empty, ErrorNotice, colors, ui } from '../ui';
 import { apiRequest } from '../../lib/api';
 import { getGooglePostUrl } from '../../lib/social-links';
@@ -628,22 +629,32 @@ export function PostDetailModal({
     void Linking.openURL(`tel:${cleanPhone}`);
   };
 
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Math.max(insets.top, 14);
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
         {/* ── App Bar Header (Back Arrow, Title "Post", 3-dots Menu) ── */}
-        <View style={styles.postNavHeader}>
-          <Pressable hitSlop={12} onPress={onClose} style={styles.navIconBtn} accessibilityLabel="Back">
+        <View style={[styles.postNavHeader, { paddingTop: headerPaddingTop, height: 52 + headerPaddingTop }]}>
+          <Pressable
+            hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+            onPress={onClose}
+            style={styles.navIconBtn}
+            accessibilityLabel="Back"
+            accessibilityRole="button"
+          >
             <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
           </Pressable>
 
           <Text style={styles.navTitle}>Post</Text>
 
           <Pressable
-            hitSlop={12}
+            hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
             onPress={() => setMenuVisible(!menuVisible)}
             style={styles.navIconBtn}
             accessibilityLabel="Post options"
+            accessibilityRole="button"
           >
             <MaterialIcons name="more-vert" size={24} color="#0F172A" />
           </Pressable>
@@ -651,7 +662,7 @@ export function PostDetailModal({
 
         {/* ── 3-Dots Dropdown Menu ── */}
         {menuVisible && (
-          <View style={styles.dropdownMenu}>
+          <View style={[styles.dropdownMenu, { top: 54 + headerPaddingTop }]}>
             <Pressable
               onPress={() => {
                 setMenuVisible(false);
@@ -792,6 +803,36 @@ export function PostDetailModal({
               {media ? (
                 <View style={styles.heroImageWrap}>
                   <Image source={{ uri: media }} style={styles.heroImage} resizeMode="cover" />
+                  {(post.logoUrl || post.businessName) && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: 14,
+                        left: 14,
+                        backgroundColor: 'rgba(15, 23, 42, 0.82)',
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: 18,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 7,
+                        maxWidth: '75%',
+                      }}
+                    >
+                      {post.logoUrl ? (
+                        <Image
+                          source={{ uri: post.logoUrl }}
+                          style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFFFFF' }}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <MaterialIcons name="storefront" size={16} color="#009F50" />
+                      )}
+                      <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
+                        {post.businessName || 'Verified Business'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               ) : null}
 
