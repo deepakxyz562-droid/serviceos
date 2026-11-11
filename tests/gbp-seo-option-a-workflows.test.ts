@@ -168,6 +168,7 @@ vi.mock('@/lib/db', () => ({
       }),
     },
     brandProfile: {
+      findUnique: vi.fn(async () => mockTenantRecord.value.brandProfile),
       update: vi.fn(async ({ data }: any) => {
         Object.assign(mockTenantRecord.value.brandProfile, data);
         return mockTenantRecord.value.brandProfile;
@@ -196,9 +197,22 @@ vi.mock('@/lib/db', () => ({
       findMany: vi.fn(async () => [...mockTrackedKeywords.rows]),
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
-    socialPost: { count: vi.fn(async () => 4) },
-    review: { count: vi.fn(async () => 42) },
+    socialPost: {
+      count: vi.fn(async () => 4),
+      findMany: vi.fn(async () => []),
+    },
+    review: {
+      count: vi.fn(async () => 42),
+      findMany: vi.fn(async () => []),
+    },
+    lead: { findMany: vi.fn(async () => []) },
+    invoice: { findMany: vi.fn(async () => []) },
+    gbpScoreSnapshot: { findMany: vi.fn(async () => []) },
     websiteAuditSnapshot: { findFirst: vi.fn(async () => null) },
+    competitor: {
+      findMany: vi.fn(async () => []),
+      upsert: vi.fn(async ({ create }: any) => create),
+    },
     gbpCompetitor: { findMany: vi.fn(async () => []) },
     seoRankScan: { findMany: vi.fn(async () => []), create: vi.fn(async () => ({})) },
     socialAccount: { findFirst: vi.fn(async () => null) },
@@ -393,5 +407,83 @@ describe('Option A GBP SEO Engine (DataForSEO-free)', () => {
     expect(rollbackJson.rolledBack).toBe(true);
     expect(mockTenantRecord.value.publicProfileEnabled).toBe(false);
     expect(mockTenantRecord.value.claimed).toBe(false);
+  });
+
+  it('renders 4-tier Performance Report JSON and HTML cleanly with no category ReferenceError or synthetic fallbacks', async () => {
+    const { GET } = await import('@/app/api/bgos/reports/4-tier/route');
+
+    const jsonRes = await GET(new NextRequest('http://localhost:3000/api/bgos/reports/4-tier?period=last_month'));
+    expect(jsonRes.status).toBe(200);
+    const json = await jsonRes.json();
+    expect(json.businessName).toBe('SmileCare Dental Studio');
+    expect(Array.isArray(json.competitors)).toBe(true);
+    expect(json.competitors).toHaveLength(0);
+    expect(json.geoGrid.points).toHaveLength(0);
+
+    const htmlRes = await GET(
+      new NextRequest('http://localhost:3000/api/bgos/reports/4-tier?period=last_month&format=html'),
+    );
+    expect(htmlRes.status).toBe(200);
+    const html = await htmlRes.text();
+    expect(html).toContain('No local competitor benchmark recorded yet.');
+    expect(html).toContain('No Geo-Grid scan recorded yet for this location.');
+    expect(html).not.toContain('swimming pool');
+    expect(html).not.toContain('Jagdeopath');
+    expect(html).not.toContain('Asoda');
+  });
+
+  it('silently refreshes behind-the-scenes competitor intelligence when Autopilot cache is stale', async () => {
+    const prevSettings = mockTenantRecord.value.settingsJson;
+    const prevFetch = global.fetch;
+
+    try {
+      const parsed = JSON.parse(prevSettings);
+      delete parsed.competitorSpyCache;
+      mockTenantRecord.value.settingsJson = JSON.stringify(parsed);
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          places: [
+            {
+              id: 'places/comp-live-1',
+              displayName: { text: 'Austin Family Dentistry' },
+              formattedAddress: '200 Congress Ave, Austin, TX',
+              rating: 4.9,
+              userRatingCount: 150,
+              location: { latitude: 30.27, longitude: -97.74 },
+              primaryType: 'dentist',
+              primaryTypeDisplayName: { text: 'Dentist' },
+              types: ['dentist', 'pediatric_dentist'],
+              goodForGroups: true,
+              reviews: [
+                {
+                  text: { text: 'Best same day crown and gentle emergency tooth extraction in Austin.' },
+                  rating: 5,
+                },
+              ],
+            },
+          ],
+        }),
+      }) as unknown as typeof fetch;
+
+      const { GET } = await import('@/app/api/gbp/auto-optimize/route');
+      const { getTenantSeoContext } = await import('@/lib/gbp/seo-context');
+      const { db } = await import('@/lib/db');
+
+      const res = await GET(new NextRequest('http://localhost:3000/api/gbp/auto-optimize'));
+      expect(res.status).toBe(200);
+      const json = await res.json();
+
+      expect((db.competitor as any).upsert).toHaveBeenCalled();
+      const catStep = json.actions.find((a: any) => a.id === 'categories');
+      expect(catStep?.previewData?.suggestedCategories).toContain('Pediatric Dentist');
+
+      const seoCtx = await getTenantSeoContext('tenant-opt-a');
+      expect(seoCtx?.competitorMissingCategories).toContain('Pediatric Dentist');
+    } finally {
+      mockTenantRecord.value.settingsJson = prevSettings;
+      global.fetch = prevFetch;
+    }
   });
 });

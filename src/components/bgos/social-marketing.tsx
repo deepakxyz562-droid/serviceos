@@ -661,20 +661,8 @@ interface CompetitorRow {
   source?: string;
 }
 
-interface CompetitorSpyInsights {
-  queryUsed: string;
-  locationUsed: string;
-  selfMapsRank: number | null;
-  reviewsNeededForTop3: number;
-  missingCategories: Array<{ category: string; competitorCount: number; percentage: number }>;
-  missingAttributes: Array<{ key: string; label: string; competitorCount: number }>;
-  suggestedKeywordsFromReviews: string[];
-  whyTopRank: string[];
-}
-
 interface CompetitorsResponse {
   competitors?: CompetitorRow[];
-  spyInsights?: CompetitorSpyInsights | null;
   source?: string;
   migrationRequired?: boolean;
   placesUnavailable?: boolean;
@@ -1570,50 +1558,21 @@ function MarketingTrackerCardContent({
   );
 }
 
-/** Competitor Analysis — real rows from /api/gbp/competitors (no fake data). */
+/** Local Market Benchmark — read-only peers from Google Places (Autopilot uses gaps behind the scenes). */
 function CompetitorAnalysisCard({
   data,
   loading,
   refreshing,
   onRefresh,
-  onSpyKeyword,
 }: {
   data: CompetitorsResponse | null;
   loading: boolean;
   refreshing: boolean;
   onRefresh: () => void;
-  onSpyKeyword?: (keyword: string) => void;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [gapDialogOpen, setGapDialogOpen] = useState(false);
-  const [spyInput, setSpyInput] = useState('');
-  const [applyingCat, setApplyingCat] = useState<string | null>(null);
   const rows = useMemo(() => (Array.isArray(data?.competitors) ? data!.competitors : []), [data]);
-
-  const handleCopyAdvantage = async (opts: { key: string; addCategories?: string[]; addAttributes?: string[] }) => {
-    setApplyingCat(opts.key);
-    try {
-      const res = await authFetch('/api/gbp/competitors/apply-advantage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          addCategories: opts.addCategories,
-          addAttributes: opts.addAttributes,
-          pushToGoogle: true,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || 'Could not apply competitor advantage');
-      toast.success(
-        `Added ${opts.key}${json?.syncedToGoogle ? ' & synced to Google Business Profile!' : ' to BGOS.'}`,
-      );
-      onRefresh();
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to apply competitor advantage');
-    } finally {
-      setApplyingCat(null);
-    }
-  };
 
   return (
     <div className="lg:col-span-4 bg-card border border-border rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
@@ -1645,39 +1604,13 @@ function CompetitorAnalysisCard({
         </div>
       </div>
 
-      <div className="py-2 space-y-2">
-        <div className="flex items-center justify-between gap-1.5 flex-wrap">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-[10px]">
-            <span aria-hidden>🎯</span> COMPETITOR SPY &bull; TOP LOCAL PACK
-          </span>
-          {data?.spyInsights?.selfMapsRank != null && (
-            <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 font-bold text-[10px]">
-              Your Rank #{data.spyInsights.selfMapsRank}
-            </span>
-          )}
-        </div>
-        {onSpyKeyword && (
-          <div className="flex items-center gap-1.5">
-            <Input
-              placeholder="Spy keyword (e.g. emergency plumber)"
-              value={spyInput}
-              onChange={(e) => setSpyInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onSpyKeyword(spyInput.trim());
-              }}
-              className="h-7 text-[11px] flex-1"
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={refreshing}
-              onClick={() => onSpyKeyword(spyInput.trim())}
-              className="h-7 px-2.5 text-[10px] font-bold shrink-0"
-            >
-              Spy
-            </Button>
-          </div>
-        )}
+      <div className="py-1.5 flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+          Local Market Benchmark &bull; Within 5 km
+        </span>
+        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold">
+          Synced for Autopilot
+        </span>
       </div>
 
       {/* Column headers */}
@@ -1808,28 +1741,6 @@ function CompetitorAnalysisCard({
           })}
         </div>
       )}
-
-      {data?.spyInsights?.missingCategories?.length ? (
-        <div className="mt-2 pt-2 border-t border-border/50 space-y-1.5">
-          <p className="text-[10px] font-bold text-foreground">Missing Competitor Categories (1-Click Copy)</p>
-          <div className="flex flex-wrap gap-1">
-            {data.spyInsights.missingCategories.slice(0, 4).map((cat) => (
-              <button
-                key={cat.category}
-                type="button"
-                disabled={Boolean(applyingCat)}
-                onClick={() => void handleCopyAdvantage({ key: cat.category, addCategories: [cat.category] })}
-                className="px-2 py-0.5 rounded-md border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[10px] font-bold text-emerald-800"
-              >
-                {applyingCat === cat.category ? 'Copying…' : `+ ${cat.category} (${cat.percentage}%)`}
-              </button>
-            ))}
-          </div>
-          {data.spyInsights.whyTopRank[0] && (
-            <p className="text-[10px] text-muted-foreground leading-snug">{data.spyInsights.whyTopRank[0]}</p>
-          )}
-        </div>
-      ) : null}
 
       {data?.placesUnavailable && rows.length > 0 && (
         <p className="text-[10px] text-muted-foreground text-center pt-2 border-t border-border/40">
@@ -2263,15 +2174,11 @@ export function SocialMediaView({
     }
   }, []);
 
-  const fetchCompetitors = useCallback(async (refresh = false, keyword?: string) => {
-    if (refresh || keyword) setCompetitorsRefreshing(true);
+  const fetchCompetitors = useCallback(async (refresh = false) => {
+    if (refresh) setCompetitorsRefreshing(true);
     else setCompetitorsLoading(true);
     try {
-      const qs = new URLSearchParams();
-      if (refresh || keyword) qs.set('refresh', '1');
-      if (keyword?.trim()) qs.set('keyword', keyword.trim());
-      const query = qs.toString();
-      const res = await authFetch(`/api/gbp/competitors${query ? `?${query}` : ''}`);
+      const res = await authFetch(`/api/gbp/competitors${refresh ? '?refresh=1' : ''}`);
       if (res.ok) {
         setCompetitorsData(await res.json());
       }
@@ -4061,7 +3968,6 @@ export function SocialMediaView({
               loading={competitorsLoading}
               refreshing={competitorsRefreshing}
               onRefresh={() => fetchCompetitors(true)}
-              onSpyKeyword={(kw) => void fetchCompetitors(true, kw)}
             />
           </div>
 

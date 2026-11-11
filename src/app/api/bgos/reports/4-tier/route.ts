@@ -191,7 +191,7 @@ export async function GET(request: NextRequest) {
       }).catch(() => []),
     ]);
 
-    const rawPhone = (tenant as any)?.phone || tenant?.brandProfile?.contactPhone || user?.phone || null;
+    const rawPhone = (tenant as any)?.phone || (tenant?.brandProfile as any)?.contactPhone || user?.phone || null;
     const businessPhone = rawPhone ? String(rawPhone) : '';
     const storeId = tenant?.publicSlug || (tenantId ? `#${tenantId.slice(-4).toUpperCase()}` : '');
     const appVersion = 'BGOS v2.0';
@@ -272,7 +272,9 @@ export async function GET(request: NextRequest) {
 
     const rawCity = (tenant?.city || tenant?.brandProfile?.location || '').trim();
     const isSeedCity = rawCity.toLowerCase() === 'dallas' && !extractedGoogleCity;
-    const effectiveCity = extractedGoogleCity || (!isSeedCity ? rawCity : '') || 'Patna';
+    const effectiveCity = extractedGoogleCity || (!isSeedCity ? rawCity : '');
+    const safeCategory = effectiveCategory.trim() || 'local business';
+    const citySuffix = effectiveCity ? ` in ${effectiveCity}` : ' near me';
 
     const curProfileViews = searchImpressions + mapsImpressions;
     // Honest previous GBP views comparison (using real snapshots if available, or 0)
@@ -419,7 +421,7 @@ export async function GET(request: NextRequest) {
       })
       .map((k) => ({
         keyword: k.keyword,
-        volume: k.searchVolume || k.score || 0,
+        volume: (k as any).searchVolume || k.score || 0,
         defaultUsed: 1,
       }));
 
@@ -439,27 +441,29 @@ export async function GET(request: NextRequest) {
       const isTechOrSoftware =
         !isMarketOrRetail &&
         (catLower.includes('software') || (catLower.includes('it') && !catLower.includes('market')) || catLower.includes('tech') || catLower.includes('consult'));
-      const locality = extractedLocalities[0] || 'Jagdeopath';
-      const locality2 = extractedLocalities[1] || 'Murlichak';
+      const locality = extractedLocalities[0] || '';
+      const locality2 = extractedLocalities[1] || '';
 
       if (isMarketOrRetail) {
         const term = effectiveCategory && !isSeedIndustry ? effectiveCategory.toLowerCase() : 'supermarket';
-        dynamicList.push({ keyword: `best ${term} in ${effectiveCity}`, volume: 500, defaultUsed: 2 });
+        dynamicList.push({ keyword: `best ${term}${citySuffix}`, volume: 500, defaultUsed: 2 });
         dynamicList.push({ keyword: `${term} near me`, volume: 500, defaultUsed: 2 });
-        dynamicList.push({ keyword: `top rated ${term} in ${effectiveCity}`, volume: 300, defaultUsed: 1 });
-        dynamicList.push({ keyword: `grocery and retail store in ${effectiveCity}`, volume: 250, defaultUsed: 1 });
+        dynamicList.push({ keyword: `top rated ${term}${citySuffix}`, volume: 300, defaultUsed: 1 });
+        dynamicList.push({ keyword: `grocery and retail store${citySuffix}`, volume: 250, defaultUsed: 1 });
         if (locality) {
           dynamicList.push({ keyword: `${term} near ${locality}`, volume: 150, defaultUsed: 1 });
         }
         if (locality2) {
           dynamicList.push({ keyword: `${term} near ${locality2}`, volume: 100, defaultUsed: 1 });
         }
-        dynamicList.push({ keyword: `daily essentials store ${effectiveCity}`, volume: 200, defaultUsed: 1 });
+        if (effectiveCity) {
+          dynamicList.push({ keyword: `daily essentials store ${effectiveCity}`, volume: 200, defaultUsed: 1 });
+        }
       } else if (isTechOrSoftware) {
         dynamicList.push({ keyword: 'best crm software for small businesses', volume: 500, defaultUsed: 2 });
         dynamicList.push({ keyword: 'software development company', volume: 500, defaultUsed: 2 });
-        dynamicList.push({ keyword: `software development company in ${effectiveCity}`, volume: 100, defaultUsed: 2 });
-        dynamicList.push({ keyword: `business software solutions ${effectiveCity}`, volume: 100, defaultUsed: 2 });
+        dynamicList.push({ keyword: `software development company${citySuffix}`, volume: 100, defaultUsed: 2 });
+        dynamicList.push({ keyword: `business software solutions${effectiveCity ? ` ${effectiveCity}` : ''}`, volume: 100, defaultUsed: 2 });
         dynamicList.push({ keyword: 'sales software for small business', volume: 500, defaultUsed: 1 });
         if (locality) {
           dynamicList.push({ keyword: `software company near ${locality}`, volume: 80, defaultUsed: 1 });
@@ -469,15 +473,15 @@ export async function GET(request: NextRequest) {
         }
       } else {
         // Industry-specific for Bakery / Cake / Pool / Hardware / Retail / etc.
-        dynamicList.push({ keyword: `best ${effectiveCategory.toLowerCase()} in ${effectiveCity}`, volume: 500, defaultUsed: 2 });
-        dynamicList.push({ keyword: `${effectiveCategory.toLowerCase()} services in ${effectiveCity}`, volume: 300, defaultUsed: 2 });
+        dynamicList.push({ keyword: `best ${safeCategory.toLowerCase()}${citySuffix}`, volume: 500, defaultUsed: 2 });
+        dynamicList.push({ keyword: `${safeCategory.toLowerCase()} services${citySuffix}`, volume: 300, defaultUsed: 2 });
         if (locality) {
-          dynamicList.push({ keyword: `${effectiveCategory.toLowerCase()} near ${locality}`, volume: 150, defaultUsed: 1 });
+          dynamicList.push({ keyword: `${safeCategory.toLowerCase()} near ${locality}`, volume: 150, defaultUsed: 1 });
         }
         if (locality2) {
-          dynamicList.push({ keyword: `${effectiveCategory.toLowerCase()} near ${locality2}`, volume: 100, defaultUsed: 1 });
+          dynamicList.push({ keyword: `${safeCategory.toLowerCase()} near ${locality2}`, volume: 100, defaultUsed: 1 });
         }
-        dynamicList.push({ keyword: `top rated ${effectiveCategory.toLowerCase()} near me`, volume: 450, defaultUsed: 1 });
+        dynamicList.push({ keyword: `top rated ${safeCategory.toLowerCase()} near me`, volume: 450, defaultUsed: 1 });
       }
 
       candidateKeywords = dynamicList.slice(0, 7);
@@ -621,7 +625,7 @@ Write exactly 2 concise, executive sentences for the owner. Highlight one growth
       ? Math.round(((cur8WkReviews.length - prev8WkReviews.length) / prev8WkReviews.length) * 100)
       : cur8WkReviews.length > 0 ? 100 : -100;
 
-    const indLower = (category || '').toLowerCase();
+    const indLower = (effectiveCategory || '').toLowerCase();
     const industryAvg =
       indLower.includes('food') || indLower.includes('restaurant') || indLower.includes('cafe') ? 14 :
       indLower.includes('supermarket') || indLower.includes('grocery') || indLower.includes('retail') || indLower.includes('market') ? 12 :
@@ -660,7 +664,7 @@ Write exactly 2 concise, executive sentences for the owner. Highlight one growth
       directions: [0, 0, 0, 0, 0, curDirections],
     };
 
-    // Stored competitors or dynamic cluster
+    // Stored competitors from Google Places (no synthetic competitor rows)
     const dbCompetitors = await db.competitor.findMany({
       where: { tenantId: user.tenantId },
       orderBy: [{ distanceKm: 'asc' }, { rating: 'desc' }],
@@ -670,53 +674,67 @@ Write exactly 2 concise, executive sentences for the owner. Highlight one growth
     const selfCompetitor = {
       id: 'self',
       name: businessName,
-      rating: avgRating || 4.8,
-      reviewCount: totalReviews || 54,
+      rating: totalReviews > 0 ? avgRating : 0,
+      reviewCount: totalReviews,
       distanceKm: 0,
       rank: 1.5,
       isSelf: true,
     };
 
-    const fallbackComps = [
-      { id: 'c1', name: `Metro ${category || 'Local'} Hub`, rating: 4.7, reviewCount: 34, distanceKm: 1.2, rank: 4.5 },
-      { id: 'c2', name: `City ${category || 'Store'} Complex`, rating: 4.1, reviewCount: 44, distanceKm: 2.1, rank: 4.9 },
-      { id: 'c3', name: `Prime ${category || 'Trade'} Center`, rating: 4.3, reviewCount: 103, distanceKm: 2.8, rank: 5.2 },
-      { id: 'c4', name: `Express Local Services`, rating: 5.0, reviewCount: 3, distanceKm: 3.4, rank: 6.0 },
-    ];
+    const competitorsList =
+      dbCompetitors.length > 0
+        ? [
+            selfCompetitor,
+            ...dbCompetitors.map((c, idx) => ({
+              id: c.id,
+              name: c.name,
+              rating: c.rating || 0,
+              reviewCount: c.reviewCount || 0,
+              distanceKm: c.distanceKm || 1.0,
+              rank: Number((3.5 + idx * 0.8).toFixed(1)),
+              isSelf: false,
+            })),
+          ]
+        : [];
 
-    const competitorsList = [
-      selfCompetitor,
-      ...(dbCompetitors.length > 0
-        ? dbCompetitors.map((c, idx) => ({
-            id: c.id,
-            name: c.name,
-            rating: c.rating || 4.5,
-            reviewCount: c.reviewCount || 0,
-            distanceKm: c.distanceKm || 1.0,
-            rank: Number((3.5 + idx * 0.8).toFixed(1)),
-            isSelf: false,
+    const rankedKeywords = trackedKeywords.length > 0
+      ? trackedKeywords
+          .filter((k) => k?.keyword)
+          .slice(0, 5)
+          .map((k) => ({
+            keyword: k.keyword,
+            rank: typeof k.mapsRank === 'number' ? k.mapsRank : Number(k.position || 0),
+            rankChange: 0,
           }))
-        : fallbackComps),
-    ];
+      : actionReport.keywordsUsed.slice(0, 5).map((k, idx) => ({
+          keyword: k.keyword,
+          rank: Number((1.2 + idx * 0.4).toFixed(1)),
+          rankChange: 0,
+        }));
 
-    const rankedKeywords = actionReport.keywordsUsed.slice(0, 5).map((k, idx) => ({
-      keyword: k.keyword,
-      rank: Number((1.2 + idx * 0.4).toFixed(1)),
-      rankChange: idx === 1 ? -0.2 : idx === 2 ? -0.2 : idx === 4 ? -0.1 : 0,
-    }));
+    let parsedReportSettings: Record<string, any> = {};
+    try {
+      parsedReportSettings = JSON.parse(tenant?.settingsJson || '{}') || {};
+    } catch {}
+    const latestRealGridScan = Array.isArray(parsedReportSettings?.seoGeoGridScans)
+      ? parsedReportSettings.seoGeoGridScans[0]
+      : null;
 
-    const geoGrid = {
-      keyword: rankedKeywords[0]?.keyword || `best ${category || 'services'} near me`,
-      lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      avgRank: 1.4,
-      points: [
-        { row: 0, col: 0, rank: 1 }, { row: 0, col: 1, rank: 1 }, { row: 0, col: 2, rank: 1 }, { row: 0, col: 3, rank: 1 }, { row: 0, col: 4, rank: 1 },
-        { row: 1, col: 0, rank: 1 }, { row: 1, col: 1, rank: 1 }, { row: 1, col: 2, rank: 1 }, { row: 1, col: 3, rank: 2 }, { row: 1, col: 4, rank: 1 },
-        { row: 2, col: 0, rank: 1 }, { row: 2, col: 1, rank: 1 }, { row: 2, col: 2, rank: 10, isCenter: true }, { row: 2, col: 3, rank: 1 }, { row: 2, col: 4, rank: 1 },
-        { row: 3, col: 0, rank: 1 }, { row: 3, col: 1, rank: 1 }, { row: 3, col: 2, rank: 1 }, { row: 3, col: 3, rank: 1 }, { row: 3, col: 4, rank: 1 },
-        { row: 4, col: 0, rank: 1 }, { row: 4, col: 1, rank: 1 }, { row: 4, col: 2, rank: 1 }, { row: 4, col: 3, rank: 1 }, { row: 4, col: 4, rank: 2 },
-      ],
-    };
+    const geoGrid = latestRealGridScan
+      ? {
+          keyword: String(latestRealGridScan.keyword || rankedKeywords[0]?.keyword || ''),
+          lastUpdated: latestRealGridScan.date
+            ? new Date(latestRealGridScan.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          avgRank: typeof latestRealGridScan.avgRank === 'number' ? latestRealGridScan.avgRank : 0,
+          points: Array.isArray(latestRealGridScan.points) ? latestRealGridScan.points : [],
+        }
+      : {
+          keyword: rankedKeywords[0]?.keyword || (effectiveCategory ? `best ${effectiveCategory.toLowerCase()} near me` : ''),
+          lastUpdated: 'Not scanned yet',
+          avgRank: 0,
+          points: [] as Array<{ row: number; col: number; rank: number; isCenter?: boolean }>,
+        };
 
     // ── Printable HTML Route ──
     const format = searchParams.get('format');
@@ -876,26 +894,13 @@ function generatePrintableReportHtml(data: {
     deltaPct8Weeks: -100,
   };
 
-  const comps = data.competitors || [
-    { id: 'self', name: data.businessName, rating: data.reputationSummary.avgRating || 4.8, reviewCount: data.reputationSummary.totalReviews || 54, rank: 1.5, isSelf: true },
-    { id: 'c1', name: 'Asoda swimming pool', rating: 4.7, reviewCount: 34, rank: 4.5 },
-    { id: 'c2', name: 'Tomar Farmhouse', rating: 4.1, reviewCount: 44, rank: 4.9 },
-    { id: 'c3', name: 'dadayara swimming pool', rating: 4.3, reviewCount: 103, rank: 5.2 },
-    { id: 'c4', name: 'Sirohi swimming pool', rating: 5.0, reviewCount: 3, rank: 6.0 },
-  ];
-
-  const kwList = data.rankedKeywords || [
-    { keyword: 'swimming pool farm house near me', rank: 1.4, rankChange: 0 },
-    { keyword: 'swimming pool near me', rank: 1.6, rankChange: -0.2 },
-    { keyword: 'private swimming pool near me', rank: 3.0, rankChange: -0.2 },
-    { keyword: 'family swimming pool near me', rank: 1.2, rankChange: 0 },
-    { keyword: 'farmhouse near me', rank: 2.5, rankChange: -0.1 },
-  ];
+  const comps = data.competitors || [];
+  const kwList = data.rankedKeywords || [];
 
   const grid = data.geoGrid || {
-    keyword: kwList[0]?.keyword || 'swimming pool farm house near me',
-    lastUpdated: 'Nov 11, 2026',
-    avgRank: 1.4,
+    keyword: kwList[0]?.keyword || '',
+    lastUpdated: 'Not scanned yet',
+    avgRank: 0,
     points: [],
   };
 
@@ -1060,17 +1065,21 @@ function generatePrintableReportHtml(data: {
       </tr>
     </thead>
     <tbody>
-      ${comps.map((c) => {
-        const isSelf = c.isSelf;
-        return `<tr class="${isSelf ? 'row-self' : ''}">
+      ${comps.length === 0
+        ? `<tr><td colspan="3" style="text-align: center; color: #64748B; padding: 14px;">No local competitor benchmark recorded yet.</td></tr>`
+        : comps.map((c) => {
+            const isSelf = c.isSelf;
+            const ratingLabel = typeof c.rating === 'number' && c.rating > 0 ? `${c.rating.toFixed(1)} ★` : '—';
+            const rankLabel = typeof c.rank === 'number' && c.rank > 0 ? c.rank.toFixed(1) : '—';
+            return `<tr class="${isSelf ? 'row-self' : ''}">
           <td>
             <div style="font-weight: 700;">${c.name} ${isSelf ? '(Your Business)' : ''}</div>
-            <div style="font-size: 11px; color: #64748B;">${(c.rating || 4.5).toFixed(1)} ★</div>
+            <div style="font-size: 11px; color: #64748B;">${ratingLabel}</div>
           </td>
-          <td style="text-align: center; font-weight: 800; color: ${isSelf ? '#B45309' : '#059669'};">${c.reviewCount || 0}</td>
-          <td style="text-align: right; font-weight: 800; color: ${isSelf ? '#B45309' : '#0F172A'};">${(c.rank || 1.5).toFixed(1)}</td>
+          <td style="text-align: center; font-weight: 800; color: ${isSelf ? '#B45309' : '#059669'};">${c.reviewCount ?? 0}</td>
+          <td style="text-align: right; font-weight: 800; color: ${isSelf ? '#B45309' : '#0F172A'};">${rankLabel}</td>
         </tr>`;
-      }).join('')}
+          }).join('')}
     </tbody>
   </table>
 
@@ -1089,46 +1098,50 @@ function generatePrintableReportHtml(data: {
       </tr>
     </thead>
     <tbody>
-      ${kwList.map((k, idx) => {
-        const isNeutral = k.rankChange === 0;
-        const isDown = k.rankChange < 0;
-        const changeHtml = isNeutral
-          ? '<span style="background:#F1F5F9;padding:2px 8px;border-radius:4px;font-weight:700;color:#64748B;">~</span>'
-          : `<span class="delta-badge ${isDown ? 'delta-down' : 'delta-up'}">${isDown ? '▼' : '▲'} ${Math.abs(k.rankChange).toFixed(1)}</span>`;
-        return `<tr>
+      ${kwList.length === 0
+        ? `<tr><td colspan="3" style="text-align: center; color: #64748B; padding: 14px;">No keyword rank checks recorded yet.</td></tr>`
+        : kwList.map((k, idx) => {
+            const isNeutral = k.rankChange === 0;
+            const isDown = k.rankChange < 0;
+            const changeHtml = isNeutral
+              ? '<span style="background:#F1F5F9;padding:2px 8px;border-radius:4px;font-weight:700;color:#64748B;">~</span>'
+              : `<span class="delta-badge ${isDown ? 'delta-down' : 'delta-up'}">${isDown ? '▼' : '▲'} ${Math.abs(k.rankChange).toFixed(1)}</span>`;
+            const rankStr = typeof k.rank === 'number' && k.rank > 0 ? k.rank.toFixed(1) : '—';
+            return `<tr>
           <td style="font-weight: 600;">${idx + 1} ${k.keyword}</td>
-          <td style="text-align: center; font-weight: 800;">${k.rank.toFixed(1)}</td>
+          <td style="text-align: center; font-weight: 800;">${rankStr}</td>
           <td style="text-align: right;">${changeHtml}</td>
         </tr>`;
-      }).join('')}
+          }).join('')}
     </tbody>
   </table>
 
   <!-- SECTION 5: RANK BY LOCATION (5X5 GEO-GRID) -->
   <div class="section-title">
     <span>Rank by Location</span>
-    <span class="section-sub">Keyword: ${grid.keyword} • Last updated on ${grid.lastUpdated}</span>
+    <span class="section-sub">Keyword: ${grid.keyword || 'Not scanned yet'} • Last updated on ${grid.lastUpdated || 'N/A'}</span>
   </div>
 
   <div class="card" style="padding: 16px; margin-bottom: 24px;">
-    <div style="font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 10px;">5×5 GPS Local Grid Scan (Center Node = Your Location)</div>
+    ${(!grid.points || grid.points.length === 0)
+      ? `<div style="text-align: center; padding: 18px; color: #64748B; font-size: 12px;">No Geo-Grid scan recorded yet for this location.</div>`
+      : `<div style="font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 10px;">5×5 GPS Local Grid Scan (Center Node = Your Location)</div>
     <div class="geo-matrix">
       ${[0, 1, 2, 3, 4].map((row) =>
         [0, 1, 2, 3, 4].map((col) => {
-          const pt = grid.points?.find((p) => p.row === row && p.col === col) || {
-            row,
-            col,
-            rank: (row === 2 && col === 2) ? 10 : 1,
-            isCenter: row === 2 && col === 2,
-          };
-          const isCenter = pt.isCenter || (row === 2 && col === 2);
+          const pt = grid.points?.find((p) => p.row === row && p.col === col);
+          const isCenter = pt?.isCenter || (row === 2 && col === 2);
+          const rankVal = typeof pt?.rank === 'number' && pt.rank > 0 ? pt.rank : null;
           if (isCenter) {
-            return `<div class="geo-pin pin-center" title="Your Location">${pt.rank}</div>`;
+            return `<div class="geo-pin pin-center" title="Your Location">${rankVal ?? '—'}</div>`;
           }
-          return `<div class="geo-pin ${pt.rank <= 3 ? 'pin-top' : 'pin-mid'}">${pt.rank}</div>`;
+          if (rankVal === null) {
+            return `<div class="geo-pin pin-mid">—</div>`;
+          }
+          return `<div class="geo-pin ${rankVal <= 3 ? 'pin-top' : 'pin-mid'}">${rankVal}</div>`;
         }).join('')
       ).join('')}
-    </div>
+    </div>`}
   </div>
 
   <!-- SECTION 6: ACTIONS & KEYWORDS SUMMARY -->

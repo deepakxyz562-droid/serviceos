@@ -23,17 +23,10 @@ interface CompetitorItem {
   isSelf?: boolean;
 }
 
-interface CompetitorSpySummary {
-  reviewsNeededForTop3: number;
-  topAvgReviews: number;
-  missingCategories: Array<{ category: string; competitorCount: number; percentage: number }>;
-  whyTopRank: string[];
-}
-
 interface KeywordRankItem {
   keyword: string;
-  rank: number;
-  rankChange: number;
+  rank: number | null;
+  rankChange?: number | null;
 }
 
 interface GeoGridPoint {
@@ -284,7 +277,7 @@ function GeoGridHeatmapMap({
         }}
       >
         <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E293B' }} numberOfLines={1}>
-          Keyword: {keyword}
+          {keyword ? `Keyword: ${keyword}` : 'Local Geo-Grid Map'}
         </Text>
       </View>
 
@@ -339,110 +332,143 @@ function GeoGridHeatmapMap({
           />
         </View>
 
-        {/* Floating Timestamp Badge (top left) */}
-        <View
-          style={{
-            position: 'absolute',
-            top: 12,
-            left: 12,
-            backgroundColor: 'rgba(15, 23, 42, 0.88)',
-            paddingHorizontal: 10,
-            paddingVertical: 5,
-            borderRadius: 8,
-            zIndex: 10,
-          }}
-        >
-          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
-            Last updated on {lastUpdated}
-          </Text>
-        </View>
-
-        {/* 5x5 Matrix Grid of Pins */}
-        <View
-          style={{
-            position: 'absolute',
-            inset: 0,
-            paddingTop: 44,
-            paddingBottom: 20,
-            paddingHorizontal: 20,
-            justifyContent: 'space-between',
-            zIndex: 5,
-          }}
-        >
-          {[0, 1, 2, 3, 4].map((row) => (
-            <View key={row} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              {[0, 1, 2, 3, 4].map((col) => {
-                const pt = points.find((p) => p.row === row && p.col === col) || {
-                  row,
-                  col,
-                  rank: (row === 2 && col === 2) ? 10 : 1,
-                  isCenter: row === 2 && col === 2,
-                };
-                const isCenter = pt.isCenter || (row === 2 && col === 2);
-
-                if (isCenter) {
-                  return (
-                    <View key={col} style={{ alignItems: 'center', zIndex: 12 }}>
-                      <View
-                        style={{
-                          width: 26,
-                          height: 26,
-                          borderRadius: 13,
-                          backgroundColor: '#F59E0B',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderWidth: 2,
-                          borderColor: '#FFFFFF',
-                          shadowColor: '#000',
-                          shadowOpacity: 0.25,
-                          shadowRadius: 3,
-                          shadowOffset: { width: 0, height: 1 },
-                        }}
-                      >
-                        <Text style={{ fontSize: 11.5, fontWeight: '900', color: '#FFFFFF' }}>
-                          {pt.rank}
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'center', marginTop: 1 }}>
-                        <MaterialIcons name="navigation" size={10} color="#0F172A" />
-                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0F172A' }}>
-                          Your Location
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                }
-
-                // Regular Grid Node
-                const isTop = pt.rank <= 3;
-                return (
-                  <View key={col} style={{ alignItems: 'center' }}>
-                    <View
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: 12,
-                        backgroundColor: isTop ? '#22C55E' : '#EAB308',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: 1.5,
-                        borderColor: '#FFFFFF',
-                        shadowColor: '#000',
-                        shadowOpacity: 0.15,
-                        shadowRadius: 2,
-                        shadowOffset: { width: 0, height: 1 },
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
-                        {pt.rank}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
+        {points.length === 0 ? (
+          <View
+            style={{
+              flex: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 24,
+              zIndex: 5,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.94)',
+                borderRadius: 14,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                alignItems: 'center',
+                gap: 6,
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+              }}
+            >
+              <MaterialIcons name="location-searching" size={22} color="#2563EB" />
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textAlign: 'center' }}>
+                No Geo-Grid scan recorded yet
+              </Text>
+              <Text style={{ fontSize: 11.5, color: '#64748B', textAlign: 'center', lineHeight: 16 }}>
+                Run AI Growth Autopilot to scan local search rankings around your business.
+              </Text>
             </View>
-          ))}
-        </View>
+          </View>
+        ) : (
+          <>
+            {/* Floating Timestamp Badge (top left) */}
+            {lastUpdated ? (
+              <View
+                style={{
+                  position: 'absolute',
+                  top: 12,
+                  left: 12,
+                  backgroundColor: 'rgba(15, 23, 42, 0.88)',
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 8,
+                  zIndex: 10,
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
+                  Last updated on {lastUpdated}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* 5x5 Matrix Grid of Pins */}
+            <View
+              style={{
+                position: 'absolute',
+                inset: 0,
+                paddingTop: 44,
+                paddingBottom: 20,
+                paddingHorizontal: 20,
+                justifyContent: 'space-between',
+                zIndex: 5,
+              }}
+            >
+              {[0, 1, 2, 3, 4].map((row) => (
+                <View key={row} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  {[0, 1, 2, 3, 4].map((col) => {
+                    const pt = points.find((p) => p.row === row && p.col === col);
+                    const isCenter = pt?.isCenter || (row === 2 && col === 2);
+                    const rankVal = typeof pt?.rank === 'number' && pt.rank > 0 ? pt.rank : null;
+
+                    if (isCenter) {
+                      return (
+                        <View key={col} style={{ alignItems: 'center', zIndex: 12 }}>
+                          <View
+                            style={{
+                              width: 26,
+                              height: 26,
+                              borderRadius: 13,
+                              backgroundColor: '#F59E0B',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderWidth: 2,
+                              borderColor: '#FFFFFF',
+                              shadowColor: '#000',
+                              shadowOpacity: 0.25,
+                              shadowRadius: 3,
+                              shadowOffset: { width: 0, height: 1 },
+                            }}
+                          >
+                            <Text style={{ fontSize: 11.5, fontWeight: '900', color: '#FFFFFF' }}>
+                              {rankVal ?? '—'}
+                            </Text>
+                          </View>
+                          <View style={{ alignItems: 'center', marginTop: 1 }}>
+                            <MaterialIcons name="navigation" size={10} color="#0F172A" />
+                            <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0F172A' }}>
+                              Your Location
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    }
+
+                    // Regular Grid Node
+                    const isTop = rankVal !== null && rankVal <= 3;
+                    return (
+                      <View key={col} style={{ alignItems: 'center' }}>
+                        <View
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 12,
+                            backgroundColor: rankVal === null ? '#94A3B8' : isTop ? '#22C55E' : '#EAB308',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1.5,
+                            borderColor: '#FFFFFF',
+                            shadowColor: '#000',
+                            shadowOpacity: 0.15,
+                            shadowRadius: 2,
+                            shadowOffset: { width: 0, height: 1 },
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
+                            {rankVal ?? '—'}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          </>
+        )}
       </View>
     </View>
   );
@@ -484,27 +510,8 @@ export function PerformancePanel({
   const competitorsRes = useResource<{
     competitors: CompetitorItem[];
     selfBusiness?: CompetitorItem;
-    spyInsights?: CompetitorSpySummary | null;
   }>('/api/gbp/competitors');
   const rankingsRes = useResource<any>('/api/gbp/rankings');
-  const [copyingCat, setCopyingCat] = useState<string | null>(null);
-
-  async function copyMissingCategory(cat: string) {
-    if (copyingCat) return;
-    setCopyingCat(cat);
-    try {
-      await apiRequest('/api/gbp/competitors/apply-advantage', {
-        method: 'POST',
-        body: { addCategories: [cat], pushToGoogle: true },
-      });
-      await competitorsRes.refresh();
-      Alert.alert('Category Added', `"${cat}" saved to your Google Business Profile.`);
-    } catch (e) {
-      Alert.alert('Update Failed', (e as Error).message || 'Could not add category');
-    } finally {
-      setCopyingCat(null);
-    }
-  }
 
   // Email summary state
   const [summaryEnabled, setSummaryEnabled] = useState(false);
@@ -586,21 +593,17 @@ export function PerformancePanel({
   const competitorsList: CompetitorItem[] = competitorsRes.data?.competitors || [];
   const displayedCompetitors = showAllCompetitors ? competitorsList : competitorsList.slice(0, 3);
 
-  // Targeted Keywords List
-  const keywordsList: KeywordRankItem[] = rankingsRes.data?.rankedKeywords || [
-    { keyword: 'swimming pool farm house near me', rank: 1.4, rankChange: 0 },
-    { keyword: 'swimming pool near me', rank: 1.6, rankChange: -0.2 },
-    { keyword: 'private swimming pool near me', rank: 3.0, rankChange: -0.2 },
-    { keyword: 'family swimming pool near me', rank: 1.2, rankChange: 0 },
-    { keyword: 'farmhouse near me', rank: 2.5, rankChange: -0.1 },
-  ];
+  // Targeted Keywords List (real API rows only)
+  const keywordsList: KeywordRankItem[] = Array.isArray(rankingsRes.data?.rankedKeywords)
+    ? rankingsRes.data.rankedKeywords
+    : [];
   const displayedKeywords = showAllKeywords ? keywordsList : keywordsList.slice(0, 4);
 
-  // GeoGrid Data
+  // GeoGrid Data (real API rows only)
   const geoGridData: GeoGridData = rankingsRes.data?.geoGrid || {
-    keyword: keywordsList[0]?.keyword || 'swimming pool farm house near me',
-    lastUpdated: 'Nov 11, 2026',
-    avgRank: 1.4,
+    keyword: keywordsList[0]?.keyword || '',
+    lastUpdated: '',
+    avgRank: 0,
     points: [],
   };
 
@@ -845,34 +848,6 @@ export function PerformancePanel({
           )}
         </View>
 
-        {competitorsRes.data?.spyInsights?.missingCategories?.length ? (
-          <View style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#BBF7D0', gap: 8 }}>
-            <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#166534' }}>
-              Missing Secondary Categories Used by Competitors
-            </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              {competitorsRes.data.spyInsights.missingCategories.slice(0, 4).map((cat) => (
-                <Pressable
-                  key={cat.category}
-                  disabled={Boolean(copyingCat)}
-                  onPress={() => void copyMissingCategory(cat.category)}
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    borderWidth: 1,
-                    borderColor: '#16A34A',
-                    borderRadius: 8,
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                  }}
-                >
-                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#15803D' }}>
-                    {copyingCat === cat.category ? 'Copying…' : `+ Copy "${cat.category}" (${cat.competitorCount})`}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        ) : null}
       </View>
 
       {/* ════════════════════════════════════════════════════════════════════════
@@ -895,60 +870,69 @@ export function PerformancePanel({
           </View>
 
           {/* Table Rows */}
-          {displayedKeywords.map((kw, idx) => {
-            const isNeutral = kw.rankChange === 0;
-            const isNegative = kw.rankChange < 0;
-            return (
-              <View
-                key={kw.keyword + idx}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                  borderBottomWidth: idx < displayedKeywords.length - 1 ? 1 : 0,
-                  borderBottomColor: '#F1F5F9',
-                }}
-              >
-                {/* Numbered Keyword */}
-                <Text style={{ flex: 1, fontSize: 13.5, fontWeight: '600', color: '#0F172A' }} numberOfLines={1}>
-                  {idx + 1} {kw.keyword}
-                </Text>
-
-                {/* Rank */}
-                <View style={{ width: 60, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>
-                    {kw.rank.toFixed(1)}
+          {displayedKeywords.length === 0 ? (
+            <View style={{ padding: 18, alignItems: 'center' }}>
+              <Text style={{ fontSize: 12.5, color: '#64748B', textAlign: 'center' }}>
+                No keyword rankings recorded yet. Run AI Growth Autopilot to track your target search terms.
+              </Text>
+            </View>
+          ) : (
+            displayedKeywords.map((kw, idx) => {
+              const rankChange = kw.rankChange ?? 0;
+              const isNeutral = rankChange === 0;
+              const isNegative = rankChange < 0;
+              return (
+                <View
+                  key={kw.keyword + idx}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    borderBottomWidth: idx < displayedKeywords.length - 1 ? 1 : 0,
+                    borderBottomColor: '#F1F5F9',
+                  }}
+                >
+                  {/* Numbered Keyword */}
+                  <Text style={{ flex: 1, fontSize: 13.5, fontWeight: '600', color: '#0F172A' }} numberOfLines={1}>
+                    {idx + 1} {kw.keyword}
                   </Text>
-                </View>
 
-                {/* Change Pill */}
-                <View style={{ width: 70, alignItems: 'flex-end' }}>
-                  {isNeutral ? (
-                    <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>~</Text>
-                    </View>
-                  ) : (
-                    <View
-                      style={{
-                        backgroundColor: isNegative ? '#FEE2E2' : '#DCFCE7',
-                        paddingHorizontal: 6,
-                        paddingVertical: 3,
-                        borderRadius: 6,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 2,
-                      }}
-                    >
-                      <Text style={{ fontSize: 10, fontWeight: '800', color: isNegative ? '#DC2626' : '#16A34A' }}>
-                        {isNegative ? '▼' : '▲'} {Math.abs(kw.rankChange).toFixed(1)}
-                      </Text>
-                    </View>
-                  )}
+                  {/* Rank */}
+                  <View style={{ width: 60, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>
+                      {typeof kw.rank === 'number' && kw.rank > 0 ? kw.rank.toFixed(1) : '—'}
+                    </Text>
+                  </View>
+
+                  {/* Change Pill */}
+                  <View style={{ width: 70, alignItems: 'flex-end' }}>
+                    {isNeutral ? (
+                      <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>~</Text>
+                      </View>
+                    ) : (
+                      <View
+                        style={{
+                          backgroundColor: isNegative ? '#FEE2E2' : '#DCFCE7',
+                          paddingHorizontal: 6,
+                          paddingVertical: 3,
+                          borderRadius: 6,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 2,
+                        }}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: isNegative ? '#DC2626' : '#16A34A' }}>
+                          {isNegative ? '▼' : '▲'} {Math.abs(rankChange).toFixed(1)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
-            );
-          })}
+              );
+            })
+          )}
 
           {/* Expand / Collapse Button */}
           {keywordsList.length > 4 && (

@@ -6,6 +6,7 @@ import { computeGbpAudit } from '@/lib/gbp/audit';
 import { getTenantSeoContext, safeParseJsonObject } from '@/lib/gbp/seo-context';
 import { generateLocalizedServiceDescriptions } from '@/lib/gbp/service-optimizer';
 import { buildCompetitorGapSummary, type CompetitorSpyProfile } from '@/lib/gbp/competitor-spy';
+import { ensureFreshCompetitorIntelligence } from '@/lib/gbp/competitor-intelligence';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { updateGoogleBusinessProfile } from '@/lib/social/adapters/googlebusiness';
 import { invalidatePlacePayloadCache } from '@/app/api/gbp/place/route';
@@ -134,9 +135,23 @@ async function buildAutoOptimizePlan(tenantId: string) {
     currentDescription.length >= 300 &&
     (!city || currentDescription.toLowerCase().includes(city.toLowerCase()));
 
-  // Extract competitor insights from cache (supports spyInsights, competitors array, or byKey map)
-  const spyCache = settings.competitorSpyCache;
+  // Extract competitor intelligence behind the scenes (auto-sync silently from Google Places when missing/stale)
+  let spyCache = settings.competitorSpyCache;
   let spyInsights = spyCache?.spyInsights || null;
+  const cacheAgeMs = spyCache?.updatedAt ? Date.now() - Date.parse(spyCache.updatedAt) : Number.POSITIVE_INFINITY;
+  const isCacheStale = !spyInsights || !Number.isFinite(cacheAgeMs) || cacheAgeMs > 24 * 60 * 60 * 1000;
+
+  if (isCacheStale) {
+    try {
+      const freshIntel = await ensureFreshCompetitorIntelligence(tenantId, { maxAgeMs: 24 * 60 * 60 * 1000 });
+      if (freshIntel.insights) {
+        spyInsights = freshIntel.insights;
+      }
+    } catch {
+      // Non-fatal: continue with available cache/SEO context
+    }
+  }
+
   if (!spyInsights && spyCache) {
     const cachedPeers: CompetitorSpyProfile[] = Array.isArray(spyCache.competitors)
       ? (spyCache.competitors as CompetitorSpyProfile[])
@@ -223,13 +238,13 @@ async function buildAutoOptimizePlan(tenantId: string) {
     },
     {
       id: 'categories',
-      title: 'Copy Missing Competitor Secondary Categories',
+      title: 'Auto-Add High-Impact Secondary Categories',
       subtitle:
         suggestedCategories.length > 0
-          ? `Add ${suggestedCategories.join(', ')} (used by top local competitors)`
+          ? `BGOS detected missing top-ranking categories: ${suggestedCategories.join(', ')}`
           : currentCats.length >= 2
             ? `${currentCats.length} secondary categories configured`
-            : 'Run Competitor Spy refresh to discover missing secondary categories',
+            : 'No category gaps flagged in your local market right now',
       ready: suggestedCategories.length > 0,
       alreadyOptimal: currentCats.length >= 2 && suggestedCategories.length === 0,
       impact: 'high',
@@ -461,7 +476,9 @@ export async function POST(request: NextRequest) {
         category: plan.category,
         city: plan.city,
         serviceAreas: plan.serviceAreas,
-        keywords: plan.keywords,
+        keywords: Array.from(
+          new Set([...plan.keywords, ...(plan.seoCtx?.competitorReviewThemes || [])]),
+        ).slice(0, 8),
         services: plan.services.map((s) => s.name),
       });
       googlePayload.description = nextDescription;

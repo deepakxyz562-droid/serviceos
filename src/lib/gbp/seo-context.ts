@@ -32,6 +32,8 @@ export interface TenantSeoContext {
   priorityKeywords: string[];
   additionalCategories: string[];
   attributes: Record<string, unknown>;
+  competitorReviewThemes?: string[];
+  competitorMissingCategories?: string[];
   seoServices: StructuredSeoService[];
 }
 
@@ -239,6 +241,19 @@ export async function getTenantSeoContext(tenantId: string | null | undefined): 
         ? (settings.attributes as Record<string, unknown>)
         : {};
 
+    const spyInsights = settings.competitorSpyCache?.spyInsights;
+    const competitorReviewThemes: string[] = Array.isArray(spyInsights?.suggestedKeywordsFromReviews)
+      ? spyInsights.suggestedKeywordsFromReviews
+          .filter((w: unknown): w is string => typeof w === 'string' && w.trim().length > 0)
+          .slice(0, 8)
+      : [];
+    const competitorMissingCategories: string[] = Array.isArray(spyInsights?.missingCategories)
+      ? spyInsights.missingCategories
+          .map((c: any) => String(c?.category || '').trim())
+          .filter(Boolean)
+          .slice(0, 6)
+      : [];
+
     return {
       tenantId: tenant.id,
       businessName: tenant.brandProfile?.businessName || tenant.name,
@@ -250,6 +265,8 @@ export async function getTenantSeoContext(tenantId: string | null | undefined): 
       priorityKeywords: priorityKeywords.slice(0, 20),
       additionalCategories,
       attributes,
+      competitorReviewThemes,
+      competitorMissingCategories,
       seoServices: mergeStructuredServices(settings, dbServices),
     };
   } catch (err) {
@@ -280,6 +297,12 @@ export function formatSeoKeywordsPromptSection(ctx: TenantSeoContext | null | un
     .map((t) => t.keyword);
   if (nonSearchTracked.length > 0) {
     lines.push(`Target Local SEO Keywords: ${nonSearchTracked.join(', ')}`);
+  }
+
+  if (ctx.competitorReviewThemes && ctx.competitorReviewThemes.length > 0) {
+    lines.push(
+      `High-demand customer review themes in local market: ${ctx.competitorReviewThemes.slice(0, 5).join(', ')}`,
+    );
   }
 
   if (ctx.serviceAreas.length > 0) {

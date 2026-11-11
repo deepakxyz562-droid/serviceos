@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, ActivityIndicator, Alert, Easing, Image, Linking, Modal, Pressable, useWindowDimensions, ScrollView, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, Animated, ActivityIndicator, Alert, Easing, Image, Linking, Modal, Pressable, useWindowDimensions, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card, Screen, Action, ErrorNotice, MenuRow, Badge, MetricCard, ui, colors, Avatar, Loading } from '../../src/components/ui';
@@ -57,24 +57,8 @@ type Competitor = {
   source: string;
 };
 
-type SpyInsights = {
-  queryUsed: string;
-  locationUsed: string;
-  selfMapsRank: number | null;
-  selfRating: number;
-  selfReviewCount: number;
-  topAvgRating: number;
-  topAvgReviews: number;
-  reviewsNeededForTop3: number;
-  missingCategories: Array<{ category: string; competitorCount: number; percentage: number }>;
-  missingAttributes: Array<{ key: string; label: string; competitorCount: number }>;
-  suggestedKeywordsFromReviews: string[];
-  whyTopRank: string[];
-};
-
 type CompetitorsResponse = {
   competitors: Competitor[];
-  spyInsights?: SpyInsights | null;
   migrationRequired?: boolean;
   placesUnavailable?: boolean;
 };
@@ -539,55 +523,6 @@ export default function HomeScreen() {
   const [reviewModalTab, setReviewModalTab] = useState<'single' | 'bulk'>('single');
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [expandedCompetitor, setExpandedCompetitor] = useState<string | null>(null);
-  const [spyKeyword, setSpyKeyword] = useState('');
-  const [spySearching, setSpySearching] = useState(false);
-  const [applyingSpyKey, setApplyingSpyKey] = useState<string | null>(null);
-
-  async function runCompetitorSpySearch() {
-    if (spySearching) return;
-    setSpySearching(true);
-    try {
-      const qs = spyKeyword.trim()
-        ? `/api/gbp/competitors?refresh=1&keyword=${encodeURIComponent(spyKeyword.trim())}`
-        : '/api/gbp/competitors?refresh=1';
-      const updated = await apiRequest<CompetitorsResponse>(qs);
-      competitors.setData(updated);
-    } catch (e) {
-      Alert.alert('Competitor Spy', (e as Error).message || 'Could not search Google Maps competitors');
-    } finally {
-      setSpySearching(false);
-    }
-  }
-
-  async function applyCompetitorAdvantage(opts: {
-    key: string;
-    addCategories?: string[];
-    addAttributes?: string[];
-    addServiceName?: string;
-  }) {
-    if (applyingSpyKey) return;
-    setApplyingSpyKey(opts.key);
-    try {
-      const res = await apiRequest<{ syncedToGoogle?: boolean }>('/api/gbp/competitors/apply-advantage', {
-        method: 'POST',
-        body: {
-          addCategories: opts.addCategories,
-          addAttributes: opts.addAttributes,
-          addServiceName: opts.addServiceName,
-          pushToGoogle: true,
-        },
-      });
-      await competitors.refresh();
-      Alert.alert(
-        'Applied to GBP',
-        `Saved ${opts.key}${res?.syncedToGoogle ? ' & synced directly to Google Business Profile!' : ' in BGOS.'}`,
-      );
-    } catch (e) {
-      Alert.alert('Update Failed', (e as Error).message || 'Could not apply competitor advantage');
-    } finally {
-      setApplyingSpyKey(null);
-    }
-  }
   const { width, fontScale } = useWindowDimensions();
   const compactActions = width < 375 || fontScale > 1.2;
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
@@ -1546,7 +1481,7 @@ export default function HomeScreen() {
             })}
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push('/seo-growth?tab=gap')}
+              onPress={() => router.push('/seo-growth')}
               style={({ pressed }) => ({
                 marginTop: 6,
                 paddingVertical: 10,
@@ -1560,214 +1495,13 @@ export default function HomeScreen() {
                 opacity: pressed ? 0.85 : 1,
               })}
             >
-              <MaterialIcons name="radar" size={16} color={colors.brandDark} />
+              <MaterialIcons name="auto-awesome" size={16} color={colors.brandDark} />
               <Text style={{ fontSize: 12, fontWeight: '800', color: colors.brandDark }}>
-                Website SEO &amp; AI Visibility Gap →
+                AI Growth Autopilot (Auto-Apply Opportunities) →
               </Text>
             </Pressable>
           </>
         )}
-      </Card>
-
-      {/* Competitor Spy: Categories, Attributes, Review Gaps & Keyword Search */}
-      <Card style={{ gap: 10 }}>
-        <View style={[ui.row, { justifyContent: 'space-between' }]}>
-          <Text style={ui.heading}>🕵️ Competitor Spy &amp; Gap Copier</Text>
-          {competitors.data?.spyInsights?.selfMapsRank ? (
-            <Badge label={`Your Rank #${competitors.data.spyInsights.selfMapsRank}`} />
-          ) : null}
-        </View>
-        <Text style={ui.caption}>
-          Inspect competitor categories, attributes &amp; reviews for any keyword — and copy winning advantages straight to Google.
-        </Text>
-
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <View style={{ flex: 1 }}>
-            <TextInput
-              placeholder="Spy keyword (e.g. emergency plumber near me)"
-              placeholderTextColor={colors.muted}
-              value={spyKeyword}
-              onChangeText={setSpyKeyword}
-              style={[ui.input, { minHeight: 42 }]}
-              onSubmitEditing={() => void runCompetitorSpySearch()}
-            />
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            disabled={spySearching}
-            onPress={() => void runCompetitorSpySearch()}
-            style={{
-              minHeight: 42,
-              paddingHorizontal: 14,
-              borderRadius: 10,
-              backgroundColor: colors.ink,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {spySearching ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Spy</Text>
-            )}
-          </Pressable>
-        </View>
-
-        {competitors.data?.spyInsights ? (
-          <View style={{ gap: 10 }}>
-            {competitors.data.spyInsights.whyTopRank.slice(0, 3).map((reason, idx) => (
-              <View
-                key={idx}
-                style={{
-                  backgroundColor: colors.soft,
-                  padding: 8,
-                  borderRadius: 8,
-                  flexDirection: 'row',
-                  gap: 6,
-                }}
-              >
-                <MaterialIcons name="bolt" size={14} color={colors.brandDark} style={{ marginTop: 2 }} />
-                <Text style={{ flex: 1, fontSize: 11.5, color: colors.ink, lineHeight: 16 }}>{reason}</Text>
-              </View>
-            ))}
-
-            {competitors.data.spyInsights.missingCategories.length > 0 ? (
-              <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.ink }}>
-                  Missing Secondary Categories (1-Tap Copy to GBP)
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                  {competitors.data.spyInsights.missingCategories.slice(0, 5).map((cat) => (
-                    <Pressable
-                      key={cat.category}
-                      disabled={Boolean(applyingSpyKey)}
-                      onPress={() =>
-                        void applyCompetitorAdvantage({
-                          key: cat.category,
-                          addCategories: [cat.category],
-                        })
-                      }
-                      style={{
-                        backgroundColor: colors.brandSoft,
-                        borderWidth: 1,
-                        borderColor: colors.brand,
-                        paddingHorizontal: 10,
-                        paddingVertical: 6,
-                        borderRadius: 8,
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: colors.brandDark }}>
-                        {applyingSpyKey === cat.category ? 'Syncing…' : `+ ${cat.category} (${cat.percentage}%)`}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            ) : null}
-
-            {competitors.data.spyInsights.missingAttributes.length > 0 ? (
-              <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.ink }}>
-                  Missing Competitor Attributes
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                  {competitors.data.spyInsights.missingAttributes.slice(0, 4).map((attr) => (
-                    <Pressable
-                      key={attr.key}
-                      disabled={Boolean(applyingSpyKey)}
-                      onPress={() =>
-                        void applyCompetitorAdvantage({
-                          key: attr.label,
-                          addAttributes: [attr.key],
-                        })
-                      }
-                      style={{
-                        backgroundColor: '#EFF6FF',
-                        borderWidth: 1,
-                        borderColor: '#93C5FD',
-                        paddingHorizontal: 10,
-                        paddingVertical: 5,
-                        borderRadius: 8,
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#1D4ED8' }}>
-                        {applyingSpyKey === attr.label ? 'Saving…' : `+ ${attr.label}`}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            ) : null}
-
-            {competitors.data.spyInsights.suggestedKeywordsFromReviews.length > 0 ? (
-              <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.ink }}>
-                  Top Competitor Review Themes → Add Service
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                  {competitors.data.spyInsights.suggestedKeywordsFromReviews.slice(0, 5).map((kw) => (
-                    <Pressable
-                      key={kw}
-                      disabled={Boolean(applyingSpyKey)}
-                      onPress={() =>
-                        void applyCompetitorAdvantage({
-                          key: kw,
-                          addServiceName: kw,
-                        })
-                      }
-                      style={{
-                        backgroundColor: colors.surface,
-                        borderWidth: 1,
-                        borderColor: colors.line,
-                        paddingHorizontal: 9,
-                        paddingVertical: 5,
-                        borderRadius: 8,
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.ink }}>
-                        + Service: {kw}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            ) : null}
-
-            {/* Competitor Secondary Category & Photo Details */}
-            {competitors.data.competitors
-              .filter((c) => (c.secondaryCategories?.length || 0) > 0 || (c.photoCount || 0) > 0)
-              .slice(0, 3)
-              .map((c) => (
-                <View
-                  key={`spy-${c.id}`}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: colors.line,
-                    borderRadius: 10,
-                    padding: 8,
-                    gap: 4,
-                  }}
-                >
-                  <View style={[ui.row, { justifyContent: 'space-between' }]}>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.ink, flex: 1 }} numberOfLines={1}>
-                      {c.mapsRank ? `#${c.mapsRank} ` : ''}{c.name}
-                    </Text>
-                    {c.photoCount != null ? (
-                      <Text style={{ fontSize: 10.5, fontWeight: '700', color: colors.muted }}>{c.photoCount} photos</Text>
-                    ) : null}
-                  </View>
-                  <Text style={{ fontSize: 10.5, color: colors.muted }}>
-                    {[c.primaryCategoryLabel || c.category, ...(c.secondaryCategories || [])].filter(Boolean).join(' · ')}
-                  </Text>
-                  {c.recentReviews?.[0]?.text ? (
-                    <Text style={{ fontSize: 10.5, color: colors.ink, fontStyle: 'italic' }} numberOfLines={2}>
-                      &ldquo;{c.recentReviews[0].text}&rdquo;
-                    </Text>
-                  ) : null}
-                </View>
-              ))}
-          </View>
-        ) : null}
       </Card>
 
       {/* More Tools — everything that left the bottom bar stays one tap away */}
