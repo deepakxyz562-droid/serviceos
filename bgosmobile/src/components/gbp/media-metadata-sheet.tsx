@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -234,7 +234,35 @@ export function MediaMetadataSheet({
   const [aiApprovedUrl, setAiApprovedUrl] = useState<string | null>(null);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [inspectStaticUrl, setInspectStaticUrl] = useState<string | null>(null);
+  const [inspectStaticTitle, setInspectStaticTitle] = useState<string | null>(null);
   const [lastAiUsedPrompt, setLastAiUsedPrompt] = useState('');
+
+  const isPersonalOrGenericName = (candidate?: string | null): boolean => {
+    if (!candidate) return true;
+    const n = candidate.trim().toLowerCase();
+    return (
+      n === 'my business' ||
+      n === 'your business' ||
+      n === 'business' ||
+      n === 'business profile' ||
+      n.includes('workspace')
+    );
+  };
+
+  const effectiveBusinessName = useMemo(() => {
+    if (businessName && !isPersonalOrGenericName(businessName)) {
+      return businessName.trim();
+    }
+    if (businessContext?.name && !isPersonalOrGenericName(businessContext.name)) {
+      return businessContext.name.trim();
+    }
+    return (businessName || businessContext?.name || 'Business').trim();
+  }, [businessName, businessContext?.name]);
+
+  function openPhotoInspection(url: string, photoTitle?: string) {
+    setInspectStaticTitle(photoTitle || `${effectiveBusinessName} Photo`);
+    setInspectStaticUrl(url);
+  }
 
   const sessionKeyRef = useRef(0);
   const lastInitKeyRef = useRef('');
@@ -531,7 +559,7 @@ export function MediaMetadataSheet({
         opts?.providerOverride || (selectedRefUrls.length > 0 ? 'gemini' : aiProviderChoice);
       setLastAiUsedPrompt(
         trimmedPrompt ||
-          `${businessContext?.name || businessName} commercial showcase`,
+          `${effectiveBusinessName} commercial showcase`,
       );
       const startRes = await apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
         method: 'POST',
@@ -543,7 +571,7 @@ export function MediaMetadataSheet({
           referenceImageUrls: selectedRefUrls,
           aspectRatio: aiAspectRatio,
           provider: effectiveProvider,
-          businessName: businessContext?.name || businessName,
+          businessName: effectiveBusinessName,
           category: businessContext?.category,
           products: businessContext?.products,
           services: businessContext?.services,
@@ -1027,9 +1055,9 @@ export function MediaMetadataSheet({
             <View style={styles.aiStudioBox}>
               <View style={styles.aiStudioHeaderRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.aiStudioTitle}>Generate Photo for {businessContext?.name || businessName}</Text>
+                  <Text style={styles.aiStudioTitle}>Generate Photo for {effectiveBusinessName}</Text>
                   <Text style={styles.aiStudioSub}>
-                    Select previous business photos (optional) so AI preserves your real property/product, or let AI auto-create from your business profile.
+                    Select previous business photos so AI preserves your real property, products, and branding, or tap Auto-Create to design from your business profile.
                   </Text>
                 </View>
               </View>
@@ -1045,11 +1073,18 @@ export function MediaMetadataSheet({
               ) : null}
 
               {/* Reference Photos Selector */}
-              <View style={{ gap: 6 }}>
+              <View style={{ gap: 8 }}>
                 <View style={styles.labelRow}>
-                  <Text style={styles.aiSubLabel}>
-                    Use Previous Business Photos ({selectedRefUrls.length}/3)
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.aiSubLabel}>
+                      Use Previous Business Photos ({selectedRefUrls.length}/3)
+                    </Text>
+                    {selectedRefUrls.length > 0 ? (
+                      <View style={styles.activeRefPill}>
+                        <Text style={styles.activeRefPillText}>{selectedRefUrls.length} Active</Text>
+                      </View>
+                    ) : null}
+                  </View>
                   <Pressable
                     onPress={() => void pickReferencePhotoFromDevice()}
                     disabled={uploadingRef || generatingAiImage}
@@ -1072,22 +1107,43 @@ export function MediaMetadataSheet({
                     <Text style={{ fontSize: 11.5, color: colors.muted }}>Loading your previous business photos…</Text>
                   </View>
                 ) : previousPhotos.length > 0 ? (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 2 }}>
                     {previousPhotos.map((photo) => {
                       const selected = selectedRefUrls.includes(photo.url);
+                      const isGbp = photo.source === 'google';
                       return (
-                        <Pressable
-                          key={photo.id}
-                          onPress={() => toggleReferencePhoto(photo.url)}
-                          style={[styles.refPhotoCard, selected && styles.refPhotoCardActive]}
-                        >
-                          <Image source={{ uri: photo.url }} style={styles.refPhotoImg} resizeMode="cover" alt={photo.title || 'Previous business photo'} />
-                          {selected ? (
-                            <View style={styles.refPhotoCheck}>
-                              <MaterialIcons name="check" size={12} color="#FFFFFF" />
-                            </View>
-                          ) : null}
-                        </Pressable>
+                        <View key={photo.id} style={{ position: 'relative' }}>
+                          <Pressable
+                            onPress={() => toggleReferencePhoto(photo.url)}
+                            onLongPress={() => openPhotoInspection(photo.url, photo.title)}
+                            style={[styles.refPhotoCard, selected && styles.refPhotoCardActive]}
+                          >
+                            <Image
+                              source={{ uri: photo.url }}
+                              style={styles.refPhotoImg}
+                              resizeMode="cover"
+                              alt={photo.title || 'Previous business photo'}
+                            />
+                            {isGbp ? (
+                              <View style={styles.refGbpBadge}>
+                                <Text style={styles.refGbpBadgeText}>GBP</Text>
+                              </View>
+                            ) : null}
+                            {selected ? (
+                              <View style={styles.refPhotoCheck}>
+                                <MaterialIcons name="check" size={12} color="#FFFFFF" />
+                              </View>
+                            ) : null}
+                          </Pressable>
+                          {/* Tap-to-preview icon overlay */}
+                          <Pressable
+                            onPress={() => openPhotoInspection(photo.url, photo.title)}
+                            hitSlop={6}
+                            style={styles.refPhotoInspectBtn}
+                          >
+                            <MaterialIcons name="zoom-in" size={14} color="#FFFFFF" />
+                          </Pressable>
+                        </View>
                       );
                     })}
                   </ScrollView>
@@ -1096,6 +1152,54 @@ export function MediaMetadataSheet({
                     No previous photos saved yet — tap &quot;Upload Ref&quot; to use a real photo of your space, or Auto-Create below.
                   </Text>
                 )}
+
+                {/* Active Reference Photos Preview Strip */}
+                {selectedRefUrls.length > 0 ? (
+                  <View style={styles.selectedRefsCard}>
+                    <View style={styles.selectedRefsHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <MaterialIcons name="auto-fix-high" size={13} color="#7C3AED" />
+                        <Text style={styles.selectedRefsTitle}>
+                          Selected AI References ({selectedRefUrls.length}/3)
+                        </Text>
+                      </View>
+                      <Pressable onPress={() => setSelectedRefUrls([])}>
+                        <Text style={styles.clearRefsText}>Clear All</Text>
+                      </Pressable>
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                      {selectedRefUrls.map((url, idx) => {
+                        const photoMatch = previousPhotos.find((p) => p.url === url);
+                        return (
+                          <View key={url} style={styles.selectedRefChipCard}>
+                            <Pressable onPress={() => openPhotoInspection(url, photoMatch?.title)}>
+                              <Image source={{ uri: url }} style={styles.selectedRefChipImg} resizeMode="cover" />
+                            </Pressable>
+                            <View style={{ flex: 1, paddingHorizontal: 4, justifyContent: 'center' }}>
+                              <Text style={styles.selectedRefChipTitle} numberOfLines={1}>
+                                {photoMatch?.title || `Reference #${idx + 1}`}
+                              </Text>
+                              <Pressable onPress={() => openPhotoInspection(url, photoMatch?.title)} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                <MaterialIcons name="zoom-in" size={11} color="#7C3AED" />
+                                <Text style={styles.selectedRefPreviewLink}>Preview</Text>
+                              </Pressable>
+                            </View>
+                            <Pressable
+                              onPress={() => toggleReferencePhoto(url)}
+                              style={styles.removeRefBtn}
+                              hitSlop={8}
+                            >
+                              <MaterialIcons name="close" size={14} color={colors.muted} />
+                            </Pressable>
+                          </View>
+                        );
+                      })}
+                    </ScrollView>
+                    <Text style={styles.selectedRefsHint}>
+                      AI will preserve the visual architecture, branding colors, and subject matter from your selected photos.
+                    </Text>
+                  </View>
+                ) : null}
               </View>
 
               {/* Smart Business Idea Prompts */}
@@ -1122,7 +1226,7 @@ export function MediaMetadataSheet({
                 <TextInput
                   value={aiPrompt}
                   onChangeText={setAiPrompt}
-                  placeholder={`e.g. Evening fairy-light lawn setup at ${businessContext?.name || businessName}, keep our farmhouse building`}
+                  placeholder={`e.g. Modern commercial showcase at ${effectiveBusinessName}, highlight our authentic space and quality`}
                   placeholderTextColor={colors.muted}
                   multiline
                   style={[styles.input, { minHeight: 68, textAlignVertical: 'top' }]}
@@ -1699,7 +1803,7 @@ export function MediaMetadataSheet({
         visible={fullscreenOpen}
         onClose={() => setFullscreenOpen(false)}
         imageUrl={generatedImageUrl}
-        title={title.trim() || `${businessContext?.name || businessName} · AI Photo`}
+        title={title.trim() || `${effectiveBusinessName} · AI Photo`}
         subtitle={`${aiAspectRatio} · Check faces, text, and framing`}
         candidates={aiCandidates}
         selectedUrl={generatedImageUrl}
@@ -1725,13 +1829,16 @@ export function MediaMetadataSheet({
         }
       />
 
-      {/* Fullscreen Read-Only Photo Viewer for uploads / editing items */}
+      {/* Fullscreen Read-Only Photo Viewer for uploads / editing items / previous photos */}
       <FullscreenImageModal
         asOverlay
         visible={Boolean(inspectStaticUrl)}
-        onClose={() => setInspectStaticUrl(null)}
+        onClose={() => {
+          setInspectStaticUrl(null);
+          setInspectStaticTitle(null);
+        }}
         imageUrl={inspectStaticUrl}
-        title={title.trim() || editingItem?.title || `${businessName} Photo`}
+        title={inspectStaticTitle || title.trim() || editingItem?.title || `${effectiveBusinessName} Photo`}
       />
     </Modal>
   );
@@ -2302,13 +2409,14 @@ const styles = StyleSheet.create({
     color: colors.brandDark,
   },
   refPhotoCard: {
-    width: 68,
-    height: 68,
+    width: 82,
+    height: 82,
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: colors.line,
     backgroundColor: colors.soft,
+    position: 'relative',
   },
   refPhotoCardActive: {
     borderColor: '#7C3AED',
@@ -2321,12 +2429,115 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: '#7C3AED',
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+  },
+  refGbpBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  refGbpBadgeText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#38BDF8',
+  },
+  refPhotoInspectBtn: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  activeRefPill: {
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 10,
+  },
+  activeRefPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#7C3AED',
+  },
+  selectedRefsCard: {
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    borderRadius: 12,
+    padding: 8,
+    gap: 6,
+    marginTop: 2,
+  },
+  selectedRefsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectedRefsTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#6D28D9',
+  },
+  clearRefsText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: colors.muted,
+  },
+  selectedRefChipCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    borderRadius: 8,
+    padding: 4,
+    paddingRight: 6,
+    width: 164,
+    gap: 6,
+  },
+  selectedRefChipImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    backgroundColor: colors.soft,
+  },
+  selectedRefChipTitle: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  selectedRefPreviewLink: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#7C3AED',
+  },
+  removeRefBtn: {
+    padding: 2,
+  },
+  selectedRefsHint: {
+    fontSize: 10,
+    color: '#6D28D9',
+    lineHeight: 13,
   },
   ideaChip: {
     backgroundColor: colors.aiPurpleSoft,

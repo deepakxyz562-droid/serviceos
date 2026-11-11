@@ -631,10 +631,29 @@ export function buildHighQualityImagePrompt(
       : contextArg;
   const isPosterMode = isPoster || rawPrompt.startsWith('[POSTER]');
   const cleanPrompt = cleanMarketingTopic(rawPrompt);
+  const pickScene = (arr: string[]): string => arr[Math.floor(Math.random() * arr.length)];
+  const lightingPool = [
+    'crisp natural morning daylight with soft shadows and authentic clarity',
+    'cinematic golden hour warmth with radiant amber architectural highlights',
+    'bright high-key commercial studio lighting with clean soft reflections',
+    'warm atmospheric evening ambient with elegant decorative string lights',
+    'sun-drenched afternoon brightness with rich photographic depth of field',
+    'clean architectural lighting with sharp focal clarity and balanced exposure',
+  ];
+  const cameraAngles = [
+    'wide-angle hero perspective capturing the entire welcoming environment',
+    'eye-level dynamic medium shot focusing on authentic craftsmanship and quality',
+    'crisp commercial angle highlighting clean premium offerings',
+    'detailed macro close-up showcasing rich textures and immaculate finish',
+    'spacious architectural perspective capturing pristine ambiance',
+  ];
+  const chosenLighting = pickScene(lightingPool);
+  const chosenAngle = pickScene(cameraAngles);
+
   // The editor already supplies explicit composition, occasion and style. A generic
   // business-domain fallback must not replace that art direction when copy AI fails.
   if (cleanPrompt.includes('Art direction:') && cleanPrompt.includes('Canvas ratio:')) {
-    return `${cleanPrompt} Preserve the specified occasion, visual subject, art style and canvas composition. Clean high-resolution commercial artwork with clear space for editable overlays. No rendered text, logos or watermarks.`;
+    return `${cleanPrompt} Preserve the specified occasion, visual subject, art style and canvas composition, captured in ${chosenLighting} with ${chosenAngle}. Clean high-resolution commercial artwork with clear space for editable overlays. No rendered text, logos or watermarks.`;
   }
 
   const productsList = Array.isArray(context?.products)
@@ -665,21 +684,25 @@ export function buildHighQualityImagePrompt(
   const catLower = category.toLowerCase();
   const offLower = offerings.toLowerCase();
 
-  const scores = { tech: 0, food: 0, fashion: 0, jewellery: 0, trades: 0, hospitality: 0 };
+  const scores = { tech: 0, food: 0, fashion: 0, jewellery: 0, trades: 0, hospitality: 0, paint: 0, hardware: 0 };
 
   // Category matching (primary signal)
   if (hasWord(catLower, ['jewel', 'jewelry', 'jewellery', 'jeweller', 'jewellers', 'diamond', 'diamonds', 'gold ornament', 'solitaire', 'gemstone', 'gemstones'])) scores.jewellery += 10;
   if (hasWord(catLower, ['sweet', 'sweets', 'mithai', 'bakery', 'confectionery', 'cake', 'cakes', 'restaurant', 'cafe', 'food', 'dessert', 'desserts'])) scores.food += 10;
   if (hasWord(catLower, ['saree', 'sarees', 'ethnic wear', 'bridal lehenga', 'boutique', 'apparel', 'clothing', 'fashion', 'garment', 'garments', 'textile', 'textiles'])) scores.fashion += 10;
   if (hasWord(catLower, ['software', 'saas', 'tech', 'technology', 'it ', 'cloud', 'app', 'apps', 'telemetry', 'gps', 'developer', 'workforce'])) scores.tech += 10;
+  if (hasWord(catLower, ['paint', 'paints', 'wall finish', 'coating', 'coatings', 'texture', 'primer', 'asian paints', 'berger', 'nerolac', 'wall decor'])) scores.paint += 10;
+  if (hasWord(catLower, ['hardware', 'tool', 'tools', 'fastener', 'fasteners', 'plywood', 'sanitary', 'pipe', 'pipes', 'machinery', 'building supply'])) scores.hardware += 10;
   if (hasWord(catLower, ['hvac', 'plumb', 'plumbing', 'electric', 'repair', 'repairs', 'contractor', 'trade', 'clean', 'cleaning', 'heating', 'cooling', 'air conditioning'])) scores.trades += 10;
-  if (hasWord(catLower, ['farmhouse', 'farm house', 'resort', 'villa', 'cottage', 'homestay', 'retreat', 'banquet', 'staycation', 'glamping', 'hotel', 'hospitality', 'venue'])) scores.hospitality += 10;
+  if (hasWord(catLower, ['farmhouse', 'farm house', 'resort', 'villa', 'cottage', 'homestay', 'retreat', 'banquet', 'staycation', 'glamping', 'hotel', 'hospitality', 'venue', 'pool', 'swimming'])) scores.hospitality += 10;
 
   // Offerings matching (secondary signal)
   if (hasWord(offLower, ['jewel', 'jewelry', 'jewellery', 'diamond', 'diamonds', 'necklace', 'necklaces', 'gold necklace', 'bangles', 'solitaire', 'earrings', 'chokers'])) scores.jewellery += 4;
   if (hasWord(offLower, ['mithai', 'kaju katli', 'gulab jamun', 'ladoo', 'pastry', 'croissant', 'rasgulla', 'sweets'])) scores.food += 4;
   if (hasWord(offLower, ['saree', 'sarees', 'lehenga', 'lehengas', 'dupatta', 'banarasi', 'suit', 'dress'])) scores.fashion += 4;
   if (hasWord(offLower, ['employee tracking', 'tracking app', 'gps', 'telemetry', 'route map', 'punch in', 'attendance', 'mobile app', 'cloud migration', 'software'])) scores.tech += 4;
+  if (hasWord(offLower, ['paint', 'emulsion', 'distemper', 'primer', 'enamel', 'texture finish', 'wall painting'])) scores.paint += 4;
+  if (hasWord(offLower, ['power tools', 'drill', 'grinder', 'fasteners', 'plumbing pipe', 'sanitary fittings'])) scores.hardware += 4;
   if (hasWord(offLower, ['ac repair', 'furnace', 'duct cleaning', 'plumbing', 'technician', 'boiler'])) scores.trades += 4;
   if (hasWord(offLower, ['farmhouse', 'villa', 'swimming pool', 'lawn', 'staycation', 'weekend stay', 'banquet', 'garden venue', 'private pool'])) scores.hospitality += 4;
 
@@ -688,11 +711,13 @@ export function buildHighQualityImagePrompt(
   if (hasWord(pLower, ['mithai', 'sweets', 'dessert', 'kaju katli', 'cake', 'pastry'])) scores.food += 2;
   if (hasWord(pLower, ['saree', 'lehenga', 'ethnic wear', 'bridal collection', 'couture'])) scores.fashion += 2;
   if (hasWord(pLower, ['diamond', 'solitaires', 'gold necklace', 'jewellery', 'jewels', 'hallmark'])) scores.jewellery += 2;
+  if (hasWord(pLower, ['paint', 'color shade', 'wall coating', 'interior painting'])) scores.paint += 2;
+  if (hasWord(pLower, ['power tool', 'drill', 'screws', 'hardware tools', 'plumbing fixture'])) scores.hardware += 2;
   if (hasWord(pLower, ['repair', 'hvac', 'plumbing', 'technician', 'air conditioning'])) scores.trades += 2;
   if (hasWord(pLower, ['farmhouse', 'villa', 'resort', 'pool', 'lawn', 'garden', 'cottage', 'patio', 'retreat'])) scores.hospitality += 3;
 
   let maxScore = 0;
-  let winningArchetype: 'tech' | 'food' | 'fashion' | 'jewellery' | 'trades' | 'hospitality' | 'custom' = 'custom';
+  let winningArchetype: 'tech' | 'food' | 'fashion' | 'jewellery' | 'trades' | 'hospitality' | 'paint' | 'hardware' | 'custom' = 'custom';
   for (const [key, score] of Object.entries(scores) as [keyof typeof scores, number][]) {
     if (score > maxScore) {
       maxScore = score;
@@ -703,7 +728,7 @@ export function buildHighQualityImagePrompt(
   let domainSubject = '';
   let styleDescriptor = 'Award-winning commercial promotional advertising photography';
   let settingDescriptor =
-    'clean modern commercial setting with generous negative copy space for digital typography overlay';
+    `clean modern commercial setting bathed in ${chosenLighting}, with generous negative copy space for digital typography overlay`;
 
   // Festive art direction takes precedence over generic category archetypes
   if (isDiwali) {
@@ -734,66 +759,156 @@ export function buildHighQualityImagePrompt(
       'Festive winter holiday celebration scene with natural pine cones, frosted evergreen branches, warm golden fairy lights, red ribbon accents, welcoming festive glow';
   } else if (winningArchetype === 'tech') {
     styleDescriptor =
-      'Award-winning commercial tech product advertising photography, sleek mobile software UI, futuristic GPS map visual, clean contemporary device mockup';
+      'Award-winning commercial tech product advertising photography, sleek contemporary device mockups, modern cloud interface visuals';
     settingDescriptor =
-      'soft dramatic studio ambient rim lighting, minimalist tech pedestal, clean shallow depth of field with generous negative copy space for typography';
-    domainSubject =
-      'Premium modern sleek smartphone mockup floating elegantly, displaying an intuitive mobile application interface with live GPS map navigation, user tracking location pins, clean route telemetry lines, and minimal workforce status cards, floating in a minimalist high-tech studio environment with soft ambient lighting';
+      `minimalist high-tech studio environment with soft rim lighting and generous negative space for typography`;
+    domainSubject = pickScene([
+      'Modern software engineering workstation with dual high-resolution monitors displaying elegant cloud dashboards and application code, clean ergonomic desk with ambient cyan lighting',
+      'Collaborative tech team analyzing interactive digital roadmaps and mobile UX prototypes on a smart glass wall in a bright contemporary tech studio',
+      'Sleek floating contemporary smartphone mockup showing an intuitive business mobile application with live GPS navigation, route telemetry, and clean status widgets in a minimalist studio',
+      'High-end laptop open on a modern oak desk with clean web application graphs, wireless accessories, and natural morning daylight',
+      'Futuristic cloud computing network visualization with glowing abstract fiber-optic data nodes and modern enterprise server architecture in a sleek command center',
+    ]);
   } else if (winningArchetype === 'food') {
     styleDescriptor =
-      'Award-winning commercial gourmet food photography, mouthwatering artisanal confections, rich appetizing textures, pure desi ghee glazes, silver vark flakes, festive brass or marble platters';
+      'Award-winning commercial gourmet food photography, mouthwatering artisanal confections, rich appetizing textures';
     settingDescriptor =
-      'warm gourmet food studio lighting, shallow depth of field, artful festive food styling with negative space';
-    domainSubject =
-      'Artisanal traditional sweets and fresh gourmet confections including rich Kaju Katli with silver vark and pistachio garnishes, beautifully styled on a festive royal brass platter';
+      `warm gourmet food studio lighting, shallow depth of field, artful festive food styling with negative space`;
+    domainSubject = pickScene([
+      'Artisanal celebration cakes and gourmet pastries with fresh berry toppings and rich cream layers, styled on a modern marble counter with warm patisserie ambient lighting',
+      'Delicate handcrafted confectionery and traditional sweets with silver vark and pistachio garnishes, styled on an authentic royal brass platter',
+      'Mouthwatering fresh bakery display with artisanal sourdough loaves, flaky croissants, and golden baked pastries in a rustic chic cafe setting',
+      'Close-up culinary composition of a decadent celebration cake slice with luscious filling and edible gold accents, editorial dessert photography',
+      'Artfully composed dessert table with assorted handcrafted confections, macarons, and warm celebration tea settings',
+    ]);
+  } else if (winningArchetype === 'paint') {
+    styleDescriptor =
+      'Award-winning commercial architectural paint and luxury wall finish photography, rich color vibrancy and immaculate surface textures';
+    settingDescriptor =
+      `designer paint studio showroom with modern swatch walls and clean commercial lighting with negative space`;
+    domainSubject = pickScene([
+      'Vibrant luxury paint studio showroom featuring designer wall color swatch palettes, premium paint cans neatly displayed, and textured wall samples with natural studio lighting',
+      'Stunning modern living room accent wall showcasing rich velvety matte wall finish, designer interior styling with elegant furniture, bright natural daylight',
+      'Artistic display of colorful designer paint swatches, wooden brushes with rich color drips, and high-gloss architectural coatings, high-resolution photography',
+      'Professional paint color consultation desk with fan decks, color matching cards, and premium interior paint buckets, inviting commercial interior',
+    ]);
+  } else if (winningArchetype === 'hardware') {
+    styleDescriptor =
+      'Award-winning commercial hardware and industrial precision tool photography, crisp chrome reflections and heavy-duty craftsmanship';
+    settingDescriptor =
+      `bright and spacious modern hardware showroom aisle with organized tool racks and clean industrial lighting`;
+    domainSubject = pickScene([
+      'Modern, meticulously organized hardware superstore aisle showcasing premium power tools, heavy-duty hand tools, and brass fixtures arranged neatly with crisp commercial lighting',
+      'Professional craftsman workspace featuring high-grade precision tools, calipers, wrenches, and hardware accessories, clean industrial aesthetic, crisp sharpness',
+      'Bright and spacious hardware storefront display featuring branded drill sets, durable construction equipment, and professional safety gear',
+      'Organized wall rack of polished chrome hand tools and industrial fasteners with sharp commercial product composition and crisp reflections',
+    ]);
   } else if (winningArchetype === 'fashion') {
     styleDescriptor =
       'High-end editorial fashion photography, luxurious designer textiles, elegant showroom mannequins, rich embroidery and fabric drape';
     settingDescriptor =
-      'designer boutique studio lighting, soft natural shadows, minimalist aesthetic background with negative copy space';
-    domainSubject =
-      'Vibrant Banarasi and silk sarees with rich golden zari borders and elegant pleating displayed against minimalist boutique arches in an upscale showroom';
+      `designer boutique studio lighting, soft natural shadows, minimalist aesthetic background with negative copy space`;
+    domainSubject = pickScene([
+      'Vibrant Banarasi silk sarees with rich golden zari borders and elegant pleating, displayed against minimalist boutique arches in an upscale showroom',
+      'Haute couture bridal lehenga with intricate handcrafted zardozi embroidery and delicate dupatta drape, editorial studio lighting',
+      'Modern designer ethnic apparel collection neatly arranged on wooden boutique racks with warm atmospheric interior lighting',
+      'Close-up textile macro photography showcasing rich silk weave, metallic threads, and immaculate handcrafted embroidery detail',
+      'Elegant fashion mannequin styled in premium designer festive attire within a sunlit contemporary fashion studio',
+    ]);
   } else if (winningArchetype === 'jewellery') {
     styleDescriptor =
       'Ultra-luxury commercial high-jewelry advertising photography, sparkling 22K hallmark gold and certified diamond solitaires, macro lens, glittering faceted light refractions';
     settingDescriptor =
-      'black velvet pedestal display, dramatic jewelry spotlighting, pristine premium composition with generous negative space';
-    domainSubject =
-      'Brilliant-cut certified diamond solitaire rings and diamond necklace resting on black velvet, dramatic sparkling refractions and macro lens detail';
+      `black velvet pedestal display, dramatic jewelry spotlighting, pristine premium composition with generous negative space`;
+    domainSubject = pickScene([
+      'Brilliant-cut certified diamond solitaire rings and necklace resting on black velvet, dramatic sparkling refractions and macro lens detail',
+      'Traditional 22K hallmark gold bridal choker necklace and matching jhumka earrings arranged on a royal crimson silk cushion',
+      'Contemporary minimalist diamond jewelry collection on sculptural ceramic pedestals with soft diffused studio lighting',
+      'Macro lens photography of handcrafted gemstone pendant catching golden light with brilliant prismatic reflections',
+      'Luxury jewelry showcase featuring certified solitaire engagement rings inside an elegant velvet display case',
+    ]);
   } else if (winningArchetype === 'trades') {
     styleDescriptor =
       'Award-winning commercial trade & home service photography, professional certified technician, clean modern tools, welcoming atmosphere';
     settingDescriptor =
-      'bright natural studio lighting, ultra-sharp focus, shallow depth of field with copy space';
-    domainSubject =
-      'Certified professional service technician in clean modern uniform inspecting equipment with advanced diagnostic tools, friendly trustworthy atmosphere, bright clean setting';
+      `bright natural studio lighting, ultra-sharp focus, shallow depth of field with copy space`;
+    domainSubject = pickScene([
+      'Certified professional service technician in clean modern uniform inspecting equipment with advanced digital diagnostic tools, friendly trustworthy atmosphere',
+      'Meticulously organized professional service toolkit with precision instruments, calipers, and brass fittings on an immaculate workspace',
+      'Modern industrial equipment installation showcasing clean plumbing, polished copper piping, and high-efficiency valves in a spotless commercial facility',
+      'Friendly service specialist consulting with a client, holding diagnostic tablet, bright natural daylight and professional setting',
+      'Detailed shot of skilled craftsman hands performing precision maintenance with modern insulated tools and safety gear',
+    ]);
   } else if (winningArchetype === 'hospitality') {
     styleDescriptor =
       'Editorial luxury boutique property and outdoor venue photography, golden-hour warmth, architectural greenery, inviting resort ambiance';
     settingDescriptor =
-      'natural sunlit garden courtyard and outdoor property setting with clean depth of field and balanced composition';
-    domainSubject = `Authentic scenic showcase of ${businessName || 'the boutique farmhouse or villa retreat'}, manicured green lawns, warm ambient string lighting, relaxing outdoor seating, serene architectural details`;
+      `natural sunlit garden courtyard and outdoor property setting with clean depth of field and balanced composition`;
+    domainSubject = pickScene([
+      `Authentic scenic showcase of ${businessName || 'the boutique farmhouse or villa retreat'}, manicured green lawns, warm ambient string lighting, relaxing outdoor seating, serene architectural details`,
+      'Crystal-clear luxury swimming pool with turquoise water ripples, premium poolside loungers, and lush green tropical palm trees, golden-hour sunlight',
+      'Spacious scenic farmhouse estate with sprawling manicured green lawn, private pavilion gazebo, and serene open sky at sunset',
+      'Enchanting evening celebration setup poolside, illuminated with warm fairy string lights, elegant outdoor seating, and calm water reflections',
+      'Private villa poolside patio with refreshing shaded daybeds, clean architectural stone deck, and tranquil garden backdrop',
+    ]);
   } else {
     // 100% Dynamic Custom Domain for ANY industry (Solar, Legal, Dental, Gym, Logistics, Agriculture, etc.)
     const primaryOfferings = offerings || category || 'professional business solutions';
     styleDescriptor = `Award-winning commercial promotional advertising photography representing ${primaryOfferings}`;
-    settingDescriptor = `clean modern architectural setting tailored for ${category || 'contemporary business'}, bathed in natural soft studio light with generous negative copy space for text overlays`;
-    domainSubject = `Professional commercial showcase for ${businessName || category || 'business'}, highlighting ${primaryOfferings}, modern state-of-the-art facilities, authentic equipment, clean aspirational presentation`;
+    settingDescriptor = `clean modern architectural setting tailored for ${category || 'contemporary business'}, bathed in ${chosenLighting} with generous negative copy space for text overlays`;
+    domainSubject = pickScene([
+      `Professional commercial showcase for ${businessName || category || 'business'}, highlighting ${primaryOfferings}, modern state-of-the-art facilities, authentic equipment, clean aspirational presentation`,
+      `Modern pristine storefront and customer service area for ${businessName || category || 'business'}, spotless commercial presentation with bright inviting ambiance`,
+      `Professional behind-the-scenes showcase of team delivering expert ${primaryOfferings} with highest standards, crisp clarity and warm depth of field`,
+      `Signature product and service feature display for ${businessName || category || 'business'}, styled for high-converting commercial advertising with sharp detail and natural studio lighting`,
+    ]);
   }
 
-  // When the user writes an explicit scene prompt, let it lead so custom requests are honored faithfully.
-  const hasExplicitScenePrompt = cleanPrompt && cleanPrompt.length > 10 && !domainSubject.toLowerCase().includes(cleanPrompt.toLowerCase().slice(0, 12));
-  const finalSubject = hasExplicitScenePrompt
-    ? !isFestive && cleanPrompt.length >= 24
-      ? `${cleanPrompt} (tailored for ${businessName || category || 'business'}${offerings ? `: ${offerings}` : ''})`
-      : `${domainSubject}, themed around ${cleanPrompt}`
+  // Check if cleanPrompt describes a physical visual scene rather than a marketing angle / slogan
+  const isPhysicalSceneDescription =
+    cleanPrompt &&
+    cleanPrompt.length >= 20 &&
+    hasWord(cleanPrompt.toLowerCase(), [
+      'shot of',
+      'close up',
+      'macro',
+      'view of',
+      'photo of',
+      'desk',
+      'studio',
+      'laptop',
+      'counter',
+      'background',
+      'interior',
+      'exterior',
+      'man',
+      'woman',
+      'person',
+      'hands',
+      'holding',
+      'displaying',
+      'showing',
+      'arranged',
+      'table',
+      'room',
+      'lighting',
+      'render',
+      'illustration',
+      'photograph',
+      'composition',
+    ]);
+
+  const finalSubject = isPhysicalSceneDescription
+    ? `${cleanPrompt} (context: ${domainSubject})`
+    : cleanPrompt && cleanPrompt.length > 5
+    ? `${domainSubject}, themed around "${cleanPrompt}"`
     : domainSubject;
 
   if (isPosterMode) {
-    return `${styleDescriptor}, promotional poster graphic (1080x1350 portrait format). Subject: ${finalSubject}. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures. Perfectly composed in ${settingDescriptor}. High-end commercial aesthetic, perfectly exposed, vivid realistic colors. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO FONTS, NO WATERMARKS, NO LOGOS, pure visual photography only.`;
+    return `${styleDescriptor}, promotional poster graphic (1080x1350 portrait format). Subject: ${finalSubject}. Shot on 35mm f/1.8 lens, ${chosenLighting}, ${chosenAngle}, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures. Perfectly composed in ${settingDescriptor}. High-end commercial aesthetic, perfectly exposed, vivid realistic colors. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO FONTS, NO WATERMARKS, NO LOGOS, pure visual photography only.`;
   }
 
-  return `${styleDescriptor}. Brief: ${finalSubject}. Shot on 35mm f/1.8 lens, natural studio lighting, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures, clean modern background. Authentic, trustworthy, and welcoming atmosphere. Perfectly exposed, vivid realistic colors. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO FONTS, NO WATERMARKS, NO LOGOS, pure visual photography only.`;
+  return `${styleDescriptor}. Brief: ${finalSubject}. Shot on 35mm f/1.8 lens, ${chosenLighting}, ${chosenAngle}, ultra-sharp focus, shallow depth of field, 8k UHD resolution, hyper-realistic textures. Perfectly composed in ${settingDescriptor}. Authentic, trustworthy, and welcoming atmosphere. Perfectly exposed, vivid realistic colors. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO FONTS, NO WATERMARKS, NO LOGOS, pure visual photography only.`;
 }
 
 /**
@@ -1061,6 +1176,7 @@ async function callSiliconFlowImage(params: {
         model,
         prompt: params.promptText,
         image_size: params.dims.siliconflowSize,
+        seed: Math.floor(Math.random() * 2_147_483_647),
       }),
     });
   } catch (err) {
@@ -1170,13 +1286,14 @@ async function callNvidiaImage(params: {
     .join('/');
 
   const isSchnell = /schnell/i.test(model);
+  const randomSeed = Math.floor(Math.random() * 2_147_483_647);
   const requestBody = isSchnell
     ? {
         prompt: params.promptText,
         width: params.dims.nvidiaWidth,
         height: params.dims.nvidiaHeight,
         steps: 4,
-        seed: 0,
+        seed: randomSeed,
       }
     : {
         prompt: params.promptText,
@@ -1185,7 +1302,7 @@ async function callNvidiaImage(params: {
         steps: 25,
         cfg_scale: 3.5,
         mode: 'base',
-        seed: 0,
+        seed: randomSeed,
       };
 
   let response: Response;
@@ -1285,7 +1402,7 @@ export async function generateDesignImage(
   options?: GenerateDesignImageOptions
 ) {
   const isPosterMode = isPoster || prompt.startsWith('[POSTER]');
-  const text = buildHighQualityImagePrompt(prompt, isPosterMode, context);
+  const text = await synthesizeDynamicVisualPrompt(prompt, isPosterMode, context, signal);
   const referenceUrls = options?.referenceImageUrls || context?.referenceImageUrls || [];
   const aspectRatio = options?.aspectRatio || context?.aspectRatio;
   const aspectHint = aspectRatio ? ` Frame for ${aspectRatio} aspect ratio.` : '';
@@ -1396,24 +1513,81 @@ export async function resolveCuratedImageFallback(
   const isDiwali = hasWord(pLower, ['diwali', 'deepavali', 'diya', 'diyas', 'rangoli', 'festival of lights', 'pataka', 'mithai']);
   const isEid = hasWord(pLower, ['eid', 'ramadan', 'crescent', 'iftar', 'eid mubarak']);
   const isChristmas = hasWord(pLower, ['christmas', 'xmas', 'holiday sale', 'santa', 'winter carnival', 'new year', 'year end']);
-  const isFood = hasWord(category + ' ' + offerings + ' ' + pLower, ['food', 'restaurant', 'cafe', 'bakery', 'sweet', 'mithai', 'dining', 'culinary', 'coffee']);
+  const isFood = hasWord(category + ' ' + offerings + ' ' + pLower, ['food', 'restaurant', 'cafe', 'bakery', 'sweet', 'mithai', 'dining', 'culinary', 'coffee', 'cake']);
   const isJewellery = hasWord(category + ' ' + offerings + ' ' + pLower, ['jewellery', 'jewelry', 'gold', 'diamond', 'silver', 'ornament']);
   const isTech = hasWord(category + ' ' + offerings + ' ' + pLower, ['software', 'tech', 'saas', 'app', 'digital', 'cloud', 'developer', 'it ']);
+  const isPaint = hasWord(category + ' ' + offerings + ' ' + pLower, ['paint', 'color', 'coating', 'wall finish', 'primer', 'decor']);
+  const isHardware = hasWord(category + ' ' + offerings + ' ' + pLower, ['hardware', 'tool', 'tools', 'fastener', 'pipe', 'plumb']);
+  const isPool = hasWord(category + ' ' + offerings + ' ' + pLower, ['pool', 'swimming', 'resort', 'farmhouse', 'villa', 'lawn']);
 
-  let stockUrl = 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1400&q=85';
+  const pickOne = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
+  let stockUrl = pickOne([
+    'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1400&q=85',
+    'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1400&q=85',
+    'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1400&q=85',
+    'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=1400&q=85',
+  ]);
 
   if (isDiwali) {
-    stockUrl = 'https://images.unsplash.com/photo-1605379399642-870262d3d051?auto=format&fit=crop&w=1400&q=85';
+    stockUrl = pickOne([
+      'https://images.unsplash.com/photo-1605379399642-870262d3d051?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1574870111867-089730e5a72b?auto=format&fit=crop&w=1400&q=85',
+    ]);
   } else if (isEid) {
-    stockUrl = 'https://images.unsplash.com/photo-1564769625905-50e93615e769?auto=format&fit=crop&w=1400&q=85';
+    stockUrl = pickOne([
+      'https://images.unsplash.com/photo-1564769625905-50e93615e769?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=85',
+    ]);
   } else if (isChristmas) {
-    stockUrl = 'https://images.unsplash.com/photo-1543258103-a62bdc069871?auto=format&fit=crop&w=1400&q=85';
+    stockUrl = pickOne([
+      'https://images.unsplash.com/photo-1543258103-a62bdc069871?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1512389142860-9c449e58a543?auto=format&fit=crop&w=1400&q=85',
+    ]);
   } else if (isFood) {
-    stockUrl = 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1400&q=85';
+    stockUrl = pickOne([
+      'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=1400&q=85',
+    ]);
   } else if (isJewellery) {
-    stockUrl = 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=1400&q=85';
+    stockUrl = pickOne([
+      'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=1400&q=85',
+    ]);
   } else if (isTech) {
-    stockUrl = 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=85';
+    stockUrl = pickOne([
+      'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1400&q=85',
+    ]);
+  } else if (isPaint) {
+    stockUrl = pickOne([
+      'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1400&q=85',
+    ]);
+  } else if (isHardware) {
+    stockUrl = pickOne([
+      'https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?auto=format&fit=crop&w=1400&q=85',
+    ]);
+  } else if (isPool) {
+    stockUrl = pickOne([
+      'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1584132967334-10e028bd69f7?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1400&q=85',
+    ]);
   }
 
   try {

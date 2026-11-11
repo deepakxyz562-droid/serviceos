@@ -5,7 +5,7 @@ vi.mock('@/lib/db', () => ({ db: { aiProviderKey: { findFirst: m.find, update: m
 vi.mock('@/lib/ai-key-crypto', () => ({
   decryptKey: (val: string) => (val.startsWith('{') ? val : 'private-key'),
 }));
-import { generateDesignImage } from '@/lib/designs/image-provider';
+import { generateDesignImage, buildHighQualityImagePrompt } from '@/lib/designs/image-provider';
 
 const ENV_BACKUP = {
   CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
@@ -261,4 +261,33 @@ it('prioritizes festive occasion over business category archetype', async () => 
  expect(promptText).toContain('diya');
  expect(promptText).toContain('marigold');
  expect(promptText).not.toContain('smartphone mockup');
+});
+
+it('produces diverse scene subjects and lighting across consecutive calls for the same business', () => {
+  const prompts = new Set<string>();
+  const context = {
+    category: 'Software & IT Solutions',
+    businessName: 'CloudTech Systems',
+    services: ['Cloud Hosting', 'Cybersecurity'],
+  };
+  for (let i = 0; i < 20; i++) {
+    prompts.add(buildHighQualityImagePrompt('Boost your tech presence', false, context));
+  }
+  expect(prompts.size).toBeGreaterThanOrEqual(3);
+});
+
+it('injects randomized seeds into NVIDIA requests', async () => {
+  m.find.mockImplementation(async ({ where }: any) => {
+    if (where?.provider === 'nvidia') return { id: 'nv-key', encryptedKey: 'nv-secret' };
+    return null;
+  });
+  m.fetch.mockResolvedValue(
+    new Response(JSON.stringify({ artifacts: [{ base64: Buffer.from('nv-img').toString('base64') }] }), {
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+  await generateDesignImage('Luxury villa exterior', 'nvidia', new AbortController().signal);
+  const sentBody = JSON.parse(String(m.fetch.mock.calls[0][1].body));
+  expect(typeof sentBody.seed).toBe('number');
+  expect(sentBody.seed).toBeGreaterThan(0);
 });

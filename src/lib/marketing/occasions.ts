@@ -192,6 +192,10 @@ Output strictly valid JSON with keys:
         'cloudflare',
         AbortSignal.timeout(60000),
         true,
+        {
+          businessName: params.businessName,
+          category: params.industry,
+        },
       );
       if (generated?.bytes) {
         const saved = await saveDesignAsset(generated.bytes, params.tenantId, params.actorId || 'system');

@@ -314,7 +314,7 @@ Requirements:
     }
 
     // 2. Generate Graphic with configured AI image provider (Cloudflare FLUX.2 / SiliconFlow / NVIDIA / Gemini)
-    const imagePrompt = `Clean professional advertisement poster for ${businessName}, ${industry} in ${city}. High quality commercial photography, sleek layout, warm lighting, high detail, modern style.`;
+    const imagePrompt = `High quality commercial advertisement visual for ${businessName} (${industry} in ${city}) showcasing ${todayTheme.focus} — ${todayTheme.angle}. Professional commercial photography, authentic setting, dynamic composition, warm natural lighting, ultra sharp focus, pure visual photography.`;
     const mediaUrls: string[] = [];
     let postDesignJson: string | null = null;
 

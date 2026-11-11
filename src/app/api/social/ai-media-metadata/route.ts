@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       db.tenant
         .findUnique({
           where: { id: tenantId },
-          select: { name: true, industry: true, city: true, state: true, description: true },
+          select: { name: true, industry: true, city: true, state: true, description: true, settingsJson: true },
         })
         .catch(() => null),
       db.trackedKeyword
@@ -106,8 +106,36 @@ export async function POST(request: NextRequest) {
         .catch(() => []) ?? [],
     ]);
 
+    let activeGbpTitle = '';
+    if (tenant?.settingsJson) {
+      try {
+        const s = JSON.parse(tenant.settingsJson);
+        activeGbpTitle = (s.activeGbpTitle || s.locationName || s?.blueprint?.businessName || '').trim();
+      } catch {}
+    }
+
+    const ownerUser = await db.user.findFirst({ where: { tenantId }, select: { name: true } }).catch(() => null);
+    const ownerNameLower = (ownerUser?.name || '').toLowerCase().trim();
+    const isPersonalOrGeneric = (candidate?: string | null): boolean => {
+      if (!candidate) return true;
+      const lower = candidate.toLowerCase().trim();
+      return (
+        lower === 'our business' ||
+        lower === 'your business' ||
+        lower === 'my business' ||
+        lower.includes('workspace') ||
+        (Boolean(ownerNameLower) && (lower === ownerNameLower || lower === `${ownerNameLower}'s business`))
+      );
+    };
+
     const businessName =
-      brandRaw?.businessName?.trim() || tenant?.name?.trim() || 'Our Business';
+      (activeGbpTitle && !isPersonalOrGeneric(activeGbpTitle) ? activeGbpTitle : '') ||
+      (brandRaw?.businessName && !isPersonalOrGeneric(brandRaw.businessName) ? brandRaw.businessName.trim() : '') ||
+      (tenant?.name && !isPersonalOrGeneric(tenant.name) ? tenant.name.trim() : '') ||
+      activeGbpTitle ||
+      brandRaw?.businessName?.trim() ||
+      tenant?.name?.trim() ||
+      'Our Business';
     const industry =
       brandRaw?.industry?.trim() || tenant?.industry?.trim() || 'Local Service';
     const location =

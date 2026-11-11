@@ -75,7 +75,11 @@ export default function PhotosScreen() {
   }, [lastCompletionSeq]);
 
   const activeProfile = discover.data?.activeProfile;
-  const profileName = activeProfile?.name || gbpPlace.data?.place?.title || 'My Business';
+  const profileName =
+    activeProfile?.name ||
+    gbpPlace.data?.place?.title ||
+    gbpPlace.data?.tenantFallback?.name ||
+    'My Business';
 
   const isInitialLoading =
     (photosRes.loading && !photosRes.data) ||

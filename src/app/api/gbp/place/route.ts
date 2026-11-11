@@ -88,7 +88,19 @@ export async function GET(request: NextRequest) {
         ? Number((reviews.reduce((acc, r) => acc + (r.rating || 5), 0) / totalReviews).toFixed(1))
         : 0;
 
-    const fallbackName = tenant?.brandProfile?.businessName || tenant?.name || 'Business Profile';
+    let tenantSettings: Record<string, any> = {};
+    if ((tenant as any)?.settingsJson) {
+      try {
+        tenantSettings = JSON.parse((tenant as any).settingsJson);
+      } catch {}
+    }
+
+    const fallbackName =
+      (typeof tenantSettings.activeGbpTitle === 'string' && tenantSettings.activeGbpTitle.trim()) ||
+      (typeof tenantSettings.locationName === 'string' && tenantSettings.locationName.trim()) ||
+      tenant?.brandProfile?.businessName ||
+      tenant?.name ||
+      'Business Profile';
     const fallbackCategory =
       tenant?.brandProfile?.industry ||
       (tenant as any)?.industry ||

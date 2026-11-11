@@ -327,9 +327,10 @@ async function gatherContextAndPhotos(
   ]);
 
   let brandBrainProducts: string[] = [];
+  let parsedSettings: Record<string, any> = {};
   if (tenant?.settingsJson) {
     try {
-      const parsedSettings = JSON.parse(tenant.settingsJson);
+      parsedSettings = JSON.parse(tenant.settingsJson);
       const items = parsedSettings?.brandBrain?.sellingItems;
       if (Array.isArray(items)) {
         brandBrainProducts = items
@@ -339,15 +340,67 @@ async function gatherContextAndPhotos(
     } catch {}
   }
 
+  let gbpMeta: Record<string, any> = {};
+  if (googleAccount?.metadata) {
+    try {
+      gbpMeta = typeof googleAccount.metadata === 'string' ? JSON.parse(googleAccount.metadata) : googleAccount.metadata;
+    } catch {}
+  }
+
+  // Detect owner's personal name to avoid displaying person name instead of business name
+  const ownerUser = await db.user.findFirst({ where: { tenantId }, select: { name: true } }).catch(() => null);
+  const ownerNameLower = (ownerUser?.name || '').toLowerCase().trim();
+
+  const isPersonalOrGeneric = (candidate?: string | null): boolean => {
+    if (!candidate) return true;
+    const lower = candidate.toLowerCase().trim();
+    if (lower === 'your business' || lower === 'my business' || lower === 'business profile' || lower.includes('workspace')) {
+      return true;
+    }
+    if (ownerNameLower && (lower === ownerNameLower || lower === `${ownerNameLower}'s business`)) {
+      return true;
+    }
+    return false;
+  };
+
+  const activeGbpTitle = (parsedSettings.activeGbpTitle || gbpMeta.locationTitle || '').trim();
+  const googleAccountName = (googleAccount?.accountName || '').trim();
+  const blueprintName = (parsedSettings.blueprint?.businessName || parsedSettings.locationName || '').trim();
+  const brandProfileName = (brandProfile?.businessName || '').trim();
+  const tenantName = (tenant?.name || '').trim();
+
+  let resolvedBusinessName = '';
+  if (activeGbpTitle && !isPersonalOrGeneric(activeGbpTitle)) {
+    resolvedBusinessName = activeGbpTitle;
+  } else if (googleAccountName && !isPersonalOrGeneric(googleAccountName)) {
+    resolvedBusinessName = googleAccountName;
+  } else if (brandProfileName && !isPersonalOrGeneric(brandProfileName)) {
+    resolvedBusinessName = brandProfileName;
+  } else if (blueprintName && !isPersonalOrGeneric(blueprintName)) {
+    resolvedBusinessName = blueprintName;
+  } else if (tenantName && !isPersonalOrGeneric(tenantName)) {
+    resolvedBusinessName = tenantName;
+  } else {
+    resolvedBusinessName = activeGbpTitle || googleAccountName || brandProfileName || blueprintName || tenantName || 'Your Business';
+  }
+
+  // If brandProfile exists and was previously stored with owner's personal name, sync to active GBP title
+  if (brandProfile && isPersonalOrGeneric(brandProfileName) && activeGbpTitle && !isPersonalOrGeneric(activeGbpTitle)) {
+    void db.brandProfile.update({
+      where: { id: brandProfile.id },
+      data: { businessName: activeGbpTitle },
+    }).catch(() => {});
+  }
+
   const business: BusinessAiContext = {
-    name: brandProfile?.businessName || tenant?.name || 'Your Business',
-    category: brandProfile?.industry || tenant?.industry || 'Local Business',
-    location: brandProfile?.location || tenant?.address || '',
+    name: resolvedBusinessName,
+    category: brandProfile?.industry || tenant?.industry || gbpMeta.category || 'Local Business',
+    location: brandProfile?.location || tenant?.address || gbpMeta.address || '',
     products: Array.from(
       new Set([...parseStringArray(brandProfile?.products), ...brandBrainProducts]),
     ).slice(0, 12),
     services: parseStringArray(brandProfile?.services).slice(0, 12),
-    website: brandProfile?.website || '',
+    website: brandProfile?.website || gbpMeta.website || '',
   };
 
   const seenUrls = new Set<string>();
@@ -360,19 +413,32 @@ async function gatherContextAndPhotos(
     previousPhotos.push({ ...item, url: norm });
   };
 
-  for (const row of libraryRows || []) {
-    if (typeof row?.folder === 'string' && row.folder.includes('retired')) continue;
-    if (typeof row?.mediaType === 'string' && row.mediaType.startsWith('video/')) continue;
-    if (typeof row?.url === 'string') {
-      pushPhoto({
-        id: row.id,
-        url: row.url,
-        title: row.name || undefined,
-        source: 'library',
-      });
+  // 1. Prioritize authentic Google Business Profile photos (storefront, interior, products live on Google Maps)
+  const includeGoogle = request.nextUrl.searchParams.get('includeGoogle') !== '0';
+  if (includeGoogle && googleAccount) {
+    try {
+      const gMedia = await Promise.race([
+        listGoogleBusinessMedia(googleAccount),
+        new Promise<{ mediaItems: [] }>((resolve) =>
+          setTimeout(() => resolve({ mediaItems: [] }), 4000),
+        ),
+      ]);
+      for (const [idx, m] of (gMedia.mediaItems || []).slice(0, 24).entries()) {
+        if (m.googleUrl) {
+          pushPhoto({
+            id: m.name || `google-${idx}`,
+            url: m.googleUrl,
+            title: m.category ? `Google Business · ${m.category}` : 'Google Business Photo',
+            source: 'google',
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[ai-image-ideas] Google Business Media fetch fallback:', err);
     }
   }
 
+  // 2. Add published and scheduled social post photos
   for (const post of postRows || []) {
     const urls = parseMediaUrls(post?.mediaUrls);
     let title: string | undefined;
@@ -385,37 +451,29 @@ async function gatherContextAndPhotos(
       pushPhoto({
         id: `post-${post.id}`,
         url: u,
-        title,
+        title: title || 'Social Post Media',
         source: 'post',
       });
     }
   }
 
-  const includeGoogle = request.nextUrl.searchParams.get('includeGoogle') !== '0';
-  if (includeGoogle && googleAccount) {
-    try {
-      const gMedia = await Promise.race([
-        listGoogleBusinessMedia(googleAccount),
-        new Promise<{ mediaItems: [] }>((resolve) =>
-          setTimeout(() => resolve({ mediaItems: [] }), 3000),
-        ),
-      ]);
-      for (const [idx, m] of (gMedia.mediaItems || []).slice(0, 12).entries()) {
-        if (m.googleUrl) {
-          pushPhoto({
-            id: m.name || `google-${idx}`,
-            url: m.googleUrl,
-            title: m.category ? `GBP · ${m.category}` : 'Google Business Photo',
-            source: 'google',
-          });
-        }
-      }
-    } catch {}
+  // 3. Add brand image library rows
+  for (const row of libraryRows || []) {
+    if (typeof row?.folder === 'string' && row.folder.includes('retired')) continue;
+    if (typeof row?.mediaType === 'string' && row.mediaType.startsWith('video/')) continue;
+    if (typeof row?.url === 'string') {
+      pushPhoto({
+        id: row.id,
+        url: row.url,
+        title: row.name || 'Brand Library Photo',
+        source: 'library',
+      });
+    }
   }
 
   return {
     business,
-    previousPhotos: previousPhotos.slice(0, 24),
+    previousPhotos: previousPhotos.slice(0, 48),
     ideas: buildIdeasForBusiness(business, topic),
   };
 }
