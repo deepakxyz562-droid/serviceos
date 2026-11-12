@@ -1,6 +1,9 @@
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   withProjectBuildGradle,
   withGradleProperties,
+  withDangerousMod,
 } = require('expo/config-plugins');
 
 function withAndroidReleaseOptimizations(config) {
@@ -54,8 +57,35 @@ function withAndroidReleaseOptimizations(config) {
     addOrUpdate('android.enableMinifyInReleaseBuilds', 'true');
     addOrUpdate('android.enableShrinkResourcesInReleaseBuilds', 'true');
     addOrUpdate('android.enablePngCrunchInReleaseBuilds', 'true');
+    // Match Expo SDK 58 template for AGP 9.2.1 until third-party RN modules migrate off kotlin-android / old DSL.
+    addOrUpdate('android.builtInKotlin', 'false');
+    addOrUpdate('android.newDsl', 'false');
     return modConfig;
   });
+
+  // 3. Keep Gradle wrapper compatible with React Native 0.88 / AGP 9.2.1 (requires >= 9.4.1)
+  config = withDangerousMod(config, [
+    'android',
+    async (modConfig) => {
+      const wrapperPath = path.join(
+        modConfig.modRequest.platformProjectRoot,
+        'gradle',
+        'wrapper',
+        'gradle-wrapper.properties',
+      );
+      if (fs.existsSync(wrapperPath)) {
+        const current = await fs.promises.readFile(wrapperPath, 'utf8');
+        const next = current.replace(
+          /distributionUrl=.*/,
+          'distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.1-bin.zip',
+        );
+        if (next !== current) {
+          await fs.promises.writeFile(wrapperPath, next, 'utf8');
+        }
+      }
+      return modConfig;
+    },
+  ]);
 
   return config;
 }
