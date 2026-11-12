@@ -60,6 +60,13 @@ export interface PublicAgentConfig {
     standalone?: { enabled: boolean; slug?: string };
     voice?: { enabled: boolean };
   };
+  knowledge?: {
+    crawledUrls: string[];
+    documents: unknown[];
+    faqPairs: unknown[];
+    systemPrompt: string;
+    guardrails: unknown[];
+  };
   updatedAt: string;
 }
 
@@ -126,6 +133,14 @@ function sanitizePublicAgent(agent: FormAgentData): PublicAgentConfig {
       standalone: agent.channels?.standalone || { enabled: true },
       voice: agent.channels?.voice || { enabled: true },
     } as any,
+    // Strip private system prompts, guardrails, and raw knowledge docs over unauthenticated GET
+    knowledge: {
+      crawledUrls: [],
+      documents: [],
+      faqPairs: Array.isArray(agent.knowledge?.faqPairs) ? agent.knowledge.faqPairs.slice(0, 20) : [],
+      systemPrompt: '',
+      guardrails: [],
+    },
     updatedAt: toIsoString(agent.updatedAt),
   };
 }
@@ -140,7 +155,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slugOrId: string }> },
 ) {
-  const { slugOrId } = await params;
+  const { slugOrId: rawSlugOrId } = await params;
+  let slugOrId = (rawSlugOrId || '').trim();
+  try {
+    slugOrId = decodeURIComponent(slugOrId).trim();
+  } catch {
+    // keep trimmed value if malformed URI sequence
+  }
 
   if (!slugOrId) {
     return NextResponse.json({ error: 'Agent identifier required' }, { status: 400 });
