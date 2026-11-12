@@ -2,9 +2,9 @@
 
 buildscript {
   ext {
-    buildToolsVersion = "35.0.0"
+    buildToolsVersion = "37.0.0"
     minSdkVersion = 24
-    compileSdkVersion = 36
+    compileSdkVersion = 37
     targetSdkVersion = 36
     ndkVersion = "27.1.12297006"
   }
@@ -28,8 +28,8 @@ allprojects {
   }
   configurations.all {
     resolutionStrategy {
-      force 'androidx.core:core:1.15.0'
-      force 'androidx.core:core-ktx:1.15.0'
+      force 'androidx.core:core:1.17.0'
+      force 'androidx.core:core-ktx:1.17.0'
     }
   }
 }

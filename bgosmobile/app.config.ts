@@ -39,7 +39,7 @@ export default ({ config, projectRoot }: ConfigContext): any => {
     package: 'com.fieseros.bgos',
     googleServicesFile: './google-services.json',
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#0B9042' },
-    compileSdkVersion: 36,
+    compileSdkVersion: 37,
     targetSdkVersion: 36,
     permissions: ['POST_NOTIFICATIONS'],
     blockedPermissions: [
