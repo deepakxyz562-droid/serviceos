@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   withProjectBuildGradle,
+  withAppBuildGradle,
   withGradleProperties,
   withDangerousMod,
 } = require('expo/config-plugins');
@@ -60,6 +61,15 @@ function withAndroidReleaseOptimizations(config) {
     // Match Expo SDK 58 template for AGP 9.2.1 until third-party RN modules migrate off kotlin-android / old DSL.
     addOrUpdate('android.builtInKotlin', 'false');
     addOrUpdate('android.newDsl', 'false');
+    return modConfig;
+  });
+
+  // 2b. AGP 9 removed getDefaultProguardFile('proguard-android.txt')
+  config = withAppBuildGradle(config, (modConfig) => {
+    modConfig.modResults.contents = modConfig.modResults.contents.replace(
+      /getDefaultProguardFile\((['"])proguard-android\.txt\1\)/g,
+      'getDefaultProguardFile("proguard-android-optimize.txt")',
+    );
     return modConfig;
   });
 
