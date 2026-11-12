@@ -46,6 +46,12 @@ function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
   }
 }
 
+function normalizeGooglePlaceId(raw?: string | null): string | null {
+  if (typeof raw !== 'string') return null;
+  const cleaned = raw.replace(/^places\//, '').trim();
+  return /^ChI[A-Za-z0-9_-]+$/.test(cleaned) ? cleaned : null;
+}
+
 async function resolveDefaultGeoAndPlace(tenant: any, googleAccount: any) {
   const stored = settings(tenant?.settingsJson);
   const meta =
@@ -54,15 +60,29 @@ async function resolveDefaultGeoAndPlace(tenant: any, googleAccount: any) {
       : googleAccount?.metadata || {};
 
   const placeId: string | null =
-    stored?.rankSearch?.placeId ||
-    tenant?.googlePlaceId ||
-    meta?.placeId ||
+    normalizeGooglePlaceId(stored?.rankSearch?.placeId) ||
+    normalizeGooglePlaceId(stored?.activeGbpPlaceId) ||
+    normalizeGooglePlaceId(tenant?.googlePlaceId) ||
+    normalizeGooglePlaceId(meta?.placeId) ||
     null;
 
   let centerLat: number | null =
-    typeof tenant?.latitude === 'number' && tenant.latitude !== 0 ? tenant.latitude : null;
+    typeof tenant?.latitude === 'number' && Number.isFinite(tenant.latitude) && tenant.latitude !== 0
+      ? tenant.latitude
+      : null;
   let centerLng: number | null =
-    typeof tenant?.longitude === 'number' && tenant.longitude !== 0 ? tenant.longitude : null;
+    typeof tenant?.longitude === 'number' && Number.isFinite(tenant.longitude) && tenant.longitude !== 0
+      ? tenant.longitude
+      : null;
+
+  if ((centerLat == null || centerLng == null) && meta?.latlng) {
+    const mLat = Number(meta.latlng.latitude ?? meta.latlng.lat);
+    const mLng = Number(meta.latlng.longitude ?? meta.latlng.lng);
+    if (Number.isFinite(mLat) && Number.isFinite(mLng) && (mLat !== 0 || mLng !== 0)) {
+      centerLat = mLat;
+      centerLng = mLng;
+    }
+  }
 
   if ((centerLat == null || centerLng == null) && typeof stored?.rankSearch?.location === 'string') {
     const parts = stored.rankSearch.location.split(',');
@@ -79,6 +99,53 @@ async function resolveDefaultGeoAndPlace(tenant: any, googleAccount: any) {
     (centerLat != null && centerLng != null ? `${centerLat},${centerLng},15z` : null);
 
   return { placeId, centerLat, centerLng, locationCoord };
+}
+
+async function lookupPlaceAndCoordsFromText(params: {
+  tenantId: string;
+  query: string;
+  regionCode?: string;
+}): Promise<{ placeId: string | null; centerLat: number | null; centerLng: number | null }> {
+  const apiKey = getGooglePlacesApiKey();
+  if (!apiKey || !params.query.trim()) {
+    return { placeId: null, centerLat: null, centerLng: null };
+  }
+  try {
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'places.id,places.location',
+      },
+      body: JSON.stringify({
+        textQuery: params.query.trim(),
+        maxResultCount: 1,
+        regionCode: params.regionCode || 'IN',
+      }),
+      signal: AbortSignal.timeout(7000),
+    });
+    if (!res.ok) return { placeId: null, centerLat: null, centerLng: null };
+    const data = (await res.json().catch(() => ({}))) as { places?: Array<any> };
+    const top = data.places?.[0];
+    const resolvedPlaceId = normalizeGooglePlaceId(top?.id);
+    const lat = typeof top?.location?.latitude === 'number' ? top.location.latitude : null;
+    const lng = typeof top?.location?.longitude === 'number' ? top.location.longitude : null;
+    if (resolvedPlaceId || (lat != null && lng != null)) {
+      await db.tenant
+        .update({
+          where: { id: params.tenantId },
+          data: {
+            ...(resolvedPlaceId ? { googlePlaceId: resolvedPlaceId } : {}),
+            ...(lat != null && lng != null ? { latitude: lat, longitude: lng } : {}),
+          } as any,
+        })
+        .catch(() => {});
+    }
+    return { placeId: resolvedPlaceId, centerLat: lat, centerLng: lng };
+  } catch {
+    return { placeId: null, centerLat: null, centerLng: null };
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -125,9 +192,9 @@ export async function GET(request: NextRequest) {
       ? (db as any).trackedKeyword
           .findMany({
             where: { tenantId: user.tenantId },
-            select: { keyword: true },
+            select: { keyword: true, mapsRank: true, organicRank: true },
             orderBy: { position: 'asc' },
-            take: 10,
+            take: 15,
           })
           .catch(() => [])
       : [],
@@ -146,25 +213,46 @@ export async function GET(request: NextRequest) {
 
   const geoDefaults = await resolveDefaultGeoAndPlace(tenant, googleAccount);
 
+  const storedGridScans = Array.isArray(stored.measuredGridScans)
+    ? [...stored.measuredGridScans].reverse()
+    : [];
+  const storedGridModeMap = new Map<string, string>();
+  for (const s of storedGridScans) {
+    if (s?.id && s?.providerMode) storedGridModeMap.set(s.id, s.providerMode);
+  }
+
+  const storedOrganicScans = Array.isArray(stored.measuredOrganicScans)
+    ? [...stored.measuredOrganicScans].reverse()
+    : [];
+  const storedOrganicModeMap = new Map<string, string>();
+  for (const s of storedOrganicScans) {
+    if (s?.id && s?.providerMode) storedOrganicModeMap.set(s.id, s.providerMode);
+  }
+
   const dbGridScans = Array.isArray(gridRows)
     ? gridRows
         .filter((r: any) => r.scanType === 'maps_grid')
-        .map((r: any) => ({
-          id: r.id,
-          date: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
-          keyword: r.keyword,
-          placeId: r.placeId,
-          gridSize: r.gridSize === 5 ? 5 : 3,
-          radiusKm: r.radiusKm || 3,
-          centerLat: r.centerLat,
-          centerLng: r.centerLng,
-          avgRank: r.avgRank,
-          top3Pct: r.top3Pct,
-          rankedPoints: safeJsonParse<any[]>(r.pointsJson, []).filter((p) => p?.rank != null).length,
-          totalPoints: r.gridSize === 5 ? 25 : 9,
-          points: safeJsonParse<any[]>(r.pointsJson, []),
-          cost: r.cost || 0,
-        }))
+        .map((r: any) => {
+          const pts = safeJsonParse<any[]>(r.pointsJson, []);
+          const gs: 3 | 5 = r.gridSize === 5 ? 5 : 3;
+          return {
+            id: r.id,
+            date: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+            keyword: r.keyword,
+            placeId: r.placeId,
+            gridSize: gs,
+            radiusKm: r.radiusKm || 3,
+            centerLat: r.centerLat,
+            centerLng: r.centerLng,
+            avgRank: r.avgRank ?? null,
+            top3Pct: r.top3Pct ?? 0,
+            rankedPoints: pts.filter((p) => typeof p?.rank === 'number' && p.rank > 0).length,
+            totalPoints: gs === 5 ? 25 : 9,
+            points: pts,
+            cost: r.cost || 0,
+            providerMode: storedGridModeMap.get(r.id) || (r.cost === 0 ? 'places_area_grid' : 'dataforseo'),
+          };
+        })
     : [];
 
   const dbOrganicScans = Array.isArray(gridRows)
@@ -182,23 +270,13 @@ export async function GET(request: NextRequest) {
             aiOverviewCited: Boolean(r.aiOverviewCited),
             citedDomains,
             cost: r.cost || 0,
+            providerMode: storedOrganicModeMap.get(r.id) || (r.cost === 0 ? 'gemini_grounded_search' : 'dataforseo'),
           };
         })
     : [];
 
-  const gridScans =
-    dbGridScans.length > 0
-      ? dbGridScans
-      : Array.isArray(stored.measuredGridScans)
-        ? [...stored.measuredGridScans].reverse()
-        : [];
-
-  const organicScans =
-    dbOrganicScans.length > 0
-      ? dbOrganicScans
-      : Array.isArray(stored.measuredOrganicScans)
-        ? [...stored.measuredOrganicScans].reverse()
-        : [];
+  const gridScans = dbGridScans.length > 0 ? dbGridScans : storedGridScans;
+  const organicScans = dbOrganicScans.length > 0 ? dbOrganicScans : storedOrganicScans;
 
   const trackedKeywordStrings = Array.isArray(trackedRows)
     ? trackedRows.map((k: any) => k.keyword).filter(Boolean)
@@ -208,76 +286,105 @@ export async function GET(request: NextRequest) {
 
   const nativeDiscovery = stored.googleDiscovery || null;
 
-  const rawKeywords = summary.keywords.length > 0
-    ? summary.keywords.map((k: any, i: number) => {
-        const changes = [0, -0.2, -0.2, 0, -0.1];
-        return {
-          keyword: k.keyword,
-          rank: typeof k.currentRank === 'number' ? Number(k.currentRank.toFixed(1)) : 1.5,
-          rankChange: changes[i % changes.length],
-        };
-      })
-    : (trackedKeywordStrings.length > 0 ? trackedKeywordStrings : [
-        `${tenant.industry || 'Business'} near me`,
-        `best ${tenant.industry || 'service'} near me`,
-        `private ${tenant.industry || 'service'} near me`,
-        `family ${tenant.industry || 'store'} near me`,
-        `top rated ${tenant.industry || 'market'} near me`,
-      ]).map((kw: string, i: number) => {
-        const baseRanks = [1.4, 1.6, 3.0, 1.2, 2.5];
-        const changes = [0, -0.2, -0.2, 0, -0.1];
-        return {
-          keyword: kw,
-          rank: baseRanks[i % baseRanks.length],
-          rankChange: changes[i % changes.length],
-        };
-      });
-
-  const topKeyword = rawKeywords[0]?.keyword || `${tenant.industry || 'Business'} near me`;
-
-  // Construct 5x5 GeoGrid representation matching benchmark heatmap
-  const defaultCenterLat = geoDefaults.centerLat || 28.6139;
-  const defaultCenterLng = geoDefaults.centerLng || 77.2090;
-  const defaultGridPoints: any[] = [];
-  const rankMatrix = [
-    [1, 1, 1, 1, 1],
-    [1, 1, 1, 2, 1],
-    [1, 1, 10, 1, 1],
-    [1, 1, 1, 1, 1],
-    [1, 1, 1, 1, 2],
-  ];
-  for (let r = 0; r < 5; r++) {
-    for (let c = 0; c < 5; c++) {
-      const isCenter = r === 2 && c === 2;
-      defaultGridPoints.push({
-        row: r,
-        col: c,
-        rank: rankMatrix[r][c],
-        isCenter,
-        lat: Number((defaultCenterLat + (2 - r) * 0.015).toFixed(6)),
-        lng: Number((defaultCenterLng + (c - 2) * 0.015).toFixed(6)),
-      });
+  // Build real measured keyword list (never synthesize fake 1.4/1.6 ranks when empty)
+  const measuredKeywordMap = new Map<string, { keyword: string; rank: number | null; rankChange: number | null }>();
+  const rawScans: RankScan[] = Array.isArray(stored.measuredRankScans) ? stored.measuredRankScans : [];
+  const prevScan = rawScans.length >= 2 ? rawScans[rawScans.length - 2] : null;
+  for (const k of summary.keywords) {
+    if (!k?.keyword) continue;
+    const curr = typeof k.currentRank === 'number' ? Number(k.currentRank.toFixed(1)) : null;
+    const prevKw = prevScan?.keywords?.find((pk) => pk.keyword.toLowerCase() === k.keyword.toLowerCase());
+    const delta =
+      curr != null && typeof prevKw?.rank === 'number'
+        ? Number((prevKw.rank - curr).toFixed(1))
+        : null;
+    measuredKeywordMap.set(k.keyword.toLowerCase(), {
+      keyword: k.keyword,
+      rank: curr,
+      rankChange: delta,
+    });
+  }
+  for (const gs of gridScans) {
+    const key = String(gs?.keyword || '').trim().toLowerCase();
+    if (!key || measuredKeywordMap.has(key)) continue;
+    const earlier = gridScans.find(
+      (other: any) => other.id !== gs.id && String(other.keyword || '').trim().toLowerCase() === key && other.avgRank != null,
+    );
+    const curr = typeof gs.avgRank === 'number' ? Number(gs.avgRank.toFixed(1)) : null;
+    const delta =
+      curr != null && typeof earlier?.avgRank === 'number'
+        ? Number((earlier.avgRank - curr).toFixed(1))
+        : null;
+    measuredKeywordMap.set(key, {
+      keyword: gs.keyword,
+      rank: curr,
+      rankChange: delta,
+    });
+  }
+  if (Array.isArray(trackedRows)) {
+    for (const row of trackedRows) {
+      const key = String(row?.keyword || '').trim().toLowerCase();
+      if (!key || measuredKeywordMap.has(key)) continue;
+      const r = typeof row.mapsRank === 'number' ? row.mapsRank : typeof row.organicRank === 'number' ? row.organicRank : null;
+      if (r != null) {
+        measuredKeywordMap.set(key, {
+          keyword: row.keyword,
+          rank: Number(r.toFixed(1)),
+          rankChange: null,
+        });
+      }
     }
   }
+  const rawKeywords = Array.from(measuredKeywordMap.values());
 
-  const latestGrid = gridScans[0];
-  const geoGrid = {
-    keyword: latestGrid?.keyword || topKeyword,
-    lastUpdated: latestGrid?.date
-      ? new Date(latestGrid.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-      : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-    avgRank: latestGrid?.avgRank || 1.4,
-    points: Array.isArray(latestGrid?.points) && latestGrid.points.length >= 9
-      ? latestGrid.points.map((p: any, idx: number) => ({
-          row: p.row ?? Math.floor(idx / 5),
-          col: p.col ?? (idx % 5),
-          rank: p.rank ?? (idx === 12 ? 10 : 1),
-          isCenter: (p.row === 2 && p.col === 2) || idx === 12,
-          lat: p.lat,
-          lng: p.lng,
-        }))
-      : defaultGridPoints,
-  };
+  const latestGrid = gridScans[0] || null;
+  const gridSize: 3 | 5 = latestGrid?.gridSize === 5 ? 5 : 3;
+  const centerIdx = Math.floor(gridSize / 2);
+
+  const geoGrid = latestGrid
+    ? {
+        hasScans: true,
+        scanId: latestGrid.id,
+        keyword: latestGrid.keyword,
+        lastUpdated: latestGrid.date
+          ? new Date(latestGrid.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : null,
+        avgRank: typeof latestGrid.avgRank === 'number' ? latestGrid.avgRank : null,
+        top3Pct: typeof latestGrid.top3Pct === 'number' ? latestGrid.top3Pct : 0,
+        gridSize,
+        radiusKm: latestGrid.radiusKm || 3,
+        centerLat: typeof latestGrid.centerLat === 'number' ? latestGrid.centerLat : geoDefaults.centerLat,
+        centerLng: typeof latestGrid.centerLng === 'number' ? latestGrid.centerLng : geoDefaults.centerLng,
+        points: Array.isArray(latestGrid.points)
+          ? latestGrid.points.map((p: any, idx: number) => {
+              const row = typeof p.row === 'number' ? p.row : Math.floor(idx / gridSize);
+              const col = typeof p.col === 'number' ? p.col : idx % gridSize;
+              return {
+                row,
+                col,
+                rank: typeof p.rank === 'number' && p.rank > 0 ? p.rank : null,
+                isCenter: row === centerIdx && col === centerIdx,
+                lat: p.lat,
+                lng: p.lng,
+                topCompetitorName: p.topCompetitorName || null,
+                topCompetitorRating: p.topCompetitorRating ?? null,
+              };
+            })
+          : [],
+      }
+    : {
+        hasScans: false,
+        scanId: null,
+        keyword: trackedKeywordStrings[0] || rawKeywords[0]?.keyword || '',
+        lastUpdated: null,
+        avgRank: null,
+        top3Pct: null,
+        gridSize: 3 as const,
+        radiusKm: 3,
+        centerLat: geoDefaults.centerLat,
+        centerLng: geoDefaults.centerLng,
+        points: [],
+      };
 
   const dataForSeoConfigured = !!(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
   const placesConfigured = Boolean(getGooglePlacesApiKey());
@@ -450,6 +557,44 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // 1b. Save verified Google Place ID & map center coordinates
+  if (body?.mode === 'save_geo_config') {
+    const cleanPlaceId = normalizeGooglePlaceId(body.placeId);
+    const lat = Number(body.centerLat);
+    const lng = Number(body.centerLng);
+    if (!cleanPlaceId || !Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lng) || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) {
+      return NextResponse.json(
+        { error: 'Enter a valid Google Place ID (ChI…) and non-zero latitude/longitude coordinates.' },
+        { status: 400 },
+      );
+    }
+    const existing = await db.tenant.findUnique({ where: { id: user.tenantId }, select: { settingsJson: true } });
+    const parsed = settings(existing?.settingsJson);
+    await db.tenant.update({
+      where: { id: user.tenantId },
+      data: {
+        googlePlaceId: cleanPlaceId,
+        latitude: lat,
+        longitude: lng,
+        settingsJson: JSON.stringify({
+          ...parsed,
+          rankSearch: {
+            ...(parsed.rankSearch || {}),
+            placeId: cleanPlaceId,
+            location: `${lat},${lng},15z`,
+          },
+        }),
+      } as any,
+    });
+    return NextResponse.json({
+      success: true,
+      placeId: cleanPlaceId,
+      centerLat: lat,
+      centerLng: lng,
+      message: 'Map center and Place ID saved.',
+    });
+  }
+
   // 2. Maps Geo-Grid Scan (3x3 / 5x5)
   if (body?.mode === 'maps_grid') {
     const gate = await requireBgosEntitled(user);
@@ -482,7 +627,18 @@ export async function POST(request: NextRequest) {
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { settingsJson: true, googlePlaceId: true, latitude: true, longitude: true, country: true },
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        address: true,
+        settingsJson: true,
+        googlePlaceId: true,
+        latitude: true,
+        longitude: true,
+        country: true,
+        brandProfile: { select: { businessName: true, location: true } },
+      },
     });
     if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
@@ -490,10 +646,33 @@ export async function POST(request: NextRequest) {
     const geoDefaults = await resolveDefaultGeoAndPlace(tenant, googleAccount);
 
     const keyword = String(body.keyword || '').trim();
-    const placeId = String(body.placeId || geoDefaults.placeId || '').trim();
-    const centerLat = Number(body.centerLat ?? geoDefaults.centerLat);
-    const centerLng = Number(body.centerLng ?? geoDefaults.centerLng);
+    let placeId = normalizeGooglePlaceId(body.placeId) || geoDefaults.placeId || '';
+    let centerLat = body.centerLat != null && body.centerLat !== '' ? Number(body.centerLat) : (geoDefaults.centerLat ?? NaN);
+    let centerLng = body.centerLng != null && body.centerLng !== '' ? Number(body.centerLng) : (geoDefaults.centerLng ?? NaN);
     const radiusKm = Number(body.radiusKm || 3);
+
+    // Auto-resolve Place ID and/or coordinates via Google Places Text Search when missing
+    const needsGeoResolve =
+      !placeId ||
+      !Number.isFinite(centerLat) ||
+      !Number.isFinite(centerLng) ||
+      (centerLat === 0 && centerLng === 0);
+    if (needsGeoResolve && hasPlaces) {
+      const bizLabel = tenant.brandProfile?.businessName || tenant.name || '';
+      const locLabel = tenant.address || tenant.brandProfile?.location || tenant.city || '';
+      const resolved = await lookupPlaceAndCoordsFromText({
+        tenantId: user.tenantId,
+        query: `${bizLabel} ${locLabel}`.trim(),
+        regionCode: ((tenant as any).country || 'IN').toUpperCase(),
+      });
+      if (!placeId && resolved.placeId) placeId = resolved.placeId;
+      if ((!Number.isFinite(centerLat) || centerLat === 0) && resolved.centerLat != null) {
+        centerLat = resolved.centerLat;
+      }
+      if ((!Number.isFinite(centerLng) || centerLng === 0) && resolved.centerLng != null) {
+        centerLng = resolved.centerLng;
+      }
+    }
 
     if (
       !keyword ||
@@ -506,7 +685,13 @@ export async function POST(request: NextRequest) {
       (centerLat === 0 && centerLng === 0)
     ) {
       return NextResponse.json(
-        { error: 'Provide a valid keyword, Google Place ID (ChI...), and map center coordinates.' },
+        {
+          error: !keyword
+            ? 'Enter a target keyword to run a Maps Geo-Grid scan.'
+            : !/^ChI[A-Za-z0-9_-]+$/.test(placeId)
+              ? 'Google Place ID (ChI…) is required. Connect your Google Business Profile or enter your Place ID in Settings.'
+              : 'Map center latitude/longitude coordinates are missing. Enter valid coordinates or set your business address.',
+        },
         { status: 400 },
       );
     }
@@ -521,35 +706,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const claimSettings = {
-      ...stored,
-      rankGridClaims: {
-        ...(stored.rankGridClaims || {}),
-        [claimKey]: new Date().toISOString(),
-      },
-    };
-    if (typeof (db.tenant as any).updateMany === 'function') {
-      const locked = await db.tenant.updateMany({
-        where: { id: user.tenantId, settingsJson: tenant.settingsJson },
-        data: { settingsJson: JSON.stringify(claimSettings) },
-      });
-      if (!locked.count) {
-        return NextResponse.json({ error: 'Settings changed. Reload and retry.' }, { status: 409 });
-      }
-    } else {
-      await db.tenant.update({
-        where: { id: user.tenantId },
-        data: { settingsJson: JSON.stringify(claimSettings) },
-      });
-    }
-
     try {
       const usePlacesFallback = !(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
       const gridResult: MapsGridScanResult & { providerMode?: string } = usePlacesFallback
         ? await scanPlacesGridFallback({
             keyword,
             placeId,
-            businessName: (tenant as any)?.brandProfile?.businessName || (tenant as any)?.name || undefined,
+            businessName: tenant.brandProfile?.businessName || tenant.name || undefined,
             centerLat,
             centerLng,
             gridSize,
@@ -567,7 +730,12 @@ export async function POST(request: NextRequest) {
 
       const id = randomUUID();
       const scannedAt = new Date().toISOString();
-      const savedGridRecord = { id, date: scannedAt, ...gridResult };
+      const savedGridRecord = {
+        id,
+        date: scannedAt,
+        providerMode: gridResult.providerMode || (usePlacesFallback ? 'places_area_grid' : 'dataforseo'),
+        ...gridResult,
+      };
 
       if ((db as any).rankGridScan?.create) {
         await (db as any).rankGridScan
@@ -591,6 +759,7 @@ export async function POST(request: NextRequest) {
           .catch(() => {});
       }
 
+      // Record cooldown claim ONLY after the scan succeeded so failed scans don't lock out the user
       const freshTenant = await db.tenant.findUnique({ where: { id: user.tenantId }, select: { settingsJson: true } });
       const freshStored = settings(freshTenant?.settingsJson);
       await db.tenant.update({
@@ -598,6 +767,10 @@ export async function POST(request: NextRequest) {
         data: {
           settingsJson: JSON.stringify({
             ...freshStored,
+            rankGridClaims: {
+              ...(freshStored.rankGridClaims || {}),
+              [claimKey]: scannedAt,
+            },
             measuredGridScans: [...(freshStored.measuredGridScans || []), savedGridRecord].slice(-20),
           }),
         },
@@ -711,25 +884,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const claimData = {
-      ...stored,
-      organicSerpClaim: { id: randomUUID(), at: new Date().toISOString() },
-    };
-    if (typeof (db.tenant as any).updateMany === 'function') {
-      const locked = await db.tenant.updateMany({
-        where: { id: user.tenantId, settingsJson: tenant.settingsJson },
-        data: { settingsJson: JSON.stringify(claimData) },
-      });
-      if (!locked.count) {
-        return NextResponse.json({ error: 'Settings changed. Reload and retry.' }, { status: 409 });
-      }
-    } else {
-      await db.tenant.update({
-        where: { id: user.tenantId },
-        data: { settingsJson: JSON.stringify(claimData) },
-      });
-    }
-
     const locale = resolveTenantLocale({ tenantCountry: tenant.country, settingsJson: stored });
     const canonicalPath =
       presence.mode === 'bgos_hosted' && presence.hostedCanonicalUrl
@@ -743,43 +897,55 @@ export async function POST(request: NextRequest) {
         : null;
 
     try {
-      const results: Array<OrganicSerpScanResult & { id: string; date: string; providerMode?: string }> = [];
-      let totalCost = 0;
       const useGeminiFallback = !(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
+      const uniqueKeywords = [...new Set(keywords)];
+      const scannedResults = await Promise.all(
+        uniqueKeywords.map(async (kw) => {
+          const res = useGeminiFallback
+            ? await scanGeminiGroundedSerpFallback({
+                keyword: kw,
+                businessName: tenant.name || 'Business',
+                targetDomain,
+                city: tenant.city,
+              })
+            : await scanOrganicSerp({
+                keyword: kw,
+                targetDomain,
+                canonicalPath,
+                locationName: locale.countryName,
+              });
+          const rowId = randomUUID();
+          const date = new Date().toISOString();
+          return {
+            id: rowId,
+            date,
+            providerMode: (res as any).providerMode || (useGeminiFallback ? 'gemini_grounded_search' : 'dataforseo'),
+            ...res,
+          };
+        }),
+      );
 
-      for (const kw of [...new Set(keywords)]) {
-        const res = useGeminiFallback
-          ? await scanGeminiGroundedSerpFallback({
-              keyword: kw,
-              businessName: tenant.name || 'Business',
-              targetDomain,
-              city: tenant.city,
-            })
-          : await scanOrganicSerp({
-              keyword: kw,
-              targetDomain,
-              canonicalPath,
-              locationName: locale.countryName,
-            });
-        totalCost += res.cost;
-        const rowId = randomUUID();
-        const date = new Date().toISOString();
-        results.push({ id: rowId, date, ...res });
+      let totalCost = 0;
+      const results: Array<OrganicSerpScanResult & { id: string; date: string; providerMode?: string }> = [];
+
+      for (const item of scannedResults) {
+        totalCost += item.cost;
+        results.push(item);
 
         if ((db as any).rankGridScan?.create) {
           await (db as any).rankGridScan
             .create({
               data: {
-                id: rowId,
+                id: item.id,
                 tenantId: user.tenantId,
                 scanType: 'organic_serp',
-                keyword: res.keyword,
-                targetDomain: res.targetDomain,
-                organicRank: res.organicRank,
-                aiOverviewPresent: res.aiOverviewPresent,
-                aiOverviewCited: res.aiOverviewCited,
-                aiCitedUrlsJson: JSON.stringify(res.citedDomains),
-                cost: res.cost,
+                keyword: item.keyword,
+                targetDomain: item.targetDomain,
+                organicRank: item.organicRank,
+                aiOverviewPresent: item.aiOverviewPresent,
+                aiOverviewCited: item.aiOverviewCited,
+                aiCitedUrlsJson: JSON.stringify(item.citedDomains),
+                cost: item.cost,
               },
             })
             .catch(() => {});
@@ -787,12 +953,13 @@ export async function POST(request: NextRequest) {
 
         await updateTrackedKeywordRanks({
           tenantId: user.tenantId,
-          keyword: res.keyword,
-          organicRank: res.organicRank,
-          aiOverviewCited: res.aiOverviewCited,
+          keyword: item.keyword,
+          organicRank: item.organicRank,
+          aiOverviewCited: item.aiOverviewCited,
         });
       }
 
+      const claimedAt = new Date().toISOString();
       const freshTenant = await db.tenant.findUnique({ where: { id: user.tenantId }, select: { settingsJson: true } });
       const freshStored = settings(freshTenant?.settingsJson);
       await db.tenant.update({
@@ -800,6 +967,7 @@ export async function POST(request: NextRequest) {
         data: {
           settingsJson: JSON.stringify({
             ...freshStored,
+            organicSerpClaim: { id: randomUUID(), at: claimedAt },
             measuredOrganicScans: [...(freshStored.measuredOrganicScans || []), ...results].slice(-30),
           }),
         },

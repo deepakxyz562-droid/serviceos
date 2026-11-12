@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { invalidatePlacePayloadCache } from '@/app/api/gbp/place/route';
+import { normalizeRegionState } from '@/lib/bgos-business-sanitizers';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,7 @@ export async function GET(request: NextRequest) {
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const tenantId = user.tenantId;
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
@@ -143,6 +145,7 @@ export async function POST(request: NextRequest) {
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const tenantId = user.tenantId;
 
     const body = await request.json().catch(() => ({}));
     const profileId = String(body.profileId || '').trim();
@@ -161,7 +164,16 @@ export async function POST(request: NextRequest) {
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { id: true, name: true, settingsJson: true, industry: true },
+      select: {
+        id: true,
+        name: true,
+        settingsJson: true,
+        industry: true,
+        state: true,
+        country: true,
+        address: true,
+        city: true,
+      },
     });
 
     let tenantSettings: Record<string, any> = {};
@@ -250,6 +262,15 @@ export async function POST(request: NextRequest) {
     if (customProducts) tenantSettings.activeGbpProducts = customProducts;
     if (customServices) tenantSettings.activeGbpServices = customServices;
 
+    const nextAddress = gbpAddress || tenant?.address || null;
+    const nextCity = gbpCity || tenant?.city || null;
+    const sanitizedState = normalizeRegionState({
+      state: tenant?.state ?? null,
+      country: tenant?.country ?? null,
+      address: nextAddress,
+      city: nextCity,
+    });
+
     // Atomically synchronize Tenant and BrandProfile
     await Promise.all([
       db.tenant.update({
@@ -261,12 +282,13 @@ export async function POST(request: NextRequest) {
           ...(gbpAddress ? { address: gbpAddress } : {}),
           ...(gbpCity ? { city: gbpCity } : {}),
           ...(gbpPlaceId ? { googlePlaceId: gbpPlaceId } : {}),
+          ...(sanitizedState !== (tenant?.state ?? null) ? { state: sanitizedState } : {}),
         },
       }),
       // Purge cached competitors so the new profile loads fresh local competitors
       db.competitor.deleteMany({ where: { tenantId: user.tenantId } }).catch(() => {}),
       (async () => {
-        const existingBp = await db.brandProfile.findUnique({ where: { tenantId: user.tenantId } }).catch(() => null);
+        const existingBp = await db.brandProfile.findUnique({ where: { tenantId } }).catch(() => null);
         const dataToSave: any = {
           businessName: finalName,
           industry: finalCategory,
@@ -283,7 +305,7 @@ export async function POST(request: NextRequest) {
         } else {
           await db.brandProfile.create({
             data: {
-              tenantId: user.tenantId,
+              tenantId,
               ...dataToSave,
             },
           });

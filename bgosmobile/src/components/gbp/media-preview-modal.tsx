@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Linking,
@@ -30,30 +31,60 @@ export function MediaPreviewModal({
   visible,
   onClose,
   onEdit,
+  onDeleted,
+  onPublished,
   businessName = 'My Business',
 }: {
   item: GbpPhoto | null;
   visible: boolean;
   onClose: () => void;
   onEdit?: (item: GbpPhoto) => void;
+  onDeleted?: (item: GbpPhoto) => void | Promise<void>;
+  onPublished?: (item: GbpPhoto) => void | Promise<void>;
   businessName?: string;
 }) {
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  const [busyAction, setBusyAction] = useState<'delete' | 'publish' | null>(null);
 
   useEffect(() => {
-    if (!visible) setFullscreenOpen(false);
+    if (!visible) {
+      setFullscreenOpen(false);
+      setBusyAction(null);
+    }
   }, [visible, item?.id, item?.url]);
 
   if (!item) return null;
 
   const isVideo = isVideoMediaAsset(item);
-  const canEdit = item.source === 'queue' && Boolean(onEdit);
+  const canManageQueue = item.source === 'queue' && Boolean(item.postId || item.id);
+  const canEdit = canManageQueue && Boolean(onEdit);
+  const queueItemId = item.postId || item.id;
   const statusLabel =
     item.source === 'google'
       ? 'Published on Google'
-      : item.status === 'scheduled' || item.status === 'publishing'
-        ? 'Scheduled'
-        : 'Draft (Not Posted)';
+      : item.status === 'failed'
+        ? 'Failed to Post'
+        : item.status === 'scheduled' || item.status === 'publishing'
+          ? 'Scheduled'
+          : 'Draft (Not Posted)';
+
+  const handlePublishNow = async () => {
+    if (!canManageQueue || busyAction) return;
+    setBusyAction('publish');
+    try {
+      await apiRequest<{ success?: boolean }>('/api/social/photos', {
+        method: 'PATCH',
+        body: { postId: queueItemId, publishNow: true },
+      });
+      await onPublished?.(item);
+      onClose();
+      Alert.alert('Published!', `${isVideo ? 'Video' : 'Photo'} uploaded live to Google Business Profile.`);
+    } catch (err: unknown) {
+      Alert.alert('Publish Failed', err instanceof Error ? err.message : 'Could not publish media to Google.');
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   const openVideoPlayer = async () => {
     if (!item.url) return;
@@ -96,51 +127,81 @@ export function MediaPreviewModal({
               {item.category ? ` · ${item.category}` : ''}
             </Text>
           </View>
-          {canEdit ? (
+          {canManageQueue ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Publish media now"
+                disabled={busyAction !== null}
+                onPress={() => void handlePublishNow()}
+                style={[styles.editTopBtn, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE' }]}
+              >
+                {busyAction === 'publish' ? (
+                  <ActivityIndicator size={12} color="#4338CA" />
+                ) : (
+                  <MaterialIcons name="bolt" size={14} color="#4338CA" />
+                )}
+                <Text style={[styles.editTopText, { color: '#4338CA' }]}>
+                  {item.status === 'failed' ? 'Retry' : 'Publish'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Delete queued media"
+                disabled={busyAction !== null}
                 onPress={() => {
                   Alert.alert(
-                    'Delete Photo',
-                    'Are you sure you want to delete this photo?',
+                    'Delete Media',
+                    'Remove this item from your BGOS media queue?',
                     [
                       { text: 'Cancel', style: 'cancel' },
                       {
                         text: 'Delete',
                         style: 'destructive',
                         onPress: async () => {
+                          setBusyAction('delete');
                           try {
-                            await apiRequest(`/api/social/photos?id=${encodeURIComponent(item.id)}`, {
+                            await apiRequest(`/api/social/photos?id=${encodeURIComponent(queueItemId)}`, {
                               method: 'DELETE',
                             });
+                            await onDeleted?.(item);
                             onClose();
-                            Alert.alert('Deleted', 'Photo removed.');
                           } catch (err: unknown) {
-                            Alert.alert('Notice', 'Could not delete item.');
+                            Alert.alert('Notice', err instanceof Error ? err.message : 'Could not delete item.');
+                          } finally {
+                            setBusyAction(null);
                           }
                         },
                       },
-                    ]
+                    ],
                   );
                 }}
                 style={[styles.editTopBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
               >
-                <MaterialIcons name="delete-outline" size={14} color={colors.danger} />
+                {busyAction === 'delete' ? (
+                  <ActivityIndicator size={12} color={colors.danger} />
+                ) : (
+                  <MaterialIcons name="delete-outline" size={14} color={colors.danger} />
+                )}
                 <Text style={[styles.editTopText, { color: colors.danger }]}>Delete</Text>
               </Pressable>
 
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  onClose();
-                  onEdit?.(item);
-                }}
-                style={styles.editTopBtn}
-              >
-                <MaterialIcons name="edit" size={14} color={colors.brandDark} />
-                <Text style={styles.editTopText}>Edit</Text>
-              </Pressable>
+              {canEdit ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit media details"
+                  disabled={busyAction !== null}
+                  onPress={() => {
+                    onClose();
+                    onEdit?.(item);
+                  }}
+                  style={styles.editTopBtn}
+                >
+                  <MaterialIcons name="edit" size={14} color={colors.brandDark} />
+                  <Text style={styles.editTopText}>Edit</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
         </View>

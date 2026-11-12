@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ExternalLink, Film, Maximize2, Pencil, Play } from 'lucide-react';
+import { ExternalLink, Film, Loader2, Maximize2, Pencil, Play, Trash2, Zap } from 'lucide-react';
+import { toast } from 'sonner';
+import { authFetch } from '@/lib/auth-fetch';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -82,24 +84,34 @@ export function WebMediaPreviewDialog({
   open,
   onOpenChange,
   onEdit,
+  onDeleted,
+  onPublished,
   businessName = 'My Business',
 }: {
   item: WebMediaItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit?: (item: WebMediaItem) => void;
+  onDeleted?: (item: WebMediaItem) => void | Promise<void>;
+  onPublished?: (item: WebMediaItem) => void | Promise<void>;
   businessName?: string;
 }) {
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  const [busyAction, setBusyAction] = useState<'delete' | 'publish' | null>(null);
 
   useEffect(() => {
-    if (!open) setFullscreenOpen(false);
+    if (!open) {
+      setFullscreenOpen(false);
+      setBusyAction(null);
+    }
   }, [open, item?.id, item?.url]);
 
   if (!item) return null;
 
   const isVideo = isWebVideoItem(item);
-  const canEdit = item.source === 'queue' && Boolean(onEdit) && Boolean(item.postId || item.id);
+  const queueId = item.postId || item.id;
+  const isQueue = item.source === 'queue' && Boolean(queueId);
+  const canEdit = isQueue && Boolean(onEdit);
   const statusLabel =
     item.source === 'google'
       ? 'Published on Google'
@@ -108,6 +120,46 @@ export function WebMediaPreviewDialog({
         : item.status === 'scheduled' || item.status === 'publishing'
           ? 'Scheduled'
           : 'Draft (Not Posted)';
+
+  const handlePublishNow = async () => {
+    if (!isQueue || busyAction) return;
+    setBusyAction('publish');
+    try {
+      const res = await authFetch('/api/social/photos', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: queueId, publishNow: true }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      if (!res.ok || !data.success) throw new Error(data.error || 'Could not publish media.');
+      toast.success('Published media live to Google Business Profile!');
+      onOpenChange(false);
+      await onPublished?.(item);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to publish media');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!isQueue || busyAction) return;
+    setBusyAction('delete');
+    try {
+      const res = await authFetch(`/api/social/photos?id=${encodeURIComponent(queueId)}`, {
+        method: 'DELETE',
+      });
+      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      if (!res.ok || !data.success) throw new Error(data.error || 'Could not remove item.');
+      toast.success('Removed media item from queue.');
+      onOpenChange(false);
+      await onDeleted?.(item);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not remove item');
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   return (
     <>
@@ -124,20 +176,53 @@ export function WebMediaPreviewDialog({
                 {item.gbpCategory || item.category ? ` · ${item.gbpCategory || item.category}` : ''}
               </DialogDescription>
             </div>
-            {canEdit && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  onOpenChange(false);
-                  onEdit?.(item);
-                }}
-                className="h-8 rounded-lg text-xs font-bold gap-1.5 shrink-0"
-              >
-                <Pencil className="size-3.5" />
-                Edit Details
-              </Button>
+            {isQueue && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={busyAction !== null}
+                  onClick={() => void handlePublishNow()}
+                  className="h-8 rounded-lg text-xs font-bold gap-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  {busyAction === 'publish' ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Zap className="size-3.5" />
+                  )}
+                  {item.status === 'failed' ? 'Retry' : 'Publish Now'}
+                </Button>
+                {canEdit && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busyAction !== null}
+                    onClick={() => {
+                      onOpenChange(false);
+                      onEdit?.(item);
+                    }}
+                    className="h-8 rounded-lg text-xs font-bold gap-1"
+                  >
+                    <Pencil className="size-3.5" />
+                    Edit
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={busyAction !== null}
+                  onClick={() => void handleDelete()}
+                  className="h-8 rounded-lg text-xs font-bold gap-1 text-rose-600 border-rose-200 hover:bg-rose-50"
+                >
+                  {busyAction === 'delete' ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-3.5" />
+                  )}
+                </Button>
+              </div>
             )}
           </div>
         </DialogHeader>

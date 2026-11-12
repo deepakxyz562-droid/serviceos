@@ -20,6 +20,7 @@
 
 import { db } from '@/lib/db'
 import { generateHubContent, type HubContent } from '@/lib/ai-client'
+import { normalizeRegionState } from '@/lib/bgos-business-sanitizers'
 
 // ─── Industry-specific dummy content ────────────────────────────────────────
 
@@ -211,6 +212,18 @@ export interface SeedPublicBusinessOptions {
    * seed if the tenant has no public profile yet).
    */
   overwrite?: boolean
+  /**
+   * Explicitly opt the tenant into the public Fieseros marketplace directory.
+   * Default: false for real signups (`tenantId` provided); true when creating
+   * a synthetic demo tenant (`!tenantId`).
+   */
+  optInMarketplace?: boolean
+  /**
+   * Populate synthetic sample copy, services, reviews, FAQs, and stock
+   * imagery. Default: false when `tenantId` is provided so real businesses
+   * never receive fake "Dallas, TX / Emergency Service / 4.9" placeholder data.
+   */
+  includeSampleContent?: boolean
 }
 
 export interface SeedPublicBusinessResult {
@@ -234,6 +247,9 @@ export interface SeedPublicBusinessResult {
 export async function seedPublicBusinessForTenant(
   options: SeedPublicBusinessOptions = {},
 ): Promise<SeedPublicBusinessResult> {
+  const isNewDemoTenant = !options.tenantId
+  const optInMarketplace = options.optInMarketplace ?? isNewDemoTenant
+  const includeSampleContent = options.includeSampleContent ?? isNewDemoTenant
   const baselineDummy = getIndustryDummy(options.industry)
   let tenant
   let created = false
@@ -244,8 +260,12 @@ export async function seedPublicBusinessForTenant(
     if (!tenant) {
       throw new Error(`Tenant not found: ${options.tenantId}`)
     }
-    // If not overwrite and already has a public profile, skip silently.
-    if (!options.overwrite && tenant.publicProfileEnabled && tenant.description && tenant.description.length >= 100) {
+    // If not overwrite and already enabled (with rich content when sample seeding is requested), skip silently.
+    if (
+      !options.overwrite &&
+      tenant.publicProfileEnabled &&
+      (!includeSampleContent || (tenant.description && tenant.description.length >= 100))
+    ) {
       // Already seeded — just return the existing state.
       const svcCount = await db.service.count({ where: { tenantId: tenant.id, isPublic: true } })
       return {
@@ -308,9 +328,59 @@ export async function seedPublicBusinessForTenant(
     created = true
   }
 
-  // ─── Update the tenant's public profile fields ───────────────────────────
-  const city = options.city || tenant.city || 'Dallas'
-  const state = options.state || tenant.state || 'TX'
+  // ─── Clean workspace path (default on normal user signup / tenant creation) ─
+  // Never fabricate Dallas/TX locations, $150 Emergency Service rows, fake 4.9/127
+  // ratings, or forced marketplace opt-in for real BGOS business workspaces.
+  if (!includeSampleContent) {
+    const city = options.city?.trim() || tenant.city || null
+    const rawState = options.state !== undefined ? options.state : tenant.state
+    const state = normalizeRegionState({
+      state: rawState,
+      country: tenant.country,
+      address: tenant.address,
+      city,
+    })
+    const publicSlug = tenant.publicSlug || tenant.slug
+
+    tenant = await db.tenant.update({
+      where: { id: tenant.id },
+      data: {
+        publicProfileEnabled: true,
+        claimed: true,
+        publicSlug,
+        ...(city ? { city } : {}),
+        state,
+        ...(optInMarketplace
+          ? {
+              marketplaceOptIn: true,
+              marketplaceTermsAcceptedAt: tenant.marketplaceTermsAcceptedAt ?? new Date(),
+            }
+          : {}),
+      },
+    })
+
+    return {
+      tenantId: tenant.id,
+      tenantName: tenant.name,
+      slug: tenant.slug,
+      publicSlug: tenant.publicSlug || tenant.slug,
+      publicUrl: buildPublicUrl(tenant.industry, tenant.city, tenant.slug),
+      shortUrl: `/b/${tenant.publicSlug || tenant.slug}`,
+      servicesCreated: 0,
+      reviewsCreated: 0,
+      created,
+    }
+  }
+
+  // ─── Synthetic demo / SuperAdmin seed path ────────────────────────────────
+  const fallbackUsDefaults = !tenant.country || tenant.country.toUpperCase() === 'US'
+  const city = options.city || tenant.city || (fallbackUsDefaults ? 'Dallas' : '')
+  const state = normalizeRegionState({
+    state: options.state || tenant.state || (fallbackUsDefaults ? 'TX' : null),
+    country: tenant.country,
+    address: tenant.address,
+    city,
+  }) || ''
 
   // ─── Generate per-tenant AI content (Pollinations.ai) ────────────────────
   // Falls back to baselineDummy on any failure — onboarding must NEVER block.
@@ -321,7 +391,7 @@ export async function seedPublicBusinessForTenant(
   const aiContent = await generateHubContent({
     businessName: tenant.name,
     industry: industryForAi,
-    city,
+    city: city || 'your area',
     state,
     phone: tenant.phone,
     services: baselineDummy.services.map((s) => s.name),
@@ -337,14 +407,12 @@ export async function seedPublicBusinessForTenant(
     where: { id: tenant.id },
     data: {
       publicProfileEnabled: true,
-      // Also opt the tenant into the marketplace browse grid so they're
-      // actually visible at /marketplace. Previously this only flipped
-      // publicProfileEnabled (which controls the public hub page at
-      // /{industry}/{city}/{slug}) but NOT marketplaceOptIn (which controls
-      // browse-grid eligibility) — so seeded tenants had a working public
-      // page but were invisible on the marketplace.
-      marketplaceOptIn: true,
-      marketplaceTermsAcceptedAt: tenant.marketplaceTermsAcceptedAt ?? new Date(),
+      ...(optInMarketplace
+        ? {
+            marketplaceOptIn: true,
+            marketplaceTermsAcceptedAt: tenant.marketplaceTermsAcceptedAt ?? new Date(),
+          }
+        : {}),
       publicSlug: tenant.publicSlug || tenant.slug,
       tagline: dummy.tagline,
       description: dummy.description,
@@ -352,8 +420,8 @@ export async function seedPublicBusinessForTenant(
       logo: tenant.logo || dummy.logo,
       rating: tenant.rating || 4.9,
       reviewCount: tenant.reviewCount || 127,
-      city,
-      state,
+      ...(city ? { city } : {}),
+      state: state || null,
       businessHoursJson: JSON.stringify({
         mon: { open: '07:00', close: '19:00' },
         tue: { open: '07:00', close: '19:00' },

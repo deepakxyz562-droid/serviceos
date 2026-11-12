@@ -59,9 +59,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const [selfReviewCount, selfReviews, tenant] = await Promise.all([
+    const [selfReviewCount, selfReviews, gbpSyncedReviews, tenant, latestGridScan, measuredKeywords] = await Promise.all([
       db.review.count({ where: { tenantId: user.tenantId } }).catch(() => 0),
       db.review.findMany({ where: { tenantId: user.tenantId }, select: { rating: true }, take: 100 }).catch(() => []),
+      (db as any).gBPReview
+        ?.findMany?.({ where: { tenantId: user.tenantId }, select: { starRating: true }, take: 100 })
+        .catch(() => []) ?? Promise.resolve([]),
       db.tenant.findUnique({
         where: { id: user.tenantId },
         select: {
@@ -75,6 +78,20 @@ export async function GET(request: NextRequest) {
           settingsJson: true,
         },
       }),
+      (db as any).rankGridScan
+        ?.findFirst?.({
+          where: { tenantId: user.tenantId, scanType: 'maps_grid' },
+          orderBy: { createdAt: 'desc' },
+          select: { avgRank: true },
+        })
+        .catch(() => null) ?? Promise.resolve(null),
+      (db as any).trackedKeyword
+        ?.findMany?.({
+          where: { tenantId: user.tenantId, mapsRank: { not: null } },
+          select: { mapsRank: true },
+          take: 10,
+        })
+        .catch(() => []) ?? Promise.resolve([]),
     ]);
 
     const parsedSettings = safeParseJsonObject(tenant?.settingsJson);
@@ -111,15 +128,46 @@ export async function GET(request: NextRequest) {
       return false;
     });
 
-    const selfRating = selfReviews.length > 0
-      ? Number((selfReviews.reduce((acc, r) => acc + (r.rating || 5), 0) / selfReviews.length).toFixed(1))
-      : 4.8;
+    const combinedSelfRatings: number[] = [];
+    for (const r of selfReviews) {
+      if (typeof r?.rating === 'number' && r.rating > 0) combinedSelfRatings.push(r.rating);
+    }
+    if (combinedSelfRatings.length === 0 && Array.isArray(gbpSyncedReviews)) {
+      for (const r of gbpSyncedReviews) {
+        if (typeof r?.starRating === 'number' && r.starRating > 0) combinedSelfRatings.push(r.starRating);
+      }
+    }
+    const effectiveSelfReviewCount = Math.max(
+      selfReviewCount,
+      Array.isArray(gbpSyncedReviews) ? gbpSyncedReviews.length : 0,
+      typeof parsedSettings.activeGbpReviewCount === 'number' ? parsedSettings.activeGbpReviewCount : 0,
+    );
+    const selfRating =
+      combinedSelfRatings.length > 0
+        ? Number((combinedSelfRatings.reduce((acc, val) => acc + val, 0) / combinedSelfRatings.length).toFixed(1))
+        : typeof parsedSettings.activeGbpRating === 'number' && parsedSettings.activeGbpRating > 0
+          ? Number(parsedSettings.activeGbpRating.toFixed(1))
+          : null;
 
-    const selfRow: CompetitorRow & { rank: number; isSelf: boolean } = {
+    const trackedMapsRanks = Array.isArray(measuredKeywords)
+      ? measuredKeywords
+          .map((k: any) => k?.mapsRank)
+          .filter((v: unknown): v is number => typeof v === 'number' && v > 0)
+      : [];
+    const fallbackMeasuredSelfRank: number | null =
+      typeof parsedSettings.competitorSpyCache?.selfMapsRank === 'number' && parsedSettings.competitorSpyCache.selfMapsRank > 0
+        ? parsedSettings.competitorSpyCache.selfMapsRank
+        : typeof latestGridScan?.avgRank === 'number' && latestGridScan.avgRank > 0
+          ? Number(latestGridScan.avgRank.toFixed(1))
+          : trackedMapsRanks.length > 0
+            ? Number((trackedMapsRanks.reduce((a: number, b: number) => a + b, 0) / trackedMapsRanks.length).toFixed(1))
+            : null;
+
+    const selfRow: CompetitorRow & { rank?: number; isSelf: boolean } = {
       id: 'self',
       name: selfName,
       rating: selfRating,
-      reviewCount: selfReviewCount,
+      reviewCount: effectiveSelfReviewCount,
       distanceKm: 0,
       address: tenant?.address || tenant?.city || null,
       category: selfCategory,
@@ -128,8 +176,8 @@ export async function GET(request: NextRequest) {
       placeId: tenant?.googlePlaceId || null,
       mapsUrl: null,
       websiteUrl: tenant?.website || null,
+      mapsRank: fallbackMeasuredSelfRank,
       source: 'self',
-      rank: 1.5,
       isSelf: true,
     };
 
@@ -137,26 +185,57 @@ export async function GET(request: NextRequest) {
       return rows.map((row) => {
         const key = (row.placeId || row.name).toLowerCase();
         const spy = cachedSpyMap[key];
-        return spy ? { ...spy, ...row, secondaryCategories: row.secondaryCategories || spy.secondaryCategories, attributesList: row.attributesList || spy.attributesList, editorialSummary: row.editorialSummary ?? spy.editorialSummary, photoCount: row.photoCount ?? spy.photoCount, recentReviews: row.recentReviews || spy.recentReviews, primaryCategoryLabel: row.primaryCategoryLabel || spy.primaryCategoryLabel } : row;
+        return spy
+          ? {
+              ...spy,
+              ...row,
+              mapsRank: row.mapsRank ?? spy.mapsRank ?? null,
+              secondaryCategories: row.secondaryCategories || spy.secondaryCategories,
+              attributesList: row.attributesList || spy.attributesList,
+              editorialSummary: row.editorialSummary ?? spy.editorialSummary,
+              photoCount: row.photoCount ?? spy.photoCount,
+              recentReviews: row.recentReviews || spy.recentReviews,
+              primaryCategoryLabel: row.primaryCategoryLabel || spy.primaryCategoryLabel,
+            }
+          : row;
       });
     }
 
-    function buildRankedList(comps: CompetitorRow[]) {
-      // Filter out self if accidentally returned
-      const filtered = comps.filter((c) => !c.name.toLowerCase().includes(selfName.toLowerCase()));
-      const combined = [selfRow, ...filtered];
-      // Sort: highest reviews * rating
+    function buildRankedList(comps: CompetitorRow[], measuredSelfRank?: number | null) {
+      const effectiveSelfRank =
+        typeof measuredSelfRank === 'number' && measuredSelfRank > 0
+          ? measuredSelfRank
+          : fallbackMeasuredSelfRank;
+      const selfWithRank = {
+        ...selfRow,
+        mapsRank: effectiveSelfRank,
+      };
+      // Filter out self if accidentally returned by placeId or business name
+      const filtered = comps.filter((c) => {
+        if (tenant?.googlePlaceId && c.placeId && c.placeId === tenant.googlePlaceId) return false;
+        return !c.name.toLowerCase().includes(selfName.toLowerCase());
+      });
+      const combined = [selfWithRank, ...filtered];
+      // Prefer measured Maps pack rank when available; fall back to review/rating authority score
       combined.sort((a, b) => {
-        const scoreA = (a.rating || 4.0) * Math.log10(Math.max(1, (a.reviewCount || 1) + 1));
-        const scoreB = (b.rating || 4.0) * Math.log10(Math.max(1, (b.reviewCount || 1) + 1));
-        return scoreB - scoreA;
+        const rankA = typeof a.mapsRank === 'number' && a.mapsRank > 0 ? a.mapsRank : Number.POSITIVE_INFINITY;
+        const rankB = typeof b.mapsRank === 'number' && b.mapsRank > 0 ? b.mapsRank : Number.POSITIVE_INFINITY;
+        if (rankA !== rankB) return rankA - rankB;
+        const scoreA = (a.rating || 0) * Math.log10(Math.max(1, (a.reviewCount || 0) + 1));
+        const scoreB = (b.rating || 0) * Math.log10(Math.max(1, (b.reviewCount || 0) + 1));
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        if ((b.reviewCount || 0) !== (a.reviewCount || 0)) return (b.reviewCount || 0) - (a.reviewCount || 0);
+        return (a.distanceKm ?? 99) - (b.distanceKm ?? 99);
       });
 
-      return combined.map((item, idx) => ({
+      const ranked = combined.map((item, idx) => ({
         ...item,
-        rank: Number((1.5 + idx * 1.1).toFixed(1)),
+        rank: typeof item.mapsRank === 'number' && item.mapsRank > 0 ? Math.round(item.mapsRank) : idx + 1,
+        ordinalRank: idx + 1,
         isSelf: item.id === 'self',
       }));
+      const rankedSelf = ranked.find((r) => r.isSelf) || { ...selfWithRank, rank: ranked.length + 1, ordinalRank: ranked.length + 1, isSelf: true };
+      return { ranked, rankedSelf };
     }
 
     const buildSpyResponse = (rows: CompetitorRow[], queryUsed: string, locationUsed: string, selfMapsRank: number | null) =>
@@ -168,8 +247,8 @@ export async function GET(request: NextRequest) {
           primaryCategory: selfCategory,
           additionalCategories,
           attributes: savedAttributes,
-          rating: selfRating,
-          reviewCount: selfReviewCount,
+          rating: selfRating ?? 0,
+          reviewCount: effectiveSelfReviewCount,
           hasWebsite: Boolean(tenant?.website),
           mapsRank: selfMapsRank,
         },
@@ -188,16 +267,16 @@ export async function GET(request: NextRequest) {
       !isLegacyCorrupt
     ) {
       const enriched = mergeCachedSpy(storedRows);
-      const ranked = buildRankedList(enriched);
       const cachedMeta = parsedSettings.competitorSpyCache || {};
+      const { ranked, rankedSelf } = buildRankedList(enriched, cachedMeta.selfMapsRank ?? null);
       return NextResponse.json({
         competitors: ranked,
-        selfBusiness: selfRow,
+        selfBusiness: rankedSelf,
         spyInsights: buildSpyResponse(
           enriched,
           cachedMeta.queryUsed || `${selfCategory} in ${tenant?.city || 'Local Area'}`,
           cachedMeta.locationUsed || tenant?.city || 'Local Area',
-          cachedMeta.selfMapsRank ?? null,
+          cachedMeta.selfMapsRank ?? fallbackMeasuredSelfRank ?? null,
         ),
         source: storedRows.some((r) => r.source === 'places') ? 'places' : 'manual',
         migrationRequired,
@@ -292,9 +371,10 @@ export async function GET(request: NextRequest) {
         } catch {}
       }
 
+      const liveRanked = buildRankedList(liveFetch.competitors, liveFetch.selfMapsRank);
       return NextResponse.json({
-        competitors: buildRankedList(liveFetch.competitors),
-        selfBusiness: selfRow,
+        competitors: liveRanked.ranked,
+        selfBusiness: liveRanked.rankedSelf,
         spyInsights: computedSpy,
         source: 'places',
         migrationRequired: false,
@@ -305,10 +385,12 @@ export async function GET(request: NextRequest) {
     // Fallback to stored rows if keyword filter had no Google Places key/results
     if (storedRows.length > 0 && !isLegacyCorrupt) {
       const enriched = mergeCachedSpy(storedRows);
+      const cachedSelfRank = parsedSettings.competitorSpyCache?.selfMapsRank ?? fallbackMeasuredSelfRank ?? null;
+      const storedRanked = buildRankedList(enriched, cachedSelfRank);
       return NextResponse.json({
-        competitors: buildRankedList(enriched),
-        selfBusiness: selfRow,
-        spyInsights: buildSpyResponse(enriched, liveFetch.queryUsed, liveFetch.locationUsed, null),
+        competitors: storedRanked.ranked,
+        selfBusiness: storedRanked.rankedSelf,
+        spyInsights: buildSpyResponse(enriched, liveFetch.queryUsed, liveFetch.locationUsed, cachedSelfRank),
         source: storedRows.some((r) => r.source === 'places') ? 'places' : 'manual',
         migrationRequired,
         placesUnavailable: false,
@@ -377,10 +459,11 @@ export async function GET(request: NextRequest) {
       },
     ];
 
+    const fallbackRanked = buildRankedList(dynamicCompetitors, fallbackMeasuredSelfRank);
     return NextResponse.json({
-      competitors: buildRankedList(dynamicCompetitors),
-      selfBusiness: selfRow,
-      spyInsights: buildSpyResponse(dynamicCompetitors, liveFetch.queryUsed, liveFetch.locationUsed, null),
+      competitors: fallbackRanked.ranked,
+      selfBusiness: fallbackRanked.rankedSelf,
+      spyInsights: buildSpyResponse(dynamicCompetitors, liveFetch.queryUsed, liveFetch.locationUsed, fallbackMeasuredSelfRank),
       source: 'local_cluster',
       migrationRequired,
       placesUnavailable: true,

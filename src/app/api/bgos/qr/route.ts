@@ -7,7 +7,13 @@ export async function GET(request: NextRequest) {
   const result = await workspace();
   if (!result.ok) return result;
   const data: BgosWorkspace = await result.json();
-  const target = request.nextUrl.searchParams.get('target') === 'review' ? data.links.review : data.links.profile;
+  const targetParam = request.nextUrl.searchParams.get('target');
+  const target =
+    targetParam === 'review'
+      ? data.links.review
+      : targetParam === 'booking'
+        ? data.links.booking
+        : data.links.profile;
   if (!target) return NextResponse.json({ error: 'Publish your profile or connect your Google Business location first.' }, { status: 409 });
   const base = process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com';
   const url = new URL(target, base).toString();

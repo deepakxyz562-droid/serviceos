@@ -28,7 +28,29 @@ const nextConfig: NextConfig = {
   },
   staticPageGenerationTimeout: 180,
   reactStrictMode: false,
-  serverExternalPackages: ["bcryptjs", "jsonwebtoken"],
+  serverExternalPackages: ["bcryptjs", "jsonwebtoken", "@react-pdf/renderer", "@react-pdf/font", "pdfkit"],
+  // Ensure pdfkit's CommonJS standard fonts (Helvetica.cjs etc.) and glyph chunks
+  // are copied into Next standalone builds even when traced through ESM imports.
+  outputFileTracingIncludes: {
+    '/api/bgos/reports/monthly-pdf': [
+      'node_modules/.bun/pdfkit@*/node_modules/pdfkit/js/standard-fonts/**/*',
+      'node_modules/.bun/pdfkit@*/node_modules/pdfkit/js/data/**/*',
+      'node_modules/pdfkit/js/standard-fonts/**/*',
+      'node_modules/pdfkit/js/data/**/*',
+    ],
+    '/api/cron/monthly-marketing-report': [
+      'node_modules/.bun/pdfkit@*/node_modules/pdfkit/js/standard-fonts/**/*',
+      'node_modules/.bun/pdfkit@*/node_modules/pdfkit/js/data/**/*',
+      'node_modules/pdfkit/js/standard-fonts/**/*',
+      'node_modules/pdfkit/js/data/**/*',
+    ],
+    '/api/quote-flow/**': [
+      'node_modules/.bun/pdfkit@*/node_modules/pdfkit/js/standard-fonts/**/*',
+      'node_modules/.bun/pdfkit@*/node_modules/pdfkit/js/data/**/*',
+      'node_modules/pdfkit/js/standard-fonts/**/*',
+      'node_modules/pdfkit/js/data/**/*',
+    ],
+  },
   images: {
     // P1-6 (SEO): Enable next/image optimization for AVIF + WebP output.
     // AVIF is ~50% smaller than JPEG, WebP ~30% smaller — both cut LCP

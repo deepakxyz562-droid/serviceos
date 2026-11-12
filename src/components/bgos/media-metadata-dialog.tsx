@@ -2,9 +2,12 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertCircle,
   Check,
+  CheckCircle2,
   Image as ImageIcon,
   Loader2,
+  MapPin,
   Maximize2,
   Plus,
   RefreshCw,
@@ -38,9 +41,26 @@ import { authFetch, authFetchWithRetry } from '@/lib/api';
 import { FullscreenImageLightbox } from './fullscreen-image-lightbox';
 import {
   appendImageCandidate,
+  computeMediaSeoReadiness,
+  slugifySeoFilename,
+  type AiPhotoStylePreset,
   type ImageCandidate,
+  type ImageGenerationSourceType,
   type ImageProviderChoice,
 } from '../../../shared/image-review';
+
+const STYLE_PRESET_OPTIONS: Array<{
+  id: AiPhotoStylePreset;
+  label: string;
+  hint: string;
+}> = [
+  { id: 'real_photo', label: 'Real Photo', hint: 'Authentic DSLR daylight' },
+  { id: 'product_studio', label: 'Product Studio', hint: 'Crisp tabletop spotlight' },
+  { id: 'team_action', label: 'Team Action', hint: 'Staff serving customers' },
+  { id: 'before_after', label: 'Finished Work', hint: 'Spotless final result' },
+  { id: 'lifestyle', label: 'Lifestyle', hint: 'Warm customer experience' },
+  { id: 'festive', label: 'Festive', hint: 'Seasonal hospitality' },
+];
 
 export type WebGbpCategoryType =
   | 'ADDITIONAL'
@@ -86,9 +106,12 @@ interface BusinessIdeasContext {
   businessName?: string;
   category?: string;
   location?: string;
+  city?: string | null;
   services?: string | string[];
   products?: string | string[];
   website?: string;
+  topSearchTerms?: Array<{ keyword: string; impressions?: number; threshold?: number | null }>;
+  geoCoordinates?: { latitude: number; longitude: number } | null;
 }
 
 interface AiImageIdeaItem {
@@ -96,6 +119,8 @@ interface AiImageIdeaItem {
   title: string;
   icon?: string;
   prompt: string;
+  gbpCategory?: string;
+  searchKeyword?: string;
 }
 
 const GBP_CATEGORIES: Array<{ value: WebGbpCategoryType; label: string }> = [
@@ -233,10 +258,15 @@ interface AiMetadataApiResponse {
   success?: boolean;
   title?: string;
   description?: string;
+  altText?: string;
   tags?: string[];
   category?: WebGbpCategoryType;
   suggestedTitles?: string[];
   suggestedTags?: string[];
+  seoFilename?: string;
+  usedSearchTerms?: string[];
+  geoTagged?: boolean;
+  seoScore?: number;
 }
 
 export function WebMediaMetadataDialog({
@@ -266,6 +296,7 @@ export function WebMediaMetadataDialog({
   const [files, setFiles] = useState<File[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [aiAltText, setAiAltText] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [category, setCategory] = useState<WebGbpCategoryType>('ADDITIONAL');
@@ -281,6 +312,7 @@ export function WebMediaMetadataDialog({
   }, []);
   const [suggestedTitles, setSuggestedTitles] = useState<string[]>([]);
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [usedSearchTerms, setUsedSearchTerms] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
@@ -288,16 +320,22 @@ export function WebMediaMetadataDialog({
 
   // Reference-aware AI image generation state
   const [ideasLoading, setIdeasLoading] = useState(false);
+  const [ideasError, setIdeasError] = useState<string | null>(null);
   const [businessCtx, setBusinessCtx] = useState<BusinessIdeasContext | null>(null);
   const [previousPhotos, setPreviousPhotos] = useState<PreviousPhotoRef[]>([]);
   const [selectedRefUrls, setSelectedRefUrls] = useState<string[]>([]);
   const [aiIdeas, setAiIdeas] = useState<AiImageIdeaItem[]>([]);
   const [aiPrompt, setAiPrompt] = useState('');
+  const [aiStylePreset, setAiStylePreset] = useState<AiPhotoStylePreset>('real_photo');
   const [aiAspectRatio, setAiAspectRatio] = useState<'1:1' | '4:5' | '9:16'>('4:5');
-  const [aiProviderChoice, setAiProviderChoice] = useState<ImageProviderChoice>('cloudflare');
+  const [aiProviderChoice, setAiProviderChoice] = useState<ImageProviderChoice>('gemini');
   const [generatingAiImage, setGeneratingAiImage] = useState(false);
   const [aiGenStatus, setAiGenStatus] = useState<string | null>(null);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [aiSeoFilename, setAiSeoFilename] = useState<string | null>(null);
+  const [aiGeoTagged, setAiGeoTagged] = useState<boolean>(false);
+  const [aiSourceType, setAiSourceType] = useState<ImageGenerationSourceType | null>(null);
+  const [aiFallbackReason, setAiFallbackReason] = useState<string | null>(null);
   const [aiCandidates, setAiCandidates] = useState<ImageCandidate[]>([]);
   const [aiApprovedUrl, setAiApprovedUrl] = useState<string | null>(null);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
@@ -305,6 +343,7 @@ export function WebMediaMetadataDialog({
   const [lastAiPromptUsed, setLastAiPromptUsed] = useState('');
   const [aiLightboxError, setAiLightboxError] = useState<string | null>(null);
   const [uploadingRefPhoto, setUploadingRefPhoto] = useState(false);
+  const [seoChecklistOpen, setSeoChecklistOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const refFileInputRef = useRef<HTMLInputElement>(null);
@@ -330,18 +369,73 @@ export function WebMediaMetadataDialog({
     };
   }, [previews]);
 
+  const effectiveSeoFilename = useMemo(() => {
+    if (aiSeoFilename) return aiSeoFilename;
+    if (files[0]?.name) return files[0].name;
+    return slugifySeoFilename(
+      title || aiPrompt || businessName || 'business-photo',
+      businessCtx?.city || businessCtx?.location?.split(',')[0] || null,
+      'jpg',
+    );
+  }, [aiSeoFilename, files, title, aiPrompt, businessName, businessCtx?.city, businessCtx?.location]);
+
+  const liveSeoReadiness = useMemo(
+    () =>
+      computeMediaSeoReadiness({
+        title,
+        description,
+        tags,
+        category,
+        city: businessCtx?.city || businessCtx?.location?.split(',')[0]?.trim() || null,
+        searchTerms: usedSearchTerms,
+        seoFilename: effectiveSeoFilename,
+        url: generatedImageUrl || previews[0]?.url || editingItem?.url,
+        geoTagged:
+          composerMode === 'ai_generate'
+            ? aiGeoTagged || Boolean(businessCtx?.geoCoordinates)
+            : false,
+      }),
+    [
+      title,
+      description,
+      tags,
+      category,
+      businessCtx?.city,
+      businessCtx?.location,
+      businessCtx?.geoCoordinates,
+      usedSearchTerms,
+      effectiveSeoFilename,
+      generatedImageUrl,
+      previews,
+      editingItem?.url,
+      composerMode,
+      aiGeoTagged,
+    ],
+  );
+
   const loadAiImageIdeas = async () => {
     const reqSession = sessionRef.current;
     setIdeasLoading(true);
+    setIdeasError(null);
     try {
       const res = await authFetch('/api/social/ai-image-ideas');
       const data = (await res.json().catch(() => ({}))) as {
         previousPhotos?: PreviousPhotoRef[];
         ideas?: Array<AiImageIdeaItem | string>;
         business?: BusinessIdeasContext;
+        error?: string;
       };
       if (reqSession !== sessionRef.current) return;
-      if (data.business) setBusinessCtx(data.business);
+      if (!res.ok) {
+        setIdeasError(data.error || 'Could not load AI image ideas right now.');
+        return;
+      }
+      if (data.business) {
+        setBusinessCtx(data.business);
+        if (Array.isArray(data.business.topSearchTerms) && data.business.topSearchTerms.length > 0) {
+          setUsedSearchTerms(data.business.topSearchTerms.map((t) => t.keyword).filter(Boolean));
+        }
+      }
       if (Array.isArray(data.previousPhotos)) {
         setPreviousPhotos(data.previousPhotos.filter((p) => Boolean(p.url)));
       }
@@ -357,6 +451,8 @@ export function WebMediaMetadataDialog({
                 title: item.title || item.prompt.slice(0, 32),
                 icon: item.icon,
                 prompt: item.prompt,
+                gbpCategory: item.gbpCategory,
+                searchKeyword: item.searchKeyword,
               };
             }
             return null;
@@ -365,7 +461,9 @@ export function WebMediaMetadataDialog({
         setAiIdeas(normalizedIdeas);
       }
     } catch {
-      // Non-blocking: user can still write a prompt or auto-generate
+      if (reqSession === sessionRef.current) {
+        setIdeasError('Could not load AI image ideas right now.');
+      }
     } finally {
       if (reqSession === sessionRef.current) setIdeasLoading(false);
     }
@@ -376,6 +474,7 @@ export function WebMediaMetadataDialog({
     selectedIntent: WebAiMediaIntent,
     mediaType: 'photo' | 'video',
     hint?: string,
+    opts?: { imageUrl?: string; aiPrompt?: string; geoTagged?: boolean },
   ) => {
     const reqId = sessionRef.current;
     setAiLoading(true);
@@ -388,16 +487,26 @@ export function WebMediaMetadataDialog({
           mediaType,
           intent: selectedIntent,
           customHint: hint,
+          imageUrl: opts?.imageUrl || (composerMode === 'ai_generate' ? generatedImageUrl : undefined),
+          aiPrompt: opts?.aiPrompt || (composerMode === 'ai_generate' ? aiPrompt.trim() || undefined : undefined),
+          geoTagged: opts?.geoTagged ?? aiGeoTagged,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as AiMetadataApiResponse;
       if (reqId !== sessionRef.current) return;
       if (data?.title) setTitle(data.title);
       if (data?.description) setDescription(data.description);
+      if (data?.altText) setAiAltText(data.altText);
       if (Array.isArray(data?.tags)) setTags(data.tags);
       if (data?.category) setCategory(data.category);
       if (Array.isArray(data?.suggestedTitles)) setSuggestedTitles(data.suggestedTitles);
       if (Array.isArray(data?.suggestedTags)) setSuggestedTags(data.suggestedTags);
+      if (Array.isArray(data?.usedSearchTerms) && data.usedSearchTerms.length > 0) {
+        setUsedSearchTerms(data.usedSearchTerms);
+      }
+      if (data?.seoFilename && !aiSeoFilename) {
+        setAiSeoFilename(data.seoFilename);
+      }
     } catch {
       if (reqId === sessionRef.current && !title) {
         setTitle(`${businessName} · ${mediaType === 'video' ? 'Video' : 'Photo'} Showcase`);
@@ -436,10 +545,17 @@ export function WebMediaMetadataDialog({
     setGeneratingAiImage(false);
     setAiCandidates([]);
     setAiApprovedUrl(null);
+    setAiSeoFilename(null);
+    setAiGeoTagged(false);
+    setAiSourceType(null);
+    setAiFallbackReason(null);
+    setAiAltText('');
     setFullscreenOpen(false);
     setInspectStaticUrl(null);
     setLastAiPromptUsed('');
     setAiLightboxError(null);
+    setIdeasError(null);
+    setSeoChecklistOpen(false);
 
     if (editingItem) {
       setComposerMode('upload');
@@ -467,6 +583,7 @@ export function WebMediaMetadataDialog({
     setGeneratedImageUrl(null);
     setSelectedRefUrls([]);
     setAiPrompt('');
+    setAiStylePreset('real_photo');
     setScheduleMode(defaultScheduleMode);
     setIntent('local_seo');
     setTitle('');
@@ -676,6 +793,8 @@ export function WebMediaMetadataDialog({
           provider: effectiveProvider,
           requestId,
           isPoster: false,
+          isGbpPhoto: true,
+          stylePreset: aiStylePreset,
           autoFromBusiness: effectiveAuto,
           aspectRatio: aiAspectRatio,
           referenceImageUrls: selectedRefUrls,
@@ -733,30 +852,60 @@ export function WebMediaMetadataDialog({
         const check = (await pollRes.json().catch(() => ({}))) as {
           status?: string;
           error?: string;
-          result?: { url?: string };
+          result?: {
+            url?: string;
+            sourceType?: ImageGenerationSourceType;
+            model?: string;
+            fallbackReason?: string;
+            seoFilename?: string;
+            geoTagged?: boolean;
+            geoCoordinates?: { latitude: number; longitude: number } | null;
+          };
         };
         if (reqSession !== sessionRef.current) return;
         if (check.status === 'completed' && check.result?.url) {
           const url = check.result.url;
+          const resolvedSourceType: ImageGenerationSourceType =
+            check.result.sourceType ||
+            (selectedRefUrls.length > 0 ? 'ai_reference' : 'ai_text');
           setGeneratedImageUrl(url);
+          if (check.result.seoFilename) setAiSeoFilename(check.result.seoFilename);
+          setAiGeoTagged(Boolean(check.result.geoTagged));
+          setAiSourceType(resolvedSourceType);
+          setAiFallbackReason(check.result.fallbackReason || null);
           setAiCandidates((prev) =>
             appendImageCandidate(prev, {
               url,
               prompt: promptForRequest || undefined,
               provider: effectiveProvider,
               aspectRatio: aiAspectRatio,
+              sourceType: resolvedSourceType,
+              model: check.result?.model,
+              fallbackReason: check.result?.fallbackReason,
+              seoFilename: check.result?.seoFilename,
+              geoTagged: check.result?.geoTagged,
+              geoCoordinates: check.result?.geoCoordinates ?? null,
             }),
           );
           setAiApprovedUrl(null);
           setAiGenStatus(null);
           setGeneratingAiImage(false);
           setFullscreenOpen(true);
-          toast.success('AI photo ready! Inspect full screen to verify quality.');
+          toast.success(
+            resolvedSourceType === 'stock_fallback'
+              ? 'Selected curated stock photo fallback while AI providers were busy.'
+              : 'AI photo ready! Inspect full screen to verify quality.',
+          );
           void generateAiMetadata(
             [promptForRequest || `${businessName} AI Photo`],
             intent,
             'photo',
             promptForRequest || undefined,
+            {
+              imageUrl: url,
+              aiPrompt: promptForRequest || undefined,
+              geoTagged: Boolean(check.result.geoTagged),
+            },
           );
           return;
         }
@@ -797,6 +946,7 @@ export function WebMediaMetadataDialog({
     if (isEditMode && editingItem) {
       setSubmitting(true);
       try {
+        const wantPublishNow = scheduleMode === 'instant';
         const res = await authFetch('/api/social/photos', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -806,14 +956,15 @@ export function WebMediaMetadataDialog({
             description: description.trim(),
             tags,
             category,
-            status: scheduleMode === 'draft' ? 'draft' : 'scheduled',
+            publishNow: wantPublishNow,
+            status: wantPublishNow ? 'published' : scheduleMode === 'draft' ? 'draft' : 'scheduled',
           }),
         });
         const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
         if (!res.ok || !data.success) throw new Error(data.error || 'Could not update media details.');
-        toast.success('Media title, tags & schedule updated.');
+        toast.success(wantPublishNow ? 'Published media live to Google Business Profile!' : 'Media title, tags & schedule updated.');
         onOpenChange(false);
-        onSaved('Media details updated.', scheduleMode);
+        onSaved(wantPublishNow ? 'Published media to Google.' : 'Media details updated.', scheduleMode);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Update failed');
       } finally {
@@ -837,6 +988,10 @@ export function WebMediaMetadataDialog({
           tags,
           category,
           mediaFormat: 'PHOTO' as const,
+          seoFilename: effectiveSeoFilename,
+          geoTagged: aiGeoTagged,
+          altText: aiAltText.trim() || title.trim() || undefined,
+          seoScore: liveSeoReadiness.score,
         };
         const res = await authFetch('/api/social/photos', {
           method: 'POST',
@@ -848,6 +1003,10 @@ export function WebMediaMetadataDialog({
             description: aiItem.description,
             tags,
             category,
+            seoFilename: effectiveSeoFilename,
+            geoTagged: aiGeoTagged,
+            altText: aiItem.altText,
+            seoScore: liveSeoReadiness.score,
             scheduleMode,
             preferredTime,
             timeZone: localTimeZone,
@@ -1044,6 +1203,38 @@ export function WebMediaMetadataDialog({
       ? Boolean(generatedImageUrl)
       : files.length > 0;
 
+  const isSplitStudio = !isEditMode && composerMode === 'ai_generate';
+
+  const sourceBadgeMeta = (() => {
+    if (aiSourceType === 'ai_reference') {
+      return {
+        label: '✨ AI + Your Photo',
+        cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+      };
+    }
+    if (aiSourceType === 'stock_fallback') {
+      return {
+        label: '📷 Stock Photo Fallback',
+        cls: 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30',
+      };
+    }
+    return {
+      label: '✨ AI Generated',
+      cls: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30',
+    };
+  })();
+
+  const seoScoreBarColor =
+    liveSeoReadiness.score >= 85
+      ? 'bg-emerald-500'
+      : liveSeoReadiness.score >= 60
+        ? 'bg-amber-500'
+        : 'bg-rose-500';
+
+  const unusedSearchTerms = usedSearchTerms.filter(
+    (term) => !tags.some((t) => t.toLowerCase() === term.toLowerCase()),
+  );
+
   return (
     <>
     <Dialog
@@ -1055,7 +1246,11 @@ export function WebMediaMetadataDialog({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col p-0 overflow-hidden bg-card text-foreground border-border">
+      <DialogContent
+        className={`${
+          isSplitStudio ? 'sm:max-w-4xl' : 'sm:max-w-xl'
+        } max-h-[92vh] flex flex-col p-0 overflow-hidden bg-card text-foreground border-border`}
+      >
         <DialogHeader className="p-5 pb-3 border-b border-border text-left">
           <div className="flex items-center justify-between gap-2 pr-6">
             <div>
@@ -1064,11 +1259,12 @@ export function WebMediaMetadataDialog({
                 {isEditMode
                   ? 'Edit Media Title, Tags & Queue'
                   : composerMode === 'ai_generate'
-                    ? 'Create Business AI Photo'
+                    ? 'AI Business Photo & Local SEO Studio'
                     : 'Upload Media with AI SEO Tags'}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Auto-tailored for <strong>{businessName}</strong> — edit any field before saving.
+                Auto-tailored for <strong>{businessName}</strong>
+                {businessCtx?.city ? ` (${businessCtx.city})` : ''} — optimize visual + GBP local SEO before publishing.
               </DialogDescription>
             </div>
             <Button
@@ -1086,6 +1282,11 @@ export function WebMediaMetadataDialog({
                   intent,
                   mediaFormatForAi,
                   title || aiPrompt.trim() || undefined,
+                  {
+                    imageUrl: composerMode === 'ai_generate' ? generatedImageUrl || undefined : undefined,
+                    aiPrompt: aiPrompt.trim() || undefined,
+                    geoTagged: aiGeoTagged,
+                  },
                 )
               }
               className="h-8 rounded-lg text-xs font-bold gap-1 shrink-0"
@@ -1116,7 +1317,7 @@ export function WebMediaMetadataDialog({
                 type="button"
                 onClick={() => {
                   setComposerMode('ai_generate');
-                  if (!previousPhotos.length && !ideasLoading) {
+                  if (!previousPhotos.length && !ideasLoading && !ideasError) {
                     void loadAiImageIdeas();
                   }
                 }}
@@ -1132,526 +1333,706 @@ export function WebMediaMetadataDialog({
             </div>
           )}
 
-          {/* Picker / Previews OR AI Generator */}
-          {isEditMode && editingItem ? (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border">
-              {editingIsVideoNoThumb ? (
-                <video
-                  src={editingItem.url}
-                  muted
-                  playsInline
-                  preload="metadata"
-                  className="size-16 rounded-lg object-cover border border-border bg-slate-900 shrink-0"
-                />
-              ) : (
-                <img
-                  src={editingItem.thumbnailUrl || editingItem.url}
-                  alt={editingItem.title || 'Media preview'}
-                  className="size-16 rounded-lg object-cover border border-border shrink-0"
-                />
-              )}
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="text-xs font-bold text-foreground">
-                  {editingItem.status === 'draft'
-                    ? 'Draft (Not Posted)'
-                    : editingItem.status === 'failed'
-                      ? 'Failed to publish — edit or reschedule'
-                      : 'Scheduled to Publish'}
-                </div>
-                {editingItem.failureReason ? (
-                  <p className="text-[11px] text-destructive line-clamp-2">{editingItem.failureReason}</p>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground">
-                    Changes update your queued Google Business Profile media automatically.
-                  </p>
-                )}
-              </div>
-            </div>
-          ) : composerMode === 'ai_generate' ? (
-            <div className="space-y-3 rounded-xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/40 dark:bg-purple-950/15 p-3.5">
-              {/* Previous Business Photos Reference Strip */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
-                    Use Previous Business Photos ({selectedRefUrls.length}/3 optional)
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => void loadAiImageIdeas()}
-                      disabled={ideasLoading}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-border bg-background text-[10.5px] font-semibold text-muted-foreground hover:text-foreground"
-                    >
-                      <RefreshCw className={`size-3 ${ideasLoading ? 'animate-spin' : ''}`} />
-                      Refresh
-                    </button>
-                    <input
-                      ref={refFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleReferenceUploadChange}
-                      className="hidden"
-                      aria-label="Upload reference photo"
+          <div className={isSplitStudio ? 'grid grid-cols-1 lg:grid-cols-12 gap-5 items-start' : 'space-y-4'}>
+            {/* LEFT COLUMN (Visual Studio OR Upload/Edit Preview) */}
+            <div className={isSplitStudio ? 'lg:col-span-6 space-y-3.5' : 'space-y-3.5'}>
+              {isEditMode && editingItem ? (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border">
+                  {editingIsVideoNoThumb ? (
+                    <video
+                      src={editingItem.url}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="size-16 rounded-lg object-cover border border-border bg-slate-900 shrink-0"
                     />
-                    <button
-                      type="button"
-                      onClick={() => refFileInputRef.current?.click()}
-                      disabled={uploadingRefPhoto}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-600 text-white text-[10.5px] font-semibold hover:bg-purple-700 disabled:opacity-60"
-                    >
-                      {uploadingRefPhoto ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
-                      Upload Ref
-                    </button>
+                  ) : (
+                    <img
+                      src={editingItem.thumbnailUrl || editingItem.url}
+                      alt={editingItem.title || 'Media preview'}
+                      className="size-16 rounded-lg object-cover border border-border shrink-0"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="text-xs font-bold text-foreground">
+                      {editingItem.status === 'draft'
+                        ? 'Draft (Not Posted)'
+                        : editingItem.status === 'failed'
+                          ? 'Failed to publish — edit or reschedule'
+                          : 'Scheduled to Publish'}
+                    </div>
+                    {editingItem.failureReason ? (
+                      <p className="text-[11px] text-destructive line-clamp-2">{editingItem.failureReason}</p>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">
+                        Changes update your queued Google Business Profile media automatically.
+                      </p>
+                    )}
                   </div>
                 </div>
-
-                {previousPhotos.length > 0 ? (
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                    {previousPhotos.map((refPhoto) => {
-                      const selected = selectedRefUrls.includes(refPhoto.url);
-                      return (
+              ) : composerMode === 'ai_generate' ? (
+                <div className="space-y-3 rounded-xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/40 dark:bg-purple-950/15 p-3.5">
+                  {/* Previous Business Photos Reference Strip */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
+                        Reference Photos ({selectedRefUrls.length}/3 optional)
+                      </span>
+                      <div className="flex items-center gap-1.5">
                         <button
-                          key={refPhoto.id}
                           type="button"
-                          onClick={() => toggleRefPhoto(refPhoto.url)}
-                          title={refPhoto.title || 'Select business photo as reference'}
-                          className={`relative size-14 rounded-lg overflow-hidden shrink-0 border-2 transition-all ${
-                            selected
-                              ? 'border-purple-600 ring-2 ring-purple-400/50'
-                              : 'border-border opacity-85 hover:opacity-100'
+                          onClick={() => void loadAiImageIdeas()}
+                          disabled={ideasLoading}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-border bg-background text-[10.5px] font-semibold text-muted-foreground hover:text-foreground"
+                        >
+                          <RefreshCw className={`size-3 ${ideasLoading ? 'animate-spin' : ''}`} />
+                          Refresh
+                        </button>
+                        <input
+                          ref={refFileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleReferenceUploadChange}
+                          className="hidden"
+                          aria-label="Upload reference photo"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => refFileInputRef.current?.click()}
+                          disabled={uploadingRefPhoto}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-600 text-white text-[10.5px] font-semibold hover:bg-purple-700 disabled:opacity-60"
+                        >
+                          {uploadingRefPhoto ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
+                          Upload Ref
+                        </button>
+                      </div>
+                    </div>
+
+                    {selectedRefUrls.length > 0 && (
+                      <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 text-[10.5px] font-semibold text-emerald-700 dark:text-emerald-300">
+                        ✓ Reference-aware Gemini mode active — preserves your authentic property/products.
+                      </div>
+                    )}
+
+                    {ideasError ? (
+                      <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-[11px] text-destructive">
+                        <span className="flex items-center gap-1.5 min-w-0 truncate">
+                          <AlertCircle className="size-3.5 shrink-0" />
+                          {ideasError}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void loadAiImageIdeas()}
+                          className="shrink-0 font-bold underline"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : previousPhotos.length > 0 ? (
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                        {previousPhotos.map((refPhoto) => {
+                          const selected = selectedRefUrls.includes(refPhoto.url);
+                          return (
+                            <button
+                              key={refPhoto.id}
+                              type="button"
+                              onClick={() => toggleRefPhoto(refPhoto.url)}
+                              title={refPhoto.title || 'Select business photo as reference'}
+                              className={`relative size-14 rounded-lg overflow-hidden shrink-0 border-2 transition-all ${
+                                selected
+                                  ? 'border-purple-600 ring-2 ring-purple-400/50'
+                                  : 'border-border opacity-85 hover:opacity-100'
+                              }`}
+                            >
+                              <img
+                                src={refPhoto.url}
+                                alt={refPhoto.title || 'Previous business photo'}
+                                className="size-full object-cover"
+                              />
+                              {selected && (
+                                <span className="absolute top-1 right-1 size-4 rounded-full bg-purple-600 text-white flex items-center justify-center">
+                                  <Check className="size-2.5" />
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">
+                        {ideasLoading
+                          ? 'Loading your Google Business photos & search ideas…'
+                          : 'No saved photos yet — click "+ Upload Ref" to recreate scenes using your own place or product.'}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Quick AI Prompt Ideas (Search-Term Powered) */}
+                  {aiIdeas.length > 0 && (
+                    <div className="space-y-1">
+                      <span className="text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">
+                        Quick SEO Scene Ideas
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {aiIdeas.slice(0, 4).map((idea) => (
+                          <button
+                            key={idea.id}
+                            type="button"
+                            onClick={() => {
+                              setAiPrompt(idea.prompt);
+                              if (
+                                idea.gbpCategory &&
+                                GBP_CATEGORIES.some((c) => c.value === idea.gbpCategory)
+                              ) {
+                                setCategory(idea.gbpCategory as WebGbpCategoryType);
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded-full border border-purple-200 dark:border-purple-800 bg-background text-[10.5px] font-medium text-foreground hover:border-purple-500 text-left"
+                          >
+                            {idea.icon || '✨'} {idea.title}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Style Preset Pills */}
+                  <div className="space-y-1">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">
+                      Photo Style Preset
+                    </span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {STYLE_PRESET_OPTIONS.map((preset) => {
+                        const active = aiStylePreset === preset.id;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => setAiStylePreset(preset.id)}
+                            className={`px-2 py-1.5 rounded-lg border text-left transition-all ${
+                              active
+                                ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                                : 'bg-background text-foreground border-border hover:border-purple-400'
+                            }`}
+                          >
+                            <div className="text-[10.5px] font-bold leading-tight">{preset.label}</div>
+                            <div
+                              className={`text-[9px] leading-tight truncate ${
+                                active ? 'text-purple-100' : 'text-muted-foreground'
+                              }`}
+                            >
+                              {preset.hint}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Scene Prompt */}
+                  <div className="space-y-1">
+                    <label htmlFor="web-ai-photo-prompt" className="text-xs font-bold text-foreground">
+                      Scene Prompt (optional — leave blank to Auto-Generate from GBP)
+                    </label>
+                    <Textarea
+                      id="web-ai-photo-prompt"
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      rows={2}
+                      placeholder={`e.g. Showcase ${businessName} — serene garden courtyard at golden hour`}
+                      className="rounded-xl text-xs resize-none bg-background"
+                    />
+                  </div>
+
+                  {/* Ratio, Provider & Unified Generate CTA */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1">
+                      {(['1:1', '4:5', '9:16'] as const).map((ratio) => (
+                        <button
+                          key={ratio}
+                          type="button"
+                          onClick={() => setAiAspectRatio(ratio)}
+                          className={`px-2 py-1 rounded-md text-[11px] font-bold border ${
+                            aiAspectRatio === ratio
+                              ? 'bg-foreground text-background border-foreground'
+                              : 'bg-background text-muted-foreground border-border'
                           }`}
                         >
-                          <img
-                            src={refPhoto.url}
-                            alt={refPhoto.title || 'Previous business photo'}
-                            className="size-full object-cover"
-                          />
-                          {selected && (
-                            <span className="absolute top-1 right-1 size-4 rounded-full bg-purple-600 text-white flex items-center justify-center">
-                              <Check className="size-2.5" />
-                            </span>
-                          )}
+                          {ratio}
                         </button>
-                      );
-                    })}
+                      ))}
+                      <select
+                        aria-label="AI Image Engine"
+                        value={selectedRefUrls.length > 0 ? 'gemini' : aiProviderChoice}
+                        disabled={selectedRefUrls.length > 0 || generatingAiImage}
+                        onChange={(e) => setAiProviderChoice(e.target.value as ImageProviderChoice)}
+                        className="h-7 px-2 rounded-md border border-border bg-background text-[10.5px] font-semibold"
+                      >
+                        <option value="gemini">Gemini Vision</option>
+                        <option value="cloudflare">Cloudflare</option>
+                        <option value="openrouter">OpenRouter</option>
+                        <option value="siliconflow">SiliconFlow</option>
+                        <option value="nvidia">NVIDIA FLUX</option>
+                      </select>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={generatingAiImage}
+                      onClick={() => void handleGenerateAiPhoto(!aiPrompt.trim())}
+                      className="h-8 rounded-lg text-[11px] font-bold gap-1 bg-purple-600 hover:bg-purple-700 text-white"
+                    >
+                      {generatingAiImage ? <Loader2 className="size-3 animate-spin" /> : <Wand2 className="size-3" />}
+                      {generatingAiImage
+                        ? 'Generating…'
+                        : aiPrompt.trim()
+                          ? 'Generate Image'
+                          : 'Auto-Generate Image'}
+                    </Button>
                   </div>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground">
-                    {ideasLoading
-                      ? 'Loading your existing Google Business photos…'
-                      : 'No saved photos yet — click "+ Upload Ref" to let AI recreate scenes using your own place or product.'}
-                  </p>
+
+                  {aiGenStatus && (
+                    <div className="flex items-center gap-2 text-xs text-purple-700 dark:text-purple-300 font-semibold bg-background/80 border border-purple-200 rounded-lg px-3 py-2">
+                      <Loader2 className="size-3.5 animate-spin shrink-0" />
+                      <span>{aiGenStatus}</span>
+                    </div>
+                  )}
+
+                  {aiLightboxError && !generatingAiImage && (
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+                      <span className="min-w-0">{aiLightboxError}</span>
+                      <button
+                        type="button"
+                        onClick={() => void handleGenerateAiPhoto(!aiPrompt.trim())}
+                        className="shrink-0 font-bold underline"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+
+                  {generatedImageUrl && (
+                    <div className="space-y-2 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/20 p-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${sourceBadgeMeta.cls}`}
+                        >
+                          {sourceBadgeMeta.label}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            aiGeoTagged
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          <MapPin className="size-2.5" />
+                          {aiGeoTagged ? 'GPS EXIF Tagged' : 'Standard EXIF'}
+                        </span>
+                      </div>
+
+                      {aiFallbackReason && (
+                        <p className="text-[10.5px] text-amber-800 dark:text-amber-300 bg-amber-500/10 rounded-md px-2 py-1">
+                          {aiFallbackReason}
+                        </p>
+                      )}
+
+                      <div className="relative rounded-xl overflow-hidden border border-border bg-slate-950 flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={() => setFullscreenOpen(true)}
+                          className="w-full cursor-zoom-in block"
+                          title="Inspect full screen"
+                        >
+                          <img
+                            src={generatedImageUrl}
+                            alt={aiAltText || aiPrompt || `${businessName} AI generated photo`}
+                            className="w-full max-h-64 object-contain mx-auto"
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFullscreenOpen(true)}
+                          className="absolute top-2 right-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/85 border border-white/20 text-white text-[11px] font-bold hover:bg-slate-900 cursor-pointer"
+                        >
+                          <Maximize2 className="size-3" />
+                          Full Screen
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 px-0.5 text-[10px] text-muted-foreground">
+                        <span className="truncate font-mono">{effectiveSeoFilename}</span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                          {aiApprovedUrl === generatedImageUrl
+                            ? '✓ Approved — Ready to schedule or publish'
+                            : aiCandidates.length > 1
+                              ? `${aiCandidates.length} variations saved — inspect full screen to pick best`
+                              : 'Click image to inspect quality in full screen'}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setFullscreenOpen(true)}
+                            className="h-7 rounded-lg text-[11px] font-bold gap-1 bg-background"
+                          >
+                            <Maximize2 className="size-3" />
+                            Inspect
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={generatingAiImage}
+                            onClick={() => void handleGenerateAiPhoto(false)}
+                            className="h-7 rounded-lg text-[11px] font-bold gap-1 bg-background"
+                          >
+                            <RefreshCw className="size-3" />
+                            Regenerate
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/*,.mp4,.mov,.webm,.m4v,.3gp,.mkv,.avi"
+                    multiple
+                    onChange={handleFileChange}
+                    className="hidden"
+                    aria-label="Choose photos or videos"
+                  />
+                  {previews.length > 0 ? (
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                      {previews.map((p, idx) => (
+                        <div
+                          key={`${p.file.name}-${idx}`}
+                          className="relative size-16 rounded-xl overflow-hidden border border-border bg-muted shrink-0"
+                        >
+                          {p.isVideo ? (
+                            <div className="relative size-full bg-slate-900">
+                              <video
+                                src={p.url}
+                                muted
+                                playsInline
+                                preload="metadata"
+                                className="size-full object-cover"
+                              />
+                              <span className="absolute bottom-1 right-1 px-1 py-0.5 rounded bg-black/75 text-white text-[8px] font-bold">
+                                VIDEO
+                              </span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setInspectStaticUrl(p.url)}
+                              className="size-full cursor-zoom-in block"
+                              title={`Inspect ${p.file.name} full screen`}
+                            >
+                              <img src={p.url} alt={p.file.name} className="size-full object-cover" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="size-16 rounded-xl border-2 border-dashed border-border hover:border-primary flex flex-col items-center justify-center text-[10px] font-semibold text-muted-foreground hover:text-primary shrink-0"
+                      >
+                        <Plus className="size-4" />
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-6 text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary"
+                    >
+                      <Upload className="size-6" />
+                      <span className="text-xs font-semibold">
+                        Choose photos or videos (MP4, MOV, 3GP, MKV, WEBM, JPG, PNG)
+                      </span>
+                    </button>
+                  )}
+                  {videoWarning && (
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                      {videoWarning}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT COLUMN (Local SEO Readiness, Metadata & GBP Publishing) */}
+            <div className={isSplitStudio ? 'lg:col-span-6 space-y-3.5' : 'space-y-3.5'}>
+              {/* Live SEO Readiness Meter */}
+              <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
+                      GBP Local SEO Readiness
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-background border border-border text-[11px] font-bold">
+                      {liveSeoReadiness.score}/100
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSeoChecklistOpen((v) => !v)}
+                    className="text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    {seoChecklistOpen ? 'Hide checks' : 'View 5 checks'}
+                  </button>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-300 ${seoScoreBarColor}`}
+                    style={{ width: `${liveSeoReadiness.score}%` }}
+                  />
+                </div>
+                {seoChecklistOpen && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                    {liveSeoReadiness.checks.map((chk) => (
+                      <div key={chk.id} className="flex items-start gap-1.5 text-[10.5px]">
+                        <CheckCircle2
+                          className={`size-3.5 shrink-0 mt-0.5 ${
+                            chk.passed ? 'text-emerald-600' : 'text-muted-foreground/50'
+                          }`}
+                        />
+                        <span className={chk.passed ? 'text-foreground font-medium' : 'text-muted-foreground'}>
+                          {chk.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
-              {/* Quick AI Prompt Ideas */}
-              {aiIdeas.length > 0 && (
-                <div className="space-y-1">
-                  <span className="text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">
-                    Quick Business Ideas
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {aiIdeas.slice(0, 4).map((idea) => (
+              {/* AI Focus Intent Chips */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                  AI Focus Angle
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {AI_INTENTS.map((item) => {
+                    const active = item.value === intent;
+                    return (
                       <button
-                        key={idea.id}
+                        key={item.value}
                         type="button"
-                        onClick={() => setAiPrompt(idea.prompt)}
-                        className="px-2.5 py-1 rounded-full border border-purple-200 dark:border-purple-800 bg-background text-[10.5px] font-medium text-foreground hover:border-purple-500 text-left"
+                        onClick={() => {
+                          setIntent(item.value);
+                          void generateAiMetadata(
+                            isEditMode
+                              ? [title || businessName]
+                              : composerMode === 'ai_generate'
+                                ? [aiPrompt.trim() || `${businessName} AI Photo`]
+                                : files.map((f) => f.name),
+                            item.value,
+                            mediaFormatForAi,
+                            aiPrompt.trim() || undefined,
+                            {
+                              imageUrl:
+                                composerMode === 'ai_generate' ? generatedImageUrl || undefined : undefined,
+                              aiPrompt: aiPrompt.trim() || undefined,
+                              geoTagged: aiGeoTagged,
+                            },
+                          );
+                        }}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
+                          active
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-muted/50 text-muted-foreground border-border hover:text-foreground'
+                        }`}
                       >
-                        ✨ {idea.title}
+                        ✨ {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Title + AI Suggestion Pills */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="web-media-title" className="text-xs font-bold text-foreground">
+                    Title
+                  </label>
+                  {aiLoading && <span className="text-[11px] text-purple-600 font-semibold">Generating…</span>}
+                </div>
+                <Input
+                  id="web-media-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={`e.g. Featured Work at ${businessName}`}
+                  className="rounded-xl text-xs"
+                />
+                {suggestedTitles.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {suggestedTitles.map((cand) => (
+                      <button
+                        key={cand}
+                        type="button"
+                        onClick={() => setTitle(cand)}
+                        className="px-2 py-0.5 rounded-md bg-muted text-[10.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/80"
+                      >
+                        {cand}
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
-              {/* Optional Custom Prompt */}
-              <div className="space-y-1">
-                <label htmlFor="web-ai-photo-prompt" className="text-xs font-bold text-foreground">
-                  Prompt (Optional — leave empty for Auto Business AI)
-                </label>
+              {/* SEO Description */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="web-media-desc" className="text-xs font-bold text-foreground">
+                    SEO Description
+                  </label>
+                  <span className="text-[11px] text-muted-foreground">{description.length}/1500</span>
+                </div>
                 <Textarea
-                  id="web-ai-photo-prompt"
-                  value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  rows={2}
-                  placeholder={`e.g. Showcase ${businessName} — serene garden courtyard at golden hour`}
-                  className="rounded-xl text-xs resize-none bg-background"
+                  id="web-media-desc"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Write or edit your customer-facing media description…"
+                  rows={3}
+                  className="rounded-xl text-xs resize-none"
                 />
               </div>
 
-              {/* Aspect Ratio + Generate Actions */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-1">
-                  {(['1:1', '4:5', '9:16'] as const).map((ratio) => (
-                    <button
-                      key={ratio}
-                      type="button"
-                      onClick={() => setAiAspectRatio(ratio)}
-                      className={`px-2 py-1 rounded-md text-[11px] font-bold border ${
-                        aiAspectRatio === ratio
-                          ? 'bg-foreground text-background border-foreground'
-                          : 'bg-background text-muted-foreground border-border'
-                      }`}
-                    >
-                      {ratio}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={generatingAiImage}
-                    onClick={() => void handleGenerateAiPhoto(true)}
-                    className="h-8 rounded-lg text-[11px] font-bold gap-1"
-                  >
-                    <Sparkles className="size-3 text-purple-600" />
-                    Auto for Business
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={generatingAiImage}
-                    onClick={() => void handleGenerateAiPhoto(false)}
-                    className="h-8 rounded-lg text-[11px] font-bold gap-1 bg-purple-600 hover:bg-purple-700 text-white"
-                  >
-                    {generatingAiImage ? <Loader2 className="size-3 animate-spin" /> : <Wand2 className="size-3" />}
-                    {generatingAiImage ? 'Generating…' : 'Generate Image'}
-                  </Button>
-                </div>
-              </div>
-
-              {aiGenStatus && (
-                <div className="flex items-center gap-2 text-xs text-purple-700 dark:text-purple-300 font-semibold bg-background/80 border border-purple-200 rounded-lg px-3 py-2">
-                  <Loader2 className="size-3.5 animate-spin shrink-0" />
-                  <span>{aiGenStatus}</span>
-                </div>
-              )}
-
-              {generatedImageUrl && (
-                <div className="space-y-2 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/20 p-2.5">
-                  <div className="relative rounded-xl overflow-hidden border border-border bg-slate-950 flex items-center justify-center">
-                    <button
-                      type="button"
-                      onClick={() => setFullscreenOpen(true)}
-                      className="w-full cursor-zoom-in block"
-                      title="Inspect full screen"
-                    >
-                      <img
-                        src={generatedImageUrl}
-                        alt={aiPrompt || `${businessName} AI generated photo`}
-                        className="w-full max-h-72 object-contain mx-auto"
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFullscreenOpen(true)}
-                      className="absolute top-2 right-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/85 border border-white/20 text-white text-[11px] font-bold hover:bg-slate-900 cursor-pointer"
-                    >
-                      <Maximize2 className="size-3" />
-                      Full Screen
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
-                    <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
-                      {aiApprovedUrl === generatedImageUrl
-                        ? '✓ Approved — Ready to schedule or publish'
-                        : aiCandidates.length > 1
-                          ? `${aiCandidates.length} variations saved — inspect full screen to pick best`
-                          : 'Click image to inspect quality in full screen'}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <Button
+              {/* Tags + GBP Search Terms */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-foreground flex items-center gap-1">
+                  <Tag className="size-3.5 text-primary" /> Tags &amp; Local Keywords
+                </label>
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {tags.map((tag) => (
+                      <button
+                        key={tag}
                         type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setFullscreenOpen(true)}
-                        className="h-7 rounded-lg text-[11px] font-bold gap-1 bg-background"
+                        onClick={() => setTags((prev) => prev.filter((t) => t !== tag))}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[11px] font-semibold"
                       >
-                        <Maximize2 className="size-3" />
-                        Inspect
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={generatingAiImage}
-                        onClick={() => void handleGenerateAiPhoto(false)}
-                        className="h-7 rounded-lg text-[11px] font-bold gap-1 bg-background"
-                      >
-                        <RefreshCw className="size-3" />
-                        Regenerate
-                      </Button>
-                    </div>
+                        <span>#{tag}</span>
+                        <X className="size-3" />
+                      </button>
+                    ))}
                   </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,video/*,.mp4,.mov,.webm,.m4v,.3gp,.mkv,.avi"
-                multiple
-                onChange={handleFileChange}
-                className="hidden"
-                aria-label="Choose photos or videos"
-              />
-              {previews.length > 0 ? (
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  {previews.map((p, idx) => (
-                    <div
-                      key={`${p.file.name}-${idx}`}
-                      className="relative size-16 rounded-xl overflow-hidden border border-border bg-muted shrink-0"
-                    >
-                      {p.isVideo ? (
-                        <div className="relative size-full bg-slate-900">
-                          <video
-                            src={p.url}
-                            muted
-                            playsInline
-                            preload="metadata"
-                            className="size-full object-cover"
-                          />
-                          <span className="absolute bottom-1 right-1 px-1 py-0.5 rounded bg-black/75 text-white text-[8px] font-bold">
-                            VIDEO
-                          </span>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setInspectStaticUrl(p.url)}
-                          className="size-full cursor-zoom-in block"
-                          title={`Inspect ${p.file.name} full screen`}
-                        >
-                          <img src={p.url} alt={p.file.name} className="size-full object-cover" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="size-16 rounded-xl border-2 border-dashed border-border hover:border-primary flex flex-col items-center justify-center text-[10px] font-semibold text-muted-foreground hover:text-primary shrink-0"
-                  >
-                    <Plus className="size-4" />
-                    Change
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-6 text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary"
-                >
-                  <Upload className="size-6" />
-                  <span className="text-xs font-semibold">
-                    Choose photos or videos (MP4, MOV, 3GP, MKV, WEBM, JPG, PNG)
-                  </span>
-                </button>
-              )}
-              {videoWarning && (
-                <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-800 dark:text-amber-300">
-                  {videoWarning}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* AI Focus Intent Chips */}
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-              AI Focus Angle
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {AI_INTENTS.map((item) => {
-                const active = item.value === intent;
-                return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => {
-                      setIntent(item.value);
-                      void generateAiMetadata(
-                        isEditMode
-                          ? [title || businessName]
-                          : composerMode === 'ai_generate'
-                            ? [aiPrompt.trim() || `${businessName} AI Photo`]
-                            : files.map((f) => f.name),
-                        item.value,
-                        mediaFormatForAi,
-                        aiPrompt.trim() || undefined,
-                      );
+                )}
+                <div className="flex gap-1.5">
+                  <Input
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addTag();
+                      }
                     }}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
-                      active
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-muted/50 text-muted-foreground border-border hover:text-foreground'
-                    }`}
-                  >
-                    ✨ {item.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Title + AI Suggestion Pills */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label htmlFor="web-media-title" className="text-xs font-bold text-foreground">
-                Title
-              </label>
-              {aiLoading && <span className="text-[11px] text-purple-600 font-semibold">Generating…</span>}
-            </div>
-            <Input
-              id="web-media-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={`e.g. Featured Work at ${businessName}`}
-              className="rounded-xl text-xs"
-            />
-            {suggestedTitles.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {suggestedTitles.map((cand) => (
-                  <button
-                    key={cand}
-                    type="button"
-                    onClick={() => setTitle(cand)}
-                    className="px-2 py-0.5 rounded-md bg-muted text-[10.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/80"
-                  >
-                    {cand}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* SEO Description */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label htmlFor="web-media-desc" className="text-xs font-bold text-foreground">
-                SEO Description
-              </label>
-              <span className="text-[11px] text-muted-foreground">{description.length}/1500</span>
-            </div>
-            <Textarea
-              id="web-media-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Write or edit your customer-facing media description…"
-              rows={3}
-              className="rounded-xl text-xs resize-none"
-            />
-          </div>
-
-          {/* Tags */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-foreground flex items-center gap-1">
-              <Tag className="size-3.5 text-primary" /> Tags &amp; Local Keywords
-            </label>
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {tags.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => setTags((prev) => prev.filter((t) => t !== tag))}
-                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[11px] font-semibold"
-                  >
-                    <span>#{tag}</span>
-                    <X className="size-3" />
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-1.5">
-              <Input
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addTag();
-                  }
-                }}
-                placeholder="Add custom tag (press Enter)"
-                className="h-8 rounded-xl text-xs"
-              />
-              <Button type="button" size="sm" variant="secondary" onClick={addTag} className="h-8 rounded-xl text-xs">
-                Add
-              </Button>
-            </div>
-            {suggestedTags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-0.5">
-                {suggestedTags.map((st) => (
-                  <button
-                    key={st}
-                    type="button"
-                    onClick={() => toggleSuggestedTag(st)}
-                    className="px-2 py-0.5 rounded-full border border-dashed border-border text-[10.5px] font-medium text-muted-foreground hover:border-primary hover:text-primary"
-                  >
-                    + {st}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Category + Publishing Schedule */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-foreground">Google Category</label>
-              <Select value={category} onValueChange={(v) => setCategory(v as WebGbpCategoryType)}>
-                <SelectTrigger className="rounded-xl text-xs h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {GBP_CATEGORIES.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      {c.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-foreground">
-                {isEditMode ? 'Queue Status' : 'Publishing Schedule'}
-              </label>
-              <Select value={scheduleMode} onValueChange={(v) => setScheduleMode(v as WebScheduleMode)}>
-                <SelectTrigger className="rounded-xl text-xs h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {!isEditMode && <SelectItem value="instant">Publish now</SelectItem>}
-                  <SelectItem value="daily">{isEditMode ? 'Scheduled to Publish' : 'Daily schedule (1/day)'}</SelectItem>
-                  {!isEditMode && <SelectItem value="weekly">Weekly schedule (1/week)</SelectItem>}
-                  <SelectItem value="draft">Save draft (Not Posted)</SelectItem>
-                </SelectContent>
-              </Select>
-              {!isEditMode && (scheduleMode === 'daily' || scheduleMode === 'weekly') && (
-                <div className="flex items-center justify-between gap-2 pt-1">
-                  <span className="text-[11px] text-muted-foreground truncate">
-                    Local publish time {localTimeZone ? `(${localTimeZone})` : ''}
-                  </span>
-                  <select
-                    value={preferredTime}
-                    onChange={(e) => setPreferredTime(e.target.value)}
-                    className="h-7 px-2 rounded-lg border border-border bg-background text-[11px] font-semibold"
-                  >
-                    <option value="09:00">09:00 AM</option>
-                    <option value="10:00">10:00 AM</option>
-                    <option value="12:00">12:00 PM</option>
-                    <option value="16:00">04:00 PM</option>
-                    <option value="19:00">07:00 PM</option>
-                  </select>
+                    placeholder="Add custom tag (press Enter)"
+                    className="h-8 rounded-xl text-xs"
+                  />
+                  <Button type="button" size="sm" variant="secondary" onClick={addTag} className="h-8 rounded-xl text-xs">
+                    Add
+                  </Button>
                 </div>
-              )}
+                {unusedSearchTerms.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide mr-1">
+                      GBP Search Terms:
+                    </span>
+                    {unusedSearchTerms.slice(0, 5).map((term) => (
+                      <button
+                        key={`gterm-${term}`}
+                        type="button"
+                        onClick={() => toggleSuggestedTag(term)}
+                        className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[10.5px] font-medium text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/20"
+                      >
+                        + {term}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {suggestedTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {suggestedTags.map((st) => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => toggleSuggestedTag(st)}
+                        className="px-2 py-0.5 rounded-full border border-dashed border-border text-[10.5px] font-medium text-muted-foreground hover:border-primary hover:text-primary"
+                      >
+                        + {st}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Category + Publishing Schedule */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground">Google Category</label>
+                  <Select value={category} onValueChange={(v) => setCategory(v as WebGbpCategoryType)}>
+                    <SelectTrigger className="rounded-xl text-xs h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {GBP_CATEGORIES.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground">
+                    {isEditMode ? 'Queue Status' : 'Publishing Schedule'}
+                  </label>
+                  <Select value={scheduleMode} onValueChange={(v) => setScheduleMode(v as WebScheduleMode)}>
+                    <SelectTrigger className="rounded-xl text-xs h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="instant">Publish now (Live on Google)</SelectItem>
+                      <SelectItem value="daily">{isEditMode ? 'Scheduled to Publish' : 'Daily schedule (1/day)'}</SelectItem>
+                      {!isEditMode && <SelectItem value="weekly">Weekly schedule (1/week)</SelectItem>}
+                      <SelectItem value="draft">Save draft (Not Posted)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {!isEditMode && (scheduleMode === 'daily' || scheduleMode === 'weekly') && (
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <span className="text-[11px] text-muted-foreground truncate">
+                        Local publish time {localTimeZone ? `(${localTimeZone})` : ''}
+                      </span>
+                      <select
+                        value={preferredTime}
+                        onChange={(e) => setPreferredTime(e.target.value)}
+                        className="h-7 px-2 rounded-lg border border-border bg-background text-[11px] font-semibold"
+                      >
+                        <option value="09:00">09:00 AM</option>
+                        <option value="10:00">10:00 AM</option>
+                        <option value="12:00">12:00 PM</option>
+                        <option value="16:00">04:00 PM</option>
+                        <option value="19:00">07:00 PM</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1745,6 +2126,10 @@ export function WebMediaMetadataDialog({
       selectedUrl={generatedImageUrl}
       onSelectCandidate={(cand) => {
         setGeneratedImageUrl(cand.url);
+        if (cand.sourceType) setAiSourceType(cand.sourceType);
+        if (cand.seoFilename) setAiSeoFilename(cand.seoFilename);
+        if (typeof cand.geoTagged === 'boolean') setAiGeoTagged(cand.geoTagged);
+        setAiFallbackReason(cand.fallbackReason || null);
       }}
       reviewMode
       isApproved={Boolean(generatedImageUrl && aiApprovedUrl === generatedImageUrl)}

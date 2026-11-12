@@ -28,6 +28,7 @@ import {
   Copy,
   AlertCircle,
   ExternalLink,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';

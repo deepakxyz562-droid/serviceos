@@ -91,20 +91,20 @@ export async function GET(request: NextRequest) {
 
     // Google Business Account & Place
     const googleAccount = await prepareGoogleAccount(resolvedTenantId).catch(() => null);
-    const googlePlace = googleAccount?.locations?.[0] || null;
+    const googlePlace = ((googleAccount as any)?.locations?.[0] || null) as any;
     const meta = (googleAccount?.metadata || {}) as Record<string, any>;
 
     const ownerUser = tenant.users?.[0] || null;
     const businessName = googlePlace?.title || meta.locationTitle || tenant.brandProfile?.businessName || tenant.name || 'My Business';
     const ownerName = ownerUser?.name || tenant.name || businessName;
-    const email = ownerUser?.email || tenant.brandProfile?.contactEmail || '';
-    const phone = ownerUser?.phone || tenant.phone || tenant.brandProfile?.contactPhone || '';
+    const email = ownerUser?.email || tenant.email || (tenant.brandProfile as any)?.contactEmail || '';
+    const phone = ownerUser?.phone || tenant.phone || (tenant.brandProfile as any)?.contactPhone || '';
     const website = tenant.brandProfile?.website || googlePlace?.websiteUri || '';
     const address = googlePlace?.address || meta.address || tenant.brandProfile?.location || tenant.city || '';
     const category = String(meta.category || meta.locationCategory || tenant.brandProfile?.industry || tenant.industry || 'Local Business');
 
-    // Parse City & Localities from Address
-    let city = 'Patna';
+    // Parse City & Localities from Address (never hardcode a seed city)
+    let city = String(tenant.city || '').trim();
     const localities: string[] = [];
 
     if (address) {
@@ -118,28 +118,46 @@ export async function GET(request: NextRequest) {
         const lower = part.toLowerCase();
         if (REGIONS_TO_SKIP.has(lower)) continue;
 
-        if (!city || city === 'Patna') {
+        if (!city) {
           city = part;
         } else if (!localities.includes(part) && part.toLowerCase() !== city.toLowerCase()) {
           localities.push(part);
         }
       }
     }
+    if (!city) {
+      city = 'Local Area';
+    }
 
-    // Real GBP Performance Metrics
+    // Real GBP Performance Metrics (including authentic 6-month trajectory)
     let liveSearchViews = 0;
     let liveMapsViews = 0;
     let liveCallClicks = 0;
     let liveDirectionRequests = 0;
     let liveMediaCount = 0;
+    let perfMonthlyTrends: {
+      months: string[];
+      views: number[];
+      calls: number[];
+      directions: number[];
+    } | null = null;
 
     if (googleAccount) {
       try {
         const perf = await fetchGoogleBusinessPerformanceMetrics(googleAccount);
-        liveSearchViews = perf.searchImpressions || 0;
-        liveMapsViews = perf.mapsImpressions || 0;
-        liveCallClicks = perf.callClicks || 0;
-        liveDirectionRequests = perf.directionRequests || 0;
+        const l30 = perf.last30Days || perf;
+        liveSearchViews = l30.searchImpressions || 0;
+        liveMapsViews = l30.mapsImpressions || 0;
+        liveCallClicks = l30.callClicks || 0;
+        liveDirectionRequests = l30.directionRequests || 0;
+        if (perf.monthlyTrends?.months?.length) {
+          perfMonthlyTrends = {
+            months: perf.monthlyTrends.months,
+            views: perf.monthlyTrends.views,
+            calls: perf.monthlyTrends.calls,
+            directions: perf.monthlyTrends.directions,
+          };
+        }
       } catch {}
 
       try {
@@ -155,11 +173,15 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
         take: 20,
       }).catch(() => []),
-      db.gBPReview.findMany({
-        where: { tenantId: resolvedTenantId },
-        orderBy: { createTime: 'desc' },
-        take: 20,
-      }).catch(() => []),
+      (db as any).gBPReview
+        ? (db as any).gBPReview
+            .findMany({
+              where: { tenantId: resolvedTenantId },
+              orderBy: { createTime: 'desc' },
+              take: 20,
+            })
+            .catch(() => [])
+        : Promise.resolve([]),
     ]);
 
     // Consolidate reviews
@@ -197,7 +219,7 @@ export async function GET(request: NextRequest) {
     const dynamicKeywords = deriveCategoryKeywords(category, city, localities[0] || '', localities[1] || '');
     const creativeKeywords = dynamicKeywords.slice(0, 3);
 
-    // Compute Dynamic 6-Month Rolling Trajectory
+    // Honest 6-Month Rolling Trajectory from Google Business Profile Performance API
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const now = new Date();
     const rollingMonths: string[] = [];
@@ -205,27 +227,23 @@ export async function GET(request: NextRequest) {
     const monthlyCalls: number[] = [];
     const monthlyDirections: number[] = [];
 
-    // Current month total views
-    const curTotalViews = (liveSearchViews + liveMapsViews) || 56;
-    const curTotalCalls = liveCallClicks || 0;
-    const curTotalDirections = liveDirectionRequests || 29;
+    const curTotalViews = liveSearchViews + liveMapsViews;
+    const curTotalCalls = liveCallClicks;
+    const curTotalDirections = liveDirectionRequests;
 
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const label = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
-      rollingMonths.push(label);
+      rollingMonths.push(`${monthNames[d.getMonth()]} ${d.getFullYear()}`);
+    }
 
-      if (i === 0) {
-        monthlyViews.push(curTotalViews);
-        monthlyCalls.push(curTotalCalls);
-        monthlyDirections.push(curTotalDirections);
-      } else {
-        // Progressive baseline curve scaling up to the current month's live performance
-        const factor = 0.65 + ((5 - i) * 0.07);
-        monthlyViews.push(Math.round(curTotalViews * factor));
-        monthlyCalls.push(Math.max(0, Math.round(curTotalCalls * factor)));
-        monthlyDirections.push(Math.round(curTotalDirections * (0.8 + ((5 - i) * 0.04))));
-      }
+    if (perfMonthlyTrends && perfMonthlyTrends.views.length === 6) {
+      monthlyViews.push(...perfMonthlyTrends.views);
+      monthlyCalls.push(...perfMonthlyTrends.calls);
+      monthlyDirections.push(...perfMonthlyTrends.directions);
+    } else {
+      monthlyViews.push(0, 0, 0, 0, 0, curTotalViews);
+      monthlyCalls.push(0, 0, 0, 0, 0, curTotalCalls);
+      monthlyDirections.push(0, 0, 0, 0, 0, curTotalDirections);
     }
 
     // Determine Tenant Join Milestone Index (from tenant.createdAt)
@@ -240,23 +258,36 @@ export async function GET(request: NextRequest) {
     }
     const joinedLabel = `${monthNames[joinDate.getMonth()]} ${joinDate.getFullYear()}`;
 
-    // Month-over-month trend analysis
-    const prevViews = monthlyViews[4] || 1;
-    const viewsDelta = Math.round(((curTotalViews - prevViews) / prevViews) * 100);
-    const viewsAnalysis = viewsDelta >= 0
-      ? `Profile views increased +${viewsDelta}% vs previous month. Consistent posting is driving local search visibility.`
-      : `Profile views shifted ${viewsDelta}% vs previous month. Maintain weekly posting rhythm to accelerate map discovery.`;
+    // Month-over-month trend analysis (comparing real latest complete month vs previous month)
+    const latestIdx = monthlyViews.length - 1;
+    const latestMonthViews = monthlyViews[latestIdx] || curTotalViews;
+    const prevViews = monthlyViews[latestIdx - 1] || 0;
+    const viewsDelta = prevViews > 0 ? Math.round(((latestMonthViews - prevViews) / prevViews) * 100) : 0;
+    const viewsAnalysis = !googleAccount
+      ? `Connect your Google Business Profile to unlock live monthly views tracking across Search and Maps.`
+      : prevViews <= 0
+        ? `Recorded ${latestMonthViews.toLocaleString()} live Google Search & Maps views in the latest month. Monthly comparison builds automatically as prior months accrue.`
+        : viewsDelta >= 0
+          ? `Profile views increased +${viewsDelta}% vs previous month. Consistent posting is driving local search visibility.`
+          : `Profile views shifted ${viewsDelta}% vs previous month. Maintain weekly posting rhythm to accelerate map discovery.`;
 
-    const prevCalls = monthlyCalls[4] || 0;
-    const callsAnalysis = curTotalCalls > 0
-      ? `Direct calls recorded from Google Maps & Search. Keep contact phone and business hours up to date.`
-      : `Calls held steady. Adding fresh exterior and showcase photography increases direct customer calls.`;
+    const latestMonthCalls = monthlyCalls[latestIdx] || curTotalCalls;
+    const callsAnalysis = !googleAccount
+      ? `Connect Google Business Profile to track inbound customer phone call clicks.`
+      : latestMonthCalls > 0
+        ? `${latestMonthCalls.toLocaleString()} direct call clicks recorded from Google Maps & Search. Keep contact phone and business hours up to date.`
+        : `No call clicks recorded yet for this month. Adding exterior and storefront photography helps lift direct customer calls.`;
 
-    const prevDir = monthlyDirections[4] || 1;
-    const dirDelta = Math.round(((curTotalDirections - prevDir) / prevDir) * 100);
-    const dirAnalysis = dirDelta >= 0
-      ? `Direction navigation requests grew +${dirDelta}% as more nearby customers navigate directly to your venue.`
-      : `Direction requests totaled ${curTotalDirections} navigations this month. Google Maps driving directions active.`;
+    const latestMonthDirections = monthlyDirections[latestIdx] || curTotalDirections;
+    const prevDir = monthlyDirections[latestIdx - 1] || 0;
+    const dirDelta = prevDir > 0 ? Math.round(((latestMonthDirections - prevDir) / prevDir) * 100) : 0;
+    const dirAnalysis = !googleAccount
+      ? `Connect Google Business Profile to measure customer direction requests in Google Maps.`
+      : prevDir <= 0
+        ? `${latestMonthDirections.toLocaleString()} Google Maps direction requests recorded. Verified pin coordinates keep navigation accurate.`
+        : dirDelta >= 0
+          ? `Direction navigation requests grew +${dirDelta}% as more nearby customers navigate directly to your venue.`
+          : `Direction requests totaled ${latestMonthDirections.toLocaleString()} navigations this month. Google Maps driving directions active.`;
 
     // Dynamic Marketing Score Calculation
     let score = 50;

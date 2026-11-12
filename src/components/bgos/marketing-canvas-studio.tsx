@@ -320,23 +320,28 @@ export function MarketingCanvasStudio({
   >([]);
   const [selectedRefUrls, setSelectedRefUrls] = useState<string[]>([]);
   const [refPhotosLoading, setRefPhotosLoading] = useState(false);
+  const [refPhotosError, setRefPhotosError] = useState<string | null>(null);
   const [uploadingRefPhoto, setUploadingRefPhoto] = useState(false);
   const refPhotoInputRef = useRef<HTMLInputElement>(null);
 
   const loadBusinessRefPhotos = useCallback(async () => {
     setRefPhotosLoading(true);
+    setRefPhotosError(null);
     try {
       const res = await authFetch('/api/social/ai-image-ideas?includeGoogle=0');
-      if (res.ok) {
-        const json = (await res.json().catch(() => ({}))) as {
-          previousPhotos?: Array<{ id: string; url: string; title?: string }>;
-        };
-        if (Array.isArray(json.previousPhotos)) {
-          setBusinessRefPhotos(json.previousPhotos.filter((p) => Boolean(p.url)));
-        }
+      const json = (await res.json().catch(() => ({}))) as {
+        previousPhotos?: Array<{ id: string; url: string; title?: string }>;
+        error?: string;
+      };
+      if (!res.ok) {
+        setRefPhotosError(json.error || 'Could not load saved business photos.');
+        return;
+      }
+      if (Array.isArray(json.previousPhotos)) {
+        setBusinessRefPhotos(json.previousPhotos.filter((p) => Boolean(p.url)));
       }
     } catch {
-      // Non-blocking: reference photos are optional
+      setRefPhotosError('Could not load saved business photos right now.');
     } finally {
       setRefPhotosLoading(false);
     }
@@ -2554,6 +2559,17 @@ export function MarketingCanvasStudio({
               </div>
               {refPhotosLoading ? (
                 <p className="text-[11px] text-muted-foreground">Loading your saved business photos…</p>
+              ) : refPhotosError ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-2.5 py-2 text-[11px] text-destructive">
+                  <span className="truncate">{refPhotosError}</span>
+                  <button
+                    type="button"
+                    onClick={() => void loadBusinessRefPhotos()}
+                    className="shrink-0 font-bold underline"
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : businessRefPhotos.length > 0 ? (
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   {businessRefPhotos.slice(0, 8).map((bp) => {

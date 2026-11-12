@@ -31,7 +31,7 @@ import {
 } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
-import { WEB_URL } from '../../src/lib/constants';
+import { BGOS_PUBLIC_WEB_URL, WEB_URL } from '../../src/lib/constants';
 import { getBgosWebUrl } from '../../src/lib/bgos-urls';
 import { useAuthStore } from '../../src/stores/auth-store';
 import { enablePush } from '../../src/lib/push';
@@ -85,10 +85,18 @@ export default function ToolsScreen() {
   }
 
   function absolute(path: string) {
-    if (path.startsWith('https://')) return path;
+    if (path.startsWith('https://') || path.startsWith('http://')) return path;
     if (path.startsWith('/app')) {
       const match = path.match(/[?&]view=([^&]+)/);
       return getBgosWebUrl(match ? match[1] : undefined);
+    }
+    if (
+      path.startsWith('/b/') ||
+      path.startsWith('/book/') ||
+      path.startsWith('/f/') ||
+      path.startsWith('/p/')
+    ) {
+      return `${BGOS_PUBLIC_WEB_URL}${path}`;
     }
     return `${WEB_URL}${path}`;
   }
@@ -429,18 +437,18 @@ export default function ToolsScreen() {
                 </View>
                 <View>
                   <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#0F172A' }}>
-                    Digital Business Card
+                    Business Page &amp; Card
                   </Text>
                   <Text style={{ fontSize: 11, color: '#64748B' }}>
-                    Contactless vCard & Standee
+                    Logo, Google Info, Bookings &amp; Leads
                   </Text>
                 </View>
               </View>
-              <Badge label="NFC Ready" accent />
+              <Badge label="Live" accent />
             </View>
 
             <Text style={{ fontSize: 12.5, color: '#64748B' }}>
-              NFC & QR-ready card with 1-tap contact save (.vcf), WhatsApp, and direct calling.
+              Share your standalone business page with 1-tap WhatsApp, appointment booking, callback form, Directions &amp; Contact save (.vcf).
             </Text>
 
             {data.links.profile && (

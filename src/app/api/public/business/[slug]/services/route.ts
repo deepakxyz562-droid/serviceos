@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { currencyMap } from '@/lib/currency';
+import {
+  isSeededDummyService,
+  resolveBusinessCurrency,
+} from '@/lib/bgos-business-sanitizers';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,10 +24,11 @@ export async function GET(
       return NextResponse.json({ error: 'Business slug required' }, { status: 400 });
     }
 
-    // 1. Find tenant by slug or ID
+    // 1. Find tenant by publicSlug, slug, or ID
     const tenant = await db.tenant.findFirst({
       where: {
         OR: [
+          { publicSlug: slug },
           { slug },
           { id: slug },
         ],
@@ -31,16 +37,20 @@ export async function GET(
         id: true,
         name: true,
         slug: true,
+        publicSlug: true,
         phone: true,
         email: true,
         website: true,
+        address: true,
         city: true,
+        country: true,
+        currency: true,
+        logo: true,
         description: true,
         settingsJson: true,
         brandProfile: {
           select: {
             businessName: true,
-            logoUrl: true,
             industry: true,
           },
         },
@@ -51,14 +61,30 @@ export async function GET(
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
 
-    // 2. Fetch active services for this business
-    let services = await db.service.findMany({
+    let settings: Record<string, any> = {};
+    try {
+      settings = JSON.parse(tenant.settingsJson || '{}');
+    } catch {}
+
+    const bookingPageConfig = settings.bookingPageConfig || {};
+    const effectivePhone = bookingPageConfig.phone || tenant.phone;
+    const resolvedCurrency = resolveBusinessCurrency({
+      currency: tenant.currency,
+      country: tenant.country,
+      address: tenant.address,
+      phone: effectivePhone,
+    });
+    const currencySymbol = currencyMap[resolvedCurrency]?.symbol || '$';
+
+    // 2. Fetch active real services for this business (strip legacy demo rows)
+    const dbServices = await db.service.findMany({
       where: {
         tenantId: tenant.id,
         isActive: true,
       },
       select: {
         id: true,
+        slug: true,
         name: true,
         description: true,
         duration: true,
@@ -68,45 +94,72 @@ export async function GET(
       orderBy: { createdAt: 'desc' },
     });
 
-    // If tenant has no custom services yet, provide standard base service templates
+    let services = dbServices
+      .filter((s) => !isSeededDummyService({ slug: s.slug, name: s.name, description: s.description }))
+      .map(({ slug: _slug, ...rest }) => rest);
+
+    // Fallback to synced GBP/SEO services before showing a neutral free consultation
     if (services.length === 0) {
-      services = [
-        {
-          id: 'standard-consultation',
-          name: 'Consultation & Assessment',
-          description: 'Initial diagnostic check-up, inspection, and upfront quote.',
-          duration: 30,
-          basePrice: 0,
-          category: 'Standard Service',
-        },
-        {
-          id: 'standard-service-call',
-          name: 'General Service Call',
-          description: 'On-site professional service appointment and diagnosis.',
-          duration: 60,
-          basePrice: 50,
-          category: 'Standard Service',
-        },
-      ];
+      const seoOrGbpServices: Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        duration: number;
+        basePrice: number;
+        category: string;
+      }> = [];
+      const rawList = Array.isArray(settings.seoServices)
+        ? settings.seoServices
+        : Array.isArray(settings.activeGbpServices)
+          ? settings.activeGbpServices
+          : [];
+      for (let i = 0; i < rawList.length; i++) {
+        const entry = rawList[i];
+        const name = typeof entry === 'string' ? entry.trim() : String(entry?.name || '').trim();
+        if (!name || isSeededDummyService({ name })) continue;
+        seoOrGbpServices.push({
+          id: `gbp-service-${i + 1}`,
+          name,
+          description: typeof entry === 'object' && entry?.description ? String(entry.description) : null,
+          duration: typeof entry === 'object' && typeof entry?.duration === 'number' ? entry.duration : 45,
+          basePrice: typeof entry === 'object' && typeof entry?.price === 'number' ? entry.price : 0,
+          category: typeof entry === 'object' && entry?.category ? String(entry.category) : 'General',
+        });
+      }
+      services = seoOrGbpServices.length > 0
+        ? seoOrGbpServices
+        : [
+            {
+              id: 'standard-consultation',
+              name: 'Consultation & Inquiry',
+              description: 'Schedule a free consultation, callback, or estimate.',
+              duration: 30,
+              basePrice: 0,
+              category: 'Consultation',
+            },
+          ];
     }
 
-    let settings: Record<string, any> = {};
-    try {
-      settings = JSON.parse(tenant.settingsJson || '{}');
-    } catch {}
-
-    const bookingPageConfig = settings.bookingPageConfig || {};
+    const logoUrl =
+      bookingPageConfig.logoUrl ||
+      settings?.brandBrain?.brandDetails?.logoUrl ||
+      tenant.logo ||
+      null;
 
     return NextResponse.json({
       success: true,
       tenantId: tenant.id,
       tenantName: bookingPageConfig.businessName || tenant.brandProfile?.businessName || tenant.name,
       slug: tenant.slug,
-      phone: bookingPageConfig.phone || tenant.phone,
+      publicSlug: tenant.publicSlug || tenant.slug,
+      logoUrl,
+      currency: resolvedCurrency,
+      currencySymbol,
+      phone: effectivePhone,
       whatsapp: bookingPageConfig.whatsapp,
       email: bookingPageConfig.email || tenant.email,
       website: bookingPageConfig.website || tenant.website,
-      headline: bookingPageConfig.headline || tenant.brandProfile?.industry || 'Professional Services',
+      headline: bookingPageConfig.headline || tenant.brandProfile?.industry || 'Local Business Services',
       description: bookingPageConfig.seoDescription || tenant.description,
       onlineBookingEnabled: bookingPageConfig.onlineBookingEnabled ?? true,
       services,

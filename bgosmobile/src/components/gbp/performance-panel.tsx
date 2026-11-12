@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Switch, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Action, Card, Empty, Field, colors, ui } from '../ui';
 import { apiRequest, ApiError } from '../../lib/api';
 import { useResource } from '../../hooks/use-resource';
 import { AiActionsFeed } from './ai-actions';
 import { SectionHeader, gbpColors } from './bits';
+import { GeoGridMap, type GeoGridPointItem } from './geo-grid-map';
 import type { AiAction, AnalyticsResult } from './types';
 
 interface CompetitorItem {
@@ -29,20 +31,17 @@ interface KeywordRankItem {
   rankChange?: number | null;
 }
 
-interface GeoGridPoint {
-  row: number;
-  col: number;
-  rank: number;
-  isCenter?: boolean;
-  lat?: number;
-  lng?: number;
-}
-
 interface GeoGridData {
+  hasScans?: boolean;
   keyword: string;
-  lastUpdated: string;
-  avgRank: number;
-  points: GeoGridPoint[];
+  lastUpdated: string | null;
+  avgRank: number | null;
+  top3Pct?: number | null;
+  gridSize?: 3 | 5;
+  radiusKm?: number;
+  centerLat?: number | null;
+  centerLng?: number | null;
+  points: GeoGridPointItem[];
 }
 
 /**
@@ -57,16 +56,16 @@ function SixMonthTrendLineChart({
   data?: number[];
   height?: number;
 }) {
-  const maxVal = Math.max(...data, 1);
+  const maxVal = Math.max(...data, 2);
 
   return (
     <View style={{ gap: 8, paddingVertical: 4 }}>
       <View style={{ height, justifyContent: 'space-between', position: 'relative' }}>
         {/* Subtle grid guidelines */}
-        {[1, 0.5, 0].map((frac, idx) => (
+        {[maxVal, Math.round(maxVal * 0.5), 0].map((tickVal, idx) => (
           <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 9.5, color: '#94A3B8', width: 20, textAlign: 'right' }}>
-              {Math.round(maxVal * frac)}
+            <Text style={{ fontSize: 9.5, color: '#94A3B8', width: 24, textAlign: 'right' }}>
+              {tickVal}
             </Text>
             <View style={{ flex: 1, height: 1, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', borderStyle: 'dashed' }} />
           </View>
@@ -155,7 +154,10 @@ function ReviewTrendsBarChart({
   industryAvg?: number;
   height?: number;
 }) {
-  const maxVal = Math.max(20, industryAvg + 4, ...weeks.map((w) => w.count));
+  const maxRaw = Math.max(20, industryAvg + 4, ...weeks.map((w) => w.count));
+  const step = Math.max(5, Math.ceil(maxRaw / 4 / 5) * 5);
+  const maxVal = step * 4;
+  const ticks = [step * 4, step * 3, step * 2, step, 0];
 
   // Compute position of industry benchmark dotted line
   const benchmarkTopPct = Math.max(5, Math.min(95, 100 - (industryAvg / maxVal) * 100));
@@ -163,8 +165,8 @@ function ReviewTrendsBarChart({
   return (
     <View style={{ gap: 6, paddingVertical: 4 }}>
       <View style={{ height, justifyContent: 'space-between', position: 'relative' }}>
-        {/* Y-axis ticks: 20, 15, 10, 5, 0 */}
-        {[20, 15, 10, 5, 0].map((num) => (
+        {/* Dynamic Y-axis ticks */}
+        {ticks.map((num) => (
           <View key={num} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={{ fontSize: 10, color: '#94A3B8', width: 18, textAlign: 'right' }}>
               {num}
@@ -254,227 +256,6 @@ function ReviewTrendsBarChart({
 }
 
 /**
- * 5x5 Geo-Grid Pin Map component matching Screenshot 3
- */
-function GeoGridHeatmapMap({
-  keyword,
-  lastUpdated,
-  points = [],
-}: {
-  keyword: string;
-  lastUpdated: string;
-  points?: GeoGridPoint[];
-}) {
-  return (
-    <View style={{ gap: 10 }}>
-      {/* Active Keyword Selector Pill */}
-      <View
-        style={{
-          backgroundColor: '#F1F5F9',
-          paddingVertical: 10,
-          paddingHorizontal: 14,
-          borderRadius: 12,
-        }}
-      >
-        <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E293B' }} numberOfLines={1}>
-          {keyword ? `Keyword: ${keyword}` : 'Local Geo-Grid Map'}
-        </Text>
-      </View>
-
-      {/* Styled Map Container Card */}
-      <View
-        style={{
-          height: 280,
-          backgroundColor: '#E8EDF2',
-          borderRadius: 16,
-          overflow: 'hidden',
-          borderWidth: 1,
-          borderColor: '#CBD5E1',
-          position: 'relative',
-        }}
-      >
-        {/* Map Background Roads Simulation */}
-        <View style={{ position: 'absolute', inset: 0, opacity: 0.35 }}>
-          {/* Main Highway Route */}
-          <View
-            style={{
-              position: 'absolute',
-              top: 70,
-              left: -40,
-              right: -40,
-              height: 7,
-              backgroundColor: '#3B82F6',
-              transform: [{ rotate: '12deg' }],
-            }}
-          />
-          {/* Secondary Arterial Route */}
-          <View
-            style={{
-              position: 'absolute',
-              top: 170,
-              left: -40,
-              right: -40,
-              height: 5,
-              backgroundColor: '#60A5FA',
-              transform: [{ rotate: '-8deg' }],
-            }}
-          />
-          {/* Cross Street */}
-          <View
-            style={{
-              position: 'absolute',
-              top: -20,
-              bottom: -20,
-              left: '46%',
-              width: 5,
-              backgroundColor: '#93C5FD',
-            }}
-          />
-        </View>
-
-        {points.length === 0 ? (
-          <View
-            style={{
-              flex: 1,
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingHorizontal: 24,
-              zIndex: 5,
-            }}
-          >
-            <View
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.94)',
-                borderRadius: 14,
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-                alignItems: 'center',
-                gap: 6,
-                borderWidth: 1,
-                borderColor: '#CBD5E1',
-              }}
-            >
-              <MaterialIcons name="location-searching" size={22} color="#2563EB" />
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textAlign: 'center' }}>
-                No Geo-Grid scan recorded yet
-              </Text>
-              <Text style={{ fontSize: 11.5, color: '#64748B', textAlign: 'center', lineHeight: 16 }}>
-                Run AI Growth Autopilot to scan local search rankings around your business.
-              </Text>
-            </View>
-          </View>
-        ) : (
-          <>
-            {/* Floating Timestamp Badge (top left) */}
-            {lastUpdated ? (
-              <View
-                style={{
-                  position: 'absolute',
-                  top: 12,
-                  left: 12,
-                  backgroundColor: 'rgba(15, 23, 42, 0.88)',
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 8,
-                  zIndex: 10,
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
-                  Last updated on {lastUpdated}
-                </Text>
-              </View>
-            ) : null}
-
-            {/* 5x5 Matrix Grid of Pins */}
-            <View
-              style={{
-                position: 'absolute',
-                inset: 0,
-                paddingTop: 44,
-                paddingBottom: 20,
-                paddingHorizontal: 20,
-                justifyContent: 'space-between',
-                zIndex: 5,
-              }}
-            >
-              {[0, 1, 2, 3, 4].map((row) => (
-                <View key={row} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  {[0, 1, 2, 3, 4].map((col) => {
-                    const pt = points.find((p) => p.row === row && p.col === col);
-                    const isCenter = pt?.isCenter || (row === 2 && col === 2);
-                    const rankVal = typeof pt?.rank === 'number' && pt.rank > 0 ? pt.rank : null;
-
-                    if (isCenter) {
-                      return (
-                        <View key={col} style={{ alignItems: 'center', zIndex: 12 }}>
-                          <View
-                            style={{
-                              width: 26,
-                              height: 26,
-                              borderRadius: 13,
-                              backgroundColor: '#F59E0B',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              borderWidth: 2,
-                              borderColor: '#FFFFFF',
-                              shadowColor: '#000',
-                              shadowOpacity: 0.25,
-                              shadowRadius: 3,
-                              shadowOffset: { width: 0, height: 1 },
-                            }}
-                          >
-                            <Text style={{ fontSize: 11.5, fontWeight: '900', color: '#FFFFFF' }}>
-                              {rankVal ?? '—'}
-                            </Text>
-                          </View>
-                          <View style={{ alignItems: 'center', marginTop: 1 }}>
-                            <MaterialIcons name="navigation" size={10} color="#0F172A" />
-                            <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0F172A' }}>
-                              Your Location
-                            </Text>
-                          </View>
-                        </View>
-                      );
-                    }
-
-                    // Regular Grid Node
-                    const isTop = rankVal !== null && rankVal <= 3;
-                    return (
-                      <View key={col} style={{ alignItems: 'center' }}>
-                        <View
-                          style={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: 12,
-                            backgroundColor: rankVal === null ? '#94A3B8' : isTop ? '#22C55E' : '#EAB308',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderWidth: 1.5,
-                            borderColor: '#FFFFFF',
-                            shadowColor: '#000',
-                            shadowOpacity: 0.15,
-                            shadowRadius: 2,
-                            shadowOffset: { width: 0, height: 1 },
-                          }}
-                        >
-                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
-                            {rankVal ?? '—'}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-      </View>
-    </View>
-  );
-}
-
-/**
  * Main Performance Panel matching Screenshots 1, 2, 3, 4
  */
 export function PerformancePanel({
@@ -496,15 +277,17 @@ export function PerformancePanel({
   onOpenPosts?: () => void;
   userEmail?: string;
 }) {
+  const router = useRouter();
   const metrics = analytics?.metrics;
   const live = Boolean(analytics?.trendsAvailable && analytics?.isLiveGoogleApi);
 
   // Tab for 6-Month Trends: 'views' | 'calls' | 'directions'
   const [trendTab, setTrendTab] = useState<'views' | 'calls' | 'directions'>('views');
 
-  // Expand toggles
+  // Expand toggles + active Geo-Grid scan keyword
   const [showAllCompetitors, setShowAllCompetitors] = useState(false);
   const [showAllKeywords, setShowAllKeywords] = useState(false);
+  const [selectedGridKeyword, setSelectedGridKeyword] = useState<string | null>(null);
 
   // Fetch competitors and keyword rankings
   const competitorsRes = useResource<{
@@ -586,12 +369,38 @@ export function PerformancePanel({
       { label: 'W7', count: 0 },
       { label: 'This Week', count: 0 },
     ],
-    deltaPct8Weeks: -100,
+    deltaPct8Weeks: null as unknown as number,
   };
 
-  // Competitors List (real API rows, no fabricated fallback numbers)
-  const competitorsList: CompetitorItem[] = competitorsRes.data?.competitors || [];
-  const displayedCompetitors = showAllCompetitors ? competitorsList : competitorsList.slice(0, 3);
+  // Competitors List (ensure user business row is included and always visible when collapsed)
+  const rawCompetitorsList: CompetitorItem[] = competitorsRes.data?.competitors || [];
+  const hasSelfInList = rawCompetitorsList.some((c) => c.isSelf);
+  const competitorsList: CompetitorItem[] = useMemo(() => {
+    if (hasSelfInList || !competitorsRes.data?.selfBusiness) {
+      return rawCompetitorsList;
+    }
+    const merged = [...rawCompetitorsList, { ...competitorsRes.data.selfBusiness, isSelf: true }];
+    merged.sort((a, b) => (a.mapsRank ?? a.rank ?? 999) - (b.mapsRank ?? b.rank ?? 999));
+    return merged;
+  }, [rawCompetitorsList, hasSelfInList, competitorsRes.data?.selfBusiness]);
+
+  const selfCompEntry = useMemo(
+    () => competitorsList.find((c) => c.isSelf) || competitorsRes.data?.selfBusiness || null,
+    [competitorsList, competitorsRes.data?.selfBusiness],
+  );
+  const selfCompIndex = competitorsList.findIndex((c) => c.isSelf);
+
+  const displayedCompetitors = useMemo(() => {
+    if (showAllCompetitors) return competitorsList;
+    const top3 = competitorsList.slice(0, 3);
+    if (selfCompIndex >= 3 && competitorsList[selfCompIndex]) {
+      return [...top3, competitorsList[selfCompIndex]];
+    }
+    if (selfCompIndex < 0 && competitorsRes.data?.selfBusiness) {
+      return [...top3, { ...competitorsRes.data.selfBusiness, isSelf: true }];
+    }
+    return top3;
+  }, [showAllCompetitors, competitorsList, selfCompIndex, competitorsRes.data?.selfBusiness]);
 
   // Targeted Keywords List (real API rows only)
   const keywordsList: KeywordRankItem[] = Array.isArray(rankingsRes.data?.rankedKeywords)
@@ -599,13 +408,41 @@ export function PerformancePanel({
     : [];
   const displayedKeywords = showAllKeywords ? keywordsList : keywordsList.slice(0, 4);
 
-  // GeoGrid Data (real API rows only)
-  const geoGridData: GeoGridData = rankingsRes.data?.geoGrid || {
-    keyword: keywordsList[0]?.keyword || '',
-    lastUpdated: '',
-    avgRank: 0,
-    points: [],
-  };
+  // GeoGrid Data (supports switching among scanned keywords)
+  const availableGridScans: Array<any> = Array.isArray(rankingsRes.data?.gridScans)
+    ? rankingsRes.data.gridScans
+    : [];
+  const activeGridScan = useMemo(() => {
+    if (availableGridScans.length === 0) return null;
+    if (selectedGridKeyword) {
+      const found = availableGridScans.find((s) => s.keyword === selectedGridKeyword);
+      if (found) return found;
+    }
+    return availableGridScans[0];
+  }, [availableGridScans, selectedGridKeyword]);
+
+  const geoGridData: GeoGridData = activeGridScan
+    ? {
+        keyword: activeGridScan.keyword,
+        lastUpdated: activeGridScan.date || rankingsRes.data?.geoGrid?.lastUpdated || '',
+        avgRank: activeGridScan.avgRank ?? 0,
+        top3Pct: activeGridScan.top3Pct ?? 0,
+        gridSize: activeGridScan.gridSize || 5,
+        radiusKm: activeGridScan.radiusKm,
+        centerLat: activeGridScan.centerLat ?? rankingsRes.data?.autoDefaults?.centerLat ?? null,
+        centerLng: activeGridScan.centerLng ?? rankingsRes.data?.autoDefaults?.centerLng ?? null,
+        points: Array.isArray(activeGridScan.points) ? activeGridScan.points : [],
+      }
+    : rankingsRes.data?.geoGrid || {
+        keyword: keywordsList[0]?.keyword || '',
+        lastUpdated: '',
+        avgRank: 0,
+        points: [],
+      };
+  const availableGridKeywords = useMemo(
+    () => Array.from(new Set(availableGridScans.map((s) => String(s.keyword || '')).filter(Boolean))),
+    [availableGridScans],
+  );
 
   return (
     <View style={{ gap: 20 }}>
@@ -679,36 +516,59 @@ export function PerformancePanel({
           <SixMonthTrendLineChart months={sixMonths} data={active6MonthData} />
         </View>
 
-        {/* 2 Bottom Rating & Reviews Cards with % delta */}
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', gap: 4 }}>
-            <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#64748B' }}>Rating</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={{ fontSize: 24, fontWeight: '800', color: '#0F172A' }}>
-                {(metrics?.avgRating ?? 4.8).toFixed(1)}
-              </Text>
-              <MaterialIcons name="star" size={20} color="#F59E0B" />
-            </View>
-            <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start', marginTop: 4 }}>
-              <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626' }}>
-                ▼ 100% last 8 wks
-              </Text>
-            </View>
-          </View>
+        {/* 2 Bottom Rating & Reviews Cards with honest % delta */}
+        {(() => {
+          const totalRev = metrics?.totalReviews ?? 0;
+          const avgRatingVal = typeof metrics?.avgRating === 'number' && metrics.avgRating > 0 && totalRev > 0
+            ? metrics.avgRating.toFixed(1)
+            : '—';
+          const rawRevDelta: number | null =
+            typeof (reviewTrends as any)?.deltaPct8Weeks === 'number'
+              ? (reviewTrends as any).deltaPct8Weeks
+              : typeof (metrics as any)?.reviewsDeltaPct8Wks === 'number'
+                ? (metrics as any).reviewsDeltaPct8Wks
+                : null;
+          const revDeltaBadge =
+            rawRevDelta == null
+              ? { bg: '#F1F5F9', fg: '#64748B', label: 'No prior 8-wk baseline' }
+              : rawRevDelta > 0
+                ? { bg: '#DCFCE7', fg: '#16A34A', label: `▲ ${rawRevDelta}% last 8 wks` }
+                : rawRevDelta < 0
+                  ? { bg: '#FEE2E2', fg: '#DC2626', label: `▼ ${Math.abs(rawRevDelta)}% last 8 wks` }
+                  : { bg: '#F1F5F9', fg: '#64748B', label: '0% last 8 wks' };
 
-          {/* Reviews count */}
-          <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', gap: 4 }}>
-            <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#64748B' }}>Reviews</Text>
-            <Text style={{ fontSize: 24, fontWeight: '800', color: '#0F172A' }}>
-              {(metrics?.totalReviews ?? 0).toLocaleString()}
-            </Text>
-            <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start', marginTop: 4 }}>
-              <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626' }}>
-                ▼ 100% last 8 wks
-              </Text>
+          return (
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', gap: 4 }}>
+                <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#64748B' }}>Rating</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={{ fontSize: 24, fontWeight: '800', color: '#0F172A' }}>
+                    {avgRatingVal}
+                  </Text>
+                  <MaterialIcons name="star" size={20} color="#F59E0B" />
+                </View>
+                <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start', marginTop: 4 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>
+                    {totalRev > 0 ? `${metrics?.responseRate ?? 0}% reply rate` : 'No reviews yet'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Reviews count */}
+              <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', gap: 4 }}>
+                <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#64748B' }}>Reviews</Text>
+                <Text style={{ fontSize: 24, fontWeight: '800', color: '#0F172A' }}>
+                  {totalRev.toLocaleString()}
+                </Text>
+                <View style={{ backgroundColor: revDeltaBadge.bg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start', marginTop: 4 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: revDeltaBadge.fg }}>
+                    {revDeltaBadge.label}
+                  </Text>
+                </View>
+              </View>
             </View>
-          </View>
-        </View>
+          );
+        })()}
       </View>
 
       {/* ════════════════════════════════════════════════════════════════════════
@@ -748,19 +608,28 @@ export function PerformancePanel({
       </View>
 
       {/* ════════════════════════════════════════════════════════════════════════
-          SECTION 3: COMPETITORS AHEAD OF YOU (Screenshots 1 & 2)
+          SECTION 3: COMPETITORS AHEAD OF YOU (ALWAYS SHOWS YOUR BUSINESS RANK)
       ════════════════════════════════════════════════════════════════════════ */}
       <View style={{ gap: 12 }}>
-        <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A' }}>
-          Competitors Ahead of You
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A' }}>
+            Competitors Ahead of You
+          </Text>
+          {selfCompEntry ? (
+            <View style={{ backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 12 }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#1D4ED8' }}>
+                Your Rank: #{Math.round(Number(selfCompEntry.mapsRank ?? selfCompEntry.rank ?? 1))}
+              </Text>
+            </View>
+          ) : null}
+        </View>
 
         <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' }}>
           {/* Table Header */}
           <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-            <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Competitor</Text>
-            <Text style={{ width: 80, fontSize: 12, fontWeight: '700', color: '#64748B', textAlign: 'center' }}>Overall Reviews</Text>
-            <Text style={{ width: 50, fontSize: 12, fontWeight: '700', color: '#64748B', textAlign: 'right' }}>Rank</Text>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Business</Text>
+            <Text style={{ width: 80, fontSize: 12, fontWeight: '700', color: '#64748B', textAlign: 'center' }}>Reviews</Text>
+            <Text style={{ width: 56, fontSize: 12, fontWeight: '700', color: '#64748B', textAlign: 'right' }}>Rank</Text>
           </View>
 
           {/* Table Rows */}
@@ -772,8 +641,9 @@ export function PerformancePanel({
             </View>
           ) : (
             displayedCompetitors.map((comp, idx) => {
-              const isSelf = comp.isSelf;
+              const isSelf = Boolean(comp.isSelf);
               const rankNum = comp.mapsRank ?? comp.rank ?? idx + 1;
+              const isPinnedSelfAfterGap = isSelf && !showAllCompetitors && selfCompIndex >= 3;
               return (
                 <View
                   key={comp.id || idx}
@@ -782,16 +652,25 @@ export function PerformancePanel({
                     alignItems: 'center',
                     paddingHorizontal: 16,
                     paddingVertical: 14,
-                    backgroundColor: isSelf ? '#FFFBEB' : '#FFFFFF',
+                    backgroundColor: isSelf ? '#EFF6FF' : '#FFFFFF',
+                    borderTopWidth: isPinnedSelfAfterGap ? 1.5 : 0,
+                    borderTopColor: isPinnedSelfAfterGap ? '#93C5FD' : 'transparent',
                     borderBottomWidth: idx < displayedCompetitors.length - 1 ? 1 : 0,
-                    borderBottomColor: isSelf ? '#FEF3C7' : '#F1F5F9',
+                    borderBottomColor: isSelf ? '#DBEAFE' : '#F1F5F9',
                   }}
                 >
-                  {/* Competitor Name, Categories & Star Rating */}
-                  <View style={{ flex: 1, gap: 2, paddingRight: 8 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: isSelf ? '#78350F' : '#0F172A' }} numberOfLines={1}>
-                      {comp.name}
-                    </Text>
+                  {/* Business Name, YOU Badge, Categories & Star Rating */}
+                  <View style={{ flex: 1, gap: 3, paddingRight: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: isSelf ? '#1E3A8A' : '#0F172A', flexShrink: 1 }} numberOfLines={1}>
+                        {comp.name}
+                      </Text>
+                      {isSelf ? (
+                        <View style={{ backgroundColor: '#2563EB', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FFFFFF' }}>YOU</Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                         <MaterialIcons name="star" size={13} color="#F59E0B" />
@@ -810,16 +689,31 @@ export function PerformancePanel({
 
                   {/* Overall Reviews */}
                   <View style={{ width: 80, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: isSelf ? '#B45309' : '#059669' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: isSelf ? '#1D4ED8' : '#059669' }}>
                       {comp.reviewCount ?? 0}
                     </Text>
                   </View>
 
                   {/* Rank */}
-                  <View style={{ width: 50, alignItems: 'flex-end' }}>
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: isSelf ? '#B45309' : '#0F172A' }}>
-                      #{Number(rankNum).toFixed(0)}
-                    </Text>
+                  <View style={{ width: 56, alignItems: 'flex-end' }}>
+                    <View
+                      style={{
+                        backgroundColor: isSelf ? '#2563EB' : rankNum <= 3 ? '#DCFCE7' : '#F1F5F9',
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: '800',
+                          color: isSelf ? '#FFFFFF' : rankNum <= 3 ? '#15803D' : '#0F172A',
+                        }}
+                      >
+                        #{Math.round(Number(rankNum))}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               );
@@ -827,7 +721,7 @@ export function PerformancePanel({
           )}
 
           {/* Expand / Collapse Button */}
-          {competitorsList.length > 3 && (
+          {(competitorsList.length > displayedCompetitors.length || showAllCompetitors) && competitorsList.length > 3 && (
             <Pressable
               onPress={() => setShowAllCompetitors(!showAllCompetitors)}
               style={{
@@ -958,17 +852,32 @@ export function PerformancePanel({
       </View>
 
       {/* ════════════════════════════════════════════════════════════════════════
-          SECTION 5: RANK BY LOCATION (GEO-GRID HEATMAP) (Screenshot 3)
+          SECTION 5: RANK BY LOCATION (GEO-GRID HEATMAP)
       ════════════════════════════════════════════════════════════════════════ */}
       <View style={{ gap: 12 }}>
-        <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A' }}>
-          Rank by Location
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>
+            Rank by Location
+          </Text>
+          <Pressable onPress={() => router.push('/seo-growth?tab=grid')}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Full Scanner →</Text>
+          </Pressable>
+        </View>
 
-        <GeoGridHeatmapMap
+        <GeoGridMap
           keyword={geoGridData.keyword}
           lastUpdated={geoGridData.lastUpdated}
+          avgRank={geoGridData.avgRank}
+          top3Pct={geoGridData.top3Pct}
+          gridSize={geoGridData.gridSize}
+          radiusKm={geoGridData.radiusKm}
+          centerLat={geoGridData.centerLat}
+          centerLng={geoGridData.centerLng}
           points={geoGridData.points}
+          availableKeywords={availableGridKeywords}
+          onSelectKeyword={(kw) => setSelectedGridKeyword(kw)}
+          compact
+          onPressEmpty={() => router.push('/seo-growth?tab=grid')}
         />
       </View>
 

@@ -374,7 +374,12 @@ export async function fetchRobotsTxtAnalysis(targetUrl: string): Promise<RobotsA
 }
 
 export async function fetchPageSpeedInsights(targetUrl: string): Promise<CoreWebVitalsSummary> {
-  const apiKey = process.env.GOOGLE_PAGESPEED_API_KEY || process.env.GOOGLE_MAPS_SERVER_API_KEY || '';
+  const apiKey =
+    process.env.GOOGLE_PAGESPEED_API_KEY ||
+    process.env.GOOGLE_PLACES_API_KEY ||
+    process.env.GOOGLE_MAPS_SERVER_API_KEY ||
+    process.env.GOOGLE_MAPS_API_KEY ||
+    '';
   if (!apiKey) {
     return {
       available: false,
@@ -865,16 +870,74 @@ export async function computeWebsiteAndAiAudit(tenantId: string): Promise<Websit
       fixActionKey: 'hosted_seo_enrich',
     });
 
+    const robotsAllowed = Boolean(tenant.publicProfileEnabled);
+    robots = {
+      fetched: true,
+      url: 'https://fieseros.com/robots.txt',
+      hasSitemap: true,
+      crawlers: AI_CRAWLERS.map((agent) => ({
+        agent,
+        allowed: robotsAllowed,
+        rule: robotsAllowed
+          ? hostedProfileTier === 'C'
+            ? 'robots.txt Allow: / (page meta is Tier C noindex until enriched)'
+            : 'Allowed on canonical FieserOS page'
+          : 'Public profile disabled',
+      })),
+    };
+
+    const hostedWordCount = [tenant.description || '', ...serviceNames, ...faqs.map((f) => `${f.question} ${f.answer}`)]
+      .join(' ')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean).length;
+
+    htmlAnalysis = {
+      fetched: true,
+      status: 200,
+      finalUrl: inspectUrl,
+      title: tenant.seoTitle || `${businessName}${city ? ` — ${city}` : ''}`,
+      titleLength: (tenant.seoTitle || `${businessName}${city ? ` — ${city}` : ''}`).length,
+      metaDescription: tenant.seoDescription || tenant.description || null,
+      metaDescriptionLength: (tenant.seoDescription || tenant.description || '').length,
+      hasNoindex: hostedProfileTier === 'C' || !tenant.publicProfileEnabled,
+      canonicalUrl: inspectUrl,
+      h1Count: 1,
+      h1Texts: [businessName],
+      jsonLdTypes: faqs.length >= 1 ? ['LocalBusiness', 'FAQPage'] : ['LocalBusiness'],
+      hasLocalBusinessSchema: true,
+      hasFaqSchema: faqs.length >= 1,
+      hasNapMatch: Boolean(businessName && (tenant.phone || city)),
+      isHttps: true,
+      wordCount: hostedWordCount,
+    };
+
+    cwv = {
+      available: false,
+      performanceScore: null,
+      lcpMs: null,
+      cls: null,
+      inpMs: null,
+      reason: 'Server-rendered BGOS Mini-Site served via Next.js edge CDN',
+    };
+
     checks.push({
       id: 'hosted_ai_crawlers',
       category: 'ai_crawlability',
       label: 'AI Search Bot Access (OAI-SearchBot & PerplexityBot)',
-      passed: true,
+      passed: robotsAllowed && hostedProfileTier !== 'C',
       severity: 'low',
       scoreWeight: 20,
-      currentValue: 'Fieseros robots.txt allows search & AI crawlers',
-      recommendation: 'Crawl permissions verified on canonical host fieseros.com.',
-      autoFixable: false,
+      currentValue:
+        robotsAllowed && hostedProfileTier !== 'C'
+          ? 'Fieseros robots.txt & meta index allow search & AI crawlers'
+          : 'Tier C noindex restricts AI indexing until enriched',
+      recommendation:
+        robotsAllowed && hostedProfileTier !== 'C'
+          ? 'Crawl permissions verified on canonical host fieseros.com.'
+          : 'Enrich your description and services above to promote from Tier C (noindex) to indexable Tier A/B.',
+      autoFixable: hostedProfileTier === 'C',
+      fixActionKey: hostedProfileTier === 'C' ? 'hosted_seo_enrich' : undefined,
     });
   } else {
     // Custom domain mode: inspect live robots.txt, HTML, and optional PSI CWV safely

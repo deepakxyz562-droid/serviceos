@@ -3,9 +3,16 @@ import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { runDesignJob } from '@/lib/designs/jobs';
 import { isUnsafeReferenceHostname } from '@/lib/designs/image-provider';
+import { extractTenantGeoAndSeoContext } from '@/lib/designs/seo-metadata';
 import { requireBgosEntitled } from '@/lib/bgos-entitlement';
 import { callAI } from '@/lib/ai-client';
-import { IMAGE_PROVIDER_CHOICES, type ImageProviderChoice } from '../../../../../../shared/image-review';
+import {
+  AI_PHOTO_STYLE_PRESETS,
+  IMAGE_PROVIDER_CHOICES,
+  slugifySeoFilename,
+  type AiPhotoStylePreset,
+  type ImageProviderChoice,
+} from '../../../../../../shared/image-review';
 
 export const maxDuration = 120;
 
@@ -60,6 +67,41 @@ function sanitizeAndValidateReferenceUrls(raw: unknown): {
   return { urls };
 }
 
+const STYLE_PRESET_PROMPTS: Record<AiPhotoStylePreset, string> = {
+  real_photo: 'authentic candid commercial photography on natural location, realistic daylight, unedited real-world detail',
+  product_studio: 'high-key clean commercial product showcase with crisp shadows, premium studio tabletop styling, tactile surface details',
+  team_action: 'authentic local team and craftsman in action serving a customer, genuine expressions, tidy uniform and workspace',
+  before_after: 'crisp wide-angle showcase highlighting spotless finished work, fresh craftsmanship and upgraded real-world result',
+  lifestyle: 'warm welcoming customer lifestyle moment using the product or experiencing the space with golden natural ambiance',
+  festive: 'tasteful celebratory seasonal hospitality lighting and subtle festive decor tailored naturally to the real business setting',
+};
+
+function normalizeStylePreset(raw: unknown): AiPhotoStylePreset | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim() as AiPhotoStylePreset;
+  return AI_PHOTO_STYLE_PRESETS.some((preset) => preset.id === trimmed) ? trimmed : undefined;
+}
+
+function buildSeoFilenameHint(params: {
+  businessName?: string;
+  topic?: string;
+  products?: string[];
+  services?: string[];
+  category?: string;
+  city?: string | null;
+  searchTerms?: string[];
+}): string {
+  const keywordLead =
+    params.topic?.trim() ||
+    params.searchTerms?.[0] ||
+    params.services?.[0] ||
+    params.products?.[0] ||
+    params.category ||
+    'showcase';
+  const combined = `${params.businessName || ''} ${keywordLead}`.trim();
+  return slugifySeoFilename(combined, params.city || null, 'jpg');
+}
+
 async function buildDynamicBusinessPrompt(params: {
   businessName?: string;
   category?: string;
@@ -67,6 +109,9 @@ async function buildDynamicBusinessPrompt(params: {
   services?: string[];
   hasRefs: boolean;
   topic?: string;
+  city?: string | null;
+  searchTerms?: string[];
+  stylePreset?: AiPhotoStylePreset;
 }): Promise<string> {
   const name = params.businessName || 'our business';
   let category = params.category || 'local business';
@@ -74,6 +119,9 @@ async function buildDynamicBusinessPrompt(params: {
     .filter(Boolean)
     .slice(0, 6)
     .join(', ');
+  const styleHint = params.stylePreset ? STYLE_PRESET_PROMPTS[params.stylePreset] : '';
+  const localSeoTerms = (params.searchTerms || []).filter(Boolean).slice(0, 4).join(', ');
+  const cityLabel = params.city ? params.city.trim() : '';
 
   // Auto-correct stale or misconfigured "It company" if the business name clearly denotes physical retail or trade
   if (/(it company|software)/i.test(category) && /(market|mart|grocery|supermarket|kirana|retail|store|bazaar|provisions|hardware|paint|bakery|cake|pool|farmhouse|resort|clinic|salon)/i.test(name)) {
@@ -108,7 +156,7 @@ async function buildDynamicBusinessPrompt(params: {
   const chosenAngle = cameraAngles[Math.floor(Math.random() * cameraAngles.length)];
 
   if (params.hasRefs) {
-    return `Preserve the authentic physical property, architecture, product appearance, and branding from the reference photos for ${name} (${category}${offerings ? `, featuring ${offerings}` : ''}), upgraded with ${chosenLight}, ${chosenAngle}, spotless presentation, and commercial magazine quality.`;
+    return `Preserve the authentic physical property, architecture, product appearance, and branding from the reference photos for ${name} (${category}${cityLabel ? ` in ${cityLabel}` : ''}${offerings ? `, featuring ${offerings}` : ''}), upgraded with ${styleHint || chosenLight}, ${chosenAngle}, spotless presentation, and commercial magazine quality.`;
   }
 
   // 1. Try dynamic AI Art Director via callAI
@@ -125,8 +173,11 @@ async function buildDynamicBusinessPrompt(params: {
           content: JSON.stringify({
             businessName: name,
             category,
+            city: cityLabel || undefined,
             offerings,
-            topic: params.topic || 'commercial showcase',
+            searchKeywords: localSeoTerms || undefined,
+            styleDirection: styleHint || undefined,
+            topic: params.topic || localSeoTerms || 'commercial showcase',
           }),
         },
       ],
@@ -136,7 +187,7 @@ async function buildDynamicBusinessPrompt(params: {
 
     const aiPrompt = (aiRes.content || '').trim().replace(/^["']|["']$/g, '');
     if (aiPrompt.length > 25) {
-      return `${aiPrompt} Shot on 35mm lens, ${chosenLight}, ${chosenAngle}, immaculate commercial composition, vibrant authentic colors, hyper-realistic depth of field. ABSOLUTELY NO TEXT, NO LOGOS, NO WATERMARKS.`;
+      return `${aiPrompt}${styleHint ? ` Style: ${styleHint}.` : ''} Shot on 35mm lens, ${chosenLight}, ${chosenAngle}, immaculate commercial composition, vibrant authentic colors, hyper-realistic depth of field. ABSOLUTELY NO TEXT, NO LOGOS, NO WATERMARKS.`;
     }
   } catch (err) {
     console.warn('[buildDynamicBusinessPrompt] AI prompt generation fallback:', err instanceof Error ? err.message : err);
@@ -278,6 +329,8 @@ export async function POST(request: NextRequest) {
     }
 
     const autoFromBusiness = Boolean(body.autoFromBusiness);
+    const stylePreset = normalizeStylePreset(body.stylePreset);
+    const isGbpPhoto = body.isGbpPhoto !== false && !body.isPoster;
     const aspectRatio =
       typeof body.aspectRatio === 'string' && VALID_ASPECT_RATIOS.has(body.aspectRatio)
         ? (body.aspectRatio as '1:1' | '4:5' | '9:16' | '16:9')
@@ -296,17 +349,34 @@ export async function POST(request: NextRequest) {
     let products = Array.isArray(body.products) ? body.products : undefined;
     let services = Array.isArray(body.services) ? body.services : undefined;
 
+    const seoCtx = await extractTenantGeoAndSeoContext(user.tenantId, {
+      overrideBusinessName: businessName,
+      overrideCategory: category,
+    }).catch(() => null);
+
+    if (seoCtx) {
+      if (!businessName && seoCtx.businessName && seoCtx.businessName !== 'Our Business') {
+        businessName = seoCtx.businessName;
+      }
+      if (!category && seoCtx.category) {
+        category = seoCtx.category;
+      }
+      if ((!services || services.length === 0) && seoCtx.services.length > 0) {
+        services = seoCtx.services;
+      }
+    }
+
     // Fallback: query database for tenant brand profile if context not supplied by client
     if (!category || !products || !businessName) {
       try {
         const [brandProfile, tenant] = await Promise.all([
-          db.brandProfile.findUnique({ where: { tenantId: user.tenantId } }).catch(() => null),
+          db.brandProfile?.findUnique?.({ where: { tenantId: user.tenantId } }).catch(() => null) ?? null,
           db.tenant
-            .findUnique({
+            ?.findUnique?.({
               where: { id: user.tenantId },
               select: { name: true, industry: true, settingsJson: true },
             })
-            .catch(() => null),
+            .catch(() => null) ?? null,
         ]);
         if (brandProfile) {
           if (!businessName && brandProfile.businessName) businessName = brandProfile.businessName;
@@ -354,6 +424,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const searchTermKeywords = (seoCtx?.searchTerms || []).map((t) => t.keyword).slice(0, 6);
     let rawPrompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
     if (!rawPrompt && autoFromBusiness) {
       rawPrompt = await buildDynamicBusinessPrompt({
@@ -362,6 +433,9 @@ export async function POST(request: NextRequest) {
         products,
         services,
         hasRefs: referenceImageUrls.length > 0,
+        city: seoCtx?.city || null,
+        searchTerms: searchTermKeywords,
+        stylePreset,
       });
     }
 
@@ -371,6 +445,15 @@ export async function POST(request: NextRequest) {
 
     const storedPrompt = body.isPoster && !rawPrompt.startsWith('[POSTER]') ? `[POSTER] ${rawPrompt}` : rawPrompt;
     const id = `${user.tenantId}:${body.requestId}`;
+    const seoSlug = buildSeoFilenameHint({
+      businessName,
+      topic: typeof body.prompt === 'string' ? body.prompt.trim() : undefined,
+      products,
+      services,
+      category,
+      city: seoCtx?.city || null,
+      searchTerms: searchTermKeywords,
+    });
 
     const pendingMeta = {
       category,
@@ -381,6 +464,17 @@ export async function POST(request: NextRequest) {
       referenceImageUrls,
       aspectRatio,
       autoFromBusiness,
+      ...(stylePreset ? { stylePreset } : {}),
+      isGbpPhoto,
+      seoSlug,
+      ...(seoCtx?.city ? { city: seoCtx.city } : {}),
+      ...(seoCtx?.latitude != null && seoCtx?.longitude != null
+        ? {
+            latitude: seoCtx.latitude,
+            longitude: seoCtx.longitude,
+          }
+        : {}),
+      ...(searchTermKeywords.length > 0 ? { searchTerms: searchTermKeywords } : {}),
     };
 
     const existing = await db.designGenerationJob.findFirst({ where: { id, tenantId: user.tenantId } });

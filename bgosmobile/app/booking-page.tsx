@@ -5,7 +5,7 @@ import { Screen, Card, Action, Badge, Chip, Field, ErrorNotice, Loading, ui } fr
 import { useUnsavedWarning } from '../src/hooks/use-unsaved-warning';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
-import { WEB_URL } from '../src/lib/constants';
+import { BGOS_PUBLIC_WEB_URL } from '../src/lib/constants';
 import type { BgosWorkspace } from '../src/types/bgos-contracts';
 
 type Service = { id: string; name: string; duration: number; basePrice: number; isActive: boolean };
@@ -73,15 +73,42 @@ export default function BookingPageScreen() {
     try { await apiRequest('/api/bookings/settings', {method: 'PATCH', body: {autoConfirm: value}}); await settings.refresh(); } catch(e) {setError((e as Error).message);} finally {setBusy(false);}
   }
   const link = workspace.data?.links?.booking;
-  const url = link ? (link.startsWith('http') ? link : `${WEB_URL}${link}`) : null;
+  const url = link ? (link.startsWith('http') ? link : `${BGOS_PUBLIC_WEB_URL}${link}`) : null;
+  const businessPageLink = workspace.data?.links?.profile;
+  const businessPageUrl = businessPageLink
+    ? (businessPageLink.startsWith('http') ? businessPageLink : `${BGOS_PUBLIC_WEB_URL}${businessPageLink}`)
+    : null;
   async function openUrl(value: string) { try { await Linking.openURL(value); } catch {setError('Could not open the page. Please try again.');} }
+  function shareViaWhatsApp(targetUrl: string, label: string) {
+    const text = encodeURIComponent(`${config.businessName || 'Our Business'} — ${label}: ${targetUrl}`);
+    void Linking.openURL(`https://wa.me/?text=${text}`).catch(() => setError('Could not open WhatsApp.'));
+  }
   return <Screen title="Booking page" subtitle="Make it easy for customers to book with you." showBack onBack={leave}>
     <View style={[ui.row, {gap: 8}]}>{(['page', 'services', 'booking'] as const).map(t => <Chip key={t} label={t === 'page' ? 'Page details' : t === 'services' ? 'Services' : 'Booking rules'} selected={tab === t} onPress={() => {setTab(t); setError(null);}} />)}</View>
     <ErrorNotice message={error || workspace.error} retry={workspace.refresh} />
     {!!notice && <Text accessibilityLiveRegion="polite" style={ui.body}>{notice}</Text>}
     {tab === 'page' && <>
-      <Card><Text style={ui.heading}>{config.businessName || 'Your booking page'}</Text><Text style={ui.body}>{config.headline || 'Your services, contact details and booking link in one place.'}</Text>
-        {url ? <View style={[ui.row, {gap: 12}]}><Action secondary label="Preview" icon="open-in-new" onPress={() => void openUrl(url)} /><Action secondary label="Share link" icon="share" onPress={() => void Share.share({message: url}).catch(() => setError('Could not share link.'))} /></View> : <Text style={ui.caption}>A booking link is not available yet. Complete your business setup.</Text>}
+      <Card><Text style={ui.heading}>{config.businessName || 'Your business & booking links'}</Text><Text style={ui.body}>{config.headline || 'Share your Business Page or direct Booking link with 1 tap.'}</Text>
+        {businessPageUrl && (
+          <View style={{gap: 8, marginTop: 4}}>
+            <Text style={ui.caption}>Business Page: {businessPageUrl}</Text>
+            <View style={[ui.row, {gap: 8, flexWrap: 'wrap'}]}>
+              <Action secondary label="Open Business Page" icon="open-in-new" onPress={() => void openUrl(businessPageUrl)} />
+              <Action secondary label="WhatsApp" icon="chat" onPress={() => shareViaWhatsApp(businessPageUrl, 'View our services & book online')} />
+              <Action secondary label="Share" icon="share" onPress={() => void Share.share({message: businessPageUrl, url: businessPageUrl}).catch(() => setError('Could not share link.'))} />
+            </View>
+          </View>
+        )}
+        {url ? (
+          <View style={{gap: 8, marginTop: 6}}>
+            <Text style={ui.caption}>Direct Booking Link: {url}</Text>
+            <View style={[ui.row, {gap: 8, flexWrap: 'wrap'}]}>
+              <Action secondary label="Preview Booking" icon="event-available" onPress={() => void openUrl(url)} />
+              <Action secondary label="WhatsApp" icon="chat" onPress={() => shareViaWhatsApp(url, 'Book an appointment online')} />
+              <Action secondary label="Share link" icon="share" onPress={() => void Share.share({message: url, url}).catch(() => setError('Could not share link.'))} />
+            </View>
+          </View>
+        ) : <Text style={ui.caption}>A booking link is not available yet. Complete your business setup.</Text>}
       </Card>
       {workspace.loading && !workspace.data ? <Loading /> : !!workspace.data && <Card>
         <Field label="Business name" value={config.businessName || ''} onChangeText={v => change('businessName',v)} editable={!busy} />

@@ -25,6 +25,260 @@ import {
   getLocalDateParts,
   parseHourMinute,
 } from '@/lib/locale-timezone';
+import { normalizePhone } from '@/lib/customer-normalize';
+
+interface ReviewCrmSyncSummary {
+  customersCreated: number;
+  customersMatched: number;
+  leadsCreated: number;
+  leadsMatched: number;
+}
+
+function getPhoneTail(raw: string | null | undefined): string | null {
+  const digits = normalizePhone(raw);
+  if (!digits) return null;
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
+function isPlaceholderCustomerName(name: string | null | undefined): boolean {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return true;
+  return /^Customer\s+\d+$/i.test(trimmed) || /^Customer$/i.test(trimmed);
+}
+
+/**
+ * Dedupe & upsert review-invite recipients into Customer and Lead CRM tables.
+ * Preserves existing real names, never creates duplicate Customer/Lead rows for
+ * the same normalized phone, and uses 'won' stage by default so open Deals aren't polluted.
+ */
+async function syncReviewRecipientsToCrm(params: {
+  tenantId: string;
+  workspaceId?: string | null;
+  recipients: Array<[string, string | null]>;
+  channel: 'whatsapp' | 'sms';
+  source: string;
+  saveToCustomers: boolean;
+  saveToLeads: boolean;
+  leadStatus: string;
+}): Promise<ReviewCrmSyncSummary> {
+  const summary: ReviewCrmSyncSummary = {
+    customersCreated: 0,
+    customersMatched: 0,
+    leadsCreated: 0,
+    leadsMatched: 0,
+  };
+  if ((!params.saveToCustomers && !params.saveToLeads) || params.recipients.length === 0) {
+    return summary;
+  }
+
+  const canQueryCustomers = typeof (db as any).customer?.findMany === 'function' && typeof (db as any).customer?.create === 'function';
+  const canQueryLeads = typeof (db as any).lead?.findMany === 'function' && typeof (db as any).lead?.create === 'function';
+  if (!canQueryCustomers && !canQueryLeads) {
+    return summary;
+  }
+
+  let resolvedWorkspaceId = params.workspaceId || null;
+  let tenantCurrency = 'USD';
+  try {
+    if (!resolvedWorkspaceId && typeof (db as any).workspace?.findFirst === 'function') {
+      const ws = await db.workspace.findFirst({
+        where: { tenantId: params.tenantId },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+      resolvedWorkspaceId = ws?.id ?? null;
+    }
+    if (typeof (db as any).tenant?.findUnique === 'function') {
+      const tenant = await db.tenant.findUnique({
+        where: { id: params.tenantId },
+        select: { currency: true },
+      });
+      if (tenant?.currency) tenantCurrency = tenant.currency;
+    }
+  } catch {}
+
+  const customerByKey = new Map<string, { id: string; name: string }>();
+  if (canQueryCustomers) {
+    try {
+      const existingCustomers = await db.customer.findMany({
+        where: { tenantId: params.tenantId },
+        select: { id: true, name: true, phone: true, normalizedPhone: true },
+        take: 2500,
+      });
+      for (const c of existingCustomers) {
+        const norm = c.normalizedPhone || normalizePhone(c.phone);
+        const tail = getPhoneTail(norm || c.phone);
+        const entry = { id: c.id, name: c.name };
+        if (norm) customerByKey.set(norm, entry);
+        if (tail) customerByKey.set(`tail:${tail}`, entry);
+      }
+    } catch {}
+  }
+
+  const leadByKey = new Map<string, { id: string; customerId: string | null; tagsJson: string; notesJson: string }>();
+  if (canQueryLeads) {
+    try {
+      const existingLeads = await db.lead.findMany({
+        where: { tenantId: params.tenantId },
+        select: { id: true, phone: true, customerId: true, tagsJson: true, notesJson: true },
+        take: 2500,
+      });
+      for (const l of existingLeads) {
+        const norm = normalizePhone(l.phone);
+        const tail = getPhoneTail(l.phone);
+        const entry = {
+          id: l.id,
+          customerId: l.customerId || null,
+          tagsJson: l.tagsJson || '[]',
+          notesJson: l.notesJson || '[]',
+        };
+        if (l.customerId) leadByKey.set(`cust:${l.customerId}`, entry);
+        if (norm) leadByKey.set(norm, entry);
+        if (tail) leadByKey.set(`tail:${tail}`, entry);
+      }
+    } catch {}
+  }
+
+  const timestampIso = new Date().toISOString();
+  const noteEntry = {
+    text: `Google review invite sent via ${params.channel.toUpperCase()} (${params.source || 'review_request'})`,
+    createdAt: timestampIso,
+  };
+
+  for (const [phone, rawName] of params.recipients) {
+    const normPhone = normalizePhone(phone);
+    const tail = getPhoneTail(phone);
+    if (!normPhone && !tail) continue;
+
+    const cleanInputName = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : '';
+    const displayName = cleanInputName || `Customer ${phone.slice(-4)}`;
+
+    // 1. Customer upsert
+    let customerId: string | null = null;
+    if (canQueryCustomers) {
+      const existingCustomer =
+        (normPhone ? customerByKey.get(normPhone) : undefined) ||
+        (tail ? customerByKey.get(`tail:${tail}`) : undefined);
+
+      if (existingCustomer) {
+        customerId = existingCustomer.id;
+        summary.customersMatched++;
+        if (
+          cleanInputName &&
+          isPlaceholderCustomerName(existingCustomer.name) &&
+          typeof (db as any).customer?.update === 'function'
+        ) {
+          await db.customer
+            .update({ where: { id: existingCustomer.id }, data: { name: cleanInputName } })
+            .catch(() => {});
+          existingCustomer.name = cleanInputName;
+        }
+      } else if (params.saveToCustomers) {
+        try {
+          const createdCustomer = await db.customer.create({
+            data: {
+              name: displayName,
+              phone,
+              normalizedPhone: normPhone,
+              workspaceId: resolvedWorkspaceId,
+              tenantId: params.tenantId,
+              leadSource: 'review_request',
+              preferredCurrency: tenantCurrency,
+            },
+            select: { id: true, name: true },
+          });
+          customerId = createdCustomer.id;
+          const entry = { id: createdCustomer.id, name: createdCustomer.name };
+          if (normPhone) customerByKey.set(normPhone, entry);
+          if (tail) customerByKey.set(`tail:${tail}`, entry);
+          summary.customersCreated++;
+        } catch {
+          // Handle concurrent creation gracefully by looking up once
+          if (normPhone && typeof (db as any).customer?.findFirst === 'function') {
+            const raced = await db.customer
+              .findFirst({ where: { tenantId: params.tenantId, normalizedPhone: normPhone }, select: { id: true, name: true } })
+              .catch(() => null);
+            if (raced) {
+              customerId = raced.id;
+              customerByKey.set(normPhone, raced);
+              summary.customersMatched++;
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Lead upsert (link existing Lead or create a non-polluting post-service Lead)
+    if (canQueryLeads) {
+      const existingLead =
+        (customerId ? leadByKey.get(`cust:${customerId}`) : undefined) ||
+        (normPhone ? leadByKey.get(normPhone) : undefined) ||
+        (tail ? leadByKey.get(`tail:${tail}`) : undefined);
+
+      if (existingLead) {
+        summary.leadsMatched++;
+        if (typeof (db as any).lead?.update === 'function') {
+          let nextTags: string[] = [];
+          try {
+            const parsedTags = JSON.parse(existingLead.tagsJson || '[]');
+            if (Array.isArray(parsedTags)) nextTags = parsedTags.map(String);
+          } catch {}
+          if (!nextTags.includes('review_requested')) nextTags.push('review_requested');
+
+          let nextNotes: Array<Record<string, unknown>> = [];
+          try {
+            const parsedNotes = JSON.parse(existingLead.notesJson || '[]');
+            if (Array.isArray(parsedNotes)) nextNotes = parsedNotes;
+          } catch {}
+          nextNotes.unshift(noteEntry);
+
+          await db.lead
+            .update({
+              where: { id: existingLead.id },
+              data: {
+                ...(customerId && !existingLead.customerId ? { customerId } : {}),
+                tagsJson: JSON.stringify(nextTags.slice(0, 12)),
+                notesJson: JSON.stringify(nextNotes.slice(0, 30)),
+              },
+            })
+            .catch(() => {});
+        }
+      } else if (params.saveToLeads) {
+        try {
+          const createdLead = await db.lead.create({
+            data: {
+              title: `Review Invite · ${displayName}`,
+              name: displayName,
+              phone,
+              source: 'review_request',
+              status: params.leadStatus,
+              priority: 'low',
+              value: 0,
+              description: noteEntry.text,
+              tenantId: params.tenantId,
+              customerId,
+              tagsJson: JSON.stringify(['review_requested']),
+              notesJson: JSON.stringify([noteEntry]),
+            },
+            select: { id: true, customerId: true, tagsJson: true, notesJson: true },
+          });
+          const leadEntry = {
+            id: createdLead.id,
+            customerId: createdLead.customerId || null,
+            tagsJson: createdLead.tagsJson || '["review_requested"]',
+            notesJson: createdLead.notesJson || '[]',
+          };
+          if (customerId) leadByKey.set(`cust:${customerId}`, leadEntry);
+          if (normPhone) leadByKey.set(normPhone, leadEntry);
+          if (tail) leadByKey.set(`tail:${tail}`, leadEntry);
+          summary.leadsCreated++;
+        } catch {}
+      }
+    }
+  }
+
+  return summary;
+}
 
 interface RecipientInput {
   name?: string;
@@ -755,11 +1009,19 @@ export async function POST(request: NextRequest) {
         ? sanitizeReviewPersonalNote(body.customNote, 120)
         : undefined;
     const waDeliveryMode = body.waDeliveryMode === 'direct_queue' ? 'direct_queue' : 'template';
+    const markSentImmediately = body.markSentImmediately === true && waDeliveryMode === 'direct_queue';
     const sourceLabel = typeof body.source === 'string' ? body.source : 'manual';
     const overrideCountry = typeof body.country === 'string' ? body.country.trim().toUpperCase() : undefined;
     const overrideTimeZone = typeof body.timeZone === 'string' ? body.timeZone.trim() : undefined;
     const preferredTime = typeof body.preferredTime === 'string' ? body.preferredTime : '10:00';
     const sendFirstBatchToday = body.startToday !== false;
+    const saveToCustomers = body.saveToCustomers !== false;
+    const saveToLeads = body.saveToLeads !== false;
+    const requestedLeadStatus =
+      typeof body.leadStatus === 'string' &&
+      ['new', 'contacted', 'qualified', 'proposal', 'won', 'completed'].includes(body.leadStatus)
+        ? body.leadStatus
+        : 'won';
 
     const [{ businessName, reviewLink, shortRedirectCode, shortReviewUrl, locale }, waStatus, smsReady, metaTemplates] =
       await Promise.all([
@@ -874,6 +1136,46 @@ export async function POST(request: NextRequest) {
       const skippedDuplicates = entries.length - newEntries.length;
 
       if (newEntries.length === 0) {
+        if (markSentImmediately) {
+          if (typeof (db as any).scheduledMessage?.updateMany === 'function') {
+            await db.scheduledMessage
+              .updateMany({
+                where: {
+                  tenantId: user.tenantId,
+                  messageType: 'review_request',
+                  status: 'pending',
+                  recipientPhone: { in: entries.map(([p]) => p) },
+                },
+                data: { status: 'sent', sentAt: new Date(), updatedAt: new Date() },
+              })
+              .catch(() => {});
+          }
+          const crmSync = await syncReviewRecipientsToCrm({
+            tenantId: user.tenantId,
+            workspaceId: user.workspaceId,
+            recipients: entries,
+            channel,
+            source: sourceLabel,
+            saveToCustomers,
+            saveToLeads,
+            leadStatus: requestedLeadStatus,
+          }).catch(() => ({
+            customersCreated: 0,
+            customersMatched: 0,
+            leadsCreated: 0,
+            leadsMatched: 0,
+          }));
+          return NextResponse.json({
+            success: true,
+            mode: 'direct_tap',
+            channel,
+            scheduledCount: 0,
+            queuedCount: 0,
+            skippedDuplicates,
+            crmSync,
+            message: 'Recorded review request & synced CRM.',
+          });
+        }
         return NextResponse.json(
           {
             error: 'All selected phone numbers are already scheduled in your pending review queue.',
@@ -981,8 +1283,9 @@ export async function POST(request: NextRequest) {
             recipientPhone: phone,
             subject: `Google Review Request · ${businessName}`,
             bodyText: messageText,
-            dueAt,
-            status: 'pending',
+            dueAt: markSentImmediately ? now : dueAt,
+            status: markSentImmediately ? 'sent' : 'pending',
+            ...(markSentImmediately ? { sentAt: now } : {}),
             metadataJson: JSON.stringify({
               customerName: customerName || '',
               source: sourceLabel,
@@ -1003,6 +1306,22 @@ export async function POST(request: NextRequest) {
         });
         createdIds.push(row.id);
       }
+
+      const crmSync = await syncReviewRecipientsToCrm({
+        tenantId: user.tenantId,
+        workspaceId: user.workspaceId,
+        recipients: newEntries,
+        channel,
+        source: sourceLabel,
+        saveToCustomers,
+        saveToLeads,
+        leadStatus: requestedLeadStatus,
+      }).catch(() => ({
+        customersCreated: 0,
+        customersMatched: 0,
+        leadsCreated: 0,
+        leadsMatched: 0,
+      }));
 
       await logActivity({
         tenantId: user.tenantId,
@@ -1036,6 +1355,7 @@ export async function POST(request: NextRequest) {
         activeMetaTemplateStatus: selectedTemplate.status,
         hasApprovedReviewTemplate,
         shortReviewUrl,
+        crmSync,
         batches: Object.entries(daySlots).map(([dayIdx, info]) => ({
           day: Number(dayIdx) + 1,
           date: info.date,
@@ -1052,6 +1372,7 @@ export async function POST(request: NextRequest) {
 
     // Immediate dispatch path
     let sentCount = 0;
+    const sentRecipients: Array<[string, string | null]> = [];
     const failures: Array<{ phone: string; error: string }> = [];
 
     for (const [phone, customerName] of byPhone) {
@@ -1117,6 +1438,7 @@ export async function POST(request: NextRequest) {
           });
         } else if (result.success) {
           sentCount++;
+          sentRecipients.push([phone, customerName]);
         } else {
           failures.push({ phone, error: result.error || 'Send failed' });
         }
@@ -1155,6 +1477,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let crmSync: ReviewCrmSyncSummary = {
+      customersCreated: 0,
+      customersMatched: 0,
+      leadsCreated: 0,
+      leadsMatched: 0,
+    };
+    if (sentRecipients.length > 0) {
+      crmSync = await syncReviewRecipientsToCrm({
+        tenantId: user.tenantId,
+        workspaceId: user.workspaceId,
+        recipients: sentRecipients,
+        channel,
+        source: sourceLabel,
+        saveToCustomers,
+        saveToLeads,
+        leadStatus: requestedLeadStatus,
+      }).catch(() => crmSync);
+    }
+
     return NextResponse.json({
       success: true,
       mode: 'immediate',
@@ -1162,6 +1503,7 @@ export async function POST(request: NextRequest) {
       failedCount: failures.length,
       recipients: byPhone.size,
       metaTemplateName: channel === 'whatsapp' ? selectedTemplate.name : undefined,
+      crmSync,
       message: `Review requests sent to ${sentCount} customer${sentCount === 1 ? '' : 's'} via ${channel}${failures.length > 0 ? ` (${failures.length} failed).` : '.'}`,
       failures: failures.slice(0, 5),
     });

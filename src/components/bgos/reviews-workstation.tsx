@@ -94,10 +94,9 @@ import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 import { parseAddress, formatAddress } from '@/components/bgos/settings';
 import { GbpStandeeModal } from '@/components/bgos/gbp-standee-modal';
-import { RankTracker } from '@/components/bgos/rank-tracker';
 import { GbpPageCreateModal } from '@/components/bgos/gbp-page-create-modal';
 import { GbpWebsiteBuilderCard } from '@/components/bgos/gbp-website-builder-card';
-import { WebsiteAiAuditCard } from '@/components/bgos/website-ai-audit-card';
+import { AiSearchSeoHub } from '@/components/bgos/ai-search-seo-hub';
 import {
   WebMediaMetadataDialog,
   type WebMediaItem,
@@ -1025,6 +1024,7 @@ export function ReviewsView({
   const [requestTemplateName, setRequestTemplateName] = useState('bgos_review_invite_en');
   const [requestCustomNote, setRequestCustomNote] = useState('');
   const [requestCustomMessage, setRequestCustomMessage] = useState('');
+  const [requestSaveToCrm, setRequestSaveToCrm] = useState(true);
   const requestEditedMessageRef = useRef(false);
 
   const openRequestReviewsModal = (preferredChannel: 'whatsapp' | 'sms' = 'whatsapp') => {
@@ -1572,6 +1572,12 @@ export function ReviewsView({
           ? requestCandidates.map((c) => ({ name: c.name, phone: c.phone }))
           : undefined;
 
+      const crmPayload = {
+        saveToCustomers: requestSaveToCrm,
+        saveToLeads: requestSaveToCrm,
+        leadStatus: 'won',
+      };
+
       const payload = isRequestLockedMeta
         ? {
             mode: 'instant',
@@ -1585,6 +1591,7 @@ export function ReviewsView({
               selectedRequestTemplate.supportsCustomNote && cleanClosingNote
                 ? cleanClosingNote
                 : undefined,
+            ...crmPayload,
             ...(selectedRecipients ? { recipients: selectedRecipients } : {}),
           }
         : isRequestWaDirectQueue
@@ -1598,6 +1605,7 @@ export function ReviewsView({
               businessName: profileTitle || businessName,
               includeDirectLink,
               messageTemplate: requestCustomMessage.trim() || undefined,
+              ...crmPayload,
               ...(selectedRecipients ? { recipients: selectedRecipients } : {}),
             }
           : {
@@ -1606,6 +1614,7 @@ export function ReviewsView({
               businessName: profileTitle || businessName,
               includeDirectLink,
               messageTemplate: requestCustomMessage.trim() || undefined,
+              ...crmPayload,
               ...(selectedRecipients ? { recipients: selectedRecipients } : {}),
             };
 
@@ -1616,11 +1625,26 @@ export function ReviewsView({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success !== false) {
+        const crm = data?.crmSync as
+          | { customersCreated?: number; customersMatched?: number; leadsCreated?: number; leadsMatched?: number }
+          | undefined;
+        const crmTotal = crm
+          ? (crm.customersCreated || 0) +
+            (crm.customersMatched || 0) +
+            (crm.leadsCreated || 0) +
+            (crm.leadsMatched || 0)
+          : 0;
+        const crmNote =
+          requestSaveToCrm && crm && crmTotal > 0
+            ? ` Synced to CRM (+${crm.customersCreated || 0} new customer${(crm.customersCreated || 0) === 1 ? '' : 's'}, +${crm.leadsCreated || 0} won lead${(crm.leadsCreated || 0) === 1 ? '' : 's'}).`
+            : '';
         toast.success(
-          data.message ||
+          `${
+            data.message ||
             (isRequestWaDirectQueue
               ? 'Queued 1-Tap WhatsApp review invites!'
-              : 'Review requests sent!'),
+              : 'Review requests sent!')
+          }${crmNote}`,
         );
         setRequestReviewsOpen(false);
       } else {
@@ -2026,6 +2050,7 @@ export function ReviewsView({
           { id: 'overview', label: 'Overview', Icon: BarChart3 },
           { id: 'rankings', label: 'Rankings & History', Icon: TrendingUp },
           { id: 'website-seo', label: 'Website & AI SEO', Icon: Globe },
+          { id: 'ai-visibility', label: 'AI Visibility', Icon: Bot },
           { id: 'reviews', label: 'Reviews', count: totalReviews, Icon: Star },
           { id: 'generate-replies', label: 'Generate Replies', count: unrepliedCount, Icon: Sparkles },
           { id: 'review-requests', label: 'Review Requests', Icon: Send },
@@ -3191,14 +3216,30 @@ export function ReviewsView({
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          TAB: LOCAL RANKING STATUS & IMPROVEMENT HISTORY
+          UNIFIED HUB: SEO AUDIT, GEO-GRID & SERP, AND AI VISIBILITY (BGOS 2.0)
          ═══════════════════════════════════════════════════════════════════════ */}
-      {activeSubTab === 'rankings' && <RankTracker />}
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          TAB: WEBSITE SEO & AI SEARCH READINESS (BGOS 2.0)
-         ═══════════════════════════════════════════════════════════════════════ */}
-      {activeSubTab === 'website-seo' && <WebsiteAiAuditCard />}
+      {(activeSubTab === 'rankings' ||
+        activeSubTab === 'website-seo' ||
+        activeSubTab === 'ai-visibility') && (
+        <AiSearchSeoHub
+          activeTab={
+            activeSubTab === 'rankings'
+              ? 'grid'
+              : activeSubTab === 'ai-visibility'
+                ? 'visibility'
+                : 'audit'
+          }
+          onTabChange={(next) =>
+            setActiveSubTab(
+              next === 'grid'
+                ? 'rankings'
+                : next === 'visibility'
+                  ? 'ai-visibility'
+                  : 'website-seo',
+            )
+          }
+        />
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
           TAB 2: REVIEWS (TRIAGE WORKSTATION, TELEMETRY STRIP & AI REPLY)
@@ -5075,6 +5116,25 @@ export function ReviewsView({
                 />
               </div>
             )}
+
+            <label className="flex items-start gap-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 p-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={requestSaveToCrm}
+                onChange={(e) => setRequestSaveToCrm(e.target.checked)}
+                className="mt-0.5 size-3.5 rounded border-slate-300 text-[#009F50] focus:ring-[#009F50]"
+              />
+              <span className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                <strong className="font-semibold text-slate-800 dark:text-slate-100 block">
+                  Save recipients to Customers &amp; Leads CRM
+                </strong>
+                Upserts deduped Customers by phone and logs a Won lead tagged{' '}
+                <code className="text-[10px] font-mono bg-slate-200/70 dark:bg-slate-800 px-1 rounded">
+                  review_requested
+                </code>{' '}
+                without flooding open pipeline deals.
+              </span>
+            </label>
           </div>
 
           <DialogFooter className="gap-2">

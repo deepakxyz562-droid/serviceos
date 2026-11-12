@@ -49,6 +49,8 @@ export async function POST(request: NextRequest) {
       industry,
       city,
       state,
+      optInMarketplace: true,
+      includeSampleContent: true,
     });
 
     return NextResponse.json({

@@ -362,6 +362,7 @@ export function ReviewRequestSheet({
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [selectedMetaTemplateName, setSelectedMetaTemplateName] = useState<string>('bgos_review_invite_en');
   const [customCloudNote, setCustomCloudNote] = useState<string>('');
+  const [saveToCrm, setSaveToCrm] = useState<boolean>(true);
 
   const waConnected = Boolean(queueData?.hasWhatsAppProvider);
   const smsReady = queueData?.smsAvailable !== false;
@@ -608,9 +609,29 @@ export function ReviewRequestSheet({
     return `https://wa.me${target}?text=${encodeURIComponent(inviteText)}`;
   }, [phone, inviteText, selectedCountry]);
 
+  function formatCrmSyncSuffix(crm?: {
+    customersCreated?: number;
+    customersMatched?: number;
+    leadsCreated?: number;
+    leadsMatched?: number;
+  }): string {
+    if (!crm || !saveToCrm) return '';
+    const custNew = crm.customersCreated ?? 0;
+    const leadNew = crm.leadsCreated ?? 0;
+    const totalTouched = custNew + (crm.customersMatched ?? 0) + leadNew + (crm.leadsMatched ?? 0);
+    if (totalTouched === 0) return '';
+    if (custNew > 0 || leadNew > 0) {
+      return ` CRM synced (+${custNew} Customer${custNew === 1 ? '' : 's'}, +${leadNew} Won Lead${leadNew === 1 ? '' : 's'}).`;
+    }
+    return ' Linked to existing Customer & Won Lead in CRM.';
+  }
+
   async function openWhatsAppDirect(targetPhone?: string, customBody?: string, markId?: string) {
     try {
       const msg = customBody || inviteText;
+      const typedNorm = !targetPhone
+        ? normalizePhoneDigits(phone, selectedCountry.callingCode, selectedCountry.digits)
+        : null;
       if (targetPhone) {
         const norm = normalizePhoneDigits(targetPhone, selectedCountry.callingCode, selectedCountry.digits);
         const digits = (norm || targetPhone).replace(/[^\d]/g, '');
@@ -622,6 +643,42 @@ export function ReviewRequestSheet({
       if (markId) {
         // Optimistically offer mark-sent after launching WhatsApp
         await markQueueItem(markId, 'mark_sent');
+      } else if (saveToCrm && typedNorm) {
+        try {
+          const syncRes = await apiRequest<{
+            crmSync?: {
+              customersCreated?: number;
+              customersMatched?: number;
+              leadsCreated?: number;
+              leadsMatched?: number;
+            };
+          }>('/api/reviews/request', {
+            method: 'POST',
+            body: {
+              mode: 'scheduled',
+              waDeliveryMode: 'direct_queue',
+              markSentImmediately: true,
+              channel: 'whatsapp',
+              dailyLimit: 5,
+              country: selectedCountry.code,
+              timeZone: selectedTimeZone,
+              source: 'direct_wa_tap',
+              reviewLink: effectiveReviewUrl,
+              businessName: cleanBusinessName,
+              includeDirectLink: true,
+              messageTemplate: inviteText,
+              saveToCustomers: true,
+              saveToLeads: true,
+              leadStatus: 'won',
+              recipients: [{ name: customerName.trim() || undefined, phone: typedNorm }],
+            },
+          });
+          setNote(`Opened WhatsApp for ${typedNorm}.${formatCrmSyncSuffix(syncRes?.crmSync)}`);
+          await loadQueue();
+          await onQueueUpdated?.();
+        } catch {
+          // Non-fatal CRM sync on direct tap
+        }
       }
     } catch {
       setNote('Could not open WhatsApp on this device.');
@@ -643,6 +700,12 @@ export function ReviewRequestSheet({
           success?: boolean;
           sentCount?: number;
           queuedCount?: number;
+          crmSync?: {
+            customersCreated?: number;
+            customersMatched?: number;
+            leadsCreated?: number;
+            leadsMatched?: number;
+          };
           error?: string;
           message?: string;
         }>('/api/reviews/request', {
@@ -658,21 +721,30 @@ export function ReviewRequestSheet({
             templateName: selectedMetaTemplate.name,
             templateLanguage: selectedMetaTemplate.language,
             customNote: selectedMetaTemplate.supportsCustomNote && cleanClosing ? cleanClosing : undefined,
+            saveToCustomers: saveToCrm,
+            saveToLeads: saveToCrm,
+            leadStatus: 'won',
             recipients: [{ name: customerName.trim() || undefined, phone: typedNorm }],
           },
         });
         if (data && data.error) throw new Error(data.error);
         const sent = data?.sentCount ?? 0;
         setNote(
-          sent > 0
+          (sent > 0
             ? `Sent "${selectedMetaTemplate.displayName}" template to ${typedNorm} via WhatsApp Cloud API.`
-            : data?.message || 'Invite processed.',
+            : data?.message || 'Invite processed.') + formatCrmSyncSuffix(data?.crmSync),
         );
       } else {
         const data = await apiRequest<{
           success?: boolean;
           scheduledCount?: number;
           queuedCount?: number;
+          crmSync?: {
+            customersCreated?: number;
+            customersMatched?: number;
+            leadsCreated?: number;
+            leadsMatched?: number;
+          };
           error?: string;
           message?: string;
         }>('/api/reviews/request', {
@@ -689,15 +761,18 @@ export function ReviewRequestSheet({
             businessName: cleanBusinessName,
             includeDirectLink: true,
             messageTemplate: inviteText,
+            saveToCustomers: saveToCrm,
+            saveToLeads: saveToCrm,
+            leadStatus: 'won',
             recipients: [{ name: customerName.trim() || undefined, phone: typedNorm }],
           },
         });
         if (data && data.error) throw new Error(data.error);
         const queued = data?.queuedCount ?? data?.scheduledCount ?? 0;
         setNote(
-          queued > 0
+          (queued > 0
             ? `Saved invite to queue for ${typedNorm}. Tap "Send on WhatsApp (Direct)" below or view it in Bulk Queue.`
-            : data?.message || 'Saved invite to queue.',
+            : data?.message || 'Saved invite to queue.') + formatCrmSyncSuffix(data?.crmSync),
         );
       }
 
@@ -767,6 +842,12 @@ export function ReviewRequestSheet({
         scheduledCount?: number;
         skippedDuplicates?: number;
         totalDays?: number;
+        crmSync?: {
+          customersCreated?: number;
+          customersMatched?: number;
+          leadsCreated?: number;
+          leadsMatched?: number;
+        };
         message?: string;
         error?: string;
       }>('/api/reviews/request', {
@@ -783,6 +864,9 @@ export function ReviewRequestSheet({
           reviewLink: effectiveReviewUrl,
           businessName: cleanBusinessName,
           includeDirectLink: true,
+          saveToCustomers: saveToCrm,
+          saveToLeads: saveToCrm,
+          leadStatus: 'won',
           ...(isLockedMetaMode
             ? {
                 templateName: selectedMetaTemplate.name,
@@ -799,8 +883,9 @@ export function ReviewRequestSheet({
 
       if (res?.error) throw new Error(res.error);
       setBulkNote(
-        res?.message ||
-          `Scheduled ${res?.scheduledCount ?? activeBulkRecipients.length} review invite(s) (${dailyLimit}/day).`,
+        (res?.message ||
+          `Scheduled ${res?.scheduledCount ?? activeBulkRecipients.length} review invite(s) (${dailyLimit}/day).`) +
+          formatCrmSyncSuffix(res?.crmSync),
       );
       if (bulkSource === 'paste') setPasteText('');
       if (bulkSource === 'csv') {
@@ -1175,6 +1260,25 @@ export function ReviewRequestSheet({
                     </Text>
                   </View>
                 ) : null}
+
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: saveToCrm }}
+                  onPress={() => setSaveToCrm((prev) => !prev)}
+                  style={styles.crmToggleCard}
+                >
+                  <MaterialIcons
+                    name={saveToCrm ? 'check-box' : 'check-box-outline-blank'}
+                    size={20}
+                    color={saveToCrm ? colors.brand : colors.muted}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.crmToggleTitle}>Save to Customers &amp; Leads CRM</Text>
+                    <Text style={styles.crmToggleSub}>
+                      Deduplicates Customer by phone &amp; logs Won lead (tagged review_requested)
+                    </Text>
+                  </View>
+                </Pressable>
 
                 {note ? (
                   <View style={styles.noteCard}>
@@ -1706,6 +1810,25 @@ export function ReviewRequestSheet({
                     </Text>
                   </View>
                 ) : null}
+
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: saveToCrm }}
+                  onPress={() => setSaveToCrm((prev) => !prev)}
+                  style={styles.crmToggleCard}
+                >
+                  <MaterialIcons
+                    name={saveToCrm ? 'check-box' : 'check-box-outline-blank'}
+                    size={20}
+                    color={saveToCrm ? colors.brand : colors.muted}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.crmToggleTitle}>Save recipients to Customers &amp; Leads CRM</Text>
+                    <Text style={styles.crmToggleSub}>
+                      Upserts deduped Customer &amp; Won lead without creating open deals
+                    </Text>
+                  </View>
+                </Pressable>
 
                 {bulkError ? (
                   <View style={styles.errorBox}>
@@ -2783,5 +2906,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     fontSize: 12,
     color: colors.ink,
+  },
+  crmToggleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  crmToggleTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  crmToggleSub: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 1,
   },
 });

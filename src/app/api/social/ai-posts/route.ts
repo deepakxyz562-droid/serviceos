@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { listGoogleBusinessMedia } from '@/lib/social/adapters/googlebusiness';
 import { getCategoryVisualPool } from '@/lib/designs/dynamic-visual-resolver';
+import { callAI } from '@/lib/ai-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -510,6 +511,107 @@ export function generate20PostsForBusiness(params: {
   return generatedPosts;
 }
 
+function parseServicesList(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((s) => (typeof s === 'string' ? s : String((s as any)?.name || ''))).map((s) => s.trim()).filter(Boolean);
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parseServicesList(parsed);
+    } catch {}
+    return raw.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+async function generateFreshAiOverlayPosts(params: {
+  tenantId: string;
+  businessName: string;
+  category: string;
+  city: string;
+  phone: string;
+  website: string;
+  services: string[];
+  logoUrl?: string | null;
+  images: string[];
+  seed: number;
+}): Promise<GeneratedPostItem[] | null> {
+  try {
+    const svcText = params.services.length > 0 ? params.services.slice(0, 6).join(', ') : params.category;
+    const prompt = `Generate 6 concise, high-converting Google Business Profile posts for "${params.businessName}" (${params.category}) in ${params.city}.
+Core offerings: ${svcText}. Contact phone: ${params.phone}. Seed variation: ${params.seed}.
+Mix post types across STANDARD, OFFER, and EVENT.
+Return STRICT JSON: {"posts":[{"postType":"STANDARD|OFFER|EVENT","title":"<=65 chars catchy headline","intro":"2 concise sentences mentioning ${params.city} and specific offerings","bullets":["3 short value points"],"ctaText":"CALL|BOOK ONLINE|GET OFFER|LEARN MORE","hashtags":["#LocalTag1","#LocalTag2","#LocalTag3"]}]}`;
+
+    const aiRes = await callAI({
+      messages: [
+        { role: 'system', content: 'You are a local Google Business Profile marketing copywriter. Return valid JSON only.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.85,
+      maxTokens: 1600,
+      json: true,
+      timeoutMs: 6500,
+      usageContext: { tenantId: params.tenantId, feature: 'ai_posts_refresh' },
+    });
+
+    const rawText = (aiRes?.content || '').trim();
+    if (!rawText) return null;
+    const cleaned = rawText.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+    const parsed = JSON.parse(cleaned) as { posts?: Array<Record<string, any>> };
+    const list = Array.isArray(parsed?.posts) ? parsed.posts : [];
+    if (list.length === 0) return null;
+
+    const bizClean = cleanHash(params.businessName || 'LocalBiz');
+    const cityClean = cleanHash(params.city || 'Local');
+
+    return list.slice(0, 8).map((item, idx): GeneratedPostItem => {
+      const rawType = String(item.postType || 'STANDARD').toUpperCase();
+      const postType: 'STANDARD' | 'OFFER' | 'EVENT' =
+        rawType === 'OFFER' || rawType === 'EVENT' ? rawType : 'STANDARD';
+      const badge: 'Standard Post' | 'Special Offer' | 'Seasonal Event' =
+        postType === 'OFFER' ? 'Special Offer' : postType === 'EVENT' ? 'Seasonal Event' : 'Standard Post';
+      const title = String(item.title || `${params.businessName} in ${params.city}`).trim().slice(0, 110);
+      const intro = String(item.intro || `Trusted ${params.category} serving ${params.city}.`).trim();
+      const bullets = Array.isArray(item.bullets) && item.bullets.length > 0
+        ? item.bullets.map((b: unknown) => String(b || '').trim()).filter(Boolean).slice(0, 4)
+        : [`Trusted local specialists in ${params.city}`, `Quick response via ${params.phone}`];
+      const rawCta = String(item.ctaText || 'CALL').toUpperCase();
+      const ctaText: GeneratedPostItem['ctaText'] =
+        rawCta === 'BOOK ONLINE' || rawCta === 'GET OFFER' || rawCta === 'ORDER' || rawCta === 'LEARN MORE'
+          ? rawCta
+          : 'CALL';
+      const hashtags = Array.isArray(item.hashtags) && item.hashtags.length > 0
+        ? item.hashtags.map((h: unknown) => (String(h).startsWith('#') ? String(h) : `#${String(h)}`)).slice(0, 5)
+        : [`#${bizClean}`, `#${cityClean}`, '#LocalExperts'];
+      const conclusion = `Call ${params.businessName} at ${params.phone} or visit us in ${params.city} today.`;
+      const formattedBullets = bullets.map((b) => `✓ ${b}`).join('\n');
+      const fullContent = `${title}\n\n${intro}\n\n${formattedBullets}\n\n${conclusion}\n\nCTA: ${ctaText}\nPhone: ${params.phone}\n\n${hashtags.join(' ')}`;
+
+      return {
+        id: `ai_live_${params.seed}_${idx + 1}`,
+        badge,
+        postType,
+        title,
+        intro,
+        bullets,
+        conclusion,
+        hashtags,
+        ctaText,
+        phone: params.phone,
+        website: params.website,
+        imageUrl: params.images[idx % params.images.length],
+        content: fullContent,
+        logoUrl: params.logoUrl || undefined,
+        businessName: params.businessName,
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
@@ -519,9 +621,14 @@ export async function GET(request: NextRequest) {
 
     const seedParam = request.nextUrl.searchParams.get('seed');
     const refreshParam = request.nextUrl.searchParams.get('refresh');
-    const seed = refreshParam ? Math.floor(Math.random() * 1000000) : (seedParam ? parseInt(seedParam, 10) : 0);
+    const parsedSeed = seedParam ? parseInt(seedParam, 10) : NaN;
+    const seed = Number.isFinite(parsedSeed) && parsedSeed > 0
+      ? parsedSeed
+      : refreshParam
+        ? Math.floor(1 + Math.random() * 999999)
+        : 0;
 
-    const [brandProfile, tenant, googleAccount, brandKit] = await Promise.all([
+    const [brandProfile, tenant, googleAccount, brandKit, serviceRows] = await Promise.all([
       db.brandProfile.findUnique({ where: { tenantId: user.tenantId } }).catch(() => null),
       db.tenant.findUnique({
         where: { id: user.tenantId },
@@ -529,6 +636,13 @@ export async function GET(request: NextRequest) {
       }).catch(() => null),
       prepareGoogleAccount(user.tenantId).catch(() => null),
       db.brandKit.findUnique({ where: { tenantId: user.tenantId } }).catch(() => null),
+      typeof (db as any).service?.findMany === 'function'
+        ? (db as any).service.findMany({
+            where: { tenantId: user.tenantId },
+            select: { name: true },
+            take: 10,
+          }).catch(() => [])
+        : Promise.resolve([]),
     ]);
 
     const resolvedLogoUrl =
@@ -544,17 +658,22 @@ export async function GET(request: NextRequest) {
       brandProfile?.industry || tenant?.industry || 'Services';
     const city =
       brandProfile?.location || tenant?.city || 'Delhi';
-    const phone =
-      brandProfile?.phone || tenant?.phone || '+91 98765 43210';
+    const phone = tenant?.phone || '+91 98765 43210';
     const website =
       brandProfile?.website || tenant?.website || 'https://google.com';
+    const services = Array.from(
+      new Set([
+        ...parseServicesList((brandProfile as any)?.services),
+        ...((Array.isArray(serviceRows) ? serviceRows : []).map((s: any) => String(s?.name || '').trim()).filter(Boolean)),
+      ]),
+    );
 
     // Fetch real GBP photos if connected
     let realPhotos: string[] = [];
     if (googleAccount) {
       try {
-        const gbpMedia = await listGoogleBusinessMedia(googleAccount, 12);
-        realPhotos = gbpMedia
+        const gbpMedia = await listGoogleBusinessMedia(googleAccount, { pageSize: 12 });
+        realPhotos = (gbpMedia?.mediaItems || [])
           .map((m) => m.googleUrl || m.thumbnailUrl)
           .filter((u): u is string => typeof u === 'string' && u.length > 0);
       } catch {}
@@ -571,7 +690,7 @@ export async function GET(request: NextRequest) {
     const libraryUrls = libraryRows.map((r) => r.url).filter(Boolean);
     const combinedPhotos = [...realPhotos, ...libraryUrls];
 
-    const posts = generate20PostsForBusiness({
+    const basePosts = generate20PostsForBusiness({
       businessName,
       category,
       city,
@@ -582,8 +701,31 @@ export async function GET(request: NextRequest) {
       seed,
     });
 
+    let posts = basePosts;
+    let aiPowered = false;
+    if (refreshParam) {
+      const liveAiPosts = await generateFreshAiOverlayPosts({
+        tenantId: user.tenantId,
+        businessName,
+        category,
+        city,
+        phone,
+        website,
+        services,
+        logoUrl: resolvedLogoUrl,
+        images: basePosts.map((p) => p.imageUrl),
+        seed,
+      });
+      if (liveAiPosts && liveAiPosts.length > 0) {
+        aiPowered = true;
+        posts = [...liveAiPosts, ...basePosts.slice(0, Math.max(0, 20 - liveAiPosts.length))];
+      }
+    }
+
     return NextResponse.json({
       success: true,
+      seed,
+      aiPowered,
       business: {
         name: businessName,
         category,
@@ -591,6 +733,9 @@ export async function GET(request: NextRequest) {
         phone,
         website,
         logoUrl: resolvedLogoUrl,
+        primaryColor: brandKit?.primaryColor || '#009F50',
+        accentColor: brandKit?.accentColor || (brandKit as any)?.secondaryColor || '#0F172A',
+        services,
       },
       count: posts.length,
       posts,

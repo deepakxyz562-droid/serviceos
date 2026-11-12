@@ -79,12 +79,16 @@ export interface AiCompetitorGapReportClient {
   planCreatedCount?: number;
 }
 
-export function AiCompetitorGapCard() {
+interface AiCompetitorGapCardProps {
+  onTasksUpdated?: () => void;
+}
+
+export function AiCompetitorGapCard({ onTasksUpdated }: AiCompetitorGapCardProps = {}) {
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [creatingPlan, setCreatingPlan] = useState(false);
   const [applyingFix, setApplyingFix] = useState<string | null>(null);
-  const [includeOpenAi, setIncludeOpenAi] = useState(false);
+  const [includeOpenAi, setIncludeOpenAi] = useState(true);
   const [promptsText, setPromptsText] = useState('');
   const [report, setReport] = useState<AiCompetitorGapReportClient | null>(null);
 
@@ -129,6 +133,7 @@ export function AiCompetitorGapCard() {
           customPrompts: customPrompts.length > 0 ? customPrompts : undefined,
           includeOpenAi,
           createPlan: withPlan,
+          createPlanOnly: withPlan && Boolean(report),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -141,6 +146,9 @@ export function AiCompetitorGapCard() {
         if (Array.isArray(data.report.promptsTested)) {
           setPromptsText(data.report.promptsTested.join('\n'));
         }
+      }
+      if (withPlan) {
+        onTasksUpdated?.();
       }
       toast.success(
         withPlan
@@ -170,6 +178,7 @@ export function AiCompetitorGapCard() {
         return;
       }
       toast.success(data?.result?.message || 'Improvement applied!');
+      onTasksUpdated?.();
     } catch {
       toast.error('Network error applying fix.');
     } finally {

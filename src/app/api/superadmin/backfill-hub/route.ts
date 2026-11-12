@@ -116,7 +116,10 @@ export async function POST(request: NextRequest) {
 
       try {
         if (needsHubBackfill) {
-          await applyHubDefaultsToTenant(t.id);
+          await applyHubDefaultsToTenant(t.id, {
+            optInMarketplace: true,
+            seedSampleServices: true,
+          });
           hubPopulated++;
         }
         if (needsServiceSeed) {

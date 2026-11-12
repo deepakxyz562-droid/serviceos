@@ -3,10 +3,36 @@ import { db } from '@/lib/db';
 import { uploadFile, deleteFile, isS3Configured, isSupabaseStorageConfigured } from '@/lib/supabase-storage';
 import { validateDesign } from '../../../shared/marketing-design';
 
+import { buildJpegExifData } from './seo-metadata';
+
+export type SaveDesignAssetOptions = {
+  format?: 'webp' | 'jpeg';
+  seoSlug?: string;
+  assetTitle?: string;
+  exif?: Parameters<typeof buildJpegExifData>[0];
+};
+
+function normalizeSeoSlugBase(seoSlug: string): string {
+  return seoSlug
+    .trim()
+    .toLowerCase()
+    .replace(/\.(jpg|jpeg|webp|png)$/i, '')
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
 async function processImageBuffer(
   bytes: Buffer,
   targetFormat: 'webp' | 'jpeg' = 'webp',
-): Promise<{ data: Buffer; width: number; height: number; format: 'webp' | 'jpeg' | 'png' }> {
+  exifInput?: Parameters<typeof buildJpegExifData>[0],
+): Promise<{
+  data: Buffer;
+  width: number;
+  height: number;
+  format: 'webp' | 'jpeg' | 'png';
+  geoTagged: boolean;
+}> {
   try {
     const sharpModule = await import('sharp');
     const sharp = sharpModule.default || sharpModule;
@@ -15,19 +41,47 @@ async function processImageBuffer(
       .rotate()
       .resize({ width: 1080, height: 1350, fit: 'inside', withoutEnlargement: true });
     if (targetFormat === 'jpeg') {
-      const normalized = await pipeline
-        .flatten({ background: '#ffffff' })
+      let jpegPipeline = pipeline.flatten({ background: '#ffffff' });
+      let geoTagged = false;
+      if (exifInput) {
+        const exifData = buildJpegExifData(exifInput);
+        const hasExif =
+          Object.keys(exifData.IFD0 || {}).length > 0 ||
+          Object.keys(exifData.IFD3 || {}).length > 0;
+        if (hasExif) {
+          jpegPipeline = jpegPipeline.withExif(exifData as any);
+          geoTagged = Boolean(
+            exifData.IFD3 &&
+              Object.keys(exifData.IFD3).length > 0 &&
+              exifInput.latitude != null &&
+              exifInput.longitude != null,
+          );
+        }
+      }
+      const normalized = await jpegPipeline
         .jpeg({ quality: 92 })
         .toBuffer({ resolveWithObject: true });
-      return { data: normalized.data, width: normalized.info.width, height: normalized.info.height, format: 'jpeg' };
+      return {
+        data: normalized.data,
+        width: normalized.info.width,
+        height: normalized.info.height,
+        format: 'jpeg',
+        geoTagged,
+      };
     }
     const normalized = await pipeline
       .webp({ quality: 85, effort: 4 })
       .toBuffer({ resolveWithObject: true });
-    return { data: normalized.data, width: normalized.info.width, height: normalized.info.height, format: 'webp' };
+    return {
+      data: normalized.data,
+      width: normalized.info.width,
+      height: normalized.info.height,
+      format: 'webp',
+      geoTagged: false,
+    };
   } catch (err) {
     console.warn('[designs/assets] sharp processing unavailable, using raw buffer:', err instanceof Error ? err.message : err);
-    return { data: bytes, width: 1080, height: 1080, format: 'png' };
+    return { data: bytes, width: 1080, height: 1080, format: 'png', geoTagged: false };
   }
 }
 
@@ -35,19 +89,24 @@ export async function saveDesignAsset(
   bytes: Buffer,
   tenantId: string,
   userId: string,
-  options?: { format?: 'webp' | 'jpeg' },
+  options?: SaveDesignAssetOptions,
 ) {
   if(bytes.length>12_000_000)throw new Error('Images must be smaller than 12 MB');
   if(!isS3Configured()&&!isSupabaseStorageConfigured())throw new Error('Persistent image storage is not configured');
-  const normalized = await processImageBuffer(bytes, options?.format ?? 'webp');
+  const normalized = await processImageBuffer(bytes, options?.format ?? 'webp', options?.exif);
   const id=randomUUID();
   const fileExt = normalized.format === 'jpeg' ? 'jpg' : normalized.format === 'webp' ? 'webp' : 'png';
   const contentType = normalized.format === 'jpeg' ? 'image/jpeg' : normalized.format === 'webp' ? 'image/webp' : 'image/png';
-  const fileName = `${id}.${fileExt}`;
+  const slugBase = options?.seoSlug ? normalizeSeoSlugBase(options.seoSlug) : '';
+  const fileName = slugBase ? `${slugBase}-${id.slice(0, 8)}.${fileExt}` : `${id}.${fileExt}`;
+  const assetName =
+    typeof options?.assetTitle === 'string' && options.assetTitle.trim()
+      ? options.assetTitle.trim().slice(0, 120)
+      : 'Design image';
   const stored=await uploadFile({bucket:'campaign-assets',companyId:tenantId,folder:'design-assets',fileName,file:normalized.data,contentType});
   try {
-    const asset=await db.imageLibrary.create({data:{id,tenantId,uploadedBy:userId,name:'Design image',folder:'bgos-design',url:stored.url,mediaType:contentType,size:normalized.data.length,width:normalized.width,height:normalized.height}});
-    return {assetId:asset.id,url:asset.url};
+    const asset=await db.imageLibrary.create({data:{id,tenantId,uploadedBy:userId,name:assetName,folder:'bgos-design',url:stored.url,mediaType:contentType,size:normalized.data.length,width:normalized.width,height:normalized.height}});
+    return {assetId:asset.id,url:asset.url,seoFilename:fileName,geoTagged:normalized.geoTagged};
   }catch(error){await deleteFile('campaign-assets',`${tenantId}/design-assets/${fileName}`).catch(()=>false);throw error;}
 }
 export async function persistDesignAssets(value: unknown, tenantId: string, userId: string) {

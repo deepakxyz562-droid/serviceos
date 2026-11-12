@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
@@ -20,6 +20,28 @@ import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
 import { leadLabels, leadStage, leadStages } from '../src/lib/leads';
 import { withProtectedRoute } from '../src/components/navigation/protected-route';
+import {
+  COUNTRIES,
+  CountryItem,
+  detectDeviceCountryAndTimezone,
+  getCountryByCode,
+} from '../src/lib/country-codes';
+import type { BgosWorkspace } from '../src/types/bgos-contracts';
+
+const LEAD_SOURCE_OPTIONS = [
+  { id: 'Phone Call', label: 'Phone Call' },
+  { id: 'WhatsApp', label: 'WhatsApp' },
+  { id: 'Google Business', label: 'Google' },
+  { id: 'Walk-in', label: 'Walk-in' },
+  { id: 'Website', label: 'Website' },
+  { id: 'Referral', label: 'Referral' },
+] as const;
+
+const PRIORITY_OPTIONS = [
+  { id: 'low', label: 'Low', activeBg: '#F1F5F9', activeText: '#334155', border: '#CBD5E1' },
+  { id: 'medium', label: 'Medium', activeBg: '#E8F8EF', activeText: '#009F50', border: '#86EFAC' },
+  { id: 'high', label: 'High', activeBg: '#FFF1F0', activeText: '#BA3547', border: '#FDA4AF' },
+] as const;
 
 type Lead = {
   id: string;
@@ -33,6 +55,12 @@ type Lead = {
   createdAt?: string;
 };
 
+type ServiceOption = {
+  id: string;
+  name: string;
+  basePrice?: number | null;
+};
+
 function LeadsScreen() {
   const params = useLocalSearchParams<{ create?: string; phone?: string; name?: string; notes?: string; source?: string }>();
   const [search, setSearch] = useState('');
@@ -42,19 +70,71 @@ function LeadsScreen() {
   const [open, setOpen] = useState(params.create === '1');
   const [selected, setSelected] = useState<Lead | null>(null);
 
+  const defaultCountry = useMemo(() => detectDeviceCountryAndTimezone().country, []);
+  const [selectedCountry, setSelectedCountry] = useState<CountryItem>(defaultCountry);
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false);
+
   const [name, setName] = useState(params.name || '');
   const [phone, setPhone] = useState(params.phone || '');
   const [email, setEmail] = useState('');
   const [service, setService] = useState('');
-  const [moreDetails,setMoreDetails] = useState(false);
-  const [attempted,setAttempted] = useState(false);
-  const [savedNotice,setSavedNotice] = useState('');
-  const invalidName = !name.trim();
-  const invalidPhone = !/^\+?[\d ()-]+$/.test(phone.trim()) || !/^\d{7,15}$/.test(phone.replace(/\D/g,''));
-  const invalidEmail = Boolean(email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
-  useEffect(()=>{if(open){setAttempted(false);setMoreDetails(Boolean(email || service));setSavedNotice('');}},[open]);
+  const [estimatedValue, setEstimatedValue] = useState('');
+  const [leadSource, setLeadSource] = useState<string>(params.source || 'Phone Call');
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [address, setAddress] = useState('');
+  const [notes, setNotes] = useState(params.notes || '');
+  const [moreDetails, setMoreDetails] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+  const [savedNotice, setSavedNotice] = useState('');
+  const [matchedCustomer, setMatchedCustomer] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const workspaceRes = useResource<BgosWorkspace>('/api/bgos/workspace');
+  const servicesRes = useResource<{ services: ServiceOption[] }>('/api/services?active=true&limit=25', 0, open);
+  const tenantCurrency = workspaceRes.data?.billing?.currency || 'USD';
+
+  useEffect(() => {
+    const code = workspaceRes.data?.locale?.country;
+    if (code) {
+      setSelectedCountry(getCountryByCode(code));
+    }
+  }, [workspaceRes.data?.locale?.country]);
+
+  const rawPhoneDigits = phone.replace(/\D/g, '');
+  const hasExplicitPlus = phone.trim().startsWith('+');
+  const invalidName = !name.trim();
+  const invalidPhone = hasExplicitPlus
+    ? rawPhoneDigits.length < 7 || rawPhoneDigits.length > 15
+    : rawPhoneDigits.length < 7 || rawPhoneDigits.length > 13;
+  const invalidEmail = Boolean(email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
+
+  const resetAddForm = () => {
+    setName('');
+    setPhone('');
+    setEmail('');
+    setService('');
+    setEstimatedValue('');
+    setLeadSource('Phone Call');
+    setPriority('medium');
+    setAddress('');
+    setNotes('');
+    setMatchedCustomer(null);
+    setAttempted(false);
+    setError(null);
+    setMoreDetails(false);
+  };
+
+  useEffect(() => {
+    if (open) {
+      setAttempted(false);
+      setError(null);
+      if (email || address || notes) setMoreDetails(true);
+      setSavedNotice('');
+    }
+    // Only reset transient notice/flags when opening modal
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -68,10 +148,33 @@ function LeadsScreen() {
     if (params.create === '1') {
       if (params.phone) setPhone(params.phone);
       if (params.name) setName(params.name);
-      if (params.notes) setService(params.notes);
+      if (params.notes) setNotes(params.notes);
+      if (params.source) setLeadSource(params.source);
       setOpen(true);
     }
-  }, [params.create, params.phone, params.name, params.notes]);
+  }, [params.create, params.phone, params.name, params.notes, params.source]);
+
+  // Subtle duplicate customer check when phone reaches 7+ digits
+  useEffect(() => {
+    if (!open || rawPhoneDigits.length < 7) {
+      setMatchedCustomer(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await apiRequest<{ customers?: Array<{ name?: string; phone?: string }> }>(
+          `/api/customers?search=${encodeURIComponent(rawPhoneDigits.slice(-8))}&limit=3`
+        );
+        const match = (res?.customers || []).find((c) =>
+          (c.phone || '').replace(/\D/g, '').endsWith(rawPhoneDigits.slice(-7))
+        );
+        setMatchedCustomer(match?.name || null);
+      } catch {
+        setMatchedCustomer(null);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [open, rawPhoneDigits]);
 
   const resource = useResource<{
     leads: Lead[];
@@ -89,25 +192,32 @@ function LeadsScreen() {
     if (invalidName || invalidPhone || invalidEmail) return;
     setBusy(true);
     setError(null);
+    const trimmedPhone = phone.trim();
+    const formattedPhone = trimmedPhone.startsWith('+')
+      ? trimmedPhone
+      : `+${selectedCountry.callingCode}${rawPhoneDigits}`;
+    const parsedValue = Number.parseFloat(estimatedValue) || 0;
+
     try {
       await apiRequest('/api/leads', {
         method: 'POST',
         body: {
           name: name.trim(),
-          phone: phone.trim(),
+          phone: formattedPhone,
           email: email.trim() || undefined,
-          title: service.trim() || undefined,
+          title: service.trim() || `${name.trim()} Inquiry`,
+          serviceType: service.trim() || undefined,
+          value: parsedValue > 0 ? parsedValue : undefined,
+          priority,
+          address: address.trim() || undefined,
           status: 'new_lead',
-          source: params.source || 'mobile_app',
-          description: params.notes || undefined,
+          source: leadSource || 'mobile_app',
+          description: notes.trim() || undefined,
         },
       });
-      setSavedNotice(name.trim() + ' added to leads.');
+      setSavedNotice(`${name.trim()} added to leads.`);
       setOpen(false);
-      setName('');
-      setPhone('');
-      setEmail('');
-      setService('');
+      resetAddForm();
       await resource.refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -178,7 +288,7 @@ function LeadsScreen() {
             <Chip
               key={s}
               label={s === 'all' ? 'All Leads' : leadLabels[s]}
-              count={s === 'all' ? resource.data?.pagination?.total || 24 : undefined}
+              count={s === 'all' && typeof resource.data?.pagination?.total === 'number' ? resource.data.pagination.total : undefined}
               selected={stage === s}
               onPress={() => {
                 setStage(s);
@@ -283,32 +393,284 @@ function LeadsScreen() {
       </View>
 
       {/* Add Lead Modal */}
-      <Modal visible={open} animationType="slide" onRequestClose={() => { if (!busy) setOpen(false); }}>
+      <Modal
+        visible={open}
+        animationType="slide"
+        onRequestClose={() => {
+          if (!busy) {
+            setOpen(false);
+            resetAddForm();
+          }
+        }}
+      >
         <Screen
-          title="Add lead"
-          subtitle="Enter the contact details for your follow-up."
+          title="Add New Lead"
+          subtitle="Record customer contact, service interest & priority."
           showBack
-          onBack={() => { if (!busy) setOpen(false); }}
-          floatingAction={<Action label={busy?'Saving…':'Save lead'} disabled={busy} icon="person-add" onPress={create}/>}
+          onBack={() => {
+            if (!busy) {
+              setOpen(false);
+              resetAddForm();
+            }
+          }}
+          floatingAction={
+            <Action
+              label={busy ? 'Saving lead…' : 'Save Lead'}
+              disabled={busy}
+              icon="person-add"
+              onPress={create}
+            />
+          }
         >
           <ErrorNotice message={error} />
-          <Card>
-            <Field label="Name" value={name} onChangeText={setName} autoComplete="name" maxLength={150} placeholder="Full name"/>
-            {attempted && invalidName && <Text style={{color:'#B42318'}}>Enter the lead’s name.</Text>}
-            <Field label="Phone" value={phone} onChangeText={setPhone} autoComplete="tel" keyboardType="phone-pad" placeholder="+91 98765 43210"/>
-            {attempted && invalidPhone && <Text style={{color:'#B42318'}}>Enter a phone number with 7–15 digits, including the country code if needed.</Text>}
+
+          {/* Section 1: Contact Details */}
+          <Card style={{ gap: 12 }}>
+            <View style={[ui.row, { justifyContent: 'space-between' }]}>
+              <Text style={ui.heading}>Contact Details</Text>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: colors.muted }}>* Required</Text>
+            </View>
+
+            <Field
+              label="Full Name *"
+              value={name}
+              onChangeText={setName}
+              autoComplete="name"
+              maxLength={150}
+              placeholder="e.g. Rohan Sharma"
+            />
+            {attempted && invalidName ? (
+              <Text style={styles.fieldError}>Please enter the customer’s name.</Text>
+            ) : null}
+
+            <View style={{ gap: 6 }}>
+              <Text style={ui.label}>Phone / WhatsApp *</Text>
+              <View style={styles.phoneRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Select country dial code"
+                  onPress={() => setCountryPickerOpen(true)}
+                  style={styles.countryBtn}
+                >
+                  <Text style={{ fontSize: 16 }}>{selectedCountry.flag}</Text>
+                  <Text style={styles.countryCodeText}>+{selectedCountry.callingCode}</Text>
+                  <MaterialIcons name="arrow-drop-down" size={18} color={colors.muted} />
+                </Pressable>
+                <TextInput
+                  accessibilityLabel="Phone Number"
+                  value={phone}
+                  onChangeText={setPhone}
+                  autoComplete="tel"
+                  keyboardType="phone-pad"
+                  placeholder={selectedCountry.placeholder}
+                  placeholderTextColor={colors.muted}
+                  style={[ui.input, { flex: 1 }]}
+                />
+              </View>
+            </View>
+
+            {attempted && invalidPhone ? (
+              <Text style={styles.fieldError}>Enter a valid 7–15 digit phone number.</Text>
+            ) : null}
+
+            {matchedCustomer ? (
+              <View style={styles.duplicateHint}>
+                <MaterialIcons name="person-pin" size={16} color={colors.brand} />
+                <Text style={styles.duplicateHintText}>
+                  Existing customer matched: <Text style={{ fontWeight: '800' }}>{matchedCustomer}</Text>
+                </Text>
+              </View>
+            ) : null}
           </Card>
-          <Pressable accessibilityRole="button" accessibilityState={{expanded:moreDetails}}
-            onPress={()=>setMoreDetails(!moreDetails)} style={{minHeight:44,flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}>
-            <Text style={{fontWeight:'700'}}>More details</Text>
-            <MaterialIcons name={moreDetails?'expand-less':'expand-more'} size={22}/>
+
+          {/* Section 2: Service & Opportunity */}
+          <Card style={{ gap: 12 }}>
+            <Text style={ui.heading}>Inquiry & Opportunity</Text>
+
+            {Array.isArray(servicesRes.data?.services) && servicesRes.data.services.length > 0 ? (
+              <View style={{ gap: 6 }}>
+                <Text style={ui.label}>Quick Select Offering</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={[ui.row, { gap: 8 }]}>
+                    {servicesRes.data.services.slice(0, 12).map((svc) => {
+                      const active = service.trim().toLowerCase() === svc.name.trim().toLowerCase();
+                      return (
+                        <Chip
+                          key={svc.id}
+                          label={svc.name}
+                          selected={active}
+                          onPress={() => {
+                            setService(svc.name);
+                            if (!estimatedValue && svc.basePrice && svc.basePrice > 0) {
+                              setEstimatedValue(String(Math.round(svc.basePrice)));
+                            }
+                          }}
+                        />
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+            ) : null}
+
+            <Field
+              label="Interested In (Service / Product)"
+              value={service}
+              onChangeText={setService}
+              placeholder="e.g. Consultation, Deep Clean, Package..."
+            />
+
+            <Field
+              label={`Estimated Deal Value (${tenantCurrency})`}
+              value={estimatedValue}
+              onChangeText={(txt) => setEstimatedValue(txt.replace(/[^0-9.]/g, ''))}
+              keyboardType="numeric"
+              placeholder={tenantCurrency === 'INR' ? 'e.g. 2500' : 'e.g. 250'}
+            />
+
+            <View style={{ gap: 6 }}>
+              <Text style={ui.label}>Lead Source</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {LEAD_SOURCE_OPTIONS.map((opt) => (
+                  <Chip
+                    key={opt.id}
+                    label={opt.label}
+                    selected={leadSource === opt.id}
+                    onPress={() => setLeadSource(opt.id)}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={ui.label}>Priority</Text>
+              <View style={styles.priorityRow}>
+                {PRIORITY_OPTIONS.map((p) => {
+                  const isActive = priority === p.id;
+                  return (
+                    <Pressable
+                      key={p.id}
+                      accessibilityRole="button"
+                      onPress={() => setPriority(p.id)}
+                      style={[
+                        styles.priorityPill,
+                        isActive && {
+                          backgroundColor: p.activeBg,
+                          borderColor: p.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.priorityText,
+                          isActive && { color: p.activeText, fontWeight: '800' },
+                        ]}
+                      >
+                        {p.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </Card>
+
+          {/* Section 3: Optional Details */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: moreDetails }}
+            onPress={() => setMoreDetails(!moreDetails)}
+            style={styles.moreToggle}
+          >
+            <View style={[ui.row, { gap: 8 }]}>
+              <MaterialIcons name="tune" size={18} color={colors.brand} />
+              <Text style={{ fontWeight: '700', color: colors.ink }}>
+                More Details (Email, Location, Notes)
+              </Text>
+            </View>
+            <MaterialIcons
+              name={moreDetails ? 'expand-less' : 'expand-more'}
+              size={22}
+              color={colors.muted}
+            />
           </Pressable>
-          {moreDetails && <Card>
-            <Field label="Email (optional)" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" placeholder="name@example.com"/>
-            {attempted && invalidEmail && <Text style={{color:'#B42318'}}>Enter a valid email address or leave it blank.</Text>}
-            <Field label="Interested in (optional)" value={service} onChangeText={setService} placeholder="Service or product"/>
-          </Card>}
+
+          {moreDetails ? (
+            <Card style={{ gap: 12 }}>
+              <Field
+                label="Email (optional)"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+                placeholder="name@example.com"
+              />
+              {attempted && invalidEmail ? (
+                <Text style={styles.fieldError}>Enter a valid email address or leave it blank.</Text>
+              ) : null}
+              <Field
+                label="Location / Address (optional)"
+                value={address}
+                onChangeText={setAddress}
+                placeholder="Area, street, or city"
+              />
+              <Field
+                label="Inquiry Notes (optional)"
+                value={notes}
+                onChangeText={setNotes}
+                multiline
+                placeholder="Timing preferences, scope details, follow-up reminder..."
+              />
+            </Card>
+          ) : null}
         </Screen>
+
+        {/* Country Dial Code Picker */}
+        <Modal
+          visible={countryPickerOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setCountryPickerOpen(false)}
+        >
+          <Pressable
+            style={styles.countryBackdrop}
+            onPress={() => setCountryPickerOpen(false)}
+          >
+            <Pressable style={styles.countrySheet} onPress={() => {}}>
+              <View style={[ui.row, { justifyContent: 'space-between', marginBottom: 10 }]}>
+                <Text style={ui.heading}>Select Country Code</Text>
+                <Pressable onPress={() => setCountryPickerOpen(false)} hitSlop={8}>
+                  <MaterialIcons name="close" size={22} color={colors.muted} />
+                </Pressable>
+              </View>
+              <ScrollView style={{ maxHeight: 340 }}>
+                {COUNTRIES.map((c) => {
+                  const active = c.code === selectedCountry.code;
+                  return (
+                    <Pressable
+                      key={c.code}
+                      onPress={() => {
+                        setSelectedCountry(c);
+                        setCountryPickerOpen(false);
+                      }}
+                      style={[
+                        styles.countryRow,
+                        active && { backgroundColor: colors.brandSoft },
+                      ]}
+                    >
+                      <Text style={{ fontSize: 20 }}>{c.flag}</Text>
+                      <Text style={[styles.countryName, active && { color: colors.brand, fontWeight: '700' }]}>
+                        {c.name}
+                      </Text>
+                      <Text style={styles.countryDial}>+{c.callingCode}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </Modal>
 
       {/* Lead Detail & Stage Switcher Modal */}
@@ -395,6 +757,107 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  fieldError: {
+    color: '#B42318',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  countryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
+  countryCodeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  duplicateHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.brandSoft,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  duplicateHintText: {
+    fontSize: 12,
+    color: '#045B2F',
+    flex: 1,
+  },
+  priorityRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  priorityPill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
+  priorityText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.muted,
+  },
+  moreToggle: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingHorizontal: 14,
+  },
+  countryBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(7, 11, 45, 0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  countrySheet: {
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  countryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
+  countryName: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  countryDial: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.muted,
   },
 });
 

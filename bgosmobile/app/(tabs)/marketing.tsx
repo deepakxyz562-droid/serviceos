@@ -738,6 +738,7 @@ export default function MarketingScreen() {
   const aiPostSliderRef = useRef<ScrollViewInstance | null>(null);
   const [fullscreenPhotoUrl, setFullscreenPhotoUrl] = useState<string | null>(null);
   const [isRefreshingAiPosts, setIsRefreshingAiPosts] = useState(false);
+  const [publishingAiPostId, setPublishingAiPostId] = useState<string | null>(null);
   const [aiPostCategoryFilter, setAiPostCategoryFilter] = useState<'ALL' | 'OFFER' | 'STANDARD' | 'EVENT'>('ALL');
 
   useEffect(() => {
@@ -749,7 +750,15 @@ export default function MarketingScreen() {
   const handleRefreshAiPosts = useCallback(async () => {
     setIsRefreshingAiPosts(true);
     try {
-      await aiPostsRes.refresh();
+      const seed = Date.now();
+      const refreshed = await apiRequest<{ posts?: any[] }>(
+        `/api/social/ai-posts?refresh=1&seed=${seed}`,
+      );
+      if (Array.isArray(refreshed?.posts) && refreshed.posts.length > 0) {
+        setLocalAiPosts(refreshed.posts);
+      } else {
+        await aiPostsRes.refresh();
+      }
       if (aiPostSliderRef.current) {
         try {
           aiPostSliderRef.current.scrollTo({ x: 0, animated: true });
@@ -757,7 +766,10 @@ export default function MarketingScreen() {
       }
       setActiveAiPostIndex(0);
     } catch (err) {
-      console.warn('[handleRefreshAiPosts] failed:', err);
+      Alert.alert(
+        'Refresh Failed',
+        err instanceof Error ? err.message : 'Could not generate new posts right now.',
+      );
     } finally {
       setIsRefreshingAiPosts(false);
     }
@@ -768,9 +780,11 @@ export default function MarketingScreen() {
     return localAiPosts.filter((p) => p.postType === aiPostCategoryFilter);
   }, [localAiPosts, aiPostCategoryFilter]);
 
-  const handlePublishCardDirectly = useCallback(async (item: any) => {
+  const handlePublishCardDirectly = useCallback(async (item: any, idx?: number) => {
+    const postKey = String(item.id || `post_${idx ?? 0}`);
+    setPublishingAiPostId(postKey);
     try {
-      await apiRequest('/api/social/posts', {
+      const res = await apiRequest<{ success?: boolean; error?: string; message?: string }>('/api/social/posts', {
         method: 'POST',
         body: {
           content: item.content,
@@ -779,9 +793,17 @@ export default function MarketingScreen() {
           publishNow: true,
         },
       });
+      if (res && res.error) throw new Error(res.error);
       Alert.alert('Published!', `"${item.title}" has been published to Google Business Profile.`);
-    } catch {
-      Alert.alert('Post Scheduled', `"${item.title}" has been submitted for publishing.`);
+    } catch (err: unknown) {
+      Alert.alert(
+        'Publish Failed',
+        err instanceof Error
+          ? err.message
+          : `Could not publish "${item.title}" right now. Check your Google connection in Settings.`,
+      );
+    } finally {
+      setPublishingAiPostId(null);
     }
   }, []);
 
@@ -975,18 +997,22 @@ export default function MarketingScreen() {
   const [inspectMainFullscreen, setInspectMainFullscreen] = useState<false | 'poster' | 'photo'>(false);
   const [inspectSheetBgFullscreen, setInspectSheetBgFullscreen] = useState(false);
   const [lastBgGenPrompt, setLastBgGenPrompt] = useState('');
+  const [refPhotosError, setRefPhotosError] = useState<string | null>(null);
   useEffect(()=>()=>{generationEpoch.current++;},[]);
   const loadBusinessRefPhotos = useCallback(async () => {
     try {
       setRefPhotosLoading(true);
+      setRefPhotosError(null);
       const res = await apiRequest<{
         previousPhotos?: Array<{ id: string; url: string; title?: string; source?: string }>;
       }>('/api/social/ai-image-ideas?includeGoogle=1');
       if (Array.isArray(res?.previousPhotos)) {
         setRefPhotosList(res.previousPhotos.filter((p) => Boolean(p.url)));
       }
-    } catch {
-      // Non-blocking: reference photos are optional
+    } catch (err: unknown) {
+      setRefPhotosError(
+        err instanceof Error ? err.message : 'Could not load AI image ideas & business photos.',
+      );
     } finally {
       setRefPhotosLoading(false);
     }
@@ -3300,8 +3326,16 @@ export default function MarketingScreen() {
                         accessibilityState={{ selected: studioCreateTab === 'templates' }}
                         accessibilityLabel="Templates"
                       >
-                        <MaterialIcons name="grid-view" size={15} color={studioCreateTab === 'templates' ? '#009F50' : '#64748B'} />
-                        <Text style={[styles.createSegmentText, studioCreateTab === 'templates' && styles.createSegmentTextActive]}>
+                        <MaterialIcons
+                          name="grid-view"
+                          size={15}
+                          style={{ flexShrink: 0 }}
+                          color={studioCreateTab === 'templates' ? '#FFFFFF' : '#64748B'}
+                        />
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.createSegmentText, studioCreateTab === 'templates' && styles.createSegmentTextActive]}
+                        >
                           Templates
                         </Text>
                       </Pressable>
@@ -3313,8 +3347,16 @@ export default function MarketingScreen() {
                         accessibilityState={{ selected: studioCreateTab === 'ideas' }}
                         accessibilityLabel="AI Posts"
                       >
-                        <MaterialIcons name="auto-awesome" size={15} color={studioCreateTab === 'ideas' ? '#009F50' : '#64748B'} />
-                        <Text style={[styles.createSegmentText, studioCreateTab === 'ideas' && styles.createSegmentTextActive]}>
+                        <MaterialIcons
+                          name="auto-awesome"
+                          size={15}
+                          style={{ flexShrink: 0 }}
+                          color={studioCreateTab === 'ideas' ? '#FFFFFF' : '#64748B'}
+                        />
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.createSegmentText, studioCreateTab === 'ideas' && styles.createSegmentTextActive]}
+                        >
                           AI Posts
                         </Text>
                       </Pressable>
@@ -3326,8 +3368,16 @@ export default function MarketingScreen() {
                         accessibilityState={{ selected: studioCreateTab === 'search' }}
                         accessibilityLabel="Search templates"
                       >
-                        <MaterialIcons name="search" size={16} color={studioCreateTab === 'search' ? '#009F50' : '#64748B'} />
-                        <Text style={[styles.createSegmentText, studioCreateTab === 'search' && styles.createSegmentTextActive]}>
+                        <MaterialIcons
+                          name="search"
+                          size={15}
+                          style={{ flexShrink: 0 }}
+                          color={studioCreateTab === 'search' ? '#FFFFFF' : '#64748B'}
+                        />
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.createSegmentText, studioCreateTab === 'search' && styles.createSegmentTextActive]}
+                        >
                           Search
                         </Text>
                       </Pressable>
@@ -3342,8 +3392,16 @@ export default function MarketingScreen() {
                         accessibilityState={{ selected: studioCreateTab === 'drafts' }}
                         accessibilityLabel="Saved folders"
                       >
-                        <MaterialIcons name="folder-open" size={15} color={studioCreateTab === 'drafts' ? '#009F50' : '#64748B'} />
-                        <Text style={[styles.createSegmentText, studioCreateTab === 'drafts' && styles.createSegmentTextActive]}>
+                        <MaterialIcons
+                          name="folder-open"
+                          size={15}
+                          style={{ flexShrink: 0 }}
+                          color={studioCreateTab === 'drafts' ? '#FFFFFF' : '#64748B'}
+                        />
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.createSegmentText, studioCreateTab === 'drafts' && styles.createSegmentTextActive]}
+                        >
                           Folders
                         </Text>
                       </Pressable>
@@ -3397,89 +3455,121 @@ export default function MarketingScreen() {
                         />
                       </View>
                     ) : (
-                      /* ── 20 Auto-Generated Dynamic AI Posts Feed ── */
+                      /* ── Compact Branded AI Posts Feed ── */
                       <ScrollView
                         style={{ flex: 1 }}
-                        contentContainerStyle={{ paddingVertical: 14, paddingHorizontal: 12, paddingBottom: 110, gap: 14 }}
+                        contentContainerStyle={{ paddingVertical: 10, paddingHorizontal: 12, paddingBottom: 100, gap: 10 }}
                         keyboardShouldPersistTaps="handled"
                         showsVerticalScrollIndicator={false}
                       >
-                        {/* Sleek Top Header Bar */}
+                        {/* Compact Single-Row Title + Refresh Header */}
                         <View
                           style={{
                             flexDirection: 'row',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            paddingHorizontal: 4,
-                            paddingTop: 4,
-                            paddingBottom: 4,
+                            paddingHorizontal: 2,
                           }}
                         >
-                          <View style={{ flex: 1, paddingRight: 8 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <MaterialIcons name="auto-awesome" size={17} color="#009F50" />
-                              <Text style={{ fontSize: 16.5, fontWeight: '800', color: '#0F172A' }}>
-                                AI Generated Posts
-                              </Text>
-                              {filteredAiPosts.length > 0 && (
-                                <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}>
-                                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#166534' }}>
-                                    {activeAiPostIndex + 1} / {filteredAiPosts.length}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                            <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
-                              Branded social & Google Business Profile posts for {effectiveBusinessName}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                            <MaterialIcons name="auto-awesome" size={16} color="#009F50" />
+                            <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                              AI Posts
                             </Text>
+                            {filteredAiPosts.length > 0 && (
+                              <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}>
+                                <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#166534' }}>
+                                  {activeAiPostIndex + 1} / {filteredAiPosts.length}
+                                </Text>
+                              </View>
+                            )}
                           </View>
 
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Pressable
-                              onPress={() => void handleRefreshAiPosts()}
-                              disabled={isRefreshingAiPosts}
-                              hitSlop={8}
-                              style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 4,
-                                backgroundColor: isRefreshingAiPosts ? '#F1F5F9' : '#FFFFFF',
-                                borderWidth: 1,
-                                borderColor: '#E2E8F0',
-                                paddingHorizontal: 9,
-                                paddingVertical: 6,
-                                borderRadius: 8,
-                              }}
-                            >
-                              {isRefreshingAiPosts ? (
-                                <ActivityIndicator size="small" color="#009F50" />
-                              ) : (
-                                <MaterialIcons name="refresh" size={14} color="#0F172A" />
-                              )}
-                              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>
-                                {isRefreshingAiPosts ? 'Refreshing...' : 'Refresh'}
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Refresh AI posts"
+                            onPress={() => void handleRefreshAiPosts()}
+                            disabled={isRefreshingAiPosts}
+                            hitSlop={8}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 4,
+                              backgroundColor: isRefreshingAiPosts ? '#F1F5F9' : '#0F172A',
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderRadius: 16,
+                            }}
+                          >
+                            {isRefreshingAiPosts ? (
+                              <ActivityIndicator size={12} color="#009F50" />
+                            ) : (
+                              <MaterialIcons name="refresh" size={13} color="#FFFFFF" />
+                            )}
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: isRefreshingAiPosts ? '#475569' : '#FFFFFF' }}>
+                              {isRefreshingAiPosts ? 'Updating…' : 'New Ideas'}
+                            </Text>
+                          </Pressable>
+                        </View>
+
+                        {/* Sleek 1-Line Business Branding Bar */}
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: '#F8FAFC',
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                            borderRadius: 12,
+                            paddingHorizontal: 10,
+                            paddingVertical: 7,
+                            gap: 8,
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                            {effectiveBusinessLogo ? (
+                              <Image
+                                source={{ uri: effectiveBusinessLogo }}
+                                style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' }}
+                                resizeMode="contain"
+                              />
+                            ) : (
+                              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#009F50', alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF' }}>{userInitials}</Text>
+                              </View>
+                            )}
+                            <View style={{ flex: 1 }}>
+                              <Text numberOfLines={1} style={{ fontSize: 11.5, fontWeight: '800', color: '#0F172A' }}>
+                                {effectiveBusinessName}
                               </Text>
-                            </Pressable>
-
-                            <Pressable
-                              onPress={() => router.push('/logo-management' as any)}
-                              hitSlop={8}
-                              style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 4,
-                                backgroundColor: '#F0FDF4',
-                                borderWidth: 1,
-                                borderColor: '#BBF7D0',
-                                paddingHorizontal: 9,
-                                paddingVertical: 6,
-                                borderRadius: 8,
-                              }}
-                            >
-                              <MaterialIcons name="palette" size={14} color="#009F50" />
-                              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#009F50' }}>Branding</Text>
-                            </Pressable>
+                              {effectiveBusinessPhone ? (
+                                <Text numberOfLines={1} style={{ fontSize: 10, color: '#64748B' }}>
+                                  {effectiveBusinessPhone}
+                                </Text>
+                              ) : null}
+                            </View>
                           </View>
+
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Manage business branding"
+                            onPress={() => router.push('/logo-management' as any)}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 3,
+                              backgroundColor: '#FFFFFF',
+                              borderWidth: 1,
+                              borderColor: '#CBD5E1',
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 10,
+                            }}
+                          >
+                            <MaterialIcons name="palette" size={12} color="#009F50" />
+                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#0F172A' }}>Branding</Text>
+                          </Pressable>
                         </View>
 
                         {/* Category Filter Pills */}
@@ -3572,86 +3662,17 @@ export default function MarketingScreen() {
                                     style={{
                                       width: cardWidth,
                                       backgroundColor: '#FFFFFF',
-                                      borderRadius: 18,
+                                      borderRadius: 16,
                                       borderWidth: 1,
                                       borderColor: '#E2E8F0',
                                       overflow: 'hidden',
                                       shadowColor: '#000',
-                                      shadowOpacity: 0.07,
-                                      shadowRadius: 10,
-                                      elevation: 3,
+                                      shadowOpacity: 0.06,
+                                      shadowRadius: 8,
+                                      elevation: 2,
                                     }}
                                   >
-                                    {/* ── Business Identity Header Row ── */}
-                                    <View
-                                      style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        paddingHorizontal: 12,
-                                        paddingVertical: 10,
-                                        backgroundColor: '#F8FAFC',
-                                        borderBottomWidth: 1,
-                                        borderBottomColor: '#F1F5F9',
-                                      }}
-                                    >
-                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, paddingRight: 8 }}>
-                                        {postLogo ? (
-                                          <Image
-                                            source={{ uri: postLogo }}
-                                            style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' }}
-                                            resizeMode="contain"
-                                          />
-                                        ) : (
-                                          <View
-                                            style={{
-                                              width: 34,
-                                              height: 34,
-                                              borderRadius: 17,
-                                              backgroundColor: '#009F50',
-                                              alignItems: 'center',
-                                              justifyContent: 'center',
-                                            }}
-                                          >
-                                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-                                              {userInitials}
-                                            </Text>
-                                          </View>
-                                        )}
-                                        <View style={{ flex: 1 }}>
-                                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                            <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
-                                              {postBizName}
-                                            </Text>
-                                            <MaterialIcons name="verified" size={14} color="#009F50" />
-                                          </View>
-                                          <Text numberOfLines={1} style={{ fontSize: 10.5, color: '#64748B' }}>
-                                            Google Business Post • #{idx + 1}
-                                          </Text>
-                                        </View>
-                                      </View>
-
-                                      <View
-                                        style={{
-                                          paddingHorizontal: 8,
-                                          paddingVertical: 3,
-                                          borderRadius: 8,
-                                          backgroundColor: item.postType === 'OFFER' ? '#FEF3C7' : item.postType === 'EVENT' ? '#F3E8FF' : '#DCFCE7',
-                                        }}
-                                      >
-                                        <Text
-                                          style={{
-                                            fontSize: 10.5,
-                                            fontWeight: '800',
-                                            color: item.postType === 'OFFER' ? '#92400E' : item.postType === 'EVENT' ? '#6B21A8' : '#166534',
-                                          }}
-                                        >
-                                          {item.badge || 'Standard Post'}
-                                        </Text>
-                                      </View>
-                                    </View>
-
-                                    {/* ── Card Hero Image with Brand Watermark Overlay ── */}
+                                    {/* ── Compact Visual Hero ── */}
                                     {item.imageUrl ? (
                                       <Pressable
                                         onPress={() => {
@@ -3671,113 +3692,88 @@ export default function MarketingScreen() {
                                             businessName: postBizName,
                                           });
                                         }}
-                                        style={{ width: '100%', height: 185, backgroundColor: '#0F172A', position: 'relative' }}
+                                        style={{ width: '100%', height: 148, backgroundColor: '#0F172A', position: 'relative' }}
                                       >
                                         <Image source={{ uri: item.imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
 
-                                        {/* Top-Left Frosted Watermark Pill (Logo + Business Name) */}
                                         <View
                                           style={{
                                             position: 'absolute',
-                                            top: 10,
-                                            left: 10,
-                                            backgroundColor: 'rgba(15, 23, 42, 0.82)',
+                                            top: 8,
+                                            left: 8,
                                             paddingHorizontal: 8,
-                                            paddingVertical: 4,
-                                            borderRadius: 14,
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            gap: 5,
-                                            maxWidth: '70%',
+                                            paddingVertical: 3,
+                                            borderRadius: 8,
+                                            backgroundColor: item.postType === 'OFFER' ? '#FEF3C7' : item.postType === 'EVENT' ? '#F3E8FF' : '#DCFCE7',
                                           }}
                                         >
-                                          {postLogo ? (
-                                            <Image
-                                              source={{ uri: postLogo }}
-                                              style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#FFFFFF' }}
-                                              resizeMode="contain"
-                                            />
-                                          ) : (
-                                            <MaterialIcons name="storefront" size={13} color="#4ADE80" />
-                                          )}
-                                          <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
-                                            {postBizName}
+                                          <Text
+                                            style={{
+                                              fontSize: 10,
+                                              fontWeight: '800',
+                                              color: item.postType === 'OFFER' ? '#92400E' : item.postType === 'EVENT' ? '#6B21A8' : '#166534',
+                                            }}
+                                          >
+                                            {item.badge || 'Standard Post'}
                                           </Text>
                                         </View>
 
-                                        {/* Top-Right Counter Pill */}
                                         <View
                                           style={{
                                             position: 'absolute',
-                                            top: 10,
-                                            right: 10,
-                                            backgroundColor: 'rgba(15, 23, 42, 0.82)',
-                                            paddingHorizontal: 8,
-                                            paddingVertical: 4,
-                                            borderRadius: 14,
+                                            top: 8,
+                                            right: 8,
+                                            backgroundColor: 'rgba(15, 23, 42, 0.78)',
+                                            paddingHorizontal: 7,
+                                            paddingVertical: 3,
+                                            borderRadius: 10,
                                           }}
                                         >
-                                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' }}>
-                                            {idx + 1} / {filteredAiPosts.length}
+                                          <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF' }}>
+                                            {idx + 1}/{filteredAiPosts.length}
                                           </Text>
                                         </View>
 
-                                        {/* Bottom Scrim with Contact Callout */}
                                         <View
                                           style={{
                                             position: 'absolute',
-                                            bottom: 0,
-                                            left: 0,
-                                            right: 0,
-                                            backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                                            paddingHorizontal: 12,
-                                            paddingVertical: 5,
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
+                                            bottom: 8,
+                                            right: 8,
+                                            backgroundColor: '#009F50',
+                                            paddingHorizontal: 8,
+                                            paddingVertical: 3,
+                                            borderRadius: 7,
                                           }}
                                         >
-                                          <Text numberOfLines={1} style={{ fontSize: 10.5, fontWeight: '700', color: '#F1F5F9', flex: 1 }}>
-                                            📞 {item.phone || effectiveBusinessPhone || 'Verified Local Store'}
+                                          <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#FFFFFF' }}>
+                                            {item.ctaText || 'CALL'}
                                           </Text>
-                                          <View style={{ backgroundColor: '#009F50', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF' }}>
-                                              {item.ctaText || 'CALL'}
-                                            </Text>
-                                          </View>
                                         </View>
                                       </Pressable>
                                     ) : null}
 
-                                    {/* ── Card Content Body ── */}
-                                    <View style={{ padding: 14, gap: 8 }}>
-                                      {/* Bold H1 SEO Headline */}
-                                      <Text numberOfLines={2} style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', lineHeight: 21 }}>
+                                    {/* ── Scannable Card Content Body ── */}
+                                    <View style={{ padding: 12, gap: 6 }}>
+                                      <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', lineHeight: 19 }}>
                                         {item.title}
                                       </Text>
 
-                                      {/* Engaging Intro Snippet */}
                                       {item.intro ? (
-                                        <Text numberOfLines={2} style={{ fontSize: 12, color: '#475569', lineHeight: 17 }}>
+                                        <Text numberOfLines={2} style={{ fontSize: 11.5, color: '#475569', lineHeight: 16 }}>
                                           {item.intro}
                                         </Text>
                                       ) : null}
 
-                                      {/* Bullets Snippet with Green Checkmarks */}
                                       {item.bullets && item.bullets.length > 0 && (
-                                        <View style={{ gap: 4, marginVertical: 2 }}>
-                                          {item.bullets.slice(0, 2).map((b: string, bIdx: number) => (
-                                            <View key={`b-${bIdx}`} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
-                                              <Text style={{ fontSize: 12, fontWeight: '900', color: '#009F50' }}>✓</Text>
-                                              <Text numberOfLines={1} style={{ fontSize: 11.5, color: '#334155', flex: 1 }}>
-                                                {b}
-                                              </Text>
-                                            </View>
-                                          ))}
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 }}>
+                                          <MaterialIcons name="check-circle" size={12} color="#009F50" />
+                                          <Text numberOfLines={1} style={{ fontSize: 11, color: '#334155', flex: 1 }}>
+                                            {item.bullets[0]}
+                                          </Text>
                                         </View>
                                       )}
 
-                                      {/* ── 1-Tap Quick Action Toolbar ── */}
+                                      {/* ── Action Toolbar ── */}
                                       <View
                                         style={{
                                           flexDirection: 'row',
@@ -3790,9 +3786,9 @@ export default function MarketingScreen() {
                                           gap: 6,
                                         }}
                                       >
-                                        {/* Direct 1-Tap Publish to Google */}
                                         <Pressable
-                                          onPress={() => void handlePublishCardDirectly(item)}
+                                          disabled={publishingAiPostId === String(item.id || `post_${idx}`)}
+                                          onPress={() => void handlePublishCardDirectly(item, idx)}
                                           hitSlop={6}
                                           style={{
                                             flexDirection: 'row',
@@ -3804,11 +3800,16 @@ export default function MarketingScreen() {
                                             borderRadius: 8,
                                             flex: 1,
                                             justifyContent: 'center',
+                                            opacity: publishingAiPostId === String(item.id || `post_${idx}`) ? 0.65 : 1,
                                           }}
                                         >
-                                          <MaterialIcons name="send" size={13} color="#FFFFFF" />
+                                          {publishingAiPostId === String(item.id || `post_${idx}`) ? (
+                                            <ActivityIndicator size={12} color="#FFFFFF" />
+                                          ) : (
+                                            <MaterialIcons name="send" size={13} color="#FFFFFF" />
+                                          )}
                                           <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>
-                                            Publish Now
+                                            {publishingAiPostId === String(item.id || `post_${idx}`) ? 'Publishing…' : 'Publish'}
                                           </Text>
                                         </Pressable>
 
@@ -5288,36 +5289,43 @@ export default function MarketingScreen() {
                           </Pressable>
                         </View>
                       </View>
-                      {refPhotosList.length > 0 ? (
+                      {refPhotosError ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 }}>
+                          <Text style={{ flex: 1, fontSize: 11, color: '#B91C1C' }} numberOfLines={2}>
+                            {refPhotosError}
+                          </Text>
+                          <Pressable onPress={() => void loadBusinessRefPhotos()}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED' }}>Retry</Text>
+                          </Pressable>
+                        </View>
+                      ) : refPhotosList.length > 0 ? (
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                           {refPhotosList.map((refItem) => {
                             const active = selectedRefUrls.includes(refItem.url);
                             return (
-                              <Pressable
-                                key={refItem.id}
-                                onPress={() => toggleRefPhoto(refItem.url)}
-                                style={{
-                                  width: 58,
-                                  height: 58,
-                                  borderRadius: 9,
-                                  overflow: 'hidden',
-                                  borderWidth: active ? 2.5 : 1,
-                                  borderColor: active ? '#009F50' : '#CBD5E1',
-                                  backgroundColor: '#E2E8F0',
-                                }}
-                              >
-                                <Image source={{ uri: refItem.url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                                {active ? (
-                                  <View style={{ position: 'absolute', top: 3, right: 3, backgroundColor: '#009F50', borderRadius: 8, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
-                                    <MaterialIcons name="check" size={11} color="#FFFFFF" />
-                                  </View>
-                                ) : null}
+                              <View key={refItem.id} style={{ position: 'relative', width: 58, height: 58 }}>
+                                <Pressable
+                                  onPress={() => toggleRefPhoto(refItem.url)}
+                                  style={{
+                                    width: 58,
+                                    height: 58,
+                                    borderRadius: 9,
+                                    overflow: 'hidden',
+                                    borderWidth: active ? 2.5 : 1,
+                                    borderColor: active ? '#009F50' : '#CBD5E1',
+                                    backgroundColor: '#E2E8F0',
+                                  }}
+                                >
+                                  <Image source={{ uri: refItem.url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                  {active ? (
+                                    <View style={{ position: 'absolute', top: 3, right: 3, backgroundColor: '#009F50', borderRadius: 8, width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+                                      <MaterialIcons name="check" size={11} color="#FFFFFF" />
+                                    </View>
+                                  ) : null}
+                                </Pressable>
                                 <Pressable
                                   hitSlop={8}
-                                  onPress={(e) => {
-                                    e.stopPropagation?.();
-                                    setFullscreenPhotoUrl(refItem.url);
-                                  }}
+                                  onPress={() => setFullscreenPhotoUrl(refItem.url)}
                                   style={{
                                     position: 'absolute',
                                     bottom: 2,
@@ -5329,7 +5337,7 @@ export default function MarketingScreen() {
                                 >
                                   <MaterialIcons name="fullscreen" size={13} color="#FFFFFF" />
                                 </Pressable>
-                              </Pressable>
+                              </View>
                             );
                           })}
                         </ScrollView>
@@ -5949,30 +5957,28 @@ export default function MarketingScreen() {
                         {refPhotosList.map((refItem) => {
                           const active = selectedRefUrls.includes(refItem.url);
                           return (
-                            <Pressable
-                              key={refItem.id}
-                              onPress={() => toggleRefPhoto(refItem.url)}
-                              style={{
-                                width: 54,
-                                height: 54,
-                                borderRadius: 8,
-                                overflow: 'hidden',
-                                borderWidth: active ? 2.5 : 1,
-                                borderColor: active ? '#009F50' : '#CBD5E1',
-                              }}
-                            >
-                              <Image source={{ uri: refItem.url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                              {active ? (
-                                <View style={{ position: 'absolute', top: 3, right: 3, backgroundColor: '#009F50', borderRadius: 8, width: 15, height: 15, alignItems: 'center', justifyContent: 'center' }}>
-                                  <MaterialIcons name="check" size={10} color="#FFFFFF" />
-                                </View>
-                              ) : null}
+                            <View key={refItem.id} style={{ position: 'relative', width: 54, height: 54 }}>
+                              <Pressable
+                                onPress={() => toggleRefPhoto(refItem.url)}
+                                style={{
+                                  width: 54,
+                                  height: 54,
+                                  borderRadius: 8,
+                                  overflow: 'hidden',
+                                  borderWidth: active ? 2.5 : 1,
+                                  borderColor: active ? '#009F50' : '#CBD5E1',
+                                }}
+                              >
+                                <Image source={{ uri: refItem.url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                {active ? (
+                                  <View style={{ position: 'absolute', top: 3, right: 3, backgroundColor: '#009F50', borderRadius: 8, width: 15, height: 15, alignItems: 'center', justifyContent: 'center' }}>
+                                    <MaterialIcons name="check" size={10} color="#FFFFFF" />
+                                  </View>
+                                ) : null}
+                              </Pressable>
                               <Pressable
                                 hitSlop={8}
-                                onPress={(e) => {
-                                  e.stopPropagation?.();
-                                  setFullscreenPhotoUrl(refItem.url);
-                                }}
+                                onPress={() => setFullscreenPhotoUrl(refItem.url)}
                                 style={{
                                   position: 'absolute',
                                   bottom: 2,
@@ -5984,7 +5990,7 @@ export default function MarketingScreen() {
                               >
                                 <MaterialIcons name="fullscreen" size={12} color="#FFFFFF" />
                               </Pressable>
-                            </Pressable>
+                            </View>
                           );
                         })}
                       </ScrollView>
@@ -6326,7 +6332,7 @@ const styles = StyleSheet.create({
   createSegmentWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 6,
     paddingHorizontal: 10,
     paddingTop: 8,
     paddingBottom: 6,
@@ -6400,9 +6406,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    height: 38,
-    paddingHorizontal: 4,
+    gap: 5,
+    minHeight: 38,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
     borderRadius: 10,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
@@ -6422,7 +6429,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: 11,
     fontWeight: '800',
-    color: '#64748B',
+    color: '#475569',
   },
   createSegmentTextActive: {
     color: '#FFFFFF',

@@ -5,6 +5,7 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
+  RefreshControl,
   Share,
   Alert,
   Linking,
@@ -25,6 +26,7 @@ interface MetricDelta {
   value: number;
   prevValue: number;
   deltaPct: number;
+  hasBaseline?: boolean;
 }
 
 interface KeywordUsedItem {
@@ -44,6 +46,8 @@ interface ReportData {
   businessPhone: string;
   storeId?: string;
   appVersion: string;
+  isConnected?: boolean;
+  trendsAvailable?: boolean;
   period: {
     key: string;
     label: string;
@@ -91,6 +95,18 @@ interface ReportData {
     totalReviews: number;
     responseRate: number;
   };
+  reviewTrends?: {
+    avgReviewsPerWeek: number;
+    industryAvg: number;
+    weeks: Array<{ label: string; count: number }>;
+    deltaPct8Weeks: number | null;
+  };
+  sixMonthTrends?: {
+    months: string[];
+    views: number[];
+    calls: number[];
+    directions: number[];
+  };
   aiExecutiveSummary: string;
 }
 
@@ -100,6 +116,9 @@ export default function GrowthReportScreen() {
   const screenWidth = Dimensions.get('window').width;
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [period, setPeriod] = useState<'last_month' | 'this_month'>('last_month');
   const [activeTab, setActiveTab] = useState<'action' | 'performance'>('action');
   const [summaryPage, setSummaryPage] = useState(0);
@@ -108,8 +127,8 @@ export default function GrowthReportScreen() {
   const analyticsData = useMemo(() => {
     if (!report) return undefined;
     return {
-      isConnected: true,
-      isLiveGoogleApi: true,
+      isConnected: Boolean(report.isConnected),
+      isLiveGoogleApi: Boolean(report.trendsAvailable),
       metrics: {
         totalViews:
           report.performanceReport.totalViews ||
@@ -122,23 +141,33 @@ export default function GrowthReportScreen() {
         totalReviews: report.reputationSummary.totalReviews,
         avgRating: report.reputationSummary.avgRating,
         responseRate: report.reputationSummary.responseRate,
-        reviewsDeltaPct8Wks: -100,
+        reviewsDeltaPct8Wks: report.reviewTrends?.deltaPct8Weeks ?? null,
       },
-      reviewTrends: (report as any).reviewTrends,
-      sixMonthTrends: (report as any).sixMonthTrends,
-      trendsAvailable: true,
+      reviewTrends: report.reviewTrends,
+      sixMonthTrends: report.sixMonthTrends,
+      trendsAvailable: Boolean(report.trendsAvailable),
     };
   }, [report]);
 
-  const loadReport = async (p = period) => {
-    setLoading(true);
+  const loadReport = async (p = period, isPullRefresh = false) => {
+    if (isPullRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setErrorMsg(null);
     try {
       const data = await apiRequest<ReportData>(`/api/bgos/reports/4-tier?period=${p}`);
       setReport(data);
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to load growth report');
+      const msg = e?.message || 'Failed to load growth report';
+      setErrorMsg(msg);
+      if (!report) {
+        Alert.alert('Error', msg);
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -149,6 +178,8 @@ export default function GrowthReportScreen() {
   const [sendingWa, setSendingWa] = useState(false);
 
   const handleDownload9PagePdf = async () => {
+    if (downloadingPdf) return;
+    setDownloadingPdf(true);
     try {
       const token = await getToken();
       const pdfUrl = `${WEB_URL}/api/bgos/reports/monthly-pdf${
@@ -157,6 +188,8 @@ export default function GrowthReportScreen() {
       await WebBrowser.openBrowserAsync(pdfUrl);
     } catch (err: any) {
       Alert.alert('Download Error', err?.message || 'Could not open 9-page PDF report.');
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -212,22 +245,76 @@ export default function GrowthReportScreen() {
 
   const page2Items = useMemo(() => {
     if (!report) return [];
+    const postTarget = Math.max(1, report.actionReport.seoPostPublished.target || 0);
+    const postAchievedPct = Math.round((report.actionReport.seoPostPublished.achieved / postTarget) * 100);
+    const mediaTarget = Math.max(1, report.actionReport.mediaUploaded.target || 0);
+    const mediaAchievedPct = Math.round((report.actionReport.mediaUploaded.achieved / mediaTarget) * 100);
+
     return [
       { id: 'calls', label: 'Calls', icon: 'phone' as const, ...report.summary.calls },
-      { id: 'engagement', label: 'Engagement', icon: 'thumb-up' as const, value: `${report.summary.engagementRate.value}%`, prevValue: `${report.summary.engagementRate.prevValue}%`, deltaPct: report.summary.engagementRate.deltaPct },
+      {
+        id: 'engagement',
+        label: 'Engagement',
+        icon: 'thumb-up' as const,
+        value: `${report.summary.engagementRate.value}%`,
+        prevValue: `${report.summary.engagementRate.prevValue}%`,
+        deltaPct: report.summary.engagementRate.deltaPct,
+        hasBaseline: report.summary.engagementRate.hasBaseline,
+      },
       { id: 'website', label: 'Website Visits', icon: 'language' as const, ...report.summary.websiteVisits },
-      { id: 'total_views', label: 'Total Impressions', icon: 'remove-red-eye' as const, value: report.performanceReport.totalViews, prevValue: 0, deltaPct: 0 },
-      { id: 'post_target', label: 'Posts Target', icon: 'flag' as const, value: report.actionReport.seoPostPublished.target, prevValue: 0, deltaPct: 0 },
-      { id: 'media_target', label: 'Media Target', icon: 'photo-library' as const, value: report.actionReport.mediaUploaded.target, prevValue: 0, deltaPct: 0 },
+      {
+        id: 'search_impr',
+        label: 'Search Views',
+        icon: 'search' as const,
+        value: report.performanceReport.searchImpressions,
+        prevValue: 0,
+        deltaPct: 0,
+        badgeLabel: 'Google Search',
+      },
+      {
+        id: 'post_target',
+        label: 'Post Goal Hit',
+        icon: 'flag' as const,
+        value: `${report.actionReport.seoPostPublished.achieved}/${report.actionReport.seoPostPublished.target}`,
+        prevValue: 0,
+        deltaPct: 0,
+        badgeLabel: `${Math.min(100, postAchievedPct)}%`,
+        badgePositive: postAchievedPct >= 75,
+      },
+      {
+        id: 'media_target',
+        label: 'Media Goal Hit',
+        icon: 'photo-library' as const,
+        value: `${report.actionReport.mediaUploaded.achieved}/${report.actionReport.mediaUploaded.target}`,
+        prevValue: 0,
+        deltaPct: 0,
+        badgeLabel: `${Math.min(100, mediaAchievedPct)}%`,
+        badgePositive: mediaAchievedPct >= 75,
+      },
     ];
   }, [report]);
 
   const renderMetricTile = (item: any) => {
-    const delta = item.deltaPct || 0;
-    const isUp = delta > 0;
-    const isDown = delta < 0;
-    const deltaColor = isDown ? '#DC2626' : isUp ? '#16A34A' : '#94A3B8';
-    const arrow = isDown ? '▼ ' : isUp ? '▲ ' : '';
+    const delta = typeof item.deltaPct === 'number' ? item.deltaPct : 0;
+    const hasBaseline = item.hasBaseline !== false && (item.prevValue > 0 || delta !== 0);
+    const isUp = hasBaseline && delta > 0;
+    const isDown = hasBaseline && delta < 0;
+
+    let badgeText = hasBaseline ? `${delta.toFixed(1)}%` : '—';
+    let badgeColor = '#64748B';
+    let badgeBg = '#F1F5F9';
+
+    if (item.badgeLabel) {
+      badgeText = item.badgeLabel;
+      badgeColor = item.badgePositive ? '#16A34A' : '#475569';
+      badgeBg = item.badgePositive ? '#DCFCE7' : '#F1F5F9';
+    } else if (isUp) {
+      badgeColor = '#16A34A';
+      badgeBg = '#DCFCE7';
+    } else if (isDown) {
+      badgeColor = '#DC2626';
+      badgeBg = '#FEE2E2';
+    }
 
     return (
       <View
@@ -239,7 +326,7 @@ export default function GrowthReportScreen() {
       >
         <View style={styles.tileHeader}>
           <View style={styles.tileIconCircle}>
-            <MaterialIcons name={item.icon} size={16} color="#3B82F6" />
+            <MaterialIcons name={item.icon} size={16} color="#2563EB" />
           </View>
           <Text style={styles.tileLabel} numberOfLines={1}>
             {item.label}
@@ -250,12 +337,15 @@ export default function GrowthReportScreen() {
           <Text style={styles.tileValue}>
             {typeof item.value === 'number' ? item.value.toLocaleString() : item.value}
           </Text>
-          <View style={styles.tileDeltaRow}>
-            {isDown && <MaterialIcons name="arrow-drop-down" size={16} color="#DC2626" style={{ marginRight: -3 }} />}
-            {isUp && <MaterialIcons name="arrow-drop-up" size={16} color="#16A34A" style={{ marginRight: -3 }} />}
-            <Text style={[styles.tileDeltaText, { color: deltaColor }]}>
-              {delta >= 0 && !isUp ? '' : ''}
-              {delta.toFixed(1)}%
+          <View style={[styles.tileDeltaPill, { backgroundColor: badgeBg }]}>
+            {isDown && !item.badgeLabel ? (
+              <MaterialIcons name="arrow-drop-down" size={14} color={badgeColor} style={{ marginLeft: -3, marginRight: -2 }} />
+            ) : null}
+            {isUp && !item.badgeLabel ? (
+              <MaterialIcons name="arrow-drop-up" size={14} color={badgeColor} style={{ marginLeft: -3, marginRight: -2 }} />
+            ) : null}
+            <Text style={[styles.tileDeltaText, { color: badgeColor }]}>
+              {badgeText}
             </Text>
           </View>
         </View>
@@ -263,11 +353,17 @@ export default function GrowthReportScreen() {
     );
   };
 
-  // Find max value in SEO post published weeks for scaling bar chart
-  const maxWeekPosts = useMemo(() => {
-    if (!report?.actionReport?.seoPostPublished?.weeks) return 10;
-    const vals = report.actionReport.seoPostPublished.weeks.flatMap((w) => [w.target, w.achieved]);
-    return Math.max(...vals, 8);
+  // Scale SEO Post Published Y-axis dynamically from real target/achieved values
+  const { yAxisTop, yAxisTicks } = useMemo(() => {
+    const weeks = report?.actionReport?.seoPostPublished?.weeks || [];
+    const vals = weeks.flatMap((w) => [w.target, w.achieved]);
+    const rawMax = Math.max(...vals, 4);
+    const step = Math.max(1, Math.ceil(rawMax / 4));
+    const top = step * 4;
+    return {
+      yAxisTop: top,
+      yAxisTicks: [top, step * 3, step * 2, step, 0],
+    };
   }, [report]);
 
   return (
@@ -305,10 +401,15 @@ export default function GrowthReportScreen() {
           accessibilityRole="button"
           accessibilityLabel="Download Report"
           onPress={handleDownload9PagePdf}
-          style={({ pressed }) => [styles.downloadButton, { opacity: pressed ? 0.75 : 1 }]}
+          disabled={downloadingPdf}
+          style={({ pressed }) => [styles.downloadButton, { opacity: pressed || downloadingPdf ? 0.75 : 1 }]}
         >
-          <MaterialIcons name="picture-as-pdf" size={16} color="#0F172A" />
-          <Text style={styles.downloadButtonText}>PDF Report</Text>
+          {downloadingPdf ? (
+            <ActivityIndicator size="small" color="#0F172A" />
+          ) : (
+            <MaterialIcons name="picture-as-pdf" size={16} color="#0F172A" />
+          )}
+          <Text style={styles.downloadButtonText}>{downloadingPdf ? 'Opening...' : 'PDF Report'}</Text>
         </Pressable>
       </View>
 
@@ -318,11 +419,29 @@ export default function GrowthReportScreen() {
           <ActivityIndicator size="large" color="#2563EB" />
           <Text style={styles.loadingText}>Loading performance report...</Text>
         </View>
+      ) : errorMsg && !report ? (
+        <View style={styles.loadingContainer}>
+          <MaterialIcons name="error-outline" size={34} color="#DC2626" />
+          <Text style={[styles.loadingText, { color: '#0F172A', textAlign: 'center' }]}>{errorMsg}</Text>
+          <Pressable
+            onPress={() => loadReport(period)}
+            style={{ backgroundColor: '#2563EB', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10, marginTop: 6 }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Retry</Text>
+          </Pressable>
+        </View>
       ) : (
         <ScrollView
           style={styles.scrollBody}
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) + 20 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => loadReport(period, true)}
+              tintColor="#2563EB"
+            />
+          }
         >
           {/* ── 9-Page Monthly Report Card ── */}
           <View style={{ backgroundColor: '#0A0F1D', borderRadius: 16, padding: 16, marginHorizontal: 16, marginTop: 12, marginBottom: 16 }}>
@@ -348,6 +467,7 @@ export default function GrowthReportScreen() {
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable
                 onPress={handleDownload9PagePdf}
+                disabled={downloadingPdf}
                 style={{
                   flex: 1,
                   flexDirection: 'row',
@@ -357,10 +477,13 @@ export default function GrowthReportScreen() {
                   backgroundColor: '#FFFFFF',
                   paddingVertical: 10,
                   borderRadius: 10,
+                  opacity: downloadingPdf ? 0.75 : 1,
                 }}
               >
                 <MaterialIcons name="picture-as-pdf" size={16} color="#0F172A" />
-                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>View 9-Page PDF</Text>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>
+                  {downloadingPdf ? 'Opening PDF...' : 'View 9-Page PDF'}
+                </Text>
               </Pressable>
 
               <Pressable
@@ -385,14 +508,32 @@ export default function GrowthReportScreen() {
             </View>
           </View>
 
-          {/* ── Performance Summary Heading ── */}
+          {/* ── Performance Summary Heading + Clean Period Selector ── */}
           <View style={styles.sectionHeadingRow}>
-            <Text style={styles.sectionHeadingMain}>
-              {report?.period.label || 'Performance Summary'}{' '}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionHeadingMain}>
+                {report?.period.label || 'Performance Summary'}
+              </Text>
               <Text style={styles.sectionHeadingSub}>
                 {report?.period.comparisonLabel || '(vs Previous)'}
               </Text>
-            </Text>
+            </View>
+            <View style={styles.periodPillGroup}>
+              {(['last_month', 'this_month'] as const).map((pKey) => {
+                const selected = period === pKey;
+                return (
+                  <Pressable
+                    key={pKey}
+                    onPress={() => setPeriod(pKey)}
+                    style={[styles.periodChip, selected ? styles.periodChipActive : null]}
+                  >
+                    <Text style={[styles.periodChipText, selected ? styles.periodChipTextActive : null]}>
+                      {pKey === 'last_month' ? 'Last Month' : 'This Month'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
 
           {/* ── Swipeable 2-Row Grid ── */}
@@ -531,12 +672,16 @@ export default function GrowthReportScreen() {
               <View style={styles.sectionCard}>
                 <View style={styles.cardHeaderRow}>
                   <Text style={styles.cardHeaderTitle}>SEO Post Published</Text>
-                  <View style={styles.filterPill}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setPeriod(period === 'last_month' ? 'this_month' : 'last_month')}
+                    style={styles.filterPill}
+                  >
                     <MaterialIcons name="filter-list" size={14} color="#E11D48" />
                     <Text style={styles.filterPillText}>
                       {period === 'last_month' ? 'Last Month' : 'This Month'}
                     </Text>
-                  </View>
+                  </Pressable>
                 </View>
 
                 {/* Legend Row */}
@@ -551,30 +696,32 @@ export default function GrowthReportScreen() {
                   </View>
                 </View>
 
-                {/* Weekly Bar Chart Progress */}
+                {/* Weekly Bar Chart Progress (Dynamic Y-Axis) */}
                 <View style={styles.chartContainer}>
-                  {/* Y-Axis Guidelines */}
                   <View style={styles.yAxisContainer}>
-                    <Text style={styles.axisLabel}>14</Text>
-                    <Text style={styles.axisLabel}>12</Text>
-                    <Text style={styles.axisLabel}>8</Text>
-                    <Text style={styles.axisLabel}>4</Text>
-                    <Text style={styles.axisLabel}>0</Text>
+                    {yAxisTicks.map((tick) => (
+                      <Text key={tick} style={styles.axisLabel}>
+                        {tick}
+                      </Text>
+                    ))}
                   </View>
 
-                  {/* Bars per Week */}
                   <View style={styles.barsArea}>
                     {(report?.actionReport.seoPostPublished.weeks || []).map((w) => {
-                      const targetH = Math.min(100, Math.round((w.target / maxWeekPosts) * 110));
-                      const achievedH = Math.min(100, Math.round((w.achieved / maxWeekPosts) * 110));
+                      const targetH = Math.min(104, Math.max(4, Math.round((w.target / Math.max(1, yAxisTop)) * 104)));
+                      const achievedH = Math.min(104, Math.max(w.achieved > 0 ? 6 : 3, Math.round((w.achieved / Math.max(1, yAxisTop)) * 104)));
 
                       return (
                         <View key={w.label} style={styles.weekBarCol}>
                           <View style={styles.barsGroup}>
-                            {/* Target Bar */}
-                            <View style={[styles.singleBar, { height: targetH, backgroundColor: '#93C5FD' }]} />
-                            {/* Achieved Bar */}
-                            <View style={[styles.singleBar, { height: achievedH, backgroundColor: '#2563EB' }]} />
+                            <View style={{ alignItems: 'center', gap: 2 }}>
+                              <Text style={{ fontSize: 9, fontWeight: '700', color: '#64748B' }}>{w.target}</Text>
+                              <View style={[styles.singleBar, { height: targetH, backgroundColor: '#93C5FD' }]} />
+                            </View>
+                            <View style={{ alignItems: 'center', gap: 2 }}>
+                              <Text style={{ fontSize: 9, fontWeight: '800', color: '#2563EB' }}>{w.achieved}</Text>
+                              <View style={[styles.singleBar, { height: achievedH, backgroundColor: '#2563EB' }]} />
+                            </View>
                           </View>
                           <Text style={styles.weekColLabel}>{w.label}</Text>
                         </View>
@@ -616,11 +763,25 @@ export default function GrowthReportScreen() {
                   <Text style={styles.actionTargetVal}>
                     {report?.actionReport.mediaUploaded.achieved} / {report?.actionReport.mediaUploaded.target}
                   </Text>
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${Math.min(100, Math.round(((report?.actionReport.mediaUploaded.achieved || 0) / Math.max(1, report?.actionReport.mediaUploaded.target || 1)) * 100))}%`,
+                          backgroundColor: '#7C3AED',
+                        },
+                      ]}
+                    />
+                  </View>
                   <Text style={styles.actionTargetSub}>
-                    {Math.round(
-                      ((report?.actionReport.mediaUploaded.achieved || 0) /
-                        Math.max(1, report?.actionReport.mediaUploaded.target || 1)) *
-                        100,
+                    {Math.min(
+                      100,
+                      Math.round(
+                        ((report?.actionReport.mediaUploaded.achieved || 0) /
+                          Math.max(1, report?.actionReport.mediaUploaded.target || 1)) *
+                          100,
+                      ),
                     )}
                     % goal reached
                   </Text>
@@ -634,8 +795,19 @@ export default function GrowthReportScreen() {
                   <Text style={styles.actionTargetVal}>
                     {report?.actionReport.reviewReplies.achieved} / {report?.actionReport.reviewReplies.target}
                   </Text>
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${Math.min(100, report?.reputationSummary.responseRate || 0)}%`,
+                          backgroundColor: '#059669',
+                        },
+                      ]}
+                    />
+                  </View>
                   <Text style={styles.actionTargetSub}>
-                    {report?.reputationSummary.responseRate}% total rate
+                    {report?.reputationSummary.responseRate ?? 0}% reply rate
                   </Text>
                 </View>
               </View>
@@ -646,7 +818,7 @@ export default function GrowthReportScreen() {
               {/* AI Executive Briefing */}
               <View style={[styles.aiBriefingCard, { marginBottom: 16 }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 18 }}>🤖</Text>
+                  <MaterialIcons name="auto-awesome" size={18} color="#166534" />
                   <Text style={styles.aiBriefingTitle}>AI Growth Officer Executive Briefing</Text>
                 </View>
                 <Text style={styles.aiBriefingBody}>{report?.aiExecutiveSummary}</Text>
@@ -654,7 +826,7 @@ export default function GrowthReportScreen() {
 
               <PerformancePanel
                 analytics={analyticsData}
-                isConnected={true}
+                isConnected={Boolean(report?.isConnected)}
                 aiActions={[]}
               />
             </View>
@@ -750,17 +922,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 18,
     paddingBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
   },
   sectionHeadingMain: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.4,
   },
   sectionHeadingSub: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
     fontWeight: '500',
+    marginTop: 1,
+  },
+  periodPillGroup: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  periodChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 7,
+  },
+  periodChipActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  periodChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  periodChipTextActive: {
+    color: '#0F172A',
+    fontWeight: '800',
   },
   gridContainer: {
     flexDirection: 'row',
@@ -803,7 +1005,8 @@ const styles = StyleSheet.create({
   },
   tileValueRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 6,
     paddingLeft: 36,
   },
@@ -817,9 +1020,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  tileDeltaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
   tileDeltaText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '800',
+  },
+  progressTrack: {
+    height: 5,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
   },
   pageIndicatorContainer: {
     flexDirection: 'row',

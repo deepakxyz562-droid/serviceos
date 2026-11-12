@@ -12,6 +12,7 @@ export interface PresenceTenantInput {
   city?: string | null;
   website?: string | null;
   publicProfileEnabled?: boolean | null;
+  marketplaceOptIn?: boolean | null;
   claimed?: boolean | null;
   settingsJson?: string | null;
   brandProfile?: {
@@ -189,14 +190,20 @@ export function resolveBusinessPresenceMode(params: {
 
   const hostedUrl = candidates.find((u) => isFieserosHostedUrl(u));
   if (publicProfileEnabled || hostedUrl) {
+    const useBgosCardCanonical =
+      tenant.marketplaceOptIn === false ||
+      tenant.marketplaceOptIn === null ||
+      Boolean(hostedUrl && /bgos\./i.test(hostedUrl));
+    const effectiveCanonical = useBgosCardCanonical ? shortHostedUrl : hostedCanonicalUrl;
+    const effectiveDomain = useBgosCardCanonical ? 'bgos.fieseros.com' : 'fieseros.com';
     return {
       mode: 'bgos_hosted',
       slug,
-      websiteUrl: hostedUrl || shortHostedUrl,
-      canonicalUrl: hostedCanonicalUrl,
+      websiteUrl: hostedUrl || effectiveCanonical,
+      canonicalUrl: effectiveCanonical,
       shortHostedUrl,
       hostedCanonicalUrl,
-      domain: 'fieseros.com',
+      domain: effectiveDomain,
       publicProfileEnabled,
       claimed,
       needsActivation: !publicProfileEnabled,

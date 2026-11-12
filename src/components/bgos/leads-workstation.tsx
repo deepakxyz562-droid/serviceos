@@ -218,12 +218,18 @@ const DEMO_LEADS: LeadItem[] = [
   },
 ];
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    maximumFractionDigits: 0,
-  }).format(amount);
+function formatCurrency(amount: number, currency = 'USD', locale?: string): string {
+  const safeCurrency = (currency || 'USD').toUpperCase();
+  const safeLocale = locale || (safeCurrency === 'INR' ? 'en-IN' : safeCurrency === 'AUD' ? 'en-AU' : safeCurrency === 'GBP' ? 'en-GB' : 'en-US');
+  try {
+    return new Intl.NumberFormat(safeLocale, {
+      style: 'currency',
+      currency: safeCurrency,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `${safeCurrency} ${Math.round(amount).toLocaleString()}`;
+  }
 }
 
 function getInitials(name?: string | null): string {
@@ -242,13 +248,33 @@ function cleanPhoneForWhatsApp(raw?: string | null): string {
   return raw.replace(/[^0-9]/g, '');
 }
 
+const FALLBACK_SERVICE_OPTIONS = [
+  'General Inquiry / Consultation',
+  'Standard Service Package',
+  'Premium / Priority Service',
+  'Custom Project / Quote',
+];
+
 export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
   const navigate = useAppStore((s) => s.setCurrentView);
+  const storeTenant = useAppStore((s) => s.auth.tenant);
   const [leads, setLeads] = useState<LeadItem[]>(isDemo ? DEMO_LEADS : []);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+
+  const [workspaceCurrency, setWorkspaceCurrency] = useState<string>('USD');
+  const [workspaceLocale, setWorkspaceLocale] = useState<string>('en-US');
+  const [callingCodeHint, setCallingCodeHint] = useState<string>('1');
+  const [serviceOptions, setServiceOptions] = useState<string[]>([]);
+  const [matchedCustomerName, setMatchedCustomerName] = useState<string | null>(null);
+
+  const effectiveCurrency = (storeTenant?.currency || workspaceCurrency || 'USD').toUpperCase();
+  const formatLeadCurrency = useCallback(
+    (amount: number) => formatCurrency(amount, effectiveCurrency, workspaceLocale),
+    [effectiveCurrency, workspaceLocale]
+  );
 
   // Lead Detail Dialog state
   const [selectedLead, setSelectedLead] = useState<LeadItem | null>(null);
@@ -263,9 +289,11 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
     name: '',
     phone: '',
     email: '',
-    serviceType: 'Home Cleaning Service',
+    serviceType: '',
+    customService: '',
+    priority: 'medium' as 'low' | 'medium' | 'high',
     value: '',
-    source: 'Website Quote Form',
+    source: 'Google Business Profile',
     address: '',
     description: '',
   });
@@ -295,6 +323,90 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
+
+  useEffect(() => {
+    if (isDemo) return;
+    let active = true;
+    (async () => {
+      try {
+        const [wsRes, svcRes, bpRes] = await Promise.all([
+          fetch('/api/bgos/workspace').catch(() => null),
+          fetch('/api/services?active=true&limit=50').catch(() => null),
+          fetch('/api/brand-profile').catch(() => null),
+        ]);
+        if (!active) return;
+
+        if (wsRes?.ok) {
+          const ws = await wsRes.json().catch(() => null);
+          if (ws?.billing?.currency) setWorkspaceCurrency(ws.billing.currency);
+          if (ws?.locale?.locale) setWorkspaceLocale(ws.locale.locale);
+          if (ws?.locale?.callingCode) setCallingCodeHint(String(ws.locale.callingCode).replace(/^\+/, ''));
+        }
+
+        const collected = new Set<string>();
+        if (svcRes?.ok) {
+          const svcData = await svcRes.json().catch(() => null);
+          if (Array.isArray(svcData?.services)) {
+            for (const s of svcData.services) {
+              if (typeof s?.name === 'string' && s.name.trim()) collected.add(s.name.trim());
+            }
+          }
+        }
+        if (bpRes?.ok) {
+          const bpData = await bpRes.json().catch(() => null);
+          const rawServices = bpData?.brandProfile?.services;
+          const list = Array.isArray(rawServices)
+            ? rawServices
+            : typeof rawServices === 'string'
+              ? (() => { try { return JSON.parse(rawServices); } catch { return []; } })()
+              : [];
+          if (Array.isArray(list)) {
+            for (const s of list) {
+              if (typeof s === 'string' && s.trim()) collected.add(s.trim());
+            }
+          }
+        }
+        const merged = Array.from(collected);
+        setServiceOptions(merged);
+        if (merged.length > 0) {
+          setNewLeadForm((prev) => (prev.serviceType ? prev : { ...prev, serviceType: merged[0] }));
+        }
+      } catch {
+        // Non-fatal metadata enrichment
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [isDemo]);
+
+  useEffect(() => {
+    if (!isNewLeadOpen || isDemo) {
+      setMatchedCustomerName(null);
+      return;
+    }
+    const digits = newLeadForm.phone.replace(/\D/g, '');
+    if (digits.length < 7) {
+      setMatchedCustomerName(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/customers?search=${encodeURIComponent(digits.slice(-8))}&limit=3`);
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        const match = Array.isArray(data?.customers)
+          ? data.customers.find((c: { phone?: string | null; name?: string | null }) =>
+              (c.phone || '').replace(/\D/g, '').endsWith(digits.slice(-7))
+            )
+          : null;
+        setMatchedCustomerName(match?.name || null);
+      } catch {
+        setMatchedCustomerName(null);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [isNewLeadOpen, isDemo, newLeadForm.phone]);
 
   // Executive Computed KPI Metrics
   const metrics = useMemo(() => {
@@ -377,6 +489,11 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
       return;
     }
 
+    const effectiveService =
+      newLeadForm.serviceType === '__custom__'
+        ? newLeadForm.customService.trim()
+        : newLeadForm.serviceType.trim();
+
     setIsCreatingLead(true);
     const parsedValue = parseFloat(newLeadForm.value) || 0;
 
@@ -388,7 +505,9 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
           name: newLeadForm.name.trim(),
           phone: newLeadForm.phone.trim(),
           email: newLeadForm.email.trim() || null,
-          serviceType: newLeadForm.serviceType,
+          serviceType: effectiveService || null,
+          title: effectiveService || `${newLeadForm.name.trim()} Inquiry`,
+          priority: newLeadForm.priority,
           value: parsedValue,
           source: newLeadForm.source,
           address: newLeadForm.address.trim() || null,
@@ -400,13 +519,16 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
       if (res.ok) {
         toast.success('New lead created successfully!');
         setIsNewLeadOpen(false);
+        setMatchedCustomerName(null);
         setNewLeadForm({
           name: '',
           phone: '',
           email: '',
-          serviceType: 'Home Cleaning Service',
+          serviceType: serviceOptions[0] || '',
+          customService: '',
+          priority: 'medium',
           value: '',
-          source: 'Website Quote Form',
+          source: 'Google Business Profile',
           address: '',
           description: '',
         });
@@ -595,7 +717,7 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900 dark:text-white">
-              {formatCurrency(metrics.pipelineValue)}
+              {formatLeadCurrency(metrics.pipelineValue)}
             </span>
           </div>
           <p className="mt-1 text-[11px] text-slate-400">Estimated value across active inquiries</p>
@@ -740,7 +862,7 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
                   <div className="mt-2 flex items-center justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400 px-1">
                     <span>Lane Value</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200">
-                      {formatCurrency(laneTotalValue)}
+                      {formatLeadCurrency(laneTotalValue)}
                     </span>
                   </div>
                 )}
@@ -789,7 +911,7 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
                           {/* Value & Source */}
                           <div className="mt-2 flex items-center justify-between text-[11px]">
                             <span className="font-bold text-[#009F50]">
-                              {lead.value ? formatCurrency(lead.value) : 'Quote Pending'}
+                              {lead.value ? formatLeadCurrency(lead.value) : 'Quote Pending'}
                             </span>
                             <span className="text-slate-400 truncate max-w-[85px]">
                               {lead.source || 'Direct'}
@@ -923,7 +1045,7 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
                           </span>
                         </td>
                         <td className="py-3.5 px-4 font-bold text-[#009F50]">
-                          {lead.value ? formatCurrency(lead.value) : '—'}
+                          {lead.value ? formatLeadCurrency(lead.value) : '—'}
                         </td>
                         <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1.5">
@@ -1015,21 +1137,28 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
                   required
                   value={newLeadForm.name}
                   onChange={(e) => setNewLeadForm({ ...newLeadForm, name: e.target.value })}
-                  placeholder="e.g. John Miller"
+                  placeholder="e.g. Rohan Sharma"
                   className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-slate-900 dark:text-white focus:border-[#009F50] focus:outline-hidden"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Phone Number <span className="text-rose-500">*</span>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Phone Number <span className="text-rose-500">*</span>
+                  </label>
+                  {matchedCustomerName && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 text-[10px] font-semibold text-[#009F50]">
+                      Existing: {matchedCustomerName}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="tel"
                   required
                   value={newLeadForm.phone}
                   onChange={(e) => setNewLeadForm({ ...newLeadForm, phone: e.target.value })}
-                  placeholder="e.g. +61 400 000 000"
+                  placeholder={`e.g. +${callingCodeHint} 98765 43210`}
                   className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-slate-900 dark:text-white focus:border-[#009F50] focus:outline-hidden"
                 />
               </div>
@@ -1044,14 +1173,14 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
                   type="email"
                   value={newLeadForm.email}
                   onChange={(e) => setNewLeadForm({ ...newLeadForm, email: e.target.value })}
-                  placeholder="e.g. john@example.com"
+                  placeholder="e.g. rohan@example.com"
                   className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-slate-900 dark:text-white focus:border-[#009F50] focus:outline-hidden"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Estimated Value ($ AUD)
+                  Estimated Value ({effectiveCurrency})
                 </label>
                 <input
                   type="number"
@@ -1059,7 +1188,7 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
                   step="1"
                   value={newLeadForm.value}
                   onChange={(e) => setNewLeadForm({ ...newLeadForm, value: e.target.value })}
-                  placeholder="e.g. 450"
+                  placeholder="e.g. 2500"
                   className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-slate-900 dark:text-white focus:border-[#009F50] focus:outline-hidden"
                 />
               </div>
@@ -1068,21 +1197,30 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Service Requested
+                  Service / Offering Requested
                 </label>
                 <select
                   value={newLeadForm.serviceType}
                   onChange={(e) => setNewLeadForm({ ...newLeadForm, serviceType: e.target.value })}
                   className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-slate-900 dark:text-white focus:border-[#009F50] focus:outline-hidden"
                 >
-                  <option value="Home Cleaning Service">Home Cleaning Service</option>
-                  <option value="End of Lease Deep Clean">End of Lease Deep Clean</option>
-                  <option value="Commercial Office Sanitization">Commercial Office Sanitization</option>
-                  <option value="Carpet Steam & Upholstery">Carpet Steam &amp; Upholstery</option>
-                  <option value="Window & Solar Cleaning">Window &amp; Solar Cleaning</option>
-                  <option value="High-Pressure Washing">High-Pressure Washing</option>
-                  <option value="Custom Project / Quote">Custom Project / Quote</option>
+                  <option value="">Select service or offering...</option>
+                  {(serviceOptions.length > 0 ? serviceOptions : FALLBACK_SERVICE_OPTIONS).map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                  <option value="__custom__">+ Custom service / inquiry...</option>
                 </select>
+                {newLeadForm.serviceType === '__custom__' && (
+                  <input
+                    type="text"
+                    value={newLeadForm.customService}
+                    onChange={(e) => setNewLeadForm({ ...newLeadForm, customService: e.target.value })}
+                    placeholder="Enter service or product name"
+                    className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-slate-900 dark:text-white focus:border-[#009F50] focus:outline-hidden"
+                  />
+                )}
               </div>
 
               <div>
@@ -1096,23 +1234,51 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
                 >
                   <option value="Google Business Profile">Google Business Profile</option>
                   <option value="WhatsApp Inbound">WhatsApp Inbound</option>
+                  <option value="Phone Call / Direct">Phone Call / Direct</option>
+                  <option value="Walk-in / In-Person">Walk-in / In-Person</option>
                   <option value="Website Quote Form">Website Quote Form</option>
                   <option value="Referral Partner">Referral Partner</option>
-                  <option value="Phone Call / Direct">Phone Call / Direct</option>
                   <option value="Facebook / Instagram Ad">Facebook / Instagram Ad</option>
                 </select>
               </div>
             </div>
 
             <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Follow-Up Priority
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {(['low', 'medium', 'high'] as const).map((level) => {
+                  const active = newLeadForm.priority === level;
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setNewLeadForm({ ...newLeadForm, priority: level })}
+                      className={`rounded-xl border px-3 py-1.5 text-xs font-semibold capitalize transition ${
+                        active
+                          ? level === 'high'
+                            ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300'
+                            : 'border-[#009F50] bg-[#E8F8EF] text-[#009F50] dark:bg-emerald-950/50 dark:text-emerald-300'
+                          : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {level}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Service Address / Suburb
+                Address / Location
               </label>
               <input
                 type="text"
                 value={newLeadForm.address}
                 onChange={(e) => setNewLeadForm({ ...newLeadForm, address: e.target.value })}
-                placeholder="e.g. 14 Riverview Terrace, Hamilton QLD 4007"
+                placeholder="Street, area, or city"
                 className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-slate-900 dark:text-white focus:border-[#009F50] focus:outline-hidden"
               />
             </div>
@@ -1125,7 +1291,7 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
                 rows={3}
                 value={newLeadForm.description}
                 onChange={(e) => setNewLeadForm({ ...newLeadForm, description: e.target.value })}
-                placeholder="Key scope, customer timing preferences, access instructions..."
+                placeholder="Key requirements, customer timing preferences, or quote notes..."
                 className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-slate-900 dark:text-white focus:border-[#009F50] focus:outline-hidden"
               />
             </div>
@@ -1256,7 +1422,7 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
                 <div className="rounded-xl border border-slate-200/90 dark:border-slate-800 p-3 bg-white dark:bg-slate-900">
                   <span className="text-[11px] font-semibold text-slate-400 block">Estimated Value</span>
                   <span className="mt-1 font-bold text-[#009F50] text-sm block">
-                    {selectedLead.value ? formatCurrency(selectedLead.value) : 'Not Estimated'}
+                    {selectedLead.value ? formatLeadCurrency(selectedLead.value) : 'Not Estimated'}
                   </span>
                 </div>
               </div>

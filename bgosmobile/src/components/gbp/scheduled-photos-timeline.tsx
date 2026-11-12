@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Platform,
@@ -11,6 +13,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../ui';
+import { apiRequest } from '../../lib/api';
 import { detectDeviceCountryAndTimezone, getTimeZoneShortLabel } from '../../lib/country-codes';
 import { MediaPreviewModal, isVideoMediaAsset } from './media-preview-modal';
 import type { GbpConnectionState, GbpPhoto } from './types';
@@ -24,6 +27,7 @@ interface ScheduledPhotosTimelineProps {
   onUploadPress: () => void;
   onAiCreatePress?: () => void;
   onEditItem?: (item: GbpPhoto) => void;
+  onRefreshNeeded?: () => void | Promise<void>;
   onConnectPress?: () => void;
   businessName?: string;
   isConnected?: boolean;
@@ -43,6 +47,7 @@ export function ScheduledPhotosTimeline({
   onUploadPress,
   onAiCreatePress,
   onEditItem,
+  onRefreshNeeded,
   onConnectPress,
   businessName = 'My Business',
   isConnected = true,
@@ -58,6 +63,48 @@ export function ScheduledPhotosTimeline({
   const [whyModalOpen, setWhyModalOpen] = useState(false);
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState<GbpPhoto | null>(null);
+  const [busyActionId, setBusyActionId] = useState<string | null>(null);
+
+  const handleQuickPublish = async (item: GbpPhoto) => {
+    const targetId = item.postId || item.id;
+    if (!targetId || busyActionId) return;
+    setBusyActionId(`pub:${targetId}`);
+    try {
+      await apiRequest('/api/social/photos', {
+        method: 'PATCH',
+        body: { postId: targetId, publishNow: true },
+      });
+      await onRefreshNeeded?.();
+      Alert.alert('Published!', `${isVideoMediaAsset(item) ? 'Video' : 'Photo'} is now live on Google.`);
+    } catch (err: unknown) {
+      Alert.alert('Publish Failed', err instanceof Error ? err.message : 'Could not publish media right now.');
+    } finally {
+      setBusyActionId(null);
+    }
+  };
+
+  const handleQuickDelete = (item: GbpPhoto) => {
+    const targetId = item.postId || item.id;
+    if (!targetId || busyActionId) return;
+    Alert.alert('Remove Media?', 'This deletes the item from your BGOS queue.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          setBusyActionId(`del:${targetId}`);
+          try {
+            await apiRequest(`/api/social/photos?id=${encodeURIComponent(targetId)}`, { method: 'DELETE' });
+            await onRefreshNeeded?.();
+          } catch (err: unknown) {
+            Alert.alert('Delete Failed', err instanceof Error ? err.message : 'Could not remove item.');
+          } finally {
+            setBusyActionId(null);
+          }
+        },
+      },
+    ]);
+  };
 
   useEffect(() => {
     if (initialTab) {
@@ -273,37 +320,43 @@ export function ScheduledPhotosTimeline({
         </View>
       )}
 
-      {/* Primary Action Button: Add Photos & Videos */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Add Photos & Videos"
-        onPress={onUploadPress}
-        disabled={isUploading}
-        style={({ pressed }) => [
-          styles.addPhotosButton,
-          pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
-        ]}
-      >
-        <MaterialIcons name="add-a-photo" size={18} color="#FFFFFF" />
-        <Text style={styles.addPhotosButtonText}>
-          {isUploading ? 'Opening Media Picker…' : 'Add Photos & Videos'}
-        </Text>
-      </Pressable>
-
-      {onAiCreatePress ? (
+      {/* ── Top Action Row: Compact Side-by-Side Upload + AI Studio ── */}
+      <View style={styles.dualActionRow}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Create AI Business Photo"
-          onPress={onAiCreatePress}
+          accessibilityLabel="Add Photos & Videos"
+          onPress={onUploadPress}
+          disabled={isUploading}
           style={({ pressed }) => [
-            styles.aiCreateButton,
+            styles.addPhotosButton,
+            onAiCreatePress && { flex: 1 },
             pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
           ]}
         >
-          <MaterialIcons name="auto-awesome" size={17} color="#6D28D9" />
-          <Text style={styles.aiCreateButtonText}>Create AI Photo from Business &amp; Previous Photos</Text>
+          <MaterialIcons name="add-a-photo" size={17} color="#FFFFFF" />
+          <Text style={styles.addPhotosButtonText} numberOfLines={1}>
+            {isUploading ? 'Picking…' : 'Add Media'}
+          </Text>
         </Pressable>
-      ) : null}
+
+        {onAiCreatePress ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Create AI Business Photo"
+            onPress={onAiCreatePress}
+            style={({ pressed }) => [
+              styles.aiCreateButton,
+              { flex: 1 },
+              pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+            ]}
+          >
+            <MaterialIcons name="auto-awesome" size={16} color="#6D28D9" />
+            <Text style={styles.aiCreateButtonText} numberOfLines={1}>
+              AI Photo Studio
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
 
       <Pressable
         accessibilityRole="button"
@@ -400,94 +453,150 @@ export function ScheduledPhotosTimeline({
                 })
               : 'Not Scheduled';
             const isEditable = item.source === 'queue' && Boolean(onEditItem);
+            const targetId = item.postId || item.id;
+            const isQueueItem = item.source === 'queue' && Boolean(targetId);
+            const isVideo = isVideoMediaAsset(item);
+            const isPublishingThis = busyActionId === `pub:${targetId}`;
+            const isDeletingThis = busyActionId === `del:${targetId}`;
 
             return (
-              <Pressable
-                key={item.id || `slot-${index}`}
-                onPress={() => setPreviewItem(item)}
-                style={styles.timelineRow}
-              >
-                {renderThumbnail(item, styles.slotThumbnail, false)}
+              <View key={item.id || `slot-${index}`} style={styles.timelineCard}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Preview ${item.title || 'media'}`}
+                  onPress={() => setPreviewItem(item)}
+                  style={styles.timelineRow}
+                >
+                  <View style={{ position: 'relative' }}>
+                    {renderThumbnail(item, styles.slotThumbnail, false)}
+                    <View style={styles.formatCornerBadge}>
+                      <Text style={styles.formatCornerText}>{isVideo ? 'VIDEO' : 'PHOTO'}</Text>
+                    </View>
+                  </View>
 
-                <View style={styles.timelineInfo}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                    <Text style={styles.slotDayText} numberOfLines={1}>
-                      {item.title || `${businessName} ${item.mediaFormat === 'VIDEO' ? 'Video' : 'Photo'}`}
-                    </Text>
-                    {item.category ? (
-                      <View style={styles.catBadge}>
-                        <Text style={styles.catBadgeText}>{item.category}</Text>
+                  <View style={styles.timelineInfo}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                      <Text style={styles.slotDayText} numberOfLines={1}>
+                        {item.title || `${businessName} ${isVideo ? 'Video' : 'Photo'}`}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        {typeof (item as any).seoScore === 'number' ? (
+                          <View style={[styles.catBadge, { backgroundColor: '#ECFDF5' }]}>
+                            <Text style={[styles.catBadgeText, { color: '#047857' }]}>
+                              SEO {Math.round((item as any).seoScore)}%
+                            </Text>
+                          </View>
+                        ) : null}
+                        {item.category ? (
+                          <View style={styles.catBadge}>
+                            <Text style={styles.catBadgeText}>{item.category}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+
+                    {item.caption ? (
+                      <Text style={styles.slotCaptionText} numberOfLines={2}>
+                        {item.caption}
+                      </Text>
+                    ) : null}
+
+                    {Array.isArray(item.tags) && item.tags.length > 0 ? (
+                      <View style={styles.tagMiniRow}>
+                        {item.tags.slice(0, 3).map((tag) => (
+                          <View key={tag} style={styles.tagMiniPill}>
+                            <Text style={styles.tagMiniText}>#{tag}</Text>
+                          </View>
+                        ))}
                       </View>
                     ) : null}
-                  </View>
 
-                  {item.caption ? (
-                    <Text style={styles.slotCaptionText} numberOfLines={2}>
-                      {item.caption}
-                    </Text>
-                  ) : null}
-
-                  {Array.isArray(item.tags) && item.tags.length > 0 ? (
-                    <View style={styles.tagMiniRow}>
-                      {item.tags.slice(0, 3).map((tag) => (
-                        <View key={tag} style={styles.tagMiniPill}>
-                          <Text style={styles.tagMiniText}>#{tag}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
-
-                  <View style={styles.timeBadgeRow}>
-                    <Text style={styles.slotTimeText}>
-                      {activeTab === 'scheduled' ? `${dayDateStr} · ${timeStr}` : dayDateStr}
-                    </Text>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        activeTab === 'uploaded'
-                          ? styles.uploadedBadge
-                          : activeTab === 'unposted'
-                            ? styles.unpostedBadge
-                            : styles.scheduledBadge,
-                      ]}
-                    >
-                      <Text
+                    <View style={styles.timeBadgeRow}>
+                      <Text style={styles.slotTimeText}>
+                        {activeTab === 'scheduled' ? `${dayDateStr} · ${timeStr}` : dayDateStr}
+                      </Text>
+                      <View
                         style={[
-                          styles.statusBadgeText,
+                          styles.statusBadge,
                           activeTab === 'uploaded'
-                            ? { color: colors.success }
+                            ? styles.uploadedBadge
                             : activeTab === 'unposted'
-                              ? { color: colors.danger }
-                              : { color: '#B45309' },
+                              ? styles.unpostedBadge
+                              : styles.scheduledBadge,
                         ]}
                       >
-                        {activeTab === 'uploaded'
-                          ? 'Published'
-                          : activeTab === 'unposted'
-                            ? 'Not Posted'
-                            : 'Scheduled'}
-                      </Text>
+                        <Text
+                          style={[
+                            styles.statusBadgeText,
+                            activeTab === 'uploaded'
+                              ? { color: colors.success }
+                              : activeTab === 'unposted'
+                                ? { color: colors.danger }
+                                : { color: '#B45309' },
+                          ]}
+                        >
+                          {activeTab === 'uploaded'
+                            ? 'Published'
+                            : item.status === 'failed'
+                              ? 'Failed'
+                              : activeTab === 'unposted'
+                                ? 'Draft'
+                                : 'Scheduled'}
+                        </Text>
+                      </View>
                     </View>
-                    {isEditable ? (
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation?.();
-                          onEditItem?.(item);
-                        }}
-                        hitSlop={6}
-                      >
-                        <Text style={styles.editHintLink}>Edit ✎</Text>
-                      </Pressable>
+
+                    {item.failureReason ? (
+                      <Text style={styles.failureText} numberOfLines={2}>
+                        {item.failureReason}
+                      </Text>
                     ) : null}
                   </View>
+                </Pressable>
 
-                  {item.failureReason ? (
-                    <Text style={styles.failureText} numberOfLines={2}>
-                      {item.failureReason}
-                    </Text>
-                  ) : null}
-                </View>
-              </Pressable>
+                {isQueueItem ? (
+                  <View style={styles.cardActionStrip}>
+                    {isEditable ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => onEditItem?.(item)}
+                        style={styles.cardActionBtn}
+                      >
+                        <MaterialIcons name="edit" size={14} color={colors.brandDark} />
+                        <Text style={[styles.cardActionText, { color: colors.brandDark }]}>Edit</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={busyActionId !== null}
+                      onPress={() => void handleQuickPublish(item)}
+                      style={[styles.cardActionBtn, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE' }]}
+                    >
+                      {isPublishingThis ? (
+                        <ActivityIndicator size={12} color="#4338CA" />
+                      ) : (
+                        <MaterialIcons name="bolt" size={14} color="#4338CA" />
+                      )}
+                      <Text style={[styles.cardActionText, { color: '#4338CA' }]}>
+                        {item.status === 'failed' ? 'Retry' : 'Publish Now'}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={busyActionId !== null}
+                      onPress={() => handleQuickDelete(item)}
+                      style={[styles.cardActionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
+                    >
+                      {isDeletingThis ? (
+                        <ActivityIndicator size={12} color={colors.danger} />
+                      ) : (
+                        <MaterialIcons name="delete-outline" size={14} color={colors.danger} />
+                      )}
+                      <Text style={[styles.cardActionText, { color: colors.danger }]}>Delete</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
             );
           })}
         </View>
@@ -600,6 +709,12 @@ export function ScheduledPhotosTimeline({
         item={previewItem}
         onClose={() => setPreviewItem(null)}
         onEdit={onEditItem}
+        onDeleted={async () => {
+          await onRefreshNeeded?.();
+        }}
+        onPublished={async () => {
+          await onRefreshNeeded?.();
+        }}
         businessName={businessName}
       />
     </View>
@@ -663,17 +778,22 @@ const styles = StyleSheet.create({
     color: colors.brand,
   },
   portraitPhotosTrack: {
-    paddingVertical: 6,
+    paddingVertical: 4,
     gap: 10,
   },
   portraitCard: {
-    width: 145,
-    height: 175,
-    borderRadius: 16,
+    width: 112,
+    height: 122,
+    borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.line,
+  },
+  dualActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   portraitImage: {
     width: '100%',
@@ -723,22 +843,22 @@ const styles = StyleSheet.create({
   },
   addPhotosButton: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     backgroundColor: colors.brand,
-    borderRadius: 14,
-    height: 48,
+    borderRadius: 12,
+    height: 44,
+    paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
     shadowColor: colors.brand,
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 2,
   },
   addPhotosButtonText: {
     color: '#FFFFFF',
-    fontSize: 14.5,
+    fontSize: 13.5,
     fontWeight: '800',
     letterSpacing: -0.2,
   },
@@ -834,15 +954,58 @@ const styles = StyleSheet.create({
   timelineList: {
     gap: 10,
   },
-  timelineRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
+  timelineCard: {
     backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
     borderColor: colors.line,
+    gap: 10,
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  formatCornerBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+  },
+  formatCornerText: {
+    color: '#FFFFFF',
+    fontSize: 8.5,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  cardActionStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  cardActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 9,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  cardActionText: {
+    fontSize: 11.5,
+    fontWeight: '800',
   },
   slotThumbnail: {
     width: 70,

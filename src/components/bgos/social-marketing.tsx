@@ -655,6 +655,9 @@ interface CompetitorRow {
   photoCount?: number;
   recentReviews?: Array<{ author?: string; rating: number | null; text: string; relativeTime?: string }>;
   mapsRank?: number | null;
+  rank?: number;
+  ordinalRank?: number;
+  isSelf?: boolean;
   mapsUrl?: string | null;
   websiteUrl?: string | null;
   lastSeoScore?: number | null;
@@ -663,6 +666,7 @@ interface CompetitorRow {
 
 interface CompetitorsResponse {
   competitors?: CompetitorRow[];
+  selfBusiness?: CompetitorRow;
   source?: string;
   migrationRequired?: boolean;
   placesUnavailable?: boolean;
@@ -1606,7 +1610,24 @@ function CompetitorAnalysisCard({
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [gapDialogOpen, setGapDialogOpen] = useState(false);
-  const rows = useMemo(() => (Array.isArray(data?.competitors) ? data!.competitors : []), [data]);
+  const rows = useMemo(() => {
+    const raw = Array.isArray(data?.competitors) ? data!.competitors : [];
+    const hasSelf = raw.some((c) => c.isSelf);
+    if (hasSelf || !data?.selfBusiness) return raw;
+    const merged = [...raw, { ...data.selfBusiness, isSelf: true }];
+    merged.sort((a, b) => (a.mapsRank ?? a.rank ?? 999) - (b.mapsRank ?? b.rank ?? 999));
+    return merged;
+  }, [data]);
+  const selfEntry = useMemo(
+    () => rows.find((r) => r.isSelf) || data?.selfBusiness || null,
+    [rows, data?.selfBusiness],
+  );
+  const displayedRows = useMemo(() => {
+    const top8 = rows.slice(0, 8);
+    if (!selfEntry) return top8;
+    if (top8.some((r) => r.isSelf || r.id === selfEntry.id)) return top8;
+    return [...rows.slice(0, 7), { ...selfEntry, isSelf: true }];
+  }, [rows, selfEntry]);
 
   return (
     <div className="lg:col-span-4 bg-card border border-border rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
@@ -1642,15 +1663,24 @@ function CompetitorAnalysisCard({
         <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
           Local Market Benchmark &bull; Within 5 km
         </span>
-        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold">
-          Synced for Autopilot
-        </span>
+        <div className="flex items-center gap-1.5">
+          {selfEntry ? (
+            <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-extrabold">
+              Your Rank: #{Math.max(1, Math.round(Number(selfEntry.mapsRank ?? selfEntry.rank ?? 1)))}
+            </span>
+          ) : (
+            <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold">
+              Synced for Autopilot
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Column headers */}
-      <div className="flex items-center justify-between px-1 pb-1 text-[10px] font-extrabold tracking-wider text-muted-foreground">
-        <span>BUSINESS</span>
-        <span>RATING</span>
+      <div className="flex items-center justify-between gap-2 px-1 pb-1 text-[10px] font-extrabold tracking-wider text-muted-foreground">
+        <span className="w-9 shrink-0">RANK</span>
+        <span className="flex-1">BUSINESS</span>
+        <span className="shrink-0">RATING</span>
       </div>
 
       {loading ? (
@@ -1687,24 +1717,50 @@ function CompetitorAnalysisCard({
         </div>
       ) : (
         <div className="divide-y divide-border/60 my-auto max-h-64 overflow-y-auto">
-          {rows.slice(0, 8).map((comp) => {
+          {displayedRows.map((comp, idx) => {
             const isExpanded = expandedId === comp.id;
+            const isSelf = Boolean(comp.isSelf);
+            const rawRank = comp.mapsRank ?? comp.rank ?? idx + 1;
+            const rankNum = Math.max(1, Math.round(Number(rawRank)));
+            const rankBadgeCls = isSelf
+              ? 'bg-primary text-primary-foreground'
+              : rankNum <= 3
+                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                : rankNum <= 10
+                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                  : 'bg-muted text-muted-foreground';
             return (
-              <div key={comp.id} className="py-1 first:pt-1">
+              <div
+                key={comp.id}
+                className={`py-1 first:pt-1 ${isSelf ? 'bg-primary/5 ring-1 ring-primary/20 rounded-xl px-1 my-0.5' : ''}`}
+              >
                 <button
                   type="button"
                   onClick={() => setExpandedId(isExpanded ? null : comp.id)}
                   className="w-full flex items-center justify-between gap-2 text-xs py-1.5 text-left hover:bg-muted/30 rounded-lg px-1 transition-colors"
                   aria-expanded={isExpanded}
                 >
-                  <div className="min-w-0 flex items-center gap-1.5">
+                  <span className={`w-8 text-center py-0.5 rounded-md text-[10px] font-extrabold shrink-0 ${rankBadgeCls}`}>
+                    #{rankNum}
+                  </span>
+                  <div className="min-w-0 flex-1 flex items-center gap-1.5">
                     <ChevronDown
                       className={`size-3 text-muted-foreground shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                     />
                     <div className="min-w-0">
-                      <p className="font-semibold text-foreground truncate text-[11px]">{comp.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className={`font-semibold truncate text-[11px] ${isSelf ? 'text-primary font-bold' : 'text-foreground'}`}>
+                          {comp.name}
+                        </p>
+                        {isSelf && (
+                          <span className="px-1.5 py-0.2 rounded bg-primary text-primary-foreground text-[9px] font-extrabold shrink-0">
+                            YOU
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] text-muted-foreground">
-                        {comp.distanceKm != null ? `${comp.distanceKm} km away` : comp.category || 'Local business'}
+                        {isSelf ? 'Your Google Business Profile' : comp.distanceKm != null ? `${comp.distanceKm} km away` : comp.category || 'Local business'}
+                        {comp.reviewCount != null ? ` · ${comp.reviewCount} reviews` : ''}
                       </p>
                     </div>
                   </div>
@@ -3413,6 +3469,7 @@ export function SocialMediaView({
     { id: 'composer', label: 'Create', Icon: Sparkles },
     { id: 'autopilot', label: 'Autopilot (30d / 1yr)', Icon: Zap },
     { id: 'google-post', label: 'Keyword Planner', Icon: Search },
+    { id: 'google-media', label: 'GBP Photos & AI', Icon: ImageIcon },
     { id: 'posts', label: 'Content library', Icon: FolderOpen },
     { id: 'overview', label: 'Calendar', Icon: Calendar },
     { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
@@ -6131,12 +6188,31 @@ export function SocialMediaView({
                           </span>
                         )}
                         {photo.tags && photo.tags.length > 0 && (
-                          <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-white/90 text-primary text-[9px] font-bold max-w-[75%] truncate">
+                          <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-white/95 text-primary text-[9px] font-bold max-w-[70%] truncate shadow-2xs">
                             #{photo.tags[0]}
                           </span>
                         )}
+                        <span
+                          className={`absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                            photo.source === 'google'
+                              ? 'bg-emerald-600/90 text-white'
+                              : photo.status === 'failed'
+                                ? 'bg-rose-600/90 text-white'
+                                : photo.status === 'scheduled'
+                                  ? 'bg-amber-500/95 text-white'
+                                  : 'bg-slate-800/85 text-white'
+                          }`}
+                        >
+                          {photo.source === 'google'
+                            ? 'Live'
+                            : photo.status === 'failed'
+                              ? 'Failed'
+                              : photo.status === 'scheduled'
+                                ? 'Scheduled'
+                                : 'Draft'}
+                        </span>
                       </div>
-                      <div className="space-y-0.5">
+                      <div className="space-y-1 px-0.5">
                         <div className="text-[11px] font-bold text-foreground truncate">
                           {photo.title || photo.caption || (photo.source === 'google' ? 'Google Live' : 'Queued Media')}
                         </div>
@@ -6144,22 +6220,46 @@ export function SocialMediaView({
                           <span className="text-[10px] font-semibold text-muted-foreground truncate">
                             {photo.scheduledFor
                               ? new Date(photo.scheduledFor).toLocaleDateString([], { month: 'short', day: 'numeric' })
-                              : photo.gbpCategory || photo.category || (photo.source === 'google' ? 'Live' : 'Draft')}
+                              : photo.gbpCategory || photo.category || (photo.source === 'google' ? 'Google' : 'Draft')}
                           </span>
                           {isEditable && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedMediaFiles([]);
-                                setEditingMediaItem(photo as WebMediaItem);
-                                setMediaDialogMode('upload');
-                                setMediaDialogOpen(true);
-                              }}
-                              className="text-[10px] font-bold text-primary hover:underline"
-                            >
-                              Edit
-                            </button>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    const res = await authFetch('/api/social/photos', {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ postId: photo.postId || photo.id, publishNow: true }),
+                                    });
+                                    const d = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+                                    if (!res.ok || !d.success) throw new Error(d.error || 'Publish failed');
+                                    toast.success('Published to Google Business Profile!');
+                                    fetchPhotos();
+                                  } catch (err) {
+                                    toast.error(err instanceof Error ? err.message : 'Publish failed');
+                                  }
+                                }}
+                                className="text-[10px] font-bold text-indigo-600 hover:underline"
+                              >
+                                {photo.status === 'failed' ? 'Retry' : 'Publish'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedMediaFiles([]);
+                                  setEditingMediaItem(photo as WebMediaItem);
+                                  setMediaDialogMode('upload');
+                                  setMediaDialogOpen(true);
+                                }}
+                                className="text-[10px] font-bold text-primary hover:underline"
+                              >
+                                Edit
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -6926,6 +7026,13 @@ export function SocialMediaView({
         open={Boolean(previewMediaItem)}
         onOpenChange={(v) => { if (!v) setPreviewMediaItem(null); }}
         businessName={businessName}
+        onDeleted={() => {
+          fetchPhotos();
+        }}
+        onPublished={() => {
+          setMediaFilter('uploaded');
+          fetchPhotos();
+        }}
         onEdit={(item) => {
           setSelectedMediaFiles([]);
           setEditingMediaItem(item);

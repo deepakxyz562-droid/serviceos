@@ -165,7 +165,10 @@ export async function runDesignJob(id:string){
           candidate.businessName ||
           (Array.isArray(candidate.referenceImageUrls) && candidate.referenceImageUrls.length > 0) ||
           candidate.aspectRatio ||
-          candidate.autoFromBusiness
+          candidate.autoFromBusiness ||
+          candidate.stylePreset ||
+          candidate.seoSlug ||
+          candidate.isGbpPhoto !== undefined
         ) {
           return candidate;
         }
@@ -181,7 +184,13 @@ export async function runDesignJob(id:string){
     undefined;
 
   const isPoster = job.prompt.startsWith('[POSTER]');
-  let result: { bytes: Buffer; model: string; cost: number | null };
+  let result: {
+    bytes: Buffer;
+    model: string;
+    cost: number | null;
+    sourceType?: string;
+    fallbackReason?: string;
+  };
   try {
     result = await generateDesignImage(
       job.prompt,
@@ -210,9 +219,55 @@ export async function runDesignJob(id:string){
   generated=true;
   const now=new Date();
   await db.usageLedger.create({data:{tenantId:job.tenantId,idempotencyKey:`image-job:${id}`,usageType:'IMAGE_GENERATION',quantitySeconds:0,aiFeature:'bgos_design_image',aiModel:result.model,providerCostUsd:result.cost,costBreakdownJson:JSON.stringify({provider:job.provider,costSource:result.cost===null?'not_reported':'provider'}),periodStart:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),1)),periodEnd:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)),occurredAt:now}}).catch(()=>{});
-  const asset=await saveDesignAsset(result.bytes,job.tenantId,job.userId);
+  const useGbpJpeg = Boolean(visualContext?.isGbpPhoto) || (!isPoster && Boolean(visualContext));
+  const saveOptions = useGbpJpeg
+    ? {
+        format: 'jpeg' as const,
+        seoSlug: typeof visualContext?.seoSlug === 'string' ? visualContext.seoSlug : undefined,
+        assetTitle:
+          typeof visualContext?.businessName === 'string' && visualContext.businessName.trim()
+            ? `${visualContext.businessName.trim()} AI Photo`
+            : undefined,
+        exif: {
+          businessName: visualContext?.businessName,
+          title: visualContext?.seoSlug
+            ? String(visualContext.seoSlug).replace(/\.[^.]+$/, '').replace(/-/g, ' ')
+            : visualContext?.businessName,
+          description: job.prompt.replace(/^\[POSTER\]\s*/i, '').slice(0, 280),
+          tags: Array.isArray(visualContext?.searchTerms) ? visualContext.searchTerms : undefined,
+          latitude:
+            typeof visualContext?.latitude === 'number' ? visualContext.latitude : null,
+          longitude:
+            typeof visualContext?.longitude === 'number' ? visualContext.longitude : null,
+        },
+      }
+    : undefined;
+  const asset = saveOptions
+    ? await saveDesignAsset(result.bytes, job.tenantId, job.userId, saveOptions)
+    : await saveDesignAsset(result.bytes, job.tenantId, job.userId);
+  const geoCoords =
+    typeof visualContext?.latitude === 'number' && typeof visualContext?.longitude === 'number'
+      ? { latitude: visualContext.latitude, longitude: visualContext.longitude }
+      : null;
+  const resolvedSourceType =
+    result.sourceType ||
+    (result.model === 'curated-occasion-stock'
+      ? 'stock_fallback'
+      : Array.isArray(visualContext?.referenceImageUrls) && visualContext.referenceImageUrls.length > 0
+        ? 'ai_reference'
+        : 'ai_text');
+  const resultPayload = {
+    assetId: asset.assetId,
+    url: asset.url,
+    ...(asset.seoFilename ? { seoFilename: asset.seoFilename } : {}),
+    ...(asset.geoTagged !== undefined ? { geoTagged: asset.geoTagged } : {}),
+    ...(asset.geoTagged && geoCoords ? { geoCoordinates: geoCoords } : {}),
+    model: result.model,
+    sourceType: resolvedSourceType,
+    ...(result.fallbackReason ? { fallbackReason: result.fallbackReason } : {}),
+  };
   const current=await db.designGenerationJob.findUnique({where:{id}});
-  await db.designGenerationJob.updateMany({where:{id,status:'running'},data:{status:current?.cancelRequested?'cancelled':'completed',resultJson:JSON.stringify(asset),finishedAt:new Date()}});
+  await db.designGenerationJob.updateMany({where:{id,status:'running'},data:{status:current?.cancelRequested?'cancelled':'completed',resultJson:JSON.stringify(resultPayload),finishedAt:new Date()}});
  }catch(error){
   if(reserved&&!generated)await db.subscription.update({where:{id:reserved},data:{aiUsageCount:{decrement:1}}}).catch(()=>{});
   await db.designGenerationJob.updateMany({where:{id,status:'running'},data:{status:'failed',resultJson:null,error:generated?'Generation finished but its result could not be stored. Contact support before retrying.':error instanceof Error?error.message:'Generation failed',finishedAt:new Date()}});

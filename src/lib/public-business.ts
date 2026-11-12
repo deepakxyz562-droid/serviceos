@@ -23,6 +23,7 @@ import { isTemplatedDescription } from '@/lib/marketplace/industry-content'
 import { sharedCacheWrap, sharedCacheDeleteByPrefix } from '@/lib/shared-cache'
 import { rethrowIfCircuitOpen } from '@/lib/circuit-breaker'
 import { formatStoreAddress } from '@/lib/format-utils'
+import { normalizeRegionState } from '@/lib/bgos-business-sanitizers'
 
 /**
  * Explicit column selection for the public-business tenant lookup.
@@ -529,7 +530,12 @@ async function buildPublicBusinessData(
 
   const parsedAddr = parseAddressParts(tenant.address);
   const displayCity = tenant.city || parsedAddr.city || null;
-  const displayState = tenant.state || parsedAddr.state || null;
+  const displayState = normalizeRegionState({
+    state: tenant.state || parsedAddr.state || null,
+    country: tenant.country,
+    address: tenant.address,
+    city: displayCity,
+  });
 
   return {
     id: tenant.id,
@@ -1483,7 +1489,12 @@ export interface HubDefaultsResult {
 export function computeHubDefaults(input: HubDefaultsInput): HubDefaultsResult {
   const parsed = parseAddressParts(input.address)
   const city = input.city?.trim() || parsed.city || null
-  const state = input.state?.trim() || parsed.state || null
+  const state = normalizeRegionState({
+    state: input.state?.trim() || parsed.state || null,
+    country: input.country,
+    address: input.address,
+    city,
+  })
   const postalCode = input.postalCode?.trim() || parsed.postalCode || null
 
   const industryPretty = prettyIndustry(input.industry)
@@ -1639,7 +1650,10 @@ export async function seedDefaultServicesForTenant(tenantId: string): Promise<nu
 }
 
 /** Apply computed defaults to a tenant row in the DB. Only fills empty fields. */
-export async function applyHubDefaultsToTenant(tenantId: string): Promise<void> {
+export async function applyHubDefaultsToTenant(
+  tenantId: string,
+  options: { optInMarketplace?: boolean; seedSampleServices?: boolean } = {},
+): Promise<void> {
   const tenant = await db.tenant.findUnique({ where: { id: tenantId } })
   if (!tenant) return
 
@@ -1672,15 +1686,9 @@ export async function applyHubDefaultsToTenant(tenantId: string): Promise<void> 
     where: { id: tenantId },
     data: {
       publicProfileEnabled: defaults.publicProfileEnabled,
-      // Opt into the marketplace browse grid ONLY if the tenant has never
-      // interacted with the marketplace opt-in (marketplaceTermsAcceptedAt
-      // IS null = never went through onboarding step 2's toggle). This fixes
-      // the "older users invisible on marketplace" issue without overriding
-      // an explicit opt-OUT from a user who completed onboarding and chose
-      // not to be listed.
-      ...(tenant.marketplaceTermsAcceptedAt
-        ? {}
-        : { marketplaceOptIn: true, marketplaceTermsAcceptedAt: new Date() }),
+      ...(options.optInMarketplace && !tenant.marketplaceTermsAcceptedAt
+        ? { marketplaceOptIn: true, marketplaceTermsAcceptedAt: new Date() }
+        : {}),
       publicSlug: defaults.publicSlug,
       city: defaults.city,
       state: defaults.state,
@@ -1697,15 +1705,15 @@ export async function applyHubDefaultsToTenant(tenantId: string): Promise<void> 
     },
   })
 
-  // ── Also seed default Service rows from the industry kit ────────────
-  // This makes the "Services Offered" section on the public Hub render
-  // immediately on onboarding completion. Safe: only seeds if the tenant
-  // has zero existing services. Non-fatal: failures are logged but don't
-  // break onboarding.
-  try {
-    await seedDefaultServicesForTenant(tenantId)
-  } catch (err) {
-    console.error('[applyHubDefaultsToTenant] seedDefaultServicesForTenant failed:', err)
+  // Only seed synthetic industry-kit Service rows when explicitly requested
+  // (e.g. SuperAdmin marketplace backfill), so real BGOS workspaces don't get
+  // phantom placeholder services injected into their catalog.
+  if (options.seedSampleServices) {
+    try {
+      await seedDefaultServicesForTenant(tenantId)
+    } catch (err) {
+      console.error('[applyHubDefaultsToTenant] seedDefaultServicesForTenant failed:', err)
+    }
   }
 }
 

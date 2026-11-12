@@ -1,10 +1,11 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, ActivityIndicator, Alert, Easing, Image, Linking, Modal, Pressable, useWindowDimensions, ScrollView, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, ActivityIndicator, Alert, Easing, Image, Linking, Modal, Pressable, Share, useWindowDimensions, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card, Screen, Action, ErrorNotice, MenuRow, Badge, MetricCard, ui, colors, Avatar, Loading } from '../../src/components/ui';
 import { detectDeviceCountryAndTimezone, getGreetingForLocalTime } from '../../src/lib/country-codes';
 import { extractCityOrLocality } from '../../src/lib/address';
+import { BGOS_PUBLIC_WEB_URL } from '../../src/lib/constants';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const brandMark = require('../../assets/brand-mark.png');
@@ -19,7 +20,6 @@ import { SidebarDrawer } from '../../src/components/navigation/sidebar-drawer';
 import { PushPromptModal } from '../../src/components/notifications/push-prompt';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import { GrowthActionSheet } from '../../src/components/gbp/growth-action-sheet';
-import { HomeStoryBubblesStrip } from '../../src/components/gbp/ai-agent-home-card';
 import type { AnalyticsResult, GbpPlaceResult } from '../../src/components/gbp/types';
 import type { BgosConversation, BgosWorkspace } from '../../src/types/bgos-contracts';
 
@@ -51,6 +51,8 @@ type Competitor = {
   recentReviews?: Array<{ author?: string; rating: number | null; text: string; relativeTime?: string }>;
   mapsRank?: number | null;
   rank?: number;
+  ordinalRank?: number;
+  isSelf?: boolean;
   mapsUrl: string | null;
   websiteUrl?: string | null;
   lastSeoScore?: number | null;
@@ -59,6 +61,7 @@ type Competitor = {
 
 type CompetitorsResponse = {
   competitors: Competitor[];
+  selfBusiness?: Competitor;
   migrationRequired?: boolean;
   placesUnavailable?: boolean;
 };
@@ -114,33 +117,25 @@ interface DiscoverResponse {
 }
 
 /**
- * Destinations kept reachable from Home ("More Tools" grid) — the Dhanda bar
- * shows Home / Review Replies / AI Post / Google Post / Google Media; every
- * other operation stays one tap away here.
+ * Secondary operations & billing destinations — primary daily tools live in the
+ * 4x2 Quick Actions grid near the top of Home and Profile Utilities in the GBP Card.
  */
 const MORE_TOOLS: {
   label: string;
   route: string;
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
 }[] = [
-  { label: 'My Plan', route: '/my-plan', icon: 'credit-card' },
-  { label: 'Brand Brain', route: '/preferences', icon: 'psychology' },
-  { label: 'WhatsApp Reviews', route: '/(tabs)/reviews', icon: 'chat' },
-  { label: 'Manage Profile', route: '/manage-profile', icon: 'storefront' },
-  { label: 'QR Standee', route: '/qr-standee', icon: 'qr-code-2' },
-  { label: 'Growth Report', route: '/growth-report', icon: 'picture-as-pdf' },
-  { label: 'Outreach', route: '/outreach', icon: 'send' },
-  { label: 'GBP Hub', route: '/growth', icon: 'hub' },
-  { label: 'Photos', route: '/(tabs)/photos', icon: 'photo-library' },
-  { label: 'Google Posts', route: '/(tabs)/marketing?mode=posts', icon: 'article' },
   { label: 'Inbox', route: '/inbox', icon: 'chat-bubble-outline' },
-  { label: 'Submissions', route: '/submissions', icon: 'assignment' },
-  { label: 'Leads', route: '/leads', icon: 'people-outline' },
+  { label: 'Leads Pipeline', route: '/leads', icon: 'people-outline' },
   { label: 'Keyword Planner', route: '/keyword-planner', icon: 'travel-explore' },
-  { label: 'AI SEO & Grid', route: '/seo-growth', icon: 'radar' },
-  { label: 'Appointments', route: '/appointments', icon: 'event' },
-  { label: 'Agents', route: '/agents', icon: 'smart-toy' },
+  { label: 'Outreach', route: '/outreach', icon: 'send' },
+  { label: 'Submissions', route: '/submissions', icon: 'assignment' },
+  { label: 'GBP Hub', route: '/growth', icon: 'hub' },
+  { label: 'Booking Setup', route: '/booking-page', icon: 'event-available' },
+  { label: 'AI Agents', route: '/agents', icon: 'smart-toy' },
   { label: 'Integrations', route: '/integrations', icon: 'extension' },
+  { label: 'My Plan', route: '/my-plan', icon: 'credit-card' },
+  { label: 'Help & FAQ', route: '/help', icon: 'help-outline' },
 ];
 
 function MoreToolsGrid() {
@@ -149,7 +144,7 @@ function MoreToolsGrid() {
     <Card style={{ gap: 12 }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="All Operations & Tools, See All"
+        accessibilityLabel="More Operations and Billing, See All"
         onPress={() => router.push('/(tabs)/tools')}
         style={({ pressed }) => [
           ui.row,
@@ -161,7 +156,7 @@ function MoreToolsGrid() {
           },
         ]}
       >
-        <Text style={ui.heading}>All Operations & Tools</Text>
+        <Text style={ui.heading}>More Operations &amp; Billing</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
           <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>See All</Text>
           <MaterialIcons name="chevron-right" size={18} color={colors.brand} />
@@ -196,127 +191,6 @@ function MoreToolsGrid() {
             </Text>
           </Pressable>
         ))}
-      </View>
-    </Card>
-  );
-}
-
-/**
- * Growth & Brand Cockpit Quick Strip:
- * High-visibility 4-action quick launch bar surfacing Brand Brain, Manage Profile,
- * QR Standees, and Growth Report directly on the mobile Home screen.
- */
-function GrowthCockpitQuickStrip() {
-  const router = useRouter();
-  const shortcuts = [
-    {
-      label: 'Brand Brain',
-      desc: 'Tone & Story',
-      route: '/preferences',
-      icon: 'psychology' as const,
-      cardBg: '#FAF5FF',
-      borderColor: '#E9D5FF',
-      iconBg: '#EDE9FE',
-      iconColor: '#7C3AED',
-    },
-    {
-      label: 'Manage Profile',
-      desc: 'Hours & Info',
-      route: '/manage-profile',
-      icon: 'storefront' as const,
-      cardBg: '#F0F9FF',
-      borderColor: '#BAE6FD',
-      iconBg: '#E0F2FE',
-      iconColor: '#0284C7',
-    },
-    {
-      label: 'QR Standee',
-      desc: 'Review Cards',
-      route: '/qr-standee',
-      icon: 'qr-code-2' as const,
-      cardBg: '#F0FDF4',
-      borderColor: '#BBF7D0',
-      iconBg: '#DCFCE7',
-      iconColor: '#059669',
-    },
-    {
-      label: 'Growth Report',
-      desc: 'Monthly PDF',
-      route: '/growth-report',
-      icon: 'analytics' as const,
-      cardBg: '#FFFBEB',
-      borderColor: '#FED7AA',
-      iconBg: '#FEF3C7',
-      iconColor: '#D97706',
-    },
-  ];
-
-  const row1 = shortcuts.slice(0, 2);
-  const row2 = shortcuts.slice(2, 4);
-
-  const renderTile = (sc: (typeof shortcuts)[number]) => (
-    <Pressable
-      key={sc.label}
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${sc.label}`}
-      onPress={() => router.push(sc.route as any)}
-      style={({ pressed }) => ({
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 8,
-        paddingHorizontal: 8,
-        borderRadius: 14,
-        backgroundColor: sc.cardBg,
-        borderWidth: 1,
-        borderColor: sc.borderColor,
-        opacity: pressed ? 0.75 : 1,
-        gap: 9,
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 2,
-        elevation: 1,
-      })}
-    >
-      <View
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 11,
-          backgroundColor: sc.iconBg,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <MaterialIcons name={sc.icon} size={20} color={sc.iconColor} />
-      </View>
-      <View style={{ flex: 1, gap: 1.5 }}>
-        <Text
-          style={{ fontSize: 12.5, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }}
-          numberOfLines={2}
-        >
-          {sc.label}
-        </Text>
-        <Text style={{ fontSize: 10, color: colors.muted, fontWeight: '600' }} numberOfLines={1}>
-          {sc.desc}
-        </Text>
-      </View>
-
-    </Pressable>
-  );
-
-  return (
-    <Card style={{ padding: 14, gap: 12 }}>
-      <View style={[ui.row,{gap:8}]}>
-        <MaterialIcons name="auto-awesome" size={18} color={colors.brand}/>
-        <Text style={[ui.heading,{flexShrink:1}]}>Growth &amp; Brand Cockpit</Text>
-      </View>
-
-      {/* 2x2 Pixel-Perfect Executive Grid */}
-      <View style={{ gap: 9 }}>
-        <View style={{ flexDirection: 'row', gap: 9 }}>{row1.map(renderTile)}</View>
-        <View style={{ flexDirection: 'row', gap: 9 }}>{row2.map(renderTile)}</View>
       </View>
     </Card>
   );
@@ -595,7 +469,24 @@ export default function HomeScreen() {
   const unreadCount = inbox.data ? inbox.data.reduce((s, c) => s + c.unreadCount, 0) : '—';
   const leadTotal = leads.data?.pagination?.total ?? '—';
   const submissionCount = submissions.data?.responses?.length ?? '—';
-  const competitorList = competitors.data?.competitors || [];
+  const rawCompetitorList = competitors.data?.competitors || [];
+  const competitorList = useMemo(() => {
+    const hasSelf = rawCompetitorList.some((c) => c.isSelf);
+    if (hasSelf || !competitors.data?.selfBusiness) return rawCompetitorList;
+    const merged = [...rawCompetitorList, { ...competitors.data.selfBusiness, isSelf: true }];
+    merged.sort((a, b) => (a.mapsRank ?? a.rank ?? 999) - (b.mapsRank ?? b.rank ?? 999));
+    return merged;
+  }, [rawCompetitorList, competitors.data?.selfBusiness]);
+  const selfCompetitor = useMemo(
+    () => competitorList.find((c) => c.isSelf) || competitors.data?.selfBusiness || null,
+    [competitorList, competitors.data?.selfBusiness],
+  );
+  const displayedHomeCompetitors = useMemo(() => {
+    const top8 = competitorList.slice(0, 8);
+    if (!selfCompetitor) return top8;
+    if (top8.some((c) => c.isSelf || c.id === selfCompetitor.id)) return top8;
+    return [...competitorList.slice(0, 7), { ...selfCompetitor, isSelf: true }];
+  }, [competitorList, selfCompetitor]);
   const actions = (growthActions.data?.actions || []).filter((a) => !a.dismissed);
   const totalDone = growthActions.data?.totalDone ?? 0;
   const totalTarget = growthActions.data?.totalTarget ?? 10;
@@ -667,39 +558,96 @@ export default function HomeScreen() {
   const greetingText = getGreetingForLocalTime(workspace.data?.locale?.timeZone);
   const firstGreetingName = (user?.name || profileName || 'there').trim().split(/\s+/)[0];
 
-  const [actionsExpanded, setActionsExpanded] = useState(false);
   const place = gbpPlace.data?.place || gbpPlace.data?.tenantFallback;
   const address = place?.address || '';
   const city = extractCityOrLocality(address, (place as any)?.city || (workspace.data as any)?.tenant?.city);
   const category = place?.category || 'Local Business';
   const completionScore = place?.completionScore ?? 76;
 
-  const actionIcons = useMemo(
+  // 4 profile-specific utilities nested inside the GBP Verified Card (zero overlap with Quick Actions)
+  const gbpUtilities = useMemo(
     () => [
-      { id: 'edit_profile', label: 'Edit profile', icon: 'edit', onPress: () => router.push('/manage-profile') },
-      { id: 'qr_standee', label: 'QR Standee', icon: 'qr-code-2', onPress: () => router.push('/qr-standee') },
-      { id: 'reviews', label: 'Reviews', icon: 'star-outline', onPress: () => router.push('/(tabs)/reviews') },
-      { id: 'add_photo', label: 'Add photo', icon: 'add-a-photo', onPress: () => router.push('/(tabs)/photos') },
-      { id: 'performance', label: 'Performance', icon: 'insights', onPress: () => router.push('/growth-report') },
-      { id: 'edit_services', label: 'Edit services', icon: 'miscellaneous-services', onPress: () => router.push('/services-management') },
-      { id: 'edit_products', label: 'Edit products', icon: 'shopping-bag', onPress: () => router.push('/manage-profile') },
-      { id: 'bookings', label: 'Bookings', icon: 'event-available', onPress: () => router.push('/booking-page') },
-      { id: 'qa', label: 'Q&A', icon: 'question-answer', onPress: () => router.push('/help') },
-      { id: 'add_update', label: 'Add update', icon: 'post-add', onPress: () => router.push('/(tabs)/marketing?generate=1') },
+      { id: 'edit_info', label: 'Edit Info', icon: 'edit' as const, onPress: () => router.push('/manage-profile') },
+      { id: 'services', label: 'Services', icon: 'miscellaneous-services' as const, onPress: () => router.push('/services-management') },
+      { id: 'qr_standee', label: 'QR Standee', icon: 'qr-code-2' as const, onPress: () => router.push('/qr-standee') },
+      { id: 'growth_report', label: 'Growth Report', icon: 'analytics' as const, onPress: () => router.push('/growth-report') },
+    ],
+    [router],
+  );
+
+  // Unified 4x2 Quick Actions grid — daily high-frequency workflows in one clean place
+  const quickActions = useMemo(
+    () => [
       {
-        id: 'ask_reviews',
-        label: 'Ask for reviews',
-        icon: 'share',
+        id: 'add_media',
+        label: 'Add Media',
+        icon: 'add-a-photo' as const,
+        iconBg: '#DCFCE7',
+        iconColor: '#009F50',
+        onPress: () => router.push('/(tabs)/photos'),
+      },
+      {
+        id: 'create_post',
+        label: 'Create Post',
+        icon: 'auto-awesome' as const,
+        iconBg: '#DBEAFE',
+        iconColor: '#2563EB',
+        onPress: () => router.push('/(tabs)/marketing?generate=1'),
+      },
+      {
+        id: 'request_review',
+        label: 'Ask Review',
+        icon: 'rate-review' as const,
+        iconBg: '#FEF3C7',
+        iconColor: '#D97706',
         onPress: () => {
           setReviewModalTab('single');
           setReviewModalOpen(true);
         },
       },
+      {
+        id: 'reply_reviews',
+        label: 'Reviews',
+        icon: 'star-half' as const,
+        iconBg: '#ECFDF5',
+        iconColor: '#059669',
+        onPress: () => router.push('/(tabs)/reviews'),
+      },
+      {
+        id: 'add_lead',
+        label: 'Add Lead',
+        icon: 'person-add' as const,
+        iconBg: '#EEF2FF',
+        iconColor: '#4F46E5',
+        onPress: () => router.push('/leads?create=1'),
+      },
+      {
+        id: 'book_appt',
+        label: 'Book Appt',
+        icon: 'event' as const,
+        iconBg: '#CCFBF1',
+        iconColor: '#0F766E',
+        onPress: () => router.push('/appointments'),
+      },
+      {
+        id: 'brand_brain',
+        label: 'Brand Brain',
+        icon: 'psychology' as const,
+        iconBg: '#F3E8FF',
+        iconColor: '#7C3AED',
+        onPress: () => router.push('/preferences'),
+      },
+      {
+        id: 'ai_seo_grid',
+        label: 'AI SEO & Grid',
+        icon: 'radar' as const,
+        iconBg: '#E0F2FE',
+        iconColor: '#0284C7',
+        onPress: () => router.push('/seo-growth'),
+      },
     ],
     [router],
   );
-
-  const visibleActionIcons = actionsExpanded ? actionIcons : actionIcons.slice(0, 7);
 
   const homeTopBar = (
     <View
@@ -1060,98 +1008,208 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {/* ── 11 Circular Icon Buttons Grid with Less/More Toggle ── */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 14, columnGap: 4, justifyContent: 'space-between', paddingTop: 4 }}>
-          {visibleActionIcons.map((act) => (
+        {/* ── 4 Profile Utility Shortcuts (Edit Info, Services, QR Standee, Growth Report) ── */}
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            paddingTop: 8,
+            borderTopWidth: 1,
+            borderTopColor: '#F1F5F9',
+          }}
+        >
+          {gbpUtilities.map((util) => (
+            <Pressable
+              key={util.id}
+              accessibilityRole="button"
+              accessibilityLabel={util.label}
+              onPress={util.onPress}
+              style={({ pressed }) => ({
+                width: '23.5%',
+                alignItems: 'center',
+                gap: 5,
+                opacity: pressed ? 0.72 : 1,
+              })}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <MaterialIcons name={util.icon} size={19} color="#0F172A" />
+              </View>
+              <Text
+                numberOfLines={1}
+                style={{
+                  fontSize: 11,
+                  fontWeight: '600',
+                  color: '#334155',
+                  textAlign: 'center',
+                }}
+              >
+                {util.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* 1-Tap Business Page & WhatsApp Share Strip */}
+        {!!workspace.data?.links?.profile && (
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: 8,
+              paddingTop: 10,
+              borderTopWidth: 1,
+              borderTopColor: '#F1F5F9',
+            }}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open your business page"
+              onPress={() => {
+                const raw = workspace.data!.links.profile!;
+                const url = raw.startsWith('http') ? raw : `${BGOS_PUBLIC_WEB_URL}${raw}`;
+                void Linking.openURL(url);
+              }}
+              style={({ pressed }) => ({
+                flex: 1.15,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
+                backgroundColor: '#F8FAFC',
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                paddingVertical: 8,
+                borderRadius: 10,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <MaterialIcons name="storefront" size={15} color="#0F172A" />
+              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>
+                Business Page
+              </Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Share business page on WhatsApp"
+              onPress={() => {
+                const raw = workspace.data!.links.profile!;
+                const url = raw.startsWith('http') ? raw : `${BGOS_PUBLIC_WEB_URL}${raw}`;
+                const msg = encodeURIComponent(
+                  `${profileName} — View services, hours, directions & book online: ${url}`,
+                );
+                void Linking.openURL(`https://wa.me/?text=${msg}`);
+              }}
+              style={({ pressed }) => ({
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
+                backgroundColor: '#16A34A',
+                paddingVertical: 8,
+                borderRadius: 10,
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <MaterialIcons name="chat" size={14} color="#FFFFFF" />
+              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>
+                WhatsApp
+              </Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Share business page"
+              onPress={() => {
+                const raw = workspace.data!.links.profile!;
+                const url = raw.startsWith('http') ? raw : `${BGOS_PUBLIC_WEB_URL}${raw}`;
+                void Share.share({
+                  title: profileName,
+                  message: `${profileName}: ${url}`,
+                  url,
+                });
+              }}
+              style={({ pressed }) => ({
+                paddingHorizontal: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 4,
+                backgroundColor: '#ECFDF5',
+                borderWidth: 1,
+                borderColor: '#BBF7D0',
+                paddingVertical: 8,
+                borderRadius: 10,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <MaterialIcons name="share" size={15} color="#059669" />
+              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#059669' }}>
+                Share
+              </Text>
+            </Pressable>
+          </View>
+        )}
+      </Card>
+
+      {/* Unified 4x2 Quick Actions Card — directly above analytics for instant access */}
+      <Card style={{ padding: 14, gap: 12, borderRadius: 16 }}>
+        <View style={[ui.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
+          <Text style={ui.heading}>Quick Actions</Text>
+          <Pressable onPress={() => router.push('/(tabs)/tools')} hitSlop={8}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>All Tools</Text>
+          </Pressable>
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 10, justifyContent: 'space-between' }}>
+          {quickActions.map((act) => (
             <Pressable
               key={act.id}
               accessibilityRole="button"
               accessibilityLabel={act.label}
               onPress={act.onPress}
               style={({ pressed }) => ({
-                width: '23%',
+                width: compactActions ? '48.5%' : '23.5%',
                 alignItems: 'center',
-                gap: 5,
-                opacity: pressed ? 0.75 : 1,
+                gap: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 4,
+                borderRadius: 12,
+                backgroundColor: pressed ? '#F1F5F9' : '#F8FAFC',
+                borderWidth: 1,
+                borderColor: '#EEF2F6',
               })}
             >
               <View
                 style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: '#F8FAFC',
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
+                  backgroundColor: act.iconBg,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.05,
-                  shadowRadius: 2,
-                  elevation: 1,
                 }}
               >
-                <MaterialIcons name={act.icon as any} size={22} color="#1E293B" />
+                <MaterialIcons name={act.icon} size={20} color={act.iconColor} />
               </View>
               <Text
-                numberOfLines={2}
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: '600',
-                  color: '#334155',
-                  textAlign: 'center',
-                  lineHeight: 13,
-                  minHeight: 26,
-                }}
+                numberOfLines={1}
+                style={{ fontSize: 11, fontWeight: '700', color: colors.ink, textAlign: 'center' }}
               >
                 {act.label}
               </Text>
             </Pressable>
           ))}
-
-          {/* Toggle Button: More / Less */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={actionsExpanded ? 'Show less actions' : 'Show more actions'}
-            onPress={() => setActionsExpanded(!actionsExpanded)}
-            style={({ pressed }) => ({
-              width: '23%',
-              alignItems: 'center',
-              gap: 5,
-              opacity: pressed ? 0.75 : 1,
-            })}
-          >
-            <View
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: '#F1F5F9',
-                borderWidth: 1,
-                borderColor: '#CBD5E1',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <MaterialIcons
-                name={actionsExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                size={24}
-                color="#475569"
-              />
-            </View>
-            <Text
-              style={{
-                fontSize: 10.5,
-                fontWeight: '700',
-                color: '#475569',
-                textAlign: 'center',
-                minHeight: 26,
-              }}
-            >
-              {actionsExpanded ? 'Less' : 'More'}
-            </Text>
-          </Pressable>
         </View>
       </Card>
 
@@ -1159,8 +1217,6 @@ export default function HomeScreen() {
         message={workspace.error || inbox.error || bookings.error || leads.error || submissions.error}
         retry={refresh}
       />
-
-      <GrowthCockpitQuickStrip />
 
       {/* Marketing Score — unified 3-slide carousel (Gauge, Growth line chart, Marketing tracker) */}
       <MarketingScoreCard
@@ -1254,40 +1310,6 @@ export default function HomeScreen() {
           )
         }
       />
-
-      {/* Benchmark Action Story Bubbles (Screenshot 2) */}
-      <HomeStoryBubblesStrip
-        onAddPhotos={() => router.push('/(tabs)/photos')}
-        onOpenPosts={() => router.push('/(tabs)/marketing')}
-        onOpenReviews={() => {
-          setReviewModalTab('single');
-          setReviewModalOpen(true);
-        }}
-        onPhotoBoost={() => router.push('/(tabs)/photos')}
-      />
-
-      {/* Quick Actions Bar */}
-      <Card style={{padding:14, gap:10}}>
-        <Text style={ui.heading}>Quick Actions</Text>
-        <View style={{flexDirection:'row', flexWrap:'wrap', gap:8}}>
-          {([
-            {label:'Create post', icon:'auto-awesome', onPress:()=>router.push('/(tabs)/marketing?generate=1')},
-            {label:'Add lead', icon:'person-add', onPress:()=>router.push('/leads?create=1')},
-            {label:'Book appointment', icon:'event', onPress:()=>router.push('/appointments')},
-            {label:'Request review', icon:'star-outline', onPress:()=>{
-              setReviewModalTab('single');
-              setReviewModalOpen(true);
-            }},
-          ] as const).map(action=>(
-            <Pressable key={action.label} accessibilityRole="button" onPress={action.onPress}
-              style={({pressed})=>({flexGrow:1,flexBasis:compactActions?'46%':0,minHeight:52,alignItems:'center',justifyContent:'center',
-                paddingVertical:6,gap:4,borderRadius:10,backgroundColor:pressed?'#DCFCE7':'#F3F8F5'})}>
-              <MaterialIcons name={action.icon} size={20} color={colors.brand}/>
-              <Text style={{textAlign:'center',fontSize:12,fontWeight:'600',color:colors.ink}}>{action.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </Card>
 
       <Text style={ui.heading}>Today</Text>
       {/* 2x2 Metric Tiles */}
@@ -1407,9 +1429,18 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         </View>
-        <Text style={[ui.caption, { marginTop: -4, fontWeight: '700', letterSpacing: 0.4 }]}>
-          LOCAL COMPETITORS • WITHIN 5 KM
-        </Text>
+        <View style={[ui.row, { justifyContent: 'space-between', marginTop: -4 }]}>
+          <Text style={[ui.caption, { fontWeight: '700', letterSpacing: 0.4 }]}>
+            LOCAL COMPETITORS • WITHIN 5 KM
+          </Text>
+          {selfCompetitor ? (
+            <View style={{ backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: '#1D4ED8' }}>
+                Your Rank: #{Math.round(Number(selfCompetitor.mapsRank ?? selfCompetitor.rank ?? 1))}
+              </Text>
+            </View>
+          ) : null}
+        </View>
 
         {competitors.loading && !competitors.data ? (
           <Loading />
@@ -1429,6 +1460,9 @@ export default function HomeScreen() {
         ) : (
           <>
             <View style={[ui.row, { justifyContent: 'space-between', paddingHorizontal: 4 }]}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.muted, letterSpacing: 0.6, width: 42 }}>
+                RANK
+              </Text>
               <Text style={{ fontSize: 10, fontWeight: '800', color: colors.muted, letterSpacing: 0.6, flex: 1 }}>
                 BUSINESS
               </Text>
@@ -1437,23 +1471,56 @@ export default function HomeScreen() {
               </Text>
               <View style={{ width: 20 }} />
             </View>
-            {competitorList.slice(0, 8).map((comp, idx) => {
+            {displayedHomeCompetitors.map((comp, idx) => {
               const expanded = expandedCompetitor === comp.id;
+              const isSelf = Boolean(comp.isSelf);
+              const rawRank = comp.mapsRank ?? comp.rank ?? idx + 1;
+              const rankVal = Math.max(1, Math.round(Number(rawRank)));
+              const rankStyle = isSelf
+                ? { bg: '#2563EB', fg: '#FFFFFF' }
+                : rankVal <= 3
+                  ? { bg: '#DCFCE7', fg: '#15803D' }
+                  : rankVal <= 10
+                    ? { bg: '#FEF3C7', fg: '#B45309' }
+                    : { bg: '#F1F5F9', fg: '#475569' };
               return (
-                <View key={comp.id} style={{ borderBottomWidth: idx < Math.min(competitorList.length, 8) - 1 ? 1 : 0, borderBottomColor: colors.line }}>
+                <View
+                  key={comp.id}
+                  style={{
+                    borderBottomWidth: idx < displayedHomeCompetitors.length - 1 ? 1 : 0,
+                    borderBottomColor: isSelf ? '#BFDBFE' : colors.line,
+                    backgroundColor: isSelf ? '#EFF6FF' : 'transparent',
+                    borderRadius: isSelf ? 10 : 0,
+                    paddingHorizontal: isSelf ? 6 : 0,
+                  }}
+                >
                   <Pressable
                     accessibilityRole="button"
                     accessibilityState={{ expanded }}
-                    accessibilityLabel={`Competitor ${comp.name}${expanded ? ', hide details' : ', show details'}`}
+                    accessibilityLabel={`${isSelf ? 'Your business' : 'Competitor'} ${comp.name}, rank ${rankVal}${expanded ? ', hide details' : ', show details'}`}
                     onPress={() => setExpandedCompetitor(expanded ? null : comp.id)}
                     style={[ui.row, { justifyContent: 'space-between', paddingVertical: 9 }]}
                   >
+                    <View style={{ width: 42, alignItems: 'flex-start' }}>
+                      <View style={{ backgroundColor: rankStyle.bg, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: rankStyle.fg }}>
+                          #{rankVal}
+                        </Text>
+                      </View>
+                    </View>
                     <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.ink }} numberOfLines={1}>
-                        {comp.name}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Text style={{ fontSize: 12.5, fontWeight: '700', color: isSelf ? '#1E3A8A' : colors.ink, flexShrink: 1 }} numberOfLines={1}>
+                          {comp.name}
+                        </Text>
+                        {isSelf ? (
+                          <View style={{ backgroundColor: '#2563EB', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5 }}>
+                            <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFFFFF' }}>YOU</Text>
+                          </View>
+                        ) : null}
+                      </View>
                       <Text style={{ fontSize: 10, color: colors.muted }}>
-                        {comp.distanceKm != null ? `${comp.distanceKm} km away` : 'Nearby'}
+                        {isSelf ? 'Your Google Business Profile' : comp.distanceKm != null ? `${comp.distanceKm} km away` : 'Nearby'}
                         {comp.reviewCount != null ? ` · ${comp.reviewCount} reviews` : ''}
                       </Text>
                     </View>

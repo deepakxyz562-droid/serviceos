@@ -70,15 +70,15 @@ export type AnalyticsResult = {
     avgRating?: number;
     responseRate: number;
     postsPublished?: number;
-    reviewsDeltaPct8Wks?: number;
+    reviewsDeltaPct8Wks?: number | null;
     ratingDeltaPct8Wks?: number;
   };
   reviewTrends?: {
     avgReviewsPerWeek: number;
     industryAvg: number;
     weeks: Array<{ label: string; count: number }>;
-    total8Weeks: number;
-    deltaPct8Weeks: number;
+    total8Weeks?: number;
+    deltaPct8Weeks: number | null;
   };
   sixMonthTrends?: {
     months: string[];

@@ -38,10 +38,23 @@ import type { GbpPhoto } from './types';
 import { FullscreenImageModal } from './fullscreen-image-modal';
 import {
   appendImageCandidate,
+  computeMediaSeoReadiness,
   getAspectRatioNumeric,
+  slugifySeoFilename,
+  type AiPhotoStylePreset,
   type ImageCandidate,
+  type ImageGenerationSourceType,
   type ImageProviderChoice,
 } from '../../../../shared/image-review';
+
+const MOBILE_STYLE_PRESETS: Array<{ id: AiPhotoStylePreset; label: string }> = [
+  { id: 'real_photo', label: 'Real Photo' },
+  { id: 'product_studio', label: 'Product Studio' },
+  { id: 'team_action', label: 'Team Action' },
+  { id: 'before_after', label: 'Finished Work' },
+  { id: 'lifestyle', label: 'Lifestyle' },
+  { id: 'festive', label: 'Festive' },
+];
 
 export type MediaScheduleMode = 'daily' | 'weekly' | 'instant' | 'draft';
 export type GbpCategoryType =
@@ -74,11 +87,16 @@ interface AiMetadataResponse {
   success?: boolean;
   title?: string;
   description?: string;
+  altText?: string;
   tags?: string[];
   category?: GbpCategoryType;
   suggestedTitles?: string[];
   suggestedTags?: string[];
   businessName?: string;
+  seoFilename?: string;
+  usedSearchTerms?: string[];
+  geoTagged?: boolean;
+  seoScore?: number;
 }
 
 const GBP_CATEGORIES: { value: GbpCategoryType; label: string }[] = [
@@ -137,15 +155,20 @@ interface BusinessImageIdea {
   title: string;
   icon: string;
   prompt: string;
+  gbpCategory?: string;
+  searchKeyword?: string;
 }
 
 interface BusinessAiContext {
   name?: string;
   category?: string;
   location?: string;
+  city?: string | null;
   products?: string[];
   services?: string[];
   website?: string;
+  topSearchTerms?: Array<{ keyword: string; impressions?: number; threshold?: number | null }>;
+  geoCoordinates?: { latitude: number; longitude: number } | null;
 }
 
 export function MediaMetadataSheet({
@@ -171,6 +194,7 @@ export function MediaMetadataSheet({
 }) {
   const detected = detectDeviceCountryAndTimezone();
   const [composerMode, setComposerMode] = useState<'upload' | 'ai_generate'>(initialMode);
+  const [aiStep, setAiStep] = useState<1 | 2>(1);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [aiUploads, setAiUploads] = useState<UploadedMediaState[]>([]);
   const [videoWarning, setVideoWarning] = useState<string | null>(null);
@@ -198,6 +222,7 @@ export function MediaMetadataSheet({
     (activeBatchId ? batchWarnings[activeBatchId] : null) || videoWarning;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [aiAltText, setAiAltText] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [category, setCategory] = useState<GbpCategoryType>('ADDITIONAL');
@@ -213,6 +238,7 @@ export function MediaMetadataSheet({
   const [intent, setIntent] = useState<AiMediaIntent>('local_seo');
   const [suggestedTitles, setSuggestedTitles] = useState<string[]>([]);
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [usedSearchTerms, setUsedSearchTerms] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -226,16 +252,22 @@ export function MediaMetadataSheet({
   const [selectedRefUrls, setSelectedRefUrls] = useState<string[]>([]);
   const [uploadingRef, setUploadingRef] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
-  const [aiAspectRatio, setAiAspectRatio] = useState<'1:1' | '4:5' | '9:16'>('1:1');
-  const [aiProviderChoice, setAiProviderChoice] = useState<ImageProviderChoice>('cloudflare');
+  const [aiStylePreset, setAiStylePreset] = useState<AiPhotoStylePreset>('real_photo');
+  const [aiAspectRatio, setAiAspectRatio] = useState<'1:1' | '4:5' | '9:16'>('4:5');
+  const [aiProviderChoice, setAiProviderChoice] = useState<ImageProviderChoice>('gemini');
   const [generatingAiImage, setGeneratingAiImage] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [aiSeoFilename, setAiSeoFilename] = useState<string | null>(null);
+  const [aiGeoTagged, setAiGeoTagged] = useState<boolean>(false);
+  const [aiSourceType, setAiSourceType] = useState<ImageGenerationSourceType | null>(null);
+  const [aiFallbackReason, setAiFallbackReason] = useState<string | null>(null);
   const [aiCandidates, setAiCandidates] = useState<ImageCandidate[]>([]);
   const [aiApprovedUrl, setAiApprovedUrl] = useState<string | null>(null);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [inspectStaticUrl, setInspectStaticUrl] = useState<string | null>(null);
   const [inspectStaticTitle, setInspectStaticTitle] = useState<string | null>(null);
   const [lastAiUsedPrompt, setLastAiUsedPrompt] = useState('');
+  const [seoChecklistExpanded, setSeoChecklistExpanded] = useState(false);
 
   const isPersonalOrGenericName = (candidate?: string | null): boolean => {
     if (!candidate) return true;
@@ -259,6 +291,61 @@ export function MediaMetadataSheet({
     return (businessName || businessContext?.name || 'Business').trim();
   }, [businessName, businessContext?.name]);
 
+  const effectiveSeoFilename = useMemo(() => {
+    if (aiSeoFilename) return aiSeoFilename;
+    if (composerMode !== 'ai_generate' && uploads[0]?.local?.name) {
+      return uploads[0].local.name;
+    }
+    return slugifySeoFilename(
+      title || aiPrompt || effectiveBusinessName || 'business-photo',
+      businessContext?.city || businessContext?.location?.split(',')[0] || null,
+      'jpg',
+    );
+  }, [
+    aiSeoFilename,
+    composerMode,
+    uploads,
+    title,
+    aiPrompt,
+    effectiveBusinessName,
+    businessContext?.city,
+    businessContext?.location,
+  ]);
+
+  const liveSeoReadiness = useMemo(
+    () =>
+      computeMediaSeoReadiness({
+        title,
+        description,
+        tags,
+        category,
+        city: businessContext?.city || businessContext?.location?.split(',')[0]?.trim() || null,
+        searchTerms: usedSearchTerms,
+        seoFilename: effectiveSeoFilename,
+        url: generatedImageUrl || uploads[0]?.cloudUrl || editingItem?.url,
+        geoTagged:
+          composerMode === 'ai_generate'
+            ? aiGeoTagged || Boolean(businessContext?.geoCoordinates)
+            : false,
+      }),
+    [
+      title,
+      description,
+      tags,
+      category,
+      businessContext?.city,
+      businessContext?.location,
+      businessContext?.geoCoordinates,
+      usedSearchTerms,
+      effectiveSeoFilename,
+      generatedImageUrl,
+      uploads,
+      editingItem?.url,
+      composerMode,
+      aiGeoTagged,
+    ],
+  );
+
   function openPhotoInspection(url: string, photoTitle?: string) {
     setInspectStaticTitle(photoTitle || `${effectiveBusinessName} Photo`);
     setInspectStaticUrl(url);
@@ -281,7 +368,12 @@ export function MediaMetadataSheet({
         ideas?: BusinessImageIdea[];
       }>(`/api/social/ai-image-ideas${qs}`);
       if (reqKey !== sessionKeyRef.current) return;
-      if (res?.business) setBusinessContext(res.business);
+      if (res?.business) {
+        setBusinessContext(res.business);
+        if (Array.isArray(res.business.topSearchTerms) && res.business.topSearchTerms.length > 0) {
+          setUsedSearchTerms(res.business.topSearchTerms.map((t) => t.keyword).filter(Boolean));
+        }
+      }
       if (Array.isArray(res?.previousPhotos)) setPreviousPhotos(res.previousPhotos);
       if (Array.isArray(res?.ideas)) setAiIdeas(res.ideas);
     } catch (err: unknown) {
@@ -297,6 +389,7 @@ export function MediaMetadataSheet({
     selectedIntent: AiMediaIntent,
     mediaType: 'photo' | 'video',
     hint?: string,
+    opts?: { imageUrl?: string; aiPrompt?: string; geoTagged?: boolean },
   ) {
     const reqKey = sessionKeyRef.current;
     setAiLoading(true);
@@ -308,15 +401,23 @@ export function MediaMetadataSheet({
           mediaType,
           intent: selectedIntent,
           customHint: hint,
+          imageUrl: opts?.imageUrl || (composerMode === 'ai_generate' ? generatedImageUrl : undefined),
+          aiPrompt: opts?.aiPrompt || (composerMode === 'ai_generate' ? aiPrompt.trim() || undefined : undefined),
+          geoTagged: opts?.geoTagged ?? aiGeoTagged,
         },
       });
       if (reqKey !== sessionKeyRef.current) return;
       if (res?.title) setTitle(res.title);
       if (res?.description) setDescription(res.description);
+      if (res?.altText) setAiAltText(res.altText);
       if (Array.isArray(res?.tags) && res.tags.length > 0) setTags(res.tags);
       if (res?.category) setCategory(res.category);
       if (Array.isArray(res?.suggestedTitles)) setSuggestedTitles(res.suggestedTitles);
       if (Array.isArray(res?.suggestedTags)) setSuggestedTags(res.suggestedTags);
+      if (Array.isArray(res?.usedSearchTerms) && res.usedSearchTerms.length > 0) {
+        setUsedSearchTerms(res.usedSearchTerms);
+      }
+      if (res?.seoFilename && !aiSeoFilename) setAiSeoFilename(res.seoFilename);
     } catch {
       // Fall back cleanly using business name without blocking user
       if (reqKey === sessionKeyRef.current && !title) {
@@ -366,13 +467,21 @@ export function MediaMetadataSheet({
     setVideoWarning(null);
     setTagInput('');
     setIdeasError(null);
+    setAiStep(1);
     setGeneratedImageUrl(null);
+    setAiSeoFilename(null);
+    setAiGeoTagged(false);
+    setAiSourceType(null);
+    setAiFallbackReason(null);
+    setAiAltText('');
+    setSeoChecklistExpanded(false);
     setAiCandidates([]);
     setAiApprovedUrl(null);
     setFullscreenOpen(false);
     setInspectStaticUrl(null);
     setLastAiUsedPrompt('');
     setAiPrompt('');
+    setAiStylePreset('real_photo');
     setSelectedRefUrls([]);
 
     const d = detectDeviceCountryAndTimezone();
@@ -514,12 +623,26 @@ export function MediaMetadataSheet({
     }
   }
 
-  function applyGeneratedCandidateUrl(url: string) {
+  function applyGeneratedCandidateUrl(
+    url: string,
+    meta?: {
+      seoFilename?: string | null;
+      geoTagged?: boolean;
+      sourceType?: ImageGenerationSourceType | null;
+      fallbackReason?: string | null;
+    },
+  ) {
     setGeneratedImageUrl(url);
+    if (meta) {
+      if (meta.seoFilename !== undefined) setAiSeoFilename(meta.seoFilename || null);
+      if (meta.geoTagged !== undefined) setAiGeoTagged(Boolean(meta.geoTagged));
+      if (meta.sourceType !== undefined) setAiSourceType(meta.sourceType || null);
+      if (meta.fallbackReason !== undefined) setAiFallbackReason(meta.fallbackReason || null);
+    }
     const localItem = normalizePendingUpload({
       uri: url,
-      name: `ai-business-photo-${Date.now()}.png`,
-      mimeType: 'image/png',
+      name: meta?.seoFilename || `ai-business-photo-${Date.now()}.jpg`,
+      mimeType: 'image/jpeg',
       mediaType: 'image',
     });
     setActiveBatchId(null);
@@ -554,7 +677,7 @@ export function MediaMetadataSheet({
       if (opts?.providerOverride) {
         setAiProviderChoice(opts.providerOverride);
       }
-      const useAuto = autoFromBusiness || !trimmedPrompt;
+      const useAuto = autoFromBusiness || (!trimmedPrompt && selectedRefUrls.length === 0);
       const effectiveProvider: ImageProviderChoice =
         opts?.providerOverride || (selectedRefUrls.length > 0 ? 'gemini' : aiProviderChoice);
       setLastAiUsedPrompt(
@@ -568,6 +691,9 @@ export function MediaMetadataSheet({
           requestId,
           prompt: trimmedPrompt || undefined,
           autoFromBusiness: useAuto,
+          isPoster: false,
+          isGbpPhoto: true,
+          stylePreset: aiStylePreset,
           referenceImageUrls: selectedRefUrls,
           aspectRatio: aiAspectRatio,
           provider: effectiveProvider,
@@ -581,21 +707,34 @@ export function MediaMetadataSheet({
       if (reqKey !== sessionKeyRef.current) return;
       const jobId = startRes?.jobId || requestId;
       const pollStart = Date.now();
-      let generated: string | null = null;
+      let completedResult: {
+        url: string;
+        sourceType?: ImageGenerationSourceType;
+        model?: string;
+        fallbackReason?: string;
+        seoFilename?: string;
+        geoTagged?: boolean;
+        geoCoordinates?: { latitude: number; longitude: number } | null;
+      } | null = null;
       let transientPollErrors = 0;
       while (Date.now() - pollStart < 95000) {
         if (reqKey !== sessionKeyRef.current) return;
         let statusRes: {
           status: string;
           error?: string;
-          result?: { url?: string; assetId?: string } | null;
+          result?: {
+            url?: string;
+            assetId?: string;
+            sourceType?: ImageGenerationSourceType;
+            model?: string;
+            fallbackReason?: string;
+            seoFilename?: string;
+            geoTagged?: boolean;
+            geoCoordinates?: { latitude: number; longitude: number } | null;
+          } | null;
         };
         try {
-          statusRes = await apiRequest<{
-            status: string;
-            error?: string;
-            result?: { url?: string; assetId?: string } | null;
-          }>(`/api/social/designs/image?id=${encodeURIComponent(jobId)}`);
+          statusRes = await apiRequest(`/api/social/designs/image?id=${encodeURIComponent(jobId)}`);
           transientPollErrors = 0;
         } catch (pollErr: unknown) {
           const statusCode =
@@ -613,7 +752,15 @@ export function MediaMetadataSheet({
         }
         if (reqKey !== sessionKeyRef.current) return;
         if (statusRes?.status === 'completed' && statusRes.result?.url) {
-          generated = statusRes.result.url;
+          completedResult = {
+            url: statusRes.result.url,
+            sourceType: statusRes.result.sourceType,
+            model: statusRes.result.model,
+            fallbackReason: statusRes.result.fallbackReason,
+            seoFilename: statusRes.result.seoFilename,
+            geoTagged: statusRes.result.geoTagged,
+            geoCoordinates: statusRes.result.geoCoordinates ?? null,
+          };
           break;
         }
         if (statusRes?.status === 'failed' || statusRes?.status === 'cancelled' || statusRes?.status === 'uncertain') {
@@ -621,26 +768,45 @@ export function MediaMetadataSheet({
         }
         await new Promise((r) => setTimeout(r, 2000));
       }
-      if (!generated) {
+      if (!completedResult) {
         throw new Error('Image generation timed out. Please try again.');
       }
 
-      const localItem = applyGeneratedCandidateUrl(generated);
+      const resolvedSourceType: ImageGenerationSourceType =
+        completedResult.sourceType ||
+        (selectedRefUrls.length > 0 ? 'ai_reference' : 'ai_text');
+      const localItem = applyGeneratedCandidateUrl(completedResult.url, {
+        seoFilename: completedResult.seoFilename || null,
+        geoTagged: Boolean(completedResult.geoTagged),
+        sourceType: resolvedSourceType,
+        fallbackReason: completedResult.fallbackReason || null,
+      });
       setAiCandidates((prev) =>
         appendImageCandidate(prev, {
-          url: generated,
+          url: completedResult.url,
           prompt: trimmedPrompt || undefined,
           provider: effectiveProvider,
           aspectRatio: aiAspectRatio,
+          sourceType: resolvedSourceType,
+          model: completedResult.model,
+          fallbackReason: completedResult.fallbackReason,
+          seoFilename: completedResult.seoFilename,
+          geoTagged: completedResult.geoTagged,
+          geoCoordinates: completedResult.geoCoordinates ?? null,
         }),
       );
       setAiApprovedUrl(null);
       setFullscreenOpen(true);
       void runAiMetadata(
-        [localItem.name],
+        [trimmedPrompt || localItem.name],
         intent,
         'photo',
-        trimmedPrompt || `${businessContext?.name || businessName} commercial showcase`,
+        trimmedPrompt || `${effectiveBusinessName} commercial showcase`,
+        {
+          imageUrl: completedResult.url,
+          aiPrompt: trimmedPrompt || undefined,
+          geoTagged: Boolean(completedResult.geoTagged),
+        },
       );
     } catch (err: unknown) {
       if (reqKey === sessionKeyRef.current) {
@@ -754,7 +920,7 @@ export function MediaMetadataSheet({
     if (isEditMode && editingItem) {
       setSubmitting(true);
       try {
-        const res = await apiRequest<{ success?: boolean }>('/api/social/photos', {
+        const res = await apiRequest<{ success?: boolean; published?: boolean; error?: string }>('/api/social/photos', {
           method: 'PATCH',
           body: {
             postId: editingItem.postId || editingItem.id,
@@ -762,11 +928,16 @@ export function MediaMetadataSheet({
             description: description.trim(),
             tags,
             category,
-            status: scheduleMode === 'draft' ? 'draft' : 'scheduled',
+            publishNow: scheduleMode === 'instant',
+            status: scheduleMode === 'instant' ? 'published' : scheduleMode === 'draft' ? 'draft' : 'scheduled',
           },
         });
-        if (!res?.success) throw new Error('Could not update media details.');
-        await onSaved('Media details updated.');
+        if (!res?.success) throw new Error(res?.error || 'Could not update media details.');
+        await onSaved(
+          scheduleMode === 'instant'
+            ? 'Published media live to Google Business Profile!'
+            : 'Media details updated.',
+        );
         onClose();
       } catch (err: unknown) {
         setErrorMsg(err instanceof Error ? err.message : 'Update failed. Please try again.');
@@ -824,6 +995,7 @@ export function MediaMetadataSheet({
 
     setSubmitting(true);
     try {
+      const resolvedAlt = aiAltText.trim() || title.trim() || undefined;
       const items = readyUrls.map((u, idx) => ({
         url: u.cloudUrl as string,
         thumbnailUrl: u.thumbnailUrl,
@@ -835,6 +1007,10 @@ export function MediaMetadataSheet({
         tags,
         category,
         mediaFormat: u.local.mediaType === 'video' ? ('VIDEO' as const) : ('PHOTO' as const),
+        seoFilename: effectiveSeoFilename,
+        geoTagged: aiGeoTagged,
+        altText: resolvedAlt,
+        seoScore: liveSeoReadiness.score,
       }));
 
       const res = await apiRequest<{ success?: boolean; message?: string }>('/api/social/photos', {
@@ -846,6 +1022,10 @@ export function MediaMetadataSheet({
           description: description.trim() || undefined,
           tags,
           category,
+          seoFilename: effectiveSeoFilename,
+          geoTagged: aiGeoTagged,
+          altText: resolvedAlt,
+          seoScore: liveSeoReadiness.score,
           scheduleMode,
           preferredTime,
           country: selectedCountry.code,
@@ -1053,292 +1233,464 @@ export function MediaMetadataSheet({
             </View>
           ) : composerMode === 'ai_generate' ? (
             <View style={styles.aiStudioBox}>
-              <View style={styles.aiStudioHeaderRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.aiStudioTitle}>Generate Photo for {effectiveBusinessName}</Text>
-                  <Text style={styles.aiStudioSub}>
-                    Select previous business photos so AI preserves your real property, products, and branding, or tap Auto-Create to design from your business profile.
+              {/* 2-Step Wizard Segmented Bar */}
+              <View style={styles.wizardStepBar}>
+                <Pressable
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: aiStep === 1 }}
+                  onPress={() => setAiStep(1)}
+                  style={[styles.wizardStepBtn, aiStep === 1 && styles.wizardStepBtnActive]}
+                >
+                  <View style={[styles.wizardStepNum, aiStep === 1 && styles.wizardStepNumActive]}>
+                    <Text style={[styles.wizardStepNumText, aiStep === 1 && { color: '#FFFFFF' }]}>1</Text>
+                  </View>
+                  <Text style={[styles.wizardStepLabel, aiStep === 1 && styles.wizardStepLabelActive]}>
+                    Create Visual
                   </Text>
-                </View>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: aiStep === 2 }}
+                  onPress={() => setAiStep(2)}
+                  style={[styles.wizardStepBtn, aiStep === 2 && styles.wizardStepBtnActive]}
+                >
+                  <View style={[styles.wizardStepNum, aiStep === 2 && styles.wizardStepNumActive]}>
+                    <Text style={[styles.wizardStepNumText, aiStep === 2 && { color: '#FFFFFF' }]}>2</Text>
+                  </View>
+                  <Text style={[styles.wizardStepLabel, aiStep === 2 && styles.wizardStepLabelActive]}>
+                    SEO &amp; Schedule {generatedImageUrl ? `(${liveSeoReadiness.score}%)` : ''}
+                  </Text>
+                </Pressable>
               </View>
 
-              {ideasError ? (
-                <View style={styles.uploadFailBanner}>
-                  <MaterialIcons name="info-outline" size={14} color={colors.danger} />
-                  <Text style={styles.uploadFailText}>{ideasError}</Text>
-                  <Pressable onPress={() => void loadAiImageIdeas()} style={styles.retryMiniBtn}>
-                    <Text style={styles.retryMiniText}>Retry</Text>
-                  </Pressable>
-                </View>
-              ) : null}
+              {aiStep === 1 ? (
+                <View style={{ gap: 12 }}>
+                  <View style={styles.aiStudioHeaderRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.aiStudioTitle}>Generate Photo for {effectiveBusinessName}</Text>
+                      <Text style={styles.aiStudioSub}>
+                        Pick reference photos to preserve your real storefront/products, choose a style preset, or tap Auto-Generate from your GBP profile.
+                      </Text>
+                    </View>
+                  </View>
 
-              {/* Reference Photos Selector */}
-              <View style={{ gap: 8 }}>
-                <View style={styles.labelRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.aiSubLabel}>
-                      Use Previous Business Photos ({selectedRefUrls.length}/3)
-                    </Text>
+                  {ideasError ? (
+                    <View style={styles.uploadFailBanner}>
+                      <MaterialIcons name="info-outline" size={14} color={colors.danger} />
+                      <Text style={styles.uploadFailText}>{ideasError}</Text>
+                      <Pressable onPress={() => void loadAiImageIdeas()} style={styles.retryMiniBtn}>
+                        <Text style={styles.retryMiniText}>Retry</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+
+                  {/* Reference Photos Selector */}
+                  <View style={{ gap: 8 }}>
+                    <View style={styles.labelRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.aiSubLabel}>
+                          Business Reference Photos ({selectedRefUrls.length}/3)
+                        </Text>
+                        {selectedRefUrls.length > 0 ? (
+                          <View style={styles.activeRefPill}>
+                            <Text style={styles.activeRefPillText}>{selectedRefUrls.length} Active</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Pressable
+                        onPress={() => void pickReferencePhotoFromDevice()}
+                        disabled={uploadingRef || generatingAiImage}
+                        style={styles.uploadRefBtn}
+                      >
+                        {uploadingRef ? (
+                          <ActivityIndicator size="small" color={colors.brandDark} />
+                        ) : (
+                          <MaterialIcons name="add-a-photo" size={13} color={colors.brandDark} />
+                        )}
+                        <Text style={styles.uploadRefText}>
+                          {uploadingRef ? 'Uploading…' : 'Upload Ref'}
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    {ideasLoading && previousPhotos.length === 0 ? (
+                      <View style={{ paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <ActivityIndicator size="small" color="#7C3AED" />
+                        <Text style={{ fontSize: 11.5, color: colors.muted }}>Loading your previous business photos…</Text>
+                      </View>
+                    ) : previousPhotos.length > 0 ? (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 2 }}>
+                        {previousPhotos.map((photo) => {
+                          const selected = selectedRefUrls.includes(photo.url);
+                          const isGbp = photo.source === 'google';
+                          return (
+                            <View key={photo.id} style={{ position: 'relative' }}>
+                              <Pressable
+                                onPress={() => toggleReferencePhoto(photo.url)}
+                                onLongPress={() => openPhotoInspection(photo.url, photo.title)}
+                                style={[styles.refPhotoCard, selected && styles.refPhotoCardActive]}
+                              >
+                                <Image
+                                  source={{ uri: photo.url }}
+                                  style={styles.refPhotoImg}
+                                  resizeMode="cover"
+                                  alt={photo.title || 'Previous business photo'}
+                                />
+                                {isGbp ? (
+                                  <View style={styles.refGbpBadge}>
+                                    <Text style={styles.refGbpBadgeText}>GBP</Text>
+                                  </View>
+                                ) : null}
+                                {selected ? (
+                                  <View style={styles.refPhotoCheck}>
+                                    <MaterialIcons name="check" size={12} color="#FFFFFF" />
+                                  </View>
+                                ) : null}
+                              </Pressable>
+                              <Pressable
+                                onPress={() => openPhotoInspection(photo.url, photo.title)}
+                                hitSlop={6}
+                                style={styles.refPhotoInspectBtn}
+                              >
+                                <MaterialIcons name="zoom-in" size={14} color="#FFFFFF" />
+                              </Pressable>
+                            </View>
+                          );
+                        })}
+                      </ScrollView>
+                    ) : (
+                      <Text style={{ fontSize: 11.5, color: colors.muted }}>
+                        No previous photos saved yet — tap &quot;Upload Ref&quot; to use a real photo of your space, or Auto-Generate below.
+                      </Text>
+                    )}
+
+                    {/* Active Reference Photos Preview Strip */}
                     {selectedRefUrls.length > 0 ? (
-                      <View style={styles.activeRefPill}>
-                        <Text style={styles.activeRefPillText}>{selectedRefUrls.length} Active</Text>
+                      <View style={styles.selectedRefsCard}>
+                        <View style={styles.selectedRefsHeader}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                            <MaterialIcons name="auto-fix-high" size={13} color="#7C3AED" />
+                            <Text style={styles.selectedRefsTitle}>
+                              Reference-Aware Mode ({selectedRefUrls.length}/3)
+                            </Text>
+                          </View>
+                          <Pressable onPress={() => setSelectedRefUrls([])}>
+                            <Text style={styles.clearRefsText}>Clear All</Text>
+                          </Pressable>
+                        </View>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                          {selectedRefUrls.map((url, idx) => {
+                            const photoMatch = previousPhotos.find((p) => p.url === url);
+                            return (
+                              <View key={url} style={styles.selectedRefChipCard}>
+                                <Pressable onPress={() => openPhotoInspection(url, photoMatch?.title)}>
+                                  <Image source={{ uri: url }} style={styles.selectedRefChipImg} resizeMode="cover" />
+                                </Pressable>
+                                <View style={{ flex: 1, paddingHorizontal: 4, justifyContent: 'center' }}>
+                                  <Text style={styles.selectedRefChipTitle} numberOfLines={1}>
+                                    {photoMatch?.title || `Reference #${idx + 1}`}
+                                  </Text>
+                                  <Pressable onPress={() => openPhotoInspection(url, photoMatch?.title)} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                    <MaterialIcons name="zoom-in" size={11} color="#7C3AED" />
+                                    <Text style={styles.selectedRefPreviewLink}>Preview</Text>
+                                  </Pressable>
+                                </View>
+                                <Pressable
+                                  onPress={() => toggleReferencePhoto(url)}
+                                  style={styles.removeRefBtn}
+                                  hitSlop={8}
+                                >
+                                  <MaterialIcons name="close" size={14} color={colors.muted} />
+                                </Pressable>
+                              </View>
+                            );
+                          })}
+                        </ScrollView>
+                        <Text style={styles.selectedRefsHint}>
+                          AI preserves your property architecture, branding, and real products.
+                        </Text>
                       </View>
                     ) : null}
                   </View>
-                  <Pressable
-                    onPress={() => void pickReferencePhotoFromDevice()}
-                    disabled={uploadingRef || generatingAiImage}
-                    style={styles.uploadRefBtn}
-                  >
-                    {uploadingRef ? (
-                      <ActivityIndicator size="small" color={colors.brandDark} />
-                    ) : (
-                      <MaterialIcons name="add-a-photo" size={13} color={colors.brandDark} />
-                    )}
-                    <Text style={styles.uploadRefText}>
-                      {uploadingRef ? 'Uploading…' : 'Upload Ref'}
-                    </Text>
-                  </Pressable>
-                </View>
 
-                {ideasLoading && previousPhotos.length === 0 ? (
-                  <View style={{ paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <ActivityIndicator size="small" color="#7C3AED" />
-                    <Text style={{ fontSize: 11.5, color: colors.muted }}>Loading your previous business photos…</Text>
-                  </View>
-                ) : previousPhotos.length > 0 ? (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 2 }}>
-                    {previousPhotos.map((photo) => {
-                      const selected = selectedRefUrls.includes(photo.url);
-                      const isGbp = photo.source === 'google';
-                      return (
-                        <View key={photo.id} style={{ position: 'relative' }}>
+                  {/* Smart Search-Term Business Idea Prompts */}
+                  {aiIdeas.length > 0 ? (
+                    <View style={{ gap: 6 }}>
+                      <Text style={styles.aiSubLabel}>Quick SEO Scene Ideas</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                        {aiIdeas.map((idea) => (
                           <Pressable
-                            onPress={() => toggleReferencePhoto(photo.url)}
-                            onLongPress={() => openPhotoInspection(photo.url, photo.title)}
-                            style={[styles.refPhotoCard, selected && styles.refPhotoCardActive]}
+                            key={idea.id}
+                            onPress={() => {
+                              setAiPrompt(idea.prompt);
+                              if (
+                                idea.gbpCategory &&
+                                GBP_CATEGORIES.some((c) => c.value === idea.gbpCategory)
+                              ) {
+                                setCategory(idea.gbpCategory as GbpCategoryType);
+                              }
+                            }}
+                            style={styles.ideaChip}
                           >
-                            <Image
-                              source={{ uri: photo.url }}
-                              style={styles.refPhotoImg}
-                              resizeMode="cover"
-                              alt={photo.title || 'Previous business photo'}
-                            />
-                            {isGbp ? (
-                              <View style={styles.refGbpBadge}>
-                                <Text style={styles.refGbpBadgeText}>GBP</Text>
-                              </View>
-                            ) : null}
-                            {selected ? (
-                              <View style={styles.refPhotoCheck}>
-                                <MaterialIcons name="check" size={12} color="#FFFFFF" />
-                              </View>
-                            ) : null}
+                            <Text style={styles.ideaChipText}>{idea.title}</Text>
                           </Pressable>
-                          {/* Tap-to-preview icon overlay */}
-                          <Pressable
-                            onPress={() => openPhotoInspection(photo.url, photo.title)}
-                            hitSlop={6}
-                            style={styles.refPhotoInspectBtn}
-                          >
-                            <MaterialIcons name="zoom-in" size={14} color="#FFFFFF" />
-                          </Pressable>
-                        </View>
-                      );
-                    })}
-                  </ScrollView>
-                ) : (
-                  <Text style={{ fontSize: 11.5, color: colors.muted }}>
-                    No previous photos saved yet — tap &quot;Upload Ref&quot; to use a real photo of your space, or Auto-Create below.
-                  </Text>
-                )}
-
-                {/* Active Reference Photos Preview Strip */}
-                {selectedRefUrls.length > 0 ? (
-                  <View style={styles.selectedRefsCard}>
-                    <View style={styles.selectedRefsHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <MaterialIcons name="auto-fix-high" size={13} color="#7C3AED" />
-                        <Text style={styles.selectedRefsTitle}>
-                          Selected AI References ({selectedRefUrls.length}/3)
-                        </Text>
-                      </View>
-                      <Pressable onPress={() => setSelectedRefUrls([])}>
-                        <Text style={styles.clearRefsText}>Clear All</Text>
-                      </Pressable>
+                        ))}
+                      </ScrollView>
                     </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
-                      {selectedRefUrls.map((url, idx) => {
-                        const photoMatch = previousPhotos.find((p) => p.url === url);
+                  ) : null}
+
+                  {/* Style Preset Chips */}
+                  <View style={{ gap: 6 }}>
+                    <Text style={styles.aiSubLabel}>Photo Style Preset</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {MOBILE_STYLE_PRESETS.map((preset) => {
+                        const active = aiStylePreset === preset.id;
                         return (
-                          <View key={url} style={styles.selectedRefChipCard}>
-                            <Pressable onPress={() => openPhotoInspection(url, photoMatch?.title)}>
-                              <Image source={{ uri: url }} style={styles.selectedRefChipImg} resizeMode="cover" />
-                            </Pressable>
-                            <View style={{ flex: 1, paddingHorizontal: 4, justifyContent: 'center' }}>
-                              <Text style={styles.selectedRefChipTitle} numberOfLines={1}>
-                                {photoMatch?.title || `Reference #${idx + 1}`}
-                              </Text>
-                              <Pressable onPress={() => openPhotoInspection(url, photoMatch?.title)} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                                <MaterialIcons name="zoom-in" size={11} color="#7C3AED" />
-                                <Text style={styles.selectedRefPreviewLink}>Preview</Text>
-                              </Pressable>
-                            </View>
-                            <Pressable
-                              onPress={() => toggleReferencePhoto(url)}
-                              style={styles.removeRefBtn}
-                              hitSlop={8}
-                            >
-                              <MaterialIcons name="close" size={14} color={colors.muted} />
-                            </Pressable>
-                          </View>
+                          <Pressable
+                            key={preset.id}
+                            onPress={() => setAiStylePreset(preset.id)}
+                            style={[styles.chip, active && styles.chipPurpleActive]}
+                          >
+                            <Text style={[styles.chipText, active && styles.chipPurpleText]}>
+                              {preset.label}
+                            </Text>
+                          </Pressable>
                         );
                       })}
                     </ScrollView>
-                    <Text style={styles.selectedRefsHint}>
-                      AI will preserve the visual architecture, branding colors, and subject matter from your selected photos.
-                    </Text>
                   </View>
-                ) : null}
-              </View>
 
-              {/* Smart Business Idea Prompts */}
-              {aiIdeas.length > 0 ? (
-                <View style={{ gap: 6 }}>
-                  <Text style={styles.aiSubLabel}>Quick Business Ideas</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {aiIdeas.map((idea) => (
-                      <Pressable
-                        key={idea.id}
-                        onPress={() => setAiPrompt(idea.prompt)}
-                        style={styles.ideaChip}
-                      >
-                        <Text style={styles.ideaChipText}>{idea.title}</Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </View>
-              ) : null}
-
-              {/* Custom Prompt + Aspect Ratio */}
-              <View style={{ gap: 6 }}>
-                <Text style={styles.aiSubLabel}>Custom Prompt (optional)</Text>
-                <TextInput
-                  value={aiPrompt}
-                  onChangeText={setAiPrompt}
-                  placeholder={`e.g. Modern commercial showcase at ${effectiveBusinessName}, highlight our authentic space and quality`}
-                  placeholderTextColor={colors.muted}
-                  multiline
-                  style={[styles.input, { minHeight: 68, textAlignVertical: 'top' }]}
-                />
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                  {(['1:1', '4:5', '9:16'] as const).map((ratio) => {
-                    const active = aiAspectRatio === ratio;
-                    return (
-                      <Pressable
-                        key={ratio}
-                        onPress={() => setAiAspectRatio(ratio)}
-                        style={[styles.chip, active && styles.chipPurpleActive]}
-                      >
-                        <Text style={[styles.chipText, active && styles.chipPurpleText]}>
-                          {ratio === '1:1' ? 'Square 1:1' : ratio === '4:5' ? 'Portrait 4:5' : 'Story 9:16'}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* Two Clear Generation CTAs */}
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <Pressable
-                  disabled={generatingAiImage || uploadingRef}
-                  onPress={() => void handleGenerateAiImage(true)}
-                  style={[styles.aiAutoBtn, (generatingAiImage || uploadingRef) && { opacity: 0.6 }]}
-                >
-                  {generatingAiImage ? (
-                    <ActivityIndicator size="small" color="#7C3AED" />
-                  ) : (
-                    <MaterialIcons name="auto-awesome" size={15} color="#7C3AED" />
-                  )}
-                  <Text style={styles.aiAutoBtnText}>Auto-Create</Text>
-                </Pressable>
-
-                <Pressable
-                  disabled={generatingAiImage || uploadingRef}
-                  onPress={() => void handleGenerateAiImage(false)}
-                  style={[styles.aiGenBtn, (generatingAiImage || uploadingRef) && { opacity: 0.6 }]}
-                >
-                  {generatingAiImage ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <MaterialIcons name="auto-fix-high" size={15} color="#FFFFFF" />
-                  )}
-                  <Text style={styles.aiGenBtnText}>
-                    {generatingAiImage ? 'Creating…' : generatedImageUrl ? 'Regenerate' : 'Generate Image'}
-                  </Text>
-                </Pressable>
-              </View>
-
-              {generatedImageUrl ? (
-                <View style={styles.generatedPreviewCard}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Inspect generated image in full screen"
-                    onPress={() => setFullscreenOpen(true)}
-                    style={styles.generatedHeroWrap}
-                  >
-                    <Image
-                      source={{ uri: generatedImageUrl }}
-                      style={[
-                        styles.generatedPreviewImg,
-                        { aspectRatio: getAspectRatioNumeric(aiAspectRatio) },
-                      ]}
-                      resizeMode="contain"
-                      alt="Generated AI business image"
+                  {/* Custom Prompt + Aspect Ratio + Engine */}
+                  <View style={{ gap: 8 }}>
+                    <Text style={styles.aiSubLabel}>Scene Prompt (optional — blank auto-builds from GBP)</Text>
+                    <TextInput
+                      value={aiPrompt}
+                      onChangeText={setAiPrompt}
+                      placeholder={`e.g. Modern commercial showcase at ${effectiveBusinessName}, highlight our authentic space and quality`}
+                      placeholderTextColor={colors.muted}
+                      multiline
+                      style={[styles.input, { minHeight: 68, textAlignVertical: 'top' }]}
                     />
-                    <View style={styles.fullscreenPillBadge}>
-                      <MaterialIcons name="fullscreen" size={14} color="#FFFFFF" />
-                      <Text style={styles.fullscreenPillText}>Full Screen</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                      {(['1:1', '4:5', '9:16'] as const).map((ratio) => {
+                        const active = aiAspectRatio === ratio;
+                        return (
+                          <Pressable
+                            key={ratio}
+                            onPress={() => setAiAspectRatio(ratio)}
+                            style={[styles.chip, active && styles.chipPurpleActive]}
+                          >
+                            <Text style={[styles.chipText, active && styles.chipPurpleText]}>
+                              {ratio === '1:1' ? 'Square 1:1' : ratio === '4:5' ? 'Portrait 4:5' : 'Story 9:16'}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
                     </View>
+                    {selectedRefUrls.length === 0 ? (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                        {(
+                          [
+                            { id: 'gemini', label: 'Gemini Vision' },
+                            { id: 'cloudflare', label: 'Cloudflare' },
+                            { id: 'openrouter', label: 'OpenRouter' },
+                            { id: 'siliconflow', label: 'SiliconFlow' },
+                          ] as Array<{ id: ImageProviderChoice; label: string }>
+                        ).map((eng) => {
+                          const active = aiProviderChoice === eng.id;
+                          return (
+                            <Pressable
+                              key={eng.id}
+                              onPress={() => setAiProviderChoice(eng.id)}
+                              style={[styles.chip, active && styles.chipBrandActive]}
+                            >
+                              <Text style={[styles.chipText, active && styles.chipBrandText]}>
+                                {eng.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    ) : null}
+                  </View>
+
+                  {/* Unified Smart Generation CTA */}
+                  <Pressable
+                    disabled={generatingAiImage || uploadingRef}
+                    onPress={() => void handleGenerateAiImage(!aiPrompt.trim())}
+                    style={[styles.aiGenBtn, (generatingAiImage || uploadingRef) && { opacity: 0.6 }]}
+                  >
+                    {generatingAiImage ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <MaterialIcons name="auto-fix-high" size={16} color="#FFFFFF" />
+                    )}
+                    <Text style={styles.aiGenBtnText}>
+                      {generatingAiImage
+                        ? 'Creating Photo…'
+                        : generatedImageUrl
+                          ? 'Regenerate Image'
+                          : aiPrompt.trim()
+                            ? 'Generate Image'
+                            : 'Auto-Generate Business Photo'}
+                    </Text>
                   </Pressable>
 
-                  <View style={styles.generatedMetaRow}>
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.brandDark }}>
-                        {aiApprovedUrl === generatedImageUrl
-                          ? '✓ Approved — Ready to Schedule or Publish'
-                          : 'Generated · Tap image to judge quality'}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: colors.muted }}>
-                        {aiCandidates.length > 1
-                          ? `${aiCandidates.length} variations generated this session — tap Full Screen to compare.`
-                          : 'Open full screen to zoom & verify faces, text, and edges.'}
-                      </Text>
-                    </View>
-                  </View>
+                  {generatedImageUrl ? (
+                    <View style={styles.generatedPreviewCard}>
+                      <View style={styles.sourceExifRow}>
+                        <View
+                          style={[
+                            styles.sourcePill,
+                            aiSourceType === 'ai_reference'
+                              ? styles.sourcePillRef
+                              : aiSourceType === 'stock_fallback'
+                                ? styles.sourcePillFallback
+                                : styles.sourcePillAi,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.sourcePillText,
+                              aiSourceType === 'ai_reference'
+                                ? { color: '#047857' }
+                                : aiSourceType === 'stock_fallback'
+                                  ? { color: '#B45309' }
+                                  : { color: '#6D28D9' },
+                            ]}
+                          >
+                            {aiSourceType === 'ai_reference'
+                              ? '✨ AI + Your Photo'
+                              : aiSourceType === 'stock_fallback'
+                                ? '📷 Stock Fallback'
+                                : '✨ AI Generated'}
+                          </Text>
+                        </View>
+                        <View style={styles.exifPill}>
+                          <MaterialIcons
+                            name={aiGeoTagged ? 'location-on' : 'photo-camera'}
+                            size={11}
+                            color={aiGeoTagged ? '#047857' : colors.muted}
+                          />
+                          <Text style={[styles.exifPillText, aiGeoTagged && { color: '#047857' }]}>
+                            {aiGeoTagged ? 'GPS EXIF Tagged' : 'Standard EXIF'}
+                          </Text>
+                        </View>
+                      </View>
 
-                  <View style={styles.generatedActionRow}>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setFullscreenOpen(true)}
-                      style={styles.inspectPrimaryBtn}
-                    >
-                      <MaterialIcons name="zoom-in" size={15} color="#FFFFFF" />
-                      <Text style={styles.inspectPrimaryText}>Inspect Full Screen</Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      disabled={generatingAiImage}
-                      onPress={() => void handleGenerateAiImage(false)}
-                      style={[styles.regenSecondaryBtn, generatingAiImage && { opacity: 0.6 }]}
-                    >
-                      <MaterialIcons name="refresh" size={14} color="#6D28D9" />
-                      <Text style={styles.regenSecondaryText}>Regenerate</Text>
-                    </Pressable>
-                  </View>
+                      {aiFallbackReason ? (
+                        <Text style={styles.fallbackReasonNote}>{aiFallbackReason}</Text>
+                      ) : null}
+
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Inspect generated image in full screen"
+                        onPress={() => setFullscreenOpen(true)}
+                        style={styles.generatedHeroWrap}
+                      >
+                        <Image
+                          source={{ uri: generatedImageUrl }}
+                          style={[
+                            styles.generatedPreviewImg,
+                            { aspectRatio: getAspectRatioNumeric(aiAspectRatio) },
+                          ]}
+                          resizeMode="contain"
+                          alt="Generated AI business image"
+                        />
+                        <View style={styles.fullscreenPillBadge}>
+                          <MaterialIcons name="fullscreen" size={14} color="#FFFFFF" />
+                          <Text style={styles.fullscreenPillText}>Full Screen</Text>
+                        </View>
+                      </Pressable>
+
+                      <Text style={styles.seoSlugPreview} numberOfLines={1}>
+                        📄 {effectiveSeoFilename}
+                      </Text>
+
+                      <View style={styles.generatedMetaRow}>
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.brandDark }}>
+                            {aiApprovedUrl === generatedImageUrl
+                              ? '✓ Approved — Ready to Schedule or Publish'
+                              : 'Generated · Tap image to judge quality'}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: colors.muted }}>
+                            {aiCandidates.length > 1
+                              ? `${aiCandidates.length} variations generated this session — tap Full Screen to compare.`
+                              : 'Open full screen to zoom & verify quality, then continue to SEO.'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.generatedActionRow}>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => setFullscreenOpen(true)}
+                          style={styles.inspectPrimaryBtn}
+                        >
+                          <MaterialIcons name="zoom-in" size={15} color="#FFFFFF" />
+                          <Text style={styles.inspectPrimaryText}>Inspect</Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          disabled={generatingAiImage}
+                          onPress={() => void handleGenerateAiImage(!aiPrompt.trim())}
+                          style={[styles.regenSecondaryBtn, generatingAiImage && { opacity: 0.6 }]}
+                        >
+                          <MaterialIcons name="refresh" size={14} color="#6D28D9" />
+                          <Text style={styles.regenSecondaryText}>Regenerate</Text>
+                        </Pressable>
+                      </View>
+
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setAiStep(2)}
+                        style={styles.continueStepBtn}
+                      >
+                        <Text style={styles.continueStepBtnText}>
+                          Continue to SEO &amp; Schedule ({liveSeoReadiness.score}/100)
+                        </Text>
+                        <MaterialIcons name="arrow-forward" size={16} color="#FFFFFF" />
+                      </Pressable>
+                    </View>
+                  ) : null}
                 </View>
-              ) : null}
+              ) : (
+                /* Step 2 Compact Selected Visual Header */
+                <View style={styles.step2VisualSummary}>
+                  {generatedImageUrl ? (
+                    <Pressable onPress={() => setFullscreenOpen(true)}>
+                      <Image
+                        source={{ uri: generatedImageUrl }}
+                        style={styles.step2Thumb}
+                        resizeMode="cover"
+                        alt="Selected AI Photo"
+                      />
+                    </Pressable>
+                  ) : (
+                    <View style={[styles.step2Thumb, { alignItems: 'center', justifyContent: 'center' }]}>
+                      <MaterialIcons name="image" size={22} color={colors.muted} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.ink }}>
+                      {generatedImageUrl
+                        ? aiApprovedUrl === generatedImageUrl
+                          ? '✓ Visual Approved'
+                          : 'AI Photo Ready'
+                        : 'No photo generated yet'}
+                    </Text>
+                    <Text style={{ fontSize: 10.5, color: colors.muted }} numberOfLines={1}>
+                      {effectiveSeoFilename} · {aiGeoTagged ? '📍 GPS EXIF' : 'Standard EXIF'}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setAiStep(1)} style={styles.changeVisualBtn}>
+                    <Text style={styles.changeVisualBtnText}>
+                      {generatedImageUrl ? 'Edit Visual' : 'Go Create'}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           ) : (
             <View style={{ gap: 8 }}>
@@ -1471,36 +1823,93 @@ export function MediaMetadataSheet({
             </View>
           )}
 
-          {/* AI Intent Chips */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>AI Focus</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-              {AI_INTENTS.map((item) => {
-                const active = item.value === intent;
-                return (
-                  <Pressable
-                    key={item.value}
-                    onPress={() => {
-                      setIntent(item.value);
-                      void runAiMetadata(
-                        isEditMode ? [title || businessName] : uploads.map((u) => u.local.name),
-                        item.value,
-                        isVideoPhotoItem(editingItem) ||
-                          uploads.some((u) => u.local.mediaType === 'video')
-                          ? 'video'
-                          : 'photo',
-                      );
-                    }}
-                    style={[styles.chip, active && styles.chipPurpleActive]}
+          {(isEditMode || composerMode !== 'ai_generate' || aiStep === 2) ? (
+            <>
+              {/* Live Local SEO Readiness Score (0–100 across 5 checks) */}
+              <View style={styles.seoScoreCard}>
+                <View style={styles.seoScoreHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <MaterialIcons name="verified" size={16} color={liveSeoReadiness.score >= 80 ? '#15803D' : '#B45309'} />
+                    <Text style={styles.seoScoreTitle}>Local SEO Readiness</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.seoScoreBadge,
+                      { backgroundColor: liveSeoReadiness.score >= 80 ? '#DCFCE7' : '#FEF3C7' },
+                    ]}
                   >
-                    <Text style={[styles.chipText, active && styles.chipPurpleText]}>
-                      ✨ {item.label}
+                    <Text
+                      style={[
+                        styles.seoScoreBadgeText,
+                        { color: liveSeoReadiness.score >= 80 ? '#15803D' : '#B45309' },
+                      ]}
+                    >
+                      {liveSeoReadiness.score}/100
                     </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
+                  </View>
+                </View>
+                <View style={styles.seoBarTrack}>
+                  <View
+                    style={[
+                      styles.seoBarFill,
+                      {
+                        width: `${Math.max(6, Math.min(100, liveSeoReadiness.score))}%`,
+                        backgroundColor: liveSeoReadiness.score >= 80 ? '#16A34A' : '#D97706',
+                      },
+                    ]}
+                  />
+                </View>
+                <View style={{ gap: 4, marginTop: 6 }}>
+                  {liveSeoReadiness.checks.map((chk) => (
+                    <View key={chk.id} style={styles.seoCheckRow}>
+                      <MaterialIcons
+                        name={chk.passed ? 'check-circle' : 'radio-button-unchecked'}
+                        size={14}
+                        color={chk.passed ? '#16A34A' : '#94A3B8'}
+                      />
+                      <Text style={styles.seoCheckText}>
+                        {chk.label}
+                        {!chk.passed && chk.detail ? ` — ${chk.detail}` : ''}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* AI Intent Chips */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>AI Focus</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                  {AI_INTENTS.map((item) => {
+                    const active = item.value === intent;
+                    return (
+                      <Pressable
+                        key={item.value}
+                        onPress={() => {
+                          setIntent(item.value);
+                          void runAiMetadata(
+                            isEditMode
+                              ? [title || businessName]
+                              : composerMode === 'ai_generate'
+                                ? [title || aiPrompt || businessName]
+                                : uploads.map((u) => u.local.name),
+                            item.value,
+                            isVideoPhotoItem(editingItem) ||
+                              uploads.some((u) => u.local.mediaType === 'video')
+                              ? 'video'
+                              : 'photo',
+                          );
+                        }}
+                        style={[styles.chip, active && styles.chipPurpleActive]}
+                      >
+                        <Text style={[styles.chipText, active && styles.chipPurpleText]}>
+                          ✨ {item.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
 
           {/* Title Field + Alternatives */}
           <View style={styles.section}>
@@ -1587,6 +1996,26 @@ export function MediaMetadataSheet({
                     <Text style={styles.suggestTagText}>+ {st}</Text>
                   </Pressable>
                 ))}
+              </View>
+            ) : null}
+            {usedSearchTerms.filter((t) => !tags.some((x) => x.toLowerCase() === t.toLowerCase())).length > 0 ? (
+              <View style={{ marginTop: 6, gap: 4 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369A1' }}>
+                  Top GBP Search Terms — tap to add as SEO tags
+                </Text>
+                <View style={styles.tagsWrap}>
+                  {usedSearchTerms
+                    .filter((t) => !tags.some((x) => x.toLowerCase() === t.toLowerCase()))
+                    .map((term) => (
+                      <Pressable
+                        key={term}
+                        onPress={() => toggleSuggestedTag(term)}
+                        style={styles.gTermPill}
+                      >
+                        <Text style={styles.gTermPillText}>+ {term}</Text>
+                      </Pressable>
+                    ))}
+                </View>
               </View>
             ) : null}
             <Text style={styles.helperCaption}>
@@ -1688,14 +2117,22 @@ export function MediaMetadataSheet({
             </View>
           ) : (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Status</Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Text style={styles.sectionLabel}>Status &amp; Publishing</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 <Pressable
                   onPress={() => setScheduleMode('daily')}
-                  style={[styles.chip, scheduleMode !== 'draft' && styles.chipBrandActive]}
+                  style={[styles.chip, scheduleMode !== 'draft' && scheduleMode !== 'instant' && styles.chipBrandActive]}
                 >
-                  <Text style={[styles.chipText, scheduleMode !== 'draft' && styles.chipBrandText]}>
+                  <Text style={[styles.chipText, scheduleMode !== 'draft' && scheduleMode !== 'instant' && styles.chipBrandText]}>
                     Scheduled
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setScheduleMode('instant')}
+                  style={[styles.chip, scheduleMode === 'instant' && styles.chipBrandActive]}
+                >
+                  <Text style={[styles.chipText, scheduleMode === 'instant' && styles.chipBrandText]}>
+                    Publish Now
                   </Text>
                 </Pressable>
                 <Pressable
@@ -1709,6 +2146,8 @@ export function MediaMetadataSheet({
               </View>
             </View>
           )}
+            </>
+          ) : null}
         </ScrollView>
 
         {/* Bottom Sticky CTA */}
@@ -1723,35 +2162,90 @@ export function MediaMetadataSheet({
               <MaterialIcons name="delete-outline" size={19} color={colors.danger} />
             </Pressable>
           ) : null}
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void handleSubmit()}
-            disabled={submitting}
-            style={({ pressed }) => [
-              styles.saveBtn,
-              submitting && { opacity: 0.65 },
-              pressed && { opacity: 0.9 },
-            ]}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+          {!isEditMode && composerMode === 'ai_generate' && aiStep === 1 ? (
+            generatedImageUrl ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setAiStep(2)}
+                style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.9 }]}
+              >
+                <Text style={styles.saveBtnText}>
+                  Continue to SEO &amp; Schedule ({liveSeoReadiness.score}%)
+                </Text>
+                <MaterialIcons name="arrow-forward" size={18} color="#FFFFFF" />
+              </Pressable>
             ) : (
-              <MaterialIcons name="check-circle" size={18} color="#FFFFFF" />
-            )}
-            <Text style={styles.saveBtnText}>
-              {submitting
-                ? 'Saving…'
-                : isEditMode
-                  ? 'Save Changes'
-                  : stillUploading
-                    ? 'Save & Upload in Background'
-                    : scheduleMode === 'instant'
-                      ? 'Publish to Google Now'
-                      : scheduleMode === 'draft'
-                        ? 'Save as Draft'
-                        : 'Save & Schedule'}
-            </Text>
-          </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void handleGenerateAiImage(!aiPrompt.trim())}
+                disabled={generatingAiImage || uploadingRef}
+                style={({ pressed }) => [
+                  styles.saveBtn,
+                  { backgroundColor: '#6D28D9' },
+                  (generatingAiImage || uploadingRef) && { opacity: 0.65 },
+                  pressed && { opacity: 0.9 },
+                ]}
+              >
+                {generatingAiImage ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <MaterialIcons name="auto-awesome" size={18} color="#FFFFFF" />
+                )}
+                <Text style={styles.saveBtnText}>
+                  {generatingAiImage
+                    ? 'Generating Visual…'
+                    : aiPrompt.trim()
+                      ? 'Generate Image'
+                      : 'Create Auto SEO Photo'}
+                </Text>
+              </Pressable>
+            )
+          ) : (
+            <>
+              {!isEditMode && composerMode === 'ai_generate' && aiStep === 2 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setAiStep(1)}
+                  disabled={submitting}
+                  style={styles.stepBackBtn}
+                >
+                  <MaterialIcons name="arrow-back" size={17} color={colors.ink} />
+                  <Text style={styles.stepBackBtnText}>Visual</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void handleSubmit()}
+                disabled={submitting}
+                style={({ pressed }) => [
+                  styles.saveBtn,
+                  submitting && { opacity: 0.65 },
+                  pressed && { opacity: 0.9 },
+                ]}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <MaterialIcons name="check-circle" size={18} color="#FFFFFF" />
+                )}
+                <Text style={styles.saveBtnText}>
+                  {submitting
+                    ? 'Saving…'
+                    : isEditMode
+                      ? scheduleMode === 'instant'
+                        ? 'Publish to Google Now'
+                        : 'Save Changes'
+                      : stillUploading
+                        ? 'Save & Upload in Background'
+                        : scheduleMode === 'instant'
+                          ? 'Publish to Google Now'
+                          : scheduleMode === 'draft'
+                            ? 'Save as Draft'
+                            : 'Save & Schedule'}
+                </Text>
+              </Pressable>
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
 
@@ -1808,7 +2302,7 @@ export function MediaMetadataSheet({
         candidates={aiCandidates}
         selectedUrl={generatedImageUrl}
         onSelectCandidate={(cand) => {
-          applyGeneratedCandidateUrl(cand.url);
+          applyGeneratedCandidateUrl(cand.url, cand);
         }}
         reviewMode
         isApproved={Boolean(generatedImageUrl && aiApprovedUrl === generatedImageUrl)}
@@ -2708,5 +3202,240 @@ const styles = StyleSheet.create({
     color: colors.noteText,
     fontWeight: '600',
     lineHeight: 15,
+  },
+  wizardStepBar: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  wizardStepBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  wizardStepBtnActive: {
+    borderColor: '#6D28D9',
+    backgroundColor: '#F5F3FF',
+  },
+  wizardStepNum: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E2E8F0',
+  },
+  wizardStepNumActive: {
+    backgroundColor: '#6D28D9',
+  },
+  wizardStepNumText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  wizardStepLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    flexShrink: 1,
+  },
+  wizardStepLabelActive: {
+    color: '#4C1D95',
+  },
+  sourceExifRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  sourcePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  sourcePillRef: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  sourcePillFallback: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  sourcePillAi: {
+    backgroundColor: '#F5F3FF',
+    borderColor: '#DDD6FE',
+  },
+  sourcePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  exifPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  exifPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  fallbackReasonNote: {
+    fontSize: 11,
+    color: '#B45309',
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginTop: 6,
+    lineHeight: 15,
+  },
+  seoSlugPreview: {
+    fontSize: 11,
+    color: '#0369A1',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  continueStepBtn: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.brand,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  continueStepBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  step2VisualSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+  },
+  step2Thumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    backgroundColor: '#E2E8F0',
+  },
+  changeVisualBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+  },
+  changeVisualBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#6D28D9',
+  },
+  seoScoreCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+  },
+  seoScoreHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  seoScoreTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  seoScoreBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  seoScoreBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  seoBarTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  seoBarFill: {
+    height: 6,
+    borderRadius: 999,
+  },
+  seoCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  seoCheckText: {
+    flex: 1,
+    fontSize: 11.5,
+    color: '#334155',
+    fontWeight: '500',
+  },
+  gTermPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  gTermPillText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  stepBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  stepBackBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.ink,
   },
 });

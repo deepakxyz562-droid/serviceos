@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Screen, Loading, ErrorNotice, colors } from '../../src/components/ui';
@@ -38,6 +39,7 @@ export default function PhotosScreen() {
   const [pendingAssets, setPendingAssets] = useState<PendingUpload[]>([]);
   const [composerVisible, setComposerVisible] = useState(false);
   const [composerMode, setComposerMode] = useState<'upload' | 'ai_generate'>('upload');
+  const [helpOpen, setHelpOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<GbpPhoto | null>(null);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
   const [focusedMediaId, setFocusedMediaId] = useState<string | null>(
@@ -202,13 +204,8 @@ export default function PhotosScreen() {
   const rightHelpAction = (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Help"
-      onPress={() =>
-        Alert.alert(
-          'Media & AI Auto-Tagging Help',
-          'Upload photos or short videos for your Google Business Profile.\n\n• After picking media, BGOS AI suggests a business-tailored Title, SEO Description, Tags, and Google Category — you can edit any field before saving.\n• Choose Daily Schedule, Weekly Schedule, Publish Now, or Save Draft (Not Posted) in your local country timezone.',
-        )
-      }
+      accessibilityLabel="Media Help"
+      onPress={() => setHelpOpen(true)}
       style={styles.helpButton}
     >
       <Text style={styles.helpButtonText}>Help</Text>
@@ -253,6 +250,7 @@ export default function PhotosScreen() {
             onUploadPress={handleUpload}
             onAiCreatePress={handleAiCreate}
             onEditItem={handleEditItem}
+            onRefreshNeeded={() => photosRes.refresh()}
             initialTab={initialTab}
             focusedMediaId={focusedMediaId}
             onClearFocus={() => setFocusedMediaId(null)}
@@ -273,6 +271,34 @@ export default function PhotosScreen() {
           await photosRes.refresh();
         }}
       />
+
+      <Modal visible={helpOpen} transparent animationType="fade" onRequestClose={() => setHelpOpen(false)}>
+        <View style={styles.helpOverlay}>
+          <View style={styles.helpModalCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <MaterialIcons name="auto-awesome" size={20} color={colors.brand} />
+                <Text style={styles.helpModalTitle}>Media &amp; AI SEO Guide</Text>
+              </View>
+              <Pressable accessibilityRole="button" onPress={() => setHelpOpen(false)} style={styles.helpCloseBtn}>
+                <MaterialIcons name="close" size={18} color={colors.ink} />
+              </Pressable>
+            </View>
+            <Text style={styles.helpModalItem}>
+              1. Tap Add Media or AI Photo Studio to upload real photos/videos or generate studio-grade GBP visuals.
+            </Text>
+            <Text style={styles.helpModalItem}>
+              2. BGOS AI auto-writes an SEO Title, Geo-tag filename, Caption, Tags, and Google Category tailored to your services.
+            </Text>
+            <Text style={styles.helpModalItem}>
+              3. Schedule Daily/Weekly in your local timezone, save to Drafts, or tap Publish Now / Retry directly on any card.
+            </Text>
+            <Pressable accessibilityRole="button" onPress={() => setHelpOpen(false)} style={styles.helpDoneBtn}>
+              <Text style={styles.helpDoneText}>Got It</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -308,5 +334,50 @@ const styles = StyleSheet.create({
     color: '#0B9042',
     fontSize: 12,
     fontWeight: '700',
+  },
+  helpOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  helpModalCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: 18,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  helpModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  helpCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  helpModalItem: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.muted,
+  },
+  helpDoneBtn: {
+    backgroundColor: colors.brand,
+    borderRadius: 12,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  helpDoneText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

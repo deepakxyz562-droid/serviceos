@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { db } from '@/lib/db';
 import { loadAiKeyChain } from '@/lib/ai-client';
+import { ensureFreshCompetitorIntelligence } from '@/lib/gbp/competitor-intelligence';
+import { getGooglePlacesApiKey } from '@/lib/gbp/keyword-planner-free';
 import { isMissingTableError } from '@/lib/gbp/marketing-score';
 import { safeFetchPublicText } from './safe-fetch';
 import { analyzeHtmlDocument, fetchRobotsTxtAnalysis } from './website-audit';
@@ -101,6 +103,24 @@ function extractUrlsFromText(text: string): string[] {
   return [...new Set(matches.map((u) => u.replace(/[.,;!?]+$/, '')))];
 }
 
+function buildBrandAliases(businessName: string): string[] {
+  const full = businessName.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!full || full.length < 3) return [];
+  const aliases = [full];
+  const stripped = full
+    .replace(/\b(pvt\.?|private|limited|ltd\.?|llc|inc\.?|llp|co\.?)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (stripped.length >= 6 && stripped !== full) {
+    aliases.push(stripped);
+  }
+  return [...new Set(aliases)];
+}
+
+function textMatchesAnyAlias(textLower: string, aliases: string[]): boolean {
+  return aliases.some((alias) => alias.length >= 3 && textLower.includes(alias));
+}
+
 function evaluateMentionAndCompetitors(params: {
   text: string;
   urls: string[];
@@ -109,17 +129,14 @@ function evaluateMentionAndCompetitors(params: {
   competitorNames: string[];
 }) {
   const lower = params.text.toLowerCase();
-  const bizLower = params.businessName.toLowerCase().trim();
-  const shortBizToken = bizLower.split(/\s+/).slice(0, 2).join(' ');
-
-  const mentioned =
-    (bizLower.length >= 3 && lower.includes(bizLower)) ||
-    (shortBizToken.length >= 5 && lower.includes(shortBizToken));
+  const bizAliases = buildBrandAliases(params.businessName);
 
   const websiteCited = Boolean(
     params.targetDomain &&
       params.urls.some((u) => u.toLowerCase().includes(params.targetDomain!.toLowerCase())),
   );
+
+  const mentioned = textMatchesAnyAlias(lower, bizAliases) || websiteCited;
 
   // Detect position in numbered/bulleted lists if business is mentioned
   let position: number | null = null;
@@ -130,7 +147,11 @@ function evaluateMentionAndCompetitors(params: {
       const numbered = line.match(/^\s*(?:\*{0,2})(\d+)[.)]\s+/);
       if (numbered) {
         listIdx = Number(numbered[1]);
-        if (line.toLowerCase().includes(bizLower) || (shortBizToken.length >= 5 && line.toLowerCase().includes(shortBizToken))) {
+        const lineLower = line.toLowerCase();
+        if (
+          textMatchesAnyAlias(lineLower, bizAliases) ||
+          (params.targetDomain && lineLower.includes(params.targetDomain.toLowerCase()))
+        ) {
           position = listIdx;
           break;
         }
@@ -139,17 +160,29 @@ function evaluateMentionAndCompetitors(params: {
   }
 
   const competitorsMentioned = params.competitorNames.filter((name) => {
-    const c = name.toLowerCase().trim();
-    if (c.length < 3) return false;
-    const prefix = c.split(/\s+/).slice(0, 2).join(' ');
-    return lower.includes(c) || (prefix.length >= 5 && lower.includes(prefix));
+    const compAliases = buildBrandAliases(name);
+    return textMatchesAnyAlias(lower, compAliases);
   });
 
-  const sentiment: 'positive' | 'neutral' | 'negative' | null = mentioned
-    ? /\b(poor|avoid|complaints?|bad)\b/i.test(lower)
-      ? 'negative'
-      : 'positive'
-    : null;
+  let sentiment: 'positive' | 'neutral' | 'negative' | null = null;
+  if (mentioned) {
+    const sentences = params.text.split(/(?<=[.!?])\s+|\n+/);
+    const brandSentences = sentences.filter((s) => {
+      const sl = s.toLowerCase();
+      return (
+        textMatchesAnyAlias(sl, bizAliases) ||
+        (params.targetDomain ? sl.includes(params.targetDomain.toLowerCase()) : false)
+      );
+    });
+    const scope = (brandSentences.length > 0 ? brandSentences.join(' ') : params.text).toLowerCase();
+    if (/\b(poor|avoid|complaints?|bad|overpriced|unreliable|terrible|worst)\b/i.test(scope)) {
+      sentiment = 'negative';
+    } else if (/\b(best|top|trusted|recommended|highly rated|popular|leading|reliable|great|excellent)\b/i.test(scope)) {
+      sentiment = 'positive';
+    } else {
+      sentiment = 'neutral';
+    }
+  }
 
   return { mentioned, websiteCited, position, competitorsMentioned, sentiment };
 }
@@ -488,11 +521,76 @@ export async function getLatestAiCompetitorGap(tenantId: string): Promise<AiComp
   }
 }
 
+async function persistGapFixTasks(params: {
+  tenantId: string;
+  presenceMode: BusinessPresenceMode;
+  contributingFactors: AiGapInsight[];
+}): Promise<number> {
+  const { tenantId, presenceMode, contributingFactors } = params;
+  const newTasks = contributingFactors.map((gap) => ({
+    id: `ai-gap-${gap.id}-${Date.now()}`,
+    source: 'ai_gap' as const,
+    category: gap.category,
+    title: gap.title,
+    description: `${gap.explanation} Action: ${gap.recommendedAction}`,
+    severity: gap.severity,
+    targetMode: presenceMode,
+    autoFixable: gap.autoFixable,
+    fixActionKey: gap.fixActionKey || null,
+    fixPayload: {},
+    hasRollback: false,
+    status: 'open' as const,
+    appliedAt: null,
+    createdAt: new Date().toISOString(),
+  }));
+
+  let planCreatedCount = 0;
+  for (const t of newTasks) {
+    if ((db as any).seoFixTask?.create) {
+      try {
+        await (db as any).seoFixTask.create({
+          data: {
+            id: randomUUID(),
+            tenantId,
+            source: 'ai_gap',
+            category: t.category,
+            title: t.title,
+            description: t.description,
+            severity: t.severity,
+            targetMode: t.targetMode,
+            autoFixable: t.autoFixable,
+            fixActionKey: t.fixActionKey,
+            fixPayloadJson: '{}',
+            status: 'open',
+          },
+        });
+      } catch (err) {
+        if (!isMissingTableError(err)) {
+          console.warn('[ai-visibility] seoFixTask create warning:', err instanceof Error ? err.message : err);
+        }
+      }
+    }
+    planCreatedCount++;
+  }
+
+  try {
+    const fresh = await db.tenant.findUnique({ where: { id: tenantId }, select: { settingsJson: true } });
+    const parsed = JSON.parse(fresh?.settingsJson || '{}');
+    const existing = Array.isArray(parsed.seoFixTasks) ? parsed.seoFixTasks : [];
+    const seen = new Set(existing.map((x: any) => x.title));
+    parsed.seoFixTasks = [...newTasks.filter((x) => !seen.has(x.title)), ...existing].slice(0, 30);
+    await db.tenant.update({ where: { id: tenantId }, data: { settingsJson: JSON.stringify(parsed) } });
+  } catch {}
+
+  return planCreatedCount;
+}
+
 export async function runAiCompetitorGapAnalysis(params: {
   tenantId: string;
   customPrompts?: string[];
   includeOpenAi?: boolean;
   createPlan?: boolean;
+  createPlanOnly?: boolean;
 }): Promise<AiCompetitorGapReport> {
   const { tenantId } = params;
   const tenant = await db.tenant.findUnique({
@@ -501,7 +599,27 @@ export async function runAiCompetitorGapAnalysis(params: {
   });
   if (!tenant) throw new Error('Tenant not found');
 
-  const [services, competitorsRaw, ownReviewsCount, orgScans] = await Promise.all([
+  // Fast path: create improvement tasks directly from latest existing report without re-running LLMs
+  if (params.createPlanOnly) {
+    const existingReport = await getLatestAiCompetitorGap(tenantId);
+    if (existingReport) {
+      const planCreatedCount = await persistGapFixTasks({
+        tenantId,
+        presenceMode: existingReport.presenceMode,
+        contributingFactors: existingReport.contributingFactors || [],
+      });
+      const updated = { ...existingReport, planCreatedCount };
+      try {
+        const fresh = await db.tenant.findUnique({ where: { id: tenantId }, select: { settingsJson: true } });
+        const parsed = JSON.parse(fresh?.settingsJson || '{}');
+        parsed.aiCompetitorGapReport = updated;
+        await db.tenant.update({ where: { id: tenantId }, data: { settingsJson: JSON.stringify(parsed) } });
+      } catch {}
+      return updated;
+    }
+  }
+
+  const [services, initialCompetitors, ownReviewsCount, orgScans] = await Promise.all([
     db.service
       ?.findMany?.({ where: { tenantId, isActive: true }, select: { name: true }, take: 10 })
       .catch(() => []) ?? [],
@@ -520,6 +638,45 @@ export async function runAiCompetitorGapAnalysis(params: {
       : [],
   ]);
 
+  let competitorsRaw: Array<{
+    id: string;
+    name: string;
+    rating?: number | null;
+    reviewCount?: number | null;
+    distanceKm?: number | null;
+    category?: string | null;
+    websiteUrl?: string | null;
+    placeId?: string | null;
+  }> = Array.isArray(initialCompetitors) ? initialCompetitors : [];
+  if (competitorsRaw.length === 0) {
+    const intel = await ensureFreshCompetitorIntelligence(tenantId, { maxAgeMs: 7 * 24 * 60 * 60 * 1000 }).catch(
+      () => null,
+    );
+    if (intel?.competitors?.length) {
+      const reloaded =
+        (await db.competitor
+          ?.findMany?.({
+            where: { tenantId },
+            orderBy: [{ distanceKm: 'asc' }, { rating: 'desc' }],
+            take: 5,
+          })
+          .catch(() => [])) ?? [];
+      competitorsRaw =
+        Array.isArray(reloaded) && reloaded.length > 0
+          ? reloaded
+          : intel.competitors.slice(0, 5).map((c) => ({
+              id: c.id,
+              name: c.name,
+              rating: c.rating,
+              reviewCount: c.reviewCount,
+              distanceKm: c.distanceKm,
+              category: c.primaryCategoryLabel,
+              websiteUrl: c.websiteUrl || null,
+              placeId: c.placeId || null,
+            }));
+    }
+  }
+
   const presence = resolveBusinessPresenceMode({ tenant });
   const businessName = tenant.brandProfile?.businessName || tenant.name;
   const industry = tenant.brandProfile?.industry || tenant.industry || 'Local Services';
@@ -531,7 +688,7 @@ export async function runAiCompetitorGapAnalysis(params: {
       ? params.customPrompts.map((p) => p.trim()).filter(Boolean).slice(0, 5)
       : buildBuyerIntentPrompts({ industry, city, services: serviceNames });
 
-  const topCompetitors = (Array.isArray(competitorsRaw) ? competitorsRaw : []).slice(0, 3);
+  const topCompetitors = competitorsRaw.slice(0, 3);
   const competitorNames = topCompetitors.map((c: any) => c.name).filter(Boolean);
 
   // Load AI API keys from shared keychain + env
@@ -546,12 +703,12 @@ export async function runAiCompetitorGapAnalysis(params: {
   const perplexityKey = process.env.PERPLEXITY_API_KEY || '';
   const openaiKey = keyChain.openai?.[0]?.plaintext || process.env.OPENAI_API_KEY || '';
 
-  const results: AiPromptResult[] = [];
-
+  // Run configured provider checks concurrently per prompt with capped parallelism
+  const tasksToRun: Array<() => Promise<AiPromptResult>> = [];
   for (const prompt of promptsTested) {
     if (geminiKey) {
-      results.push(
-        await queryGeminiGrounded(prompt, geminiKey, {
+      tasksToRun.push(() =>
+        queryGeminiGrounded(prompt, geminiKey, {
           businessName,
           targetDomain: presence.domain,
           competitorNames,
@@ -559,8 +716,8 @@ export async function runAiCompetitorGapAnalysis(params: {
       );
     }
     if (perplexityKey) {
-      results.push(
-        await queryPerplexitySearch(prompt, perplexityKey, {
+      tasksToRun.push(() =>
+        queryPerplexitySearch(prompt, perplexityKey, {
           businessName,
           targetDomain: presence.domain,
           competitorNames,
@@ -568,8 +725,8 @@ export async function runAiCompetitorGapAnalysis(params: {
       );
     }
     if (params.includeOpenAi && openaiKey) {
-      results.push(
-        await queryOpenAiWebSearch(prompt, openaiKey, {
+      tasksToRun.push(() =>
+        queryOpenAiWebSearch(prompt, openaiKey, {
           businessName,
           targetDomain: presence.domain,
           competitorNames,
@@ -578,8 +735,16 @@ export async function runAiCompetitorGapAnalysis(params: {
     }
   }
 
+  const results: AiPromptResult[] = [];
+  const CONCURRENCY = 4;
+  for (let i = 0; i < tasksToRun.length; i += CONCURRENCY) {
+    const batch = tasksToRun.slice(i, i + CONCURRENCY);
+    const batchOut = await Promise.all(batch.map((fn) => fn()));
+    results.push(...batchOut);
+  }
+
   // Enrich missing competitor websiteUrl from Google Places Details if placeId is known
-  const placesKey = process.env.GOOGLE_MAPS_SERVER_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+  const placesKey = getGooglePlacesApiKey();
   if (placesKey) {
     await Promise.all(
       topCompetitors.map(async (c: any) => {
@@ -838,59 +1003,11 @@ export async function runAiCompetitorGapAnalysis(params: {
 
   let planCreatedCount = 0;
   if (params.createPlan) {
-    const newTasks = contributingFactors.map((gap) => ({
-      id: `ai-gap-${gap.id}-${Date.now()}`,
-      source: 'ai_gap' as const,
-      category: gap.category,
-      title: gap.title,
-      description: `${gap.explanation} Action: ${gap.recommendedAction}`,
-      severity: gap.severity,
-      targetMode: presence.mode,
-      autoFixable: gap.autoFixable,
-      fixActionKey: gap.fixActionKey || null,
-      fixPayload: {},
-      hasRollback: false,
-      status: 'open' as const,
-      appliedAt: null,
-      createdAt: new Date().toISOString(),
-    }));
-
-    for (const t of newTasks) {
-      if ((db as any).seoFixTask?.create) {
-        try {
-          await (db as any).seoFixTask.create({
-            data: {
-              id: randomUUID(),
-              tenantId,
-              source: 'ai_gap',
-              category: t.category,
-              title: t.title,
-              description: t.description,
-              severity: t.severity,
-              targetMode: t.targetMode,
-              autoFixable: t.autoFixable,
-              fixActionKey: t.fixActionKey,
-              fixPayloadJson: '{}',
-              status: 'open',
-            },
-          });
-        } catch (err) {
-          if (!isMissingTableError(err)) {
-            console.warn('[ai-visibility] seoFixTask create warning:', err instanceof Error ? err.message : err);
-          }
-        }
-      }
-      planCreatedCount++;
-    }
-
-    try {
-      const fresh = await db.tenant.findUnique({ where: { id: tenantId }, select: { settingsJson: true } });
-      const parsed = JSON.parse(fresh?.settingsJson || '{}');
-      const existing = Array.isArray(parsed.seoFixTasks) ? parsed.seoFixTasks : [];
-      const seen = new Set(existing.map((x: any) => x.title));
-      parsed.seoFixTasks = [...newTasks.filter((x) => !seen.has(x.title)), ...existing].slice(0, 30);
-      await db.tenant.update({ where: { id: tenantId }, data: { settingsJson: JSON.stringify(parsed) } });
-    } catch {}
+    planCreatedCount = await persistGapFixTasks({
+      tenantId,
+      presenceMode: presence.mode,
+      contributingFactors,
+    });
   }
 
   const report: AiCompetitorGapReport = {

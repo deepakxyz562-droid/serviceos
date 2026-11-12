@@ -75,10 +75,14 @@ export default function PublicBookingPage() {
           if (data.onlineBookingEnabled !== undefined) {
             setOnlineBookingEnabled(Boolean(data.onlineBookingEnabled));
           }
-          if (data.phone?.startsWith('+1') || data.phone?.startsWith('1')) {
+          if (data.currencySymbol) {
+            setCurrencySymbol(data.currencySymbol);
+          } else if (data.phone?.startsWith('+1')) {
             setCurrencySymbol('$');
-          } else {
+          } else if (data.phone?.startsWith('+91')) {
             setCurrencySymbol('₹');
+          } else {
+            setCurrencySymbol('$');
           }
         }
       })

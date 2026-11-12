@@ -54,6 +54,7 @@ type GridScanRow = {
   top3Pct: number;
   rankedPoints: number;
   totalPoints: number;
+  providerMode?: string;
   points: GridPoint[];
   cost: number;
 };
@@ -68,6 +69,7 @@ type OrganicScanRow = {
   aiOverviewCited: boolean;
   citedDomains: string[];
   topCompetitorDomains?: string[];
+  providerMode?: string;
   cost: number;
 };
 
@@ -139,6 +141,14 @@ export function RankTracker() {
   const [radiusKm, setRadiusKm] = useState<number>(3);
   const [gridBusy, setGridBusy] = useState(false);
   const [selectedGridId, setSelectedGridId] = useState<string | null>(null);
+  const [selectedPointKey, setSelectedPointKey] = useState<string | null>(null);
+
+  // Pin / Coordinate editor state
+  const [showLocationEditor, setShowLocationEditor] = useState(false);
+  const [editPlaceId, setEditPlaceId] = useState('');
+  const [editLat, setEditLat] = useState('');
+  const [editLng, setEditLng] = useState('');
+  const [savingLocation, setSavingLocation] = useState(false);
 
   // Organic SERP form state
   const [organicKeywordsInput, setOrganicKeywordsInput] = useState('');
@@ -168,6 +178,9 @@ export function RankTracker() {
         setGridKeyword((prev) => prev || defaults.suggestedKeywords[0]);
         setOrganicKeywordsInput((prev) => prev || defaults.suggestedKeywords.slice(0, 3).join('\n'));
       }
+      if (defaults?.placeId) setEditPlaceId((prev) => prev || defaults.placeId!);
+      if (defaults?.centerLat != null) setEditLat((prev) => prev || String(defaults.centerLat));
+      if (defaults?.centerLng != null) setEditLng((prev) => prev || String(defaults.centerLng));
       if (Array.isArray(j.gridScans) && j.gridScans.length > 0) {
         setSelectedGridId((prev) => prev || j.gridScans![0].id);
       }
@@ -246,6 +259,40 @@ export function RankTracker() {
       setError(e instanceof Error ? e.message : 'Scan failed');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function saveGeoConfig() {
+    const cleanPlace = editPlaceId.trim();
+    const lat = Number(editLat.trim());
+    const lng = Number(editLng.trim());
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      toast.error('Enter valid numeric Latitude (-90..90) and Longitude (-180..180).');
+      return;
+    }
+    setSavingLocation(true);
+    try {
+      const r = await authFetch('/api/gbp/rankings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'save_geo_config',
+          placeId: cleanPlace || undefined,
+          centerLat: lat,
+          centerLng: lng,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || 'Could not save location coordinates');
+      if (cleanPlace) setPlaceId(cleanPlace);
+      setLocation(`${lat},${lng}`);
+      setShowLocationEditor(false);
+      toast.success('Business Place ID & center coordinates saved.');
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save coordinates');
+    } finally {
+      setSavingLocation(false);
     }
   }
 
@@ -673,15 +720,96 @@ export function RankTracker() {
                 Google Places API key or DataForSEO credentials are required to run Maps Geo-Grid scans.
               </p>
             )}
+
+            <div className="rounded-lg border border-border/80 bg-muted/20 p-3 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
+                  <MapPin className="size-3.5 text-[#009F50] shrink-0" />
+                  <span>
+                    Grid Center:{' '}
+                    <span className="font-mono font-semibold text-foreground">
+                      {data?.autoDefaults?.centerLat != null && data?.autoDefaults?.centerLng != null
+                        ? `${data.autoDefaults.centerLat}, ${data.autoDefaults.centerLng}`
+                        : location || 'Auto-detect on first scan'}
+                    </span>
+                  </span>
+                  {(placeId || data?.autoDefaults?.placeId) && (
+                    <span className="font-mono text-[11px] bg-background border rounded px-1.5 py-0.5">
+                      Place ID: {(placeId || data?.autoDefaults?.placeId || '').slice(0, 18)}…
+                    </span>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowLocationEditor((v) => !v)}
+                  className="h-7 text-[11px]"
+                >
+                  {showLocationEditor ? 'Close Editor' : 'Edit Location / Place ID'}
+                </Button>
+              </div>
+
+              {showLocationEditor && (
+                <div className="grid gap-2 sm:grid-cols-12 pt-1 border-t">
+                  <div className="sm:col-span-5">
+                    <label className="text-[11px] font-semibold text-muted-foreground">Google Place ID</label>
+                    <input
+                      className="mt-1 w-full rounded-md border bg-background px-2.5 py-1.5 text-xs font-mono"
+                      value={editPlaceId}
+                      onChange={(e) => setEditPlaceId(e.target.value)}
+                      placeholder="ChIJ..."
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-muted-foreground">Latitude</label>
+                    <input
+                      className="mt-1 w-full rounded-md border bg-background px-2.5 py-1.5 text-xs font-mono"
+                      value={editLat}
+                      onChange={(e) => setEditLat(e.target.value)}
+                      placeholder="12.9716"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-muted-foreground">Longitude</label>
+                    <input
+                      className="mt-1 w-full rounded-md border bg-background px-2.5 py-1.5 text-xs font-mono"
+                      value={editLng}
+                      onChange={(e) => setEditLng(e.target.value)}
+                      placeholder="77.5946"
+                    />
+                  </div>
+                  <div className="sm:col-span-3 flex items-end">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={savingLocation}
+                      onClick={() => void saveGeoConfig()}
+                      className="w-full h-8 text-xs font-bold bg-[#009F50] hover:bg-[#008A45] text-white"
+                    >
+                      {savingLocation ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}
+                      Save Pin Location
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {activeGridScan ? (
             <div className="rounded-xl border bg-card p-5 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h4 className="text-sm font-bold">
-                    &ldquo;{activeGridScan.keyword}&rdquo; ({activeGridScan.gridSize}x{activeGridScan.gridSize} · {activeGridScan.radiusKm} km radius)
-                  </h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-sm font-bold">
+                      &ldquo;{activeGridScan.keyword}&rdquo; ({activeGridScan.gridSize}x{activeGridScan.gridSize} · {activeGridScan.radiusKm} km radius)
+                    </h4>
+                    <Badge variant="outline" className="text-[10px]">
+                      {activeGridScan.providerMode === 'dataforseo'
+                        ? 'DataForSEO Live Maps'
+                        : 'Google Places Area Grid'}
+                    </Badge>
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Scanned {new Date(activeGridScan.date).toLocaleString()} · Avg Rank: {activeGridScan.avgRank ?? 'Unranked'} · Top-3 Coverage: {activeGridScan.top3Pct}%
                   </p>
@@ -690,7 +818,10 @@ export function RankTracker() {
                   <select
                     className="rounded-lg border bg-background px-2.5 py-1.5 text-xs"
                     value={activeGridScan.id}
-                    onChange={(e) => setSelectedGridId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedGridId(e.target.value);
+                      setSelectedPointKey(null);
+                    }}
                   >
                     {data!.gridScans!.map((s) => (
                       <option key={s.id} value={s.id}>
@@ -707,20 +838,70 @@ export function RankTracker() {
                   gridTemplateColumns: `repeat(${activeGridScan.gridSize}, minmax(0, 1fr))`,
                 }}
               >
-                {activeGridScan.points.map((pt, idx) => (
-                  <div
-                    key={`${pt.row}-${pt.col}-${idx}`}
-                    title={`Coord: ${pt.lat}, ${pt.lng}${pt.topCompetitorName ? ` · #1: ${pt.topCompetitorName}` : ''}`}
-                    className={`aspect-square rounded-xl border flex flex-col items-center justify-center p-1 text-center transition ${tileClass(pt.rank)}`}
-                  >
-                    <span className="text-sm font-black">{pt.rank != null ? `#${pt.rank}` : '—'}</span>
-                    {pt.row === Math.floor(activeGridScan.gridSize / 2) &&
-                      pt.col === Math.floor(activeGridScan.gridSize / 2) && (
-                        <span className="text-[9px] uppercase font-bold opacity-90">Center</span>
-                      )}
-                  </div>
-                ))}
+                {activeGridScan.points.map((pt, idx) => {
+                  const ptKey = `${pt.row}-${pt.col}`;
+                  const isCenter =
+                    pt.row === Math.floor(activeGridScan.gridSize / 2) &&
+                    pt.col === Math.floor(activeGridScan.gridSize / 2);
+                  const isSelected = selectedPointKey === ptKey;
+                  return (
+                    <button
+                      type="button"
+                      key={`${ptKey}-${idx}`}
+                      onClick={() => setSelectedPointKey(isSelected ? null : ptKey)}
+                      title={`Coord: ${pt.lat}, ${pt.lng}${pt.topCompetitorName ? ` · #1: ${pt.topCompetitorName}` : ''}`}
+                      className={`aspect-square rounded-xl border flex flex-col items-center justify-center p-1 text-center transition cursor-pointer hover:scale-[1.03] ${tileClass(pt.rank)} ${isSelected ? 'ring-2 ring-offset-2 ring-slate-900 dark:ring-white scale-[1.04]' : ''}`}
+                    >
+                      <span className="text-sm font-black">{pt.rank != null ? `#${pt.rank}` : '—'}</span>
+                      {isCenter && <span className="text-[9px] uppercase font-bold opacity-90">Center</span>}
+                    </button>
+                  );
+                })}
               </div>
+
+              {(() => {
+                const chosen = activeGridScan.points.find(
+                  (pt) => `${pt.row}-${pt.col}` === selectedPointKey,
+                );
+                if (!chosen) {
+                  return (
+                    <p className="text-center text-[11px] text-muted-foreground">
+                      Click any pin tile above to inspect GPS coordinates and the #1 competitor at that corner.
+                    </p>
+                  );
+                }
+                const isCenter =
+                  chosen.row === Math.floor(activeGridScan.gridSize / 2) &&
+                  chosen.col === Math.floor(activeGridScan.gridSize / 2);
+                return (
+                  <div className="rounded-lg border bg-muted/30 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-foreground">
+                          {isCenter ? 'Center Pin (Your Business)' : `Grid Pin (Row ${chosen.row + 1}, Col ${chosen.col + 1})`}
+                        </span>
+                        <Badge className={tileClass(chosen.rank)}>
+                          {chosen.rank != null ? `Rank #${chosen.rank}` : 'Not in Top 20'}
+                        </Badge>
+                      </div>
+                      <p className="font-mono text-[11px] text-muted-foreground">
+                        Coords: {chosen.lat}, {chosen.lng}
+                      </p>
+                    </div>
+                    {chosen.topCompetitorName ? (
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          #1 Competitor at Pin
+                        </span>
+                        <p className="font-semibold text-foreground">
+                          {chosen.topCompetitorName}
+                          {chosen.topCompetitorRating != null ? ` (${chosen.topCompetitorRating}★)` : ''}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             <div className="rounded-xl border border-dashed p-6 text-center text-xs text-muted-foreground">
@@ -808,9 +989,20 @@ export function RankTracker() {
                   <tr key={row.id} className="border-t">
                     <td className="p-3 font-semibold text-foreground">{row.keyword}</td>
                     <td className="p-3">
-                      {row.organicRank != null ? (
+                      {row.providerMode === 'gemini_grounded_search' ? (
+                        row.organicRank != null ? (
+                          <div className="flex flex-col items-start gap-0.5">
+                            <Badge className="bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800">
+                              AI Source #{row.organicRank}
+                            </Badge>
+                            <span className="text-[10px] text-muted-foreground">Gemini Grounded</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">Not Cited</span>
+                        )
+                      ) : row.organicRank != null ? (
                         <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          #{row.organicRank}
+                          Web #{row.organicRank}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">Not in Top 30</span>

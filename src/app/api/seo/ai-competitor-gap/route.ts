@@ -43,8 +43,9 @@ export async function POST(request: NextRequest) {
     const report = await runAiCompetitorGapAnalysis({
       tenantId: user.tenantId,
       customPrompts,
-      includeOpenAi: body?.includeOpenAi === true,
+      includeOpenAi: body?.includeOpenAi !== false,
       createPlan: body?.createPlan === true,
+      createPlanOnly: body?.createPlanOnly === true,
     });
 
     return NextResponse.json({ success: true, report });

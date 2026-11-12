@@ -5,8 +5,17 @@ import fs from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { getCategoryVisualPool } from './dynamic-visual-resolver';
+import type { ImageGenerationSourceType } from '../../../shared/image-review';
 
 export type ImageProvider = 'gemini' | 'openrouter' | 'cloudflare' | 'siliconflow' | 'nvidia';
+
+export interface GeneratedImageResult {
+  bytes: Buffer;
+  model: string;
+  cost: number | null;
+  sourceType?: ImageGenerationSourceType;
+  fallbackReason?: string;
+}
 
 const IS_TEST_ENV = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 const KEY_CACHE_TTL_MS = 30_000;
@@ -601,6 +610,11 @@ export interface BusinessVisualContext {
   referenceImageUrls?: string[];
   autoFromBusiness?: boolean;
   aspectRatio?: '1:1' | '4:5' | '9:16' | '16:9';
+  stylePreset?: string;
+  isGbpPhoto?: boolean;
+  city?: string | null;
+  searchTerms?: string[];
+  seoSlug?: string;
 }
 
 function cleanMarketingTopic(raw: string): string {
@@ -973,6 +987,9 @@ Rules:
     const userPayload = JSON.stringify({
       businessName: context?.businessName || '',
       category: context?.category || '',
+      city: context?.city || '',
+      searchKeywords: context?.searchTerms || [],
+      stylePreset: context?.stylePreset || '',
       products: context?.products || [],
       services: context?.services || [],
       website: context?.website || '',
@@ -1067,105 +1084,137 @@ async function callGeminiOrOpenRouterImage(params: {
   promptText: string;
   referenceImages: Array<{ mimeType: 'image/png' | 'image/jpeg' | 'image/webp'; base64: string }>;
   signal: AbortSignal;
-}): Promise<{ bytes: Buffer; model: string; cost: number | null }> {
+}): Promise<GeneratedImageResult> {
   const cred = await resolveProviderCredential(params.provider);
   if (!cred) {
     throw new Error(`Configure an active ${params.provider} key in Superadmin`);
   }
 
-  const model =
-    cred.modelOverride ||
-    (params.provider === 'gemini'
-      ? process.env.BGOS_GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image'
-      : process.env.BGOS_OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image');
-
-  const requestBody =
+  const explicitEnvModel =
     params.provider === 'gemini'
-      ? {
-          contents: [
-            {
-              parts: [
-                ...params.referenceImages.map((ref) => ({
-                  inlineData: { mimeType: ref.mimeType, data: ref.base64 },
-                })),
-                { text: params.promptText },
-              ],
-            },
-          ],
-          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
-        }
-      : {
-          model,
-          messages: [
-            {
-              role: 'user',
-              content:
-                params.referenceImages.length > 0
-                  ? [
-                      { type: 'text', text: params.promptText },
-                      ...params.referenceImages.map((ref) => ({
-                        type: 'image_url',
-                        image_url: { url: `data:${ref.mimeType};base64,${ref.base64}` },
-                      })),
-                    ]
-                  : params.promptText,
-            },
-          ],
-          modalities: ['image', 'text'],
-        };
+      ? process.env.BGOS_GEMINI_IMAGE_MODEL
+      : process.env.BGOS_OPENROUTER_IMAGE_MODEL;
+  const primaryModel =
+    cred.modelOverride ||
+    explicitEnvModel ||
+    (params.provider === 'gemini'
+      ? 'gemini-3.1-flash-image'
+      : 'google/gemini-2.5-flash-image');
 
-  let response: Response;
-  try {
-    response = await fetch(
+  const candidateModels =
+    params.provider === 'gemini' &&
+    !cred.modelOverride &&
+    !explicitEnvModel &&
+    primaryModel !== 'gemini-2.5-flash-image'
+      ? [primaryModel, 'gemini-2.5-flash-image']
+      : [primaryModel];
+
+  let lastError: unknown = null;
+  for (let idx = 0; idx < candidateModels.length; idx += 1) {
+    const model = candidateModels[idx];
+    const hasFallbackModel = idx < candidateModels.length - 1;
+
+    const requestBody =
       params.provider === 'gemini'
-        ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`
-        : 'https://openrouter.ai/api/v1/chat/completions',
-      {
-        method: 'POST',
-        signal: combineSignals(params.signal, 20_000),
-        headers: {
-          'Content-Type': 'application/json',
-          ...(params.provider === 'gemini'
-            ? { 'x-goog-api-key': cred.secret }
-            : { Authorization: `Bearer ${cred.secret}` }),
+        ? {
+            contents: [
+              {
+                parts: [
+                  ...params.referenceImages.map((ref) => ({
+                    inlineData: { mimeType: ref.mimeType, data: ref.base64 },
+                  })),
+                  { text: params.promptText },
+                ],
+              },
+            ],
+            generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+          }
+        : {
+            model,
+            messages: [
+              {
+                role: 'user',
+                content:
+                  params.referenceImages.length > 0
+                    ? [
+                        { type: 'text', text: params.promptText },
+                        ...params.referenceImages.map((ref) => ({
+                          type: 'image_url',
+                          image_url: { url: `data:${ref.mimeType};base64,${ref.base64}` },
+                        })),
+                      ]
+                    : params.promptText,
+              },
+            ],
+            modalities: ['image', 'text'],
+          };
+
+    let response: Response;
+    try {
+      response = await fetch(
+        params.provider === 'gemini'
+          ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`
+          : 'https://openrouter.ai/api/v1/chat/completions',
+        {
+          method: 'POST',
+          signal: combineSignals(params.signal, 20_000),
+          headers: {
+            'Content-Type': 'application/json',
+            ...(params.provider === 'gemini'
+              ? { 'x-goog-api-key': cred.secret }
+              : { Authorization: `Bearer ${cred.secret}` }),
+          },
+          body: JSON.stringify(requestBody),
         },
-        body: JSON.stringify(requestBody),
-      },
-    );
-  } catch (err) {
-    if (!params.signal.aborted && err instanceof Error && /timeout|aborted/i.test(err.name + ' ' + err.message)) {
-      throw new ProviderRequestError(`${params.provider} image generation failed (504)`, 504);
+      );
+    } catch (err) {
+      if (!params.signal.aborted && err instanceof Error && /timeout|aborted/i.test(err.name + ' ' + err.message)) {
+        lastError = new ProviderRequestError(`${params.provider} image generation failed (504)`, 504);
+      } else {
+        lastError = err;
+      }
+      if (!hasFallbackModel) throw lastError;
+      continue;
     }
-    throw err;
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      const accountQuotaExhausted =
+        response.status === 401 ||
+        response.status === 402 ||
+        response.status === 403 ||
+        (response.status === 429 && /quota|exceeded|RESOURCE_EXHAUSTED|exhausted|credit|balance|limit/i.test(errText));
+      const modelError = new ProviderRequestError(
+        `${params.provider} image generation failed (${response.status})`,
+        response.status,
+        accountQuotaExhausted,
+      );
+      if (hasFallbackModel && (response.status === 404 || response.status === 400)) {
+        console.warn(`[image-provider] Gemini model ${model} returned ${response.status}, falling back to ${candidateModels[idx + 1]}`);
+        lastError = modelError;
+        continue;
+      }
+      throw modelError;
+    }
+
+    const data = await response.json();
+    const encoded = parseProviderImageResponse(params.provider, data);
+    if (!encoded) {
+      throw new UnsupportedImagePayloadError('The provider did not return a supported image');
+    }
+
+    await recordProviderKeyUsage(cred.keyRowId);
+
+    return {
+      bytes: Buffer.from(encoded, 'base64'),
+      model,
+      cost: typeof data.usage?.cost === 'number' ? data.usage.cost : null,
+    };
   }
 
-  if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    const accountQuotaExhausted =
-      response.status === 401 ||
-      response.status === 402 ||
-      response.status === 403 ||
-      (response.status === 429 && /quota|exceeded|RESOURCE_EXHAUSTED|exhausted|credit|balance|limit/i.test(errText));
-    throw new ProviderRequestError(
-      `${params.provider} image generation failed (${response.status})`,
-      response.status,
-      accountQuotaExhausted,
-    );
-  }
-
-  const data = await response.json();
-  const encoded = parseProviderImageResponse(params.provider, data);
-  if (!encoded) {
-    throw new UnsupportedImagePayloadError('The provider did not return a supported image');
-  }
-
-  await recordProviderKeyUsage(cred.keyRowId);
-
-  return {
-    bytes: Buffer.from(encoded, 'base64'),
-    model,
-    cost: typeof data.usage?.cost === 'number' ? data.usage.cost : null,
-  };
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`${params.provider} image generation failed`);
 }
 
 async function callSiliconFlowImage(params: {
@@ -1429,7 +1478,7 @@ export async function generateDesignImage(
   isPoster?: boolean,
   context?: BusinessVisualContext,
   options?: GenerateDesignImageOptions
-) {
+): Promise<GeneratedImageResult> {
   const isPosterMode = isPoster || prompt.startsWith('[POSTER]');
   const text = await synthesizeDynamicVisualPrompt(prompt, isPosterMode, context, signal);
   const referenceUrls = options?.referenceImageUrls || context?.referenceImageUrls || [];
@@ -1453,12 +1502,16 @@ export async function generateDesignImage(
       if (signal.aborted) break;
       if (getActiveProviderCooldown(mmProvider)) continue;
       try {
-        return await callGeminiOrOpenRouterImage({
+        const res = await callGeminiOrOpenRouterImage({
           provider: mmProvider,
           promptText: multimodalPrompt,
           referenceImages: loadedRefs,
           signal,
         });
+        return {
+          ...res,
+          sourceType: 'ai_reference',
+        };
       } catch (err) {
         recordProviderFailureCooldown(mmProvider, err);
         lastMultimodalError = err;
@@ -1466,16 +1519,25 @@ export async function generateDesignImage(
     }
 
     // Fallback to text-to-image providers with descriptive prompt when Gemini & OpenRouter are unavailable
+    const refFallbackReason =
+      lastMultimodalError instanceof Error
+        ? `Reference-aware multimodal generation was unavailable (${lastMultimodalError.message}); generated from visual prompt instead.`
+        : 'Reference-aware multimodal generation was unavailable; generated from visual prompt instead.';
     for (const textFallback of ['cloudflare', 'siliconflow', 'nvidia'] as const) {
       if (signal.aborted) break;
       if (getActiveProviderCooldown(textFallback)) continue;
       try {
-        return await callSingleTextImageProvider({
+        const res = await callSingleTextImageProvider({
           provider: textFallback,
           promptText: promptWithAspect,
           dims,
           signal,
         });
+        return {
+          ...res,
+          sourceType: 'ai_text',
+          fallbackReason: refFallbackReason,
+        };
       } catch (err) {
         recordProviderFailureCooldown(textFallback, err);
       }
@@ -1493,12 +1555,16 @@ export async function generateDesignImage(
     primaryErr = new ProviderRequestError(`${provider} skipped during quota cooldown: ${cooldownReason}`, 429, true);
   } else {
     try {
-      return await callSingleTextImageProvider({
+      const res = await callSingleTextImageProvider({
         provider,
         promptText: promptWithAspect,
         dims,
         signal,
       });
+      return {
+        ...res,
+        sourceType: 'ai_text',
+      };
     } catch (err) {
       recordProviderFailureCooldown(provider, err);
       primaryErr = err;
@@ -1513,12 +1579,20 @@ export async function generateDesignImage(
     if (signal.aborted) break;
     if (getActiveProviderCooldown(fallbackProvider)) continue;
     try {
-      return await callSingleTextImageProvider({
+      const res = await callSingleTextImageProvider({
         provider: fallbackProvider,
         promptText: promptWithAspect,
         dims,
         signal,
       });
+      return {
+        ...res,
+        sourceType: 'ai_text',
+        fallbackReason:
+          primaryErr instanceof Error
+            ? `Primary provider ${provider} unavailable (${primaryErr.message}); generated via ${fallbackProvider}.`
+            : undefined,
+      };
     } catch (fallbackErr) {
       recordProviderFailureCooldown(fallbackProvider, fallbackErr);
     }
@@ -1530,7 +1604,7 @@ export async function generateDesignImage(
 export async function resolveCuratedImageFallback(
   prompt: string,
   context?: BusinessVisualContext
-): Promise<{ bytes: Buffer; model: string; cost: number | null }> {
+): Promise<GeneratedImageResult> {
   const cleanPrompt = prompt.replace(/^\[POSTER\]\s*/i, '').trim();
   const pLower = cleanPrompt.toLowerCase();
   const category = (context?.category || '').toLowerCase();
@@ -1615,6 +1689,7 @@ export async function resolveCuratedImageFallback(
     ]);
   }
 
+  let fallbackFetchErr: unknown = null;
   try {
     const res = await fetch(stockUrl, { signal: AbortSignal.timeout(10000) });
     if (res.ok) {
@@ -1625,17 +1700,22 @@ export async function resolveCuratedImageFallback(
           bytes,
           model: 'curated-occasion-stock',
           cost: 0,
+          sourceType: 'stock_fallback',
+          fallbackReason:
+            'AI image providers were temporarily at capacity; selected a curated royalty-free business photo fallback.',
         };
       }
+    } else {
+      fallbackFetchErr = new Error(`Stock fallback returned HTTP ${res.status}`);
     }
   } catch (err) {
-    console.warn('[resolveCuratedImageFallback] fetch failed, falling back to minimal buffer:', err);
+    fallbackFetchErr = err;
+    console.warn('[resolveCuratedImageFallback] fetch failed:', err);
   }
 
-  const fallbackPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
-  return {
-    bytes: fallbackPng,
-    model: 'curated-occasion-stock',
-    cost: 0,
-  };
+  throw new Error(
+    fallbackFetchErr instanceof Error
+      ? `AI image providers are temporarily busy and stock photo fallback failed (${fallbackFetchErr.message}). Please retry.`
+      : 'AI image providers are temporarily busy and stock photo fallback failed. Please retry.',
+  );
 }

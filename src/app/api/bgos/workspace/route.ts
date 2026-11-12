@@ -43,6 +43,7 @@ export async function GET(request?: NextRequest): Promise<NextResponse> {
       select: {
         name: true,
         slug: true,
+        publicSlug: true,
         country: true,
         phone: true,
         email: true,
@@ -95,8 +96,13 @@ export async function GET(request?: NextRequest): Promise<NextResponse> {
       bookingPageConfig.businessName ||
       tenant.brandProfile?.businessName ||
       tenant.name;
+    const isAgencyMode = settings.bgos?.mode === 'agency';
+    const businessSlug =
+      tenant.publicSlug ||
+      tenant.slug ||
+      tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const data: BgosWorkspace = {
-      name: effectiveBusinessName, mode: settings.bgos?.mode === 'agency' ? 'agency' : 'local',
+      name: effectiveBusinessName, mode: isAgencyMode ? 'agency' : 'local',
       locale: {
         country: resolvedLocale.country,
         countryName: resolvedLocale.countryName,
@@ -116,10 +122,11 @@ export async function GET(request?: NextRequest): Promise<NextResponse> {
       },
       intakeForm: form && form.slug ? { id: form.id, name: form.name, slug: form.slug } : null,
       links: {
-        profile: profile?.isEnabled && profile.handle
-          ? `/p/${encodeURIComponent(profile.handle)}`
-          : `/b/${encodeURIComponent(tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}`,
-        booking: `/book/${encodeURIComponent(tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}`,
+        profile:
+          isAgencyMode && profile?.isEnabled && profile.handle
+            ? `/p/${encodeURIComponent(profile.handle)}`
+            : `/b/${encodeURIComponent(businessSlug)}`,
+        booking: `/book/${encodeURIComponent(businessSlug)}`,
         form: form?.slug ? `/f/${encodeURIComponent(form.slug)}` : null,
         review: tenant.googlePlaceId ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(tenant.googlePlaceId)}` : null,
       },

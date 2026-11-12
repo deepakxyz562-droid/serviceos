@@ -118,11 +118,23 @@ export interface WebsiteAuditReportClientDto {
 
 interface WebsiteAiAuditCardProps {
   compact?: boolean;
+  refreshSignal?: number;
   onStatusUpdated?: (summary: {
     mode: 'no_website' | 'bgos_hosted' | 'custom_domain';
     hostedTier: 'A' | 'B' | 'C' | null;
     websiteScore: number | null;
+    overallScore?: number;
+    gbpScore?: number | null;
+    aiReadinessScore?: number;
+    openTasksCount?: number;
   }) => void;
+}
+
+function scoreToneClass(score: number | null | undefined): string {
+  if (score == null) return 'text-foreground';
+  if (score >= 75) return 'text-[#009F50]';
+  if (score >= 45) return 'text-amber-600 dark:text-amber-400';
+  return 'text-rose-600 dark:text-rose-400';
 }
 
 const MODE_LABELS: Record<'no_website' | 'bgos_hosted' | 'custom_domain', { title: string; tone: string }> = {
@@ -140,7 +152,11 @@ const MODE_LABELS: Record<'no_website' | 'bgos_hosted' | 'custom_domain', { titl
   },
 };
 
-export function WebsiteAiAuditCard({ compact = false, onStatusUpdated }: WebsiteAiAuditCardProps) {
+export function WebsiteAiAuditCard({
+  compact = false,
+  refreshSignal = 0,
+  onStatusUpdated,
+}: WebsiteAiAuditCardProps) {
   const [loading, setLoading] = useState(true);
   const [auditing, setAuditing] = useState(false);
   const [fixingKey, setFixingKey] = useState<string | null>(null);
@@ -176,6 +192,10 @@ export function WebsiteAiAuditCard({ compact = false, onStatusUpdated }: Website
           mode: pres.mode,
           hostedTier: snap?.hostedProfileTier ?? null,
           websiteScore: snap?.websiteScore ?? null,
+          overallScore: snap?.overallScore,
+          gbpScore: snap?.gbpScore ?? (typeof data?.gbpScore === 'number' ? data.gbpScore : null),
+          aiReadinessScore: snap?.aiReadinessScore,
+          openTasksCount: taskList.filter((t) => t.status === 'open').length,
         });
       }
     } catch {
@@ -187,7 +207,7 @@ export function WebsiteAiAuditCard({ compact = false, onStatusUpdated }: Website
 
   useEffect(() => {
     void loadAudit();
-  }, [loadAudit]);
+  }, [loadAudit, refreshSignal]);
 
   const runLiveAudit = async () => {
     setAuditing(true);
@@ -459,14 +479,16 @@ export function WebsiteAiAuditCard({ compact = false, onStatusUpdated }: Website
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="rounded-xl border border-border bg-muted/20 p-3.5">
             <span className="text-[11px] font-semibold text-muted-foreground">Overall BGOS 2.0 Score</span>
-            <p className="text-2xl font-extrabold text-foreground mt-1">
+            <p className={`text-2xl font-extrabold mt-1 ${scoreToneClass(report?.overallScore)}`}>
               {report ? `${report.overallScore}/100` : '—'}
             </p>
             <span className="text-[10px] text-muted-foreground">GBP + Website + AI Readiness</span>
           </div>
           <div className="rounded-xl border border-border bg-muted/20 p-3.5">
             <span className="text-[11px] font-semibold text-muted-foreground">Google Profile Health</span>
-            <p className="text-2xl font-extrabold text-foreground mt-1">
+            <p
+              className={`text-2xl font-extrabold mt-1 ${scoreToneClass(report?.gbpScore ?? gbpScoreFallback)}`}
+            >
               {report?.gbpScore != null
                 ? `${report.gbpScore}/100`
                 : gbpScoreFallback != null
@@ -477,17 +499,37 @@ export function WebsiteAiAuditCard({ compact = false, onStatusUpdated }: Website
           </div>
           <div className="rounded-xl border border-border bg-muted/20 p-3.5">
             <span className="text-[11px] font-semibold text-muted-foreground">Website SEO Score</span>
-            <p className="text-2xl font-extrabold text-foreground mt-1">
-              {report ? (report.websiteScore != null ? `${report.websiteScore}/100` : '0/100') : '—'}
-            </p>
-            <span className="text-[10px] text-muted-foreground">On-page, Schema &amp; HTTPS</span>
+            {report ? (
+              report.websiteScore != null ? (
+                <p className={`text-2xl font-extrabold mt-1 ${scoreToneClass(report.websiteScore)}`}>
+                  {`${report.websiteScore}/100`}
+                </p>
+              ) : (
+                <div className="mt-2">
+                  <Badge className="bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800 font-bold">
+                    Not Active
+                  </Badge>
+                </div>
+              )
+            ) : (
+              <p className="text-2xl font-extrabold text-foreground mt-1">—</p>
+            )}
+            <span className="text-[10px] text-muted-foreground">
+              {report && report.websiteScore == null
+                ? 'Activate hosted site to unlock'
+                : 'On-page, Schema & HTTPS'}
+            </span>
           </div>
           <div className="rounded-xl border border-border bg-muted/20 p-3.5">
             <span className="text-[11px] font-semibold text-muted-foreground">AI Search Readiness</span>
-            <p className="text-2xl font-extrabold text-[#009F50] mt-1">
+            <p className={`text-2xl font-extrabold mt-1 ${scoreToneClass(report?.aiReadinessScore)}`}>
               {report ? `${report.aiReadinessScore}/100` : '—'}
             </p>
-            <span className="text-[10px] text-muted-foreground">Crawlers + Entities + FAQs</span>
+            <span className="text-[10px] text-muted-foreground">
+              {(report?.presence?.mode ?? presence?.mode) === 'no_website'
+                ? 'Max 35/100 without website'
+                : 'Crawlers + Entities + FAQs'}
+            </span>
           </div>
         </div>
       </div>
@@ -658,7 +700,7 @@ export function WebsiteAiAuditCard({ compact = false, onStatusUpdated }: Website
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             : task.status === 'rolled_back'
                               ? 'bg-slate-100 text-slate-600'
-                              : task.severity === 'high'
+                              : ((task.severity || (task as { priority?: string }).priority || 'medium').toLowerCase() === 'high')
                                 ? 'bg-rose-50 text-rose-700 border-rose-200'
                                 : 'bg-amber-50 text-amber-700 border-amber-200'
                         }`}
@@ -669,7 +711,7 @@ export function WebsiteAiAuditCard({ compact = false, onStatusUpdated }: Website
                             ? 'Rolled Back'
                             : task.status === 'dismissed'
                               ? 'Dismissed'
-                              : task.severity.toUpperCase()}
+                              : (task.severity || (task as { priority?: string }).priority || 'medium').toUpperCase()}
                       </Badge>
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         {task.source === 'ai_gap' ? 'AI Visibility Plan' : 'Technical Audit'}

@@ -73,3 +73,29 @@ if [ -f "$MANIFEST" ]; then
   fi
   echo "✓ All manifest-referenced assets present."
 fi
+
+# Belt-and-suspenders: ensure pdfkit's CommonJS standard fonts (Helvetica.cjs etc.)
+# and glyph chunks are present in Next standalone output (NFT traces .mjs via
+# ESM while pdfkit.node.mjs invokes createRequire('#standard-fonts/*') -> *.cjs).
+for STANDALONE_ROOT in "$ROOT/.next/standalone" "$ROOT/standalone"; do
+  if [ -d "$STANDALONE_ROOT" ]; then
+    for SRC_FONTS in "$ROOT"/node_modules/.bun/pdfkit@*/node_modules/pdfkit/js/standard-fonts; do
+      [ -d "$SRC_FONTS" ] || continue
+      PKG_REL="${SRC_FONTS#$ROOT/}"
+      DST_FONTS="$STANDALONE_ROOT/$PKG_REL"
+      if [ -d "$(dirname "$DST_FONTS")" ]; then
+        mkdir -p "$DST_FONTS"
+        if command -v rsync >/dev/null 2>&1; then
+          rsync -a "$SRC_FONTS/" "$DST_FONTS/"
+        else
+          cp -r "$SRC_FONTS/." "$DST_FONTS/"
+        fi
+        echo "✓ Synced pdfkit standard-fonts → $STANDALONE_ROOT/$PKG_REL"
+      fi
+    done
+    if [ -d "$ROOT/node_modules/pdfkit/js/standard-fonts" ] && [ -d "$STANDALONE_ROOT/node_modules/pdfkit/js" ]; then
+      mkdir -p "$STANDALONE_ROOT/node_modules/pdfkit/js/standard-fonts"
+      cp -r "$ROOT/node_modules/pdfkit/js/standard-fonts/." "$STANDALONE_ROOT/node_modules/pdfkit/js/standard-fonts/"
+    fi
+  fi
+done

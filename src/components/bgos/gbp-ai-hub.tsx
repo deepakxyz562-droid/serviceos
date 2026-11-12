@@ -91,6 +91,7 @@ import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 import { GbpManageProfileDialog } from '@/components/bgos/gbp-manage-profile-dialog';
 import { GbpAutoOptimizerPanel } from '@/components/bgos/gbp-auto-optimizer-panel';
+import { GbpPerformanceReportDialog } from '@/components/bgos/gbp-performance-report-dialog';
 import {
   WebMediaMetadataDialog,
   type WebMediaItem,
@@ -483,6 +484,7 @@ function HubHeader({
   grade,
   connectUrl,
   onOpenManageProfile,
+  onOpenReport,
 }: {
   name: string;
   address: string;
@@ -492,6 +494,7 @@ function HubHeader({
   grade: string | null;
   connectUrl: string;
   onOpenManageProfile?: () => void;
+  onOpenReport?: () => void;
 }) {
   return (
     <Card className="rounded-2xl shadow-xs">
@@ -543,6 +546,18 @@ function HubHeader({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onOpenReport && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onOpenReport}
+              className="gap-1.5 rounded-xl border-slate-200 text-xs font-semibold hover:bg-slate-50"
+            >
+              <FileText className="size-3.5 text-primary" />
+              Growth Report
+            </Button>
+          )}
           {onOpenManageProfile && (
             <Button
               type="button"
@@ -2212,6 +2227,7 @@ export function GbpAiHub() {
   const [connectUrl, setConnectUrl] = useState('');
   const [manageProfileOpen, setManageProfileOpen] = useState(false);
   const [manageProfileTab, setManageProfileTab] = useState<'basics' | 'description' | 'hours'>('basics');
+  const [reportOpen, setReportOpen] = useState(false);
 
   const handleOpenManageProfile = useCallback((tab: 'basics' | 'description' | 'hours' = 'basics') => {
     setManageProfileTab(tab);
@@ -2488,6 +2504,7 @@ export function GbpAiHub() {
         grade={auditData?.grade || null}
         connectUrl={connectUrl}
         onOpenManageProfile={() => handleOpenManageProfile('basics')}
+        onOpenReport={() => setReportOpen(true)}
       />
 
       <Tabs defaultValue="overview" className="gap-4">
@@ -2593,10 +2610,12 @@ export function GbpAiHub() {
             summary={summary}
             onSaveSummary={handleSaveSummary}
             savingSummary={savingSummary}
-            onViewReport={() => setCurrentView('socialMedia')}
+            onViewReport={() => setReportOpen(true)}
           />
         </TabsContent>
       </Tabs>
+
+      <GbpPerformanceReportDialog open={reportOpen} onOpenChange={setReportOpen} />
 
       <GbpManageProfileDialog
         open={manageProfileOpen}

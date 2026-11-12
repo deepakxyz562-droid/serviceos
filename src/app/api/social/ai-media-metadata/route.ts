@@ -3,6 +3,14 @@ import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getBrandContext, getBrandContextRaw } from '@/lib/brand-context';
 import { callAI } from '@/lib/ai-client';
+import {
+  extractTenantGeoAndSeoContext,
+  inspectImageWithVision,
+} from '@/lib/designs/seo-metadata';
+import {
+  computeMediaSeoReadiness,
+  slugifySeoFilename,
+} from '../../../../../shared/image-review';
 
 const VALID_GBP_CATEGORIES = [
   'EXTERIOR',
@@ -19,12 +27,15 @@ type GbpMediaCategory = (typeof VALID_GBP_CATEGORIES)[number];
 
 interface AiMediaMetadataBody {
   mediaUrls?: string[];
+  imageUrl?: string;
   filenames?: string[];
   mediaType?: 'photo' | 'video';
   intent?: 'showcase' | 'local_seo' | 'offer' | 'behind_the_scenes' | 'team';
   tone?: string;
   customHint?: string;
+  aiPrompt?: string;
   categoryHint?: string;
+  geoTagged?: boolean;
 }
 
 function cleanKeywordTag(raw: string): string {
@@ -86,16 +97,22 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json().catch(() => ({}))) as AiMediaMetadataBody;
     const tenantId = user.tenantId;
+    const mediaType = body.mediaType === 'video' ? 'video' : 'photo';
+    const previewImageUrl =
+      (typeof body.imageUrl === 'string' && body.imageUrl.trim()) ||
+      (Array.isArray(body.mediaUrls) && typeof body.mediaUrls[0] === 'string'
+        ? body.mediaUrls[0].trim()
+        : '');
 
-    const [brandContext, brandRaw, tenant, trackedKeywords] = await Promise.all([
+    const [brandContext, brandRaw, tenant, trackedKeywords, seoCtx] = await Promise.all([
       getBrandContext(tenantId),
       getBrandContextRaw(tenantId),
       db.tenant
-        .findUnique({
+        ?.findUnique?.({
           where: { id: tenantId },
           select: { name: true, industry: true, city: true, state: true, description: true, settingsJson: true },
         })
-        .catch(() => null),
+        .catch(() => null) ?? null,
       db.trackedKeyword
         ?.findMany?.({
           where: { tenantId },
@@ -104,6 +121,7 @@ export async function POST(request: NextRequest) {
           select: { keyword: true },
         })
         .catch(() => []) ?? [],
+      extractTenantGeoAndSeoContext(tenantId).catch(() => null),
     ]);
 
     let activeGbpTitle = '';
@@ -135,15 +153,16 @@ export async function POST(request: NextRequest) {
       (activeGbpTitle && !isPersonalOrGeneric(activeGbpTitle) ? activeGbpTitle : '') ||
       (brandRaw?.businessName && !isPersonalOrGeneric(brandRaw.businessName) ? brandRaw.businessName.trim() : '') ||
       (tenant?.name && !isPersonalOrGeneric(tenant.name) ? tenant.name.trim() : '') ||
+      (seoCtx?.businessName && !isPersonalOrGeneric(seoCtx.businessName) ? seoCtx.businessName : '') ||
       activeGbpTitle ||
       brandRaw?.businessName?.trim() ||
       tenant?.name?.trim() ||
       'Our Business';
     const industry =
-      brandRaw?.industry?.trim() || tenant?.industry?.trim() || 'Local Service';
+      brandRaw?.industry?.trim() || tenant?.industry?.trim() || seoCtx?.category || 'Local Service';
     const location =
       brandRaw?.location?.trim() ||
-      [tenant?.city, tenant?.state].filter(Boolean).join(', ').trim();
+      [tenant?.city || seoCtx?.city, tenant?.state].filter(Boolean).join(', ').trim();
 
     let servicesList: string[] = [];
     try {
@@ -154,24 +173,43 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch {}
+    if (servicesList.length === 0 && seoCtx?.services?.length) {
+      servicesList = seoCtx.services.slice(0, 6);
+    }
 
-    const keywordHints = [
-      ...trackedKeywords.map((k: { keyword: string }) => k.keyword),
-      ...servicesList,
-    ].slice(0, 8);
+    const visionSummary =
+      previewImageUrl && mediaType !== 'video'
+        ? await inspectImageWithVision({
+            imageUrl: previewImageUrl,
+            businessName,
+            category: industry,
+          }).catch(() => null)
+        : null;
+
+    const googleSearchTerms = (seoCtx?.searchTerms || []).map((t) => t.keyword).filter(Boolean);
+    const keywordHints = Array.from(
+      new Set([
+        ...googleSearchTerms,
+        ...trackedKeywords.map((k: { keyword: string }) => k.keyword),
+        ...servicesList,
+        ...(visionSummary?.visualDetails || []),
+      ]),
+    ).slice(0, 10);
 
     const filenames = Array.isArray(body.filenames)
       ? body.filenames.filter((f): f is string => typeof f === 'string').slice(0, 10)
       : [];
-    const mediaType = body.mediaType === 'video' ? 'video' : 'photo';
     const intent = body.intent || 'local_seo';
     const tone = (body.tone || brandRaw?.tone || 'Professional & welcoming').trim();
+    const aiPrompt = typeof body.aiPrompt === 'string' ? body.aiPrompt.trim() : '';
     const customHint = (body.customHint || '').trim();
-    const fallbackCategory = inferCategoryFromContext(
-      `${body.categoryHint || ''} ${customHint}`,
-      intent,
-      filenames,
-    );
+    const fallbackCategory =
+      (visionSummary?.suggestedCategory as GbpMediaCategory | undefined) ||
+      inferCategoryFromContext(
+        `${body.categoryHint || ''} ${customHint} ${aiPrompt}`,
+        intent,
+        filenames,
+      );
 
     const systemPrompt = `${brandContext}
 
@@ -182,27 +220,33 @@ Rules:
 1. Respond with STRICT valid JSON only (no markdown fences, no commentary).
 2. JSON schema:
 {
-  "title": "string (4-9 words, clear scannable title naming the business or location naturally)",
-  "description": "string (2-3 natural local-SEO sentences for Google Business Profile, max 380 chars; weave 1-2 location/service terms naturally; NO hashtags inside description)",
+  "title": "string (4-9 words, clear scannable title naming the business, service/subject, or location naturally)",
+  "description": "string (2-3 natural local-SEO sentences for Google Business Profile, max 380 chars; weave 1-2 real Search Terms & city/service terms naturally; NO hashtags inside description)",
+  "altText": "string (concise 60-125 char visual + local SEO alt attribute)",
   "tags": ["array of 5-7 concise searchable keyword tags without # symbol"],
   "category": "one of: EXTERIOR | INTERIOR | PRODUCT | AT_WORK | TEAMS | ADDITIONAL",
   "suggestedTitles": ["3 short alternative title variations"],
   "suggestedTags": ["up to 6 bonus local-SEO keyword chips"]
 }
-3. Never invent fake prices or discounts unless explicitly given in context.`;
+3. Prioritize real Google Business Profile Search Terms and what is actually visible in the image when provided. Never keyword-stuff or invent fake prices or discounts.`;
 
     const userPrompt = [
       `Business: ${businessName}`,
       `Category/Industry: ${industry}`,
       location ? `Location: ${location}` : null,
       servicesList.length ? `Key Services: ${servicesList.join(', ')}` : null,
+      googleSearchTerms.length
+        ? `Top Real GBP Search Terms: ${googleSearchTerms.slice(0, 6).join(', ')}`
+        : null,
       keywordHints.length ? `Target SEO Keywords: ${keywordHints.join(', ')}` : null,
+      visionSummary?.subjectSummary ? `Visual Inspection of Photo: ${visionSummary.subjectSummary}` : null,
+      aiPrompt ? `Image Generation Scene Brief: ${aiPrompt}` : null,
       filenames.length ? `Uploaded file name(s): ${filenames.join(', ')}` : null,
       `Goal / Intent: ${intent}`,
       `Desired Tone: ${tone}`,
       body.categoryHint ? `Preferred Category: ${body.categoryHint}` : null,
       customHint ? `User Note / Focus: ${customHint}` : null,
-      `Generate tailored title, description, tags, and best Google Business Profile photo category now.`,
+      `Generate tailored title, description, altText, tags, and best Google Business Profile photo category now.`,
     ]
       .filter(Boolean)
       .join('\n');
@@ -210,6 +254,7 @@ Rules:
     let parsed: {
       title?: string;
       description?: string;
+      altText?: string;
       tags?: string[];
       category?: string;
       suggestedTitles?: string[];
@@ -223,7 +268,7 @@ Rules:
           { role: 'user', content: userPrompt },
         ],
         temperature: 0.65,
-        maxTokens: 550,
+        maxTokens: 600,
         json: true,
         usageContext: { tenantId, feature: 'media_metadata' },
       });
@@ -235,11 +280,12 @@ Rules:
     }
 
     const locationSuffix = location ? ` in ${location}` : '';
-    const primaryService = servicesList[0] || industry;
-    const secondaryService = servicesList[1] || `${industry} service`;
+    const primaryService = googleSearchTerms[0] || servicesList[0] || industry;
+    const secondaryService = googleSearchTerms[1] || servicesList[1] || `${industry} service`;
+    const subjectFocus = customHint || aiPrompt;
 
-    const fallbackTitle = customHint
-      ? `${customHint.slice(0, 48)} – ${businessName}`
+    const fallbackTitle = subjectFocus
+      ? `${subjectFocus.slice(0, 48)} – ${businessName}${location ? ` (${location.split(',')[0].trim()})` : ''}`.slice(0, 80)
       : intent === 'offer'
         ? `Featured ${primaryService} Highlight – ${businessName}`
         : intent === 'team'
@@ -248,13 +294,14 @@ Rules:
             ? `${primaryService} in Action at ${businessName}`
             : `${businessName} · ${primaryService}${locationSuffix}`.slice(0, 72);
 
-    const fallbackDescription = customHint
-      ? `${customHint}. Discover trusted ${primaryService.toLowerCase()} and ${secondaryService.toLowerCase()} at ${businessName}${locationSuffix}. Contact us today or visit our profile for availability and directions.`
-      : `Explore authentic ${mediaType} updates from ${businessName}${locationSuffix}. Known for quality ${primaryService.toLowerCase()} and attentive service, we help local customers experience reliable results every visit.`;
+    const fallbackDescription = subjectFocus
+      ? `${subjectFocus.slice(0, 120)}. Discover trusted ${primaryService.toLowerCase()} and ${secondaryService.toLowerCase()} at ${businessName}${locationSuffix}. Contact us today or visit our Google profile for availability and directions.`
+      : `Explore authentic ${mediaType} updates from ${businessName}${locationSuffix}. Known for quality ${primaryService.toLowerCase()} and ${secondaryService.toLowerCase()}, we help local customers experience reliable results every visit.`;
 
     const fallbackTags = Array.from(
       new Set(
         [
+          ...googleSearchTerms.slice(0, 4),
           businessName,
           primaryService,
           industry,
@@ -303,20 +350,64 @@ Rules:
       ),
     ).slice(0, 8);
 
-    const finalTitle = (typeof parsed?.title === 'string' && parsed.title.trim()) || fallbackTitle;
-    const finalDescription =
-      (typeof parsed?.description === 'string' && parsed.description.trim()) || fallbackDescription;
+    const finalTitle = ((typeof parsed?.title === 'string' && parsed.title.trim()) || fallbackTitle).slice(0, 100);
+    const finalDescription = (
+      (typeof parsed?.description === 'string' && parsed.description.trim()) ||
+      fallbackDescription
+    ).slice(0, 1500);
+    const altText = (
+      (typeof parsed?.altText === 'string' && parsed.altText.trim()) ||
+      visionSummary?.subjectSummary ||
+      `${finalTitle} at ${businessName}${locationSuffix}`
+    ).slice(0, 160);
+
+    const usedSearchTerms = googleSearchTerms.slice(0, 8);
+    const seoFilename = slugifySeoFilename(
+      finalTitle || aiPrompt || primaryService,
+      seoCtx?.city || location.split(',')[0] || null,
+      'jpg',
+    );
+    const geoCoordinates =
+      seoCtx?.latitude !== null &&
+      seoCtx?.latitude !== undefined &&
+      seoCtx?.longitude !== null &&
+      seoCtx?.longitude !== undefined
+        ? { latitude: seoCtx.latitude, longitude: seoCtx.longitude }
+        : null;
+    const isGeoTagged =
+      mediaType === 'photo' &&
+      (typeof body.geoTagged === 'boolean' ? body.geoTagged : Boolean(geoCoordinates));
+
+    const seoReadiness = computeMediaSeoReadiness({
+      title: finalTitle,
+      description: finalDescription,
+      tags,
+      category: resolvedCategory,
+      city: seoCtx?.city || location.split(',')[0]?.trim() || null,
+      searchTerms: usedSearchTerms.length > 0 ? usedSearchTerms : keywordHints,
+      seoFilename,
+      url: previewImageUrl || undefined,
+      geoTagged: isGeoTagged,
+    });
 
     return NextResponse.json({
       success: true,
-      title: finalTitle.slice(0, 100),
-      description: finalDescription.slice(0, 1500),
+      title: finalTitle,
+      description: finalDescription,
+      altText,
       tags,
       category: resolvedCategory,
       suggestedTitles,
       suggestedTags,
       tone,
       businessName,
+      seoFilename,
+      usedSearchTerms,
+      geoTagged: isGeoTagged,
+      geoCoordinates,
+      seoScore: seoReadiness.score,
+      seoChecks: seoReadiness.checks,
+      visualSummary: visionSummary?.subjectSummary || null,
     });
   } catch (error) {
     console.error('[api/social/ai-media-metadata] Error:', error);

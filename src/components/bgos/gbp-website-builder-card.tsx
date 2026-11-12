@@ -1,7 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Globe, Sparkles, ExternalLink, RefreshCw, ShieldCheck, Wrench } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
+import {
+  Check,
+  Copy,
+  Download,
+  ExternalLink,
+  Globe,
+  MessageCircle,
+  QrCode,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  Wrench,
+  X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -9,6 +23,7 @@ import { authFetch } from '@/lib/client-auth';
 
 interface GbpWebsiteBuilderCardProps {
   businessSlug?: string;
+  businessName?: string;
   isGbpConnected?: boolean;
   presenceMode?: 'no_website' | 'bgos_hosted' | 'custom_domain';
   hostedTier?: 'A' | 'B' | 'C' | null;
@@ -18,6 +33,7 @@ interface GbpWebsiteBuilderCardProps {
 
 export function GbpWebsiteBuilderCard({
   businessSlug = 'business',
+  businessName,
   isGbpConnected = false,
   presenceMode,
   hostedTier,
@@ -28,6 +44,40 @@ export function GbpWebsiteBuilderCard({
   const [enriching, setEnriching] = useState(false);
   const [websiteUrl, setWebsiteUrl] = useState(`https://bgos.fieseros.com/b/${businessSlug}`);
   const [synced, setSynced] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState('');
+
+  useEffect(() => {
+    setWebsiteUrl(`https://bgos.fieseros.com/b/${businessSlug}`);
+    setQrDataUrl('');
+  }, [businessSlug]);
+
+  useEffect(() => {
+    if (!qrOpen || qrDataUrl) return;
+    QRCode.toDataURL(websiteUrl, { width: 320, margin: 2 })
+      .then((url) => setQrDataUrl(url))
+      .catch(() => {});
+  }, [qrOpen, qrDataUrl, websiteUrl]);
+
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(websiteUrl);
+      setCopied(true);
+      toast.success('Business page link copied!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Could not copy link');
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    const label = businessName ? `${businessName} — ` : '';
+    const text = encodeURIComponent(
+      `${label}View services, hours, directions & book online: ${websiteUrl}`,
+    );
+    window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener,noreferrer');
+  };
 
   const handleGenerate = async () => {
     try {
@@ -119,7 +169,7 @@ export function GbpWebsiteBuilderCard({
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-border text-xs">
         <div className="space-y-0.5 min-w-0">
-          <span className="text-[10px] uppercase font-bold text-muted-foreground">Public Website URL</span>
+          <span className="text-[10px] uppercase font-bold text-muted-foreground">Public Business Page URL</span>
           <p className="font-semibold text-foreground truncate select-all">{websiteUrl}</p>
         </div>
 
@@ -130,7 +180,35 @@ export function GbpWebsiteBuilderCard({
             onClick={() => window.open(websiteUrl, '_blank')}
             className="h-8 text-xs gap-1 font-semibold"
           >
-            <ExternalLink className="size-3" /> Preview Live Site
+            <ExternalLink className="size-3" /> Preview Page
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleCopyUrl}
+            className="h-8 text-xs gap-1 font-semibold"
+          >
+            {copied ? <Check className="size-3 text-emerald-600" /> : <Copy className="size-3" />}
+            {copied ? 'Copied' : 'Copy Link'}
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleShareWhatsApp}
+            className="h-8 text-xs gap-1 font-semibold border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+          >
+            <MessageCircle className="size-3" /> WhatsApp
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setQrOpen(true)}
+            className="h-8 text-xs gap-1 font-semibold"
+          >
+            <QrCode className="size-3" /> QR
           </Button>
 
           {onOpenSeoAudit && (
@@ -174,6 +252,57 @@ export function GbpWebsiteBuilderCard({
           </Button>
         </div>
       </div>
+
+      {qrOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setQrOpen(false)}
+        >
+          <div
+            className="w-full max-w-xs rounded-2xl border border-border bg-card p-5 shadow-xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-foreground">Business Page QR Code</h4>
+              <button
+                type="button"
+                onClick={() => setQrOpen(false)}
+                className="rounded-lg p-1 text-muted-foreground hover:bg-muted"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="flex flex-col items-center rounded-xl border border-border bg-white p-3">
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="Business Page QR" className="size-44" />
+              ) : (
+                <div className="flex size-44 items-center justify-center text-xs text-slate-400">
+                  Generating...
+                </div>
+              )}
+              <p className="mt-2 max-w-full truncate text-[11px] text-slate-500">{websiteUrl}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="sm" variant="outline" onClick={handleShareWhatsApp} className="text-xs gap-1">
+                <MessageCircle className="size-3" /> WhatsApp
+              </Button>
+              <Button
+                size="sm"
+                disabled={!qrDataUrl}
+                onClick={() => {
+                  const a = document.createElement('a');
+                  a.href = qrDataUrl;
+                  a.download = `${businessSlug}-qr.png`;
+                  a.click();
+                }}
+                className="text-xs gap-1 bg-[#009F50] hover:bg-[#008A45] text-white"
+              >
+                <Download className="size-3" /> Download
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
