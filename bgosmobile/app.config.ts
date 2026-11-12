@@ -18,7 +18,7 @@ export default ({ config, projectRoot }: ConfigContext): any => {
   name: APP_NAME,
   description: FULL_TITLE,
   slug: 'bgos',
-  owner: 'rishi076s-team',
+  owner: 'deepakchandra076',
   version: '1.0.0',
   icon: './assets/app-icon.png',
   splash: { image: './assets/icon-squircle.png', resizeMode: 'contain', backgroundColor: '#F5FBF8' },
@@ -66,7 +66,7 @@ export default ({ config, projectRoot }: ConfigContext): any => {
   ],
   extra: {
     eas: {
-      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID || '30078807-9b75-42c3-97c3-41fb166c40f2',
+      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID || '6671fda2-0cc6-41c5-be96-e3bef1b459f4',
     },
   },
   };

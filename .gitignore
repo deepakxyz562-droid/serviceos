@@ -208,3 +208,9 @@ next-dev.pid
 # BGOS landing artwork must ship with both production entry points.
 !/public/bgos/landing/assistant-hd.png
 !/apps/bgos/public/bgos/landing/assistant-hd.png
+
+# Local EAS signing credentials (never commit or upload in archives)
+bgosmobile/credentials.json
+bgosmobile/credentials/
+*.jks
+*.keystore
