@@ -3,7 +3,6 @@ import React, { useEffect, useRef } from 'react';
 import { Alert, AppState, Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-// @ts-expect-error expo-font types provided at bundle time
 import { useFonts } from 'expo-font';
 import type { NotificationResponse } from 'expo-notifications';
 import { getNotificationsModule, isExpoGoRuntime } from '../src/lib/notifications-runtime';
