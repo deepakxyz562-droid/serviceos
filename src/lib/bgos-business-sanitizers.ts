@@ -112,38 +112,139 @@ export function isSeededDummyText(text?: string | null): boolean {
   return DUMMY_TEXT_MARKERS.some((marker) => lower.includes(marker));
 }
 
-const DUMMY_SERVICES_BY_SLUG: Record<string, string> = {
-  'emergency-service': '24/7 emergency response for urgent issues.',
-  'inspection-maintenance': 'professional inspection and routine maintenance to prevent issues.',
-  installation: 'professional installation of new equipment and systems.',
-  'repair-replacement': 'expert repair and replacement services for all major components.',
-  'emergency-plumbing': '24/7 emergency plumbing service for burst pipes, severe leaks, and sewer backups.',
-  'drain-cleaning': 'professional drain cleaning for slow drains, clogs, and backups.',
-  'water-heater-installation': 'tank and tankless water heater installation, repair, and replacement.',
-  'bathroom-kitchen-plumbing': 'fixture installation, pipe repair, and remodel rough-ins for bathrooms and kitchens.',
-  'ac-repair-installation': 'air conditioning repair, installation, and maintenance for all brands.',
-  'heating-service': 'furnace repair, installation, and heat pump service.',
-  'duct-cleaning': 'professional air duct cleaning to improve indoor air quality.',
-  'maintenance-plans': 'annual maintenance plans to keep your hvac system running efficiently.',
-  'electrical-repair': 'licensed electrical repair for homes and businesses.',
-  'panel-upgrade': 'electrical panel upgrades and service upgrades.',
-  'lighting-installation': 'indoor and outdoor lighting installation, including led upgrades.',
-  'ev-charger-installation': 'electric vehicle charger installation for homes and businesses.',
+interface DummyServiceRule {
+  description: string;
+  basePrice?: number;
+  duration?: number;
+  aiPhrases?: string[];
+}
+
+const DUMMY_SERVICES_BY_SLUG: Record<string, DummyServiceRule> = {
+  'emergency-service': {
+    description: '24/7 emergency response for urgent issues.',
+    basePrice: 150,
+    duration: 90,
+    aiPhrases: ['when your critical systems fail', 'downtown area', 'urgent consultation'],
+  },
+  'inspection-maintenance': {
+    description: 'professional inspection and routine maintenance to prevent issues.',
+    basePrice: 89,
+    duration: 60,
+    aiPhrases: ['proactive inspection & maintenance', 'north side', 'surrounding suburbs'],
+  },
+  installation: {
+    description: 'professional installation of new equipment and systems.',
+    basePrice: 1200,
+    duration: 240,
+    aiPhrases: ['professional installation', 'east side', 'robust digital infrastructure'],
+  },
+  'repair-replacement': {
+    description: 'expert repair and replacement services for all major components.',
+    basePrice: 200,
+    duration: 120,
+    aiPhrases: ['facing persistent', 'west side', 'repair & replacement services'],
+  },
+  'emergency-plumbing': {
+    description: '24/7 emergency plumbing service for burst pipes, severe leaks, and sewer backups.',
+  },
+  'drain-cleaning': {
+    description: 'professional drain cleaning for slow drains, clogs, and backups.',
+  },
+  'water-heater-installation': {
+    description: 'tank and tankless water heater installation, repair, and replacement.',
+  },
+  'bathroom-kitchen-plumbing': {
+    description: 'fixture installation, pipe repair, and remodel rough-ins for bathrooms and kitchens.',
+  },
+  'ac-repair-installation': {
+    description: 'air conditioning repair, installation, and maintenance for all brands.',
+  },
+  'heating-service': {
+    description: 'furnace repair, installation, and heat pump service.',
+  },
+  'duct-cleaning': {
+    description: 'professional air duct cleaning to improve indoor air quality.',
+  },
+  'maintenance-plans': {
+    description: 'annual maintenance plans to keep your hvac system running efficiently.',
+  },
+  'electrical-repair': {
+    description: 'licensed electrical repair for homes and businesses.',
+  },
+  'panel-upgrade': {
+    description: 'electrical panel upgrades and service upgrades.',
+  },
+  'lighting-installation': {
+    description: 'indoor and outdoor lighting installation, including led upgrades.',
+  },
+  'ev-charger-installation': {
+    description: 'electric vehicle charger installation for homes and businesses.',
+  },
 };
+
+const SEEDED_DUMMY_SERVICE_BOILERPLATE = [
+  'and the downtown area',
+  'serves the north side',
+  'surrounding suburbs',
+  'and the east side',
+  'and the west side',
+];
+
+/**
+ * Returns a safe public web URL (`https://`, `http://`, or root-relative `/`),
+ * rejecting device-local / picker URIs such as `file://`, `content://`, `ph://`, `blob:`.
+ */
+export function sanitizePublicImageUrl(url?: string | null): string | null {
+  if (typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+  if (
+    lower.startsWith('file:') ||
+    lower.startsWith('content:') ||
+    lower.startsWith('ph:') ||
+    lower.startsWith('assets-library:') ||
+    lower.startsWith('blob:') ||
+    lower.startsWith('data:text')
+  ) {
+    return null;
+  }
+  if (lower.startsWith('https://') || lower.startsWith('http://') || trimmed.startsWith('/')) {
+    return trimmed;
+  }
+  return null;
+}
 
 /**
  * Exclude untouched auto-seeded placeholder services (`Emergency Service 150`, etc.)
+ * including AI-rewritten variants generated during hub seeding,
  * while keeping any genuinely customized services created by the owner.
  */
 export function isSeededDummyService(input: {
   slug?: string | null;
   name?: string | null;
   description?: string | null;
+  basePrice?: number | null;
+  duration?: number | null;
 }): boolean {
   const slug = (input.slug || '').trim().toLowerCase();
   const desc = (input.description || '').trim().toLowerCase();
   if (!slug || !(slug in DUMMY_SERVICES_BY_SLUG)) return false;
-  return !desc || desc === DUMMY_SERVICES_BY_SLUG[slug];
+  const rule = DUMMY_SERVICES_BY_SLUG[slug];
+  if (!desc || desc === rule.description) return true;
+  if (rule.aiPhrases?.some((phrase) => desc.includes(phrase))) return true;
+  if (
+    typeof rule.basePrice === 'number' &&
+    typeof rule.duration === 'number' &&
+    typeof input.basePrice === 'number' &&
+    typeof input.duration === 'number' &&
+    Math.abs(input.basePrice - rule.basePrice) < 0.01 &&
+    input.duration === rule.duration &&
+    SEEDED_DUMMY_SERVICE_BOILERPLATE.some((phrase) => desc.includes(phrase))
+  ) {
+    return true;
+  }
+  return false;
 }
 
 const DUMMY_AREA_SET = new Set([

@@ -4,6 +4,7 @@ import { CI } from '@/lib/db-utils';
 import { getAuthUser } from '@/lib/auth';
 import { hasRole } from '@/lib/auth/permissions';
 import { toIsoStringSafe } from '@/lib/safe-date';
+import { parseReviewFlagReport } from '@/lib/reviews/report-review';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/reviews — List reviews with filters
@@ -119,6 +120,7 @@ export async function GET(request: NextRequest) {
 
     const normalizedReviews = reviews.map((review: any) => {
       const normalizedCreatedAt = toIsoStringSafe(review?.createdAt);
+      const flagReport = parseReviewFlagReport(review?.responseJson);
       if (review?.source === 'google' && typeof review.responseJson === 'string' && review.responseJson) {
         try {
           const parsed = JSON.parse(review.responseJson);
@@ -126,6 +128,7 @@ export async function GET(request: NextRequest) {
           if (createIso) {
             return {
               ...review,
+              flagReport,
               createdAt: createIso,
               createTime: createIso,
               googleUpdateTime: toIsoStringSafe(parsed?.googleUpdateTime) || (typeof parsed?.googleUpdateTime === 'string' ? parsed.googleUpdateTime : undefined),
@@ -136,10 +139,11 @@ export async function GET(request: NextRequest) {
       if (normalizedCreatedAt && normalizedCreatedAt !== review?.createdAt) {
         return {
           ...review,
+          flagReport,
           createdAt: normalizedCreatedAt,
         };
       }
-      return review;
+      return flagReport ? { ...review, flagReport } : review;
     });
 
     const finalReviews =

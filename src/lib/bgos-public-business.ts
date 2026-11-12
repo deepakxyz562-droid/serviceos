@@ -20,8 +20,19 @@ import {
   normalizeWhatsAppDigits,
   resolveBusinessCurrency,
   resolveCountryCode,
+  sanitizePublicImageUrl,
   type BgosBusinessHoursRow,
 } from '@/lib/bgos-business-sanitizers';
+import {
+  parseBgosProducts,
+  parseBgosStoreSettings,
+  parseSocialProfiles,
+} from '@/lib/bgos-store-catalog';
+import type {
+  BgosPageVisibility,
+  BgosProduct,
+  BgosStoreSettings,
+} from '../../shared/bgos-contracts';
 
 export interface BgosPublicService {
   id: string;
@@ -82,12 +93,15 @@ export interface BgosPublicBusinessProfile {
   openNow: boolean | null;
   hours: BgosBusinessHoursRow[];
   services: BgosPublicService[];
+  products: BgosProduct[];
+  storeSettings: BgosStoreSettings;
   gallery: BgosPublicGalleryItem[];
   reviews: BgosPublicReview[];
   faqs: Array<{ question: string; answer: string }>;
   serviceAreas: string[];
   socialLinks: Record<string, string>;
   bookingEnabled: boolean;
+  pageVisibility: BgosPageVisibility;
   intakeFormSlug: string | null;
   hideFieserosBranding: boolean;
   marketplaceOptIn: boolean;
@@ -256,6 +270,7 @@ export async function getBgosPublicBusinessProfileUncached(
           name: true,
           slug: true,
           publicSlug: true,
+          publicProfileEnabled: true,
           industry: true,
           logo: true,
           coverImage: true,
@@ -339,7 +354,7 @@ export async function getBgosPublicBusinessProfileUncached(
             responseJson: true,
           },
           orderBy: [{ createdAt: 'desc' }],
-          take: 10,
+          take: 25,
         })
         .catch(() => []),
       db.form
@@ -461,7 +476,14 @@ export async function getBgosPublicBusinessProfileUncached(
 
     // ── Services (strictly real or GBP-sourced, zero Emergency 150 dummy rows) ──
     const realDbServices = dbServices.filter(
-      (svc) => !isSeededDummyService({ slug: svc.slug, name: svc.name, description: svc.description }),
+      (svc) =>
+        !isSeededDummyService({
+          slug: svc.slug,
+          name: svc.name,
+          description: svc.description,
+          basePrice: svc.basePrice,
+          duration: svc.duration,
+        }),
     );
     const services: BgosPublicService[] = realDbServices.map((svc) => ({
       id: svc.id,
@@ -475,10 +497,21 @@ export async function getBgosPublicBusinessProfileUncached(
 
     if (services.length === 0) {
       const seoServices = mergeStructuredServices(settings, []);
+      const realSeoServices = seoServices.filter((s) => {
+        const derivedSlug = s.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+        return !isSeededDummyService({
+          slug: derivedSlug,
+          name: s.name,
+          description: s.description,
+        });
+      });
       const gbpServiceNames = Array.isArray(settings.activeGbpServices)
         ? settings.activeGbpServices.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0)
         : [];
-      for (const s of seoServices) {
+      for (const s of realSeoServices) {
         services.push({
           id: s.id || `seo-${s.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
           name: s.name,
@@ -506,8 +539,9 @@ export async function getBgosPublicBusinessProfileUncached(
 
     // ── Photos & Logo ──
     const logoUrl =
-      (typeof brandDetails.logoUrl === 'string' && brandDetails.logoUrl.trim()) ||
-      tenant.logo?.trim() ||
+      sanitizePublicImageUrl(bookingConfig.logoUrl) ||
+      sanitizePublicImageUrl(brandDetails.logoUrl) ||
+      sanitizePublicImageUrl(tenant.logo) ||
       null;
 
     const tenantGallery: BgosPublicGalleryItem[] = safeJsonArray(tenant.galleryJson)
@@ -543,21 +577,31 @@ export async function getBgosPublicBusinessProfileUncached(
       }
     }
 
-    const coverImage = tenant.coverImage?.trim() || gallery[0]?.url || null;
+    // Show cover banner image ONLY when manually set by the owner; otherwise render the brand gradient.
+    const coverImage =
+      sanitizePublicImageUrl(bookingConfig.coverImage) ||
+      sanitizePublicImageUrl(tenant.coverImage) ||
+      null;
 
     // ── Rating & Reviews ──
-    const reviews: BgosPublicReview[] = dbReviews.map((r) => {
-      const resp = safeJsonObject(r.responseJson);
-      return {
-        id: r.id,
-        rating: r.rating,
-        comment: r.comment,
-        authorName: r.authorName?.trim() || 'Verified Customer',
-        source: r.source || 'google',
-        createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
-        replyText: typeof resp.text === 'string' && resp.text.trim() ? resp.text.trim() : null,
-      };
-    });
+    const reviews: BgosPublicReview[] = dbReviews
+      .filter((r) => {
+        const resp = safeJsonObject(r.responseJson);
+        return resp?.flagReport?.hideOnPublicPage !== true;
+      })
+      .slice(0, 10)
+      .map((r) => {
+        const resp = safeJsonObject(r.responseJson);
+        return {
+          id: r.id,
+          rating: r.rating,
+          comment: r.comment,
+          authorName: r.authorName?.trim() || 'Verified Customer',
+          source: r.source || 'google',
+          createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+          replyText: typeof resp.text === 'string' && resp.text.trim() ? resp.text.trim() : null,
+        };
+      });
 
     const isSeededFakeScore =
       tenant.rating === 4.9 && tenant.reviewCount === 127 && reviews.length === 0 && !placeSnap?.userRatingCount;
@@ -634,15 +678,19 @@ export async function getBgosPublicBusinessProfileUncached(
       ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(candidatePlaceId)}`
       : null;
 
-    const socialLinksRaw = safeJsonObject(tenant.socialLinksJson);
+    const socialProfilesMerged = parseSocialProfiles(tenant.socialLinksJson, settings);
+    const socialLinksRaw = { ...safeJsonObject(tenant.socialLinksJson), ...socialProfilesMerged };
     const socialLinks: Record<string, string> = {};
     for (const [k, v] of Object.entries(socialLinksRaw)) {
       if (typeof v === 'string' && /^https?:\/\//i.test(v.trim())) {
         socialLinks[k] = v.trim();
       }
     }
+    const products = parseBgosProducts(settings).filter((p) => p.inStock !== false);
+    const storeSettings = parseBgosStoreSettings(settings);
 
     const brandPrimary =
+      (typeof bookingConfig.accentColor === 'string' && bookingConfig.accentColor.trim()) ||
       (typeof brandDetails?.primaryColor === 'string' && brandDetails.primaryColor.trim()) ||
       branding?.primaryColor ||
       '';
@@ -661,6 +709,22 @@ export async function getBgosPublicBusinessProfileUncached(
     const additionalCategories = Array.isArray(settings.additionalCategories)
       ? settings.additionalCategories.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0)
       : [];
+
+    const rawVisibility =
+      bookingConfig?.pageVisibility && typeof bookingConfig.pageVisibility === 'object'
+        ? (bookingConfig.pageVisibility as Partial<BgosPageVisibility>)
+        : {};
+    const pageVisibility: BgosPageVisibility = {
+      published: tenant.publicProfileEnabled !== false && rawVisibility.published !== false,
+      showServices: rawVisibility.showServices !== false,
+      showProducts: rawVisibility.showProducts !== false,
+      showPhotos: rawVisibility.showPhotos !== false,
+      showReviews: rawVisibility.showReviews !== false,
+      showFaqs: rawVisibility.showFaqs !== false,
+      showInquiryForm: rawVisibility.showInquiryForm !== false,
+      showHours: rawVisibility.showHours !== false,
+      showChatbot: rawVisibility.showChatbot !== false,
+    };
 
     return {
       tenantId: tenant.id,
@@ -696,12 +760,15 @@ export async function getBgosPublicBusinessProfileUncached(
       openNow,
       hours,
       services,
+      products,
+      storeSettings,
       gallery,
       reviews,
       faqs,
       serviceAreas,
       socialLinks,
       bookingEnabled: bookingConfig.onlineBookingEnabled !== false,
+      pageVisibility,
       intakeFormSlug: activeForm?.slug || null,
       hideFieserosBranding: branding.hideFieserosBranding,
       marketplaceOptIn: Boolean(tenant.marketplaceOptIn),

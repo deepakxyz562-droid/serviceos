@@ -28,7 +28,9 @@ import {
   Send,
   Share2,
   ShieldCheck,
+  ShoppingBag,
   Star,
+  Truck,
   UserPlus,
   X,
 } from 'lucide-react';
@@ -116,6 +118,17 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [logoError, setLogoError] = useState(false);
+  const [coverError, setCoverError] = useState(false);
+
+  const showServices = profile.pageVisibility?.showServices !== false;
+  const showProducts = profile.pageVisibility?.showProducts !== false;
+  const showPhotos = profile.pageVisibility?.showPhotos !== false;
+  const showReviews = profile.pageVisibility?.showReviews !== false;
+  const showFaqs = profile.pageVisibility?.showFaqs !== false;
+  const showInquiryForm = profile.pageVisibility?.showInquiryForm !== false;
+  const showHours = profile.pageVisibility?.showHours !== false;
+  const showChatbot = profile.pageVisibility?.showChatbot !== false;
 
   // Inline / quick inquiry state
   const [inqName, setInqName] = useState('');
@@ -442,10 +455,11 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-2.5">
-            {profile.logoUrl ? (
+            {profile.logoUrl && !logoError ? (
               <img
                 src={profile.logoUrl}
                 alt={profile.businessName}
+                onError={() => setLogoError(true)}
                 className="h-9 w-9 shrink-0 rounded-xl border border-slate-200 bg-white object-contain p-0.5"
               />
             ) : (
@@ -504,15 +518,17 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
           <div
             className="relative h-32 w-full sm:h-44"
             style={{
-              background: profile.coverImage
-                ? undefined
-                : `linear-gradient(135deg, ${accent}22 0%, ${accent}44 50%, #0f172a18 100%)`,
+              background:
+                profile.coverImage && !coverError
+                  ? undefined
+                  : `linear-gradient(135deg, ${accent}22 0%, ${accent}44 50%, #0f172a18 100%)`,
             }}
           >
-            {profile.coverImage && (
+            {profile.coverImage && !coverError && (
               <img
                 src={profile.coverImage}
                 alt={`${profile.businessName} cover`}
+                onError={() => setCoverError(true)}
                 className="h-full w-full object-cover"
               />
             )}
@@ -522,11 +538,12 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
           <div className="px-4 pb-6 pt-0 sm:px-8 sm:pb-7">
             <div className="relative -mt-10 flex flex-col gap-4 sm:-mt-12 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-5">
-                {profile.logoUrl ? (
+                {profile.logoUrl && !logoError ? (
                   <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border-4 border-white bg-white shadow-md sm:h-24 sm:w-24">
                     <img
                       src={profile.logoUrl}
                       alt={`${profile.businessName} logo`}
+                      onError={() => setLogoError(true)}
                       className="h-full w-full object-contain p-1.5"
                     />
                   </div>
@@ -609,6 +626,7 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
 
               {/* Desktop / Tablet Primary Action Buttons */}
               <div className="flex flex-wrap items-center gap-2.5 sm:justify-end">
+                {showChatbot && (
                   <button
                     type="button"
                     onClick={() => setChatOpen(true)}
@@ -617,6 +635,7 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                     <ChatBubbleIcon className="h-4 w-4" style={{ color: accent }} />
                     <span>Ask AI · Chat</span>
                   </button>
+                )}
                 {profile.bookingEnabled && (
                   <button
                     type="button"
@@ -748,8 +767,125 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
               </section>
             )}
 
+            {/* Products, Pickup & Delivery Storefront Section */}
+            {showProducts && (profile.products?.length > 0 || profile.storeSettings?.foodOrderingEnabled || profile.storeSettings?.deliveryEnabled) && (
+              <section id="products" className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <ShoppingBag className="h-4 w-4 text-slate-500" />
+                    <h2 className="text-base font-bold text-slate-900 sm:text-lg">
+                      {profile.storeSettings?.foodOrderingEnabled ? 'Menu & Products' : 'Products'}
+                    </h2>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {profile.storeSettings?.pickupEnabled && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200/70">
+                        Pickup
+                      </span>
+                    )}
+                    {profile.storeSettings?.deliveryEnabled && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 ring-1 ring-blue-200/70">
+                        <Truck className="h-3 w-3" />
+                        Delivery
+                      </span>
+                    )}
+                    {profile.storeSettings?.foodOrderingEnabled && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200/70">
+                        Food Ordering
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {profile.products?.length > 0 ? (
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {profile.products.map((prod) => (
+                      <div
+                        key={prod.id}
+                        className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/40 p-3.5"
+                      >
+                        <div className="flex gap-3">
+                          {prod.imageUrl ? (
+                            <img
+                              src={prod.imageUrl}
+                              alt={prod.name}
+                              className="h-16 w-16 shrink-0 rounded-lg border border-slate-200 bg-white object-cover"
+                            />
+                          ) : null}
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                              {prod.category}
+                            </span>
+                            <h3 className="truncate text-sm font-semibold text-slate-900">
+                              {prod.name}
+                            </h3>
+                            {prod.description ? (
+                              <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-600">
+                                {prod.description}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 border-t border-slate-200/60 pt-2.5">
+                          <span className="text-sm font-bold text-slate-900">
+                            {prod.price && prod.price > 0
+                              ? formatCurrency(prod.price, profile.currency, { compact: true })
+                              : 'Price on inquiry'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInqMessage(
+                                `Hi ${profile.businessName}, I would like to order "${prod.name}" (${
+                                  profile.storeSettings?.deliveryEnabled ? 'Delivery / Pickup' : 'Pickup'
+                                }).`,
+                              );
+                              document.getElementById('bgos-inquiry-section')?.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'center',
+                              });
+                            }}
+                            className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                            style={{ backgroundColor: accent }}
+                          >
+                            Order / Request
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-slate-50/60 px-4 py-3">
+                    <p className="text-xs text-slate-600">
+                      Available for{' '}
+                      {[
+                        profile.storeSettings?.pickupEnabled ? 'store pickup' : null,
+                        profile.storeSettings?.deliveryEnabled ? 'local delivery' : null,
+                        profile.storeSettings?.foodOrderingEnabled ? 'food ordering' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' & ')}
+                      . Send your order request below or message us directly.
+                    </p>
+                    {profile.storeSettings?.orderActionUrl ? (
+                      <a
+                        href={profile.storeSettings.orderActionUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
+                        style={{ backgroundColor: accent }}
+                      >
+                        Order Online
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : null}
+                  </div>
+                )}
+              </section>
+            )}
+
             {/* Real Services Section */}
-            {profile.services.length > 0 && (
+            {showServices && profile.services.length > 0 && (
               <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="text-base font-bold text-slate-900 sm:text-lg">
@@ -809,7 +945,7 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
             )}
 
             {/* Photos & Google Business Media */}
-            {profile.gallery.length > 0 && (
+            {showPhotos && profile.gallery.length > 0 && (
               <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
                 <div className="flex items-center justify-between">
                   <h2 className="flex items-center gap-2 text-base font-bold text-slate-900 sm:text-lg">
@@ -841,7 +977,7 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
             )}
 
             {/* Verified Customer & Google Reviews */}
-            {(profile.reviews.length > 0 || profile.reviewUrl) && (
+            {showReviews && (profile.reviews.length > 0 || profile.reviewUrl) && (
               <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -917,7 +1053,7 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
             )}
 
             {/* Business FAQs (Only Real Owner FAQs) */}
-            {profile.faqs.length > 0 && (
+            {showFaqs && profile.faqs.length > 0 && (
               <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
                 <h2 className="text-base font-bold text-slate-900 sm:text-lg">
                   Frequently Asked Questions
@@ -955,10 +1091,11 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
           {/* Right Sidebar: Quick Inquiry + Hours + Map + Share */}
           <aside className="space-y-6 lg:col-span-5">
             {/* Instant Lead / Callback Form */}
-            <section
-              id="bgos-inquiry-section"
-              className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6"
-            >
+            {showInquiryForm && (
+              <section
+                id="bgos-inquiry-section"
+                className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6"
+              >
               <h2 className="text-base font-bold text-slate-900 sm:text-lg">
                 Request a Callback or Quote
               </h2>
@@ -1086,7 +1223,8 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                   </button>
                 </form>
               )}
-            </section>
+              </section>
+            )}
 
             {/* Business Contact Info, Location & Map */}
             <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
@@ -1240,7 +1378,7 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
             </section>
 
             {/* Business Hours */}
-            {profile.hours.length > 0 && (
+            {showHours && profile.hours.length > 0 && (
               <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
                 <h2 className="flex items-center gap-2 text-base font-bold text-slate-900 sm:text-lg">
                   <Clock className="h-4 w-4 text-slate-500" />
@@ -1337,17 +1475,19 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
       </main>
 
       {/* Sticky Mobile Bottom Dock */}
-      <BgosBusinessChatWidget
-        profile={profile}
-        initialMeta={chatbotMeta}
-        externalOpen={chatOpen}
-        onExternalOpenChange={setChatOpen}
-        onRequestBook={() => {
-          setBookSuccess(null);
-          setBookError(null);
-          setBookingOpen(true);
-        }}
-      />
+      {showChatbot && (
+        <BgosBusinessChatWidget
+          profile={profile}
+          initialMeta={chatbotMeta}
+          externalOpen={chatOpen}
+          onExternalOpenChange={setChatOpen}
+          onRequestBook={() => {
+            setBookSuccess(null);
+            setBookError(null);
+            setBookingOpen(true);
+          }}
+        />
+      )}
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-3 py-2 backdrop-blur sm:hidden">
         <div className="mx-auto flex max-w-md items-center gap-2">

@@ -167,7 +167,16 @@ export async function GET(request: NextRequest) {
           where: { tenantId: user.tenantId, isActive: true },
           orderBy: { createdAt: 'asc' },
           take: 40,
-          select: { id: true, name: true, description: true, longDescription: true, category: true },
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            description: true,
+            longDescription: true,
+            category: true,
+            basePrice: true,
+            duration: true,
+          },
         })
         .catch(() => []),
     ]);
@@ -200,10 +209,7 @@ export async function GET(request: NextRequest) {
       } catch {}
     }
     const mergedSeoServices = mergeStructuredServices(tenantSettings, dbServices);
-    const effectiveServicesList =
-      Array.isArray(tenantSettings.services) && tenantSettings.services.length > 0
-        ? tenantSettings.services
-        : mergedSeoServices.map((s) => s.name);
+    const effectiveServicesList = mergedSeoServices.map((s) => s.name);
 
     const fallbackName =
       (typeof tenantSettings.activeGbpTitle === 'string' && tenantSettings.activeGbpTitle.trim()) ||
@@ -699,7 +705,9 @@ export async function PATCH(request: NextRequest) {
       });
 
       if (resolvedSeoServices) {
-        await upsertTenantStructuredServices(user.tenantId, resolvedSeoServices);
+        await upsertTenantStructuredServices(user.tenantId, resolvedSeoServices, {
+          syncMissingToInactive: true,
+        });
       }
 
       // Synchronize phone to owner user record so Phone OTP login automatically recognizes the business owner
@@ -772,6 +780,11 @@ export async function PATCH(request: NextRequest) {
     }
 
     invalidatePlacePayloadCache(user.tenantId);
+
+    const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
+    await ensureAndSyncBusinessChatbot(user.tenantId, {
+      triggerSource: 'gbp_place_update',
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

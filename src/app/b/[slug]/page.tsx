@@ -74,6 +74,13 @@ export async function generateMetadata({
     };
   }
 
+  if (profile.pageVisibility.published === false) {
+    return {
+      title: `${profile.businessName} — Page Paused`,
+      robots: { index: false, follow: false },
+    };
+  }
+
   const ogImage = toAbsoluteAssetUrl(profile.coverImage || profile.logoUrl, profile.canonicalUrl);
 
   return {
@@ -152,6 +159,21 @@ export default async function ShortBusinessUrlPage({
     );
   }
 
+  if (profile.pageVisibility.published === false) {
+    return (
+      <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+        <main className="flex-1 flex items-center justify-center px-4">
+          <div className="text-center max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+            <h1 className="text-xl font-bold mb-2">{profile.businessName}</h1>
+            <p className="text-sm text-slate-500">
+              This public business page is temporarily paused by the owner. Please check back later or contact the business directly.
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const localBusinessSchema = getLocalBusinessSchema({
     name: profile.businessName,
     description: profile.seoDescription,
@@ -183,7 +205,10 @@ export default async function ShortBusinessUrlPage({
         : undefined,
   });
 
-  const chatbotMeta = await getPrimaryBusinessChatbotMeta(profile.tenantId).catch(() => null);
+  const chatbotMeta =
+    profile.pageVisibility.showChatbot !== false
+      ? await getPrimaryBusinessChatbotMeta(profile.tenantId).catch(() => null)
+      : null;
 
   return (
     <>

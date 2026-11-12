@@ -124,6 +124,16 @@ const SAMPLE_PROFILE: BgosPublicBusinessProfile = {
   gallery: [],
   faqs: [],
   bookingEnabled: true,
+  pageVisibility: {
+    published: true,
+    showServices: true,
+    showPhotos: true,
+    showReviews: true,
+    showFaqs: true,
+    showInquiryForm: true,
+    showHours: true,
+    showChatbot: true,
+  },
   showReviews: true,
   showGallery: true,
   planTier: 'starter',
@@ -207,6 +217,54 @@ describe('bgos-business-chatbot & unanswered questions', () => {
         sourceType: 'auto_business_profile',
       }),
     );
+  });
+
+  it('handles Supabase string updatedAt, cleans legacy template names/Unsplash avatars, and skips redundant KB upserts via kbHash', async () => {
+    const { getBgosPublicBusinessProfileUncached } = await import('@/lib/bgos-public-business');
+    vi.mocked(getBgosPublicBusinessProfileUncached).mockResolvedValue(SAMPLE_PROFILE);
+
+    const legacyAgent = {
+      id: 'agent_legacy',
+      tenantId: 'ten_salon',
+      slug: 'royal-salon-assistant',
+      name: 'Patient Intake & Consultation Booking Assistant',
+      roleTitle: 'Customer Assistant',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
+      statusText: 'Online',
+      brandColor: '#1E3A5F',
+      voiceTone: 'friendly',
+      welcomeGreeting: 'Welcome!',
+      greetingSubtitle: 'AI Assistant',
+      configJson: JSON.stringify({ isPrimaryBusinessBot: true }),
+      status: 'active',
+      updatedAt: '2026-11-12T06:00:00.000Z',
+    };
+    mockDb.formAgent.findMany.mockResolvedValue([legacyAgent]);
+    mockDb.formAgent.update.mockImplementation(async ({ data }: any) => ({
+      ...legacyAgent,
+      ...data,
+      updatedAt: '2026-11-12T06:01:00.000Z',
+    }));
+
+    const first = await ensureAndSyncBusinessChatbot('ten_salon', { triggerSource: 'page_visit' });
+    expect(first.agent.name).toBe('Royal Unisex Salon Assistant');
+    expect(first.agent.avatarUrl).toBe('');
+    expect(first.agent.updatedAt).toBe('2026-11-12T06:01:00.000Z');
+    expect(first.autoSyncSummary?.kbHash).toBeTruthy();
+    expect(mockUpsertKB).toHaveBeenCalledTimes(1);
+
+    // Second call with matching kbHash should skip re-ingesting KB chunks
+    const persistedCfg = mockDb.formAgent.update.mock.calls[0][0].data.configJson;
+    mockDb.formAgent.findMany.mockResolvedValue([
+      {
+        ...legacyAgent,
+        name: 'Royal Unisex Salon Assistant',
+        avatarUrl: '',
+        configJson: persistedCfg,
+      },
+    ]);
+    await ensureAndSyncBusinessChatbot('ten_salon', { triggerSource: 'page_visit' });
+    expect(mockUpsertKB).toHaveBeenCalledTimes(1);
   });
 
   it('enforces Free tier 50/month AI chat quota with graceful Owner WhatsApp/Phone CTA fallback', async () => {

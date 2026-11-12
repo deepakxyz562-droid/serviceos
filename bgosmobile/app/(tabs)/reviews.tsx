@@ -21,6 +21,7 @@ import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { relativeDate, formatReviewTime } from '../../src/components/gbp/bits';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
+import { ReviewReportSheet, parseClientFlagReport } from '../../src/components/gbp/review-report-sheet';
 import type { GbpConnectionState, GbpPlaceResult, Review } from '../../src/components/gbp/types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -236,6 +237,7 @@ export default function ReviewRepliesScreen() {
   const [topSlide, setTopSlide] = useState(0);
   const [slideWidth, setSlideWidth] = useState(SCREEN_WIDTH - 32);
   const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
+  const [reportTargetReview, setReportTargetReview] = useState<Review | null>(null);
 
   const activeProfile = discover.data?.activeProfile;
   const shortId = activeProfile?.shortId || (gbpPlace.data?.place?.locationId ? `#${gbpPlace.data.place.locationId.slice(-4)}` : '');
@@ -1514,7 +1516,72 @@ export default function ReviewRepliesScreen() {
                     </View>
                   </View>
 
-                  <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '500' }}>{timeLabel}</Text>
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '500' }}>{timeLabel}</Text>
+                    {(() => {
+                      const flag = parseClientFlagReport(review);
+                      const isLow = rating <= 3;
+                      if (flag) {
+                        return (
+                          <Pressable
+                            onPress={() => setReportTargetReview(review)}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 4,
+                              paddingHorizontal: 8,
+                              paddingVertical: 3,
+                              borderRadius: 999,
+                              backgroundColor: '#FEF2F2',
+                              borderWidth: 1,
+                              borderColor: '#FECACA',
+                            }}
+                          >
+                            <MaterialIcons name="flag" size={12} color="#DC2626" />
+                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#B91C1C' }}>
+                              {flag.flagStatus === 'appealed_on_google'
+                                ? 'Appealed'
+                                : flag.hideOnPublicPage
+                                  ? 'Flagged · Hidden'
+                                  : 'Flagged'}
+                            </Text>
+                          </Pressable>
+                        );
+                      }
+                      return (
+                        <Pressable
+                          onPress={() => setReportTargetReview(review)}
+                          hitSlop={6}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 999,
+                            backgroundColor: isLow ? '#FFF1F2' : '#F8FAFC',
+                            borderWidth: 1,
+                            borderColor: isLow ? '#FECDD3' : '#E2E8F0',
+                          }}
+                        >
+                          <MaterialIcons
+                            name="outlined-flag"
+                            size={12}
+                            color={isLow ? '#E11D48' : '#64748B'}
+                          />
+                          <Text
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: '700',
+                              color: isLow ? '#BE123C' : '#64748B',
+                            }}
+                          >
+                            Report
+                          </Text>
+                        </Pressable>
+                      );
+                    })()}
+                  </View>
                 </View>
 
                 {/* Review written comment if present */}
@@ -1885,6 +1952,29 @@ export default function ReviewRepliesScreen() {
               )}`)
         }
         apiRequest={apiRequest}
+      />
+
+      {/* Fake / Jealous 1-Star Review Shield & Google Appeal Sheet */}
+      <ReviewReportSheet
+        visible={Boolean(reportTargetReview)}
+        review={reportTargetReview}
+        businessName={activeProfile?.name || gbpPlace.data?.place?.title || 'Our Business'}
+        onClose={() => setReportTargetReview(null)}
+        onSaved={async () => {
+          await Promise.all([reviews.refresh(), pendingFeed.refresh()]);
+        }}
+        onUseDisputeReply={(rev, text) => {
+          const existingReply = parseReply(rev);
+          if (existingReply) {
+            setEditingId(rev.id);
+            setEditingText(text);
+          } else {
+            setDrafts((prev) => ({
+              ...prev,
+              [rev.id]: { text },
+            }));
+          }
+        }}
       />
     </View>
   );

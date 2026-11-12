@@ -2,13 +2,15 @@ import { serviceInputError } from '../../../../shared/service-input';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { isSeededDummyService } from '@/lib/bgos-business-sanitizers';
+import { deriveServiceSlug, syncServiceCatalogAndGbp } from '@/lib/gbp/service-sync';
 
 // ─── GET /api/services ─────────────────────────────────────────────────────
-// List services for a tenant
+// List non-dummy services for a tenant
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
@@ -17,6 +19,7 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category');
     const active = searchParams.get('active');
     const search = searchParams.get('search');
+    const includeDummy = searchParams.get('includeDummy') === '1';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1);
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50') || 50));
 
@@ -34,7 +37,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const [services, total] = await Promise.all([
+    const [rawServices, rawTotal] = await Promise.all([
       db.service.findMany({
         where,
         orderBy: { createdAt: 'desc' },
@@ -44,9 +47,25 @@ export async function GET(request: NextRequest) {
       db.service.count({ where }),
     ]);
 
+    const services = includeDummy
+      ? rawServices
+      : rawServices.filter(
+          (svc) =>
+            !isSeededDummyService({
+              slug: svc.slug || deriveServiceSlug(svc.name),
+              name: svc.name,
+              description: svc.longDescription || svc.description,
+              basePrice: svc.basePrice,
+              duration: svc.duration,
+            }),
+        );
+    const filteredDummyCount = rawServices.length - services.length;
+    const total = Math.max(services.length, rawTotal - filteredDummyCount);
+
     return NextResponse.json({
       services,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      hasSeededDummyServices: filteredDummyCount > 0,
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     });
   } catch (error) {
     console.error('List services error:', error);
@@ -55,11 +74,11 @@ export async function GET(request: NextRequest) {
 }
 
 // ─── POST /api/services ────────────────────────────────────────────────────
-// Create a service
+// Create a service and sync to BGOS settings, chatbot & (when requested) Google Business
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
@@ -71,36 +90,62 @@ export async function POST(request: NextRequest) {
     const {
       name,
       description,
+      longDescription,
       category,
       basePrice,
       duration,
       icon,
       isActive,
+      isPublic,
       checklistId,
+      syncToGoogle,
     } = body;
 
-    if (!name) {
+    const cleanName = String(name || '').trim();
+    if (!cleanName) {
       return NextResponse.json({ error: 'Service name is required' }, { status: 400 });
     }
 
+    const cleanLongDesc =
+      typeof longDescription === 'string' && longDescription.trim()
+        ? longDescription.trim().slice(0, 500)
+        : null;
+    const cleanShortDesc =
+      typeof description === 'string' && description.trim()
+        ? description.trim()
+        : cleanLongDesc
+          ? cleanLongDesc.slice(0, 220)
+          : null;
+
     const service = await db.service.create({
       data: {
-        name,
-        description: description || null,
+        name: cleanName,
+        slug: deriveServiceSlug(cleanName) || undefined,
+        description: cleanShortDesc,
+        longDescription: cleanLongDesc,
         category: category || 'general',
         basePrice: basePrice !== undefined ? Number(basePrice) : 0,
         duration: duration !== undefined ? Number(duration) : 60,
         icon: icon || null,
         isActive: isActive !== undefined ? isActive : true,
+        isPublic: isPublic !== undefined ? Boolean(isPublic) : true,
         checklistId: checklistId || null,
         tenantId: user.tenantId,
       },
     });
 
-    const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
-    await ensureAndSyncBusinessChatbot(user.tenantId, { triggerSource: 'service_create' }).catch(() => {});
+    const syncResult = await syncServiceCatalogAndGbp(user.tenantId, {
+      syncToGoogle: syncToGoogle !== false,
+      triggerSource: 'service_create',
+    }).catch(() => ({
+      servicesCount: 0,
+      googleSync: { connected: false, attempted: false, synced: false, warnings: [] },
+    }));
 
-    return NextResponse.json({ service }, { status: 201 });
+    return NextResponse.json(
+      { service, googleSync: syncResult.googleSync },
+      { status: 201 },
+    );
   } catch (error) {
     console.error('Create service error:', error);
     return NextResponse.json({ error: 'Failed to create service' }, { status: 500 });

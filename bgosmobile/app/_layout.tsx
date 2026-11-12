@@ -118,6 +118,7 @@ export default function RootLayout() {
         <Stack.Screen name="qr-standee" />
         <Stack.Screen name="booking-page" />
         <Stack.Screen name="services-management" />
+        <Stack.Screen name="products-management" />
         <Stack.Screen name="manage-profile" />
         <Stack.Screen name="my-plan" />
         <Stack.Screen name="keyword-planner" />

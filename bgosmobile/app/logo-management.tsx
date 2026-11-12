@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Screen, colors } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
+import { uploadFileToStorage } from '../src/lib/upload';
 
 const PRESET_COLORS = [
   { label: 'Teal Blue', hex: '#1B8380' },
@@ -46,6 +47,7 @@ export default function LogoManagementScreen() {
   const [logoUsage, setLogoUsage] = useState<'original' | 'black_background'>('original');
 
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [generatingAi, setGeneratingAi] = useState(false);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [colorPickerTarget, setColorPickerTarget] = useState<'brand' | 'secondary' | null>(null);
@@ -78,10 +80,33 @@ export default function LogoManagementScreen() {
 
       if (!result.canceled && result.assets[0]?.uri) {
         const asset = result.assets[0];
-        setLogoUri(asset.uri);
         const name = asset.fileName || `logo_${Date.now().toString(36).slice(-6)}.png`;
+        setLogoUri(asset.uri);
         setLogoFileName(name);
-        Alert.alert('Logo Selected', 'Logo image loaded. Remember to tap Save Changes.');
+        setUploadingLogo(true);
+        try {
+          const uploadedUrl = await uploadFileToStorage(
+            {
+              uri: asset.uri,
+              name,
+              mimeType: asset.mimeType || 'image/png',
+              fileSize: asset.fileSize,
+              mediaType: 'image',
+            },
+            { folder: 'brand-logos', visibility: 'public' },
+          );
+          setLogoUri(uploadedUrl);
+          Alert.alert('Logo Uploaded', 'Logo uploaded to cloud storage. Tap Save Changes to publish.');
+        } catch (uploadErr) {
+          Alert.alert(
+            'Upload Failed',
+            uploadErr instanceof Error
+              ? uploadErr.message
+              : 'Could not upload logo to cloud storage. Please try again.',
+          );
+        } finally {
+          setUploadingLogo(false);
+        }
       }
     } catch {
       Alert.alert('Error', 'Could not open photo library.');
@@ -140,8 +165,26 @@ export default function LogoManagementScreen() {
   };
 
   const handleSave = async () => {
+    if (uploadingLogo) {
+      Alert.alert('Please Wait', 'Logo upload is still finishing.');
+      return;
+    }
     setSaving(true);
     try {
+      let resolvedLogoUrl = logoUri;
+      if (resolvedLogoUrl && !/^https?:\/\//i.test(resolvedLogoUrl)) {
+        resolvedLogoUrl = await uploadFileToStorage(
+          {
+            uri: resolvedLogoUrl,
+            name: logoFileName && logoFileName !== 'No logo uploaded yet' ? logoFileName : 'logo.png',
+            mimeType: 'image/png',
+            mediaType: 'image',
+          },
+          { folder: 'brand-logos', visibility: 'public' },
+        );
+        setLogoUri(resolvedLogoUrl);
+      }
+
       const existing = brandRes.data || {};
       const existingDetails = existing.brandDetails || {};
       await apiRequest('/api/brand-profile', {
@@ -151,7 +194,7 @@ export default function LogoManagementScreen() {
           industry: existing.profile?.industry || 'Services',
           brandDetails: {
             ...existingDetails,
-            logoUrl: logoUri,
+            logoUrl: resolvedLogoUrl,
             logoFileName,
             brandColor,
             secondaryColor,
@@ -409,10 +452,10 @@ export default function LogoManagementScreen() {
         {/* ── SAVE ACTION ── */}
         <Pressable
           onPress={handleSave}
-          disabled={saving}
-          style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+          disabled={saving || uploadingLogo}
+          style={[styles.saveBtn, (saving || uploadingLogo) && { opacity: 0.7 }]}
         >
-          {saving ? (
+          {saving || uploadingLogo ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <>

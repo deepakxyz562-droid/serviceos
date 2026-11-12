@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getBrandContextRaw } from '@/lib/brand-context';
+import { sanitizePublicImageUrl } from '@/lib/bgos-business-sanitizers';
 import { parseBgosEmailPrefs } from '@/lib/emails/bgos/sender';
 
 /**
@@ -222,6 +223,12 @@ export async function GET(request: NextRequest) {
         const parsed = JSON.parse(tenant.settingsJson);
         const bb = parsed?.brandBrain || {};
         brandDetails = bb.brandDetails || null;
+        if (brandDetails && typeof brandDetails === 'object' && 'logoUrl' in brandDetails) {
+          brandDetails = {
+            ...brandDetails,
+            logoUrl: sanitizePublicImageUrl(brandDetails.logoUrl),
+          };
+        }
         sellingItems = Array.isArray(bb.sellingItems) ? bb.sellingItems : [];
         marketingTargets = bb.marketingTargets || null;
         aiReplySalutation = bb.aiReplySalutation || null;
@@ -239,7 +246,7 @@ export async function GET(request: NextRequest) {
       whatsappNumber: tenant?.whatsappPhone ?? null,
       businessAddress: tenant?.address ?? null,
       tenantSlug: tenant?.slug ?? null,
-      logo: tenant?.logo ?? null,
+      logo: sanitizePublicImageUrl(tenant?.logo) ?? null,
       gstNumber,
       invoicePrefix,
       defaultTaxRate,
@@ -289,6 +296,29 @@ export async function PUT(request: NextRequest) {
     }
     if (!industry) {
       return NextResponse.json({ error: 'industry is required.' }, { status: 400 });
+    }
+
+    const rawBrandDetails = (body as any).brandDetails;
+    let sanitizedBrandDetails = rawBrandDetails;
+    let syncedTenantLogo: string | null | undefined = undefined;
+    if (rawBrandDetails && typeof rawBrandDetails === 'object') {
+      if (typeof rawBrandDetails.logoUrl === 'string' && rawBrandDetails.logoUrl.trim()) {
+        const cleanLogo = sanitizePublicImageUrl(rawBrandDetails.logoUrl);
+        if (!cleanLogo) {
+          return NextResponse.json(
+            {
+              error:
+                'Logo image must be uploaded to cloud storage before saving (device-local URIs cannot be served publicly).',
+            },
+            { status: 400 },
+          );
+        }
+        sanitizedBrandDetails = { ...rawBrandDetails, logoUrl: cleanLogo };
+        syncedTenantLogo = cleanLogo;
+      } else if ('logoUrl' in rawBrandDetails) {
+        sanitizedBrandDetails = { ...rawBrandDetails, logoUrl: null };
+        syncedTenantLogo = null;
+      }
     }
 
     // Normalise list-shaped fields to JSON strings.
@@ -402,7 +432,7 @@ export async function PUT(request: NextRequest) {
         const existingBrandBrain = (existingSettings.brandBrain ?? {}) as Record<string, unknown>;
         const mergedBrandBrain: Record<string, unknown> = {
           ...existingBrandBrain,
-          ...((body as any).brandDetails !== undefined ? { brandDetails: (body as any).brandDetails } : {}),
+          ...(sanitizedBrandDetails !== undefined ? { brandDetails: sanitizedBrandDetails } : {}),
           ...((body as any).sellingItems !== undefined ? { sellingItems: (body as any).sellingItems } : {}),
           ...((body as any).marketingTargets !== undefined ? { marketingTargets: (body as any).marketingTargets } : {}),
           ...((body as any).aiReplySalutation !== undefined ? { aiReplySalutation: (body as any).aiReplySalutation } : {}),
@@ -485,6 +515,7 @@ export async function PUT(request: NextRequest) {
           ...((body.location !== undefined || (body as any).businessAddress !== undefined)
             ? { address: (((body as any).businessAddress ?? body.location) || '').trim() || null }
             : {}),
+          ...(syncedTenantLogo !== undefined ? { logo: syncedTenantLogo } : {}),
           // Tax/compliance fields live inside settingsJson.taxCompliance so
           // we don't need a schema migration to add new operational columns.
           ...(settingsJson !== undefined ? { settingsJson } : {}),

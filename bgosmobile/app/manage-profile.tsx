@@ -24,6 +24,17 @@ import { normalizePendingUpload, type PendingUpload } from '../src/lib/upload';
 import { extractCityOrLocality } from '../src/lib/address';
 import { MediaMetadataSheet } from '../src/components/gbp/media-metadata-sheet';
 import type { GbpPhoto, GbpPlaceResult, PhotosResponse, SocialPost } from '../src/components/gbp/types';
+import type { BgosWorkspace } from '../src/types/bgos-contracts';
+
+interface ProfileServiceItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  longDescription?: string | null;
+  basePrice?: number;
+  duration?: number;
+  isActive?: boolean;
+}
 
 interface RewriteVariation {
   id: string;
@@ -132,8 +143,23 @@ export default function ManageGoogleProfileScreen() {
   const [supportBranding, setSupportBranding] = useState<boolean>(true);
   const [updatingBranding, setUpdatingBranding] = useState(false);
 
-  // 5-Tab Business Information Hub State (Screenshots 3, 4, 5, 7)
-  const [infoTab, setInfoTab] = useState<'about' | 'contact' | 'location' | 'hours' | 'more'>('about');
+  // 6-Tab Business Information Hub State
+  const [infoTab, setInfoTab] = useState<'about' | 'services' | 'contact' | 'location' | 'hours' | 'more'>('about');
+  const workspaceRes = useResource<BgosWorkspace>('/api/bgos/workspace');
+  const servicesRes = useResource<{ services: ProfileServiceItem[] }>(
+    '/api/services?limit=50',
+    0,
+    infoTab === 'services',
+  );
+  const [svcModalOpen, setSvcModalOpen] = useState(false);
+  const [editingSvcId, setEditingSvcId] = useState<string | null>(null);
+  const [svcName, setSvcName] = useState('');
+  const [svcPrice, setSvcPrice] = useState('0');
+  const [svcDuration, setSvcDuration] = useState('60');
+  const [svcDesc, setSvcDesc] = useState('');
+  const [svcSyncGoogle, setSvcSyncGoogle] = useState(true);
+  const [savingSvc, setSavingSvc] = useState(false);
+
   const [secondaryPhoneModalOpen, setSecondaryPhoneModalOpen] = useState(false);
   const [editSecondaryPhone, setEditSecondaryPhone] = useState('');
   const [savingSecondaryPhone, setSavingSecondaryPhone] = useState(false);
@@ -141,6 +167,75 @@ export default function ManageGoogleProfileScreen() {
 
   const place = placeRes.data?.place;
   const isConnected = Boolean(placeRes.data?.isConnected);
+  const currencySymbol = workspaceRes.data?.billing?.currency === 'USD' ? '$' : '₹';
+
+  function openServiceEditor(svc?: ProfileServiceItem) {
+    setEditingSvcId(svc?.id || null);
+    setSvcName(svc?.name || '');
+    setSvcPrice(String(svc?.basePrice ?? 0));
+    setSvcDuration(String(svc?.duration ?? 60));
+    setSvcDesc(svc?.longDescription || svc?.description || '');
+    setSvcSyncGoogle(true);
+    setSvcModalOpen(true);
+  }
+
+  async function handleSaveProfileService() {
+    const cleanName = svcName.trim();
+    const priceNum = Number(svcPrice || 0);
+    const durationNum = Number(svcDuration || 60);
+    if (!cleanName || Number.isNaN(priceNum) || priceNum < 0 || !Number.isInteger(durationNum) || durationNum < 5) {
+      Alert.alert('Invalid Service', 'Enter a service name, valid price (0 or more), and duration (>= 5 mins).');
+      return;
+    }
+    setSavingSvc(true);
+    try {
+      const res = await apiRequest<{
+        googleSync?: { attempted?: boolean; synced?: boolean; warnings?: string[] };
+      }>(editingSvcId ? `/api/services/${editingSvcId}` : '/api/services', {
+        method: editingSvcId ? 'PUT' : 'POST',
+        body: {
+          name: cleanName,
+          basePrice: priceNum,
+          duration: durationNum,
+          description: svcDesc.trim() ? svcDesc.trim().slice(0, 220) : null,
+          longDescription: svcDesc.trim() ? svcDesc.trim().slice(0, 500) : null,
+          isActive: true,
+          isPublic: true,
+          syncToGoogle: isConnected && svcSyncGoogle,
+        },
+      });
+      setSvcModalOpen(false);
+      await Promise.all([servicesRes.refresh(), placeRes.refresh(), workspaceRes.refresh()]);
+      const syncMsg = res.googleSync?.synced
+        ? 'Updated in BGOS, AI chatbot, and Google Business Profile.'
+        : 'Updated in BGOS public page and AI chatbot.';
+      Alert.alert(editingSvcId ? 'Service Updated' : 'Service Added', syncMsg);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to save service.');
+    } finally {
+      setSavingSvc(false);
+    }
+  }
+
+  function handleDeleteProfileService(svc: ProfileServiceItem) {
+    Alert.alert('Remove service?', `Remove "${svc.name}" from your business services?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiRequest(`/api/services/${svc.id}?syncToGoogle=${isConnected ? 'true' : 'false'}`, {
+              method: 'DELETE',
+            });
+            await Promise.all([servicesRes.refresh(), placeRes.refresh(), workspaceRes.refresh()]);
+          } catch (err: unknown) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Could not delete service.');
+          }
+        },
+      },
+    ]);
+  }
   const title = place?.title || placeRes.data?.tenantFallback?.name || '';
   const category = place?.category || placeRes.data?.tenantFallback?.category || '';
   const address = place?.address || placeRes.data?.tenantFallback?.address || '';
@@ -497,15 +592,21 @@ export default function ManageGoogleProfileScreen() {
           </View>
         </Card>
 
-        {/* ── 2. Business Information 5-Tab Segmented Hub (Screenshots 3, 4, 5, 7) ── */}
+        {/* ── 2. Business Information 6-Tab Segmented Hub ── */}
         <View style={{ gap: 10 }}>
           {/* Segmented Tab Headers */}
-          <View style={styles.infoTabBar}>
-            {(['about', 'contact', 'location', 'hours', 'more'] as const).map((tab) => {
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.infoTabBar}
+          >
+            {(['about', 'services', 'contact', 'location', 'hours', 'more'] as const).map((tab) => {
               const isActive = infoTab === tab;
               const label =
                 tab === 'about'
                   ? 'About'
+                  : tab === 'services'
+                  ? 'Services'
                   : tab === 'contact'
                   ? 'Contact'
                   : tab === 'location'
@@ -527,7 +628,7 @@ export default function ManageGoogleProfileScreen() {
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
 
           {/* Tab 1: About (Screenshot 5) */}
           {infoTab === 'about' && (
@@ -645,6 +746,134 @@ export default function ManageGoogleProfileScreen() {
             </Card>
           )}
 
+          {/* Tab: Services (Unified Catalog + Google Business Sync) */}
+          {infoTab === 'services' && (
+            <Card style={{ padding: 14, gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                    Services Catalog
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                    Synced with your public page, AI chatbot &amp; Google Business.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => openServiceEditor()}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    backgroundColor: '#0B9042',
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <MaterialIcons name="add" size={16} color="#FFFFFF" />
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>Add Service</Text>
+                </Pressable>
+              </View>
+
+              {servicesRes.loading && !servicesRes.data ? (
+                <ActivityIndicator color="#0B9042" style={{ marginVertical: 14 }} />
+              ) : (servicesRes.data?.services || []).length === 0 ? (
+                <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, gap: 8 }}>
+                  <Text style={{ fontSize: 13, color: '#475569', lineHeight: 18 }}>
+                    No services added yet. Add your services with price, duration &amp; SEO description.
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Action label="Add Service" icon="add" compact onPress={() => openServiceEditor()} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Action
+                        label="SEO Ideas"
+                        icon="auto-awesome"
+                        secondary
+                        compact
+                        onPress={() => router.push('/services-management')}
+                      />
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={{ gap: 10 }}>
+                  {(servicesRes.data?.services || []).map((svc) => (
+                    <View
+                      key={svc.id}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        borderRadius: 12,
+                        padding: 12,
+                        gap: 6,
+                        backgroundColor: '#FFFFFF',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                            {svc.name}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                            {svc.duration || 60} min · {svc.basePrice && svc.basePrice > 0 ? `${currencySymbol}${svc.basePrice.toLocaleString()}` : 'Request Quote'}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Edit ${svc.name}`}
+                            onPress={() => openServiceEditor(svc)}
+                            hitSlop={8}
+                            style={{ padding: 6, borderRadius: 8, backgroundColor: '#EFF6FF' }}
+                          >
+                            <MaterialIcons name="edit" size={16} color="#2563EB" />
+                          </Pressable>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Delete ${svc.name}`}
+                            onPress={() => handleDeleteProfileService(svc)}
+                            hitSlop={8}
+                            style={{ padding: 6, borderRadius: 8, backgroundColor: '#FEF2F2' }}
+                          >
+                            <MaterialIcons name="delete-outline" size={16} color="#DC2626" />
+                          </Pressable>
+                        </View>
+                      </View>
+                      {!!(svc.longDescription || svc.description) && (
+                        <Text numberOfLines={2} style={{ fontSize: 12, color: '#475569', lineHeight: 17 }}>
+                          {svc.longDescription || svc.description}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+
+                  <Pressable
+                    onPress={() => router.push('/services-management')}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      paddingVertical: 9,
+                      borderRadius: 10,
+                      backgroundColor: '#F0FDF4',
+                      borderWidth: 1,
+                      borderColor: '#BBF7D0',
+                    }}
+                  >
+                    <MaterialIcons name="auto-awesome" size={15} color="#0B9042" />
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0B9042' }}>
+                      Open AI SEO Optimizer for Services
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+            </Card>
+          )}
+
           {/* Tab 2: Contact (Screenshot 7) */}
           {infoTab === 'contact' && (
             <Card style={{ paddingVertical: 4, paddingHorizontal: 14 }}>
@@ -707,7 +936,7 @@ export default function ManageGoogleProfileScreen() {
               </View>
 
               {/* Chat on Google Maps Toggle */}
-              <View style={[styles.rowItem, { borderBottomWidth: 0 }]}>
+              <View style={styles.rowItem}>
                 <MaterialIcons name="chat" size={20} color="#0B9042" style={styles.rowIcon} />
                 <View style={{ flex: 1, paddingRight: 8 }}>
                   <Text style={styles.rowLabel}>Chat</Text>
@@ -722,6 +951,21 @@ export default function ManageGoogleProfileScreen() {
                   thumbColor={chatEnabled ? '#0B9042' : '#FFFFFF'}
                 />
               </View>
+
+              {/* Social Profiles, Products & Ordering Links Shortcut */}
+              <Pressable
+                onPress={() => router.push('/products-management?tab=social')}
+                style={[styles.rowItem, { borderBottomWidth: 0 }]}
+              >
+                <MaterialIcons name="share" size={20} color="#2563EB" style={styles.rowIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>Social profiles, Products &amp; Ordering links</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B' }}>
+                    Instagram, Facebook, Pickup/Delivery &amp; Google Place Action URLs
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color="#64748B" />
+              </Pressable>
             </Card>
           )}
 
@@ -1617,6 +1861,139 @@ export default function ManageGoogleProfileScreen() {
         </View>
       </Modal>
 
+      {/* Service Add/Edit Modal inside Manage Google Profile */}
+      <Modal
+        visible={svcModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          if (!savingSvc) setSvcModalOpen(false);
+        }}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'flex-end' }}>
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              padding: 18,
+              gap: 12,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
+                {editingSvcId ? 'Edit Service' : 'Add Service'}
+              </Text>
+              <Pressable onPress={() => !savingSvc && setSvcModalOpen(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={22} color={colors.muted} />
+              </Pressable>
+            </View>
+
+            <View style={{ gap: 4 }}>
+              <Text style={styles.rowLabel}>Service Name</Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#CBD5E1',
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 14,
+                  color: colors.ink,
+                }}
+                value={svcName}
+                onChangeText={setSvcName}
+                placeholder="e.g. Custom Software Development"
+              />
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={styles.rowLabel}>Price ({currencySymbol})</Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    fontSize: 14,
+                    color: colors.ink,
+                  }}
+                  value={svcPrice}
+                  onChangeText={setSvcPrice}
+                  keyboardType="decimal-pad"
+                  placeholder="0 for Request Quote"
+                />
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={styles.rowLabel}>Duration (mins)</Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    fontSize: 14,
+                    color: colors.ink,
+                  }}
+                  value={svcDuration}
+                  onChangeText={setSvcDuration}
+                  keyboardType="number-pad"
+                  placeholder="60"
+                />
+              </View>
+            </View>
+
+            <View style={{ gap: 4 }}>
+              <Text style={styles.rowLabel}>Description (used on Page, Chatbot &amp; Google)</Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#CBD5E1',
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 13.5,
+                  color: colors.ink,
+                  minHeight: 82,
+                  textAlignVertical: 'top',
+                }}
+                multiline
+                maxLength={500}
+                value={svcDesc}
+                onChangeText={setSvcDesc}
+                placeholder="Describe this service and who it is for..."
+              />
+            </View>
+
+            {isConnected && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 }}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={styles.rowLabel}>Sync to Google Business Profile</Text>
+                  <Text style={{ fontSize: 11.5, color: colors.muted }}>
+                    Push updated service name &amp; description directly to Google
+                  </Text>
+                </View>
+                <Switch
+                  value={svcSyncGoogle}
+                  onValueChange={setSvcSyncGoogle}
+                  trackColor={{ true: '#0B9042' }}
+                />
+              </View>
+            )}
+
+            <Action
+              label={savingSvc ? 'Saving…' : editingSvcId ? 'Save & Sync Service' : 'Add & Sync Service'}
+              icon="check"
+              disabled={savingSvc}
+              onPress={() => void handleSaveProfileService()}
+            />
+          </View>
+        </View>
+      </Modal>
+
       <MediaMetadataSheet
         visible={mediaComposerOpen}
         onClose={() => setMediaComposerOpen(false)}
@@ -1843,9 +2220,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     borderRadius: 12,
     padding: 3,
+    gap: 2,
+    minWidth: '100%',
   },
   infoTabButton: {
     flex: 1,
+    minWidth: 66,
+    paddingHorizontal: 11,
     paddingVertical: 8,
     alignItems: 'center',
     borderRadius: 9,

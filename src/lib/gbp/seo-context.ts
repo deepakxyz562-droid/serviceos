@@ -1,4 +1,14 @@
 import { db } from '@/lib/db';
+import { isSeededDummyService } from '@/lib/bgos-business-sanitizers';
+
+function deriveServiceSlug(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+}
 
 export interface GoogleDiscoveryKeyword {
   keyword: string;
@@ -65,13 +75,36 @@ export function safeParseJsonArray(raw: string | null | undefined): string[] {
  */
 export function mergeStructuredServices(
   settings: Record<string, any>,
-  dbServices: Array<{ id: string; name: string; description: string | null; longDescription: string | null; category: string }> = [],
+  dbServices: Array<{
+    id: string;
+    slug?: string | null;
+    name: string;
+    description: string | null;
+    longDescription: string | null;
+    category: string;
+    basePrice?: number | null;
+    duration?: number | null;
+  }> = [],
 ): StructuredSeoService[] {
   const byName = new Map<string, StructuredSeoService>();
 
-  const upsert = (entry: StructuredSeoService) => {
+  const upsert = (
+    entry: StructuredSeoService,
+    meta?: { slug?: string | null; basePrice?: number | null; duration?: number | null },
+  ) => {
     const cleanName = entry.name.trim();
     if (!cleanName) return;
+    if (
+      isSeededDummyService({
+        slug: meta?.slug || deriveServiceSlug(cleanName),
+        name: cleanName,
+        description: entry.description,
+        basePrice: meta?.basePrice,
+        duration: meta?.duration,
+      })
+    ) {
+      return;
+    }
     const key = cleanName.toLowerCase();
     const existing = byName.get(key);
     if (!existing) {
@@ -109,12 +142,19 @@ export function mergeStructuredServices(
 
   // 2. Prisma Service rows (canonical web public hub catalog)
   for (const svc of dbServices) {
-    upsert({
-      id: svc.id,
-      name: svc.name,
-      description: (svc.longDescription || svc.description || '').trim(),
-      category: svc.category,
-    });
+    upsert(
+      {
+        id: svc.id,
+        name: svc.name,
+        description: (svc.longDescription || svc.description || '').trim(),
+        category: svc.category,
+      },
+      {
+        slug: svc.slug,
+        basePrice: svc.basePrice,
+        duration: svc.duration,
+      },
+    );
   }
 
   // 3. Legacy string array pills from mobile/settings
@@ -325,19 +365,30 @@ export function formatSeoKeywordsPromptSection(ctx: TenantSeoContext | null | un
 export async function upsertTenantStructuredServices(
   tenantId: string,
   services: StructuredSeoService[],
+  options?: { syncMissingToInactive?: boolean },
 ): Promise<StructuredSeoService[]> {
   const normalized: StructuredSeoService[] = [];
   const seen = new Set<string>();
   for (const raw of services) {
     const name = String(raw?.name || '').trim().slice(0, 100);
     if (!name) continue;
+    const description = String(raw.description || '').trim().slice(0, 500);
+    if (
+      isSeededDummyService({
+        slug: deriveServiceSlug(name),
+        name,
+        description,
+      })
+    ) {
+      continue;
+    }
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     normalized.push({
       id: raw.id,
       name,
-      description: String(raw.description || '').trim().slice(0, 500),
+      description,
       targetKeyword: raw.targetKeyword ? String(raw.targetKeyword).trim().slice(0, 120) : undefined,
       category: raw.category ? String(raw.category).trim() : undefined,
       syncedToGoogle: Boolean(raw.syncedToGoogle),
@@ -353,6 +404,7 @@ export async function upsertTenantStructuredServices(
 
   settings.seoServices = normalized;
   settings.services = serviceNames;
+  settings.activeGbpServices = serviceNames;
 
   await db.tenant.update({
     where: { id: tenantId },
@@ -370,14 +422,27 @@ export async function upsertTenantStructuredServices(
   // Sync into db.service so Public Business Hub & GBP Audit reflect rich descriptions
   type DbServiceRow = {
     id: string;
+    slug?: string | null;
     name: string;
     description: string | null;
     longDescription: string | null;
+    basePrice?: number | null;
+    duration?: number | null;
+    isActive?: boolean;
   };
   const existingDb: DbServiceRow[] = await db.service
     .findMany({
       where: { tenantId },
-      select: { id: true, name: true, description: true, longDescription: true },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        description: true,
+        longDescription: true,
+        basePrice: true,
+        duration: true,
+        isActive: true,
+      },
     })
     .catch((): DbServiceRow[] => []);
   const existingByName = new Map<string, DbServiceRow>(
@@ -390,6 +455,7 @@ export async function upsertTenantStructuredServices(
     const longDesc = item.description || null;
     if (match) {
       if (
+        match.isActive === false ||
         (longDesc && longDesc !== (match.longDescription || '')) ||
         (shortDesc && !match.description)
       ) {
@@ -428,6 +494,42 @@ export async function upsertTenantStructuredServices(
         })
         .catch(() => null);
       if (created?.id) item.id = created.id;
+    }
+  }
+
+  // Soft-deactivate removed services and purge leftover untouched dummy rows when explicitly saving full catalog
+  const activeLowerSet = new Set(normalized.map((s) => s.name.toLowerCase()));
+  const dummyIdsToDelete = existingDb
+    .filter((row) =>
+      isSeededDummyService({
+        slug: row.slug,
+        name: row.name,
+        description: row.longDescription || row.description,
+        basePrice: row.basePrice,
+        duration: row.duration,
+      }),
+    )
+    .map((row) => row.id);
+  if (dummyIdsToDelete.length > 0 && db.service.deleteMany) {
+    await db.service.deleteMany({ where: { tenantId, id: { in: dummyIdsToDelete } } }).catch(() => {});
+  }
+
+  if (options?.syncMissingToInactive && db.service.updateMany) {
+    const removedIds = existingDb
+      .filter(
+        (row) =>
+          row.isActive !== false &&
+          !dummyIdsToDelete.includes(row.id) &&
+          !activeLowerSet.has(row.name.trim().toLowerCase()),
+      )
+      .map((row) => row.id);
+    if (removedIds.length > 0) {
+      await db.service
+        .updateMany({
+          where: { tenantId, id: { in: removedIds } },
+          data: { isActive: false, isPublic: false },
+        })
+        .catch(() => {});
     }
   }
 

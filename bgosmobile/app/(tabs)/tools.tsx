@@ -166,9 +166,15 @@ export default function ToolsScreen() {
         />
         <MenuRow
           title="Manage Google Profile"
-          detail="Contact & Address, AI & Automation, Post on Google"
+          detail="Contact & Address, Services, AI & Automation, Post on Google"
           icon="storefront"
           onPress={() => router.push('/manage-profile')}
+        />
+        <MenuRow
+          title="Products, Pickup & Ordering"
+          detail="Catalog, Delivery / Food Ordering, Social links & Google Ads"
+          icon="shopping-bag"
+          onPress={() => router.push('/products-management')}
         />
         <MenuRow
           title="QR Standee Studio"
@@ -459,24 +465,47 @@ export default function ToolsScreen() {
               </View>
             )}
 
-            <Pressable
-              onPress={() => router.push('/qr-standee')}
-              style={({ pressed }) => ({
-                backgroundColor: '#1E293B',
-                paddingVertical: 11,
-                borderRadius: 10,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 6,
-                opacity: pressed ? 0.9 : 1,
-              })}
-            >
-              <MaterialIcons name="qr-code" size={18} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
-                View Card & Standee QR
-              </Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                onPress={() => router.push('/booking-page')}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  backgroundColor: '#009F50',
+                  paddingVertical: 11,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 6,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <MaterialIcons name="tune" size={18} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                  Page Settings
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.push('/qr-standee')}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  backgroundColor: '#1E293B',
+                  paddingVertical: 11,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 6,
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <MaterialIcons name="qr-code" size={18} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                  View QR
+                </Text>
+              </Pressable>
+            </View>
 
             {data.links.profile && (
               <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -587,7 +616,7 @@ export default function ToolsScreen() {
             >
               <MaterialIcons name="tune" size={18} color="#FFFFFF" />
               <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
-                Customize Page & Services
+                Customize Page &amp; Services → Page Settings
               </Text>
             </Pressable>
 

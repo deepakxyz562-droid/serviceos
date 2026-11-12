@@ -9,6 +9,7 @@ import {
   normalizeRegionState,
   normalizeWhatsAppDigits,
   resolveBusinessCurrency,
+  sanitizePublicImageUrl,
   shouldRenderBgosCardHost,
 } from './bgos-business-sanitizers';
 
@@ -125,11 +126,44 @@ describe('dummy content sanitizers', () => {
 
     expect(
       isSeededDummyService({
+        slug: 'emergency-service',
+        name: 'Emergency Service',
+        description:
+          'When your critical systems fail, FieserOS provides rapid Emergency Service across Patna and the Downtown area.',
+        basePrice: 150,
+        duration: 90,
+      }),
+    ).toBe(true);
+
+    expect(
+      isSeededDummyService({
+        slug: 'inspection-maintenance',
+        name: 'Inspection & Maintenance',
+        description:
+          'Proactive Inspection & Maintenance is essential. Our team serves the North Side and surrounding suburbs.',
+        basePrice: 89,
+        duration: 60,
+      }),
+    ).toBe(true);
+
+    expect(
+      isSeededDummyService({
         slug: 'custom-consulting',
         name: 'Cloud Architecture Audit',
         description: 'Full infrastructure audit for startups.',
       }),
     ).toBe(false);
+  });
+
+  it('rejects non-web local device URIs via sanitizePublicImageUrl while keeping https/relative URLs', () => {
+    expect(sanitizePublicImageUrl('file:///var/mobile/Containers/Data/logo.png')).toBeNull();
+    expect(sanitizePublicImageUrl('content://media/external/images/1')).toBeNull();
+    expect(sanitizePublicImageUrl('ph://ED7AC36B-A150-4C38-BB8C-B6D696F4F2ED')).toBeNull();
+    expect(sanitizePublicImageUrl('blob:https://bgos.fieseros.com/123')).toBeNull();
+    expect(sanitizePublicImageUrl('https://cdn.fieseros.com/logos/brand.png')).toBe(
+      'https://cdn.fieseros.com/logos/brand.png',
+    );
+    expect(sanitizePublicImageUrl('/uploads/logo.png')).toBe('/uploads/logo.png');
   });
 
   it('filters pure placeholder Downtown..Suburbs areas while preserving real neighborhoods', () => {

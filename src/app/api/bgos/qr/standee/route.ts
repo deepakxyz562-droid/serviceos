@@ -450,39 +450,71 @@ export async function GET(request: NextRequest) {
         ? Number((reviews.reduce((acc, r) => acc + (r.rating || 5), 0) / totalReviews).toFixed(1))
         : 5.0;
 
-    const brandBrain = (() => {
+    const parsedSettings = (() => {
       try {
-        const parsed = JSON.parse(tenant?.settingsJson || '{}');
-        return parsed?.brandBrain || {};
+        return JSON.parse(tenant?.settingsJson || '{}');
       } catch {
         return {};
       }
     })();
+    const brandBrain = parsedSettings?.brandBrain || {};
 
     const businessName =
       placeDetails?.title || tenant?.brandProfile?.businessName || tenant?.name || 'Our Business';
     const tagline =
-      tenant?.brandProfile?.tagline || 'We appreciate your business & feedback!';
+      tenant?.tagline || brandBrain?.brandDetails?.tagline || 'We appreciate your business & feedback!';
     const phone =
       brandBrain?.brandDetails?.phoneOnPoster || tenant?.phone || '';
     const address =
       brandBrain?.brandDetails?.addressOnPoster || tenant?.address || '';
-    const resolvedPlaceId = placeDetails?.placeId || null;
+    const resolvedPlaceId = placeDetails?.placeId || tenant?.googlePlaceId || null;
 
+    const origin = (process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com').replace(/\/+$/, '');
+    const publicSlug =
+      parsedSettings?.bookingPageConfig?.publicSlug ||
+      tenant?.publicSlug ||
+      tenant?.slug ||
+      user.tenantId;
+    const pageUrl = `${origin}/b/${encodeURIComponent(publicSlug)}`;
     const reviewUrl = resolvedPlaceId
       ? `https://search.google.com/local/writereview?placeid=${resolvedPlaceId}`
-      : placeDetails?.mapsUri ||
-        (process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com') +
-          `/reviews/rate?tenant=${user.tenantId}`;
+      : placeDetails?.mapsUri || `${origin}/reviews/rate?tenant=${user.tenantId}`;
+    const mapsUrl =
+      placeDetails?.mapsUri ||
+      (resolvedPlaceId
+        ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(resolvedPlaceId)}`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${businessName} ${address}`.trim())}`);
 
-    const qrDataUrl = await QRCode.toDataURL(reviewUrl, {
-      width: 720,
-      margin: 2,
-      errorCorrectionLevel: 'H',
-      color: { dark: '#0F172A', light: '#FFFFFF' },
-    });
+    const targetParam = new URL(request.url).searchParams.get('target');
+    const target = targetParam === 'page' || targetParam === 'maps' ? targetParam : 'review';
+    const activeTargetUrl =
+      target === 'page' ? pageUrl : target === 'maps' ? mapsUrl : reviewUrl;
 
-    const logoUrl = brandBrain?.brandDetails?.logoUrl || null;
+    const [qrReviewUrl, qrPageUrl, qrMapsUrl] = await Promise.all([
+      QRCode.toDataURL(reviewUrl, {
+        width: 720,
+        margin: 2,
+        errorCorrectionLevel: 'H',
+        color: { dark: '#0F172A', light: '#FFFFFF' },
+      }),
+      QRCode.toDataURL(pageUrl, {
+        width: 720,
+        margin: 2,
+        errorCorrectionLevel: 'H',
+        color: { dark: '#0F172A', light: '#FFFFFF' },
+      }),
+      QRCode.toDataURL(mapsUrl, {
+        width: 720,
+        margin: 2,
+        errorCorrectionLevel: 'H',
+        color: { dark: '#0F172A', light: '#FFFFFF' },
+      }),
+    ]);
+
+    const qrDataUrl =
+      target === 'page' ? qrPageUrl : target === 'maps' ? qrMapsUrl : qrReviewUrl;
+
+    const logoUrl = parsedSettings?.bookingPageConfig?.logoUrl || brandBrain?.brandDetails?.logoUrl || tenant?.logo || null;
 
     const defaultSvg = generateStandeeSvg({
       template: TEMPLATES.google_grexa_standee || TEMPLATES.google_verified,
@@ -494,8 +526,16 @@ export async function GET(request: NextRequest) {
       qrDataUrl,
       phone,
       address,
-      headline: 'Scan to Review Us on Google',
-      subheadline: 'Your 5-star review helps our local team grow!',
+      headline:
+        target === 'page'
+          ? 'Scan to Book & Order Online'
+          : target === 'maps'
+            ? 'Scan to View Us on Google Maps'
+            : 'Scan to Review Us on Google',
+      subheadline:
+        target === 'page'
+          ? 'View services, products, hours & chat with us!'
+          : 'Your 5-star review helps our local team grow!',
       showRating: true,
       showContact: true,
       logoUrl,
@@ -508,8 +548,30 @@ export async function GET(request: NextRequest) {
       totalReviews,
       phone,
       address,
-      reviewUrl,
+      reviewUrl: activeTargetUrl,
+      pageUrl,
+      mapsUrl,
       qrDataUrl,
+      targets: {
+        review: {
+          url: reviewUrl,
+          qrDataUrl: qrReviewUrl,
+          headline: 'Scan to Review Us on Google',
+          subheadline: 'Your 5-star review helps our local team grow!',
+        },
+        page: {
+          url: pageUrl,
+          qrDataUrl: qrPageUrl,
+          headline: 'Scan to Book & Order Online',
+          subheadline: 'Browse services, products & chat instantly!',
+        },
+        maps: {
+          url: mapsUrl,
+          qrDataUrl: qrMapsUrl,
+          headline: 'Scan to Find Us on Google Maps',
+          subheadline: 'Directions, photos, hours & Google profile',
+        },
+      },
       defaultSvg,
       logoUrl,
       templates: Object.values(TEMPLATES),
@@ -571,32 +633,44 @@ export async function POST(request: NextRequest) {
         ? Number((reviews.reduce((acc, r) => acc + (r.rating || 5), 0) / totalReviews).toFixed(1))
         : 5.0;
 
-    const brandBrain = (() => {
+    const parsedSettings = (() => {
       try {
-        const parsed = JSON.parse(tenant?.settingsJson || '{}');
-        return parsed?.brandBrain || {};
+        return JSON.parse(tenant?.settingsJson || '{}');
       } catch {
         return {};
       }
     })();
+    const brandBrain = parsedSettings?.brandBrain || {};
 
     const businessName =
       placeDetails?.title || tenant?.brandProfile?.businessName || tenant?.name || 'Our Business';
     const tagline =
-      tenant?.brandProfile?.tagline || 'We appreciate your business & feedback!';
+      tenant?.tagline || brandBrain?.brandDetails?.tagline || 'We appreciate your business & feedback!';
     const phone =
       brandBrain?.brandDetails?.phoneOnPoster || tenant?.phone || '';
     const address =
       brandBrain?.brandDetails?.addressOnPoster || tenant?.address || '';
-    const resolvedPlaceId = placeDetails?.placeId || null;
+    const resolvedPlaceId = placeDetails?.placeId || tenant?.googlePlaceId || null;
 
+    const origin = (process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com').replace(/\/+$/, '');
+    const publicSlug =
+      parsedSettings?.bookingPageConfig?.publicSlug ||
+      tenant?.publicSlug ||
+      tenant?.slug ||
+      user.tenantId;
+    const pageUrl = `${origin}/b/${encodeURIComponent(publicSlug)}`;
     const reviewUrl = resolvedPlaceId
       ? `https://search.google.com/local/writereview?placeid=${resolvedPlaceId}`
-      : placeDetails?.mapsUri ||
-        (process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com') +
-          `/reviews/rate?tenant=${user.tenantId}`;
+      : placeDetails?.mapsUri || `${origin}/reviews/rate?tenant=${user.tenantId}`;
+    const mapsUrl =
+      placeDetails?.mapsUri ||
+      (resolvedPlaceId
+        ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(resolvedPlaceId)}`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${businessName} ${address}`.trim())}`);
+    const target = body?.target === 'page' || body?.target === 'maps' ? body.target : 'review';
+    const chosenUrl = target === 'page' ? pageUrl : target === 'maps' ? mapsUrl : reviewUrl;
 
-    const qrDataUrl = await QRCode.toDataURL(reviewUrl, {
+    const qrDataUrl = await QRCode.toDataURL(chosenUrl, {
       width: 720,
       margin: 2,
       errorCorrectionLevel: 'H',

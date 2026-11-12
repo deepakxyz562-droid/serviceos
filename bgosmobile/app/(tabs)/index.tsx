@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, ActivityIndicator, Alert, Easing, Image, Linking, Modal, Pressable, Share, useWindowDimensions, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -131,7 +131,7 @@ const MORE_TOOLS: {
   { label: 'Outreach', route: '/outreach', icon: 'send' },
   { label: 'Submissions', route: '/submissions', icon: 'assignment' },
   { label: 'GBP Hub', route: '/growth', icon: 'hub' },
-  { label: 'Booking Setup', route: '/booking-page', icon: 'event-available' },
+  { label: 'Page Settings', route: '/booking-page', icon: 'tune' },
   { label: 'Train AI Chatbot', route: '/agents', icon: 'smart-toy' },
   { label: 'Integrations', route: '/integrations', icon: 'extension' },
   { label: 'My Plan', route: '/my-plan', icon: 'credit-card' },
@@ -410,6 +410,8 @@ export default function HomeScreen() {
   const [reviewModalTab, setReviewModalTab] = useState<'single' | 'bulk'>('single');
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [expandedCompetitor, setExpandedCompetitor] = useState<string | null>(null);
+  const [actionsExpanded, setActionsExpanded] = useState(false);
+  const [logoLoadError, setLogoLoadError] = useState(false);
   const { width, fontScale } = useWindowDimensions();
   const compactActions = width < 375 || fontScale > 1.2;
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
@@ -564,16 +566,47 @@ export default function HomeScreen() {
   const category = place?.category || 'Local Business';
   const completionScore = place?.completionScore ?? 76;
 
-  // 4 profile-specific utilities nested inside the GBP Verified Card (zero overlap with Quick Actions)
-  const gbpUtilities = useMemo(
+  const businessLogoUrl = workspace.data?.bookingPageConfig?.logoUrl || null;
+  useEffect(() => {
+    setLogoLoadError(false);
+  }, [businessLogoUrl]);
+  const businessAccent = workspace.data?.bookingPageConfig?.accentColor || '#0B9042';
+  const publicProfilePath = workspace.data?.links?.profile || '';
+  const publicProfileUrl = publicProfilePath
+    ? publicProfilePath.startsWith('http')
+      ? publicProfilePath
+      : `${BGOS_PUBLIC_WEB_URL}${publicProfilePath}`
+    : '';
+
+  // Restored full circular Google Business action dock (7 visible + More/Less toggle)
+  const actionIcons = useMemo(
     () => [
-      { id: 'edit_info', label: 'Edit Info', icon: 'edit' as const, onPress: () => router.push('/manage-profile') },
-      { id: 'services', label: 'Services', icon: 'miscellaneous-services' as const, onPress: () => router.push('/services-management') },
+      { id: 'edit_profile', label: 'Edit profile', icon: 'edit' as const, onPress: () => router.push('/manage-profile') },
+      { id: 'edit_services', label: 'Services', icon: 'miscellaneous-services' as const, onPress: () => router.push('/services-management') },
+      { id: 'products', label: 'Products', icon: 'shopping-bag' as const, onPress: () => router.push('/products-management') },
+      { id: 'reviews', label: 'Reviews', icon: 'star-outline' as const, onPress: () => router.push('/(tabs)/reviews') },
+      { id: 'add_photo', label: 'Add photo', icon: 'add-a-photo' as const, onPress: () => router.push('/(tabs)/photos') },
       { id: 'qr_standee', label: 'QR Standee', icon: 'qr-code-2' as const, onPress: () => router.push('/qr-standee') },
-      { id: 'growth_report', label: 'Growth Report', icon: 'analytics' as const, onPress: () => router.push('/growth-report') },
+      { id: 'performance', label: 'Performance', icon: 'insights' as const, onPress: () => router.push('/growth-report') },
+      { id: 'page_settings', label: 'Page Setup', icon: 'tune' as const, onPress: () => router.push('/booking-page') },
+      { id: 'bookings', label: 'Bookings', icon: 'event-available' as const, onPress: () => router.push('/appointments') },
+      { id: 'pickup_delivery', label: 'Ordering', icon: 'local-shipping' as const, onPress: () => router.push('/products-management?tab=fulfillment') },
+      { id: 'advertise', label: 'Advertise', icon: 'campaign' as const, onPress: () => router.push('/products-management?tab=social') },
+      { id: 'add_update', label: 'Add update', icon: 'post-add' as const, onPress: () => router.push('/(tabs)/marketing?generate=1') },
+      {
+        id: 'ask_reviews',
+        label: 'Ask reviews',
+        icon: 'rate-review' as const,
+        onPress: () => {
+          setReviewModalTab('single');
+          setReviewModalOpen(true);
+        },
+      },
+      { id: 'ai_chatbot', label: 'AI Chatbot', icon: 'smart-toy' as const, onPress: () => router.push('/agents') },
     ],
     [router],
   );
+  const visibleActionIcons = actionsExpanded ? actionIcons : actionIcons.slice(0, 7);
 
   // Unified 4x2 Quick Actions grid — daily high-frequency workflows in one clean place
   const quickActions = useMemo(
@@ -951,38 +984,77 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      {/* ── Google Business Profile Verified Card & Circular Action Dock (Screenshots 2 & 6) ── */}
-      <Card style={{ padding: 14, gap: 12, borderRadius: 16 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+      {/* ── Google Business Profile Verified Card & Circular Action Dock ── */}
+      <Card
+        style={{
+          padding: 15,
+          gap: 14,
+          borderRadius: 18,
+          borderColor: '#E2E8F0',
+          shadowColor: '#0F172A',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 8,
+          elevation: 2,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Manage ${profileName}`}
+            onPress={() => router.push('/manage-profile')}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 11,
+              flex: 1,
+              minWidth: 0,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
             <View
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: '#0B9042',
+                width: 46,
+                height: 46,
+                borderRadius: 14,
+                backgroundColor: businessLogoUrl && !logoLoadError ? '#F8FAFC' : businessAccent,
+                borderWidth: businessLogoUrl && !logoLoadError ? 1 : 0,
+                borderColor: '#E2E8F0',
                 alignItems: 'center',
                 justifyContent: 'center',
+                overflow: 'hidden',
               }}
             >
-              <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF' }}>
-                {profileName.charAt(0).toUpperCase()}
-              </Text>
+              {businessLogoUrl && !logoLoadError ? (
+                <Image
+                  source={{ uri: businessLogoUrl }}
+                  style={{ width: 42, height: 42 }}
+                  resizeMode="contain"
+                  onError={() => setLogoLoadError(true)}
+                />
+              ) : (
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#FFFFFF' }}>
+                  {profileName.charAt(0).toUpperCase()}
+                </Text>
+              )}
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', flexShrink: 1 }}
+                >
                   {profileName}
                 </Text>
                 <MaterialIcons name="verified" size={16} color="#2563EB" />
               </View>
-              <Text numberOfLines={1} style={{ fontSize: 12, color: '#64748B', marginTop: 1 }}>
+              <Text numberOfLines={1} style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
                 {address || (city && city !== 'your area' ? `${category} • ${city}` : category)}
               </Text>
             </View>
-          </View>
+          </Pressable>
 
-          {/* Profile Strength Progress Ring Matching Screenshot 2 */}
+          {/* Profile Strength Badge */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Profile strength: ${completionScore}%. Complete info.`}
@@ -992,8 +1064,8 @@ export default function HomeScreen() {
               justifyContent: 'center',
               backgroundColor: '#F0FDF4',
               borderRadius: 12,
-              paddingHorizontal: 9,
-              paddingVertical: 5,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
               borderWidth: 1,
               borderColor: '#BBF7D0',
               opacity: pressed ? 0.75 : 1,
@@ -1008,94 +1080,137 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {/* ── 4 Profile Utility Shortcuts (Edit Info, Services, QR Standee, Growth Report) ── */}
+        {/* ── Circular Action Icons Grid with More/Less Toggle ── */}
         <View
           style={{
             flexDirection: 'row',
+            flexWrap: 'wrap',
+            rowGap: 12,
+            columnGap: 4,
             justifyContent: 'space-between',
-            paddingTop: 8,
+            paddingTop: 10,
             borderTopWidth: 1,
             borderTopColor: '#F1F5F9',
           }}
         >
-          {gbpUtilities.map((util) => (
+          {visibleActionIcons.map((act) => (
             <Pressable
-              key={util.id}
+              key={act.id}
               accessibilityRole="button"
-              accessibilityLabel={util.label}
-              onPress={util.onPress}
+              accessibilityLabel={act.label}
+              onPress={act.onPress}
               style={({ pressed }) => ({
-                width: '23.5%',
+                width: '23%',
                 alignItems: 'center',
                 gap: 5,
-                opacity: pressed ? 0.72 : 1,
+                opacity: pressed ? 0.75 : 1,
               })}
             >
               <View
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
                   backgroundColor: '#F8FAFC',
                   borderWidth: 1,
                   borderColor: '#E2E8F0',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  shadowColor: '#0F172A',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 2,
+                  elevation: 1,
                 }}
               >
-                <MaterialIcons name={util.icon} size={19} color="#0F172A" />
+                <MaterialIcons name={act.icon} size={22} color="#1E293B" />
               </View>
               <Text
-                numberOfLines={1}
+                numberOfLines={2}
                 style={{
-                  fontSize: 11,
+                  fontSize: 10.5,
                   fontWeight: '600',
                   color: '#334155',
                   textAlign: 'center',
+                  lineHeight: 13,
+                  minHeight: 26,
                 }}
               >
-                {util.label}
+                {act.label}
               </Text>
             </Pressable>
           ))}
+
+          {/* More / Less Toggle */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={actionsExpanded ? 'Show fewer actions' : 'Show more actions'}
+            onPress={() => setActionsExpanded((v) => !v)}
+            style={({ pressed }) => ({
+              width: '23%',
+              alignItems: 'center',
+              gap: 5,
+              opacity: pressed ? 0.75 : 1,
+            })}
+          >
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: '#F1F5F9',
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <MaterialIcons
+                name={actionsExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                size={24}
+                color="#475569"
+              />
+            </View>
+            <Text
+              numberOfLines={2}
+              style={{
+                fontSize: 10.5,
+                fontWeight: '700',
+                color: '#475569',
+                textAlign: 'center',
+                lineHeight: 13,
+                minHeight: 26,
+              }}
+            >
+              {actionsExpanded ? 'Less' : 'More'}
+            </Text>
+          </Pressable>
         </View>
 
-        {/* 1-Tap Business Page & WhatsApp Share Strip */}
-        {!!workspace.data?.links?.profile && (
+        {/* Clean Public Business Page Bar */}
+        {!!publicProfileUrl && (
           <View
             style={{
               flexDirection: 'row',
+              alignItems: 'center',
               gap: 8,
-              paddingTop: 10,
-              borderTopWidth: 1,
-              borderTopColor: '#F1F5F9',
+              backgroundColor: '#F8FAFC',
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              borderRadius: 12,
+              paddingHorizontal: 10,
+              paddingVertical: 8,
             }}
           >
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Open your business page"
-              onPress={() => {
-                const raw = workspace.data!.links.profile!;
-                const url = raw.startsWith('http') ? raw : `${BGOS_PUBLIC_WEB_URL}${raw}`;
-                void Linking.openURL(url);
-              }}
-              style={({ pressed }) => ({
-                flex: 1.15,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                backgroundColor: '#F8FAFC',
-                borderWidth: 1,
-                borderColor: '#E2E8F0',
-                paddingVertical: 8,
-                borderRadius: 10,
-                opacity: pressed ? 0.8 : 1,
-              })}
+              onPress={() => void Linking.openURL(publicProfileUrl)}
+              style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}
             >
-              <MaterialIcons name="storefront" size={15} color="#0F172A" />
-              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A' }}>
-                Business Page
+              <MaterialIcons name="language" size={16} color="#0B9042" />
+              <Text numberOfLines={1} style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A', flexShrink: 1 }}>
+                {publicProfileUrl.replace(/^https?:\/\//, '')}
               </Text>
             </Pressable>
 
@@ -1103,27 +1218,24 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Share business page on WhatsApp"
               onPress={() => {
-                const raw = workspace.data!.links.profile!;
-                const url = raw.startsWith('http') ? raw : `${BGOS_PUBLIC_WEB_URL}${raw}`;
                 const msg = encodeURIComponent(
-                  `${profileName} — View services, hours, directions & book online: ${url}`,
+                  `${profileName} — View services, hours, directions & book online: ${publicProfileUrl}`,
                 );
                 void Linking.openURL(`https://wa.me/?text=${msg}`);
               }}
               style={({ pressed }) => ({
-                flex: 1,
                 flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
+                gap: 4,
                 backgroundColor: '#16A34A',
-                paddingVertical: 8,
-                borderRadius: 10,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 8,
                 opacity: pressed ? 0.85 : 1,
               })}
             >
-              <MaterialIcons name="chat" size={14} color="#FFFFFF" />
-              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>
+              <MaterialIcons name="chat" size={13} color="#FFFFFF" />
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
                 WhatsApp
               </Text>
             </Pressable>
@@ -1132,32 +1244,25 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Share business page"
               onPress={() => {
-                const raw = workspace.data!.links.profile!;
-                const url = raw.startsWith('http') ? raw : `${BGOS_PUBLIC_WEB_URL}${raw}`;
                 void Share.share({
                   title: profileName,
-                  message: `${profileName}: ${url}`,
-                  url,
+                  message: `${profileName}: ${publicProfileUrl}`,
+                  url: publicProfileUrl,
                 });
               }}
               style={({ pressed }) => ({
-                paddingHorizontal: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
+                width: 30,
+                height: 30,
+                borderRadius: 8,
                 backgroundColor: '#ECFDF5',
                 borderWidth: 1,
                 borderColor: '#BBF7D0',
-                paddingVertical: 8,
-                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
                 opacity: pressed ? 0.8 : 1,
               })}
             >
               <MaterialIcons name="share" size={15} color="#059669" />
-              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#059669' }}>
-                Share
-              </Text>
             </Pressable>
           </View>
         )}

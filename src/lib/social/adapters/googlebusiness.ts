@@ -1782,6 +1782,132 @@ export async function updateGoogleBusinessProfile(
   return { descriptionApplied, appliedMasks, warnings };
 }
 
+const GBP_PLACE_ACTIONS_API_BASE = 'https://mybusinessplaceactions.googleapis.com/v1';
+
+export type GbpPlaceActionType =
+  | 'APPOINTMENT'
+  | 'ONLINE_ORDERING'
+  | 'FOOD_ORDERING'
+  | 'SHOP_ONLINE';
+
+export interface GbpPlaceActionLinkItem {
+  name: string;
+  placeActionType: string;
+  uri: string;
+}
+
+/**
+ * List existing Place Action Links (Booking, Online Ordering, Food Ordering) on Google Business Profile.
+ */
+export async function listGooglePlaceActions(
+  account: SocialAccountData,
+): Promise<GbpPlaceActionLinkItem[]> {
+  const { locationId } = await extractLocationRef(account);
+  const res = await fetch(
+    `${GBP_PLACE_ACTIONS_API_BASE}/locations/${encodeURIComponent(locationId)}/placeActionLinks`,
+    {
+      headers: {
+        Authorization: `Bearer ${account.accessToken}`,
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(12000),
+    },
+  );
+  if (!res.ok) return [];
+  const data = (await res.json().catch(() => ({}))) as {
+    placeActionLinks?: Array<{ name?: string; placeActionType?: string; uri?: string }>;
+  };
+  return (data.placeActionLinks || [])
+    .filter((l) => l.name && l.placeActionType && l.uri)
+    .map((l) => ({
+      name: String(l.name),
+      placeActionType: String(l.placeActionType),
+      uri: String(l.uri),
+    }));
+}
+
+/**
+ * Create or update a Google Place Action Link (`APPOINTMENT`, `ONLINE_ORDERING`, `FOOD_ORDERING`)
+ * so Google Search & Maps show the owner's BGOS Booking / Ordering URL directly on the profile.
+ */
+export async function upsertGooglePlaceActionLink(
+  account: SocialAccountData,
+  input: { placeActionType: GbpPlaceActionType; uri: string },
+): Promise<{ ok: boolean; linkName?: string; warning?: string }> {
+  try {
+    const cleanUri = input.uri.trim();
+    if (!/^https?:\/\//i.test(cleanUri)) {
+      return { ok: false, warning: `Invalid Place Action URL for ${input.placeActionType}` };
+    }
+    const { locationId } = await extractLocationRef(account);
+    const existing = await listGooglePlaceActions(account);
+    const match = existing.find((l) => l.placeActionType === input.placeActionType);
+
+    if (match) {
+      if (match.uri === cleanUri) {
+        return { ok: true, linkName: match.name };
+      }
+      const res = await fetch(
+        `${GBP_PLACE_ACTIONS_API_BASE}/${match.name}?updateMask=uri,placeActionType`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${account.accessToken}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            uri: cleanUri,
+            placeActionType: input.placeActionType,
+          }),
+          signal: AbortSignal.timeout(12000),
+        },
+      );
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+        return {
+          ok: false,
+          warning: `${input.placeActionType}: ${err.error?.message || `HTTP ${res.status}`}`,
+        };
+      }
+      const updated = (await res.json().catch(() => ({}))) as { name?: string };
+      return { ok: true, linkName: updated.name || match.name };
+    }
+
+    const res = await fetch(
+      `${GBP_PLACE_ACTIONS_API_BASE}/locations/${encodeURIComponent(locationId)}/placeActionLinks`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${account.accessToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          placeActionType: input.placeActionType,
+          uri: cleanUri,
+          isPreferred: true,
+        }),
+        signal: AbortSignal.timeout(12000),
+      },
+    );
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+      return {
+        ok: false,
+        warning: `${input.placeActionType}: ${err.error?.message || `HTTP ${res.status}`}`,
+      };
+    }
+    const created = (await res.json().catch(() => ({}))) as { name?: string };
+    return { ok: true, linkName: created.name };
+  } catch (err) {
+    return {
+      ok: false,
+      warning: `${input.placeActionType}: ${(err as Error).message || 'Sync failed'}`,
+    };
+  }
+}
+
 // ─── Self-register ─────────────────────────────────────────────────────────
 
 registerAdapter(googleBusinessAdapter);

@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
+import { sanitizePublicImageUrl } from '@/lib/bgos-business-sanitizers';
 import { formatCurrency } from '@/lib/currency';
 import { getBrandContext, getBrandContextRaw } from '@/lib/brand-context';
 import {
@@ -57,6 +59,24 @@ export interface BusinessChatbotAutoSyncSummary {
   faqCount: number;
   unansweredPendingCount: number;
   publicCardSlug: string;
+  kbHash?: string;
+}
+
+const LEGACY_TEMPLATE_BOT_NAMES = new Set([
+  'patient intake & consultation booking assistant',
+  'ai concierge',
+  'clara',
+  'customer assistant',
+]);
+
+function toIsoStringSafe(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string' && value.trim()) return value;
+  return new Date().toISOString();
+}
+
+function isStockUnsplashAvatar(url?: string | null): boolean {
+  return typeof url === 'string' && url.toLowerCase().includes('images.unsplash.com/');
 }
 
 export interface PublicBusinessChatbotMeta {
@@ -209,6 +229,33 @@ function buildAutoKnowledgeDocumentText(
     }
   }
 
+  if (profile.products?.length > 0) {
+    lines.push('\nProducts & Items Available:');
+    for (const prod of profile.products) {
+      const priceLabel =
+        prod.price !== null && prod.price > 0
+          ? formatCurrency(prod.price, profile.currency, { compact: true })
+          : 'Price on inquiry';
+      lines.push(
+        `- ${prod.name}${prod.category ? ` [${prod.category}]` : ''}: ${priceLabel}${prod.description ? ` — ${prod.description}` : ''}`,
+      );
+    }
+  }
+
+  const fulfillmentFlags: string[] = [];
+  if (profile.storeSettings?.pickupEnabled) fulfillmentFlags.push('In-store / curbside pickup');
+  if (profile.storeSettings?.deliveryEnabled) {
+    fulfillmentFlags.push(
+      profile.storeSettings.deliveryRadius
+        ? `Local delivery (${profile.storeSettings.deliveryRadius})`
+        : 'Local delivery',
+    );
+  }
+  if (profile.storeSettings?.foodOrderingEnabled) fulfillmentFlags.push('Online food ordering');
+  if (fulfillmentFlags.length > 0) {
+    lines.push(`\nOrdering & Fulfillment Options: ${fulfillmentFlags.join(', ')}`);
+  }
+
   if (brandSummaryText.trim()) {
     lines.push(`\nBrand Identity & Guidelines:\n${brandSummaryText.trim()}`);
   }
@@ -355,6 +402,36 @@ export async function ensureAndSyncBusinessChatbot(
     ]),
   ).filter(Boolean);
 
+  const kbDocText = buildAutoKnowledgeDocumentText(
+    profile,
+    brandContext,
+    mergedFaqs,
+    customInstructions,
+  );
+  const kbHash = createHash('sha256').update(kbDocText).digest('hex');
+  const prevKbHash =
+    typeof existingCfg?.autoSyncSummary?.kbHash === 'string'
+      ? existingCfg.autoSyncSummary.kbHash
+      : null;
+
+  let resolvedKbHash = prevKbHash || undefined;
+  if (!prevKbHash || prevKbHash !== kbHash) {
+    let kbSyncedOk = false;
+    await upsertManagedKnowledgeDocument({
+      tenantId,
+      title: AUTO_KB_TITLE,
+      text: kbDocText,
+      sourceType: 'auto_business_profile',
+    })
+      .then(() => {
+        kbSyncedOk = true;
+      })
+      .catch(() => {});
+    if (kbSyncedOk) {
+      resolvedKbHash = kbHash;
+    }
+  }
+
   const syncedAt = new Date().toISOString();
   const autoSyncSummary: BusinessChatbotAutoSyncSummary = {
     syncedAt,
@@ -367,19 +444,30 @@ export async function ensureAndSyncBusinessChatbot(
     faqCount: mergedFaqs.length,
     unansweredPendingCount: pendingUnanswered.length,
     publicCardSlug: profile.slug,
+    ...(resolvedKbHash ? { kbHash: resolvedKbHash } : {}),
   };
 
   const defaultBotName = `${profile.businessName} Assistant`;
   const defaultGreeting = `Hi! 👋 Welcome to **${profile.businessName}**. Ask me about our services, timings, pricing, or tap **Chat with Owner** anytime.`;
 
-  // Preserve manual edits if the owner already customized bot name/greeting
+  // Preserve manual edits if the owner already customized bot name/greeting,
+  // while upgrading untouched legacy template names (`Patient Intake & Consultation Booking Assistant`, etc.).
   const isCustomName = Boolean(existingCfg.customBotName);
+  const existingRawName = (agentRow?.name || '').trim();
+  const isLegacyTemplateName =
+    !existingRawName || LEGACY_TEMPLATE_BOT_NAMES.has(existingRawName.toLowerCase());
   const resolvedName =
-    agentRow && isCustomName && agentRow.name ? agentRow.name : agentRow?.name || defaultBotName;
+    agentRow && isCustomName && existingRawName
+      ? existingRawName
+      : !isLegacyTemplateName
+        ? existingRawName
+        : defaultBotName;
   const resolvedGreeting =
     agentRow && agentRow.welcomeGreeting && existingCfg.customGreeting
       ? agentRow.welcomeGreeting
-      : agentRow?.welcomeGreeting && agentRow.welcomeGreeting !== DEFAULT_FORM_AGENT.welcomeGreeting
+      : agentRow?.welcomeGreeting &&
+          agentRow.welcomeGreeting !== DEFAULT_FORM_AGENT.welcomeGreeting &&
+          !isLegacyTemplateName
         ? agentRow.welcomeGreeting
         : defaultGreeting;
 
@@ -387,7 +475,13 @@ export async function ensureAndSyncBusinessChatbot(
     (agentRow?.voiceTone as FormAgentData['voiceTone'] | undefined) ||
     mapBrandToneToAgentTone(brandRaw?.tone);
   const resolvedBrandColor = profile.accentColor || agentRow?.brandColor || '#059669';
-  const resolvedAvatar = agentRow?.avatarUrl || profile.logoUrl || '';
+  const sanitizedAgentAvatar = sanitizePublicImageUrl(agentRow?.avatarUrl);
+  const safeAgentAvatar =
+    sanitizedAgentAvatar && !isStockUnsplashAvatar(sanitizedAgentAvatar)
+      ? sanitizedAgentAvatar
+      : null;
+  const safeProfileLogo = sanitizePublicImageUrl(profile.logoUrl);
+  const resolvedAvatar = safeAgentAvatar || safeProfileLogo || '';
   const allowOwnerHandoff = existingCfg.allowOwnerHandoff !== false;
 
   const nextKnowledge: FormAgentData['knowledge'] = {
@@ -443,11 +537,22 @@ export async function ensureAndSyncBusinessChatbot(
       },
     });
   } else {
+    const needsNameUpgrade = agentRow.name !== resolvedName;
+    const needsGreetingUpgrade = agentRow.welcomeGreeting !== resolvedGreeting && isLegacyTemplateName;
+    const existingRawAvatar = agentRow.avatarUrl || '';
+    const existingAvatarUnsafeOrStock =
+      Boolean(existingRawAvatar) &&
+      (!sanitizePublicImageUrl(existingRawAvatar) || isStockUnsplashAvatar(existingRawAvatar));
+    const shouldUpdateAvatar =
+      existingAvatarUnsafeOrStock || (!existingRawAvatar && Boolean(resolvedAvatar));
+
     agentRow = await db.formAgent.update({
       where: { id: agentRow.id },
       data: {
+        ...(needsNameUpgrade ? { name: resolvedName } : {}),
+        ...(needsGreetingUpgrade ? { welcomeGreeting: resolvedGreeting } : {}),
         brandColor: resolvedBrandColor,
-        ...(!agentRow.avatarUrl && resolvedAvatar ? { avatarUrl: resolvedAvatar } : {}),
+        ...(shouldUpdateAvatar ? { avatarUrl: resolvedAvatar } : {}),
         configJson: JSON.stringify({
           ...nextConfigJson,
           id: agentRow.id,
@@ -457,20 +562,6 @@ export async function ensureAndSyncBusinessChatbot(
     });
   }
 
-  // Upsert the single canonical auto-synced KB document for semantic/BM25 RAG
-  const kbDocText = buildAutoKnowledgeDocumentText(
-    profile,
-    brandContext,
-    mergedFaqs,
-    customInstructions,
-  );
-  await upsertManagedKnowledgeDocument({
-    tenantId,
-    title: AUTO_KB_TITLE,
-    text: kbDocText,
-    sourceType: 'auto_business_profile',
-  }).catch(() => {});
-
   const agentData: FormAgentData = {
     ...DEFAULT_FORM_AGENT,
     ...nextConfigJson,
@@ -479,14 +570,17 @@ export async function ensureAndSyncBusinessChatbot(
     slug: agentRow.slug,
     name: agentRow.name,
     roleTitle: agentRow.roleTitle,
-    avatarUrl: agentRow.avatarUrl || resolvedAvatar,
+    avatarUrl:
+      (sanitizePublicImageUrl(agentRow.avatarUrl) && !isStockUnsplashAvatar(agentRow.avatarUrl)
+        ? sanitizePublicImageUrl(agentRow.avatarUrl)
+        : null) || resolvedAvatar,
     statusText: agentRow.statusText || 'Online',
     brandColor: agentRow.brandColor || resolvedBrandColor,
     voiceTone: resolvedTone,
     welcomeGreeting: agentRow.welcomeGreeting || resolvedGreeting,
     greetingSubtitle: agentRow.greetingSubtitle || 'AI Assistant • Live Owner Support',
     knowledge: nextKnowledge,
-    updatedAt: agentRow.updatedAt.toISOString(),
+    updatedAt: toIsoStringSafe(agentRow.updatedAt),
   };
 
   return { agent: agentData, profile, autoSyncSummary };
@@ -507,11 +601,18 @@ export async function getPrimaryBusinessChatbotMeta(
   if (profile.bookingEnabled) quickQuestions.push('Book an appointment');
   if (cfg.allowOwnerHandoff !== false) quickQuestions.push('Chat with business owner');
 
+  const safeAvatar =
+    (sanitizePublicImageUrl(agent.avatarUrl) && !isStockUnsplashAvatar(agent.avatarUrl)
+      ? sanitizePublicImageUrl(agent.avatarUrl)
+      : null) ||
+    sanitizePublicImageUrl(profile.logoUrl) ||
+    null;
+
   return {
     agentId: agent.id,
     agentName: agent.name || `${profile.businessName} Assistant`,
     roleTitle: agent.roleTitle || 'Customer Assistant',
-    avatarUrl: agent.avatarUrl || profile.logoUrl || null,
+    avatarUrl: safeAvatar,
     accentColor: profile.accentColor || agent.brandColor || '#059669',
     welcomeGreeting: agent.welcomeGreeting,
     allowOwnerHandoff: cfg.allowOwnerHandoff !== false,
@@ -599,6 +700,37 @@ function buildDeterministicBusinessAnswer(
   const matchedFaq = findMatchingFaq(faqs, message);
   if (matchedFaq) {
     return { reply: matchedFaq.answer, matched: true };
+  }
+
+  if (/\b(product|item|buy|shop|order|delivery|pickup|takeaway|menu|food|stock)\b/i.test(lower)) {
+    const fulfillmentParts: string[] = [];
+    if (profile.storeSettings?.pickupEnabled) fulfillmentParts.push('Pickup');
+    if (profile.storeSettings?.deliveryEnabled) fulfillmentParts.push('Delivery');
+    if (profile.storeSettings?.foodOrderingEnabled) fulfillmentParts.push('Food Ordering');
+    if (profile.products?.length > 0) {
+      const pLines = profile.products.slice(0, 8).map((p) => {
+        const priceStr =
+          p.price !== null && p.price > 0
+            ? formatCurrency(p.price, profile.currency, { compact: true })
+            : 'Price on inquiry';
+        return `• **${p.name}** — ${priceStr}${p.description ? ` (${p.description.slice(0, 80)})` : ''}`;
+      });
+      const fulfillNote =
+        fulfillmentParts.length > 0
+          ? `\n\n**Fulfillment available:** ${fulfillmentParts.join(' • ')}`
+          : '';
+      return {
+        reply: `Here are the products available at **${profile.businessName}**:\n\n${pLines.join('\n')}${fulfillNote}`,
+        matched: true,
+        showBookingCta: profile.bookingEnabled,
+      };
+    }
+    if (fulfillmentParts.length > 0) {
+      return {
+        reply: `**${profile.businessName}** supports **${fulfillmentParts.join(' & ')}**. Tell us what items you need or tap Order/Inquire on our page!`,
+        matched: true,
+      };
+    }
   }
 
   if (/\b(service|price|pricing|cost|rate|fee|package|menu|offer|charge)\b/i.test(lower)) {
@@ -986,6 +1118,18 @@ export async function answerBusinessChatbotMessage(params: {
       brandContext ? `BRAND CONTEXT:\n${brandContext}` : '',
       `BUSINESS DETAILS:\nName: ${profile.businessName}\nCategory: ${profile.category}\nPhone: ${profile.phone || 'Not listed'}\nWhatsApp: ${profile.whatsappPhone || 'Not listed'}\nEmail: ${profile.email || 'Not listed'}\nAddress: ${profile.address || 'Not listed'}\nHours: ${hoursLines}\nRating: ${profile.rating > 0 ? `${profile.rating.toFixed(1)}/5 (${profile.reviewCount} reviews)` : 'Not yet rated'}`,
       `SERVICES:\n${servicesLines}`,
+      profile.products?.length > 0
+        ? `PRODUCTS:\n${profile.products
+            .slice(0, 15)
+            .map((p) => {
+              const price =
+                p.price !== null && p.price > 0
+                  ? formatCurrency(p.price, profile.currency, { compact: true })
+                  : 'Price on inquiry';
+              return `- ${p.name}: ${price}${p.description ? ` — ${p.description}` : ''}`;
+            })
+            .join('\n')}`
+        : '',
       faqLines ? `TRAINED FAQS:\n${faqLines}` : '',
       ragContext ? `KNOWLEDGE BASE EXCERPTS:\n${ragContext}` : '',
     ]

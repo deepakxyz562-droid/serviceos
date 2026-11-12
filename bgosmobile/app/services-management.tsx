@@ -195,6 +195,27 @@ export default function ServicesManagementScreen() {
     });
   }
 
+  function confirmRemoveService(service: string) {
+    Alert.alert(
+      'Remove service?',
+      `Remove "${service}" from your active services? Save or Push to Google afterward to update your live profile and Business Page.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setSelectedServices((prev) => prev.filter((s) => s !== service));
+            setCustomServices((prev) => prev.filter((s) => s !== service));
+            if (expandedService === service) {
+              setExpandedService(null);
+            }
+          },
+        },
+      ],
+    );
+  }
+
   function handleAddCustomService() {
     const trimmed = customInput.trim();
     if (!trimmed) return;
@@ -525,22 +546,41 @@ export default function ServicesManagementScreen() {
 
             return (
               <View key={name} style={styles.serviceSeoCard}>
-                <Pressable
-                  onPress={() => setExpandedService(isOpen ? null : name)}
-                  style={styles.serviceSeoHeader}
-                >
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={styles.serviceSeoTitle}>{name}</Text>
-                    <View style={[styles.healthPill, { backgroundColor: health.bg }]}>
-                      <Text style={[styles.healthText, { color: health.color }]}>{health.label}</Text>
+                <View style={styles.serviceSeoHeader}>
+                  <Pressable
+                    onPress={() => setExpandedService(isOpen ? null : name)}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                  >
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={styles.serviceSeoTitle}>{name}</Text>
+                      <View style={[styles.healthPill, { backgroundColor: health.bg }]}>
+                        <Text style={[styles.healthText, { color: health.color }]}>{health.label}</Text>
+                      </View>
                     </View>
-                  </View>
-                  <MaterialIcons
-                    name={isOpen ? 'expand-less' : 'expand-more'}
-                    size={22}
-                    color="#64748B"
-                  />
-                </Pressable>
+                    <MaterialIcons
+                      name={isOpen ? 'expand-less' : 'expand-more'}
+                      size={22}
+                      color="#64748B"
+                    />
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${name}`}
+                    onPress={() => confirmRemoveService(name)}
+                    hitSlop={8}
+                    style={({ pressed }) => ({
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: '#FEF2F2',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                  >
+                    <MaterialIcons name="delete-outline" size={18} color="#DC2626" />
+                  </Pressable>
+                </View>
 
                 {isOpen && (
                   <View style={{ gap: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
@@ -586,6 +626,27 @@ export default function ServicesManagementScreen() {
                           setDescriptionsByName((prev) => ({ ...prev, [name]: val }))
                         }
                       />
+                    </View>
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 2 }}>
+                      <Pressable
+                        onPress={() => router.push('/booking-page?tab=services')}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      >
+                        <MaterialIcons name="payments" size={14} color="#0284C7" />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#0284C7' }}>
+                          Set Price & Duration
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => confirmRemoveService(name)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      >
+                        <MaterialIcons name="delete-outline" size={15} color="#DC2626" />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#DC2626' }}>
+                          Remove Service
+                        </Text>
+                      </Pressable>
                     </View>
                   </View>
                 )}

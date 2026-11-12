@@ -104,6 +104,7 @@ export function BgosBusinessChatWidget({
   const [visitorPhone, setVisitorPhone] = useState('');
   const [unreadOwnerCount, setUnreadOwnerCount] = useState(0);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [headerLogoError, setHeaderLogoError] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const lastPollIsoRef = useRef<string | null>(null);
@@ -527,10 +528,11 @@ export function BgosBusinessChatWidget({
             style={{ backgroundColor: accent }}
           >
             <div className="flex min-w-0 items-center gap-3">
-              {profile.logoUrl ? (
+              {profile.logoUrl && !headerLogoError ? (
                 <img
                   src={profile.logoUrl}
                   alt={profile.businessName}
+                  onError={() => setHeaderLogoError(true)}
                   className="h-9 w-9 shrink-0 rounded-full border border-white/25 bg-white object-cover"
                 />
               ) : (

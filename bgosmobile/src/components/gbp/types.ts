@@ -9,6 +9,29 @@ export type StructuredSeoService = {
   syncedToGoogle?: boolean;
 };
 
+export type ReviewReportReason =
+  | 'conflict_of_interest'
+  | 'fake_never_visited'
+  | 'spam_off_topic'
+  | 'harassment_profanity'
+  | 'other';
+
+export type ReviewFlagStatus = 'flagged' | 'appealed_on_google' | 'resolved';
+
+export type ReviewFlagReport = {
+  reason: ReviewReportReason;
+  reasonLabel: string;
+  details: string;
+  flagStatus: ReviewFlagStatus;
+  hideOnPublicPage: boolean;
+  appealText: string;
+  disputeReplyDraft: string;
+  reportedAt: string;
+  reportedBy?: string | null;
+  updatedAt?: string;
+  googleRemovalToolUrl?: string;
+};
+
 export type Review = {
   id: string;
   rating: number;
@@ -21,6 +44,7 @@ export type Review = {
   createdAt?: string;
   createTime?: string;
   publishedAt?: string;
+  flagReport?: ReviewFlagReport | null;
 };
 
 export type ReplyPayload = {

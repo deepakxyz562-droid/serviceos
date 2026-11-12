@@ -1,6 +1,7 @@
 import { serviceInputError } from '../../../../../shared/service-input';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { deriveServiceSlug, syncServiceCatalogAndGbp } from '@/lib/gbp/service-sync';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/services/[id] — Get single service
@@ -60,8 +61,8 @@ export async function PUT(
 
     const updateData: Record<string, unknown> = {};
     const allowedFields = [
-      'name', 'description', 'category', 'basePrice', 'duration',
-      'icon', 'isActive', 'assignedTeamJson', 'addOnsJson',
+      'name', 'description', 'longDescription', 'category', 'basePrice', 'duration',
+      'icon', 'isActive', 'isPublic', 'assignedTeamJson', 'addOnsJson',
       'upsellServiceIdsJson', 'imageUrl', 'tagsJson', 'sortOrder',
       'checklistId',
     ];
@@ -72,8 +73,19 @@ export async function PUT(
           updateData[field] = parseFloat(String(body[field]));
         } else if (field === 'duration' || field === 'sortOrder') {
           updateData[field] = parseInt(String(body[field]));
-        } else if (field === 'isActive') {
+        } else if (field === 'isActive' || field === 'isPublic') {
           updateData[field] = Boolean(body[field]);
+        } else if (field === 'name' && typeof body[field] === 'string') {
+          const cleanName = body[field].trim();
+          updateData.name = cleanName;
+          const nextSlug = deriveServiceSlug(cleanName);
+          if (nextSlug) updateData.slug = nextSlug;
+        } else if (field === 'longDescription' && typeof body[field] === 'string') {
+          const cleanLong = body[field].trim().slice(0, 500);
+          updateData.longDescription = cleanLong || null;
+          if (body.description === undefined && cleanLong) {
+            updateData.description = cleanLong.slice(0, 220);
+          }
         } else {
           updateData[field] = body[field];
         }
@@ -85,10 +97,19 @@ export async function PUT(
       data: updateData,
     });
 
-    const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
-    await ensureAndSyncBusinessChatbot(user.tenantId, { triggerSource: 'service_update' }).catch(() => {});
+    const syncResult = await syncServiceCatalogAndGbp(user.tenantId, {
+      syncToGoogle: body.syncToGoogle !== false,
+      triggerSource: 'service_update',
+    }).catch(() => ({
+      servicesCount: 0,
+      googleSync: { connected: false, attempted: false, synced: false, warnings: [] },
+    }));
 
-    return NextResponse.json(service);
+    return NextResponse.json({
+      ...service,
+      service,
+      googleSync: syncResult.googleSync,
+    });
   } catch (error) {
     console.error('Error updating service:', error);
     return NextResponse.json(
@@ -110,6 +131,12 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const syncToGoogleParam = new URL(request.url).searchParams.get('syncToGoogle');
+    const body = await request.json().catch(() => ({}));
+    const syncToGoogle =
+      syncToGoogleParam !== null
+        ? syncToGoogleParam !== 'false'
+        : body?.syncToGoogle !== false;
 
     const existing = await db.service.findFirst({
       where: { id, tenantId: user.tenantId },
@@ -121,10 +148,15 @@ export async function DELETE(
 
     await db.service.delete({ where: { id } });
 
-    const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
-    await ensureAndSyncBusinessChatbot(user.tenantId, { triggerSource: 'service_delete' }).catch(() => {});
+    const syncResult = await syncServiceCatalogAndGbp(user.tenantId, {
+      syncToGoogle,
+      triggerSource: 'service_delete',
+    }).catch(() => ({
+      servicesCount: 0,
+      googleSync: { connected: false, attempted: false, synced: false, warnings: [] },
+    }));
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, googleSync: syncResult.googleSync });
   } catch (error) {
     console.error('Error deleting service:', error);
     return NextResponse.json(

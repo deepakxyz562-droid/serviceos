@@ -34,7 +34,7 @@ function parseDocToItem(doc: {
   title: string;
   content: string;
   status: string;
-  updatedAt: Date;
+  updatedAt: Date | string;
 }): UnansweredQuestionItem {
   let payload: Record<string, any> = {};
   try {
@@ -45,12 +45,18 @@ function parseDocToItem(doc: {
   }
   const status: UnansweredQuestionItem['status'] =
     doc.status === 'resolved' || doc.status === 'ignored' ? doc.status : 'pending';
+  const docUpdatedAt =
+    doc.updatedAt instanceof Date
+      ? doc.updatedAt.toISOString()
+      : typeof doc.updatedAt === 'string' && doc.updatedAt.trim()
+        ? doc.updatedAt
+        : new Date().toISOString();
   return {
     id: doc.id,
     scopeId: doc.tenantId || 'default',
     question: String(payload.question || doc.title.replace(/^Unanswered:\s*/i, '')).trim(),
     count: typeof payload.count === 'number' && payload.count > 0 ? payload.count : 1,
-    lastAskedAt: String(payload.lastAskedAt || doc.updatedAt.toISOString()),
+    lastAskedAt: String(payload.lastAskedAt || docUpdatedAt),
     suggestedAnswer: typeof payload.suggestedAnswer === 'string' ? payload.suggestedAnswer : undefined,
     status,
     source: payload.source || 'chat',

@@ -26,6 +26,15 @@ interface StandeeTemplate {
   cardBorder: string;
 }
 
+type QrTargetKey = 'review' | 'page' | 'maps';
+
+interface QrTargetEntry {
+  url: string;
+  qrDataUrl: string;
+  headline?: string;
+  subheadline?: string;
+}
+
 interface StandeeData {
   businessName: string;
   tagline: string;
@@ -33,8 +42,11 @@ interface StandeeData {
   totalReviews: number;
   phone: string;
   address: string;
-  reviewUrl: string;
+  reviewUrl?: string;
+  pageUrl?: string;
+  mapsUrl?: string;
   qrDataUrl: string;
+  targets?: Record<QrTargetKey, QrTargetEntry>;
   defaultSvg: string;
   logoUrl?: string | null;
   headline?: string;
@@ -104,6 +116,7 @@ export default function QrStandeeScreen() {
   // Customization state
   const [selectedTemplateId, setSelectedTemplateId] = useState('google_grexa_standee');
   const [selectedSize, setSelectedSize] = useState<'a5' | 'table_tent' | 'square_badge'>('a5');
+  const [qrTarget, setQrTarget] = useState<QrTargetKey>('review');
   const [headline, setHeadline] = useState('Scan to Rate Us on Google');
   const [subheadline, setSubheadline] = useState('Your feedback helps our team grow!');
   const [showRating, setShowRating] = useState(true);
@@ -185,6 +198,7 @@ export default function QrStandeeScreen() {
         body: {
           templateId: selectedTemplateId,
           size: selectedSize,
+          target: qrTarget,
           headline,
           subheadline,
           showRating,
@@ -201,10 +215,10 @@ export default function QrStandeeScreen() {
           {
             text: 'Share / Print',
             onPress: () => {
-              if (data?.reviewUrl) {
+              if (activeTargetUrl) {
                 void Share.share({
-                  title: `${data.businessName} - Google Review Standee`,
-                  message: `Google Review Standee for ${data.businessName}:\nScan QR code or click: ${data.reviewUrl}`,
+                  title: `${data?.businessName || 'Business'} - QR Standee`,
+                  message: `QR Standee for ${data?.businessName || 'our business'}:\nScan QR code or click: ${activeTargetUrl}`,
                 });
               }
             },
@@ -212,18 +226,18 @@ export default function QrStandeeScreen() {
         ]
       );
     } catch (e: any) {
-      if (data?.reviewUrl) {
+      if (activeTargetUrl) {
         Alert.alert(
           'Standee Ready',
-          `Your Google review link is ready: ${data.reviewUrl}`,
+          `Your QR link is ready: ${activeTargetUrl}`,
           [
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Share Link',
               onPress: () => {
                 void Share.share({
-                  title: `${data.businessName} - Google Review Standee`,
-                  message: `Please review ${data.businessName} on Google: ${data.reviewUrl}`,
+                  title: `${data?.businessName || 'Business'} - QR Standee`,
+                  message: `Scan or visit ${data?.businessName || 'our business'}: ${activeTargetUrl}`,
                 });
               },
             },
@@ -238,13 +252,39 @@ export default function QrStandeeScreen() {
   };
 
   const handleShareLink = async () => {
-    if (!data?.reviewUrl) return;
+    if (!activeTargetUrl) return;
     try {
       await Share.share({
-        message: `Please take 15 seconds to review ${data.businessName} on Google: ${data.reviewUrl}`,
-        url: data.reviewUrl,
+        message: `${qrTarget === 'review' ? 'Please take 15 seconds to review' : 'Visit'} ${data?.businessName || 'us'}: ${activeTargetUrl}`,
+        url: activeTargetUrl,
       });
     } catch {}
+  };
+
+  const activeTargetEntry = data?.targets?.[qrTarget];
+  const activeTargetUrl =
+    activeTargetEntry?.url ||
+    (qrTarget === 'page'
+      ? data?.pageUrl
+      : qrTarget === 'maps'
+        ? data?.mapsUrl
+        : data?.reviewUrl) ||
+    data?.reviewUrl ||
+    '';
+  const activeQrDataUrl = activeTargetEntry?.qrDataUrl || data?.qrDataUrl || '';
+
+  const selectQrTarget = (next: QrTargetKey) => {
+    setQrTarget(next);
+    const meta = data?.targets?.[next];
+    if (meta?.headline) setHeadline(meta.headline);
+    else if (next === 'page') setHeadline('Scan to Book & Order Online');
+    else if (next === 'maps') setHeadline('Scan to Find Us on Google Maps');
+    else setHeadline('Scan to Rate Us on Google');
+
+    if (meta?.subheadline) setSubheadline(meta.subheadline);
+    else if (next === 'page') setSubheadline('Browse services, products & chat instantly!');
+    else if (next === 'maps') setSubheadline('Directions, photos, hours & Google profile');
+    else setSubheadline('Your feedback helps our team grow!');
   };
 
   const currentTemplate = data?.templates?.find((t) => t.id === selectedTemplateId) || {
@@ -272,6 +312,59 @@ export default function QrStandeeScreen() {
         </View>
       ) : (
         <View style={{ gap: 16 }}>
+          {/* 0. QR TARGET DESTINATION SWITCHER */}
+          <Card style={{ gap: 8 }}>
+            <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.ink }}>
+              What should customers scan to open?
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(
+                [
+                  { id: 'review', label: 'Google Review', icon: 'star' },
+                  { id: 'page', label: 'Book & Order Page', icon: 'storefront' },
+                  { id: 'maps', label: 'Google Maps', icon: 'place' },
+                ] as const
+              ).map((opt) => {
+                const selected = qrTarget === opt.id;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    onPress={() => selectQrTarget(opt.id)}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 5,
+                      paddingVertical: 9,
+                      paddingHorizontal: 6,
+                      borderRadius: 10,
+                      backgroundColor: selected ? '#0F172A' : '#F8FAFC',
+                      borderWidth: 1,
+                      borderColor: selected ? '#0F172A' : '#E2E8F0',
+                    }}
+                  >
+                    <MaterialIcons
+                      name={opt.icon}
+                      size={14}
+                      color={selected ? '#FFFFFF' : '#475569'}
+                    />
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: '700',
+                        color: selected ? '#FFFFFF' : '#334155',
+                      }}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Card>
+
           {/* 1. LIVE STANDEE PREVIEW CARD */}
           <Card
             style={{
@@ -390,9 +483,9 @@ export default function QrStandeeScreen() {
                   </>
                 ) : null}
 
-                {data?.qrDataUrl ? (
+                {activeQrDataUrl ? (
                   <Image
-                    source={{ uri: data.qrDataUrl }}
+                    source={{ uri: activeQrDataUrl }}
                     style={{ width: 170, height: 170 }}
                     resizeMode="contain"
                   />
