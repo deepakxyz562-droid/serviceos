@@ -198,6 +198,10 @@ export async function PATCH(request: NextRequest) {
 
     const updated = await db.tenant.updateMany({ where: { id: user.tenantId, settingsJson: tenant.settingsJson }, data: updateData });
     if (!updated.count) return NextResponse.json({ error: 'Settings changed in another session. Refresh and retry.' }, { status: 409 });
+
+    const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
+    await ensureAndSyncBusinessChatbot(user.tenantId, { triggerSource: 'workspace_update' }).catch(() => {});
+
     return NextResponse.json({ success: true });
   } catch { return NextResponse.json({ error: 'Could not save workspace settings' }, { status: 503 }); }
 }

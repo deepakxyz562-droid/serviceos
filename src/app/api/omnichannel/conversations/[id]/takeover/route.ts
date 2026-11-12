@@ -16,8 +16,33 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       aiPaused: body.aiPaused,
       tookOverById: body.aiPaused ? user.id : null,
       tookOverAt: body.aiPaused ? new Date() : null,
-    }, select: { id: true, aiPaused: true } });
-    return NextResponse.json(updated, { headers: { 'Cache-Control': 'no-store' } });
+    }, select: { id: true, aiPaused: true, conversationId: true } });
+
+    if (updated.conversationId.startsWith('live_chat_')) {
+      const { mirrorInboxReplyToLiveChat, extractLiveChatSessionId } = await import('@/lib/live-chat-bridge');
+      const ownerLabel = user.name?.trim() || 'Business Owner';
+      await mirrorInboxReplyToLiveChat({
+        conversationId: updated.conversationId,
+        senderType: 'system',
+        senderId: user.id,
+        senderName: ownerLabel,
+        body: body.aiPaused
+          ? `${ownerLabel} joined the chat.`
+          : 'AI Assistant resumed the conversation.',
+      }).catch(() => null);
+
+      const sessionId = extractLiveChatSessionId(updated.conversationId);
+      if (sessionId) {
+        await db.publicChatSession
+          .updateMany({
+            where: { id: sessionId },
+            data: { status: body.aiPaused ? 'claimed' : 'active' },
+          })
+          .catch(() => {});
+      }
+    }
+
+    return NextResponse.json({ id: updated.id, aiPaused: updated.aiPaused }, { headers: { 'Cache-Control': 'no-store' } });
   } catch {
     return NextResponse.json({ error: 'Could not update conversation. Please retry.' }, { status: 500 });
   }

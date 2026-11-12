@@ -132,7 +132,7 @@ const MORE_TOOLS: {
   { label: 'Submissions', route: '/submissions', icon: 'assignment' },
   { label: 'GBP Hub', route: '/growth', icon: 'hub' },
   { label: 'Booking Setup', route: '/booking-page', icon: 'event-available' },
-  { label: 'AI Agents', route: '/agents', icon: 'smart-toy' },
+  { label: 'Train AI Chatbot', route: '/agents', icon: 'smart-toy' },
   { label: 'Integrations', route: '/integrations', icon: 'extension' },
   { label: 'My Plan', route: '/my-plan', icon: 'credit-card' },
   { label: 'Help & FAQ', route: '/help', icon: 'help-outline' },

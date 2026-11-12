@@ -215,6 +215,29 @@ export async function POST(request: NextRequest) {
     if (existing && existing.tenantId !== user.tenantId) return NextResponse.json({error: 'Assistant not found'}, {status: 404});
     if (existing && body.updatedAt && toIsoString(existing.updatedAt) !== body.updatedAt) return NextResponse.json({error: 'This assistant has changed. Reload before saving.'}, {status: 409});
     if (existing) {
+      let existingConfig: Record<string, any> = {};
+      try {
+        existingConfig = existing.configJson ? JSON.parse(existing.configJson) : {};
+      } catch {
+        existingConfig = {};
+      }
+      const nextKnowledge = {
+        ...(existingConfig.knowledge || {}),
+        ...(body.knowledge || {}),
+      };
+      const mergedConfig = {
+        ...existingConfig,
+        ...body,
+        id: existing.id,
+        slug: body.slug || existing.slug,
+        avatarUrl: effectiveAvatar || existing.avatarUrl || '',
+        brandColor: effectiveBrandColor,
+        style: mergedStyle,
+        knowledge: nextKnowledge,
+        customBotName: existingConfig.customBotName || name !== existing.name,
+        customGreeting: existingConfig.customGreeting || (welcomeGreeting && welcomeGreeting !== existing.welcomeGreeting),
+      };
+
       const updated = await db.formAgent.update({
         where: { id: existing.id, tenantId: user.tenantId, updatedAt: existing.updatedAt },
         data: {
@@ -222,31 +245,31 @@ export async function POST(request: NextRequest) {
           slug: body.slug || existing.slug,
           name,
           roleTitle: roleTitle || 'AI Assistant',
-          avatarUrl: effectiveAvatar,
+          avatarUrl: effectiveAvatar || existing.avatarUrl || '',
           statusText: statusText || 'Online',
           brandColor: effectiveBrandColor,
           voiceTone: voiceTone || 'friendly',
           welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
           greetingSubtitle: greetingSubtitle || null,
-          configJson: JSON.stringify({
-            ...body,
-            id: existing.id,
-            slug: body.slug || existing.slug,
-            avatarUrl: effectiveAvatar,
-            brandColor: effectiveBrandColor,
-            style: mergedStyle,
-          }),
+          configJson: JSON.stringify(mergedConfig),
         },
       });
+
+      if (validTenantId || existing.tenantId) {
+        const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
+        await ensureAndSyncBusinessChatbot(validTenantId || existing.tenantId!, {
+          triggerSource: 'agent_save',
+        }).catch(() => {});
+      }
 
       return NextResponse.json({
         success: true,
         agent: {
-          ...body,
+          ...mergedConfig,
           id: updated.id,
           slug: updated.slug,
-          avatarUrl: effectiveAvatar,
-          brandColor: effectiveBrandColor,
+          avatarUrl: updated.avatarUrl,
+          brandColor: updated.brandColor,
           style: mergedStyle,
           updatedAt: toIsoString(updated.updatedAt),
         },

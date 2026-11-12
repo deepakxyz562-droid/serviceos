@@ -18,6 +18,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Screen, colors } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
+import { applyWorkspaceSession, type SessionResponse } from '../src/stores/auth-store';
+import type { WorkspaceListItem } from '../src/components/navigation/workspace-switcher-section';
 import { apiRequest } from '../src/lib/api';
 import { getToken } from '../src/lib/auth';
 import { WEB_URL } from '../src/lib/constants';
@@ -336,6 +338,148 @@ export default function SelectProfileScreen() {
     }
   }
 
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [newWorkspaceModalOpen, setNewWorkspaceModalOpen] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [newWorkspaceCategory, setNewWorkspaceCategory] = useState('');
+  const [newWorkspaceCity, setNewWorkspaceCity] = useState('');
+
+  const discoverExtra = (discover.data || {}) as {
+    boundProfileId?: string | null;
+    hasWorkspaceActivity?: boolean;
+    workspaceActivityReason?: string | null;
+    workspaces?: WorkspaceListItem[];
+  };
+  const boundProfileId = discoverExtra.boundProfileId || null;
+  const hasWorkspaceActivity = Boolean(discoverExtra.hasWorkspaceActivity);
+  const workspaces = Array.isArray(discoverExtra.workspaces) ? discoverExtra.workspaces : [];
+
+  async function handleSwitchExistingWorkspace(workspaceId: string, label?: string) {
+    if (switchingId || creatingWorkspace) return;
+    setSwitchingId(workspaceId);
+    try {
+      const session = await apiRequest<SessionResponse & { success?: boolean }>(
+        '/api/bgos/workspaces/switch',
+        {
+          method: 'POST',
+          body: { workspaceId },
+        },
+      );
+      if (session?.user && session?.token) {
+        await applyWorkspaceSession(session);
+      }
+      setStatusNotice(`✓ Switched to ${label || 'business workspace'}`);
+      router.replace('/(tabs)');
+    } catch (e) {
+      Alert.alert(
+        'Switch Failed',
+        e instanceof Error ? e.message : 'Could not switch business workspace.',
+      );
+    } finally {
+      setSwitchingId(null);
+    }
+  }
+
+  async function handleCreateSeparateWorkspace(params: {
+    businessName: string;
+    profileId?: string | null;
+    category?: string | null;
+    city?: string | null;
+    services?: string[];
+  }) {
+    if (creatingWorkspace) return;
+    setCreatingWorkspace(true);
+    try {
+      const res = await apiRequest<SessionResponse & { success?: boolean; workspace?: WorkspaceListItem }>(
+        '/api/bgos/workspaces',
+        {
+          method: 'POST',
+          body: {
+            businessName: params.businessName,
+            profileId: params.profileId || undefined,
+            category: params.category || undefined,
+            city: params.city || undefined,
+            services: params.services && params.services.length > 0 ? params.services : undefined,
+          },
+        },
+      );
+      if (res?.user && res?.token) {
+        await applyWorkspaceSession(res);
+      }
+      setNewWorkspaceModalOpen(false);
+      setNewWorkspaceName('');
+      setNewWorkspaceCategory('');
+      setNewWorkspaceCity('');
+      router.replace('/(tabs)');
+    } catch (e) {
+      Alert.alert(
+        'Could Not Create Workspace',
+        e instanceof Error ? e.message : 'Failed to create dedicated business workspace.',
+      );
+    } finally {
+      setCreatingWorkspace(false);
+    }
+  }
+
+  function handleSelectProfileRow(p: any) {
+    if (p.isBoundToOtherWorkspace && p.boundWorkspaceId) {
+      Alert.alert(
+        `Switch to ${p.boundBusinessName || p.name}?`,
+        `This Google Business already has its own dedicated workspace (${String(p.boundPlanTier || 'free').toUpperCase()} plan). Switch to manage it without mixing data.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Switch Workspace',
+            onPress: () => void handleSwitchExistingWorkspace(p.boundWorkspaceId, p.boundBusinessName || p.name),
+          },
+        ],
+      );
+      return;
+    }
+
+    if (boundProfileId && boundProfileId !== p.id) {
+      Alert.alert(
+        'Separate Workspace Required',
+        hasWorkspaceActivity
+          ? `Your current workspace already has live data (${discoverExtra.workspaceActivityReason || 'activity'}). Each business gets its own isolated CRM, page URL, AI chatbot & subscription.\n\nCreate a dedicated workspace for "${p.name}"?`
+          : `Your current workspace is already linked to another Google Business. Create a separate workspace for "${p.name}"?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Create Business Workspace',
+            onPress: () =>
+              void handleCreateSeparateWorkspace({
+                businessName: p.name,
+                profileId: p.id,
+                category: p.category || null,
+              }),
+          },
+        ],
+      );
+      return;
+    }
+
+    handleCardPress(p);
+  }
+
+  async function handleConfirmOrCreateFromModal(
+    p: any,
+    name: string,
+    category: string,
+    offeringsList: string[],
+  ) {
+    if (boundProfileId && boundProfileId !== p.id) {
+      await handleCreateSeparateWorkspace({
+        businessName: name || p.name,
+        profileId: p.id,
+        category: category || p.category,
+        services: offeringsList,
+      });
+      return;
+    }
+    await handleConfirmProfile(p, name, category, offeringsList);
+  }
+
   return (
     <Screen
       title="Select profile"
@@ -395,6 +539,72 @@ export default function SelectProfileScreen() {
           </View>
         )}
 
+        {/* Active Business Workspaces Switcher (1 Business = 1 Workspace & Subscription) */}
+        {workspaces.length > 0 && (
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              padding: 14,
+              gap: 10,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View>
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                  Your Business Workspaces ({workspaces.length})
+                </Text>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>
+                  Each business gets its own CRM, page URL, chatbot &amp; plan
+                </Text>
+              </View>
+            </View>
+            <View style={{ gap: 6 }}>
+              {workspaces.map((ws) => (
+                <Pressable
+                  key={ws.workspaceId}
+                  accessibilityRole="button"
+                  disabled={Boolean(switchingId || creatingWorkspace)}
+                  onPress={() => {
+                    if (!ws.isCurrent) void handleSwitchExistingWorkspace(ws.workspaceId, ws.name);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    backgroundColor: ws.isCurrent ? '#F0FDF4' : '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: ws.isCurrent ? '#86EFAC' : '#E2E8F0',
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>
+                      {ws.name}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#64748B' }} numberOfLines={1}>
+                      {ws.planTier.toUpperCase()} Plan · /{ws.slug}
+                    </Text>
+                  </View>
+                  {ws.isCurrent ? (
+                    <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#16A34A' }}>Active</Text>
+                    </View>
+                  ) : (
+                    <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB' }}>Switch</Text>
+                    </View>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Profiles Card */}
         <View
           style={{
@@ -416,7 +626,7 @@ export default function SelectProfileScreen() {
               </Text>
             </View>
           ) : (
-            profiles.map((p, idx) => {
+            profiles.map((p: any, idx) => {
               const isSelected = p.id === activeId;
               const isSwitching = switchingId === p.id;
               const colorScheme = AVATAR_COLORS[p.initial] || { bg: '#F1F5F9', text: '#0F172A' };
@@ -426,7 +636,7 @@ export default function SelectProfileScreen() {
                 <Pressable
                   key={p.id}
                   accessibilityRole="button"
-                  onPress={() => handleCardPress(p)}
+                  onPress={() => handleSelectProfileRow(p)}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -489,6 +699,10 @@ export default function SelectProfileScreen() {
                       </View>
                       <MaterialIcons name="edit" size={17} color="#16A34A" />
                     </View>
+                  ) : p.isBoundToOtherWorkspace ? (
+                    <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB' }}>Switch</Text>
+                    </View>
                   ) : (
                     <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
                   )}
@@ -499,6 +713,28 @@ export default function SelectProfileScreen() {
         </View>
 
         {/* Connection Action Section */}
+        <Pressable
+          accessibilityRole="button"
+          disabled={creatingWorkspace}
+          onPress={() => setNewWorkspaceModalOpen(true)}
+          style={({ pressed }) => ({
+            width: '100%',
+            height: 48,
+            borderRadius: 14,
+            backgroundColor: '#0F172A',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            opacity: pressed || creatingWorkspace ? 0.8 : 1,
+          })}
+        >
+          <MaterialIcons name="add-business" size={20} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>
+            Add Another Business Workspace
+          </Text>
+        </Pressable>
+
         {isConnected ? (
           <View style={{ gap: 8 }}>
             <Pressable
@@ -1167,10 +1403,10 @@ export default function SelectProfileScreen() {
             <View style={{ gap: 10, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
               <Pressable
                 accessibilityRole="button"
-                disabled={Boolean(switchingId)}
+                disabled={Boolean(switchingId || creatingWorkspace)}
                 onPress={() => {
                   if (verifyModalProfile) {
-                    void handleConfirmProfile(
+                    void handleConfirmOrCreateFromModal(
                       verifyModalProfile,
                       editName,
                       editCategory,
@@ -1184,10 +1420,10 @@ export default function SelectProfileScreen() {
                   borderRadius: 14,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  opacity: switchingId ? 0.7 : 1,
+                  opacity: switchingId || creatingWorkspace ? 0.7 : 1,
                 })}
               >
-                {switchingId ? (
+                {switchingId || creatingWorkspace ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <ActivityIndicator size="small" color="#FFFFFF" />
                     <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
@@ -1196,17 +1432,27 @@ export default function SelectProfileScreen() {
                   </View>
                 ) : (
                   <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
-                    Confirm &amp; Set Active Profile
+                    {verifyModalProfile && boundProfileId && boundProfileId !== verifyModalProfile.id
+                      ? 'Create Workspace & Activate'
+                      : 'Confirm & Set Active Profile'}
                   </Text>
                 )}
               </Pressable>
 
               <Pressable
                 accessibilityRole="button"
-                disabled={Boolean(switchingId)}
+                disabled={Boolean(switchingId || creatingWorkspace)}
                 onPress={() => {
                   if (verifyModalProfile) {
-                    void handleQuickSelect(verifyModalProfile);
+                    if (boundProfileId && boundProfileId !== verifyModalProfile.id) {
+                      void handleCreateSeparateWorkspace({
+                        businessName: verifyModalProfile.name,
+                        profileId: verifyModalProfile.id,
+                        category: verifyModalProfile.category || null,
+                      });
+                    } else {
+                      void handleQuickSelect(verifyModalProfile);
+                    }
                   }
                 }}
                 style={({ pressed }) => ({
@@ -1221,6 +1467,131 @@ export default function SelectProfileScreen() {
                 </Text>
               </Pressable>
             </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Create Dedicated Business Workspace Modal */}
+      <Modal
+        visible={newWorkspaceModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setNewWorkspaceModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 20,
+              gap: 14,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A' }}>
+                Add Business Workspace
+              </Text>
+              <Pressable onPress={() => setNewWorkspaceModalOpen(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={22} color="#64748B" />
+              </Pressable>
+            </View>
+            <Text style={{ fontSize: 12.5, color: '#64748B', lineHeight: 18 }}>
+              Each business runs in an isolated workspace with its own Google location, public card URL (/b/...), auto-trained AI chatbot, CRM leads, and subscription (starts Free).
+            </Text>
+
+            <View style={{ gap: 10 }}>
+              <View style={{ gap: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Business Name *</Text>
+                <TextInput
+                  value={newWorkspaceName}
+                  onChangeText={setNewWorkspaceName}
+                  placeholder="e.g. Royal Unisex Salon"
+                  placeholderTextColor="#94A3B8"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 11,
+                    fontSize: 14,
+                    color: '#0F172A',
+                    backgroundColor: '#F8FAFC',
+                  }}
+                />
+              </View>
+
+              <View style={{ gap: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Category</Text>
+                <TextInput
+                  value={newWorkspaceCategory}
+                  onChangeText={setNewWorkspaceCategory}
+                  placeholder="e.g. Hair Salon, Dental Clinic, Plumber"
+                  placeholderTextColor="#94A3B8"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 11,
+                    fontSize: 14,
+                    color: '#0F172A',
+                    backgroundColor: '#F8FAFC',
+                  }}
+                />
+              </View>
+
+              <View style={{ gap: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>City</Text>
+                <TextInput
+                  value={newWorkspaceCity}
+                  onChangeText={setNewWorkspaceCity}
+                  placeholder="e.g. Patna, Noida, Austin"
+                  placeholderTextColor="#94A3B8"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 11,
+                    fontSize: 14,
+                    color: '#0F172A',
+                    backgroundColor: '#F8FAFC',
+                  }}
+                />
+              </View>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              disabled={!newWorkspaceName.trim() || creatingWorkspace}
+              onPress={() =>
+                void handleCreateSeparateWorkspace({
+                  businessName: newWorkspaceName.trim(),
+                  category: newWorkspaceCategory.trim() || null,
+                  city: newWorkspaceCity.trim() || null,
+                })
+              }
+              style={{
+                backgroundColor: !newWorkspaceName.trim() || creatingWorkspace ? '#94A3B8' : '#16A34A',
+                paddingVertical: 14,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 4,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+                {creatingWorkspace ? 'Creating Business Workspace...' : 'Create Free Business Workspace'}
+              </Text>
+            </Pressable>
           </View>
         </KeyboardAvoidingView>
       </Modal>

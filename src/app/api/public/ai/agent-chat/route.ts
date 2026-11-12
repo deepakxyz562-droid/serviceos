@@ -429,16 +429,36 @@ export async function POST(req: NextRequest) {
     // 3. Fetch Existing Business Services & Today's Open Slots
     //    (tenant-scoped only — standalone forms don't have a CRM service catalog)
     const todayStr = new Date().toISOString().split('T')[0];
-    const services = tenantId
-      ? await db.serviceItem.findMany({
-          where: { tenantId },
-          select: { name: true, description: true, defaultPrice: true },
-          take: 8,
-        }).catch(() => [])
-      : [];
+    const [serviceItems, bgosServices] = tenantId
+      ? await Promise.all([
+          db.serviceItem.findMany({
+            where: { tenantId },
+            select: { name: true, description: true, defaultPrice: true },
+            take: 8,
+          }).catch(() => []),
+          db.service.findMany({
+            where: { tenantId, isActive: true },
+            select: { name: true, description: true, basePrice: true, duration: true },
+            take: 15,
+          }).catch(() => []),
+        ])
+      : [[], []];
 
-    const servicesList = services.length > 0
-      ? services.map((s) => `- ${s.name} ($${s.defaultPrice || 'Custom Quote'}): ${s.description || ''}`).join('\n')
+    const mergedServices = [
+      ...bgosServices.map((s) => ({
+        name: s.name,
+        description: s.description,
+        price: s.basePrice > 0 ? s.basePrice : null,
+      })),
+      ...serviceItems.map((s) => ({
+        name: s.name,
+        description: s.description,
+        price: s.defaultPrice || null,
+      })),
+    ].slice(0, 15);
+
+    const servicesList = mergedServices.length > 0
+      ? mergedServices.map((s) => `- ${s.name} (${s.price ?? 'Custom Quote'}): ${s.description || ''}`).join('\n')
       : 'Services: Not yet configured — check our website or knowledge base for details.';
 
     // Fetch synced E-commerce products (Shopify / Store catalog / WhatsApp Commerce)

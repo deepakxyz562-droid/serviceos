@@ -396,7 +396,7 @@ export async function GET(
   try {
     const session = await db.publicChatSession.findUnique({
       where: { id: sessionId },
-      select: { id: true, tenantId: true },
+      select: { id: true, tenantId: true, status: true },
     })
     if (!session) {
       return NextResponse.json(
@@ -404,6 +404,13 @@ export async function GET(
         { status: 404, headers: CORS_HEADERS },
       )
     }
+
+    const linkedConversation = await db.conversation
+      .findFirst({
+        where: { conversationId: `live_chat_${sessionId}` },
+        select: { aiPaused: true },
+      })
+      .catch(() => null)
 
     // Fetch messages after `since` (or all), ordered ASC.
     const messages = await db.publicChatMessage.findMany({
@@ -445,7 +452,12 @@ export async function GET(
       // presence API without an extra round-trip — needed when the visitor
       // restored an existing session from localStorage and never re-POSTed
       // to /session.
-      { messages, tenantId: session.tenantId },
+      {
+        messages,
+        tenantId: session.tenantId,
+        sessionStatus: session.status,
+        aiPaused: linkedConversation?.aiPaused ?? false,
+      },
       { headers: CORS_HEADERS },
     )
   } catch (err) {

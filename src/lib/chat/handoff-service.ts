@@ -256,7 +256,8 @@ export async function requestHumanHandoff(
           inboxTenantId,
           visitorName,
           visitorPhone,
-          visitorEmail
+          visitorEmail,
+          effectiveWorkspaceId,
         );
       } catch (bridgeErr) {
         console.warn('[handoff-service] Failed to create live chat conversation bridge:', bridgeErr);

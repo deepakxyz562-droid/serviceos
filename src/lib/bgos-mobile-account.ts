@@ -229,25 +229,62 @@ export async function resolveBgosMobileAccount(userId: string, workspaceId?: str
     }
   }
 
-  let workspace = user.workspace;
+  let workspace: any = user.workspace;
+  if (workspaceId && (!workspace || workspace.id !== workspaceId)) {
+    const ownedWorkspace =
+      typeof (db as any).workspace?.findFirst === 'function'
+        ? await db.workspace
+            .findFirst({
+              where: { id: workspaceId, ownerId: userId },
+              include: { tenant: true },
+            })
+            .catch(() => null)
+        : null;
+    if (ownedWorkspace) {
+      workspace = ownedWorkspace;
+    } else if (typeof (db as any).productMembership?.findFirst === 'function') {
+      const membership = await db.productMembership
+        .findFirst({
+          where: { workspaceId, userId, status: 'active' },
+          select: { workspaceId: true },
+        })
+        .catch(() => null);
+      if (membership && typeof (db as any).workspace?.findUnique === 'function') {
+        workspace = await db.workspace
+          .findUnique({ where: { id: workspaceId }, include: { tenant: true } })
+          .catch(() => null);
+      }
+    }
+  }
   if (!workspace && user.tenantId) {
     workspace = await db.workspace.findFirst({ where: { tenantId: user.tenantId } });
   }
-  if (!user.tenantId || user.tenant?.suspendedAt || (workspaceId && workspace && workspace.id !== workspaceId) || !isBgosIdentity({ user, workspace })) {
+  const effectiveTenantId = workspace?.tenantId || user.tenantId;
+  const effectiveTenant = workspace?.tenant || user.tenant;
+  if (
+    !effectiveTenantId ||
+    effectiveTenant?.suspendedAt ||
+    (workspaceId && workspace && workspace.id !== workspaceId) ||
+    !isBgosIdentity({ user, workspace })
+  ) {
     throw new ProductAccessError('BGOS_REQUIRED', 403);
   }
 
   const effectiveProduct = workspace?.productType || 'bgos';
   const gbpCount = await db.socialAccount.count({
     where: {
-      tenantId: user.tenantId,
+      tenantId: effectiveTenantId,
       platform: 'googlebusiness',
       isActive: true,
     },
   });
-  const onboardingRequired = !user.tenant?.onboardingCompleted && gbpCount === 0;
+  const onboardingRequired = !effectiveTenant?.onboardingCompleted && gbpCount === 0;
   return {
-    user: { ...user, workspaceId: workspace?.id || user.workspaceId },
+    user: {
+      ...user,
+      tenantId: effectiveTenantId,
+      workspaceId: workspace?.id || user.workspaceId,
+    },
     workspace: { id: workspace?.id || 'default_bgos', productType: effectiveProduct, name: workspace?.name || 'BGOS' },
     onboardingRequired,
   };

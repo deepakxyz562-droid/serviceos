@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { permanentRedirect } from 'next/navigation';
 import { BgosPublicBusinessPage } from '@/components/bgos/bgos-public-business-page';
+import { getPrimaryBusinessChatbotMeta } from '@/lib/bgos-business-chatbot';
 import { StructuredData } from '@/components/seo/structured-data';
 import { shouldRenderBgosCardHost } from '@/lib/bgos-business-sanitizers';
 import {
@@ -182,10 +183,12 @@ export default async function ShortBusinessUrlPage({
         : undefined,
   });
 
+  const chatbotMeta = await getPrimaryBusinessChatbotMeta(profile.tenantId).catch(() => null);
+
   return (
     <>
       <StructuredData data={localBusinessSchema} />
-      <BgosPublicBusinessPage profile={profile} />
+      <BgosPublicBusinessPage profile={profile} chatbotMeta={chatbotMeta} />
     </>
   );
 }

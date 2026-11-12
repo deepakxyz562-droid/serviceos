@@ -97,6 +97,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
+    await ensureAndSyncBusinessChatbot(user.tenantId, { triggerSource: 'service_create' }).catch(() => {});
+
     return NextResponse.json({ service }, { status: 201 });
   } catch (error) {
     console.error('Create service error:', error);

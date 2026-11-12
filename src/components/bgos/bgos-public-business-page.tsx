@@ -1,5 +1,9 @@
 'use client';
 
+import { MessageSquare as ChatBubbleIcon } from 'lucide-react';
+import { BgosBusinessChatWidget } from '@/components/bgos/bgos-business-chat-widget';
+import type { PublicBusinessChatbotMeta } from '@/lib/bgos-business-chatbot';
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import {
@@ -37,6 +41,7 @@ import type {
 
 interface BgosPublicBusinessPageProps {
   profile: BgosPublicBusinessProfile;
+  chatbotMeta?: PublicBusinessChatbotMeta | null;
 }
 
 interface BookingSlotOption {
@@ -98,12 +103,13 @@ function getTodayIsoInTz(timeZone: string): string {
   }
 }
 
-export function BgosPublicBusinessPage({ profile }: BgosPublicBusinessPageProps) {
+export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusinessPageProps) {
   const accent = getSafeAccent(profile.accentColor);
   const shareUrl = profile.canonicalUrl;
 
   // Modals & drawers
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [lightboxItem, setLightboxItem] = useState<BgosPublicGalleryItem | null>(null);
   const [showMapEmbed, setShowMapEmbed] = useState(false);
@@ -603,6 +609,14 @@ export function BgosPublicBusinessPage({ profile }: BgosPublicBusinessPageProps)
 
               {/* Desktop / Tablet Primary Action Buttons */}
               <div className="flex flex-wrap items-center gap-2.5 sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setChatOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 shadow-xs transition hover:bg-slate-50"
+                  >
+                    <ChatBubbleIcon className="h-4 w-4" style={{ color: accent }} />
+                    <span>Ask AI · Chat</span>
+                  </button>
                 {profile.bookingEnabled && (
                   <button
                     type="button"
@@ -1323,6 +1337,18 @@ export function BgosPublicBusinessPage({ profile }: BgosPublicBusinessPageProps)
       </main>
 
       {/* Sticky Mobile Bottom Dock */}
+      <BgosBusinessChatWidget
+        profile={profile}
+        initialMeta={chatbotMeta}
+        externalOpen={chatOpen}
+        onExternalOpenChange={setChatOpen}
+        onRequestBook={() => {
+          setBookSuccess(null);
+          setBookError(null);
+          setBookingOpen(true);
+        }}
+      />
+
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-3 py-2 backdrop-blur sm:hidden">
         <div className="mx-auto flex max-w-md items-center gap-2">
           {profile.phone && (

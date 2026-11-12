@@ -39,21 +39,44 @@ import { createInboundMessage, createOutboundMessage } from '@/lib/inbox-message
  *
  * Returns the conversationId (the @unique string, NOT the PK id).
  */
+export function extractLiveChatSessionId(conversationId: string): string | null {
+  if (!conversationId || !conversationId.startsWith('live_chat_')) {
+    return null;
+  }
+  const sessionId = conversationId.slice('live_chat_'.length).trim();
+  return sessionId || null;
+}
+
 export async function findOrCreateLiveChatConversation(
   sessionId: string,
   tenantId: string,
   visitorName?: string | null,
   visitorPhone?: string | null,
   visitorEmail?: string | null,
+  workspaceId?: string | null,
 ): Promise<string> {
   const conversationId = `live_chat_${sessionId}`;
+
+  // Resolve workspaceId if caller omitted it so BGOS mobile Inbox queries matching workspaceId still see it
+  let resolvedWorkspaceId = workspaceId || null;
+  if (!resolvedWorkspaceId && typeof (db as any).workspace?.findFirst === 'function') {
+    const ws = await db.workspace
+      .findFirst({ where: { tenantId }, select: { id: true }, orderBy: { createdAt: 'asc' } })
+      .catch(() => null);
+    resolvedWorkspaceId = ws?.id || null;
+  }
 
   // Check if the conversation already exists
   const existing = await db.conversation.findFirst({
     where: { conversationId },
-    select: { conversationId: true },
+    select: { conversationId: true, workspaceId: true },
   });
   if (existing) {
+    if (!existing.workspaceId && resolvedWorkspaceId) {
+      await db.conversation
+        .updateMany({ where: { conversationId, workspaceId: null }, data: { workspaceId: resolvedWorkspaceId } })
+        .catch(() => {});
+    }
     return existing.conversationId;
   }
 
@@ -72,6 +95,7 @@ export async function findOrCreateLiveChatConversation(
       currentStage: 'greeting',
       lastMessageAt: new Date(),
       tenantId,
+      ...(resolvedWorkspaceId ? { workspaceId: resolvedWorkspaceId } : {}),
       metadataJson: JSON.stringify({
         liveChatSessionId: sessionId,
         visitorEmail: visitorEmail || null,
@@ -107,10 +131,18 @@ export async function mirrorLiveChatMessageToInbox(
   // Find or create the conversation
   const session = await db.publicChatSession.findUnique({
     where: { id: sessionId },
-    select: { visitorName: true, visitorPhone: true, visitorEmail: true, tenantId: true },
+    select: { visitorName: true, visitorPhone: true, visitorEmail: true, tenantId: true, workspaceId: true },
   });
   if (!session) {
     return; // session doesn't exist — can't mirror
+  }
+
+  let effectiveWorkspaceId = session.workspaceId || null;
+  if (!effectiveWorkspaceId && typeof (db as any).workspace?.findFirst === 'function') {
+    const ws = await db.workspace
+      .findFirst({ where: { tenantId }, select: { id: true }, orderBy: { createdAt: 'asc' } })
+      .catch(() => null);
+    effectiveWorkspaceId = ws?.id || null;
   }
 
   const conversationId = await findOrCreateLiveChatConversation(
@@ -119,6 +151,7 @@ export async function mirrorLiveChatMessageToInbox(
     session.visitorName,
     session.visitorPhone,
     session.visitorEmail,
+    effectiveWorkspaceId,
   );
 
   // Map sender type
@@ -135,6 +168,7 @@ export async function mirrorLiveChatMessageToInbox(
       content: body,
       messageType: 'text',
       externalId, // idempotency key
+      workspaceId: effectiveWorkspaceId || undefined,
       metadataJson: {
         liveChatSessionId: sessionId,
         publicChatMessageId,
@@ -150,6 +184,7 @@ export async function mirrorLiveChatMessageToInbox(
       content: body,
       messageType: 'text',
       externalId, // idempotency key
+      workspaceId: effectiveWorkspaceId || undefined,
       metadataJson: {
         liveChatSessionId: sessionId,
         publicChatMessageId,
@@ -159,4 +194,51 @@ export async function mirrorLiveChatMessageToInbox(
   // 'system' messages are not mirrored — they're internal widget state
   // (e.g., "session started", "visitor joined") and don't belong in the
   // unified inbox.
+}
+
+/**
+ * Mirror an outbound reply or takeover notice sent from Omnichannel Inbox
+ * (mobile or web) back into `PublicChatMessage` so the visitor widget polling
+ * `/api/public/chat/[sessionId]/messages` receives it immediately.
+ */
+export async function mirrorInboxReplyToLiveChat(params: {
+  conversationId: string;
+  senderType: 'admin' | 'system';
+  senderId?: string | null;
+  senderName?: string | null;
+  body: string;
+}): Promise<{ messageId: string; sessionId: string } | null> {
+  const sessionId = extractLiveChatSessionId(params.conversationId);
+  if (!sessionId) return null;
+
+  const session = await db.publicChatSession
+    .findUnique({ where: { id: sessionId }, select: { id: true, status: true } })
+    .catch(() => null);
+  if (!session) return null;
+
+  const text = params.body.trim();
+  if (!text) return null;
+
+  const msg = await db.publicChatMessage.create({
+    data: {
+      sessionId,
+      senderType: params.senderType,
+      senderId: params.senderId || null,
+      senderName: params.senderName || (params.senderType === 'admin' ? 'Business Owner' : 'System'),
+      body: text,
+    },
+    select: { id: true },
+  });
+
+  await db.publicChatSession
+    .update({
+      where: { id: sessionId },
+      data: {
+        lastMessageAt: new Date(),
+        ...(params.senderType === 'admin' ? { unreadCount: 0, status: 'claimed' } : {}),
+      },
+    })
+    .catch(() => {});
+
+  return { messageId: msg.id, sessionId };
 }

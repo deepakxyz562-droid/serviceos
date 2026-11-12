@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'A BGOS business account is required.' }, { status: 401 });
       }
       try {
-        const bgos = await resolveBgosMobileAccount(authUser.id);
+        const bgos = await resolveBgosMobileAccount(authUser.id, authUser.workspaceId || undefined);
         authUser = { ...authUser, tenantId: bgos.user.tenantId, workspaceId: bgos.user.workspaceId, role: bgos.user.role };
       } catch (error) {
         await revokeRefreshSession(rotated.session.token, 'bgos_access_unavailable');

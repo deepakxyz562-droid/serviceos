@@ -85,6 +85,9 @@ export async function PUT(
       data: updateData,
     });
 
+    const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
+    await ensureAndSyncBusinessChatbot(user.tenantId, { triggerSource: 'service_update' }).catch(() => {});
+
     return NextResponse.json(service);
   } catch (error) {
     console.error('Error updating service:', error);
@@ -117,6 +120,9 @@ export async function DELETE(
     }
 
     await db.service.delete({ where: { id } });
+
+    const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
+    await ensureAndSyncBusinessChatbot(user.tenantId, { triggerSource: 'service_delete' }).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (error) {

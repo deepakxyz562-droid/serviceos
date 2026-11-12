@@ -239,18 +239,19 @@ export function getBgosPublicCanonicalUrl(slug: string): string {
  * Strictly strips untouched marketplace dummy data (`Dallas`, `TX`, `Emergency Service 150`, etc.)
  * and hydrates from live Google Place + tenant branding + real services & reviews.
  */
-export const getBgosPublicBusinessProfile = cache(
-  async (slugOrId: string): Promise<BgosPublicBusinessProfile | null> => {
-    const cleanSlug = decodeURIComponent(slugOrId || '').trim();
-    if (!cleanSlug) return null;
+export async function getBgosPublicBusinessProfileUncached(
+  slugOrId: string,
+): Promise<BgosPublicBusinessProfile | null> {
+  const cleanSlug = decodeURIComponent(slugOrId || '').trim();
+  if (!cleanSlug) return null;
 
-    const tenant = await db.tenant
-      .findFirst({
-        where: {
-          OR: [{ slug: cleanSlug }, { publicSlug: cleanSlug }, { id: cleanSlug }],
-          suspendedAt: null,
-        },
-        select: {
+  const tenant = await db.tenant
+    .findFirst({
+      where: {
+        OR: [{ slug: cleanSlug }, { publicSlug: cleanSlug }, { id: cleanSlug }],
+        suspendedAt: null,
+      },
+      select: {
           id: true,
           name: true,
           slug: true,
@@ -708,5 +709,10 @@ export const getBgosPublicBusinessProfile = cache(
       seoTitle,
       seoDescription,
     };
+}
+
+export const getBgosPublicBusinessProfile = cache(
+  async (slugOrId: string): Promise<BgosPublicBusinessProfile | null> => {
+    return getBgosPublicBusinessProfileUncached(slugOrId);
   },
 );

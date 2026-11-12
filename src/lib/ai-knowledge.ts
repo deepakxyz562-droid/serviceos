@@ -84,7 +84,7 @@ export async function ingestKnowledgeDocument(params: {
   tenantId: string;
   title: string;
   text: string;
-  sourceType?: 'manual' | 'file';
+  sourceType?: 'manual' | 'file' | 'auto_business_profile';
   mimeType?: string | null;
   userId?: string | null;
 }): Promise<IngestResult> {
@@ -103,12 +103,19 @@ export async function ingestKnowledgeDocument(params: {
     /* non-fatal */
   }
 
+  const normalizedSourceType =
+    params.sourceType === 'file'
+      ? 'file'
+      : params.sourceType === 'auto_business_profile'
+        ? 'auto_business_profile'
+        : 'manual';
+
   const content = text.slice(0, KB_MAX_CHARS_PER_DOC);
   const doc = await db.aiKnowledgeDocument.create({
     data: {
       tenantId,
       title,
-      sourceType: params.sourceType === 'file' ? 'file' : 'manual',
+      sourceType: normalizedSourceType,
       mimeType: params.mimeType ?? null,
       byteSize: content.length,
       content,
@@ -161,6 +168,20 @@ export async function ingestKnowledgeDocument(params: {
 export async function deleteKnowledgeDocument(tenantId: string, documentId: string): Promise<boolean> {
   const result = await db.aiKnowledgeDocument.deleteMany({ where: { id: documentId, tenantId } });
   return result.count > 0;
+}
+
+/** Replace any prior auto-managed document of the given sourceType and re-index cleanly. */
+export async function upsertManagedKnowledgeDocument(params: {
+  tenantId: string;
+  title: string;
+  text: string;
+  sourceType: 'auto_business_profile';
+  userId?: string | null;
+}): Promise<IngestResult> {
+  await db.aiKnowledgeDocument
+    .deleteMany({ where: { tenantId: params.tenantId, sourceType: params.sourceType } })
+    .catch(() => {});
+  return ingestKnowledgeDocument(params);
 }
 
 export async function listKnowledgeDocuments(tenantId: string) {

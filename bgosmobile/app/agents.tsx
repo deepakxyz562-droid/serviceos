@@ -633,15 +633,168 @@ function AgentsScreen() {
     ];
   }, [draft, faqs, channelStatus]);
 
+  const [syncSummary, setSyncSummary] = useState<{
+    syncedAt: string;
+    triggerSource: string;
+    servicesCount: number;
+    hoursConfigured: boolean;
+    hasLocation: boolean;
+    hasBrandBrain: boolean;
+    hasPhone: boolean;
+    faqCount: number;
+    unansweredPendingCount: number;
+    publicCardSlug: string;
+  } | null>(null);
+  const [allowOwnerHandoff, setAllowOwnerHandoff] = useState(true);
+  const [syncingBusiness, setSyncingBusiness] = useState(false);
+  const [unansweredList, setUnansweredList] = useState<
+    Array<{ id: string; question: string; sessionId?: string; askedAt: string }>
+  >([]);
+  const [teachItem, setTeachItem] = useState<{ id: string; question: string } | null>(null);
+  const [teachAnswerText, setTeachAnswerText] = useState('');
+  const [teachingSaving, setTeachingSaving] = useState(false);
+  const autoProvisionTriggeredRef = useRef(false);
+
+  const refreshSyncAndUnanswered = useCallback(async () => {
+    try {
+      const [syncRes, unansweredRes] = await Promise.all([
+        apiRequest<{
+          chatbot?: {
+            allowOwnerHandoff?: boolean;
+            autoSyncSummary?: typeof syncSummary;
+          } | null;
+        }>('/api/bgos/chatbot/sync').catch(() => null),
+        apiRequest<{
+          questions?: Array<{ id: string; question: string; sessionId?: string; askedAt: string }>;
+        }>('/api/ai/knowledge/unanswered?status=pending').catch(() => null),
+      ]);
+      if (syncRes?.chatbot) {
+        if (typeof syncRes.chatbot.allowOwnerHandoff === 'boolean') {
+          setAllowOwnerHandoff(syncRes.chatbot.allowOwnerHandoff);
+        }
+        if (syncRes.chatbot.autoSyncSummary) {
+          setSyncSummary(syncRes.chatbot.autoSyncSummary);
+        }
+      }
+      if (unansweredRes?.questions) {
+        setUnansweredList(unansweredRes.questions);
+      }
+    } catch {
+      // Non-fatal background refresh
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshSyncAndUnanswered();
+  }, [refreshSyncAndUnanswered]);
+
+  // Auto-provision & auto-train primary chatbot when business opens screen with 0 agents
+  useEffect(() => {
+    if (resource.loading || !resource.data || draft || autoProvisionTriggeredRef.current) return;
+    autoProvisionTriggeredRef.current = true;
+    setSyncingBusiness(true);
+    apiRequest<{
+      autoSyncSummary?: typeof syncSummary;
+    }>('/api/bgos/chatbot/sync', {
+      method: 'POST',
+      body: JSON.stringify({ triggerSource: 'mobile_auto_provision' }),
+    })
+      .then((res) => {
+        if (res?.autoSyncSummary) setSyncSummary(res.autoSyncSummary);
+        void resource.refresh();
+        void refreshSyncAndUnanswered();
+      })
+      .catch(() => {
+        // Allow manual creation/retry if auto-provision fails
+      })
+      .finally(() => {
+        setSyncingBusiness(false);
+      });
+  }, [draft, refreshSyncAndUnanswered, resource]);
+
+  async function handleManualSyncBusiness() {
+    if (syncingBusiness) return;
+    setSyncingBusiness(true);
+    try {
+      const res = await apiRequest<{
+        autoSyncSummary?: typeof syncSummary;
+      }>('/api/bgos/chatbot/sync', {
+        method: 'POST',
+        body: JSON.stringify({ triggerSource: 'mobile_manual_sync', allowOwnerHandoff }),
+      });
+      if (res?.autoSyncSummary) setSyncSummary(res.autoSyncSummary);
+      await Promise.all([resource.refresh(), refreshSyncAndUnanswered()]);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert('Chatbot Synced', 'Your AI assistant is up to date with your latest services, hours, location, and brand voice.');
+    } catch (e) {
+      Alert.alert('Sync Failed', e instanceof Error ? e.message : 'Could not sync business data right now.');
+    } finally {
+      setSyncingBusiness(false);
+    }
+  }
+
+  async function handleToggleOwnerHandoff(nextValue: boolean) {
+    setAllowOwnerHandoff(nextValue);
+    try {
+      await apiRequest('/api/bgos/chatbot/sync', {
+        method: 'POST',
+        body: JSON.stringify({ allowOwnerHandoff: nextValue, triggerSource: 'handoff_toggle' }),
+      });
+    } catch {
+      setAllowOwnerHandoff(!nextValue);
+      Alert.alert('Error', 'Could not update live chat handoff preference.');
+    }
+  }
+
+  async function handleTeachSubmit() {
+    if (!teachItem || !teachAnswerText.trim() || teachingSaving) return;
+    setTeachingSaving(true);
+    try {
+      await apiRequest('/api/ai/knowledge/unanswered', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: teachItem.id,
+          action: 'resolve',
+          question: teachItem.question,
+          answer: teachAnswerText.trim(),
+        }),
+      });
+      setTeachItem(null);
+      setTeachAnswerText('');
+      await Promise.all([refreshSyncAndUnanswered(), resource.refresh()]);
+      Alert.alert('Answer Saved', 'Your AI assistant learned this answer and will use it automatically.');
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Could not save answer.');
+    } finally {
+      setTeachingSaving(false);
+    }
+  }
+
+  async function handleDismissUnanswered(id: string) {
+    try {
+      await apiRequest('/api/ai/knowledge/unanswered', {
+        method: 'POST',
+        body: JSON.stringify({ id, action: 'dismiss' }),
+      });
+      setUnansweredList((prev) => prev.filter((item) => item.id !== id));
+    } catch {
+      Alert.alert('Error', 'Could not dismiss question.');
+    }
+  }
+
   const publicChatUrl = draft ? `${WEB_URL}/agent/${draft.slug || draft.id}` : '';
+  const publicBusinessPageUrl = syncSummary?.publicCardSlug
+    ? `${WEB_URL}/b/${syncSummary.publicCardSlug}`
+    : publicChatUrl;
 
   async function handleSharePublicLink() {
-    if (!publicChatUrl) return;
+    const shareTarget = publicBusinessPageUrl || publicChatUrl;
+    if (!shareTarget) return;
     try {
       await Share.share({
         title: `${draft?.name || 'Business'} AI Assistant`,
-        message: `Chat with our 24/7 AI Business Assistant here: ${publicChatUrl}`,
-        url: publicChatUrl,
+        message: `Visit our business page & chat with our assistant anytime: ${shareTarget}`,
+        url: shareTarget,
       });
     } catch {
       Alert.alert('Error', 'Could not open share menu.');
@@ -1073,6 +1226,109 @@ function AgentsScreen() {
       {/* ── 3. Tab: Overview (Profile & Persona) ── */}
       {tab === 'overview' && (
         <View style={{ gap: 14 }}>
+          {/* Auto-Trained Business Knowledge Sync Card */}
+          <Card style={{ gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={ui.heading}>Auto-Trained From Your Business</Text>
+                <Text style={ui.caption}>
+                  {syncSummary?.syncedAt
+                    ? `Synced ${new Date(syncSummary.syncedAt).toLocaleDateString()} · Services, hours & profile`
+                    : 'Automatically synced with your Google Business & BGOS data'}
+                </Text>
+              </View>
+              <Badge label={syncingBusiness ? 'Syncing...' : 'Auto-Synced'} success={!syncingBusiness} />
+            </View>
+
+            {syncSummary && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {[
+                  { label: `${syncSummary.servicesCount} Services`, ok: syncSummary.servicesCount > 0 },
+                  { label: syncSummary.hoursConfigured ? 'Hours Synced' : 'Hours Missing', ok: syncSummary.hoursConfigured },
+                  { label: syncSummary.hasLocation ? 'Location Synced' : 'No Address', ok: syncSummary.hasLocation },
+                  { label: syncSummary.hasBrandBrain ? 'Brand Voice' : 'Default Voice', ok: syncSummary.hasBrandBrain },
+                  { label: `${syncSummary.faqCount} FAQs`, ok: syncSummary.faqCount > 0 },
+                ].map((pill) => (
+                  <View
+                    key={pill.label}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 999,
+                      backgroundColor: pill.ok ? '#ECFDF5' : '#F1F5F9',
+                      borderWidth: 1,
+                      borderColor: pill.ok ? '#A7F3D0' : '#E2E8F0',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11.5,
+                        fontWeight: '700',
+                        color: pill.ok ? '#047857' : '#64748B',
+                      }}
+                    >
+                      {pill.label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <Action
+                  label={syncingBusiness ? 'Syncing...' : 'Sync Business Data'}
+                  icon="sync"
+                  disabled={syncingBusiness}
+                  onPress={() => void handleManualSyncBusiness()}
+                />
+              </View>
+              {syncSummary?.publicCardSlug ? (
+                <View style={{ flex: 1 }}>
+                  <Action
+                    secondary
+                    label="Preview Page"
+                    icon="open-in-new"
+                    onPress={() => void Linking.openURL(`${WEB_URL}/b/${syncSummary.publicCardSlug}`)}
+                  />
+                </View>
+              ) : null}
+            </View>
+          </Card>
+
+          {/* Live Owner Chat Handoff & Custom Guardrails */}
+          <Card style={{ gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink }}>
+                  Allow Visitors to Chat Live with Me
+                </Text>
+                <Text style={{ fontSize: 12, color: colors.muted, marginTop: 2 }}>
+                  Customers on your public page can switch from AI to live Inbox chat with you
+                </Text>
+              </View>
+              <Switch
+                value={allowOwnerHandoff}
+                onValueChange={(val) => void handleToggleOwnerHandoff(val)}
+                trackColor={{ false: '#CBD5E1', true: colors.brand }}
+              />
+            </View>
+
+            <Field
+              label="Custom Business Rules & Do/Don'ts"
+              multiline
+              value={(draft.knowledge as any)?.systemPrompt || ''}
+              onChangeText={(text) =>
+                edit({
+                  knowledge: {
+                    ...(draft.knowledge || { websiteUrls: [], faqPairs: [] }),
+                    systemPrompt: text,
+                  } as FormAgentData['knowledge'],
+                })
+              }
+              placeholder="e.g. Always mention free site inspection, quote in INR, never commit to Sunday bookings without owner confirmation."
+            />
+          </Card>
           {/* Identity Fields */}
           <Card style={{ gap: 12 }}>
             <Text style={ui.heading}>Assistant Identity</Text>
@@ -1383,6 +1639,86 @@ function AgentsScreen() {
             </ScrollView>
           </View>
 
+          {/* Unanswered Visitor Questions (Train from Real Chats) */}
+          <Card style={{ gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={ui.heading}>Unanswered Visitor Questions</Text>
+                <Text style={ui.caption}>Questions visitors asked that need your answer</Text>
+              </View>
+              <Badge
+                label={unansweredList.length > 0 ? `${unansweredList.length} pending` : 'All caught up'}
+                success={unansweredList.length === 0}
+              />
+            </View>
+
+            {unansweredList.length === 0 ? (
+              <Text style={{ fontSize: 12.5, color: colors.muted }}>
+                No pending questions right now. When your bot cannot answer a visitor confidently, it saves the question here so you can teach it in one tap.
+              </Text>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {unansweredList.slice(0, 6).map((item) => (
+                  <View
+                    key={item.id}
+                    style={{
+                      backgroundColor: '#FFFBEB',
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: '#FDE68A',
+                      padding: 12,
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }}>
+                      “{item.question}”
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setTeachItem({ id: item.id, question: item.question });
+                          setTeachAnswerText('');
+                        }}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          paddingVertical: 8,
+                          borderRadius: 9,
+                          backgroundColor: colors.brand,
+                        }}
+                      >
+                        <MaterialIcons name="school" size={15} color="#FFFFFF" />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
+                          Teach Answer
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => void handleDismissUnanswered(item.id)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 9,
+                          backgroundColor: '#FFFFFF',
+                          borderWidth: 1,
+                          borderColor: '#E2E8F0',
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.muted }}>
+                          Dismiss
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+
           {/* Accordion FAQ Cards */}
           {filteredFaqs.length === 0 ? (
             <Card style={{ alignItems: 'center', padding: 24, gap: 8 }}>
@@ -1518,13 +1854,18 @@ function AgentsScreen() {
                 gap: 6,
               }}
             >
-              <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted }}>Public Chat URL</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted }}>
+                Business Page URL (with Live AI Chatbot)
+              </Text>
               <Text
                 style={{ fontSize: 13, fontWeight: '600', color: colors.brand }}
                 numberOfLines={1}
                 ellipsizeMode="middle"
               >
-                {publicChatUrl}
+                {publicBusinessPageUrl}
+              </Text>
+              <Text style={{ fontSize: 10.5, color: colors.muted }}>
+                Standalone Chat Link: {publicChatUrl}
               </Text>
             </View>
 
@@ -1982,7 +2323,7 @@ function AgentsScreen() {
             >
               <Image
                 source={{
-                  uri: `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(publicChatUrl)}&size=200x200&margin=4`,
+                  uri: `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(publicBusinessPageUrl || publicChatUrl)}&size=200x200&margin=4`,
                 }}
                 style={{ width: 180, height: 180 }}
               />
@@ -1991,6 +2332,51 @@ function AgentsScreen() {
             <View style={{ width: '100%', gap: 8 }}>
               <Action label="Share Chat Link" icon="share" onPress={() => void handleSharePublicLink()} />
               <Action secondary label="Close" onPress={() => setQrModalOpen(false)} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+      {/* ── Modal: Teach Answer to Unanswered Visitor Question ── */}
+      <Modal visible={Boolean(teachItem)} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
+                Teach AI Assistant
+              </Text>
+              <Pressable onPress={() => setTeachItem(null)} hitSlop={10}>
+                <MaterialIcons name="close" size={22} color={colors.muted} />
+              </Pressable>
+            </View>
+
+            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted }}>
+                Visitor Asked
+              </Text>
+              <Text style={{ fontSize: 13.5, fontWeight: '700', color: colors.ink, marginTop: 4 }}>
+                {teachItem?.question}
+              </Text>
+            </View>
+
+            <Field
+              label="Your Answer"
+              multiline
+              value={teachAnswerText}
+              onChangeText={setTeachAnswerText}
+              placeholder="Write the exact answer your chatbot should give next time..."
+            />
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <Action label="Cancel" secondary onPress={() => setTeachItem(null)} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Action
+                  label={teachingSaving ? 'Saving...' : 'Save & Train'}
+                  disabled={!teachAnswerText.trim() || teachingSaving}
+                  onPress={() => void handleTeachSubmit()}
+                />
+              </View>
             </View>
           </View>
         </View>

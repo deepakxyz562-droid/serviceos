@@ -148,14 +148,29 @@ export async function POST(
     const dispatchMeta: Record<string, unknown> = { sentBy: 'agent', agentId: authUser?.id }
 
     // Channels with no external send-back capability — in-app only.
-    const IN_APP_CHANNELS = new Set(['website', 'live_chat', 'manual'])
+    const IN_APP_CHANNELS = new Set(['website', 'live_chat', 'livechat', 'manual'])
     // Channels that have no outbound dispatcher wired up yet (only ingest).
     const UNSUPPORTED_OUTBOUND = new Set(['facebook', 'instagram', 'google_ads', 'justdial', 'phone'])
 
     try {
-      if (IN_APP_CHANNELS.has(channel)) {
-        // Website / live chat widget polls the DB — no external dispatch needed.
-        dispatchMeta.dispatch = { channel, status: 'in_app', reason: 'no external dispatch required' }
+      if (IN_APP_CHANNELS.has(channel) || conversation.conversationId.startsWith('live_chat_')) {
+        // Mirror outbound reply back to PublicChatMessage so visitor widgets receive owner replies
+        const { mirrorInboxReplyToLiveChat } = await import('@/lib/live-chat-bridge')
+        const mirrored = await mirrorInboxReplyToLiveChat({
+          conversationId: conversation.conversationId,
+          senderType: 'admin',
+          senderId: authUser?.id || null,
+          senderName: authUser?.name || 'Business Owner',
+          body: messageBody,
+        }).catch(() => null)
+
+        dispatchMeta.dispatch = {
+          channel,
+          status: 'delivered',
+          reason: 'in_app_live_chat',
+          mirroredSessionId: mirrored?.sessionId || null,
+          mirroredMessageId: mirrored?.messageId || null,
+        }
         await db.inboxMessage.update({
           where: { id: message.id },
           data: { status: 'delivered', metadataJson: JSON.stringify(dispatchMeta) },

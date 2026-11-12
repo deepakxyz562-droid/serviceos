@@ -501,6 +501,13 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    try {
+      const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
+      await ensureAndSyncBusinessChatbot(tenantId, { triggerSource: 'brand_profile_update' });
+    } catch {
+      /* non-fatal chatbot background sync */
+    }
+
     return NextResponse.json({ profile });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';

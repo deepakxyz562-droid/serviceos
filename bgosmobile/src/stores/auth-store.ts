@@ -251,3 +251,18 @@ onSessionEnded(() => {
   invalidateResourceScope();
   useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false, onboardingRequired: false });
 });
+
+export async function applyWorkspaceSession(session: SessionResponse): Promise<void> {
+  const revision = sessionRevision();
+  const user = await acceptSession(session, revision);
+  invalidateResourceScope();
+  const onboardingRequired = await resolveOnboardingRequirement(session, user);
+  useAuthStore.setState({
+    user,
+    onboardingRequired,
+    isAuthenticated: true,
+    isLoading: false,
+    error: null,
+  });
+  triggerPushSync();
+}
