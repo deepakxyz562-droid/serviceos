@@ -9,7 +9,7 @@
  */
 
 import { db } from '@/lib/db';
-import { createNotification } from '@/lib/notifications';
+import { notifyTenantLiveChatEscalation } from '@/lib/operator-notify';
 import { checkAgentAvailability, type AgentAvailabilityResult } from '@/lib/presence';
 import { findOrCreateLiveChatConversation, mirrorLiveChatMessageToInbox } from '@/lib/live-chat-bridge';
 
@@ -361,33 +361,18 @@ export async function requestHumanHandoff(
           });
         }
 
-        const snippet = message && message.length > 90 ? `${message.slice(0, 87)}...` : message;
-        const alertText = `${visitorName || 'A visitor'} requested live specialist assistance on ${agentName}${snippet ? `: "${snippet}"` : ''}`;
         const targetConversationId = inboxConversationId || `live_chat_${liveSessionId}`;
 
-        await Promise.all(
-          recipients.map((r) =>
-            createNotification({
-              tenantId: tenantId || effectiveWorkspaceId || '',
-              recipientId: r.id,
-              type: 'reminder',
-              category: 'customer',
-              title: '🔔 Live Agent Escalation',
-              message: alertText,
-              priority: 'urgent',
-              actionUrl: `/?product=bgos&view=omnichannel&conversation=${targetConversationId}`,
-              actionLabel: 'Open in Inbox',
-              senderType: 'system',
-              metadataJson: JSON.stringify({
-                sessionId: liveSessionId,
-                conversationId: targetConversationId,
-                agentName,
-                visitorName,
-                source: 'live_chat_escalation',
-              }),
-            }).catch(() => null)
-          )
-        );
+        await notifyTenantLiveChatEscalation({
+          tenantId: tenantId || null,
+          workspaceId: effectiveWorkspaceId || null,
+          sessionId: liveSessionId,
+          conversationId: targetConversationId,
+          visitorName,
+          agentName,
+          message,
+          recipientIds: recipients.map((r) => r.id),
+        }).catch(() => null);
       } catch (notifErr) {
         console.warn('[handoff-service] In-app notification creation failed:', notifErr);
       }

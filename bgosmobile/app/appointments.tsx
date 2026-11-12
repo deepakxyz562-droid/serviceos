@@ -22,13 +22,22 @@ import { WEB_URL } from '../src/lib/constants';
 import { withProtectedRoute } from '../src/components/navigation/protected-route';
 import type { BgosWorkspace } from '../src/types/bgos-contracts';
 
-type Booking = { id: string; title: string; customerName?: string; scheduledAt?: string; status: string };
+type Booking = {
+  id: string;
+  title: string;
+  customerName?: string;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  scheduledAt?: string;
+  status: string;
+};
 
 function AppointmentsScreen() {
   const router = useRouter();
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [weekOffset, setWeekOffset] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'confirmed' | 'pending' | 'completed' | 'cancelled'>('all');
 
   const liveBookingUrl = workspace.data?.links?.booking
     ? (workspace.data.links.booking.startsWith('http')
@@ -125,10 +134,13 @@ function AppointmentsScreen() {
   }
 
   const activeDayKey = localDay(selectedDate);
-  const filtered =
+  const dayBookings =
     resource.data?.bookings.filter(
       (b) => b.scheduledAt && localDay(new Date(b.scheduledAt)) === activeDayKey
     ) || [];
+  const filtered = dayBookings.filter((b) =>
+    statusFilter === 'all' ? true : (b.status || '').toLowerCase() === statusFilter,
+  );
 
   const monthYearLabel = selectedDate.toLocaleDateString([], { month: 'long', year: 'numeric' });
 
@@ -299,6 +311,39 @@ function AppointmentsScreen() {
         <Badge label={`${filtered.length} Bookings`} accent />
       </View>
 
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
+        <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
+          {(['all', 'confirmed', 'pending', 'completed', 'cancelled'] as const).map((statusKey) => {
+            const active = statusFilter === statusKey;
+            return (
+              <Pressable
+                key={statusKey}
+                onPress={() => setStatusFilter(statusKey)}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: active ? colors.brand : '#FFFFFF',
+                  borderWidth: 1,
+                  borderColor: active ? colors.brand : '#E2E8F0',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: '700',
+                    color: active ? '#FFFFFF' : '#475569',
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {statusKey}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+
       {resource.loading ? (
         <Loading />
       ) : !filtered.length ? (
@@ -352,7 +397,48 @@ function AppointmentsScreen() {
             <View style={{ gap: 2 }}>
               <Text style={[ui.heading, { fontSize: 17 }]}>{b.customerName || 'Customer Client'}</Text>
               <Text style={ui.body}>{b.title}</Text>
+              {b.customerPhone ? (
+                <Text style={ui.caption}>{b.customerPhone}</Text>
+              ) : null}
             </View>
+
+            {b.customerPhone && !['cancelled', 'completed'].includes(b.status) ? (
+              <Pressable
+                onPress={() => {
+                  const digits = String(b.customerPhone).replace(/[^0-9]/g, '');
+                  const timeLabel = b.scheduledAt
+                    ? new Date(b.scheduledAt).toLocaleString([], {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'soon';
+                  const msg = encodeURIComponent(
+                    `Hi ${b.customerName || 'there'}, this is a friendly reminder for your "${b.title}" appointment scheduled on ${timeLabel}. Reply if you need any changes!`,
+                  );
+                  void Linking.openURL(`https://wa.me/${digits}?text=${msg}`).catch(() => {});
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  alignSelf: 'flex-start',
+                  gap: 6,
+                  backgroundColor: '#ECFDF5',
+                  borderColor: '#A7F3D0',
+                  borderWidth: 1,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                }}
+              >
+                <MaterialIcons name="chat" size={14} color="#047857" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#047857' }}>
+                  WhatsApp Remind
+                </Text>
+              </Pressable>
+            ) : null}
 
             {!['cancelled', 'completed'].includes(b.status) && (
               <View style={[ui.row, { gap: 10, marginTop: 4 }]}>

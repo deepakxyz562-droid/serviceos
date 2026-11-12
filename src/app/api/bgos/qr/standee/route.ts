@@ -17,7 +17,7 @@ export interface StandeeTemplate {
   cardBorder: string;
 }
 
-export const TEMPLATES: Record<string, StandeeTemplate> = {
+const TEMPLATES: Record<string, StandeeTemplate> = {
   google_grexa_standee: {
     id: 'google_grexa_standee',
     name: 'Google Official Wave (With Logo)',
@@ -417,6 +417,38 @@ function escapeXml(unsafe: string): string {
   });
 }
 
+function buildStandeePrintableHtml(businessName: string, svg: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeXml(businessName)} - Printable QR Standee</title>
+  <style>
+    @page { size: auto; margin: 0; }
+    body { margin: 0; padding: 24px; display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center; background: #E2E8F0; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    .toolbar { display: flex; gap: 10px; align-items: center; }
+    .print-btn { background: #009F50; color: #fff; border: 0; padding: 10px 18px; border-radius: 999px; font-weight: 700; cursor: pointer; font-size: 14px; }
+    .print-container { background: white; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border-radius: 12px; overflow: hidden; max-width: 100%; }
+    .print-container svg { display: block; max-width: 100%; height: auto; }
+    @media print {
+      body { background: white; padding: 0; }
+      .print-container { box-shadow: none; border-radius: 0; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar no-print">
+    <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+  </div>
+  <div class="print-container">
+    ${svg}
+  </div>
+</body>
+</html>`;
+}
+
 /**
  * GET /api/bgos/qr/standee
  * Fetch standee preview metadata, templates, honest live Google rating, and default QR code.
@@ -478,15 +510,23 @@ export async function GET(request: NextRequest) {
     const pageUrl = `${origin}/b/${encodeURIComponent(publicSlug)}`;
     const reviewUrl = resolvedPlaceId
       ? `https://search.google.com/local/writereview?placeid=${resolvedPlaceId}`
-      : placeDetails?.mapsUri || `${origin}/reviews/rate?tenant=${user.tenantId}`;
+      : placeDetails?.mapsUri || pageUrl;
     const mapsUrl =
       placeDetails?.mapsUri ||
       (resolvedPlaceId
         ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(resolvedPlaceId)}`
         : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${businessName} ${address}`.trim())}`);
 
-    const targetParam = new URL(request.url).searchParams.get('target');
+    const searchParams = new URL(request.url).searchParams;
+    const targetParam = searchParams.get('target');
     const target = targetParam === 'page' || targetParam === 'maps' ? targetParam : 'review';
+    const formatParam = searchParams.get('format');
+    const reqTemplateId = searchParams.get('templateId') || 'google_grexa_standee';
+    const reqSizeParam = searchParams.get('size');
+    const reqSize = (reqSizeParam === 'table_tent' || reqSizeParam === 'square_badge' ? reqSizeParam : 'a5') as 'a5' | 'table_tent' | 'square_badge';
+    const reqTemplate = TEMPLATES[reqTemplateId] || TEMPLATES.google_grexa_standee || TEMPLATES.google_verified;
+    const reqShowRating = searchParams.get('showRating') !== 'false';
+    const reqShowContact = searchParams.get('showContact') !== 'false';
     const activeTargetUrl =
       target === 'page' ? pageUrl : target === 'maps' ? mapsUrl : reviewUrl;
 
@@ -516,9 +556,22 @@ export async function GET(request: NextRequest) {
 
     const logoUrl = parsedSettings?.bookingPageConfig?.logoUrl || brandBrain?.brandDetails?.logoUrl || tenant?.logo || null;
 
+    const defaultHeadline =
+      searchParams.get('headline') ||
+      (target === 'page'
+        ? 'Scan to Book & Order Online'
+        : target === 'maps'
+          ? 'Scan to View Us on Google Maps'
+          : 'Scan to Review Us on Google');
+    const defaultSubheadline =
+      searchParams.get('subheadline') ||
+      (target === 'page'
+        ? 'View services, products, hours & chat with us!'
+        : 'Your 5-star review helps our local team grow!');
+
     const defaultSvg = generateStandeeSvg({
-      template: TEMPLATES.google_grexa_standee || TEMPLATES.google_verified,
-      size: 'a5',
+      template: reqTemplate,
+      size: reqSize,
       businessName,
       tagline,
       rating: avgRating,
@@ -526,20 +579,19 @@ export async function GET(request: NextRequest) {
       qrDataUrl,
       phone,
       address,
-      headline:
-        target === 'page'
-          ? 'Scan to Book & Order Online'
-          : target === 'maps'
-            ? 'Scan to View Us on Google Maps'
-            : 'Scan to Review Us on Google',
-      subheadline:
-        target === 'page'
-          ? 'View services, products, hours & chat with us!'
-          : 'Your 5-star review helps our local team grow!',
-      showRating: true,
-      showContact: true,
+      headline: defaultHeadline,
+      subheadline: defaultSubheadline,
+      showRating: reqShowRating,
+      showContact: reqShowContact,
       logoUrl,
     });
+
+    if (formatParam === 'html') {
+      return new NextResponse(buildStandeePrintableHtml(businessName, defaultSvg), {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+    }
 
     return NextResponse.json({
       businessName,
@@ -661,7 +713,7 @@ export async function POST(request: NextRequest) {
     const pageUrl = `${origin}/b/${encodeURIComponent(publicSlug)}`;
     const reviewUrl = resolvedPlaceId
       ? `https://search.google.com/local/writereview?placeid=${resolvedPlaceId}`
-      : placeDetails?.mapsUri || `${origin}/reviews/rate?tenant=${user.tenantId}`;
+      : placeDetails?.mapsUri || pageUrl;
     const mapsUrl =
       placeDetails?.mapsUri ||
       (resolvedPlaceId
@@ -696,28 +748,7 @@ export async function POST(request: NextRequest) {
       logoUrl,
     });
 
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>${escapeXml(businessName)} - Google Review Standee</title>
-  <style>
-    @page { size: auto; margin: 0; }
-    body { margin: 0; padding: 24px; display: flex; align-items: center; justify-content: center; background: #E2E8F0; min-height: 100vh; font-family: sans-serif; }
-    .print-container { background: white; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border-radius: 12px; overflow: hidden; }
-    @media print {
-      body { background: white; padding: 0; }
-      .print-container { box-shadow: none; border-radius: 0; }
-      .no-print { display: none; }
-    }
-  </style>
-</head>
-<body>
-  <div class="print-container">
-    ${svg}
-  </div>
-</body>
-</html>`;
+    const html = buildStandeePrintableHtml(businessName, svg);
 
     return NextResponse.json({
       success: true,

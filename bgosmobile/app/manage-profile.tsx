@@ -36,6 +36,48 @@ interface ProfileServiceItem {
   isActive?: boolean;
 }
 
+const BUSINESS_DAYS = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+] as const;
+
+type DayHoursEntry = { open: boolean; openTime: string; closeTime: string };
+type RegularHoursMap = Record<string, DayHoursEntry>;
+
+const DEFAULT_REGULAR_HOURS: RegularHoursMap = {
+  Monday: { open: true, openTime: '09:00', closeTime: '18:00' },
+  Tuesday: { open: true, openTime: '09:00', closeTime: '18:00' },
+  Wednesday: { open: true, openTime: '09:00', closeTime: '18:00' },
+  Thursday: { open: true, openTime: '09:00', closeTime: '18:00' },
+  Friday: { open: true, openTime: '09:00', closeTime: '18:00' },
+  Saturday: { open: false, openTime: '09:00', closeTime: '18:00' },
+  Sunday: { open: false, openTime: '09:00', closeTime: '18:00' },
+};
+
+function normalizeRegularHoursMap(raw: unknown): RegularHoursMap {
+  const source = raw && typeof raw === 'object' ? (raw as Record<string, any>) : {};
+  const next: RegularHoursMap = {};
+  for (const day of BUSINESS_DAYS) {
+    const entry = source[day] || source[day.toLowerCase()] || source[day.toUpperCase()];
+    const fallback = DEFAULT_REGULAR_HOURS[day];
+    if (entry && typeof entry === 'object') {
+      next[day] = {
+        open: entry.open !== false,
+        openTime: typeof entry.openTime === 'string' && entry.openTime.trim() ? entry.openTime.trim() : fallback.openTime,
+        closeTime: typeof entry.closeTime === 'string' && entry.closeTime.trim() ? entry.closeTime.trim() : fallback.closeTime,
+      };
+    } else {
+      next[day] = { ...fallback };
+    }
+  }
+  return next;
+}
+
 interface RewriteVariation {
   id: string;
   title: string;
@@ -164,6 +206,8 @@ export default function ManageGoogleProfileScreen() {
   const [editSecondaryPhone, setEditSecondaryPhone] = useState('');
   const [savingSecondaryPhone, setSavingSecondaryPhone] = useState(false);
   const [chatEnabled, setChatEnabled] = useState(true);
+  const [savingChatToggle, setSavingChatToggle] = useState(false);
+  const [hoursState, setHoursState] = useState<RegularHoursMap>(() => ({ ...DEFAULT_REGULAR_HOURS }));
 
   const place = placeRes.data?.place;
   const isConnected = Boolean(placeRes.data?.isConnected);
@@ -278,7 +322,7 @@ export default function ManageGoogleProfileScreen() {
   const profilePhotos = photosRes.data?.photos || [];
   const photosCount = profilePhotos.length;
 
-  // Sync support branding from API on load
+  // Sync support branding, hours, and AI chat visibility from API on load
   React.useEffect(() => {
     if (typeof place?.supportBranding === 'boolean') {
       setSupportBranding(place.supportBranding);
@@ -286,6 +330,85 @@ export default function ManageGoogleProfileScreen() {
       setSupportBranding(placeRes.data.tenantFallback.supportBranding);
     }
   }, [place?.supportBranding, placeRes.data?.tenantFallback?.supportBranding]);
+
+  React.useEffect(() => {
+    const rawHours = place?.regularHours || placeRes.data?.tenantFallback?.regularHours;
+    if (rawHours && typeof rawHours === 'object') {
+      setHoursState(normalizeRegularHoursMap(rawHours));
+    }
+  }, [place?.regularHours, placeRes.data?.tenantFallback?.regularHours]);
+
+  React.useEffect(() => {
+    const showChatbot = workspaceRes.data?.bookingPageConfig?.pageVisibility?.showChatbot;
+    if (typeof showChatbot === 'boolean') {
+      setChatEnabled(showChatbot);
+    }
+  }, [workspaceRes.data?.bookingPageConfig?.pageVisibility?.showChatbot]);
+
+  async function handleToggleChat(nextValue: boolean) {
+    const prev = chatEnabled;
+    setChatEnabled(nextValue);
+    setSavingChatToggle(true);
+    try {
+      await apiRequest('/api/bgos/workspace', {
+        method: 'PATCH',
+        body: {
+          bookingPageConfig: {
+            pageVisibility: {
+              showChatbot: nextValue,
+            },
+          },
+        },
+      });
+      await workspaceRes.refresh();
+    } catch (err: unknown) {
+      setChatEnabled(prev);
+      Alert.alert('Update failed', err instanceof Error ? err.message : 'Could not update chat visibility setting.');
+    } finally {
+      setSavingChatToggle(false);
+    }
+  }
+
+  async function handleSaveRegularHours() {
+    for (const day of BUSINESS_DAYS) {
+      const row = hoursState[day];
+      if (!row?.open) continue;
+      if (!/^\d{1,2}:\d{2}$/.test(row.openTime) || !/^\d{1,2}:\d{2}$/.test(row.closeTime)) {
+        Alert.alert('Invalid time format', `Use HH:MM (e.g. 09:00 and 18:00) for ${day}.`);
+        return;
+      }
+    }
+    setSavingHours(true);
+    try {
+      const res = await apiRequest<{
+        syncedToGoogle?: boolean;
+        googleWarnings?: string[];
+      }>('/api/gbp/place', {
+        method: 'PATCH',
+        body: {
+          regularHours: hoursState,
+          pushToGoogle: isConnected,
+        },
+      });
+      await placeRes.refresh();
+      setHoursModalOpen(false);
+      if (isConnected) {
+        const warningText = res.googleWarnings?.length
+          ? `\n\nGoogle notice: ${res.googleWarnings.join(' ')}`
+          : '';
+        Alert.alert(
+          res.syncedToGoogle ? 'Hours Synced to Google' : 'Hours Saved Locally',
+          `${res.syncedToGoogle ? 'Your operating hours were updated in BGOS and pushed to Google Business Profile.' : 'Saved in BGOS.'}${warningText}`,
+        );
+      } else {
+        Alert.alert('Hours Updated', 'Business operating hours updated.');
+      }
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update business hours.');
+    } finally {
+      setSavingHours(false);
+    }
+  }
 
   // Filter posts strictly for current business and by standard/offer tab
   const posts = useMemo(() => {
@@ -343,7 +466,10 @@ export default function ManageGoogleProfileScreen() {
         .map((c) => c.trim())
         .filter(Boolean);
 
-      await apiRequest('/api/gbp/place', {
+      const res = await apiRequest<{
+        syncedToGoogle?: boolean;
+        googleWarnings?: string[];
+      }>('/api/gbp/place', {
         method: 'PATCH',
         body: {
           phone: editPhone || phone,
@@ -352,11 +478,18 @@ export default function ManageGoogleProfileScreen() {
           openingDate: editOpeningDate || openingDate,
           address: editAddress || address,
           website: editWebsite || website,
+          pushToGoogle: isConnected,
         },
       });
-      await placeRes.refresh();
+      await Promise.all([placeRes.refresh(), workspaceRes.refresh()]);
       setBasicsModalOpen(false);
-      Alert.alert('Success', 'Business details updated.');
+      const warningText = res?.googleWarnings?.length
+        ? `\n\nGoogle notice: ${res.googleWarnings.join(' ')}`
+        : '';
+      Alert.alert(
+        res?.syncedToGoogle ? 'Synced to Google & BGOS' : 'Success',
+        `${res?.syncedToGoogle ? 'Business details saved and pushed to Google Business Profile.' : 'Business details updated.'}${warningText}`,
+      );
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update details');
     } finally {
@@ -946,7 +1079,8 @@ export default function ManageGoogleProfileScreen() {
                 </View>
                 <Switch
                   value={chatEnabled}
-                  onValueChange={setChatEnabled}
+                  disabled={savingChatToggle}
+                  onValueChange={handleToggleChat}
                   trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
                   thumbColor={chatEnabled ? '#0B9042' : '#FFFFFF'}
                 />
@@ -1038,14 +1172,26 @@ export default function ManageGoogleProfileScreen() {
               </View>
 
               <View style={{ gap: 8, paddingTop: 2 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 13.5, color: '#475569', fontWeight: '500' }}>Mon – Fri</Text>
-                  <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>09:00 – 18:00</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 13.5, color: '#475569', fontWeight: '500' }}>Sat – Sun</Text>
-                  <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#64748B' }}>Closed</Text>
-                </View>
+                {BUSINESS_DAYS.map((day) => {
+                  const row = hoursState[day] || DEFAULT_REGULAR_HOURS[day];
+                  return (
+                    <View
+                      key={day}
+                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                    >
+                      <Text style={{ fontSize: 13.5, color: '#475569', fontWeight: '500' }}>{day}</Text>
+                      <Text
+                        style={{
+                          fontSize: 13.5,
+                          fontWeight: '700',
+                          color: row.open ? '#0F172A' : '#64748B',
+                        }}
+                      >
+                        {row.open ? `${row.openTime} – ${row.closeTime}` : 'Closed'}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
 
               {/* Special hours */}
@@ -1717,7 +1863,7 @@ export default function ManageGoogleProfileScreen() {
       <Modal visible={hoursModalOpen} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
                 Business Operating Hours
               </Text>
@@ -1726,25 +1872,134 @@ export default function ManageGoogleProfileScreen() {
               </Pressable>
             </View>
 
-            <View style={{ gap: 12, paddingVertical: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#0F172A' }}>Monday – Friday</Text>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#009F50' }}>9:00 AM – 6:00 PM</Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#0F172A' }}>Saturday</Text>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>Closed</Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#0F172A' }}>Sunday</Text>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>Closed</Text>
-              </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              <Pressable
+                onPress={() => setHoursState({ ...DEFAULT_REGULAR_HOURS })}
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: '#F1F5F9',
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Mon–Fri 09:00–18:00</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const allOpen: RegularHoursMap = {};
+                  for (const d of BUSINESS_DAYS) {
+                    allOpen[d] = { open: true, openTime: '09:00', closeTime: '21:00' };
+                  }
+                  setHoursState(allOpen);
+                }}
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: '#ECFDF5',
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#047857' }}>All Days 09:00–21:00</Text>
+              </Pressable>
             </View>
+
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 10, paddingVertical: 4 }}>
+                {BUSINESS_DAYS.map((day) => {
+                  const row = hoursState[day] || DEFAULT_REGULAR_HOURS[day];
+                  return (
+                    <View
+                      key={day}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        borderRadius: 12,
+                        padding: 10,
+                        gap: 8,
+                        backgroundColor: row.open ? '#FFFFFF' : '#F8FAFC',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.ink }}>{day}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: row.open ? '#0B9042' : '#64748B' }}>
+                            {row.open ? 'Open' : 'Closed'}
+                          </Text>
+                          <Switch
+                            value={row.open}
+                            onValueChange={(val) =>
+                              setHoursState((prev) => ({
+                                ...prev,
+                                [day]: { ...(prev[day] || DEFAULT_REGULAR_HOURS[day]), open: val },
+                              }))
+                            }
+                            trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+                            thumbColor={row.open ? '#0B9042' : '#FFFFFF'}
+                          />
+                        </View>
+                      </View>
+                      {row.open ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <TextInput
+                            value={row.openTime}
+                            onChangeText={(txt) =>
+                              setHoursState((prev) => ({
+                                ...prev,
+                                [day]: { ...(prev[day] || DEFAULT_REGULAR_HOURS[day]), openTime: txt },
+                              }))
+                            }
+                            placeholder="09:00"
+                            keyboardType="numbers-and-punctuation"
+                            style={{
+                              flex: 1,
+                              borderWidth: 1,
+                              borderColor: '#CBD5E1',
+                              borderRadius: 8,
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              fontSize: 13,
+                              fontWeight: '700',
+                              color: colors.ink,
+                              textAlign: 'center',
+                            }}
+                          />
+                          <Text style={{ color: '#64748B', fontWeight: '700' }}>to</Text>
+                          <TextInput
+                            value={row.closeTime}
+                            onChangeText={(txt) =>
+                              setHoursState((prev) => ({
+                                ...prev,
+                                [day]: { ...(prev[day] || DEFAULT_REGULAR_HOURS[day]), closeTime: txt },
+                              }))
+                            }
+                            placeholder="18:00"
+                            keyboardType="numbers-and-punctuation"
+                            style={{
+                              flex: 1,
+                              borderWidth: 1,
+                              borderColor: '#CBD5E1',
+                              borderRadius: 8,
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              fontSize: 13,
+                              fontWeight: '700',
+                              color: colors.ink,
+                              textAlign: 'center',
+                            }}
+                          />
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
 
             <View style={{ marginTop: 14 }}>
               <Action
-                label="Done"
-                onPress={() => setHoursModalOpen(false)}
+                label={savingHours ? 'Saving Hours...' : isConnected ? 'Save & Sync to Google' : 'Save Operating Hours'}
+                onPress={handleSaveRegularHours}
+                disabled={savingHours}
               />
             </View>
           </View>

@@ -163,7 +163,10 @@ export async function POST(
       console.warn('[bgos/inquiry] Customer resolve warning:', err);
     }
 
-    const title = `[Callback / Quote] ${name}${effectiveServiceName ? ` — ${effectiveServiceName}` : ''}`;
+    const isProductOrder = Boolean(effectiveServiceName?.startsWith('[Order'));
+    const title = isProductOrder
+      ? `[Product Order] ${name} — ${effectiveServiceName}`
+      : `[Callback / Quote] ${name}${effectiveServiceName ? ` — ${effectiveServiceName}` : ''}`;
     const descParts: string[] = [];
     if (cleanMessage) descParts.push(cleanMessage);
     if (cleanAddress) descParts.push(`Location: ${cleanAddress}`);

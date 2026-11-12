@@ -1,6 +1,6 @@
 import '../src/lib/runtime-polyfills';
-import React, { useEffect } from 'react';
-import { Platform } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Alert, AppState, Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 // @ts-expect-error expo-font types provided at bundle time
@@ -8,6 +8,8 @@ import { useFonts } from 'expo-font';
 import type { NotificationResponse } from 'expo-notifications';
 import { getNotificationsModule, isExpoGoRuntime } from '../src/lib/notifications-runtime';
 import { notificationDestination } from '../src/lib/notification-routing';
+import { apiRequest } from '../src/lib/api';
+import { enablePush, isPushPermissionGranted } from '../src/lib/push';
 import { useAuthStore } from '../src/stores/auth-store';
 import { RootErrorBoundary } from '../src/components/navigation/error-boundary';
 import { AnimatedSplash } from '../src/components/navigation/animated-splash';
@@ -40,6 +42,9 @@ export default function RootLayout() {
   });
   const { isAuthenticated, isLoading, onboardingRequired, checkAuth } = useAuthStore();
   const router = useRouter();
+  const seenNotifIdsRef = useRef<Set<string>>(new Set());
+  const notifPollerReadyRef = useRef(false);
+  const pushSyncedRef = useRef(false);
 
   useEffect(() => {
     checkAuth();
@@ -87,6 +92,140 @@ export default function RootLayout() {
       try {
         listener?.remove();
       } catch {}
+    };
+  }, [isLoading, isAuthenticated, onboardingRequired, router]);
+
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || onboardingRequired) {
+      pushSyncedRef.current = false;
+      seenNotifIdsRef.current.clear();
+      notifPollerReadyRef.current = false;
+      return;
+    }
+
+    if (!pushSyncedRef.current && Platform.OS !== 'web' && !isExpoGoRuntime) {
+      pushSyncedRef.current = true;
+      void enablePush().catch(() => {});
+    }
+
+    let cancelled = false;
+    const pollUnreadEscalations = async () => {
+      if (cancelled || AppState.currentState === 'background') return;
+      try {
+        const res = await apiRequest<{
+          notifications?: Array<{
+            id: string;
+            title?: string;
+            message?: string;
+            priority?: string;
+            category?: string;
+            createdAt?: string;
+            metadataJson?: string | null;
+          }>;
+        }>('/api/notifications?filter=unread&limit=10');
+
+        const rows = Array.isArray(res?.notifications) ? res.notifications : [];
+        const isFirstRun = !notifPollerReadyRef.current;
+        notifPollerReadyRef.current = true;
+
+        const nowMs = Date.now();
+        const freshEscalations: Array<{
+          id: string;
+          title: string;
+          message: string;
+          conversationId?: string;
+          sessionId?: string;
+        }> = [];
+
+        for (const item of rows) {
+          if (!item?.id || seenNotifIdsRef.current.has(item.id)) continue;
+          seenNotifIdsRef.current.add(item.id);
+
+          let meta: Record<string, unknown> = {};
+          if (item.metadataJson) {
+            try {
+              meta = JSON.parse(item.metadataJson) as Record<string, unknown>;
+            } catch {}
+          }
+          const isLiveChat =
+            meta.source === 'live_chat_escalation' ||
+            (item.priority === 'urgent' && item.category === 'customer');
+          if (!isLiveChat) continue;
+
+          const createdMs = item.createdAt ? new Date(item.createdAt).getTime() : nowMs;
+          if (isFirstRun && Number.isFinite(createdMs) && nowMs - createdMs > 120_000) {
+            continue;
+          }
+
+          freshEscalations.push({
+            id: item.id,
+            title: item.title || 'Live Chat Escalation',
+            message: item.message || 'A customer wants to chat with a human agent.',
+            conversationId: typeof meta.conversationId === 'string' ? meta.conversationId : undefined,
+            sessionId: typeof meta.sessionId === 'string' ? meta.sessionId : undefined,
+          });
+        }
+
+        if (freshEscalations.length === 0 || cancelled) return;
+        const latest = freshEscalations[0];
+        const Notifications = getNotificationsModule();
+
+        if (!isExpoGoRuntime && Notifications && Platform.OS !== 'web') {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: latest.title,
+              body: latest.message,
+              sound: 'default',
+              data: {
+                route: '/inbox',
+                conversationId: latest.conversationId,
+                sessionId: latest.sessionId,
+                source: 'live_chat_escalation',
+              },
+            },
+            trigger: null,
+          }).catch(() => {});
+        } else {
+          Alert.alert(latest.title, latest.message, [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'Open Inbox',
+              onPress: () => {
+                void apiRequest('/api/notifications', {
+                  method: 'PATCH',
+                  body: { id: latest.id, isRead: true },
+                }).catch(() => {});
+                router.push({
+                  pathname: '/inbox',
+                  params: latest.conversationId
+                    ? {
+                        conversationId: latest.conversationId,
+                        ...(latest.sessionId ? { sessionId: latest.sessionId } : {}),
+                      }
+                    : {},
+                });
+              },
+            },
+          ]);
+        }
+      } catch {}
+    };
+
+    void pollUnreadEscalations();
+    const timer = setInterval(() => {
+      void pollUnreadEscalations();
+    }, 15_000);
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void pollUnreadEscalations();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      sub.remove();
     };
   }, [isLoading, isAuthenticated, onboardingRequired, router]);
 

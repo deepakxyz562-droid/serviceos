@@ -10,11 +10,16 @@ import {
   Alert,
   TextInput,
   Switch,
+  Modal,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Screen, Card, ui, colors } from '../src/components/ui';
 import { apiRequest } from '../src/lib/api';
+import { getToken } from '../src/lib/auth';
+import { WEB_URL } from '../src/lib/constants';
 
 interface StandeeTemplate {
   id: string;
@@ -127,6 +132,7 @@ export default function QrStandeeScreen() {
   // Generated state
   const [generating, setGenerating] = useState(false);
   const [generatedHtml, setGeneratedHtml] = useState<string | null>(null);
+  const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -190,6 +196,36 @@ export default function QrStandeeScreen() {
     loadData();
   }, []);
 
+  const handleOpenPrintPage = async () => {
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && generatedHtml) {
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(generatedHtml);
+          win.document.close();
+          win.focus();
+          setTimeout(() => win.print(), 300);
+          return;
+        }
+      }
+      const token = await getToken();
+      const params = new URLSearchParams({
+        format: 'html',
+        templateId: selectedTemplateId,
+        size: selectedSize,
+        target: qrTarget,
+        headline,
+        subheadline,
+        showRating: String(showRating),
+        showContact: String(showContact),
+      });
+      if (token) params.set('auth', token);
+      await WebBrowser.openBrowserAsync(`${WEB_URL}/api/bgos/qr/standee?${params.toString()}`);
+    } catch (err: unknown) {
+      Alert.alert('Print Preview', err instanceof Error ? err.message : 'Unable to open print preview.');
+    }
+  };
+
   const handleGenerate = async () => {
     setGenerating(true);
     try {
@@ -207,24 +243,7 @@ export default function QrStandeeScreen() {
         },
       });
       setGeneratedHtml(res.html);
-      Alert.alert(
-        'Ready to Print',
-        'Your countertop standee has been generated with your verified live Google rating and logo. Tap Share to send or print!',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Share / Print',
-            onPress: () => {
-              if (activeTargetUrl) {
-                void Share.share({
-                  title: `${data?.businessName || 'Business'} - QR Standee`,
-                  message: `QR Standee for ${data?.businessName || 'our business'}:\nScan QR code or click: ${activeTargetUrl}`,
-                });
-              }
-            },
-          },
-        ]
-      );
+      setPrintPreviewOpen(true);
     } catch (e: any) {
       if (activeTargetUrl) {
         Alert.alert(
@@ -801,12 +820,105 @@ export default function QrStandeeScreen() {
             >
               <MaterialIcons name="share" size={18} color={colors.ink} />
               <Text style={{ color: colors.ink, fontSize: 13, fontWeight: '700' }}>
-                Share Direct Review Link
+                {qrTarget === 'review' ? 'Share Direct Review Link' : 'Share QR Target Link'}
               </Text>
             </Pressable>
           </View>
         </View>
       )}
+
+      <Modal
+        visible={printPreviewOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPrintPreviewOpen(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 20,
+              gap: 12,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
+                Standee Ready to Print
+              </Text>
+              <Pressable onPress={() => setPrintPreviewOpen(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={22} color={colors.muted} />
+              </Pressable>
+            </View>
+            <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 19 }}>
+              Print-ready {selectedSize.toUpperCase()} standee ({currentTemplate.name}) generated for{' '}
+              {data?.businessName || 'your business'} with your live rating and selected QR destination.
+            </Text>
+            <View
+              style={{
+                backgroundColor: '#F8FAFC',
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                borderRadius: 12,
+                padding: 12,
+                gap: 4,
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>QR TARGET LINK</Text>
+              <Text style={{ fontSize: 12, color: '#0F172A' }} numberOfLines={2}>
+                {activeTargetUrl || data?.reviewUrl}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                setPrintPreviewOpen(false);
+                void handleOpenPrintPage();
+              }}
+              style={{
+                backgroundColor: colors.brand,
+                borderRadius: 12,
+                paddingVertical: 13,
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <MaterialIcons name="print" size={18} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>
+                Open Printable Standee / Save PDF
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setPrintPreviewOpen(false);
+                void handleShareLink();
+              }}
+              style={{
+                backgroundColor: '#F1F5F9',
+                borderRadius: 12,
+                paddingVertical: 12,
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <MaterialIcons name="share" size={18} color={colors.ink} />
+              <Text style={{ color: colors.ink, fontSize: 13, fontWeight: '700' }}>
+                Share Link Instead
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }

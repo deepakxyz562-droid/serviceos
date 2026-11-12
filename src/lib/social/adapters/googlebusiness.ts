@@ -1537,9 +1537,85 @@ export async function fetchGoogleBusinessPlaceDetails(
  *
  * Returns the updated fields. Throws structured errors with actionable messages.
  */
+export type RegularHoursDayInput = {
+  open?: boolean;
+  openTime?: string;
+  closeTime?: string;
+};
+
+export type RegularHoursInput = Record<string, RegularHoursDayInput>;
+
+const GBP_DAY_ENUMS: Array<[string, string]> = [
+  ['Monday', 'MONDAY'],
+  ['Tuesday', 'TUESDAY'],
+  ['Wednesday', 'WEDNESDAY'],
+  ['Thursday', 'THURSDAY'],
+  ['Friday', 'FRIDAY'],
+  ['Saturday', 'SATURDAY'],
+  ['Sunday', 'SUNDAY'],
+];
+
+function parseClockTime(raw: unknown, fallbackHours: number, fallbackMinutes: number): { hours: number; minutes: number } {
+  if (typeof raw !== 'string') return { hours: fallbackHours, minutes: fallbackMinutes };
+  const match = raw.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return { hours: fallbackHours, minutes: fallbackMinutes };
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (h === 24 && m === 0) return { hours: 24, minutes: 0 };
+  return {
+    hours: Math.max(0, Math.min(23, Number.isFinite(h) ? h : fallbackHours)),
+    minutes: Math.max(0, Math.min(59, Number.isFinite(m) ? m : fallbackMinutes)),
+  };
+}
+
+/**
+ * Convert `{ Monday: { open, openTime, closeTime }, ... }` into the Google
+ * Business Information v1 `regularHours` payload (`{ periods: [...] }`).
+ */
+export function buildGoogleRegularHoursPeriods(regularHours: RegularHoursInput): {
+  periods: Array<{
+    openDay: string;
+    openTime: { hours: number; minutes?: number };
+    closeDay: string;
+    closeTime: { hours: number; minutes?: number };
+  }>;
+} {
+  const periods: Array<{
+    openDay: string;
+    openTime: { hours: number; minutes?: number };
+    closeDay: string;
+    closeTime: { hours: number; minutes?: number };
+  }> = [];
+
+  for (const [dayName, dayEnum] of GBP_DAY_ENUMS) {
+    const entry =
+      regularHours[dayName] ||
+      regularHours[dayName.toLowerCase()] ||
+      regularHours[dayEnum];
+    if (!entry || entry.open === false) continue;
+
+    const openClock = parseClockTime(entry.openTime, 9, 0);
+    const closeClock = parseClockTime(entry.closeTime, 18, 0);
+    periods.push({
+      openDay: dayEnum,
+      openTime: openClock.minutes > 0 ? openClock : { hours: openClock.hours },
+      closeDay: dayEnum,
+      closeTime: closeClock.hours === 24
+        ? { hours: 24 }
+        : closeClock.minutes > 0
+          ? closeClock
+          : { hours: closeClock.hours },
+    });
+  }
+
+  return { periods };
+}
+
 export interface GbpProfileUpdateInput {
   description?: string; // max 750 chars per Google policy
   websiteUri?: string;
+  primaryPhone?: string;
+  regularHours?: RegularHoursInput;
   additionalCategories?: string[]; // display names or 'categories/gcid:...' / 'gcid:...'
   serviceItems?: Array<{ name: string; description?: string; categoryName?: string }>;
   attributes?: Record<string, boolean | string | string[]>;
@@ -1740,6 +1816,21 @@ export async function updateGoogleBusinessProfile(
     if (formattedItems.length > 0) {
       await patchGroup('serviceItems', { serviceItems: formattedItems }, 'Services catalog');
     }
+  }
+
+  // 3b. Primary phone number
+  if (updates.primaryPhone !== undefined && updates.primaryPhone.trim()) {
+    await patchGroup(
+      'phoneNumbers.primaryPhone',
+      { phoneNumbers: { primaryPhone: updates.primaryPhone.trim() } },
+      'Primary phone',
+    );
+  }
+
+  // 3c. Regular business operating hours
+  if (updates.regularHours && typeof updates.regularHours === 'object') {
+    const gbpHours = buildGoogleRegularHoursPeriods(updates.regularHours);
+    await patchGroup('regularHours', { regularHours: gbpHours }, 'Regular business hours');
   }
 
   // 4. Business attributes (hours/service options/payments)

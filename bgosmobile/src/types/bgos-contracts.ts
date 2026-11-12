@@ -88,7 +88,7 @@ export interface BgosWorkspace {
   usage?: { contacts: number; forms: number; usedLeadCredits: number; leadCreditLimit: number };
 }
 export interface BgosConversation {
-  id: string; customerName: string; channel: string; lastMessage: string;
+  id: string; externalConversationId?: string; customerName: string; channel: string; lastMessage: string;
   lastMessageTime: string; unreadCount: number; aiPaused: boolean; status: string;
 }
 export interface BgosMessage {

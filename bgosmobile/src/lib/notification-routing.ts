@@ -2,6 +2,7 @@ const destinations = {
   inbox: '/inbox',
   messages: '/inbox',
   conversations: '/inbox',
+  omnichannel: '/inbox',
   leads: '/leads',
   calendar: '/appointments',
   appointments: '/appointments',
@@ -46,6 +47,8 @@ const PASSTHROUGH_PARAMS = [
   'mode',
   'pill',
   'googleUrl',
+  'conversationId',
+  'sessionId',
 ] as const;
 
 function buildDestinationQuery(
@@ -92,6 +95,9 @@ export function notificationDestination(data: Record<string, unknown>): string |
   }
 
   // 3. Entity-based fallback
+  if (data.conversationId || data.sessionId || data.source === 'live_chat_escalation') {
+    return `/inbox${buildDestinationQuery(data)}`;
+  }
   if (data.mediaId || data.photoId) return `/(tabs)/photos${buildDestinationQuery(data)}`;
   if (data.postId) {
     const extra = new URLSearchParams();

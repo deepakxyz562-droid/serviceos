@@ -158,6 +158,18 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
   const [bookSuccess, setBookSuccess] = useState<string | null>(null);
   const [bookError, setBookError] = useState<string | null>(null);
 
+  // Standalone product order modal state
+  const [orderProduct, setOrderProduct] = useState<(typeof profile.products)[number] | null>(null);
+  const [orderQty, setOrderQty] = useState(1);
+  const [orderFulfillment, setOrderFulfillment] = useState<'pickup' | 'delivery'>('pickup');
+  const [orderName, setOrderName] = useState('');
+  const [orderPhone, setOrderPhone] = useState('');
+  const [orderAddress, setOrderAddress] = useState('');
+  const [orderNotes, setOrderNotes] = useState('');
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
+
   const todayWeekday = useMemo(() => {
     try {
       return new Intl.DateTimeFormat('en-US', {
@@ -407,10 +419,8 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
       return;
     }
 
-    if (!bookEmail.trim()) {
-      setBookError('Please enter your email address so we can send your confirmation.');
-      return;
-    }
+    const effectiveEmail =
+      bookEmail.trim() || `${bookPhone.replace(/[^0-9]/g, '') || 'guest'}@guest.bgos.local`;
 
     setBookSubmitting(true);
     try {
@@ -429,7 +439,7 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
           customer: {
             name: bookName.trim(),
             phone: bookPhone.trim(),
-            email: bookEmail.trim(),
+            email: effectiveEmail,
             notes: bookNotes.trim(),
           },
         }),
@@ -835,15 +845,15 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                           <button
                             type="button"
                             onClick={() => {
-                              setInqMessage(
-                                `Hi ${profile.businessName}, I would like to order "${prod.name}" (${
-                                  profile.storeSettings?.deliveryEnabled ? 'Delivery / Pickup' : 'Pickup'
-                                }).`,
+                              setOrderProduct(prod);
+                              setOrderQty(1);
+                              setOrderFulfillment(
+                                profile.storeSettings?.deliveryEnabled && !profile.storeSettings?.pickupEnabled
+                                  ? 'delivery'
+                                  : 'pickup',
                               );
-                              document.getElementById('bgos-inquiry-section')?.scrollIntoView({
-                                behavior: 'smooth',
-                                block: 'center',
-                              });
+                              setOrderSuccess(null);
+                              setOrderError(null);
                             }}
                             className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
                             style={{ backgroundColor: accent }}
@@ -1708,11 +1718,10 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
 
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-700">
-                    Email {slots.length > 0 ? '*' : '(optional)'}
+                    Email (optional — for calendar invite)
                   </label>
                   <input
                     type="email"
-                    required={slots.length > 0}
                     value={bookEmail}
                     onChange={(e) => setBookEmail(e.target.value)}
                     placeholder="you@example.com"
@@ -1841,6 +1850,255 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Standalone Product Order / Request Modal */}
+      {orderProduct && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  Order {orderProduct.name}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {orderProduct.price && orderProduct.price > 0
+                    ? `${formatCurrency(orderProduct.price * orderQty, profile.currency, { compact: true })} (${orderQty} × ${formatCurrency(orderProduct.price, profile.currency, { compact: true })})`
+                    : profile.businessName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOrderProduct(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close order dialog"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {orderSuccess ? (
+              <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center">
+                <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
+                <p className="mt-3 text-base font-bold text-emerald-950">Order Request Sent!</p>
+                <p className="mt-1 text-xs text-emerald-800">{orderSuccess}</p>
+                <button
+                  type="button"
+                  onClick={() => setOrderProduct(null)}
+                  className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setOrderError(null);
+                  if (!orderName.trim() || !orderPhone.trim()) {
+                    setOrderError('Please enter your name and phone number.');
+                    return;
+                  }
+                  if (orderFulfillment === 'delivery' && !orderAddress.trim()) {
+                    setOrderError('Please enter your delivery address.');
+                    return;
+                  }
+                  setOrderSubmitting(true);
+                  try {
+                    const res = await fetch(
+                      `/api/public/business/${encodeURIComponent(profile.slug)}/inquiry`,
+                      {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          name: orderName.trim(),
+                          phone: orderPhone.trim(),
+                          serviceName: `[Order x${orderQty}] ${orderProduct.name}`,
+                          address:
+                            orderFulfillment === 'delivery'
+                              ? orderAddress.trim()
+                              : 'Store Pickup',
+                          message: [
+                            `Product Order: ${orderProduct.name}`,
+                            `Quantity: ${orderQty}`,
+                            `Fulfillment: ${orderFulfillment === 'delivery' ? 'Local Delivery' : 'Store Pickup'}`,
+                            orderNotes.trim() ? `Notes: ${orderNotes.trim()}` : '',
+                          ]
+                            .filter(Boolean)
+                            .join('\n'),
+                        }),
+                      },
+                    );
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      setOrderError(data.error || 'Could not place order request.');
+                    } else {
+                      setOrderSuccess(
+                        data.message ||
+                          `${profile.businessName} received your order for ${orderProduct.name} and will confirm shortly.`,
+                      );
+                    }
+                  } catch {
+                    setOrderError('Network error — please try again.');
+                  } finally {
+                    setOrderSubmitting(false);
+                  }
+                }}
+                className="mt-4 space-y-3.5"
+              >
+                {orderError && (
+                  <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{orderError}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Quantity</label>
+                    <div className="flex items-center rounded-xl border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setOrderQty((q) => Math.max(1, q - 1))}
+                        className="px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                      >
+                        −
+                      </button>
+                      <span className="flex-1 text-center text-sm font-semibold text-slate-900">
+                        {orderQty}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setOrderQty((q) => Math.min(99, q + 1))}
+                        className="px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Fulfillment</label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(['pickup', 'delivery'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setOrderFulfillment(mode)}
+                          className={`rounded-xl border px-2 py-2 text-xs font-semibold capitalize ${
+                            orderFulfillment === mode
+                              ? 'border-transparent text-white'
+                              : 'border-slate-200 bg-white text-slate-700'
+                          }`}
+                          style={orderFulfillment === mode ? { backgroundColor: accent } : undefined}
+                        >
+                          {mode}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Your Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={orderName}
+                      onChange={(e) => setOrderName(e.target.value)}
+                      placeholder="Full name"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Phone Number *</label>
+                    <input
+                      type="tel"
+                      required
+                      value={orderPhone}
+                      onChange={(e) => setOrderPhone(e.target.value)}
+                      placeholder="+91 98765 43210"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {orderFulfillment === 'delivery' && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                      Delivery Address *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={orderAddress}
+                      onChange={(e) => setOrderAddress(e.target.value)}
+                      placeholder="House / street / landmark"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Notes (optional)</label>
+                  <textarea
+                    rows={2}
+                    value={orderNotes}
+                    onChange={(e) => setOrderNotes(e.target.value)}
+                    placeholder="Size, spice level, preferred delivery window..."
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={orderSubmitting}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-60"
+                  style={{ backgroundColor: accent }}
+                >
+                  {orderSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sending Order...
+                    </>
+                  ) : (
+                    'Place Order Request'
+                  )}
+                </button>
+
+                <div className="flex flex-wrap gap-2">
+                  {(profile.whatsappDigits || profile.whatsappPhone || profile.phone) && (
+                    <a
+                      href={`https://wa.me/${profile.whatsappDigits || (profile.whatsappPhone || profile.phone || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                        `Hi ${profile.businessName}, I want to order "${orderProduct.name}" x${orderQty} (${orderFulfillment}).${orderName ? ` Name: ${orderName}` : ''}`,
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" />
+                      Order via WhatsApp
+                    </a>
+                  )}
+                  {profile.storeSettings?.orderActionUrl && (
+                    <a
+                      href={profile.storeSettings.orderActionUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                    >
+                      Order Online
+                    </a>
+                  )}
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

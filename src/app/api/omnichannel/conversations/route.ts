@@ -168,6 +168,7 @@ export async function GET(request: NextRequest) {
 
       return {
         id: conv.id,
+        externalConversationId: conv.conversationId,
         aiPaused: conv.aiPaused,
         customerName: conv.customerName || conv.customerPhone || 'Unknown',
         customerPhone: conv.customerPhone || undefined,

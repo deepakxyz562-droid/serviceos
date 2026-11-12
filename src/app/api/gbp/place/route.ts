@@ -755,6 +755,12 @@ export async function PATCH(request: NextRequest) {
             ...(typeof updateData.website === 'string' && updateData.website
               ? { websiteUri: updateData.website }
               : {}),
+            ...(typeof updateData.phone === 'string' && updateData.phone
+              ? { primaryPhone: updateData.phone }
+              : {}),
+            ...(body.regularHours && typeof body.regularHours === 'object'
+              ? { regularHours: body.regularHours }
+              : {}),
             ...(Array.isArray(body.additionalCategories)
               ? { additionalCategories: body.additionalCategories }
               : {}),

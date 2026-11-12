@@ -32,6 +32,7 @@ import {
 import { getTenantBgosEntitlement } from '@/lib/bgos-entitlement';
 import { syncChatConversation } from '@/lib/chat/chat-session-sync';
 import { mirrorLiveChatMessageToInbox } from '@/lib/live-chat-bridge';
+import { notifyTenantLiveChatEscalation } from '@/lib/operator-notify';
 import { tryExecuteChatBooking } from '@/lib/scheduling/chat-booking-helper';
 import {
   checkTenantRateLimit,
@@ -879,6 +880,16 @@ export async function answerBusinessChatbotMessage(params: {
         null,
         visitor?.name || null,
       ).catch(() => {});
+
+      await notifyTenantLiveChatEscalation({
+        tenantId: profile.tenantId,
+        sessionId,
+        conversationId: `live_chat_${sessionId}`,
+        visitorName: visitor?.name || null,
+        agentName: profile.businessName,
+        message: rawMessage,
+        isFollowUp: true,
+      }).catch(() => {});
 
       return {
         reply: '',

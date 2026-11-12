@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import {
   Alert,
   Linking,
@@ -38,8 +39,32 @@ function InboxScreen() {
   const tickets = useResource<{ tickets: any[] }>('/api/support/tickets?limit=20');
   const [activeTab, setActiveTab] = useState<'inbox' | 'engage' | 'tickets'>('inbox');
   const [selected, setSelected] = useState<BgosConversation | null>(null);
+  const { conversationId: paramConvId, sessionId: paramSessionId } = useLocalSearchParams<{
+    conversationId?: string;
+    sessionId?: string;
+  }>();
   const [channelFilter, setChannelFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const handledDeepLinkRef = useRef<string>('');
+
+  useEffect(() => {
+    const targetKey = paramConvId || (paramSessionId ? `live_chat_${paramSessionId}` : '');
+    if (!targetKey || handledDeepLinkRef.current === targetKey || !Array.isArray(inbox.data)) return;
+    const match = inbox.data.find(
+      (c) =>
+        c.id === paramConvId ||
+        c.externalConversationId === paramConvId ||
+        (paramSessionId
+          ? c.externalConversationId === `live_chat_${paramSessionId}` || c.id === `live_chat_${paramSessionId}`
+          : false),
+    );
+    if (match) {
+      handledDeepLinkRef.current = targetKey;
+      setActiveTab('inbox');
+      setChannelFilter('all');
+      setSelected(match);
+    }
+  }, [inbox.data, paramConvId, paramSessionId]);
   const agents = useResource<{ agents: { id: string; slug?: string }[] }>('/api/forms/agents');
 
   const rawList = inbox.data || [];

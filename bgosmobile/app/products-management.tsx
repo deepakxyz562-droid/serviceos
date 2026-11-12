@@ -8,6 +8,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   Switch,
   Text,
   TextInput,
@@ -25,6 +26,7 @@ import type {
   BgosProduct,
   BgosSocialProfiles,
   BgosStoreSettings,
+  BgosWorkspace,
 } from '../src/types/bgos-contracts';
 
 type StoreApiResponse = {
@@ -48,6 +50,13 @@ export default function ProductsManagementScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string }>();
   const storeRes = useResource<StoreApiResponse>('/api/bgos/products');
+  const workspaceRes = useResource<BgosWorkspace>('/api/bgos/workspace');
+  const [adKit, setAdKit] = useState<{
+    headlines: string[];
+    descriptions: string[];
+    keywords: string[];
+    landingUrl: string;
+  } | null>(null);
 
   const [tab, setTab] = useState<TabKey>(
     params.tab === 'fulfillment' || params.tab === 'social' ? params.tab : 'catalog',
@@ -570,6 +579,101 @@ export default function ProductsManagementScreen() {
             <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
               Promote &amp; Advertise
             </Text>
+            <Text style={{ fontSize: 12.5, color: '#64748B', lineHeight: 18 }}>
+              Generate ready-to-paste Google Ads Express headlines, descriptions, and local keywords linked directly to your public business page.
+            </Text>
+            <Action
+              label={adKit ? 'Regenerate Google Ad Copy Kit' : 'Generate Google Ad Copy Kit'}
+              icon="auto-awesome"
+              onPress={() => {
+                const bizName =
+                  workspaceRes.data?.bookingPageConfig?.businessName || 'Our Business';
+                const cityPart = (workspaceRes.data?.bookingPageConfig?.address || '')
+                  .split(',')[0]
+                  ?.trim();
+                const topService =
+                  workspaceRes.data?.gbpServices?.[0] || products[0]?.name || 'Local Services';
+                const landingUrl =
+                  storeRes.data?.canonicalUrl || workspaceRes.data?.links?.profile || '';
+                const headlines = [
+                  `${bizName}`.slice(0, 30),
+                  `Book ${topService}`.slice(0, 30),
+                  (cityPart ? `Top Rated in ${cityPart}` : 'Instant Online Booking').slice(0, 30),
+                ];
+                const descriptions = [
+                  `${bizName}${cityPart ? ` in ${cityPart}` : ''}: Explore services, live pricing, verified reviews & book online.`.slice(0, 90),
+                  `${storeSettings.deliveryEnabled ? 'Pickup & delivery available. ' : ''}Fast quotes & 24/7 AI assistant. Visit today!`.slice(0, 90),
+                ];
+                const keywords = [
+                  `${topService}${cityPart ? ` ${cityPart}` : ''}`,
+                  `${bizName}${cityPart ? ` ${cityPart}` : ''}`,
+                  ...products.slice(0, 3).map((p) => p.name),
+                  ...(workspaceRes.data?.gbpServices?.slice(0, 2) || []),
+                ].filter(Boolean);
+                setAdKit({ headlines, descriptions, keywords: Array.from(new Set(keywords)), landingUrl });
+              }}
+            />
+
+            {adKit ? (
+              <View
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 12,
+                  padding: 12,
+                  gap: 8,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>
+                  HEADLINES (Google Ads Express)
+                </Text>
+                {adKit.headlines.map((h, i) => (
+                  <Text key={`hl-${i}`} style={{ fontSize: 12.5, color: '#1E293B', fontWeight: '600' }}>
+                    {i + 1}. {h}
+                  </Text>
+                ))}
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>
+                  DESCRIPTIONS
+                </Text>
+                {adKit.descriptions.map((d, i) => (
+                  <Text key={`desc-${i}`} style={{ fontSize: 12, color: '#475569' }}>
+                    • {d}
+                  </Text>
+                ))}
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>
+                  LOCAL KEYWORDS
+                </Text>
+                <Text style={{ fontSize: 12, color: '#475569' }}>{adKit.keywords.join(', ')}</Text>
+                {adKit.landingUrl ? (
+                  <Text style={{ fontSize: 11.5, color: '#0284C7', fontWeight: '600' }}>
+                    Landing Page: {adKit.landingUrl}
+                  </Text>
+                ) : null}
+                <Action
+                  secondary
+                  compact
+                  label="Copy / Share Ad Kit"
+                  icon="share"
+                  onPress={() => {
+                    const summary = [
+                      'Headlines:',
+                      ...adKit.headlines.map((h, i) => `${i + 1}. ${h}`),
+                      '',
+                      'Descriptions:',
+                      ...adKit.descriptions.map((d) => `- ${d}`),
+                      '',
+                      `Keywords: ${adKit.keywords.join(', ')}`,
+                      adKit.landingUrl ? `Landing Page: ${adKit.landingUrl}` : '',
+                    ]
+                      .filter(Boolean)
+                      .join('\n');
+                    void Share.share({ message: summary });
+                  }}
+                />
+              </View>
+            ) : null}
+
             <Action
               label="Create AI Promo Post on Google"
               icon="campaign"
