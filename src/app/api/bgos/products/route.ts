@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
-import { upsertGooglePlaceActionLink } from '@/lib/social/adapters/googlebusiness';
+import {
+  publishProductShowcaseToGoogle,
+  resolveTenantPublicUrls,
+  syncGooglePlaceActionsForTenant,
+} from '@/lib/gbp/place-actions-sync';
 import {
   normalizeBgosProductInput,
   normalizeSocialUrl,
@@ -46,13 +49,7 @@ async function loadTenantStoreContext(tenantId: string, request: NextRequest) {
   const products = parseBgosProducts(settings);
   const storeSettings = parseBgosStoreSettings(settings);
   const socialProfiles = parseSocialProfiles(tenant.socialLinksJson, settings);
-  const slug =
-    settings?.bookingPageConfig?.publicSlug ||
-    tenant.publicSlug ||
-    tenant.slug ||
-    tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  const origin = (process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com').replace(/\/+$/, '');
-  const canonicalUrl = `${origin}/b/${encodeURIComponent(slug)}`;
+  const urls = resolveTenantPublicUrls(tenant, settings);
 
   return {
     tenant,
@@ -61,7 +58,8 @@ async function loadTenantStoreContext(tenantId: string, request: NextRequest) {
     storeSettings,
     socialProfiles,
     currency: tenant.currency || (tenant.country === 'IN' ? 'INR' : 'USD'),
-    canonicalUrl,
+    canonicalUrl: urls.profileUrl,
+    productsFeedUrl: urls.productsFeedUrl,
   };
 }
 
@@ -82,6 +80,7 @@ export async function GET(request: NextRequest) {
       socialProfiles: ctx.socialProfiles,
       currency: ctx.currency,
       canonicalUrl: ctx.canonicalUrl,
+      productsFeedUrl: ctx.productsFeedUrl,
     });
   } catch (err) {
     console.error('[bgos/products] GET failed:', err);
@@ -116,10 +115,32 @@ export async function POST(request: NextRequest) {
       socialProfiles: ctx.socialProfiles,
     });
 
+    const gbpSync =
+      body?.syncToGoogle !== false
+        ? await syncGooglePlaceActionsForTenant({
+            tenantId: ctx.tenant.id,
+            storeSettings: ctx.storeSettings,
+            includeAppointment: false,
+            includeOrdering: true,
+          })
+        : null;
+
+    const googlePost =
+      body?.publishToGooglePost === true
+        ? await publishProductShowcaseToGoogle({
+            tenantId: ctx.tenant.id,
+            product: item,
+            currency: ctx.currency,
+            profileUrl: ctx.canonicalUrl,
+          })
+        : null;
+
     return NextResponse.json({
       ok: true,
       product: item,
       products: nextProducts,
+      gbpSync,
+      googlePost,
     }, { status: 201 });
   } catch (err) {
     console.error('[bgos/products] POST failed:', err);
@@ -169,10 +190,32 @@ export async function PUT(request: NextRequest) {
       socialProfiles: ctx.socialProfiles,
     });
 
+    const gbpSync =
+      body?.syncToGoogle !== false
+        ? await syncGooglePlaceActionsForTenant({
+            tenantId: ctx.tenant.id,
+            storeSettings: ctx.storeSettings,
+            includeAppointment: false,
+            includeOrdering: true,
+          })
+        : null;
+
+    const googlePost =
+      body?.publishToGooglePost === true
+        ? await publishProductShowcaseToGoogle({
+            tenantId: ctx.tenant.id,
+            product: merged,
+            currency: ctx.currency,
+            profileUrl: ctx.canonicalUrl,
+          })
+        : null;
+
     return NextResponse.json({
       ok: true,
       product: merged,
       products: nextProducts,
+      gbpSync,
+      googlePost,
     });
   } catch (err) {
     console.error('[bgos/products] PUT failed:', err);
@@ -295,48 +338,23 @@ export async function PATCH(request: NextRequest) {
       socialProfiles: nextSocialProfiles,
     });
 
-    const gbpSync: {
-      attempted: boolean;
-      syncedActions: string[];
-      warnings: string[];
-    } = {
-      attempted: false,
-      syncedActions: [],
-      warnings: [],
-    };
-
-    if (body?.syncToGoogle === true) {
-      gbpSync.attempted = true;
-      const googleAccount = await prepareGoogleAccount(user.tenantId).catch(() => null);
-      if (!googleAccount) {
-        gbpSync.warnings.push('No active Google Business account connected.');
-      } else {
-        const orderTargetUrl =
-          normalizeSocialUrl(nextStoreSettings.orderActionUrl) || `${ctx.canonicalUrl}#products`;
-        const apptRes = await upsertGooglePlaceActionLink(googleAccount, {
-          placeActionType: 'APPOINTMENT',
-          uri: ctx.canonicalUrl,
-        });
-        if (apptRes.ok) gbpSync.syncedActions.push('APPOINTMENT');
-        else if (apptRes.warning) gbpSync.warnings.push(apptRes.warning);
-
-        if (nextStoreSettings.foodOrderingEnabled) {
-          const foodRes = await upsertGooglePlaceActionLink(googleAccount, {
-            placeActionType: 'FOOD_ORDERING',
-            uri: orderTargetUrl,
-          });
-          if (foodRes.ok) gbpSync.syncedActions.push('FOOD_ORDERING');
-          else if (foodRes.warning) gbpSync.warnings.push(foodRes.warning);
-        } else if (nextStoreSettings.pickupEnabled || nextStoreSettings.deliveryEnabled) {
-          const orderRes = await upsertGooglePlaceActionLink(googleAccount, {
-            placeActionType: 'ONLINE_ORDERING',
-            uri: orderTargetUrl,
-          });
-          if (orderRes.ok) gbpSync.syncedActions.push('ONLINE_ORDERING');
-          else if (orderRes.warning) gbpSync.warnings.push(orderRes.warning);
-        }
-      }
-    }
+    const gbpSync =
+      body?.syncToGoogle === true
+        ? await syncGooglePlaceActionsForTenant({
+            tenantId: user.tenantId,
+            storeSettings: nextStoreSettings,
+            includeAppointment: true,
+            includeOrdering: Boolean(
+              nextStoreSettings.foodOrderingEnabled ||
+                nextStoreSettings.pickupEnabled ||
+                nextStoreSettings.deliveryEnabled,
+            ),
+          })
+        : {
+            attempted: false,
+            syncedActions: [] as string[],
+            warnings: [] as string[],
+          };
 
     return NextResponse.json({
       ok: true,

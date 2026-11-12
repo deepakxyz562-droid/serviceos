@@ -107,7 +107,7 @@ function toAccountData(account: {
 /**
  * Build the PublishParams object for the adapter from the SocialPost row.
  */
-function toPublishParams(
+export function toPublishParams(
   post: {
     content: string;
     mediaUrls: string;
@@ -129,19 +129,25 @@ function toPublishParams(
   }
 
   let gbpOfferData: PublishParams['gbpOfferData'] | undefined;
+  let gbpActionType: PublishParams['gbpActionType'] | undefined;
   let gbpMediaCategory: PublishParams['gbpMediaCategory'] | undefined;
   let mediaFormat: PublishParams['mediaFormat'] | undefined;
   if (post.gbpOfferData) {
     try {
       const parsed = JSON.parse(post.gbpOfferData);
       if (parsed && typeof parsed === 'object') {
-        if (parsed.title && parsed.startDate) {
+        if (parsed.title || parsed.startDate || parsed.endDate || parsed.couponCode || parsed.redeemUrl) {
           gbpOfferData = {
-            title: String(parsed.title),
+            title: String(parsed.title ?? ''),
             startDate: String(parsed.startDate ?? ''),
             endDate: String(parsed.endDate ?? ''),
             couponCode: parsed.couponCode ? String(parsed.couponCode) : undefined,
+            redeemUrl: parsed.redeemUrl ? String(parsed.redeemUrl) : undefined,
           };
+        }
+        const validActions = new Set(['BOOK', 'ORDER', 'SHOP', 'LEARN_MORE', 'SIGN_UP', 'CALL']);
+        if (typeof parsed.actionType === 'string' && validActions.has(parsed.actionType)) {
+          gbpActionType = parsed.actionType as PublishParams['gbpActionType'];
         }
         if (typeof parsed.category === 'string') {
           gbpMediaCategory = parsed.category as PublishParams['gbpMediaCategory'];
@@ -186,6 +192,7 @@ function toPublishParams(
     mediaUrls,
     linkUrl: post.linkUrl ?? undefined,
     gbpPostType: resolvedGbpPostType,
+    gbpActionType,
     gbpMediaCategory,
     mediaFormat,
     gbpOfferData,

@@ -35,6 +35,7 @@ type StoreApiResponse = {
   socialProfiles: BgosSocialProfiles;
   currency: string;
   canonicalUrl: string;
+  productsFeedUrl?: string;
 };
 
 type TabKey = 'catalog' | 'fulfillment' | 'social';
@@ -88,6 +89,7 @@ export default function ProductsManagementScreen() {
   const [pImageUrl, setPImageUrl] = useState<string | null>(null);
   const [pInStock, setPInStock] = useState(true);
   const [pModes, setPModes] = useState<BgosFulfillmentMode[]>(['pickup', 'delivery']);
+  const [publishToGooglePost, setPublishToGooglePost] = useState(true);
 
   useEffect(() => {
     if (params.tab === 'fulfillment' || params.tab === 'social' || params.tab === 'catalog') {
@@ -113,6 +115,7 @@ export default function ProductsManagementScreen() {
     setPImageUrl(null);
     setPInStock(true);
     setPModes(['pickup', 'delivery']);
+    setPublishToGooglePost(true);
     setModalOpen(true);
   }
 
@@ -129,6 +132,7 @@ export default function ProductsManagementScreen() {
         ? prod.fulfillmentModes
         : ['pickup', 'delivery'],
     );
+    setPublishToGooglePost(false);
     setModalOpen(true);
   }
 
@@ -187,14 +191,28 @@ export default function ProductsManagementScreen() {
         imageUrl: pImageUrl,
         inStock: pInStock,
         fulfillmentModes: pModes.length > 0 ? pModes : ['pickup'],
+        publishToGooglePost,
       };
-      await apiRequest('/api/bgos/products', {
+      const saveRes = await apiRequest<{
+        gbpSync?: { syncedActions?: string[] };
+        googlePost?: { ok?: boolean };
+      }>('/api/bgos/products', {
         method: editingId ? 'PUT' : 'POST',
         body: payload,
       });
       setModalOpen(false);
       await storeRes.refresh();
-      setNotice(editingId ? 'Product updated & synced to BGOS Page + AI Chatbot' : 'Product added & synced to BGOS Page + AI Chatbot');
+      const extraParts: string[] = [];
+      if (saveRes?.gbpSync?.syncedActions?.length) {
+        extraParts.push(`Google link: ${saveRes.gbpSync.syncedActions.join(', ')}`);
+      }
+      if (saveRes?.googlePost?.ok) {
+        extraParts.push('Google Update published');
+      }
+      const baseMsg = editingId
+        ? 'Product updated & synced to BGOS Page + AI Chatbot'
+        : 'Product added & synced to BGOS Page + AI Chatbot';
+      setNotice(extraParts.length > 0 ? `${baseMsg} (${extraParts.join(' • ')})` : baseMsg);
     } catch (err) {
       setError((err as Error).message || 'Could not save product');
     } finally {
@@ -524,6 +542,43 @@ export default function ProductsManagementScreen() {
             disabled={busy}
             onPress={() => void handleSaveStoreSettings(true)}
           />
+
+          <Card style={{ gap: 8, backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' }}>
+            <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+              Google Products & Merchant Feed Sync
+            </Text>
+            <Text style={{ fontSize: 12, color: '#475569', lineHeight: 17 }}>
+              Google restricts third-party apps from editing the manual GBP Product Shelf directly. BGOS syncs your Google Order Button, publishes product launch Updates, and serves a live Google Merchant Center XML feed you can connect in Google Business Profile.
+            </Text>
+            {storeRes.data?.productsFeedUrl ? (
+              <View style={{ gap: 8 }}>
+                <Text
+                  selectable
+                  style={{
+                    fontSize: 11.5,
+                    color: '#0369A1',
+                    backgroundColor: '#E0F2FE',
+                    padding: 8,
+                    borderRadius: 8,
+                    fontWeight: '600',
+                  }}
+                >
+                  {storeRes.data.productsFeedUrl}
+                </Text>
+                <Action
+                  secondary
+                  compact
+                  label="Share Merchant XML Feed URL"
+                  icon="share"
+                  onPress={() => {
+                    void Share.share({
+                      message: `Google Merchant Center Product Feed:\n${storeRes.data?.productsFeedUrl}`,
+                    });
+                  }}
+                />
+              </View>
+            ) : null}
+          </Card>
         </View>
       ) : null}
 
@@ -856,6 +911,29 @@ export default function ProductsManagementScreen() {
                   In Stock / Available Now
                 </Text>
                 <Switch value={pInStock} onValueChange={setPInStock} trackColor={{ true: colors.brand }} />
+              </View>
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingTop: 4,
+                }}
+              >
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>
+                    Announce on Google Updates
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                    Also publish a product showcase post with an Order button to your Google Business Profile.
+                  </Text>
+                </View>
+                <Switch
+                  value={publishToGooglePost}
+                  onValueChange={setPublishToGooglePost}
+                  trackColor={{ true: colors.brand }}
+                />
               </View>
 
               <Action

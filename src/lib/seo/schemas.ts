@@ -682,3 +682,116 @@ export function getBlogPostingSchema(opts: {
 
   return schema;
 }
+
+// ─── Business Catalog Schemas (Products & OfferCatalog Services for /b/[slug]) ─
+
+export interface BusinessCatalogSchemaInput {
+  businessName: string;
+  canonicalUrl: string;
+  currency: string;
+  fallbackImage?: string;
+  products?: Array<{
+    id: string;
+    name: string;
+    description?: string | null;
+    price?: number | null;
+    category?: string | null;
+    imageUrl?: string | null;
+    inStock?: boolean;
+  }>;
+  services?: Array<{
+    name: string;
+    description?: string | null;
+    price?: number | null;
+    category?: string | null;
+  }>;
+}
+
+/**
+ * Generates Schema.org `Product` blocks (for Google Merchant / Shopping eligibility)
+ * and an `OfferCatalog` block of `Service` items for a public BGOS business page.
+ */
+export function getBusinessCatalogSchemas(
+  opts: BusinessCatalogSchemaInput,
+): Record<string, unknown>[] {
+  const schemas: Record<string, unknown>[] = [];
+  const currency = (opts.currency || "INR").toUpperCase();
+  const seller = {
+    "@type": "LocalBusiness",
+    "@id": opts.canonicalUrl,
+    name: opts.businessName,
+    url: opts.canonicalUrl,
+  };
+
+  for (const prod of (opts.products || []).slice(0, 30)) {
+    const rawImg = prod.imageUrl || opts.fallbackImage;
+    let img: string | null | undefined;
+    if (!rawImg || /^(https?:)?\/\//i.test(rawImg)) {
+      img = rawImg;
+    } else {
+      try {
+        img = new URL(rawImg.startsWith("/") ? rawImg : `/${rawImg}`, opts.canonicalUrl).toString();
+      } catch {
+        img = absolutizeImageUrl(rawImg);
+      }
+    }
+    const hasPrice =
+      typeof prod.price === "number" && Number.isFinite(prod.price) && prod.price >= 0;
+    schemas.push({
+      "@context": "https://schema.org",
+      "@type": "Product",
+      sku: prod.id,
+      name: prod.name,
+      ...(prod.description ? { description: prod.description.slice(0, 1000) } : {}),
+      ...(prod.category ? { category: prod.category } : {}),
+      ...(img ? { image: img } : {}),
+      brand: {
+        "@type": "Brand",
+        name: opts.businessName,
+      },
+      offers: {
+        "@type": "Offer",
+        url: `${opts.canonicalUrl}#products`,
+        priceCurrency: currency,
+        ...(hasPrice ? { price: (prod.price as number).toFixed(2) } : {}),
+        availability:
+          prod.inStock === false
+            ? "https://schema.org/OutOfStock"
+            : "https://schema.org/InStock",
+        itemCondition: "https://schema.org/NewCondition",
+        seller,
+      },
+    });
+  }
+
+  const services = opts.services || [];
+  if (services.length > 0) {
+    schemas.push({
+      "@context": "https://schema.org",
+      "@type": "OfferCatalog",
+      name: `${opts.businessName} — Services`,
+      url: opts.canonicalUrl,
+      provider: seller,
+      itemListElement: services.slice(0, 30).map((svc, idx) => {
+        const hasPrice =
+          typeof svc.price === "number" && Number.isFinite(svc.price) && svc.price > 0;
+        return {
+          "@type": "Offer",
+          position: idx + 1,
+          ...(hasPrice
+            ? { price: (svc.price as number).toFixed(2), priceCurrency: currency }
+            : {}),
+          itemOffered: {
+            "@type": "Service",
+            name: svc.name,
+            ...(svc.description ? { description: svc.description.slice(0, 500) } : {}),
+            ...(svc.category ? { serviceType: svc.category } : {}),
+            provider: seller,
+          },
+        };
+      }),
+    });
+  }
+
+  return schemas;
+}

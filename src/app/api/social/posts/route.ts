@@ -312,7 +312,8 @@ interface CreatePostBody {
   status?: 'draft' | 'scheduled' | 'published';
   approvalStatus?: 'pending' | 'approved' | 'rejected';
   gbpPostType?: string;
-  gbpOfferData?: { title: string; startDate?: string; endDate?: string; couponCode?: string; redeemUrl?: string; [key: string]: unknown };
+  gbpActionType?: 'BOOK' | 'ORDER' | 'SHOP' | 'LEARN_MORE' | 'SIGN_UP' | 'CALL';
+  gbpOfferData?: { title: string; startDate?: string; endDate?: string; couponCode?: string; redeemUrl?: string; actionType?: string; [key: string]: unknown };
   pinterestBoard?: string;
 }
 
@@ -498,6 +499,9 @@ export async function POST(request: NextRequest) {
     }));
 
     const offerData: Record<string, unknown> = body.gbpOfferData ? { ...body.gbpOfferData } : {};
+    if (body.gbpActionType) {
+      offerData.actionType = body.gbpActionType;
+    }
     if (body.approvalStatus) {
       offerData.approvalStatus = body.approvalStatus;
     }

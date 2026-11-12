@@ -59,6 +59,20 @@ export interface BgosPublicGalleryItem {
   caption?: string | null;
 }
 
+export interface BgosPublicActivity {
+  id: string;
+  type: 'offer' | 'event' | 'whats_new';
+  title: string;
+  summary: string;
+  imageUrl: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  couponCode: string | null;
+  actionType: 'BOOK' | 'ORDER' | 'SHOP' | 'LEARN_MORE' | 'SIGN_UP' | 'CALL';
+  actionUrl: string | null;
+  publishedAt: string | null;
+}
+
 export interface BgosPublicBusinessProfile {
   tenantId: string;
   slug: string;
@@ -94,6 +108,7 @@ export interface BgosPublicBusinessProfile {
   hours: BgosBusinessHoursRow[];
   services: BgosPublicService[];
   products: BgosProduct[];
+  activities?: BgosPublicActivity[];
   storeSettings: BgosStoreSettings;
   gallery: BgosPublicGalleryItem[];
   reviews: BgosPublicReview[];
@@ -323,7 +338,7 @@ export async function getBgosPublicBusinessProfileUncached(
     );
     const brandDetails = settings?.brandBrain?.brandDetails || {};
 
-    const [dbServices, dbReviews, activeForm, branding, googleAccount] = await Promise.all([
+    const [dbServices, dbReviews, activeForm, branding, googleAccount, dbActivityPosts] = await Promise.all([
       db.service
         .findMany({
           where: { tenantId: tenant.id, isActive: true },
@@ -366,6 +381,30 @@ export async function getBgosPublicBusinessProfileUncached(
         .catch(() => null),
       loadTenantEmailBranding(tenant.id),
       prepareGoogleAccount(tenant.id).catch(() => null),
+      typeof (db as any).socialPost?.findMany === 'function'
+        ? (db as any).socialPost
+            .findMany({
+              where: {
+                tenantId: tenant.id,
+                status: { in: ['published', 'scheduled', 'partial'] },
+                gbpPostType: { in: ['offer', 'event', 'whats_new'] },
+              },
+              select: {
+                id: true,
+                content: true,
+                mediaUrls: true,
+                linkUrl: true,
+                gbpPostType: true,
+                gbpOfferData: true,
+                publishedAt: true,
+                scheduledAt: true,
+                createdAt: true,
+              },
+              orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+              take: 15,
+            })
+            .catch(() => [])
+        : Promise.resolve([]),
     ]);
 
     const placeDetails = googleAccount
@@ -688,6 +727,75 @@ export async function getBgosPublicBusinessProfileUncached(
     }
     const products = parseBgosProducts(settings).filter((p) => p.inStock !== false);
     const storeSettings = parseBgosStoreSettings(settings);
+    const todayYmd = new Date().toISOString().slice(0, 10);
+    const activities: BgosPublicActivity[] = (Array.isArray(dbActivityPosts) ? dbActivityPosts : [])
+      .map((post: any): BgosPublicActivity | null => {
+        const offerMeta = safeJsonObject(post.gbpOfferData);
+        const endDate =
+          typeof offerMeta.endDate === 'string' && offerMeta.endDate.trim()
+            ? offerMeta.endDate.trim().slice(0, 10)
+            : null;
+        if (endDate && endDate < todayYmd) return null;
+        const lines = String(post.content || '')
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean);
+        const rawType = post.gbpPostType === 'offer' || post.gbpPostType === 'event' ? post.gbpPostType : 'whats_new';
+        const title =
+          (typeof offerMeta.title === 'string' && offerMeta.title.trim()) ||
+          lines[0] ||
+          (rawType === 'offer' ? 'Special Offer' : rawType === 'event' ? 'Upcoming Event' : 'Business Update');
+        const summary =
+          lines.length > 1
+            ? lines.slice(1).join(' ')
+            : lines[0] && lines[0] !== title
+              ? lines[0]
+              : String(post.content || '').trim();
+        const mediaArr = safeJsonArray(post.mediaUrls);
+        const imageUrl =
+          typeof mediaArr[0] === 'string' ? sanitizePublicImageUrl(mediaArr[0]) || null : null;
+        const validActions = new Set(['BOOK', 'ORDER', 'SHOP', 'LEARN_MORE', 'SIGN_UP', 'CALL']);
+        const actionType = validActions.has(String(offerMeta.actionType))
+          ? (offerMeta.actionType as BgosPublicActivity['actionType'])
+          : rawType === 'offer'
+            ? 'ORDER'
+            : rawType === 'event'
+              ? 'BOOK'
+              : 'LEARN_MORE';
+        return {
+          id: String(post.id),
+          type: rawType,
+          title: title.slice(0, 120),
+          summary: summary.slice(0, 320),
+          imageUrl,
+          startDate:
+            typeof offerMeta.startDate === 'string' && offerMeta.startDate.trim()
+              ? offerMeta.startDate.trim().slice(0, 10)
+              : null,
+          endDate,
+          couponCode:
+            typeof offerMeta.couponCode === 'string' && offerMeta.couponCode.trim()
+              ? offerMeta.couponCode.trim()
+              : null,
+          actionType,
+          actionUrl:
+            (typeof offerMeta.redeemUrl === 'string' && /^https?:\/\//i.test(offerMeta.redeemUrl.trim())
+              ? offerMeta.redeemUrl.trim()
+              : null) ||
+            (typeof post.linkUrl === 'string' && /^https?:\/\//i.test(post.linkUrl.trim())
+              ? post.linkUrl.trim()
+              : null),
+          publishedAt: post.publishedAt
+            ? new Date(post.publishedAt).toISOString()
+            : post.scheduledAt
+              ? new Date(post.scheduledAt).toISOString()
+              : post.createdAt
+                ? new Date(post.createdAt).toISOString()
+                : null,
+        };
+      })
+      .filter((a): a is BgosPublicActivity => Boolean(a))
+      .slice(0, 6);
 
     const brandPrimary =
       (typeof bookingConfig.accentColor === 'string' && bookingConfig.accentColor.trim()) ||
@@ -761,6 +869,7 @@ export async function getBgosPublicBusinessProfileUncached(
       hours,
       services,
       products,
+      activities,
       storeSettings,
       gallery,
       reviews,

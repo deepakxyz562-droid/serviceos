@@ -29,7 +29,9 @@ import {
   Share2,
   ShieldCheck,
   ShoppingBag,
+  Sparkles,
   Star,
+  Tag,
   Truck,
   UserPlus,
   X,
@@ -950,6 +952,134 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                       </div>
                     </div>
                   ))}
+                </div>
+              </section>
+            )}
+
+            {/* Activities, Events & Special Offers */}
+            {profile.activities && profile.activities.length > 0 && (
+              <section id="activities" className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-amber-500" />
+                    <h2 className="text-base font-bold text-slate-900 sm:text-lg">
+                      Activities, Events &amp; Offers
+                    </h2>
+                  </div>
+                  <span className="text-xs font-medium text-slate-500">
+                    {profile.activities.length} active
+                  </span>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {profile.activities.map((act) => {
+                    const typeBadge =
+                      act.type === 'offer'
+                        ? { label: 'Special Offer', cls: 'bg-amber-50 text-amber-800 ring-amber-200/80' }
+                        : act.type === 'event'
+                          ? { label: 'Event', cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200/80' }
+                          : { label: 'Update', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200/80' };
+                    const ctaLabel =
+                      act.actionType === 'BOOK'
+                        ? 'Book Now'
+                        : act.actionType === 'ORDER'
+                          ? 'Order Now'
+                          : act.actionType === 'CALL'
+                            ? 'Call Now'
+                            : act.type === 'offer'
+                              ? 'Claim Offer'
+                              : 'Learn More';
+
+                    return (
+                      <div
+                        key={act.id}
+                        className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/40 p-4"
+                      >
+                        <div className="space-y-2">
+                          {act.imageUrl ? (
+                            <img
+                              src={act.imageUrl}
+                              alt={act.title}
+                              className="h-32 w-full rounded-lg border border-slate-200 bg-white object-cover"
+                            />
+                          ) : null}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold ring-1 ${typeBadge.cls}`}
+                            >
+                              <Tag className="h-2.5 w-2.5" />
+                              {typeBadge.label}
+                            </span>
+                            {(act.startDate || act.endDate) && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10.5px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                                <Calendar className="h-2.5 w-2.5 text-slate-400" />
+                                {act.startDate || 'Now'}
+                                {act.endDate && act.endDate !== act.startDate ? ` → ${act.endDate}` : ''}
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="text-sm font-bold text-slate-900">{act.title}</h3>
+                          {act.summary ? (
+                            <p className="line-clamp-3 text-xs leading-relaxed text-slate-600">
+                              {act.summary}
+                            </p>
+                          ) : null}
+                          {act.couponCode ? (
+                            <div className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-amber-400 bg-amber-50/80 px-2.5 py-1 text-[11px] font-bold text-amber-900">
+                              <span>Code:</span>
+                              <span className="font-mono tracking-wide">{act.couponCode}</span>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="pt-1">
+                          {act.actionType === 'CALL' && profile.phone ? (
+                            <a
+                              href={`tel:${profile.phone}`}
+                              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                              style={{ backgroundColor: accent }}
+                            >
+                              <Phone className="h-3.5 w-3.5" />
+                              {ctaLabel}
+                            </a>
+                          ) : act.actionType === 'BOOK' && profile.bookingEnabled ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBookSuccess(null);
+                                setBookError(null);
+                                setBookingOpen(true);
+                              }}
+                              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                              style={{ backgroundColor: accent }}
+                            >
+                              <Calendar className="h-3.5 w-3.5" />
+                              {ctaLabel}
+                            </button>
+                          ) : act.actionUrl ? (
+                            <a
+                              href={act.actionUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                              style={{ backgroundColor: accent }}
+                            >
+                              {ctaLabel}
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ) : (
+                            <a
+                              href="#bgos-inquiry-section"
+                              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                              style={{ backgroundColor: accent }}
+                            >
+                              {ctaLabel}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             )}

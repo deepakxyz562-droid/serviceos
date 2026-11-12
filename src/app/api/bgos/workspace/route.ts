@@ -513,6 +513,15 @@ export async function PATCH(request: NextRequest) {
     const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
     await ensureAndSyncBusinessChatbot(user.tenantId, { triggerSource: 'workspace_update' }).catch(() => {});
 
+    if (cfg && (cfg.onlineBookingEnabled === true || cfg.publicSlug !== undefined)) {
+      const { syncGooglePlaceActionsForTenant } = await import('@/lib/gbp/place-actions-sync');
+      await syncGooglePlaceActionsForTenant({
+        tenantId: user.tenantId,
+        includeAppointment: cfg.onlineBookingEnabled !== false,
+        includeOrdering: false,
+      }).catch(() => {});
+    }
+
     return NextResponse.json({
       success: true,
       ...(input.data.clearSeededDummyServices ? { removedDummyCount } : {}),

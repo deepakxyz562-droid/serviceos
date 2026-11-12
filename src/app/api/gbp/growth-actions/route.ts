@@ -502,6 +502,7 @@ export async function POST(request: NextRequest) {
         'attributes',
         'services',
         'landing_page',
+        'booking_link',
       ];
       if (!VALID_STEPS.includes(stepId)) {
         return NextResponse.json({ error: 'invalid stepId' }, { status: 400 });

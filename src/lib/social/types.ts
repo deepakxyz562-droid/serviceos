@@ -77,6 +77,8 @@ export interface PublishTarget {
  * Inbound publish request — what the API route builds from the form payload
  * before calling the publisher orchestrator.
  */
+export type GbpCallToActionType = 'BOOK' | 'ORDER' | 'SHOP' | 'LEARN_MORE' | 'SIGN_UP' | 'CALL';
+
 export interface PublishRequest {
   tenantId: string;
   content: string;
@@ -85,6 +87,7 @@ export interface PublishRequest {
   targets: { platform: SocialPlatform; socialAccountId: string }[];
   scheduledAt?: string;
   gbpPostType?: string;
+  gbpActionType?: GbpCallToActionType;
   gbpOfferData?: {
     title: string;
     startDate: string;
@@ -92,6 +95,7 @@ export interface PublishRequest {
     couponCode?: string;
     redeemUrl?: string;
     termsConditions?: string;
+    actionType?: GbpCallToActionType;
   };
   pinterestBoard?: string;
   createdById: string;
@@ -148,6 +152,8 @@ export interface PublishParams {
   linkUrl?: string;
   /** GBP-only: 'offer' | 'event' | 'whats_new' | 'product' | 'photo_media'. */
   gbpPostType?: string;
+  /** GBP-only CTA button type for Local Posts. */
+  gbpActionType?: GbpCallToActionType;
   /** GBP-only: media category when gbpPostType='photo_media'. */
   gbpMediaCategory?: 'ADDITIONAL' | 'COVER' | 'PROFILE' | 'EXTERIOR' | 'INTERIOR' | 'PRODUCT' | 'AT_WORK' | 'TEAMS';
   /** Media format hint for GBP media uploads. */

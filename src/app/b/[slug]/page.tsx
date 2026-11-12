@@ -10,7 +10,7 @@ import {
   getBgosPublicCanonicalUrl,
 } from '@/lib/bgos-public-business';
 import { getCanonicalUrlBySlug } from '@/lib/public-business';
-import { getLocalBusinessSchema } from '@/lib/seo/schemas';
+import { getBusinessCatalogSchemas, getLocalBusinessSchema } from '@/lib/seo/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -205,6 +205,15 @@ export default async function ShortBusinessUrlPage({
         : undefined,
   });
 
+  const catalogSchemas = getBusinessCatalogSchemas({
+    businessName: profile.businessName,
+    canonicalUrl: profile.canonicalUrl,
+    currency: profile.currency,
+    fallbackImage: toAbsoluteAssetUrl(profile.coverImage || profile.logoUrl, profile.canonicalUrl),
+    products: profile.pageVisibility.showProducts !== false ? profile.products : [],
+    services: profile.pageVisibility.showServices !== false ? profile.services : [],
+  });
+
   const chatbotMeta =
     profile.pageVisibility.showChatbot !== false
       ? await getPrimaryBusinessChatbotMeta(profile.tenantId).catch(() => null)
@@ -212,7 +221,7 @@ export default async function ShortBusinessUrlPage({
 
   return (
     <>
-      <StructuredData data={localBusinessSchema} />
+      <StructuredData data={[localBusinessSchema, ...catalogSchemas]} />
       <BgosPublicBusinessPage profile={profile} chatbotMeta={chatbotMeta} />
     </>
   );

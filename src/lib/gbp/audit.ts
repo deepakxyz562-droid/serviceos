@@ -163,20 +163,23 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
       category: 'Conversion',
       label: 'Dedicated GBP Landing Page / Booking Link',
       passed: Boolean(
-        settings.bookingLink ||
+        settings.googlePlaceActions?.appointmentUri ||
+          settings.bookingLink ||
           (brand as any)?.bookingLink ||
           settings.onlineBookingEnabled === true ||
           (tenant as any).publicProfileEnabled === true
       ),
       scoreWeight: 15,
       currentValue:
-        settings.bookingLink || (brand as any)?.bookingLink
-          ? 'Booking link configured'
-          : (tenant as any).publicProfileEnabled
-            ? 'Dedicated GBP Landing Page active'
-            : 'Not configured',
-      recommendation: 'Linking a dedicated localized GBP Landing Page (instead of a generic homepage) boosts both Maps relevance and bookings.',
-      actionRequired: 'Enable your dedicated GBP Landing Page and sync it to Google Business Profile.',
+        settings.googlePlaceActions?.appointmentUri
+          ? 'Synced to Google Appointments button'
+          : settings.bookingLink || (brand as any)?.bookingLink
+            ? 'Booking link configured'
+            : (tenant as any).publicProfileEnabled
+              ? 'Dedicated GBP Landing Page active'
+              : 'Not configured',
+      recommendation: 'Linking a dedicated localized GBP Landing Page and Booking URL on Google Search & Maps converts discovery views directly into bookings.',
+      actionRequired: 'Sync your BGOS Booking URL & Landing Page to Google Business Profile.',
     },
     {
       id: 'services_catalog',

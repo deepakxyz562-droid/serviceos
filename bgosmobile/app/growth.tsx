@@ -46,6 +46,7 @@ import type {
 
 type ToolTab = 'overview' | 'reviews' | 'posts' | 'photos' | 'performance';
 type PostType = 'whats_new' | 'offer' | 'event' | 'product';
+type GbpActionType = 'BOOK' | 'ORDER' | 'LEARN_MORE' | 'CALL';
 type ScheduleChoice = 'now' | 'daily' | 'weekly';
 
 type ReviewsResponse = { reviews: Review[]; pagination?: { total: number } };
@@ -58,6 +59,19 @@ const POST_TYPES: { value: PostType; label: string }[] = [
   { value: 'event', label: 'Event' },
   { value: 'product', label: 'Product' },
 ];
+
+const ACTION_TYPES: { value: GbpActionType; label: string }[] = [
+  { value: 'BOOK', label: 'Book' },
+  { value: 'ORDER', label: 'Order' },
+  { value: 'LEARN_MORE', label: 'Learn More' },
+  { value: 'CALL', label: 'Call' },
+];
+
+function ymdOffset(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 const RATING_FILTERS: { value: number; label: string }[] = [
   { value: 0, label: 'All' },
@@ -135,6 +149,12 @@ function GrowthScreen() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [postTopic, setPostTopic] = useState('');
   const [postType, setPostType] = useState<PostType>('whats_new');
+  const [activityTitle, setActivityTitle] = useState('');
+  const [startDateStr, setStartDateStr] = useState(() => ymdOffset(0));
+  const [endDateStr, setEndDateStr] = useState(() => ymdOffset(7));
+  const [couponCode, setCouponCode] = useState('');
+  const [ctaActionType, setCtaActionType] = useState<GbpActionType>('LEARN_MORE');
+  const [ctaLinkUrl, setCtaLinkUrl] = useState('');
   const [generating, setGenerating] = useState(false);
   const [draft, setDraft] = useState<AiPostDraft | null>(null);
   const [editHeadline, setEditHeadline] = useState('');
@@ -485,6 +505,9 @@ function GrowthScreen() {
         setDraft(res.post);
         setEditHeadline(res.post.headline || '');
         setEditContent(res.post.content || '');
+        if ((postType === 'offer' || postType === 'event') && !activityTitle.trim()) {
+          setActivityTitle(res.post.headline || '');
+        }
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to generate AI post.');
@@ -504,12 +527,36 @@ function GrowthScreen() {
     setPublishing(true);
     setError(null);
     try {
+      const defaultBookingPath = workspace.data?.links?.booking;
+      const defaultProfilePath = workspace.data?.links?.profile;
+      const fallbackPath =
+        ctaActionType === 'BOOK' ? defaultBookingPath || defaultProfilePath : defaultProfilePath;
+      const resolvedLinkUrl =
+        ctaActionType === 'CALL'
+          ? undefined
+          : ctaLinkUrl.trim() ||
+            (fallbackPath
+              ? fallbackPath.startsWith('http')
+                ? fallbackPath
+                : `${WEB_URL}${fallbackPath}`
+              : undefined);
+
       const body: Record<string, unknown> = {
         content: [headline, content].filter(Boolean).join('\n\n'),
         status,
         mediaUrls: draft.visualImageUrl ? [draft.visualImageUrl] : [],
         gbpPostType: postType,
+        gbpActionType: ctaActionType,
+        ...(resolvedLinkUrl ? { linkUrl: resolvedLinkUrl } : {}),
       };
+      if (postType === 'offer' || postType === 'event') {
+        body.gbpOfferData = {
+          title: (activityTitle || headline || content).trim().slice(0, 58),
+          startDate: startDateStr.trim() || ymdOffset(0),
+          endDate: endDateStr.trim() || ymdOffset(7),
+          ...(postType === 'offer' && couponCode.trim() ? { couponCode: couponCode.trim() } : {}),
+        };
+      }
       if (status === 'scheduled') body.scheduledAt = nextScheduleIso(scheduleChoice === 'daily' ? 'daily' : 'weekly');
       if (status !== 'draft') {
         if (!gbpAccountId) {
@@ -522,7 +569,7 @@ function GrowthScreen() {
       Alert.alert(
         status === 'published' ? 'Post Published! 🚀' : status === 'scheduled' ? 'Post Scheduled ⏰' : 'Draft Saved',
         status === 'published'
-          ? 'Your AI post has been submitted to your Google Business Profile feed.'
+          ? 'Your AI post has been submitted to your Google Business Profile feed and BGOS page.'
           : status === 'scheduled'
           ? `AI will publish this post ${scheduleChoice === 'daily' ? 'tomorrow' : 'next week'} at 10:00.`
           : 'Your post draft was saved — publish it when it is ready.',
@@ -531,6 +578,9 @@ function GrowthScreen() {
       setPostTopic('');
       setEditHeadline('');
       setEditContent('');
+      setActivityTitle('');
+      setCouponCode('');
+      setCtaLinkUrl('');
       setComposerOpen(false);
       await postsRes.refresh();
     } catch (e: unknown) {
@@ -1129,7 +1179,12 @@ function GrowthScreen() {
                       key={t.value}
                       accessibilityRole="button"
                       accessibilityState={{ selected: active }}
-                      onPress={() => setPostType(t.value)}
+                      onPress={() => {
+                        setPostType(t.value);
+                        if (t.value === 'event') setCtaActionType('BOOK');
+                        else if (t.value === 'offer' || t.value === 'product') setCtaActionType('ORDER');
+                        else setCtaActionType('LEARN_MORE');
+                      }}
                       style={{
                         minHeight: 36,
                         paddingHorizontal: 12,
@@ -1149,6 +1204,83 @@ function GrowthScreen() {
                 })}
               </ChipRow>
             </View>
+
+            {(postType === 'offer' || postType === 'event') ? (
+              <View style={{ gap: 10 }}>
+                <Field
+                  label={postType === 'offer' ? 'Offer Title (shown on Google)' : 'Event / Activity Title'}
+                  placeholder={postType === 'offer' ? 'e.g. 20% Off Diwali Combo' : 'e.g. Weekend Health Checkup Camp'}
+                  value={activityTitle}
+                  onChangeText={setActivityTitle}
+                />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Field
+                      label="Start Date (YYYY-MM-DD)"
+                      placeholder="YYYY-MM-DD"
+                      value={startDateStr}
+                      onChangeText={setStartDateStr}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Field
+                      label="End Date (YYYY-MM-DD)"
+                      placeholder="YYYY-MM-DD"
+                      value={endDateStr}
+                      onChangeText={setEndDateStr}
+                    />
+                  </View>
+                </View>
+                {postType === 'offer' ? (
+                  <Field
+                    label="Coupon / Promo Code (Optional)"
+                    placeholder="e.g. SAVE20"
+                    value={couponCode}
+                    onChangeText={setCouponCode}
+                  />
+                ) : null}
+              </View>
+            ) : null}
+
+            <View style={{ gap: 6 }}>
+              <Text style={ui.label}>Action button on Google &amp; BGOS Card</Text>
+              <ChipRow>
+                {ACTION_TYPES.map((act) => {
+                  const active = ctaActionType === act.value;
+                  return (
+                    <Pressable
+                      key={act.value}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      onPress={() => setCtaActionType(act.value)}
+                      style={{
+                        minHeight: 34,
+                        paddingHorizontal: 11,
+                        borderRadius: 10,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: active ? colors.brandSoft : colors.surface,
+                        borderWidth: 1,
+                        borderColor: active ? colors.brand : colors.line,
+                      }}
+                    >
+                      <Text style={{ color: active ? colors.brandDark : colors.muted, fontSize: 12, fontWeight: '700' }}>
+                        {act.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ChipRow>
+            </View>
+
+            {ctaActionType !== 'CALL' ? (
+              <Field
+                label="Button Link URL (Optional — defaults to your BGOS Booking / Catalog link)"
+                placeholder="https://bgos.fieseros.com/..."
+                value={ctaLinkUrl}
+                onChangeText={setCtaLinkUrl}
+              />
+            ) : null}
 
             {!draft ? (
               <AiButton label={generating ? 'Generating…' : 'Generate ✨'} loading={generating} onPress={generatePost} />

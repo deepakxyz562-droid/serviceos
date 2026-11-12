@@ -28,6 +28,6 @@ describe('BGOS Notification Deep-Link Routing', () => {
     expect(notificationDestination({ reviewId: 'rev_123' })).toBe('/(tabs)/reviews');
     expect(notificationDestination({ leadId: 'lead_456' })).toBe('/leads');
     expect(notificationDestination({ bookingId: 'book_789' })).toBe('/appointments');
-    expect(notificationDestination({ conversationId: 'conv_321' })).toBe('/inbox');
+    expect(notificationDestination({ conversationId: 'conv_321' })).toBe('/inbox?conversationId=conv_321');
   });
 });

@@ -103,6 +103,58 @@ async function resolveGoogleClientCredentials(): Promise<{
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
+export interface GoogleDateParts {
+  year: number;
+  month: number;
+  day: number;
+}
+
+export interface GoogleEventSchedule {
+  startDate: GoogleDateParts;
+  endDate: GoogleDateParts;
+}
+
+function parseGoogleDateParts(raw: string | undefined, fallback: Date): GoogleDateParts {
+  const trimmed = typeof raw === 'string' ? raw.trim() : '';
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  if (ymd) {
+    return {
+      year: Number(ymd[1]),
+      month: Number(ymd[2]),
+      day: Number(ymd[3]),
+    };
+  }
+  const parsed = trimmed ? new Date(trimmed) : fallback;
+  const d = Number.isNaN(parsed.getTime()) ? fallback : parsed;
+  return {
+    year: d.getFullYear(),
+    month: d.getMonth() + 1,
+    day: d.getDate(),
+  };
+}
+
+/**
+ * Build a GBP LocalPost TimeInterval `{ startDate, endDate }` suitable for both
+ * `OFFER` and `EVENT` posts. Preserves calendar dates from `YYYY-MM-DD` strings
+ * without timezone drift and guarantees `endDate >= startDate`.
+ */
+export function buildGoogleEventSchedule(
+  startDateStr?: string,
+  endDateStr?: string,
+  defaultDurationDays = 7,
+): GoogleEventSchedule {
+  const now = new Date();
+  const startDate = parseGoogleDateParts(startDateStr, now);
+  const startUtcMs = Date.UTC(startDate.year, startDate.month - 1, startDate.day);
+  const fallbackEnd = new Date(startUtcMs + defaultDurationDays * 86400000);
+  let endDate = parseGoogleDateParts(endDateStr, fallbackEnd);
+  const endUtcMs = Date.UTC(endDate.year, endDate.month - 1, endDate.day);
+  if (endUtcMs < startUtcMs) {
+    endDate = { ...startDate };
+  }
+  return { startDate, endDate };
+}
+
 /**
  * Extract the GBP accountName (e.g. "accounts/123") and locationId
  * (e.g. the numeric location ID, NOT the full path) from account.metadata.
@@ -342,27 +394,9 @@ export const googleBusinessAdapter: PlatformAdapter = {
     if (postType === 'offer') {
       body.topicType = 'OFFER';
       const offerData = params.gbpOfferData;
-      const startD = offerData?.startDate && !isNaN(new Date(offerData.startDate).getTime())
-        ? new Date(offerData.startDate)
-        : new Date();
-      const endD = offerData?.endDate && !isNaN(new Date(offerData.endDate).getTime())
-        ? new Date(offerData.endDate)
-        : new Date(Date.now() + 7 * 86400000);
-
       body.event = {
         title: (offerData?.title || params.content).slice(0, 58),
-        schedule: {
-          startDate: {
-            year: startD.getFullYear(),
-            month: startD.getMonth() + 1,
-            day: startD.getDate(),
-          },
-          endDate: {
-            year: endD.getFullYear(),
-            month: endD.getMonth() + 1,
-            day: endD.getDate(),
-          },
-        },
+        schedule: buildGoogleEventSchedule(offerData?.startDate, offerData?.endDate),
       };
 
       const offerObj: Record<string, unknown> = {};
@@ -374,21 +408,11 @@ export const googleBusinessAdapter: PlatformAdapter = {
       }
     } else if (postType === 'event') {
       body.topicType = 'EVENT';
-      // The composer doesn't currently capture event title/startTime/endTime
-      // as separate structured fields — fall back to the post content for
-      // title and use the gbpOfferData block if it was populated (some
-      // users reuse the offer fields for events).
       const eventData = params.gbpOfferData;
-      const event: Record<string, unknown> = {
-        title: eventData?.title || params.content.slice(0, 80),
+      body.event = {
+        title: (eventData?.title || params.content).slice(0, 58),
+        schedule: buildGoogleEventSchedule(eventData?.startDate, eventData?.endDate),
       };
-      if (eventData?.startDate) {
-        event.startTime = eventData.startDate;
-      }
-      if (eventData?.endDate) {
-        event.endTime = eventData.endDate;
-      }
-      body.event = event;
     } else {
       // whats_new / standard
       body.topicType = 'STANDARD';
@@ -403,10 +427,13 @@ export const googleBusinessAdapter: PlatformAdapter = {
       }));
     }
 
-    // Attach call-to-action if a link URL was provided.
-    if (params.linkUrl) {
+    // Attach call-to-action button if configured (`CALL` omits url per GBP API).
+    const actionType = params.gbpActionType || 'LEARN_MORE';
+    if (actionType === 'CALL') {
+      body.callToAction = { actionType: 'CALL' };
+    } else if (params.linkUrl) {
       body.callToAction = {
-        actionType: 'LEARN_MORE',
+        actionType,
         url: params.linkUrl,
       };
     }

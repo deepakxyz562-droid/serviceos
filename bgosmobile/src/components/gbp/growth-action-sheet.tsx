@@ -39,7 +39,7 @@ export interface GrowthSegmentAudit {
 }
 
 export interface GrowthSegmentSeoItem {
-  id: 'description' | 'categories' | 'attributes' | 'services' | 'landing_page';
+  id: 'description' | 'categories' | 'attributes' | 'services' | 'landing_page' | 'booking_link';
   title: string;
   subtitle: string;
   ready: boolean;

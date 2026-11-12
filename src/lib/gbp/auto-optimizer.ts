@@ -9,13 +9,19 @@ import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { updateGoogleBusinessProfile } from '@/lib/social/adapters/googlebusiness';
 import { invalidatePlacePayloadCache } from '@/app/api/gbp/place/route';
 import { applyHostedOrActivationSeoFix } from '@/lib/seo/website-audit';
+import {
+  resolveTenantPublicUrls,
+  syncGooglePlaceActionsForTenant,
+  type PlaceActionsSyncResult,
+} from '@/lib/gbp/place-actions-sync';
 
 export type AutoOptimizeStepId =
   | 'description'
   | 'categories'
   | 'attributes'
   | 'services'
-  | 'landing_page';
+  | 'landing_page'
+  | 'booking_link';
 
 export interface AutoOptimizeActionPreview {
   id: AutoOptimizeStepId;
@@ -380,9 +386,15 @@ export async function buildAutoOptimizePlan(
     limit: 5,
   });
 
-  const slug = tenant.publicSlug || tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  const landingUrl = `https://bgos.fieseros.com/b/${slug}`;
+  const publicUrls = resolveTenantPublicUrls(tenant, settings);
+  const landingUrl = publicUrls.profileUrl;
+  const bookingUrl = publicUrls.bookingUrl;
   const landingOptimal = Boolean(tenant.publicProfileEnabled && tenant.claimed && (tenant.seoTitle || '').length >= 25);
+  const placeActionsOptimal = Boolean(
+    settings.googlePlaceActions?.appointmentUri === bookingUrl &&
+      (settings.bookingLink === bookingUrl ||
+        (tenant.brandProfile as { bookingLink?: string | null } | null)?.bookingLink === bookingUrl),
+  );
 
   const actions: AutoOptimizeActionPreview[] = [
     {
@@ -461,6 +473,20 @@ export async function buildAutoOptimizePlan(
         landingUrl,
         currentWebsite: tenant.website || null,
         publicProfileEnabled: tenant.publicProfileEnabled,
+      },
+    },
+    {
+      id: 'booking_link',
+      title: 'Sync Booking & Order Buttons to Google',
+      subtitle: placeActionsOptimal
+        ? `Google Appointments button synced to ${bookingUrl}`
+        : `Automatically connect ${bookingUrl} to your Google Business Booking button`,
+      ready: true,
+      alreadyOptimal: placeActionsOptimal,
+      impact: 'high',
+      previewData: {
+        bookingUrl,
+        currentAppointmentUri: settings.googlePlaceActions?.appointmentUri || null,
       },
     },
   ];
@@ -584,7 +610,7 @@ export async function executeAutoOptimize(
   const selectedSteps = new Set<AutoOptimizeStepId>(
     Array.isArray(opts.steps) && opts.steps.length > 0
       ? opts.steps
-      : ['description', 'categories', 'attributes', 'services', 'landing_page'],
+      : ['description', 'categories', 'attributes', 'services', 'landing_page', 'booking_link'],
   );
   const pushToGoogle = opts.pushToGoogle !== false;
   const scoreBefore = plan.audit.score;
@@ -740,6 +766,37 @@ export async function executeAutoOptimize(
     appliedSteps.push('landing_page');
   }
 
+  // 6. Booking & Ordering Place Action Links sync to Google Business Profile
+  let bookingSyncResult: { appointmentUri?: string; orderUri?: string; syncedActions: string[] } | null = null;
+  if (selectedSteps.has('booking_link') || (selectedSteps.has('landing_page') && pushToGoogle)) {
+    if (pushToGoogle) {
+      const actionRes: PlaceActionsSyncResult = await syncGooglePlaceActionsForTenant({
+        tenantId,
+        includeAppointment: true,
+      }).catch((err: unknown): PlaceActionsSyncResult => ({
+        attempted: true,
+        connected: false,
+        syncedActions: [],
+        warnings: [err instanceof Error ? err.message : 'Place Action link sync warning'],
+      }));
+      bookingSyncResult = {
+        appointmentUri: actionRes.appointmentUri,
+        orderUri: actionRes.orderUri,
+        syncedActions: actionRes.syncedActions,
+      };
+      if (actionRes.syncedActions.length > 0) {
+        syncedToGoogle = true;
+        if (!appliedMasks.includes('placeActionLinks')) appliedMasks.push('placeActionLinks');
+      }
+      if (actionRes.warnings.length > 0) {
+        googleWarnings.push(...actionRes.warnings);
+      }
+    }
+    if (selectedSteps.has('booking_link')) {
+      appliedSteps.push('booking_link');
+    }
+  }
+
   invalidatePlacePayloadCache(tenantId);
   const auditAfter = await computeGbpAudit(tenantId);
 
@@ -751,6 +808,7 @@ export async function executeAutoOptimize(
     suggestedAttributesApplied: selectedSteps.has('attributes') ? plan.suggestedAttributes.map((a) => a.key) : [],
     generatedDescription: nextDescription,
     landingResult,
+    bookingSyncResult,
     syncedToGoogle,
     appliedMasks,
     googleWarnings,
