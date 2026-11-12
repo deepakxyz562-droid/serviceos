@@ -64,7 +64,7 @@ export async function enablePush(): Promise<{ success: boolean; message: string 
     const projectId =
       Constants.easConfig?.projectId ||
       Constants.expoConfig?.extra?.eas?.projectId ||
-      '6671fda2-0cc6-41c5-be96-e3bef1b459f4';
+      '30078807-9b75-42c3-97c3-41fb166c40f2';
 
     if (Device.isDevice && projectId && !isExpoGoRuntime) {
       const Notifications = getNotificationsModule();
@@ -123,7 +123,7 @@ export async function autoSyncPushToken(): Promise<void> {
     const projectId =
       Constants.easConfig?.projectId ||
       Constants.expoConfig?.extra?.eas?.projectId ||
-      '6671fda2-0cc6-41c5-be96-e3bef1b459f4';
+      '30078807-9b75-42c3-97c3-41fb166c40f2';
 
     if (Device.isDevice && projectId) {
       const tokenRes = await Notifications.getExpoPushTokenAsync({ projectId }).catch(() => null);

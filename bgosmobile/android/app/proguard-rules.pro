@@ -28,3 +28,19 @@
 
 # Expo Notifications & Channels
 -keep class expo.modules.notifications.** { *; }
+
+# Firebase & Auth TurboModules
+-keep class io.invertase.firebase.** { *; }
+-dontwarn io.invertase.firebase.**
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**
+
+# React Native Worklets
+-keep class com.swmansion.worklets.** { *; }
+-dontwarn com.swmansion.worklets.**
+
+# React Native Screens, Gestures, Safe Area, WebView
+-keep class com.swmansion.gesturehandler.** { *; }
+-keep class com.swmansion.rnscreens.** { *; }
+-keep class com.th3rdwave.safeareacontext.** { *; }
+-keep class com.reactnativecommunity.webview.** { *; }

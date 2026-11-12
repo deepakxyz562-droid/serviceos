@@ -55,8 +55,8 @@ function withAndroidReleaseOptimizations(config) {
         props.push({ type: 'property', key, value });
       }
     };
-    addOrUpdate('android.enableMinifyInReleaseBuilds', 'true');
-    addOrUpdate('android.enableShrinkResourcesInReleaseBuilds', 'true');
+    addOrUpdate('android.enableMinifyInReleaseBuilds', 'false');
+    addOrUpdate('android.enableShrinkResourcesInReleaseBuilds', 'false');
     addOrUpdate('android.enablePngCrunchInReleaseBuilds', 'true');
     // Match Expo SDK 58 template for AGP 9.2.1 until third-party RN modules migrate off kotlin-android / old DSL.
     addOrUpdate('android.builtInKotlin', 'false');

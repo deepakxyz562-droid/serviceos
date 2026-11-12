@@ -92,7 +92,7 @@ android {
         applicationId 'com.fieseros.bgos'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        versionCode 30
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
@@ -153,7 +153,6 @@ android {
 }
 
 dependencies {
-    implementation("androidx.work:work-runtime-ktx:2.10.1")
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
