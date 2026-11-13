@@ -1,12 +1,24 @@
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
-const config = getDefaultConfig(__dirname);
-config.watchFolders = [...(config.watchFolders || []), path.resolve(__dirname, '../shared')];
+const projectRoot = __dirname;
+const workspaceRoot = path.resolve(projectRoot, '..');
+
+const config = getDefaultConfig(projectRoot);
+
+config.watchFolders = [
+  projectRoot,
+  path.resolve(workspaceRoot, 'shared'),
+];
+
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, 'node_modules'),
+  path.resolve(workspaceRoot, 'node_modules'),
+];
 
 config.resolver.extraNodeModules = {
   ...(config.resolver.extraNodeModules || {}),
-  '@': path.resolve(__dirname, 'src'),
+  '@': path.resolve(projectRoot, 'src'),
 };
 
 if (config.watcher && config.watcher.healthCheck) {
