@@ -275,7 +275,11 @@ export async function proxy(request: NextRequest) {
   const isCanonicalRootDomain =
     host === canonicalHost ||
     host === BRAND.domain ||
-    host.endsWith(`.${BRAND.domain}`);
+    host.endsWith(`.${BRAND.domain}`) ||
+    lowerHost === 'bgos.site' ||
+    lowerHost.endsWith('.bgos.site') ||
+    lowerHost === 'bgos.app' ||
+    lowerHost.endsWith('.bgos.app');
 
   if (
     process.env.ENABLE_CANONICAL_REDIRECT === 'true' &&

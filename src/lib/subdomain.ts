@@ -64,6 +64,16 @@ export function extractSubdomain(hostname: string): string | null {
     return subdomain;
   }
 
+  // Explicit check for bgos.site domain
+  if (host === 'bgos.site' || host === 'www.bgos.site') {
+    return null;
+  }
+  if (host.endsWith('.bgos.site')) {
+    const subdomain = host.slice(0, host.length - '.bgos.site'.length);
+    if (subdomain === 'www') return null;
+    return subdomain;
+  }
+
   // Fallback for custom domains or when NEXT_PUBLIC_APP_URL is not set:
   // For *.netlify.app: subdomain is the first part when we have 4+ parts
   // e.g., abc.fieseros.com → parts = ['abc', 'fieseros', 'com']

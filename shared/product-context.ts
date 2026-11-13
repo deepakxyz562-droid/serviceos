@@ -70,6 +70,9 @@ export function getWorkspaceProduct(auth?: ProductIdentity): ProductApp {
 /** Host is presentation context only; authorization always uses workspace identity. */
 export function productForHostname(hostname: string): ProductApp {
   const host = hostname.toLowerCase().split(':')[0];
+  if (host === 'bgos.site' || host.endsWith('.bgos.site')) {
+    return 'bgos';
+  }
   const products: Record<string, ProductApp> = {
     'fieseros.com': 'marketing',
     'app.fieseros.com': 'customer',
@@ -77,6 +80,8 @@ export function productForHostname(hostname: string): ProductApp {
     'business.fieseros.com': 'crm',
     'admin.fieseros.com': 'admin',
     'bgos.fieseros.com': 'bgos',
+    'bgos.site': 'bgos',
+    'www.bgos.site': 'bgos',
     'bgos.app': 'bgos',
     'bos.fieseros.com': 'bos',
     'chatbotly.fieseros.com': 'bgos',

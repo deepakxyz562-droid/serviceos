@@ -34,6 +34,14 @@ export interface AutopilotGrowthActionItem {
   readyCount?: number;
 }
 
+export interface RoadmapTask {
+  id: string;
+  label: string;
+  done: boolean;
+  cta?: string;
+  actionType?: string;
+}
+
 export interface RoadmapPhase {
   phase: number;
   title: string;
@@ -41,6 +49,7 @@ export interface RoadmapPhase {
   status: 'completed' | 'in_progress' | 'upcoming';
   itemsCount: number;
   completedCount: number;
+  tasks?: RoadmapTask[];
 }
 
 export interface GrowthSegmentReview {
@@ -152,8 +161,71 @@ export function GrowthActionSheet({
   const readinessScore = growthData?.readinessScore ?? 78;
   const readinessGrade = growthData?.readinessGrade ?? (readinessScore >= 80 ? 'A' : 'B');
   const autopilotActions = growthData?.autopilotActions || [];
-  const roadmapPhases = growthData?.roadmap || [];
   const totalApprovals = reviewItems.length + postItems.length;
+
+  const defaultRoadmap: RoadmapPhase[] = [
+    {
+      phase: 1,
+      title: 'Days 1–7: Fix the Foundation',
+      objective: 'Ensure Google verification, primary category, verified phone, website, and operating hours.',
+      status: autopilotActions.filter((a) => a.phase === 'foundation' && a.status !== 'completed').length === 0 ? 'completed' : 'in_progress',
+      itemsCount: 5,
+      completedCount: Math.max(1, 5 - autopilotActions.filter((a) => a.phase === 'foundation' && a.status !== 'completed').length),
+      tasks: [
+        { id: 't_cat', label: 'Primary business category configured', done: true },
+        { id: 't_phone', label: 'Verified business phone number for calls', done: !autopilotActions.some((a) => a.id === 'add_phone'), cta: 'Add Phone', actionType: 'add_phone' },
+        { id: 't_web', label: 'Official website / storefront URL', done: !autopilotActions.some((a) => a.id === 'add_website'), cta: 'Add Website', actionType: 'add_website' },
+        { id: 't_hours', label: 'Regular & weekend operating hours', done: !autopilotActions.some((a) => a.id === 'set_hours'), cta: 'Set Hours', actionType: 'set_hours' },
+        { id: 't_book', label: 'Google Maps dedicated booking link', done: !autopilotActions.some((a) => a.id === 'booking_link'), cta: 'Enable Booking', actionType: 'enable_booking' },
+      ],
+    },
+    {
+      phase: 2,
+      title: 'Days 8–30: Improve Customer Trust',
+      objective: 'Boost review velocity, reply to 100% of reviews, and publish weekly authentic work photos.',
+      status: reviewItems.length === 0 && !autopilotActions.some((a) => a.id === 'photo_optimization') ? 'completed' : 'in_progress',
+      itemsCount: 4,
+      completedCount: (reviewItems.length === 0 ? 1 : 0) + (postItems.length === 0 ? 1 : 0) + 1,
+      tasks: [
+        { id: 't_rev', label: '100% Google review response rate with AI', done: reviewItems.length === 0, cta: 'Reply Reviews', actionType: 'approve_reviews' },
+        { id: 't_photos', label: 'Upload 5 authentic storefront & work photos', done: !autopilotActions.some((a) => a.id === 'photo_optimization'), cta: 'Upload Photos', actionType: 'upload_photos' },
+        { id: 't_posts', label: 'Publish weekly Google updates & offers', done: postItems.length === 0, cta: 'Review Posts', actionType: 'approve_posts' },
+        { id: 't_standee', label: 'Download counter QR Review Standee PDF', done: true },
+      ],
+    },
+    {
+      phase: 3,
+      title: 'Days 31–60: Expand Visibility',
+      objective: 'Target local search demand queries, 300-char service descriptions, and local SEO.',
+      status: 'in_progress',
+      itemsCount: 4,
+      completedCount: 2,
+      tasks: [
+        { id: 't_svc', label: '300-500 char localized service descriptions', done: !autopilotActions.some((a) => a.id === 'categories_and_services'), cta: 'Auto-Write', actionType: 'add_services' },
+        { id: 't_kw', label: 'Target top nearby search queries in profile', done: !autopilotActions.some((a) => a.id === 'local_keywords'), cta: 'Optimize', actionType: 'add_services' },
+        { id: 't_desc', label: '750-char SEO description with city name', done: !autopilotActions.some((a) => a.id === 'business_description'), cta: 'AI Description', actionType: 'auto_optimize_seo' },
+        { id: 't_nap', label: 'Website NAP (Name, Address, Phone) consistency', done: true },
+      ],
+    },
+    {
+      phase: 4,
+      title: 'Days 61–90: Improve Conversions',
+      objective: 'Track real customer inquiries, phone calls, direction requests, and order bookings.',
+      status: 'in_progress',
+      itemsCount: 3,
+      completedCount: 2,
+      tasks: [
+        { id: 't_maps', label: 'Google Search & Maps impressions tracking', done: true },
+        { id: 't_calls', label: 'Track direct phone calls & direction clicks', done: true },
+        { id: 't_leads', label: 'Connect inquiries & booking conversions in CRM', done: true },
+      ],
+    },
+  ];
+
+  const roadmapPhases =
+    growthData?.roadmap && growthData.roadmap.length > 0 && growthData.roadmap[0].tasks && growthData.roadmap[0].tasks.length > 0
+      ? growthData.roadmap
+      : defaultRoadmap;
 
   const handleApproveSegment = async (segment: 'reviews' | 'posts') => {
     setApproving(`segment_${segment}`);
@@ -810,6 +882,83 @@ export function GrowthActionSheet({
                           {phase.completedCount} of {phase.itemsCount} milestone items on track
                         </Text>
                       </View>
+
+                      {/* Detailed Milestone Task Checklist */}
+                      {phase.tasks && phase.tasks.length > 0 && (
+                        <View style={{ gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                          {phase.tasks.map((task) => (
+                            <View
+                              key={task.id}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                paddingVertical: 4,
+                              }}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 }}>
+                                <MaterialIcons
+                                  name={task.done ? 'check-circle' : 'radio-button-unchecked'}
+                                  size={16}
+                                  color={task.done ? '#16A34A' : '#94A3B8'}
+                                />
+                                <Text
+                                  style={{
+                                    fontSize: 12,
+                                    color: task.done ? '#1E293B' : '#475569',
+                                    fontWeight: task.done ? '600' : '500',
+                                    textDecorationLine: task.done ? 'line-through' : 'none',
+                                    flex: 1,
+                                  }}
+                                  numberOfLines={1}
+                                >
+                                  {task.label}
+                                </Text>
+                              </View>
+
+                              {!task.done && task.cta && (
+                                <Pressable
+                                  onPress={() => {
+                                    if (task.actionType === 'add_phone') {
+                                      setQuickInputType('phone');
+                                      setQuickInputValue('');
+                                    } else if (task.actionType === 'add_website') {
+                                      setQuickInputType('website');
+                                      setQuickInputValue('');
+                                    } else if (task.actionType === 'set_hours') {
+                                      onClose();
+                                      router.push('/manage-profile');
+                                    } else if (task.actionType === 'upload_photos') {
+                                      onClose();
+                                      router.push('/(tabs)/photos');
+                                    } else if (task.actionType === 'approve_reviews') {
+                                      handleApproveSegment('reviews');
+                                    } else if (task.actionType === 'approve_posts') {
+                                      handleApproveSegment('posts');
+                                    } else if (task.actionType === 'enable_booking') {
+                                      handleRunSeoStep('booking_link');
+                                    } else if (task.actionType === 'auto_optimize_seo') {
+                                      handleRunSeoStep('description');
+                                    } else if (task.actionType === 'add_services') {
+                                      handleRunSeoStep('services');
+                                    }
+                                  }}
+                                  style={{
+                                    backgroundColor: '#EFF6FF',
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 3,
+                                    borderRadius: 6,
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#2563EB' }}>
+                                    {task.cta}
+                                  </Text>
+                                </Pressable>
+                              )}
+                            </View>
+                          ))}
+                        </View>
+                      )}
                     </View>
                   );
                 })}
