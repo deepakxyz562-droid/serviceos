@@ -323,7 +323,7 @@ export default function CustomersScreen() {
   const [selectedTag, setSelectedTag] = useState<'ALL' | 'VIP' | 'REGULAR' | 'NEW'>('ALL');
   const [error, setError] = useState<string | null>(null);
 
-  const fetchCustomers = useCallback(async (isInitial = false) => {
+  const fetchCustomers = useCallback(async (isInitial = false, force = false) => {
     try {
       if (isInitial) {
         // Hydrate from cache immediately for instant render without blocking
@@ -341,7 +341,7 @@ export default function CustomersScreen() {
         }
       }
       const url = API_PATHS.commerceCustomers;
-      const data = await apiRequest<CustomersResponse>(url);
+      const data = await apiRequest<CustomersResponse>(url, { forceRefresh: force });
       setCustomers(data.customers || []);
       setCurrency(data.currency || 'INR');
       if (data.summary) {
@@ -369,7 +369,7 @@ export default function CustomersScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await hapticFeedback.light();
-    await fetchCustomers(false);
+    await fetchCustomers(false, true);
   };
 
   const handleWhatsApp = (customer: CustomerRecord) => {

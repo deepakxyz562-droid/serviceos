@@ -1,10 +1,17 @@
 import { db } from '@/lib/db';
 import { getQuoteFlowUser } from '@/lib/quote-flow-session';
 import { resolveStaffSession, type ResolvedStaffSession } from '@/lib/commerce/staff-helper';
+import { getCachedSessionBusiness, setCachedSessionBusiness } from '@/lib/commerce/session-cache';
 
 export async function resolveStaffSessionFromRequest(req: Request): Promise<ResolvedStaffSession> {
   const user = await getQuoteFlowUser(req);
   if (!user) throw new Error('UNAUTHORIZED');
+
+  // Fast-path: in-memory business cache hit (<1ms, 0 Supabase roundtrips)
+  const cached = getCachedSessionBusiness(user.id);
+  if (cached?.business) {
+    return cached as ResolvedStaffSession;
+  }
 
   const resolved = await resolveStaffSession(user);
   if (!resolved?.business) {
@@ -14,7 +21,7 @@ export async function resolveStaffSessionFromRequest(req: Request): Promise<Reso
       business = await db.aiBusiness.findFirst({ where: { tenantId: user.tenantId } });
     }
     if (!business) throw new Error('BUSINESS_NOT_FOUND');
-    return {
+    const ownerSession: ResolvedStaffSession = {
       business,
       role: 'owner',
       permissions: {
@@ -28,8 +35,11 @@ export async function resolveStaffSessionFromRequest(req: Request): Promise<Reso
       },
       isOwner: true,
     };
+    setCachedSessionBusiness(user.id, ownerSession);
+    return ownerSession;
   }
 
+  setCachedSessionBusiness(user.id, resolved);
   return resolved;
 }
 

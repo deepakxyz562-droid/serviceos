@@ -65,9 +65,9 @@ export default function OrdersScreen() {
   } | null>(null);
   const [submittingMatch, setSubmittingMatch] = useState(false);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (force = false) => {
     try {
-      const data = await apiRequest<{ orders: Order[] }>(API_PATHS.commerceOrders);
+      const data = await apiRequest<{ orders: Order[] }>(API_PATHS.commerceOrders, { forceRefresh: force });
       setOrders(data.orders || []);
       setError(null);
       void storageSetItem('bos_orders_cache', JSON.stringify(data.orders || [])).catch(() => {});
@@ -105,7 +105,7 @@ export default function OrdersScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     hapticFeedback.light();
-    await fetchOrders();
+    await fetchOrders(true);
     setRefreshing(false);
   };
 

@@ -869,3 +869,53 @@ export async function getRecurringJobDetails(
 
   return row.get_recurring_job_details;
 }
+
+export interface BosCommerceContextResult {
+  ok: boolean;
+  error?: string;
+  user?: {
+    id: string;
+    email: string;
+    name?: string | null;
+    tenantId?: string | null;
+    isActive: boolean;
+    role?: string;
+  } | null;
+  business?: any;
+  config?: any;
+  role?: string;
+  isOwner?: boolean;
+}
+
+/**
+ * getBosCommerceContext — fetch user active status, AiBusiness, and GptformCommerceConfig
+ * in a single atomic SQL call via PostgREST RPC.
+ *
+ * Eliminates 3 sequential PostgREST roundtrips down to 1.
+ */
+export async function getBosCommerceContext(
+  userId: string,
+): Promise<BosCommerceContextResult | null> {
+  const client = getAdminClient();
+  const { data, error } = await client.rpc('get_bos_commerce_context', {
+    p_user_id: userId,
+  });
+
+  if (error) {
+    const msg = error.message || '';
+    if (
+      error.code === 'PGRST202' ||
+      msg.includes('Could not find the function') ||
+      (msg.includes('function') && msg.includes('does not exist'))
+    ) {
+      throw new RpcFunctionNotFoundError('get_bos_commerce_context');
+    }
+    throw new Error(
+      `[supabase-rpc] get_bos_commerce_context failed: ${msg} (code: ${error.code ?? 'n/a'})`,
+    );
+  }
+
+  const result = Array.isArray(data) ? data[0] : data;
+  return (result as BosCommerceContextResult) || null;
+}
+

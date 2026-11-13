@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireQuoteFlowBusiness } from '@/lib/quote-flow-session';
+import { invalidateCommerceSessionCache } from '@/lib/commerce/session-cache';
 import { sanitizeUpiId } from '@/lib/upi-qr';
 import { computeStoreAvailability, getIstCurrentDateStr } from '@/lib/commerce/store-availability';
 
@@ -217,6 +218,7 @@ export async function PATCH(req: NextRequest) {
         where: { id: business.id },
         data: businessUpdates,
       });
+      invalidateCommerceSessionCache(user.id);
     }
 
     let config = await db.gptformCommerceConfig.findFirst({

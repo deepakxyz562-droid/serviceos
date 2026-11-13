@@ -18,6 +18,8 @@ export function BusinessHomeScreen() {
     const [loaded, setLoaded] = useState<{ identity: string; data: BusinessHomeSnapshot } | null>(null);
     const snapshot = loaded?.identity === identity ? loaded.data : null;
     const bootstrap = useRef<{ identity: string; promise: Promise<unknown> } | null>(null);
+    const lastFetchTime = useRef<number>(0);
+    const lastRevision = useRef<number>(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<'connection' | 'setup' | 'account' | null>(null);
     const [revision, setRevision] = useState(0);
@@ -82,6 +84,17 @@ export function BusinessHomeScreen() {
         if (!hydrated || !user?.id)
             return;
         let active = true;
+
+        const isManualRefresh = revision !== lastRevision.current;
+        lastRevision.current = revision;
+
+        const timeSinceLastFetch = Date.now() - lastFetchTime.current;
+        if (!isManualRefresh && timeSinceLastFetch < 25_000 && snapshot) {
+            // Recently loaded (<25s ago), reuse existing snapshot instantly without screen flicker
+            return;
+        }
+        lastFetchTime.current = Date.now();
+
         // Keep showing existing snapshot without screen flicker; only show loading if empty
         if (!snapshot) {
             setLoading(true);
@@ -96,8 +109,8 @@ export function BusinessHomeScreen() {
         }
 
         const fetchHomeData = () => Promise.all([
-            apiRequest<BusinessHomeSnapshot>('/api/commerce/home'),
-            apiRequest<any>('/api/commerce/config').catch(() => null),
+            apiRequest<BusinessHomeSnapshot>('/api/commerce/home', { forceRefresh: isManualRefresh }),
+            apiRequest<any>('/api/commerce/config', { forceRefresh: isManualRefresh }).catch(() => null),
         ]);
 
         fetchHomeData()

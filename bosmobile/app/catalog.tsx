@@ -113,7 +113,7 @@ export default function MobileCatalogScreen() {
   const [lowOnly,setLowOnly]=useState(filter==='low-stock');
   const stockTracker=useRef(new RequestTracker());
   const saveBusy=useRef(false);
-  const loadStock=async()=>{try{const data=await apiRequest<{items:Array<{id:string;productId?:string;stock:number|null;totalStock?:number|null;minStock:number}>}>(API_PATHS.commerceInventory);setQuantities(Object.fromEntries(data.items.map(i=>[i.productId||i.id,{id:i.id,stock:i.stock,totalStock:i.totalStock,minStock:i.minStock}])));setStockError(false);}catch{setStockError(true);}};
+  const loadStock=async(force = false)=>{try{const data=await apiRequest<{items:Array<{id:string;productId?:string;stock:number|null;totalStock?:number|null;minStock:number}>}>(API_PATHS.commerceInventory, { forceRefresh: force });setQuantities(Object.fromEntries(data.items.map(i=>[i.productId||i.id,{id:i.id,stock:i.stock,totalStock:i.totalStock,minStock:i.minStock}])));setStockError(false);}catch{setStockError(true);}};
   const saveStock=async()=>{
     const quantity=Number(stockQuantity);
     if(!stockProduct||stockSaving)return;
@@ -197,7 +197,9 @@ export default function MobileCatalogScreen() {
     const isSilent = typeof silent === 'boolean' ? silent : false;
     try {
       if (!isSilent) setLoading(true);
-      const data = await apiRequest<{ config: any }>(API_PATHS.commerceConfig);
+      const data = await apiRequest<{ config: any }>(API_PATHS.commerceConfig, {
+        forceRefresh: isSilent,
+      });
       const cfg = data.config;
       if (cfg?.catalogJson) {
         const parsed = typeof cfg.catalogJson === 'string' ? JSON.parse(cfg.catalogJson) : cfg.catalogJson;
@@ -229,7 +231,7 @@ export default function MobileCatalogScreen() {
     hapticFeedback.light();
     await Promise.all([
       fetchCatalog(true),
-      blueprint.capabilities.inventory ? loadStock() : Promise.resolve(),
+      blueprint.capabilities.inventory ? loadStock(true) : Promise.resolve(),
     ]);
     setRefreshing(false);
   }, [blueprint.capabilities.inventory]);

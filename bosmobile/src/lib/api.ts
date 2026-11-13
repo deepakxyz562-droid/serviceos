@@ -13,19 +13,72 @@ export class ApiError extends Error {
   }
 }
 
-interface RequestOptions {
+export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: any;
   params?: Record<string, string | number | boolean | undefined | null>;
   headers?: Record<string, string>;
   skipAuth?: boolean;
+  forceRefresh?: boolean;
+  cacheTtlMs?: number;
+}
+
+interface ApiCacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+// In-memory cache for GET responses to enable 0ms instant tab switching
+const apiMemoryCache = new Map<string, ApiCacheEntry<any>>();
+
+// In-flight request deduplication map to prevent multiple concurrent HTTP calls for the same URL
+const inFlightRequests = new Map<string, Promise<any>>();
+
+export function clearApiCache(pathPattern?: string): void {
+  if (pathPattern) {
+    for (const key of apiMemoryCache.keys()) {
+      if (key.includes(pathPattern)) {
+        apiMemoryCache.delete(key);
+      }
+    }
+  } else {
+    apiMemoryCache.clear();
+  }
+}
+
+function invalidateOnMutation(url: string, method: string): void {
+  if (method === 'GET') return;
+  if (url.includes('/api/commerce/config') || url.includes('/api/commerce/inventory')) {
+    clearApiCache('/api/commerce/config');
+    clearApiCache('/api/commerce/inventory');
+    clearApiCache('/api/commerce/home');
+  } else if (url.includes('/api/commerce/orders')) {
+    clearApiCache('/api/commerce/orders');
+    clearApiCache('/api/commerce/home');
+  } else if (url.includes('/api/commerce/customers')) {
+    clearApiCache('/api/commerce/customers');
+    clearApiCache('/api/commerce/home');
+  } else if (url.includes('/api/tenant/blueprint')) {
+    clearApiCache('/api/tenant/blueprint');
+    clearApiCache('/api/commerce/home');
+  } else {
+    clearApiCache('/api/commerce');
+  }
 }
 
 export async function apiRequest<T = any>(
   path: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const { method = 'GET', body, params, headers = {}, skipAuth = false } = options;
+  const {
+    method = 'GET',
+    body,
+    params,
+    headers = {},
+    skipAuth = false,
+    forceRefresh = false,
+    cacheTtlMs = 45_000,
+  } = options;
 
   let url = path.startsWith('http') ? path : `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
@@ -42,114 +95,152 @@ export async function apiRequest<T = any>(
     }
   }
 
-  const reqHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...headers,
-  };
+  // 1. Fast path: Memory Cache hit for GET requests (<1ms instant render)
+  if (method === 'GET' && !forceRefresh) {
+    const cached = apiMemoryCache.get(url);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.data as T;
+    }
 
-  const isTrustedOrigin = !path.startsWith('http') || path.startsWith(API_BASE_URL);
-
-  if (!skipAuth && isTrustedOrigin) {
-    const token = await getToken();
-    if (token) {
-      reqHeaders['Authorization'] = `Bearer ${token}`;
+    // 2. In-flight request deduplication: reuse active promise
+    const pending = inFlightRequests.get(url);
+    if (pending) {
+      return pending as Promise<T>;
     }
   }
 
-  const send = async (): Promise<Response> => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
-    try {
-      return await fetch(url, {
-        method,
-        headers: reqHeaders,
-        body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
-      });
-    } catch {
-      throw new ApiError('Unable to connect. Check your internet connection and try again.', 0);
-    } finally {
-      clearTimeout(timeout);
-    }
-  };
-  const response = await send();
+  const runRequest = async (): Promise<T> => {
+    const reqHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...headers,
+    };
 
-  if (response.status === 401 && !skipAuth) {
-    // Attempt automatic single-flight refresh.
-    // IMPORTANT: only clear the session on a genuine auth rejection.
-    // A transient error (network, 5xx, rate limit) must NOT nuke the session —
-    // the token may still be valid and the user should be able to retry.
-    let refreshed: boolean;
-    try {
-      refreshed = await attemptTokenRefresh();
-    } catch {
-      // Transient refresh failure (network / 5xx / 429). Do NOT clear tokens.
-      // Surface the original 401 so the caller can show a retry affordance.
-      throw new ApiError(
-        'Unable to reach the server. Please check your connection and try again.',
-        401,
-        { transient: true },
-      );
-    }
+    const isTrustedOrigin = !path.startsWith('http') || path.startsWith(API_BASE_URL);
 
-    if (refreshed) {
-      const newToken = await getToken();
-      reqHeaders['Authorization'] = `Bearer ${newToken}`;
-      const retryResponse = await send();
-      if (retryResponse.ok) {
-        return (await retryResponse.json()) as T;
+    if (!skipAuth && isTrustedOrigin) {
+      const token = await getToken();
+      if (token) {
+        reqHeaders['Authorization'] = `Bearer ${token}`;
       }
-      // If the retry returns 401 after a successful token refresh, the session is VALID,
-      // but this specific endpoint is rejecting access (e.g. role, tenant, or plan restriction).
-      // NEVER clearTokens() here! Doing so would nuke the valid session across the entire app.
-      if (retryResponse.status === 401) {
-        let errData: any = {};
-        try {
-          errData = await retryResponse.json();
-        } catch {}
+    }
+
+    const send = async (): Promise<Response> => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30_000);
+      try {
+        return await fetch(url, {
+          method,
+          headers: reqHeaders,
+          body: body ? JSON.stringify(body) : undefined,
+          signal: controller.signal,
+        });
+      } catch {
+        throw new ApiError('Unable to connect. Check your internet connection and try again.', 0);
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+    const response = await send();
+
+    if (response.status === 401 && !skipAuth) {
+      // Attempt automatic single-flight refresh.
+      let refreshed: boolean;
+      try {
+        refreshed = await attemptTokenRefresh();
+      } catch {
         throw new ApiError(
-          errData.error || errData.message || 'Access denied for this feature.',
+          'Unable to reach the server. Please check your connection and try again.',
           401,
-          errData
+          { transient: true },
         );
       }
-      // Non-401 retry failure — surface the actual status, don't clear session.
-      let retryErrData: any = {};
+
+      if (refreshed) {
+        const newToken = await getToken();
+        reqHeaders['Authorization'] = `Bearer ${newToken}`;
+        const retryResponse = await send();
+        if (retryResponse.ok) {
+          const result = (await retryResponse.json()) as T;
+          if (method === 'GET') {
+            apiMemoryCache.set(url, { data: result, expiresAt: Date.now() + cacheTtlMs });
+          } else {
+            invalidateOnMutation(url, method);
+          }
+          return result;
+        }
+        if (retryResponse.status === 401) {
+          let errData: any = {};
+          try {
+            errData = await retryResponse.json();
+          } catch {}
+          throw new ApiError(
+            errData.error || errData.message || 'Access denied for this feature.',
+            401,
+            errData
+          );
+        }
+        let retryErrData: any = {};
+        try {
+          retryErrData = await retryResponse.json();
+        } catch {}
+        throw new ApiError(
+          retryErrData.error || retryErrData.message || `Request failed with status ${retryResponse.status}`,
+          retryResponse.status,
+          retryErrData
+        );
+      }
+
+      clearApiCache();
+      await clearTokens();
+      throw new ApiError('Session expired. Please sign in again.', 401);
+    }
+
+    if (!response.ok) {
+      let errorData: any = {};
       try {
-        retryErrData = await retryResponse.json();
+        errorData = await response.json();
       } catch {}
       throw new ApiError(
-        retryErrData.error || retryErrData.message || `Request failed with status ${retryResponse.status}`,
-        retryResponse.status,
-        retryErrData
+        errorData.error || errorData.message || `Request failed with status ${response.status}`,
+        response.status,
+        errorData
       );
     }
 
-    // Refresh was authoritatively rejected (returned false) — token is dead.
-    await clearTokens();
-    throw new ApiError('Session expired. Please sign in again.', 401);
-  }
-
-  if (!response.ok) {
-    let errorData: any = {};
+    let parsedResult: T;
     try {
-      errorData = await response.json();
-    } catch {}
-    throw new ApiError(
-      errorData.error || errorData.message || `Request failed with status ${response.status}`,
-      response.status,
-      errorData
-    );
+      parsedResult = (await response.json()) as T;
+    } catch {
+      if (response.status === 204 || response.headers.get('content-length') === '0') {
+        parsedResult = {} as T;
+      } else {
+        throw new ApiError('Invalid JSON response from server', response.status);
+      }
+    }
+
+    if (method === 'GET') {
+      apiMemoryCache.set(url, {
+        data: parsedResult,
+        expiresAt: Date.now() + cacheTtlMs,
+      });
+    } else {
+      invalidateOnMutation(url, method);
+    }
+
+    return parsedResult;
+  };
+
+  if (method === 'GET' && !forceRefresh) {
+    const promise = runRequest();
+    inFlightRequests.set(url, promise);
+    try {
+      return await promise;
+    } finally {
+      inFlightRequests.delete(url);
+    }
   }
 
-  try {
-    return (await response.json()) as T;
-  } catch {
-    if (response.status === 204 || response.headers.get('content-length') === '0') {
-      return {} as T;
-    }
-    throw new ApiError('Invalid JSON response from server', response.status);
-  }
+  return await runRequest();
 }
 
 let refreshPromise: Promise<boolean> | null = null;

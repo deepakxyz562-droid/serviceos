@@ -1,5 +1,11 @@
 import { getAuthUser, verifyToken } from '@/lib/auth';
 import { db } from '@/lib/db';
+import {
+  getCachedSessionUser,
+  setCachedSessionUser,
+  getCachedSessionBusiness,
+  setCachedSessionBusiness,
+} from '@/lib/commerce/session-cache';
 
 export interface QuoteFlowUser {
   id: string;
@@ -22,17 +28,61 @@ export async function getQuoteFlowUser(req?: Request): Promise<QuoteFlowUser | n
       if (bearerToken) {
         const user = verifyToken(bearerToken);
         if (user?.id && user?.email) {
+          // Fast-path: In-memory cache hit (<1ms, bypasses Supabase HTTP roundtrip)
+          const cached = getCachedSessionUser(user.id);
+          if (cached) {
+            return cached;
+          }
+
+          // Optimized path: Supabase Postgres RPC (1 atomic query instead of 3 PostgREST roundtrips)
+          if (process.env.USE_SUPABASE_DB === 'true') {
+            try {
+              const { getBosCommerceContext } = await import('@/lib/supabase-rpc');
+              const rpc = await getBosCommerceContext(user.id);
+              if (rpc?.ok && rpc.user && rpc.user.isActive) {
+                const resolvedUser: QuoteFlowUser = {
+                  id: rpc.user.id,
+                  email: rpc.user.email,
+                  name: rpc.user.name || undefined,
+                  tenantId: rpc.user.tenantId || undefined,
+                };
+                setCachedSessionUser(user.id, resolvedUser);
+                if (rpc.business) {
+                  setCachedSessionBusiness(user.id, {
+                    business: rpc.business,
+                    role: rpc.role || 'owner',
+                    permissions: {
+                      canCreateInvoices: true,
+                      canPosBilling: true,
+                      canManageProducts: true,
+                      canViewReports: true,
+                      canManageKhata: true,
+                      canManageSettings: true,
+                      canManageStaff: true,
+                    },
+                    isOwner: rpc.isOwner ?? true,
+                  });
+                }
+                return resolvedUser;
+              }
+            } catch {
+              // RPC not found or network error, fallback to standard path below
+            }
+          }
+
           const mobileUser = await db.user.findUnique({
             where: { id: user.id },
             select: { id: true, email: true, name: true, tenantId: true, isActive: true },
           });
           if (mobileUser?.isActive) {
-            return {
+            const resolvedUser: QuoteFlowUser = {
               id: mobileUser.id,
               email: mobileUser.email,
               name: mobileUser.name || undefined,
               tenantId: mobileUser.tenantId || undefined,
             };
+            setCachedSessionUser(user.id, resolvedUser);
+            return resolvedUser;
           }
         }
       }
@@ -129,6 +179,11 @@ export async function seedSystemTemplates(businessId: string) {
 }
 
 export async function getOrCreateBusinessForUser(userId: string, tenantId?: string, defaultName = 'My Business') {
+  const cached = getCachedSessionBusiness(userId);
+  if (cached?.business) {
+    return cached.business;
+  }
+
   let business = await db.aiBusiness.findUnique({
     where: { ownerId: userId },
   });
@@ -137,6 +192,7 @@ export async function getOrCreateBusinessForUser(userId: string, tenantId?: stri
     const { resolveStaffSession } = await import('@/lib/commerce/staff-helper');
     const staff = await resolveStaffSession({ id: userId });
     if (staff?.business) {
+      setCachedSessionBusiness(userId, staff as any);
       return staff.business;
     }
 
@@ -154,6 +210,21 @@ export async function getOrCreateBusinessForUser(userId: string, tenantId?: stri
     // Seed default system templates
     await seedSystemTemplates(business.id);
   }
+
+  setCachedSessionBusiness(userId, {
+    business,
+    role: 'owner',
+    permissions: {
+      canCreateInvoices: true,
+      canPosBilling: true,
+      canManageProducts: true,
+      canViewReports: true,
+      canManageKhata: true,
+      canManageSettings: true,
+      canManageStaff: true,
+    },
+    isOwner: true,
+  });
 
   return business;
 }
