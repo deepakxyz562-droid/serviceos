@@ -416,8 +416,6 @@ export default function HomeScreen() {
   const [expandedCompetitor, setExpandedCompetitor] = useState<string | null>(null);
   const [actionsExpanded, setActionsExpanded] = useState(false);
   const [logoLoadError, setLogoLoadError] = useState(false);
-  const { width, fontScale } = useWindowDimensions();
-  const compactActions = width < 375 || fontScale > 1.2;
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const inbox = useResource<BgosConversation[]>('/api/omnichannel/conversations', 15000);
   const dayStart = new Date();
@@ -596,95 +594,11 @@ export default function HomeScreen() {
       { id: 'bookings', label: 'Bookings', icon: 'event-available' as const, onPress: () => router.push('/appointments') },
       { id: 'pickup_delivery', label: 'Ordering', icon: 'local-shipping' as const, onPress: () => router.push('/products-management?tab=fulfillment') },
       { id: 'advertise', label: 'Advertise', icon: 'campaign' as const, onPress: () => router.push('/products-management?tab=social') },
-      { id: 'add_update', label: 'Add update', icon: 'post-add' as const, onPress: () => router.push('/(tabs)/marketing?generate=1') },
-      {
-        id: 'ask_reviews',
-        label: 'Ask reviews',
-        icon: 'rate-review' as const,
-        onPress: () => {
-          setReviewModalTab('single');
-          setReviewModalOpen(true);
-        },
-      },
       { id: 'ai_chatbot', label: 'AI Chatbot', icon: 'smart-toy' as const, onPress: () => router.push('/agents') },
     ],
     [router],
   );
   const visibleActionIcons = actionsExpanded ? actionIcons : actionIcons.slice(0, 7);
-
-  // Unified 4x2 Quick Actions grid — daily high-frequency workflows in one clean place
-  const quickActions = useMemo(
-    () => [
-      {
-        id: 'add_media',
-        label: 'Add Media',
-        icon: 'add-a-photo' as const,
-        iconBg: '#DCFCE7',
-        iconColor: '#009F50',
-        onPress: () => router.push('/(tabs)/photos'),
-      },
-      {
-        id: 'create_post',
-        label: 'Create Post',
-        icon: 'auto-awesome' as const,
-        iconBg: '#DBEAFE',
-        iconColor: '#2563EB',
-        onPress: () => router.push('/(tabs)/marketing?generate=1'),
-      },
-      {
-        id: 'request_review',
-        label: 'Ask Review',
-        icon: 'rate-review' as const,
-        iconBg: '#FEF3C7',
-        iconColor: '#D97706',
-        onPress: () => {
-          setReviewModalTab('single');
-          setReviewModalOpen(true);
-        },
-      },
-      {
-        id: 'reply_reviews',
-        label: 'Reviews',
-        icon: 'star-half' as const,
-        iconBg: '#ECFDF5',
-        iconColor: '#059669',
-        onPress: () => router.push('/(tabs)/reviews'),
-      },
-      {
-        id: 'add_lead',
-        label: 'Add Lead',
-        icon: 'person-add' as const,
-        iconBg: '#EEF2FF',
-        iconColor: '#4F46E5',
-        onPress: () => router.push('/leads?create=1'),
-      },
-      {
-        id: 'book_appt',
-        label: 'Book Appt',
-        icon: 'event' as const,
-        iconBg: '#CCFBF1',
-        iconColor: '#0F766E',
-        onPress: () => router.push('/appointments'),
-      },
-      {
-        id: 'brand_brain',
-        label: 'Brand Brain',
-        icon: 'psychology' as const,
-        iconBg: '#F3E8FF',
-        iconColor: '#7C3AED',
-        onPress: () => router.push('/preferences'),
-      },
-      {
-        id: 'ai_seo_grid',
-        label: 'AI SEO & Grid',
-        icon: 'radar' as const,
-        iconBg: '#E0F2FE',
-        iconColor: '#0284C7',
-        onPress: () => router.push('/seo-growth'),
-      },
-    ],
-    [router],
-  );
 
   const homeTopBar = (
     <View
@@ -1294,55 +1208,100 @@ export default function HomeScreen() {
         )}
       </Card>
 
-      {/* Unified 4x2 Quick Actions Card — directly above analytics for instant access */}
-      <Card style={{ padding: 14, gap: 12, borderRadius: 16 }}>
-        <View style={[ui.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
-          <Text style={ui.heading}>Quick Actions</Text>
-          <Pressable onPress={() => router.push('/(tabs)/tools')} hitSlop={8}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>All Tools</Text>
-          </Pressable>
-        </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 10, justifyContent: 'space-between' }}>
-          {quickActions.map((act) => (
-            <Pressable
-              key={act.id}
-              accessibilityRole="button"
-              accessibilityLabel={act.label}
-              onPress={act.onPress}
-              style={({ pressed }) => ({
-                width: compactActions ? '48.5%' : '23.5%',
-                alignItems: 'center',
-                gap: 6,
-                paddingVertical: 10,
-                paddingHorizontal: 4,
-                borderRadius: 12,
-                backgroundColor: pressed ? '#F1F5F9' : '#F8FAFC',
-                borderWidth: 1,
-                borderColor: '#EEF2F6',
-              })}
-            >
-              <View
-                style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: 12,
-                  backgroundColor: act.iconBg,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <MaterialIcons name={act.icon} size={20} color={act.iconColor} />
-              </View>
-              <Text
-                numberOfLines={1}
-                style={{ fontSize: 11, fontWeight: '700', color: colors.ink, textAlign: 'center' }}
-              >
-                {act.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </Card>
+      {/* Primary Action Buttons: Add Lead & Book Appt */}
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add New Lead"
+          onPress={() => router.push('/leads?create=1')}
+          style={({ pressed }) => ({
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            backgroundColor: '#FFFFFF',
+            borderWidth: 1,
+            borderColor: '#BBF7D0',
+            borderRadius: 14,
+            paddingVertical: 12,
+            paddingHorizontal: 12,
+            shadowColor: '#009F50',
+            shadowOffset: { width: 0, height: 1.5 },
+            shadowOpacity: 0.07,
+            shadowRadius: 5,
+            elevation: 2,
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: '#DCFCE7',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <MaterialIcons name="person-add" size={19} color="#009F50" />
+          </View>
+          <View>
+            <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+              Add Lead
+            </Text>
+            <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#009F50' }}>
+              New inquiry
+            </Text>
+          </View>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Book Appointment"
+          onPress={() => router.push('/appointments')}
+          style={({ pressed }) => ({
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            backgroundColor: '#FFFFFF',
+            borderWidth: 1,
+            borderColor: '#BFDBFE',
+            borderRadius: 14,
+            paddingVertical: 12,
+            paddingHorizontal: 12,
+            shadowColor: '#2563EB',
+            shadowOffset: { width: 0, height: 1.5 },
+            shadowOpacity: 0.07,
+            shadowRadius: 5,
+            elevation: 2,
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: '#DBEAFE',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <MaterialIcons name="event" size={19} color="#2563EB" />
+          </View>
+          <View>
+            <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+              Book Appt
+            </Text>
+            <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#2563EB' }}>
+              Schedule slot
+            </Text>
+          </View>
+        </Pressable>
+      </View>
 
       <ErrorNotice
         message={workspace.error || inbox.error || bookings.error || leads.error || submissions.error}
@@ -1377,206 +1336,6 @@ export default function HomeScreen() {
           },
         ]}
       />
-
-      {/* ── Google Business Growth Action Center (AI Autopilot Hub) ── */}
-      <Card
-        style={{
-          padding: 16,
-          borderRadius: 18,
-          gap: 14,
-          borderColor: '#E2E8F0',
-          shadowColor: '#0F172A',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.04,
-          shadowRadius: 8,
-          elevation: 2,
-        }}
-      >
-        {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 12,
-                backgroundColor: '#FEF3C7',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ fontSize: 20 }}>⚡</Text>
-            </View>
-            <View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
-                  Growth Action Center
-                </Text>
-                <View
-                  style={{
-                    backgroundColor: '#DCFCE7',
-                    paddingHorizontal: 6,
-                    paddingVertical: 1,
-                    borderRadius: 6,
-                  }}
-                >
-                  <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#16A34A' }}>AUTOPILOT</Text>
-                </View>
-              </View>
-              <Text style={{ fontSize: 11.5, color: colors.muted, marginTop: 1 }}>
-                {growthActions.data?.readinessScore ?? 78}/100 Readiness · {growthActions.data?.pendingApprovalCount || 0} Approvals Waiting
-              </Text>
-            </View>
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open Growth Autopilot Studio"
-            onPress={() => setGrowthModalOpen(true)}
-            style={{
-              backgroundColor: '#F1F5F9',
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              borderRadius: 8,
-            }}
-          >
-            <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.brand }}>
-              View All →
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Top 3 Prioritized Actions from Connected GBP Data */}
-        <View style={{ gap: 10 }}>
-          {(growthActions.data?.autopilotActions || []).slice(0, 3).map((act) => {
-            const isP0 = act.priorityLevel === 'P0';
-            return (
-              <Pressable
-                key={act.id}
-                accessibilityRole="button"
-                accessibilityLabel={act.title}
-                onPress={() => setGrowthModalOpen(true)}
-                style={({ pressed }) => ({
-                  backgroundColor: '#F8FAFC',
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: isP0 ? '#FECACA' : '#E2E8F0',
-                  padding: 12,
-                  gap: 6,
-                  opacity: pressed ? 0.85 : 1,
-                })}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View
-                      style={{
-                        backgroundColor: isP0 ? '#FEE2E2' : '#FEF3C7',
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        borderRadius: 6,
-                      }}
-                    >
-                      <Text style={{ fontSize: 9.5, fontWeight: '900', color: isP0 ? '#DC2626' : '#D97706' }}>
-                        {isP0 ? '🔥 P0 CRITICAL' : '⚡ P1 HIGH'}
-                      </Text>
-                    </View>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>
-                      {act.phaseDays}
-                    </Text>
-                  </View>
-
-                  <View
-                    style={{
-                      backgroundColor:
-                        act.status === 'awaiting_approval'
-                          ? '#FFEDD5'
-                          : act.status === 'ready_for_review'
-                            ? '#E0E7FF'
-                            : '#F1F5F9',
-                      paddingHorizontal: 7,
-                      paddingVertical: 2,
-                      borderRadius: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 9.5,
-                        fontWeight: '800',
-                        color:
-                          act.status === 'awaiting_approval'
-                            ? '#EA580C'
-                            : act.status === 'ready_for_review'
-                              ? '#4338CA'
-                              : '#475569',
-                      }}
-                    >
-                      {act.status.replace(/_/g, ' ').toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-
-                <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
-                  {act.title}
-                </Text>
-                <Text style={{ fontSize: 11.5, color: '#475569', lineHeight: 16 }}>
-                  {act.finding}
-                </Text>
-
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 2 }}>
-                  <View
-                    style={{
-                      backgroundColor: isP0 ? colors.brand : '#0F172A',
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
-                      borderRadius: 8,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 4,
-                    }}
-                  >
-                    <MaterialIcons name="bolt" size={14} color="#FFFFFF" />
-                    <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>
-                      {act.cta}
-                    </Text>
-                  </View>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* 90-Day Roadmap Quick Preview */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open 90-Day Growth Roadmap"
-          onPress={() => setGrowthModalOpen(true)}
-          style={({ pressed }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            backgroundColor: '#F0F9FF',
-            paddingVertical: 10,
-            paddingHorizontal: 12,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: '#BAE6FD',
-            opacity: pressed ? 0.85 : 1,
-          })}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 16 }}>🗺️</Text>
-            <View>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: '#0369A1' }}>
-                90-Day Growth Roadmap Active
-              </Text>
-              <Text style={{ fontSize: 10.5, color: '#0284C7' }}>
-                Fix Foundation (Days 1–7) • Build Trust • Expand Visibility
-              </Text>
-            </View>
-          </View>
-          <MaterialIcons name="chevron-right" size={18} color="#0369A1" />
-        </Pressable>
-      </Card>
 
       {/* Google's Performance & Search Preview (100% Real GBP & Analytics Data) */}
       <GooglePerformanceCard
@@ -1671,67 +1430,53 @@ export default function HomeScreen() {
         />
       </View>
 
-      {/* Today's Appointments or Next Conversations */}
-      <Card>
-        <View style={[ui.row, { justifyContent: 'space-between' }]}>
-          <Text style={ui.heading}>{agency ? 'Next Conversations' : "Today's Appointments"}</Text>
-          <Badge label={agency ? 'Pipeline' : `${appointments?.length || 0} scheduled`} accent />
-        </View>
+      {/* Today's Appointments (Hidden when in agency mode where Next Conversations was shown) */}
+      {!agency && (
+        <Card>
+          <View style={[ui.row, { justifyContent: 'space-between' }]}>
+            <Text style={ui.heading}>{"Today's Appointments"}</Text>
+            <Badge label={`${appointments?.length || 0} scheduled`} accent />
+          </View>
 
-        {agency ? (
-          <>
-            <Text style={ui.body}>Review your leads and outreach before the next follow-up call.</Text>
-            <MenuRow
-              title="Lead Pipeline"
-              detail="Review contacts and follow-ups"
-              icon="people-outline"
-              onPress={() => router.push('/leads')}
-            />
-            <MenuRow
-              title="Campaign Approvals"
-              detail="Review email & WhatsApp broadcasts"
-              icon="send"
-              onPress={() => router.push('/outreach')}
-            />
-          </>
-        ) : bookings.error ? (
-          <Text style={ui.body}>Appointments are currently unavailable. Retry above.</Text>
-        ) : appointments?.length ? (
-          appointments.slice(0, 4).map((b) => (
-            <View
-              key={b.id}
-              style={[
-                ui.row,
-                {
-                  justifyContent: 'space-between',
-                  paddingVertical: 8,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.line,
-                },
-              ]}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={ui.heading}>{b.customerName || b.title || 'Client Appointment'}</Text>
-                <Text style={ui.caption}>
-                  {b.title || 'Service'} · {new Date(b.scheduledAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
+          {bookings.error ? (
+            <Text style={ui.body}>Appointments are currently unavailable. Retry above.</Text>
+          ) : appointments?.length ? (
+            appointments.slice(0, 4).map((b) => (
+              <View
+                key={b.id}
+                style={[
+                  ui.row,
+                  {
+                    justifyContent: 'space-between',
+                    paddingVertical: 8,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.line,
+                  },
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={ui.heading}>{b.customerName || b.title || 'Client Appointment'}</Text>
+                  <Text style={ui.caption}>
+                    {b.title || 'Service'} · {new Date(b.scheduledAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+                <Badge label={b.status} success={b.status === 'confirmed'} />
               </View>
-              <Badge label={b.status} success={b.status === 'confirmed'} />
-            </View>
-          ))
-        ) : (
-          <Text style={ui.body}>
-            {bookings.loading ? 'Loading your schedule…' : 'No appointments scheduled for today.'}
-          </Text>
-        )}
+            ))
+          ) : (
+            <Text style={ui.body}>
+              {bookings.loading ? 'Loading your schedule…' : 'No appointments scheduled for today.'}
+            </Text>
+          )}
 
-        <Action
-          secondary
-          label="View Full Calendar"
-          icon="event"
-          onPress={() => router.push('/appointments')}
-        />
-      </Card>
+          <Action
+            secondary
+            label="View Full Calendar"
+            icon="event"
+            onPress={() => router.push('/appointments')}
+          />
+        </Card>
+      )}
 
       {/* Competitor Analysis — real /api/gbp/competitors from Google Places (New) */}
       <Card style={{ gap: 10 }}>

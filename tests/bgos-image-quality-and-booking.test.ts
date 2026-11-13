@@ -84,18 +84,17 @@ describe('High Quality Image Prompt & Public Booking Services Flow', () => {
   describe('Prompt Quality Enhancer', () => {
     it('enriches photo prompts with commercial photography and realism directives', () => {
       const prompt = buildHighQualityImagePrompt('smiling plumber fixing kitchen sink');
-      expect(prompt).toContain('Award-winning commercial promotional photography');
+      expect(prompt).toContain('commercial promotional advertising photography');
       expect(prompt).toContain('35mm f/1.8 lens');
       expect(prompt).toContain('8k UHD resolution');
-      expect(prompt).toContain('no watermarks');
+      expect(prompt).toMatch(/no watermarks/i);
       expect(prompt).toContain('smiling plumber fixing kitchen sink');
     });
 
     it('enriches poster prompts with bold typographic and advertising agency directives', () => {
       const prompt = buildHighQualityImagePrompt('50% off holiday discount sale', true);
-      expect(prompt).toContain('Ultra-high quality modern commercial promotional poster design');
-      expect(prompt).toContain('1080x1350 vertical format');
-      expect(prompt).toContain('bold visual hierarchy');
+      expect(prompt).toContain('promotional poster graphic');
+      expect(prompt).toContain('1080x1350 portrait format');
       expect(prompt).toContain('50% off holiday discount sale');
     });
   });
@@ -142,11 +141,11 @@ describe('High Quality Image Prompt & Public Booking Services Flow', () => {
     });
 
     it('constructs public booking URLs directly with domain root without corrupting with /app?product=bgos', () => {
-      const WEB_URL = 'https://bgos.fieseros.com';
+      const WEB_URL = 'https://bgos.site';
       const bookingPath = '/book/metro-fast-plumbing';
       const constructed = bookingPath.startsWith('http') ? bookingPath : `${WEB_URL}${bookingPath}`;
 
-      expect(constructed).toBe('https://bgos.fieseros.com/book/metro-fast-plumbing');
+      expect(constructed).toBe('https://bgos.site/book/metro-fast-plumbing');
       expect(constructed).not.toContain('/app?product=bgos');
     });
   });

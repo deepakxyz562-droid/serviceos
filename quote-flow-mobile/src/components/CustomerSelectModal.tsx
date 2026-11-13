@@ -13,6 +13,7 @@ import {
   Platform,
 } from "react-native";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
+import { ContactPickerModal, SelectedContact } from "@/components/ContactPickerModal";
 import { api, apiPost } from "@/api/client";
 import {
   sanitizePhone,
@@ -56,6 +57,16 @@ export function CustomerSelectModal({
   const [newAddress, setNewAddress] = useState("");
   const [newGstin, setNewGstin] = useState("");
   const [savingNew, setSavingNew] = useState(false);
+  const [contactPickerVisible, setContactPickerVisible] = useState(false);
+
+  function handleContactPicked(c: SelectedContact) {
+    setNewName(c.name || "");
+    if (c.phone) setNewPhone(c.phone);
+    if (c.email) setNewEmail(c.email);
+    if (c.address) setNewAddress(c.address);
+    if (c.company && !c.name) setNewName(c.company);
+    setIsAddingNew(true);
+  }
 
   async function loadCustomers() {
     setLoading(true);
@@ -167,6 +178,15 @@ export function CustomerSelectModal({
           {isAddingNew ? (
             /* IN-LINE CLIENT CREATION FORM */
             <ScrollView style={styles.formScroll} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+              <TouchableOpacity
+                style={styles.importContactsPill}
+                onPress={() => setContactPickerVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Feather name="user-check" size={15} color="#2563eb" style={{ marginRight: 6 }} />
+                <Text style={styles.importContactsPillText}>Auto-fill from Phone Contacts</Text>
+              </TouchableOpacity>
+
               <Text style={styles.inputLabel}>
                 Client Name <Text style={{ color: "#ef4444" }}>*</Text>
               </Text>
@@ -265,6 +285,15 @@ export function CustomerSelectModal({
                 </TouchableOpacity>
               </View>
 
+              <TouchableOpacity
+                style={styles.importContactsRow}
+                onPress={() => setContactPickerVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Feather name="user-check" size={15} color="#2563eb" style={{ marginRight: 6 }} />
+                <Text style={styles.importContactsRowText}>Import from Phone Contacts</Text>
+              </TouchableOpacity>
+
               {loading ? (
                 <View style={styles.centerLoading}>
                   <ActivityIndicator size="large" color="#2563eb" />
@@ -351,6 +380,12 @@ export function CustomerSelectModal({
           )}
         </View>
       </KeyboardAvoidingView>
+
+      <ContactPickerModal
+        visible={contactPickerVisible}
+        onClose={() => setContactPickerVisible(false)}
+        onSelect={handleContactPicked}
+      />
     </Modal>
   );
 }
@@ -402,6 +437,39 @@ const styles = StyleSheet.create({
     gap: 8,
     borderBottomWidth: 1,
     borderBottomColor: "#f1f5f9",
+  },
+  importContactsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#eff6ff",
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+  },
+  importContactsRowText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#2563eb",
+  },
+  importContactsPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#eff6ff",
+    paddingVertical: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    marginBottom: 14,
+  },
+  importContactsPillText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#2563eb",
   },
   searchWrap: {
     flex: 1,

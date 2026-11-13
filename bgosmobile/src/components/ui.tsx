@@ -99,6 +99,7 @@ export function Screen({
   onBack,
   customHeader,
   stickyHeader,
+  extraTopPadding = 0,
   extraBottomPadding = 0,
   floatingAction,
   scrollable = true,
@@ -115,6 +116,7 @@ export function Screen({
   onBack?: () => void;
   customHeader?: React.ReactNode;
   stickyHeader?: React.ReactNode;
+  extraTopPadding?: number;
   extraBottomPadding?: number;
   floatingAction?: React.ReactNode;
   scrollable?: boolean;
@@ -135,8 +137,11 @@ export function Screen({
     }
   }
 
-  // Fallback top padding only when SafeAreaView reports zero top inset (e.g., certain full-screen Modals)
-  const modalFallbackTop = Platform.OS === 'ios' ? 14 : (RNStatusBar.currentHeight || 24) + 4;
+  // Ensure top clearance is NEVER cut off by punch holes, camera notches, or mobile top edges
+  const androidStatus = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0;
+  const minTopInset = Platform.OS === 'android' ? androidStatus + 10 : (Platform.OS === 'ios' ? 44 : 20);
+  const effectiveTopPadding = Math.max(insets.top, minTopInset) + extraTopPadding;
+
   // Ensure content never gets hidden behind bottom tabs (62px bar + insets.bottom + clearance)
   const floatingClearance = floatingAction ? 60 : 0;
   const bottomInset = Math.max(insets.bottom, 16) + 76 + extraBottomPadding + floatingClearance;
@@ -152,11 +157,11 @@ export function Screen({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            hitSlop={10}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             onPress={handleBack}
             style={({ pressed }) => [ui.navBackBtn, { opacity: pressed ? 0.65 : 1 }]}
           >
-            <MaterialIcons name="chevron-left" size={26} color={colors.ink} />
+            <MaterialIcons name="chevron-left" size={24} color={colors.ink} />
           </Pressable>
         ) : headerIcon ? (
           <View style={ui.navIconTile}>
@@ -183,10 +188,10 @@ export function Screen({
         ui.screen,
         {
           backgroundColor: hasPinnedNav ? '#FFFFFF' : colors.background,
-          paddingTop: insets.top > 0 ? 0 : modalFallbackTop,
+          paddingTop: effectiveTopPadding,
         },
       ]}
-      edges={['top', 'left', 'right']}
+      edges={['left', 'right']}
     >
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {pinnedNavBar}
@@ -650,9 +655,9 @@ export const ui = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#EEF2F6',
-    minHeight: 54,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    minHeight: 56,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -662,7 +667,7 @@ export const ui = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     minWidth: 0,
   },
   navBarRight: {
@@ -670,12 +675,15 @@ export const ui = StyleSheet.create({
     alignItems: 'flex-end',
   },
   navBackBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: -4,
+    marginLeft: 0,
   },
   navIconTile: {
     width: 32,

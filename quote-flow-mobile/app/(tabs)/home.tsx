@@ -12,7 +12,7 @@ import { useRouter } from "expo-router";
 import { useAppStore } from "@/store/app";
 import { api } from "@/api/client";
 import { formatCurrency } from "@/lib/format";
-import { AiOmniInputModal } from "../../src/components/AiOmniInputModal";
+import { AiOmniInputModal } from "@/components/AiOmniInputModal";
 
 interface RecentItem {
   id: string;
@@ -76,7 +76,7 @@ export default function HomeScreen() {
   const first = business?.ownerName || business?.name || "there";
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.container}>
         <Text style={styles.greeting}>{greeting}, {first.split(" ")[0]}</Text>
         <Text style={styles.greetingSub}>What would you like to create?</Text>

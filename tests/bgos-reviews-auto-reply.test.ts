@@ -6,6 +6,10 @@ vi.mock('@/lib/auth', () => ({
   getAuthUser: vi.fn(),
 }));
 
+vi.mock('@/lib/bgos-entitlement', () => ({
+  requireBgosEntitled: vi.fn(async () => ({ ok: true })),
+}));
+
 vi.mock('@/lib/ai-client', () => ({
   callAI: vi.fn().mockResolvedValue('Thank you for your fantastic review! We are delighted to serve you.'),
 }));

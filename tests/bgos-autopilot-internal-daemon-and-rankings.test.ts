@@ -145,6 +145,15 @@ describe('In-Process Autopilot Worker Daemon & Free Native GBP Rankings', () => 
       expect(mockGenerateDailyAutopilotPost).toHaveBeenCalledWith('tenant-autopilot-1');
     });
 
+    it('continues beyond the first 50 tenants', async () => {
+      const { runAutopilotTick } = await import('@/lib/social/autopilot-worker-daemon');
+      mockDb.tenant.findMany.mockResolvedValueOnce(Array.from({length:50},(_,i)=>({id:`tenant-${String(i).padStart(3,'0')}`}))).mockResolvedValueOnce([{id:'tenant-050'}]);
+      const result = await runAutopilotTick(new Date());
+      expect(result.tenantsChecked).toBe(51);
+      expect(mockDb.tenant.findMany.mock.calls[1][0].where.id).toEqual({gt:'tenant-049'});
+      expect(mockGenerateDailyAutopilotPost).toHaveBeenCalledWith('tenant-050');
+    });
+
     it('manages daemon lifecycle gracefully (start and stop)', async () => {
       const { startBgosAutopilotWorker, stopBgosAutopilotWorker } = await import(
         '@/lib/social/autopilot-worker-daemon'

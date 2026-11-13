@@ -6,6 +6,10 @@ vi.mock('@/lib/auth', () => ({
   getAuthUser: vi.fn(),
 }));
 
+vi.mock('@/lib/bgos-entitlement', () => ({
+  requireBgosEntitled: vi.fn(async () => ({ ok: true })),
+}));
+
 vi.mock('@/lib/social/publisher', () => ({
   publishPost: vi.fn().mockResolvedValue(undefined),
 }));
@@ -325,7 +329,33 @@ describe('GBP Reviews, Autopilot 30d/1yr, Rankings, Page Creation & Website Buil
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
-      expect(json.websiteUrl).toContain('https://bgos.fieseros.com/b/fieseros-heating');
+      expect(json.websiteUrl).toContain('https://bgos.site/b/fieseros-heating');
+    });
+
+    it('preserves existing custom website on Google Business Profile and does not overwrite it with bgos.site', async () => {
+      const { getAuthUser } = await import('@/lib/auth');
+      vi.mocked(getAuthUser).mockResolvedValue({ id: 'user-1', email: 'owner@fieseros.com', tenantId: 'tenant-fieseros' } as any);
+
+      // Set existing custom website on tenant
+      mockTenant.website = 'https://drsharmaclinic.com';
+
+      const { POST } = await import('@/app/api/gbp/website/generate/route');
+      const req = new NextRequest('http://localhost/api/gbp/website/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ syncToGoogle: true }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.preservedCustomWebsite).toBe('https://drsharmaclinic.com');
+      expect(json.message).toContain('drsharmaclinic.com');
+      expect(mockTenant.website).toBe('https://drsharmaclinic.com');
+
+      // Reset
+      mockTenant.website = undefined;
     });
   });
 });

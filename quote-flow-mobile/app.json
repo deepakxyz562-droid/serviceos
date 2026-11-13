@@ -15,6 +15,7 @@
         "NSMicrophoneUsageDescription": "QuoteFlow uses the microphone to create quotes from your voice.",
         "NSCameraUsageDescription": "QuoteFlow uses the camera to scan documents.",
         "NSPhotoLibraryUsageDescription": "QuoteFlow uses your photo library to add a business logo and document attachments.",
+        "NSContactsUsageDescription": "QuoteFlow lets you quickly select client name and phone number from your contacts.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -25,7 +26,8 @@
       },
       "package": "com.quoteflow.app",
       "permissions": [
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "READ_CONTACTS"
       ]
     },
     "web": {
@@ -44,7 +46,11 @@
           ]
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-asset",
+      "expo-font",
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "experiments": {
       "tsconfigPaths": true,

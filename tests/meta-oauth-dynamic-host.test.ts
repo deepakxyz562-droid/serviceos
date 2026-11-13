@@ -108,3 +108,21 @@ it('uses bgos.fieseros.com host for instagram redirect_uri and encodes into stat
   const state = JSON.parse(stateStr);
   expect(state.redirectUri).toBe('https://bgos.fieseros.com/api/oauth/instagram/callback');
 });
+
+it('uses bgos.site host for facebook and instagram redirect_uri and encodes into state', async () => {
+  const fbReq = new NextRequest('https://bgos.site/api/oauth/facebook', {
+    headers: { host: 'bgos.site' },
+  });
+  const fbRes = await startFacebook(fbReq);
+  expect(fbRes.status).toBe(307);
+  const fbLoc = new URL(fbRes.headers.get('location')!);
+  expect(fbLoc.searchParams.get('redirect_uri')).toBe('https://bgos.site/api/oauth/facebook/callback');
+
+  const igReq = new NextRequest('https://bgos.site/api/oauth/instagram', {
+    headers: { host: 'bgos.site' },
+  });
+  const igRes = await startInstagram(igReq);
+  expect(igRes.status).toBe(307);
+  const igLoc = new URL(igRes.headers.get('location')!);
+  expect(igLoc.searchParams.get('redirect_uri')).toBe('https://bgos.site/api/oauth/instagram/callback');
+});

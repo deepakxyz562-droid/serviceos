@@ -62,6 +62,7 @@ describe('PosterTemplateGallery (Flyer-Maker-style entry)', () => {
 
   it('selects a template on card click with the full template payload', () => {
     renderGallery();
+    fireEvent.click(screen.getByRole('button', { name: /All templates/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Use Mega Sale template' }));
     expect(onSelect).toHaveBeenCalledTimes(1);
     const arg = onSelect.mock.calls[0][0];

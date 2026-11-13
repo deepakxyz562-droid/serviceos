@@ -105,7 +105,7 @@ export default function ItemsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Items</Text>
         <TouchableOpacity

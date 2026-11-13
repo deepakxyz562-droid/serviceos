@@ -66,7 +66,7 @@ export default function QuotesScreen() {
   const currency = business?.currency || "INR";
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       {/* Top App Bar */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>

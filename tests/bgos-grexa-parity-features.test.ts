@@ -116,6 +116,10 @@ vi.mock('@/lib/auth', () => ({
   })),
 }));
 
+vi.mock('@/lib/bgos-entitlement', () => ({
+  requireBgosEntitled: vi.fn(async () => ({ ok: true })),
+}));
+
 vi.mock('@/lib/social/google-account-helper', () => ({
   prepareGoogleAccount: vi.fn(async () => mockGoogleAccount),
 }));

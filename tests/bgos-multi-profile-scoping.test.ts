@@ -18,6 +18,10 @@ vi.mock('@/lib/auth', () => ({
   getAuthUser: m.findAuthUser,
 }));
 
+vi.mock('@/lib/bgos-entitlement', () => ({
+  requireBgosEntitled: vi.fn(async () => ({ ok: true })),
+}));
+
 vi.mock('@/lib/db', () => ({
   db: {
     tenant: { findUnique: m.findTenant },
@@ -212,5 +216,72 @@ describe('Multi-profile Reviews & Posts Scoping', () => {
 
     // Verify it targeted sa-2 (Branch 2) instead of defaulting to sa-1 (Branch 1)
     expect(parsedTargets[0].socialAccountId).toBe('sa-2');
+  });
+
+  it('falls back safely without 500 error when extractLocationRef fails on pending-approval account', async () => {
+    m.countSocialAccount.mockResolvedValue(1);
+    m.findTenant.mockResolvedValue({
+      id: 'tenant-1',
+      settingsJson: null,
+    });
+    m.findManySocialAccount.mockResolvedValue([
+      {
+        id: 'sa-pending',
+        accountId: '5008',
+        accountName: 'Google Business Profile (Pending Approval)',
+        accessToken: 'encrypted-token',
+        metadata: JSON.stringify({
+          accountName: 'accounts/primary',
+          locationId: '5008',
+          pendingApiApproval: true,
+        }),
+      },
+    ]);
+
+    const scope = await googleReviewScope('tenant-1');
+    expect(scope).toEqual({ source: 'google' });
+  });
+
+  it('quotes and escapes PostgREST OR/NOT filter values containing quotes or reserved chars', async () => {
+    const {
+      formatPostgrestOrValue,
+      buildOrConditionPart,
+      applyWhereFilters,
+    } = await import('@/lib/supabase-db');
+
+    expect(formatPostgrestOrValue('%"text":"%')).toBe('"%\\"text\\":\\"%"');
+    expect(formatPostgrestOrValue('2026-11-09T10:00:00.000Z')).toBe('2026-11-09T10:00:00.000Z');
+
+    const orCalls: string[] = [];
+    const mockQuery = {
+      or: (f: string) => { orCalls.push(f); return mockQuery; },
+      not: () => mockQuery,
+      eq: () => mockQuery,
+      neq: () => mockQuery,
+      in: () => mockQuery,
+      is: () => mockQuery,
+      ilike: () => mockQuery,
+      gt: () => mockQuery,
+      gte: () => mockQuery,
+      lt: () => mockQuery,
+      lte: () => mockQuery,
+      order: () => mockQuery,
+    } as any;
+
+    applyWhereFilters(mockQuery, {
+      AND: [
+        { NOT: { responseJson: { contains: '"text":"' } } },
+        { NOT: { responseJson: { contains: '"replyText":"' } } },
+      ],
+    });
+
+    expect(orCalls).toEqual([
+      'responseJson.is.null,responseJson.not.ilike."%\\"text\\":\\"%"',
+      'responseJson.is.null,responseJson.not.ilike."%\\"replyText\\":\\"%"',
+    ]);
+
+    expect(
+      buildOrConditionPart({ publishTargets: { contains: '"socialAccountId":"sa-1"' } }),
+    ).toBe('publishTargets.ilike."%\\"socialAccountId\\":\\"sa-1\\"%"');
   });
 });

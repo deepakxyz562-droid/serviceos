@@ -574,10 +574,31 @@ export default function MobileCatalogScreen() {
 
         {/* Details */}
         <View style={styles.itemInfo}>
+          {/* Header row: Product Title + Top-Right Action Buttons */}
           <View style={styles.titleRow}>
             <Text style={styles.itemName} numberOfLines={1}>
               {item.name}
             </Text>
+            <View style={styles.cardHeaderActions}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`${t('Edit', 'बदलें')} ${item.name}`}
+                onPress={() => handleOpenEditModal(item)}
+                style={styles.headerActionBtn}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="edit" size={15} color="#64748b" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`${t('Delete', 'हटाएं')} ${item.name}`}
+                onPress={() => handleDeleteProduct(item.id, item.name)}
+                style={styles.headerActionBtn}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="delete-outline" size={16} color="#ef4444" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={[styles.metaRow, { flexWrap: 'wrap', gap: 4 }]}>
@@ -618,7 +639,7 @@ export default function MobileCatalogScreen() {
             </Text>
           ) : null}
 
-          {/* Price & Stock Adjustment Row */}
+          {/* Price & Status Row */}
           <View style={styles.priceRow}>
             <View>
               <Text style={styles.itemPrice}>
@@ -630,8 +651,30 @@ export default function MobileCatalogScreen() {
               </Text>
             </View>
 
-            {/* Quick 1-Tap Stock Stepper */}
-            {hasInventory && (
+            {/* In-Stock Status Badge */}
+            <TouchableOpacity
+              style={[styles.stockBadge, inStock ? styles.stockBadgeIn : styles.stockBadgeOut]}
+              onPress={() => handleToggleActive(item.id)}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[styles.stockDot, inStock ? styles.stockDotIn : styles.stockDotOut]}
+              />
+              <Text
+                style={[
+                  styles.stockBadgeText,
+                  inStock ? styles.stockBadgeTextIn : styles.stockBadgeTextOut,
+                ]}
+              >
+                {inStock ? t('Active', 'उपलब्ध') : t('Hidden', 'छिपा हुआ')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Dedicated Inventory Stepper Row */}
+          {hasInventory && (
+            <View style={styles.stockStepperRow}>
+              <Text style={styles.stockLabelText}>{t('Stock', 'स्टॉक')}:</Text>
               <View style={styles.inlineStockRow}>
                 <TouchableOpacity
                   onPress={() => handleAdjustStock(item, -1)}
@@ -655,7 +698,7 @@ export default function MobileCatalogScreen() {
                     {stockError
                       ? '—'
                       : itemStock == null
-                      ? t('Set', 'जोड़ें')
+                      ? t('Set Qty', 'मात्रा जोड़ें')
                       : `${itemStock} ${item.unit || 'pcs'}`}
                   </Text>
                 </TouchableOpacity>
@@ -669,47 +712,8 @@ export default function MobileCatalogScreen() {
                   <MaterialIcons name="add" size={14} color="#047857" />
                 </TouchableOpacity>
               </View>
-            )}
-
-            {/* In-Stock Status Badge */}
-            <TouchableOpacity
-              style={[styles.stockBadge, inStock ? styles.stockBadgeIn : styles.stockBadgeOut]}
-              onPress={() => handleToggleActive(item.id)}
-              activeOpacity={0.7}
-            >
-              <View
-                style={[styles.stockDot, inStock ? styles.stockDotIn : styles.stockDotOut]}
-              />
-              <Text
-                style={[
-                  styles.stockBadgeText,
-                  inStock ? styles.stockBadgeTextIn : styles.stockBadgeTextOut,
-                ]}
-              >
-                {inStock ? t('Active', 'उपलब्ध') : t('Hidden', 'छिपा हुआ')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Actions (Edit / Delete) */}
-        <View style={styles.actionCol}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={`${t('Edit', 'बदलें')} ${item.name}`}
-            onPress={() => handleOpenEditModal(item)}
-            style={styles.actionBtn}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="edit" size={18} color="#475569" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleDeleteProduct(item.id, item.name)}
-            style={styles.actionBtn}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="delete-outline" size={19} color="#ef4444" />
-          </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -754,7 +758,6 @@ export default function MobileCatalogScreen() {
         </View>
       </View>
 
-      {blueprint.capabilities.inventory&&<View style={{flexDirection:'row',gap:10,paddingHorizontal:20,paddingBottom:12}}>{[false,true].map(low=><TouchableOpacity key={String(low)} accessibilityRole="button" onPress={()=>setLowOnly(low)} style={{padding:12,borderRadius:20,backgroundColor:lowOnly===low?'#dcfce7':'#f1f5f9'}}><Text style={{color:'#14532d',fontWeight:'600'}}>{low?t('Low stock','कम स्टॉक'):t('All products','सभी सामान')}</Text></TouchableOpacity>)}</View>}
       <Modal visible={!!stockProduct} transparent animationType="slide" onRequestClose={()=>{if(!stockSaving)setStockProduct(null);}}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':undefined} style={{flex:1,justifyContent:'flex-end',backgroundColor:'#0006'}}><View style={{padding:24,gap:16,backgroundColor:'white',borderTopLeftRadius:24,borderTopRightRadius:24,paddingBottom:40}}><Text style={{fontSize:22,fontWeight:'700'}}>{stockProduct?.name}</Text><Text>{t('Quantity currently in your shop, including reserved items','दुकान में कुल मात्रा, आरक्षित सामान सहित')}</Text>{saveError&&<Text accessibilityRole="alert" style={{color:'#b91c1c'}}>{saveError}</Text>}<TextInput accessibilityLabel={t('Stock quantity','स्टॉक की मात्रा')} keyboardType="number-pad" value={stockQuantity} onChangeText={setStockQuantity} style={{minHeight:52,borderWidth:1,borderColor:'#cbd5e1',borderRadius:12,padding:14,fontSize:20}}/><TouchableOpacity accessibilityRole="button" disabled={stockSaving} onPress={saveStock} style={{minHeight:52,backgroundColor:'#047857',borderRadius:12,alignItems:'center',justifyContent:'center'}}><Text style={{color:'white',fontWeight:'700'}}>{stockSaving?'…':t('Save quantity','मात्रा सेव करें')}</Text></TouchableOpacity><TouchableOpacity disabled={stockSaving} onPress={()=>setStockProduct(null)} style={{padding:14,alignItems:'center'}}><Text>{t('Cancel','रद्द करें')}</Text></TouchableOpacity></View></KeyboardAvoidingView></Modal>
       {/* Search Bar */}
       <View style={styles.searchSection}>
@@ -809,16 +812,60 @@ export default function MobileCatalogScreen() {
         </View>
       )}
 
-      {/* Category Filter Chips */}
-      {categories.length > 1 && (
-        <View style={styles.chipsSection}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipsContainer}
+      {/* Unified Filter Chips: All, Low Stock (if inventory enabled), and Categories */}
+      <View style={styles.chipsSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipsContainer}
+        >
+          {/* All Chip */}
+          <TouchableOpacity
+            style={[styles.chip, selectedCategory === 'All' && !lowOnly && styles.chipActive]}
+            onPress={() => {
+              hapticFeedback.light();
+              setSelectedCategory('All');
+              setLowOnly(false);
+            }}
+            activeOpacity={0.7}
           >
-            {categories.map((cat) => {
-              const active = selectedCategory === cat;
+            <Text style={[styles.chipText, selectedCategory === 'All' && !lowOnly && styles.chipTextActive]}>
+              {t('All', 'सभी')}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Low Stock Chip (if inventory enabled) */}
+          {blueprint.capabilities.inventory && (
+            <TouchableOpacity
+              style={[
+                styles.chip,
+                lowOnly && { backgroundColor: '#fef3c7', borderColor: '#f59e0b' },
+              ]}
+              onPress={() => {
+                hapticFeedback.light();
+                setLowOnly(!lowOnly);
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <MaterialIcons name="warning-amber" size={13} color={lowOnly ? '#b45309' : '#64748b'} />
+                <Text
+                  style={[
+                    styles.chipText,
+                    lowOnly && { color: '#92400e', fontWeight: '800' },
+                  ]}
+                >
+                  {t('Low Stock', 'कम स्टॉक')}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* Business Category Chips */}
+          {categories
+            .filter((cat) => cat !== 'All')
+            .map((cat) => {
+              const active = selectedCategory === cat && !lowOnly;
               return (
                 <TouchableOpacity
                   key={cat}
@@ -826,6 +873,7 @@ export default function MobileCatalogScreen() {
                   onPress={() => {
                     hapticFeedback.light();
                     setSelectedCategory(cat);
+                    setLowOnly(false);
                   }}
                   activeOpacity={0.7}
                 >
@@ -833,9 +881,8 @@ export default function MobileCatalogScreen() {
                 </TouchableOpacity>
               );
             })}
-          </ScrollView>
-        </View>
-      )}
+        </ScrollView>
+      </View>
 
       {/* Error Banner (list-load failure) */}
       {!loading && error ? (
@@ -1708,7 +1755,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -1760,9 +1807,35 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   itemName: {
+    flex: 1,
     fontSize: 14,
     fontWeight: '800',
     color: '#0f172a',
+    marginRight: 6,
+  },
+  cardHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 6,
+  },
+  headerActionBtn: {
+    padding: 5,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  stockStepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  stockLabelText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
   },
   metaRow: {
     flexDirection: 'row',

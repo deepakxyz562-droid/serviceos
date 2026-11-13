@@ -27,6 +27,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { api, apiPost, apiPatch } from "@/api/client";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
+import { ContactPickerModal, SelectedContact } from "@/components/ContactPickerModal";
 import {
   sanitizePhone,
   isValidPhone,
@@ -63,6 +64,7 @@ export default function CustomerFormScreen() {
   const [showMoreFields, setShowMoreFields] = useState(false);
   const [loading, setLoading] = useState(false);
   const [preloaded, setPreloaded] = useState(!params.id);
+  const [contactPickerVisible, setContactPickerVisible] = useState(false);
 
   // Pre-load existing customer when editing
   useEffect(() => {
@@ -159,11 +161,15 @@ export default function CustomerFormScreen() {
   }
 
   function handleImportContacts() {
-    Alert.alert(
-      "Import Contacts",
-      "Connect device contacts to quickly populate client name, phone and email.",
-      [{ text: "OK" }]
-    );
+    setContactPickerVisible(true);
+  }
+
+  function handleContactPicked(c: SelectedContact) {
+    if (c.name) setName(c.name);
+    if (c.phone) setPhone(c.phone);
+    if (c.email) setEmail(c.email);
+    if (c.address) setBillingLine1(c.address);
+    if (c.company && !name) setName(c.company);
   }
 
   if (!preloaded) {
@@ -373,6 +379,12 @@ export default function CustomerFormScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ContactPickerModal
+        visible={contactPickerVisible}
+        onClose={() => setContactPickerVisible(false)}
+        onSelect={handleContactPicked}
+      />
     </SafeAreaView>
   );
 }

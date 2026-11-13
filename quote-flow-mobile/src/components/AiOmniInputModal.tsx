@@ -14,10 +14,16 @@ import {
 } from "react-native";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
 import { api } from "@/api/client";
-import { ExpoSpeechRecognitionModule } from "expo-speech-recognition";
 
-function getSpeechModule() {
-  return ExpoSpeechRecognitionModule;
+function getSpeechModule(): any {
+  try {
+    // Dynamic require so Expo Go does not crash at bundle load time
+    // when custom native modules are not linked into the client binary
+    const mod = require("expo-speech-recognition");
+    return mod?.ExpoSpeechRecognitionModule ?? null;
+  } catch {
+    return null;
+  }
 }
 
 interface AiOmniInputModalProps {

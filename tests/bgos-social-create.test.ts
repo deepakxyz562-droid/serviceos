@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 const m = vi.hoisted(() => ({ create: vi.fn(), findUnique: vi.fn(), accounts: vi.fn(), publish: vi.fn(), after: vi.fn(), renderDesign: vi.fn() }));
 vi.mock('next/server', async original => ({ ...await original<typeof import('next/server')>(), after: m.after }));
 vi.mock('@/lib/auth', () => ({ getAuthUser: async () => ({ id: 'u', tenantId: 't' }) }));
+vi.mock('@/lib/bgos-entitlement', () => ({ requireBgosEntitled: async () => ({ ok: true }) }));
 vi.mock('@/lib/db', () => ({ db: { socialPost: { create: m.create, findUnique: m.findUnique }, socialAccount: { findMany: m.accounts } } }));
 vi.mock('@/lib/social/publisher', () => ({ publishPost: m.publish }));
 vi.mock('@/lib/designs/render', () => ({ renderDesign: m.renderDesign }));

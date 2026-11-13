@@ -85,6 +85,7 @@ export default function InvoiceCreateScreen() {
   );
   const [shippingFee, setShippingFee] = useState("0");
   const [globalTaxRate, setGlobalTaxRate] = useState("0");
+  const [isInterstate, setIsInterstate] = useState(false);
 
   const [dueDateText, setDueDateText] = useState(pendingDraft?.terms || "Due on receipt");
   const [paymentMethod, setPaymentMethod] = useState("Bank Transfer & UPI");
@@ -222,6 +223,7 @@ export default function InvoiceCreateScreen() {
     globalTaxRate: parseFloat(globalTaxRate) || 0,
     shippingFee: parseFloat(shippingFee) || 0,
     currency: currencyCode,
+    isInterstate,
   });
 
   function updateItem(idx: number, patch: Partial<Item>) {
@@ -257,6 +259,7 @@ export default function InvoiceCreateScreen() {
         docTypeSegment: docType,
         currencyCode,
         currencySymbol,
+        isInterstate,
         shippingFee: parseFloat(shippingFee) || 0,
         dueTerms: dueDateText,
         terms: selectedTerms,
@@ -644,10 +647,23 @@ export default function InvoiceCreateScreen() {
                     <Text style={styles.calcLabel}>Taxable Amount</Text>
                     <Text style={styles.calcValue}>{formatCurrency(totals.taxableAmount, currency)}</Text>
                   </View>
-                  <View style={styles.calcRow}>
-                    <Text style={styles.calcLabel}>GST Amount</Text>
-                    <Text style={styles.calcValue}>{formatCurrency(totals.gstAmount, currency)}</Text>
-                  </View>
+                  {isInterstate ? (
+                    <View style={styles.calcRow}>
+                      <Text style={styles.calcLabel}>IGST ({items[0]?.taxRate || 18}%)</Text>
+                      <Text style={styles.calcValue}>{formatCurrency(totals.igstAmount, currency)}</Text>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={styles.calcRow}>
+                        <Text style={styles.calcLabel}>CGST ({(items[0]?.taxRate || 18) / 2}%)</Text>
+                        <Text style={styles.calcValue}>{formatCurrency(totals.cgstAmount, currency)}</Text>
+                      </View>
+                      <View style={styles.calcRow}>
+                        <Text style={styles.calcLabel}>SGST ({(items[0]?.taxRate || 18) / 2}%)</Text>
+                        <Text style={styles.calcValue}>{formatCurrency(totals.sgstAmount, currency)}</Text>
+                      </View>
+                    </>
+                  )}
                   <View style={styles.dottedDivider} />
                 </>
               )}
@@ -716,6 +732,21 @@ export default function InvoiceCreateScreen() {
                       value={globalTaxRate}
                       onChangeText={(t) => setGlobalTaxRate(sanitizeDecimal(t))}
                       style={styles.itemInput}
+                    />
+                  </View>
+                )}
+
+                {docType === "TAX_INVOICE" && (
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderColor: "#f1f5f9" }}>
+                    <View>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: "#1e293b" }}>Inter-State Supply (IGST)</Text>
+                      <Text style={{ fontSize: 11, color: "#64748b" }}>Charge IGST instead of CGST + SGST</Text>
+                    </View>
+                    <Switch
+                      value={isInterstate}
+                      onValueChange={setIsInterstate}
+                      trackColor={{ false: "#cbd5e1", true: "#bfdbfe" }}
+                      thumbColor={isInterstate ? "#2563eb" : "#f8fafc"}
                     />
                   </View>
                 )}

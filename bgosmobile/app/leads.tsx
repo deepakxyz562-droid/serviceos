@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
   Screen,
@@ -62,6 +62,8 @@ type ServiceOption = {
 };
 
 function LeadsScreen() {
+  const router = useRouter();
+  const handledCreateParamRef = useRef(false);
   const params = useLocalSearchParams<{ create?: string; phone?: string; name?: string; notes?: string; source?: string }>();
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -125,6 +127,19 @@ function LeadsScreen() {
     setMoreDetails(false);
   };
 
+  const handleCloseAddLead = () => {
+    if (busy) return;
+    setOpen(false);
+    resetAddForm();
+    if (params.create === '1') {
+      if (router.canGoBack?.()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)');
+      }
+    }
+  };
+
   useEffect(() => {
     if (open) {
       setAttempted(false);
@@ -145,7 +160,8 @@ function LeadsScreen() {
   }, [search]);
 
   useEffect(() => {
-    if (params.create === '1') {
+    if (params.create === '1' && !handledCreateParamRef.current) {
+      handledCreateParamRef.current = true;
       if (params.phone) setPhone(params.phone);
       if (params.name) setName(params.name);
       if (params.notes) setNotes(params.notes);
@@ -396,23 +412,16 @@ function LeadsScreen() {
       <Modal
         visible={open}
         animationType="slide"
-        onRequestClose={() => {
-          if (!busy) {
-            setOpen(false);
-            resetAddForm();
-          }
-        }}
+        presentationStyle="fullScreen"
+        statusBarTranslucent
+        onRequestClose={handleCloseAddLead}
       >
         <Screen
           title="Add New Lead"
           subtitle="Record customer contact, service interest & priority."
           showBack
-          onBack={() => {
-            if (!busy) {
-              setOpen(false);
-              resetAddForm();
-            }
-          }}
+          onBack={handleCloseAddLead}
+          extraTopPadding={12}
           floatingAction={
             <Action
               label={busy ? 'Saving lead…' : 'Save Lead'}
@@ -674,13 +683,20 @@ function LeadsScreen() {
       </Modal>
 
       {/* Lead Detail & Stage Switcher Modal */}
-      <Modal visible={!!selected} animationType="slide" onRequestClose={() => { if (!busy) setSelected(null); }}>
+      <Modal
+        visible={!!selected}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        statusBarTranslucent
+        onRequestClose={() => { if (!busy) setSelected(null); }}
+      >
         {selected && (
           <Screen
             title={selected.name}
             subtitle={selected.title || 'Lead Profile & History'}
             showBack={true}
             onBack={() => { if (!busy) setSelected(null); }}
+            extraTopPadding={12}
           >
             <ErrorNotice message={error} />
 

@@ -18,6 +18,8 @@ export interface DetailedInvoiceTotals {
   gstAmount: number;
   cgstAmount: number;
   sgstAmount: number;
+  igstAmount: number;
+  isInterstate?: boolean;
   subtotal: number;
   discount: number;
   shippingFee: number;
@@ -50,6 +52,7 @@ export function computeInvoiceTotals(options: {
   globalTaxRate?: number;
   shippingFee?: number;
   currency?: string;
+  isInterstate?: boolean;
 }): DetailedInvoiceTotals {
   const {
     items = [],
@@ -58,6 +61,7 @@ export function computeInvoiceTotals(options: {
     discountType = 'AMOUNT',
     globalTaxRate = 0,
     shippingFee = 0,
+    isInterstate = false,
   } = options;
 
   const docType = (documentType.toUpperCase() as DocumentType) || 'TAX_INVOICE';
@@ -78,6 +82,8 @@ export function computeInvoiceTotals(options: {
       gstAmount: 0,
       cgstAmount: 0,
       sgstAmount: 0,
+      igstAmount: 0,
+      isInterstate: false,
       subtotal,
       discount,
       shippingFee: round2(Number(shippingFee) || 0),
@@ -102,8 +108,10 @@ export function computeInvoiceTotals(options: {
       documentType: 'SIMPLE_BILL',
       taxableAmount: taxable,
       gstAmount: tax,
-      cgstAmount: round2(tax / 2),
-      sgstAmount: round2(tax / 2),
+      cgstAmount: isInterstate ? 0 : round2(tax / 2),
+      sgstAmount: isInterstate ? 0 : round2(tax / 2),
+      igstAmount: isInterstate ? tax : 0,
+      isInterstate,
       subtotal,
       discount,
       shippingFee: round2(Number(shippingFee) || 0),
@@ -138,8 +146,9 @@ export function computeInvoiceTotals(options: {
     discount = Math.min(round2(Number(discountValue) || 0), subtotal);
   }
 
-  const cgstAmount = round2(gstAmount / 2);
-  const sgstAmount = round2(gstAmount / 2);
+  const cgstAmount = isInterstate ? 0 : round2(gstAmount / 2);
+  const sgstAmount = isInterstate ? 0 : round2(gstAmount / 2);
+  const igstAmount = isInterstate ? gstAmount : 0;
   const total = round2(Math.max(0, subtotal - discount) + (Number(shippingFee) || 0));
 
   return {
@@ -148,6 +157,8 @@ export function computeInvoiceTotals(options: {
     gstAmount,
     cgstAmount,
     sgstAmount,
+    igstAmount,
+    isInterstate,
     subtotal,
     discount,
     shippingFee: round2(Number(shippingFee) || 0),

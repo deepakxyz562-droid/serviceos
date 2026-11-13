@@ -32,6 +32,8 @@ import { useAppStore } from "@/store/app";
 import { api, apiPatch, apiPost, apiDelete, API_BASE_URL, loadToken } from "@/api/client";
 import { formatCurrency } from "@/lib/format";
 import { MaterialIcons, Feather, FontAwesome5 } from "@expo/vector-icons";
+import { DynamicUpiQrCard, buildUpiPaymentUrl } from "@/components/DynamicUpiQrCard";
+import { RecordPaymentModal } from "@/components/RecordPaymentModal";
 
 // Unified Template Theme Resolver (maps catalog IDs + native IDs)
 export interface TemplateTheme {
@@ -175,6 +177,7 @@ export default function InvoicePreviewScreen() {
   const [zoomed, setZoomed] = useState(false);
   const [moreModalVisible, setMoreModalVisible] = useState(false);
   const [sendModalVisible, setSendModalVisible] = useState(false);
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -282,22 +285,60 @@ export default function InvoicePreviewScreen() {
     }
   }
 
-  // Send via WhatsApp
-  function sendWhatsApp() {
+  // Send via WhatsApp (with professional template, balance, and dynamic UPI link)
+  function sendWhatsApp(isReminder = false) {
     if (!inv) return;
     const portalUrl = `${API_BASE_URL}/doc/${inv.id}`;
     const phone = (inv.customer?.phone || "").replace(/[^0-9+]/g, "");
-    const text = encodeURIComponent(
-      `Hi ${inv.customer?.name || "Customer"},\n\nHere is Invoice ${inv.number} for ${formatCurrency(
-        inv.total || 0,
-        business?.currency,
-        business?.currencySymbol
-      )} from ${business?.name || "our company"}.\n\nView invoice: ${portalUrl}`
-    );
+    const clientName = inv.customer?.name || "Customer";
+    const bizName = business?.name || "our company";
+    const totalFormatted = formatCurrency(inv.total || 0, invoiceCurrency, invoiceCurrencySymbol);
+    const balanceFormatted = formatCurrency(balance, invoiceCurrency, invoiceCurrencySymbol);
+    const dueDateFormatted = inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-GB") : "Due on receipt";
+
+    let upiSection = "";
+    if (business?.upiId && balance > 0) {
+      const upiUrl = buildUpiPaymentUrl({
+        upiId: business.upiId,
+        businessName: bizName,
+        amount: balance,
+        invoiceNumber: inv.number,
+        currency: invoiceCurrency,
+      });
+      upiSection = `\n\n📲 *Pay instantly via UPI:*\n${upiUrl}\n*UPI ID:* ${business.upiId}`;
+    }
+
+    let messageText = "";
+    if (isReminder) {
+      messageText =
+        `🔔 *Payment Reminder: Invoice ${inv.number}*\n` +
+        `----------------------------------------\n` +
+        `Hi ${clientName},\n\n` +
+        `This is a friendly reminder that Invoice *${inv.number}* from *${bizName}* is pending.\n\n` +
+        `📅 *Due Date:* ${dueDateFormatted}\n` +
+        `💰 *Total Amount:* ${totalFormatted}\n` +
+        `⚡ *Balance Due:* ${balanceFormatted}` +
+        upiSection +
+        `\n\n🔗 *View & Download PDF:* ${portalUrl}\n\n` +
+        `_Thank you!_`;
+    } else {
+      messageText =
+        `🧾 *Invoice ${inv.number}* from *${bizName}*\n` +
+        `----------------------------------------\n` +
+        `👤 *Client:* ${clientName}\n` +
+        `📅 *Due Date:* ${dueDateFormatted}\n` +
+        `💰 *Total Amount:* ${totalFormatted}\n` +
+        `⚡ *Balance Due:* ${balanceFormatted}` +
+        upiSection +
+        `\n\n🔗 *View & Download PDF:* ${portalUrl}\n\n` +
+        `_Thank you for your business!_`;
+    }
+
+    const text = encodeURIComponent(messageText);
     const url = phone ? `whatsapp://send?phone=${phone}&text=${text}` : `whatsapp://send?text=${text}`;
     Linking.openURL(url).catch(() => {
       Linking.openURL(`https://wa.me/${phone ? phone : ""}?text=${text}`).catch(() => {
-        Alert.alert("Error", "Could not open WhatsApp");
+        Alert.alert("WhatsApp", "Could not open WhatsApp. Please ensure the app is installed.");
       });
     });
   }
@@ -419,6 +460,7 @@ export default function InvoicePreviewScreen() {
   let termsList: string[] = [];
   let showBank = business?.showBankOnInvoice ?? true;
   let showUpi = business?.showUpiOnInvoice ?? true;
+  let isInterstate = false;
 
   if (inv?.notes) {
     try {
@@ -431,6 +473,7 @@ export default function InvoicePreviewScreen() {
         else if (typeof meta.terms === "string") termsList = [meta.terms];
         if (meta.showBankDetails !== undefined) showBank = meta.showBankDetails;
         if (meta.showUpiQr !== undefined) showUpi = meta.showUpiQr;
+        if (meta.isInterstate !== undefined) isInterstate = Boolean(meta.isInterstate);
       }
     } catch {}
   }
@@ -594,14 +637,29 @@ export default function InvoicePreviewScreen() {
                 </View>
               )}
 
-              {inv.tax > 0 && (
+              {inv.tax > 0 && isInterstate ? (
                 <View style={styles.docSummaryRow}>
-                  <Text style={styles.docSummaryLabel}>Tax ({inv.taxRate || 0}%)</Text>
+                  <Text style={styles.docSummaryLabel}>IGST ({inv.taxRate || 0}%)</Text>
                   <Text style={styles.docSummaryVal}>
                     {formatCurrency(inv.tax || 0, invoiceCurrency, invoiceCurrencySymbol)}
                   </Text>
                 </View>
-              )}
+              ) : inv.tax > 0 ? (
+                <>
+                  <View style={styles.docSummaryRow}>
+                    <Text style={styles.docSummaryLabel}>CGST ({(inv.taxRate || 0) / 2}%)</Text>
+                    <Text style={styles.docSummaryVal}>
+                      {formatCurrency((inv.tax || 0) / 2, invoiceCurrency, invoiceCurrencySymbol)}
+                    </Text>
+                  </View>
+                  <View style={styles.docSummaryRow}>
+                    <Text style={styles.docSummaryLabel}>SGST ({(inv.taxRate || 0) / 2}%)</Text>
+                    <Text style={styles.docSummaryVal}>
+                      {formatCurrency((inv.tax || 0) / 2, invoiceCurrency, invoiceCurrencySymbol)}
+                    </Text>
+                  </View>
+                </>
+              ) : null}
 
               <View style={styles.docSummaryRow}>
                 <Text style={styles.docSummaryLabel}>Total</Text>
@@ -658,13 +716,17 @@ export default function InvoicePreviewScreen() {
                 </View>
               ) : null}
               {showUpi && business?.upiId ? (
-                <View style={styles.sheetUpiRow}>
-                  <MaterialIcons name="qr-code-2" size={32} color="#1e293b" />
-                  <View style={{ marginLeft: 8 }}>
-                    <Text style={styles.sheetUpiLabel}>Scan to Pay (UPI)</Text>
-                    <Text style={styles.sheetUpiId}>{business.upiId}</Text>
-                  </View>
-                </View>
+                <DynamicUpiQrCard
+                  upiId={business.upiId}
+                  businessName={business.name}
+                  amount={balance}
+                  invoiceNumber={inv.number}
+                  currency={invoiceCurrency}
+                  currencySymbol={invoiceCurrencySymbol}
+                  accentColor={theme.accent}
+                  isPaid={isPaid}
+                  compact={true}
+                />
               ) : null}
             </View>
           ) : null}
@@ -732,15 +794,37 @@ export default function InvoicePreviewScreen() {
           </View>
         </View>
 
-        {/* Primary Send Button with Paper Plane */}
-        <TouchableOpacity
-          style={[styles.primarySendBtn, { backgroundColor: "#2563eb" }]}
-          onPress={() => setSendModalVisible(true)}
-          activeOpacity={0.88}
-        >
-          <Feather name="send" size={17} color="#ffffff" style={{ marginRight: 8 }} />
-          <Text style={styles.primarySendBtnText}>Send Invoice</Text>
-        </TouchableOpacity>
+        {/* Dual Primary Action Buttons: WhatsApp & Record Payment (or Send) */}
+        <View style={styles.primaryActionsRow}>
+          <TouchableOpacity
+            style={[styles.primaryActionBtnHalf, { backgroundColor: "#25D366" }]}
+            onPress={() => sendWhatsApp(false)}
+            activeOpacity={0.88}
+          >
+            <FontAwesome5 name="whatsapp" size={17} color="#ffffff" style={{ marginRight: 6 }} />
+            <Text style={styles.primaryActionBtnText}>WhatsApp</Text>
+          </TouchableOpacity>
+
+          {!isPaid ? (
+            <TouchableOpacity
+              style={[styles.primaryActionBtnHalf, { backgroundColor: "#2563eb" }]}
+              onPress={() => setPaymentModalVisible(true)}
+              activeOpacity={0.88}
+            >
+              <FontAwesome5 name="money-bill-wave" size={15} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.primaryActionBtnText}>Record Pay</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.primaryActionBtnHalf, { backgroundColor: "#2563eb" }]}
+              onPress={() => setSendModalVisible(true)}
+              activeOpacity={0.88}
+            >
+              <Feather name="send" size={16} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.primaryActionBtnText}>Send / Share</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* 4-Action Quick Bar */}
         <View style={styles.quickActionsRow}>
@@ -802,6 +886,32 @@ export default function InvoicePreviewScreen() {
                 <MaterialIcons name="close" size={22} color="#64748b" />
               </TouchableOpacity>
             </View>
+
+            {!isPaid && (
+              <TouchableOpacity
+                style={styles.sheetRow}
+                onPress={() => {
+                  setMoreModalVisible(false);
+                  setPaymentModalVisible(true);
+                }}
+              >
+                <FontAwesome5 name="money-bill-wave" size={18} color="#10b981" style={styles.sheetIcon} />
+                <Text style={styles.sheetRowText}>Record Payment</Text>
+              </TouchableOpacity>
+            )}
+
+            {!isPaid && (
+              <TouchableOpacity
+                style={styles.sheetRow}
+                onPress={() => {
+                  setMoreModalVisible(false);
+                  sendWhatsApp(true);
+                }}
+              >
+                <FontAwesome5 name="bell" size={18} color="#f59e0b" style={styles.sheetIcon} />
+                <Text style={styles.sheetRowText}>Send Payment Reminder (WhatsApp)</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={styles.sheetRow}
@@ -885,15 +995,31 @@ export default function InvoicePreviewScreen() {
               style={styles.sendOptionBtn}
               onPress={() => {
                 setSendModalVisible(false);
-                sendWhatsApp();
+                sendWhatsApp(false);
               }}
             >
               <FontAwesome5 name="whatsapp" size={22} color="#25D366" style={{ marginRight: 12 }} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.sendOptionTitle}>Send via WhatsApp</Text>
-                <Text style={styles.sendOptionDesc}>Direct 1-tap message with portal link</Text>
+                <Text style={styles.sendOptionDesc}>Direct 1-tap message with PDF & instant UPI payment</Text>
               </View>
             </TouchableOpacity>
+
+            {!isPaid && (
+              <TouchableOpacity
+                style={styles.sendOptionBtn}
+                onPress={() => {
+                  setSendModalVisible(false);
+                  sendWhatsApp(true);
+                }}
+              >
+                <FontAwesome5 name="bell" size={20} color="#f59e0b" style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sendOptionTitle}>Send Payment Reminder</Text>
+                  <Text style={styles.sendOptionDesc}>Polite WhatsApp reminder with outstanding balance</Text>
+                </View>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={styles.sendOptionBtn}
@@ -924,6 +1050,32 @@ export default function InvoicePreviewScreen() {
         <View style={styles.busyOverlay}>
           <ActivityIndicator size="large" color="#ffffff" />
         </View>
+      )}
+
+      {/* Record Payment Modal */}
+      {inv && (
+        <RecordPaymentModal
+          visible={paymentModalVisible}
+          invoiceId={inv.id}
+          invoiceNumber={inv.number}
+          totalAmount={inv.total || 0}
+          paidAmount={paidAmount}
+          balanceAmount={balance}
+          currencySymbol={invoiceCurrencySymbol}
+          onClose={() => setPaymentModalVisible(false)}
+          onPaymentRecorded={(payment, newBalance) => {
+            setInv((prev: any) => {
+              if (!prev) return prev;
+              const updatedPayments = [...(prev.payments || []), payment];
+              return {
+                ...prev,
+                payments: updatedPayments,
+                status: newBalance <= 0.01 ? "PAID" : "PARTIALLY_PAID",
+              };
+            });
+            load();
+          }}
+        />
       )}
     </SafeAreaView>
   );
@@ -1278,6 +1430,25 @@ const styles = StyleSheet.create({
   pillTextDelivery: {
     fontSize: 11,
     color: "#64748b",
+  },
+  primaryActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  primaryActionBtnHalf: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  primaryActionBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#ffffff",
   },
   primarySendBtn: {
     flexDirection: "row",
