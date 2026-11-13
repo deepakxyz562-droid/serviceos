@@ -3034,6 +3034,11 @@ export default function MarketingScreen() {
           <UpcomingPostsCarousel
             businessName={effectiveBusinessName}
             businessCategory={brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category}
+            defaultWebsiteUrl={
+              brandProfile.data?.profile?.website ||
+              gbpPlace.data?.place?.website ||
+              ''
+            }
             onCreateWithAi={() => setCreatePostModalOpen(true)}
             onViewPost={(post) => {
               setActiveReviewPost({
@@ -6366,6 +6371,11 @@ export default function MarketingScreen() {
         }}
         post={activeReviewPost}
         businessName={effectiveBusinessName}
+        defaultWebsiteUrl={
+          brandProfile.data?.profile?.website ||
+          gbpPlace.data?.place?.website ||
+          ''
+        }
         onPublished={() => {
           setBoardRefresh((k) => k + 1);
         }}

@@ -506,23 +506,16 @@ export function PostDetailModal({
   onDelete?: (post: SocialPostRow) => void;
   onEditSave?: (updatedPost: SocialPostRow) => void;
 }) {
-  if (!post) return null;
-  const badge = statusBadge(post);
-  const media = post.mediaUrls?.[0];
-  const googlePostUrl = getGooglePostUrl(post);
-
   const [menuVisible, setMenuVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const parsed = parsePostStructure(post.content || '', post.title || (post.designJson as any)?.headline || 'Standard Post');
-
-  const [editTitle, setEditTitle] = useState(parsed.title);
-  const [editIntro, setEditIntro] = useState(parsed.intro);
-  const [editBullets, setEditBullets] = useState(parsed.bullets.join('\n'));
-  const [editConclusion, setEditConclusion] = useState(parsed.conclusion);
-  const [editCta, setEditCta] = useState(parsed.ctaText || 'CALL');
-  const [editHashtags, setEditHashtags] = useState(parsed.hashtags.join(' '));
+  const [editTitle, setEditTitle] = useState('');
+  const [editIntro, setEditIntro] = useState('');
+  const [editBullets, setEditBullets] = useState('');
+  const [editConclusion, setEditConclusion] = useState('');
+  const [editCta, setEditCta] = useState('CALL');
+  const [editHashtags, setEditHashtags] = useState('');
 
   useEffect(() => {
     if (post) {
@@ -537,6 +530,13 @@ export function PostDetailModal({
       setMenuVisible(false);
     }
   }, [post]);
+
+  if (!post || !visible) return null;
+
+  const badge = statusBadge(post);
+  const media = post.mediaUrls?.[0];
+  const googlePostUrl = getGooglePostUrl(post);
+  const parsed = parsePostStructure(post.content || '', post.title || (post.designJson as any)?.headline || 'Standard Post');
 
   const handleCopyCaption = async () => {
     try {
@@ -1168,14 +1168,16 @@ export function PostsBoard({
       )}
 
       {/* Post Detail Modal */}
-      <PostDetailModal
-        post={inspectPost}
-        visible={!!inspectPost}
-        onClose={() => setInspectPost(null)}
-        onApprove={(p) => void moderate(p, 'approved')}
-        onReject={(p) => void moderate(p, 'rejected')}
-        onRetry={(p) => void retry(p)}
-      />
+      {inspectPost ? (
+        <PostDetailModal
+          post={inspectPost}
+          visible={!!inspectPost}
+          onClose={() => setInspectPost(null)}
+          onApprove={(p) => void moderate(p, 'approved')}
+          onReject={(p) => void moderate(p, 'rejected')}
+          onRetry={(p) => void retry(p)}
+        />
+      ) : null}
     </View>
   );
 }

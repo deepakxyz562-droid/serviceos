@@ -17,6 +17,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { apiRequest } from '../../lib/api';
 import { normalizePendingUpload, uploadFileToStorage } from '../../lib/upload';
+import { GbpMediaPickerModal, type SelectedMediaItem } from './gbp-media-picker-modal';
 
 export interface GeneratedPostData {
   id?: string;
@@ -46,10 +47,11 @@ export function CreateGbpPostModal({
   businessCategory = '',
 }: CreateGbpPostModalProps) {
   const [prompt, setPrompt] = useState('');
-  const [referenceImageUri, setReferenceImageUri] = useState<string | null>(null);
-  const [referenceImageUrl, setReferenceImageUrl] = useState<string | null>(null);
+  const [attachedImageUri, setAttachedImageUri] = useState<string | null>(null);
+  const [attachedImageUrl, setAttachedImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [mediaPickerVisible, setMediaPickerVisible] = useState(false);
 
   // Dynamic inspiration chips tailored to the merchant's business context
   const inspirationIdeas = useMemo(() => {
@@ -121,10 +123,10 @@ export function CreateGbpPostModal({
     ];
   }, [businessName, businessCategory]);
 
-  const handlePickReferenceImage = async () => {
+  const handlePickAttachedPhoto = async () => {
     Alert.alert(
-      'Add Reference Photo',
-      'Add a real photo of your business space, service, or product for best AI post results.',
+      'Attach Post Photo',
+      'Select an authentic photo for your Google Business Profile post:',
       [
         {
           text: 'Take Photo 📷',
@@ -160,19 +162,25 @@ export function CreateGbpPostModal({
             }
           },
         },
+        {
+          text: 'Select from Uploaded Media 📁',
+          onPress: () => {
+            setMediaPickerVisible(true);
+          },
+        },
         { text: 'Cancel', style: 'cancel' },
       ],
     );
   };
 
   const processPickedImage = async (asset: ImagePicker.ImagePickerAsset) => {
-    setReferenceImageUri(asset.uri);
+    setAttachedImageUri(asset.uri);
     setUploadingImage(true);
     try {
       const pending = normalizePendingUpload(
         {
           uri: asset.uri,
-          name: asset.fileName || `ref-${Date.now()}.jpg`,
+          name: asset.fileName || `post-${Date.now()}.jpg`,
           mimeType: asset.mimeType || 'image/jpeg',
           file: (asset as any).file,
           fileSize: asset.fileSize,
@@ -182,12 +190,12 @@ export function CreateGbpPostModal({
       );
       const cloudUrl = await uploadFileToStorage(pending);
       if (cloudUrl) {
-        setReferenceImageUrl(cloudUrl);
+        setAttachedImageUrl(cloudUrl);
       }
     } catch (err) {
       console.warn('[processPickedImage] Upload notice:', err);
       // Keep local URI as fallback
-      setReferenceImageUrl(asset.uri);
+      setAttachedImageUrl(asset.uri);
     } finally {
       setUploadingImage(false);
     }
@@ -217,7 +225,7 @@ export function CreateGbpPostModal({
 
   const handleGenerate = async () => {
     const finalPrompt = prompt.trim();
-    if (!finalPrompt && !referenceImageUrl && !referenceImageUri) {
+    if (!finalPrompt && !attachedImageUrl && !attachedImageUri) {
       Alert.alert('Post Topic Needed', 'Please describe the post you want to create or pick an inspiration idea.');
       return;
     }
@@ -240,8 +248,9 @@ export function CreateGbpPostModal({
         method: 'POST',
         body: JSON.stringify({
           topic: activeTopic,
-          photoUrl: referenceImageUrl || referenceImageUri || undefined,
-          referenceImageUrl: referenceImageUrl || referenceImageUri || undefined,
+          photoUrl: attachedImageUrl || attachedImageUri || undefined,
+          referenceImageUrl: attachedImageUrl || attachedImageUri || undefined,
+          attachedImageUrl: attachedImageUrl || attachedImageUri || undefined,
           targetKeyword: businessCategory || 'local business',
         }),
       });
@@ -262,11 +271,18 @@ export function CreateGbpPostModal({
             ? 'Event Post'
             : 'Standard Post';
 
+      const finalPostImage =
+        attachedImageUrl ||
+        attachedImageUri ||
+        res.photoUrl ||
+        res.imageUrl ||
+        undefined;
+
       const generatedPost: GeneratedPostData = {
         title: res.title || generatedHeadline,
         headline: generatedHeadline,
         caption: generatedCaption,
-        imageUrl: res.imageUrl || res.photoUrl || referenceImageUrl || referenceImageUri || undefined,
+        imageUrl: finalPostImage,
         postType: postTypeStr,
         ctaAction: res.gbpCtaAction || 'CALL',
         ctaUrl: res.bookingUrl || undefined,
@@ -285,7 +301,7 @@ export function CreateGbpPostModal({
     }
   };
 
-  const isButtonActive = Boolean(prompt.trim() || referenceImageUri);
+  const isButtonActive = Boolean(prompt.trim() || attachedImageUri);
 
   return (
     <Modal
@@ -336,22 +352,22 @@ export function CreateGbpPostModal({
               textAlignVertical="top"
             />
 
-            {/* Reference Image Preview Chip (if selected) */}
-            {referenceImageUri ? (
+            {/* Attached Photo Preview Chip (if selected) */}
+            {attachedImageUri ? (
               <View style={styles.refImageRow}>
-                <Image source={{ uri: referenceImageUri }} style={styles.refThumbnail} />
+                <Image source={{ uri: attachedImageUri }} style={styles.refThumbnail} />
                 <View style={{ flex: 1, paddingLeft: 8 }}>
                   <Text style={styles.refImageTitle} numberOfLines={1}>
-                    Reference Photo Attached
+                    Photo Attached
                   </Text>
                   <Text style={styles.refImageSub}>
-                    {uploadingImage ? 'Uploading authentic photo…' : 'Ready for AI post generation'}
+                    {uploadingImage ? 'Uploading photo…' : 'Will be published with post'}
                   </Text>
                 </View>
                 <Pressable
                   onPress={() => {
-                    setReferenceImageUri(null);
-                    setReferenceImageUrl(null);
+                    setAttachedImageUri(null);
+                    setAttachedImageUrl(null);
                   }}
                   hitSlop={8}
                   style={styles.removeRefBtn}
@@ -361,21 +377,21 @@ export function CreateGbpPostModal({
               </View>
             ) : null}
 
-            {/* Bottom Row inside card: + Add Reference Image & 🎙️ */}
+            {/* Bottom Row inside card: + Attach Photo & 🎙️ */}
             <View style={styles.inputCardFooter}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Add Reference Image"
-                onPress={handlePickReferenceImage}
+                accessibilityLabel="Attach Photo"
+                onPress={handlePickAttachedPhoto}
                 style={styles.addRefBtn}
                 disabled={uploadingImage}
               >
                 {uploadingImage ? (
                   <ActivityIndicator size="small" color="#2563EB" />
                 ) : (
-                  <MaterialIcons name="add" size={18} color="#2563EB" />
+                  <MaterialIcons name="add-photo-alternate" size={18} color="#2563EB" />
                 )}
-                <Text style={styles.addRefText}>Add Reference Image</Text>
+                <Text style={styles.addRefText}>Attach Photo</Text>
               </Pressable>
 
               <Pressable
@@ -448,6 +464,16 @@ export function CreateGbpPostModal({
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* ── Modal to pick from already uploaded GBP / business media ── */}
+      <GbpMediaPickerModal
+        visible={mediaPickerVisible}
+        onClose={() => setMediaPickerVisible(false)}
+        onSelectPhoto={(photo) => {
+          setAttachedImageUri(photo.thumbnailUrl || photo.url);
+          setAttachedImageUrl(photo.url);
+        }}
+      />
     </Modal>
   );
 }

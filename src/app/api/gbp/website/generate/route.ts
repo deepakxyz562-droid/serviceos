@@ -61,7 +61,25 @@ export async function POST(request: NextRequest) {
         },
       })
       .catch(() => null);
+    const { isFieserosHostedUrl } = await import('@/lib/seo/presence-mode');
     const previousWebsiteUrl = tenantMeta?.website || null;
+
+    // Detect if user already has an established custom website in tenant, booking settings, or Google Business Profile
+    let existingCustomWebsite: string | null = null;
+    if (tenantMeta?.website && !isFieserosHostedUrl(tenantMeta.website)) {
+      existingCustomWebsite = tenantMeta.website.trim();
+    } else if (tenant.website && !isFieserosHostedUrl(tenant.website)) {
+      existingCustomWebsite = tenant.website.trim();
+    } else {
+      try {
+        const parsedSettings = JSON.parse(tenant.settingsJson || '{}');
+        const candidate = parsedSettings?.bookingPageConfig?.website;
+        if (candidate && !isFieserosHostedUrl(candidate)) {
+          existingCustomWebsite = candidate.trim();
+        }
+      } catch {}
+    }
+
     const seoCtx = await getTenantSeoContext(user.tenantId).catch(() => null);
     const businessName = seoCtx?.businessName || tenant.brandProfile?.businessName || tenant.name;
     const category = seoCtx?.category || tenantMeta?.industry || 'Local Services';
@@ -115,12 +133,12 @@ export async function POST(request: NextRequest) {
         ? tenantMeta.seoDescription
         : `Looking for ${topKeywords.slice(0, 2).join(' or ') || category} in ${city}? Book ${businessName} for localized services, verified info, and quick contact.`.slice(0, 155);
 
-    // Enable dedicated GBP landing page on tenant with Search-Term-aligned metadata & FAQs
+    // Enable dedicated GBP landing page on tenant. Preserve custom website if already owned!
     await db.tenant.update({
       where: { id: user.tenantId },
       data: {
         slug,
-        website: websiteUrl,
+        website: existingCustomWebsite || websiteUrl,
         publicProfileEnabled: true,
         claimed: true,
         description: richDescription.slice(0, 740),
@@ -140,24 +158,66 @@ export async function POST(request: NextRequest) {
       const googleAccount = await prepareGoogleAccount(user.tenantId);
       if (googleAccount?.accessToken && googleAccount.metadata) {
         try {
-          const {locationId}=await extractLocationRef(googleAccount);
-          if(locationId){
-            const patchUrl=`https://mybusinessbusinessinformation.googleapis.com/v1/locations/${encodeURIComponent(locationId)}?updateMask=websiteUri`;
-            const gRes = await fetch(patchUrl, {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${googleAccount.accessToken}`,
-              },
-              body: JSON.stringify({ websiteUri: websiteUrl }),
-            });
+          const { locationId } = await extractLocationRef(googleAccount);
+          if (locationId) {
+            // First inspect if Google Business Profile already has an existing websiteUri
+            let gbpLiveWebsite: string | null = null;
+            try {
+              const metaLoc = (googleAccount.metadata as any)?.locations?.find?.(
+                (l: any) => String(l.locationId || l.id) === String(locationId)
+              );
+              if (metaLoc?.website && !isFieserosHostedUrl(metaLoc.website)) {
+                gbpLiveWebsite = metaLoc.website.trim();
+              } else {
+                const readRes = await fetch(
+                  `https://mybusinessbusinessinformation.googleapis.com/v1/locations/${encodeURIComponent(locationId)}?readMask=websiteUri`,
+                  {
+                    headers: { Authorization: `Bearer ${googleAccount.accessToken}` },
+                    signal: AbortSignal.timeout(10000),
+                  }
+                );
+                if (readRes.ok) {
+                  const readData = await readRes.json().catch(() => ({}));
+                  if (readData.websiteUri && !isFieserosHostedUrl(readData.websiteUri)) {
+                    gbpLiveWebsite = readData.websiteUri.trim();
+                  }
+                }
+              }
+            } catch {}
 
-            if (gRes.ok) {
-              syncedToGoogle = true;
+            const finalCustomWebsite = existingCustomWebsite || gbpLiveWebsite;
+
+            if (finalCustomWebsite) {
+              // PRESERVE CUSTOM WEBSITE: Do NOT overwrite Google's primary websiteUri with bgos.site!
+              // Instead, link BGOS page as an official Google Place Action (Booking / Appointment)
+              try {
+                const { syncGooglePlaceActionsForTenant } = await import('@/lib/gbp/place-actions-sync');
+                await syncGooglePlaceActionsForTenant({
+                  tenantId: user.tenantId,
+                  includeAppointment: true,
+                });
+              } catch {}
+              syncedToGoogle = false;
+              googleNotice = `Your custom website (${finalCustomWebsite}) is preserved as primary on Google Maps. BGOS landing page was linked for online booking & 24/7 AI chat.`;
             } else {
-              const errJson = await gRes.json().catch(() => ({}));
-              console.warn('[api/gbp/website/generate] Google Business website update notice:', errJson);
-              googleNotice = errJson.error?.message || 'Google Business Profile verification pending';
+              // No custom website exists anywhere -> safely link bgos.site as Google websiteUri
+              const patchUrl = `https://mybusinessbusinessinformation.googleapis.com/v1/locations/${encodeURIComponent(locationId)}?updateMask=websiteUri`;
+              const gRes = await fetch(patchUrl, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${googleAccount.accessToken}`,
+                },
+                body: JSON.stringify({ websiteUri: websiteUrl }),
+              });
+
+              if (gRes.ok) {
+                syncedToGoogle = true;
+              } else {
+                const errJson = await gRes.json().catch(() => ({}));
+                console.warn('[api/gbp/website/generate] Google Business website update notice:', errJson);
+                googleNotice = errJson.error?.message || 'Google Business Profile verification pending';
+              }
             }
           }
         } catch (gErr: any) {
@@ -197,15 +257,20 @@ export async function POST(request: NextRequest) {
       severity: 'info',
     }).catch(() => {});
 
+    const finalMessage = existingCustomWebsite
+      ? `Preserved your official website (${existingCustomWebsite}) on Google Maps. BGOS landing page enabled at ${websiteUrl} for online appointments & AI chat.`
+      : syncedToGoogle
+      ? `Business website enabled and linked to your Google Business Profile websiteUri!`
+      : `Business website enabled at ${websiteUrl}! (Google Business Profile sync notice: ${googleNotice || 'Connect Google to auto-sync'})`;
+
     return NextResponse.json({
       success: true,
       websiteUrl,
       slug,
+      preservedCustomWebsite: existingCustomWebsite,
       syncedToGoogle,
       googleNotice,
-      message: syncedToGoogle
-        ? `Business website enabled and linked to your Google Business Profile websiteUri!`
-        : `Business website enabled at ${websiteUrl}! (Google Business Profile sync notice: ${googleNotice || 'Connect Google to auto-sync'})`,
+      message: finalMessage,
     });
   } catch (error: any) {
     console.error('[api/gbp/website/generate] Error:', error);

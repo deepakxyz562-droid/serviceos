@@ -26,7 +26,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
-    if (!(file instanceof File) || file.size > KNOWLEDGE_FILE_MAX_BYTES) return NextResponse.json({error: 'Upload a file no larger than 10 MB.'}, {status: 413});
+    const isFileLike = Boolean(
+      file &&
+      typeof (file as any).arrayBuffer === 'function' &&
+      typeof (file as any).size === 'number'
+    );
+    if (!isFileLike || (file as any).size > KNOWLEDGE_FILE_MAX_BYTES) {
+      return NextResponse.json({ error: 'Upload a readable file no larger than 10 MB.' }, { status: 413 });
+    }
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const filename = file.name || 'document.txt';

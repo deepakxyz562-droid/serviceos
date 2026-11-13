@@ -33,6 +33,7 @@ interface UpcomingPostsCarouselProps {
   onViewPost?: (post: UpcomingPostItem) => void;
   businessName?: string;
   businessCategory?: string;
+  defaultWebsiteUrl?: string;
   onPostPublished?: () => void;
 }
 
@@ -41,6 +42,7 @@ export function UpcomingPostsCarousel({
   onViewPost,
   businessName = 'My Business',
   businessCategory = '',
+  defaultWebsiteUrl = '',
   onPostPublished,
 }: UpcomingPostsCarouselProps) {
   const [posts, setPosts] = useState<UpcomingPostItem[]>([]);
@@ -287,6 +289,7 @@ export function UpcomingPostsCarousel({
         }}
         post={selectedEditPost}
         businessName={businessName}
+        defaultWebsiteUrl={defaultWebsiteUrl}
         onPublished={() => {
           void fetchScheduled();
           if (onPostPublished) onPostPublished();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +18,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { apiRequest } from '../../lib/api';
 import { normalizePendingUpload, uploadFileToStorage } from '../../lib/upload';
 import type { GeneratedPostData } from './create-gbp-post-modal';
+import { GbpMediaPickerModal } from './gbp-media-picker-modal';
 
 interface PostReviewEditModalProps {
   visible: boolean;
@@ -25,6 +26,7 @@ interface PostReviewEditModalProps {
   post: GeneratedPostData | null;
   onPublished?: () => void;
   businessName?: string;
+  defaultWebsiteUrl?: string;
 }
 
 export function PostReviewEditModal({
@@ -33,19 +35,33 @@ export function PostReviewEditModal({
   post,
   onPublished,
   businessName = 'My Business',
+  defaultWebsiteUrl = '',
 }: PostReviewEditModalProps) {
-  if (!post) return null;
-
-  const [headline, setHeadline] = useState(post.headline || post.title || '');
-  const [caption, setCaption] = useState(post.caption || '');
-  const [imageUrl, setImageUrl] = useState<string | undefined>(post.imageUrl);
-  const [postType, setPostType] = useState<'Standard Post' | 'Offer Post' | 'Event Post'>(
-    post.postType || 'Standard Post',
-  );
-  const [ctaAction, setCtaAction] = useState<string>(post.ctaAction || 'CALL');
-  const [ctaUrl, setCtaUrl] = useState<string>(post.ctaUrl || '');
+  const [headline, setHeadline] = useState('');
+  const [caption, setCaption] = useState('');
+  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
+  const [postType, setPostType] = useState<'Standard Post' | 'Offer Post' | 'Event Post'>('Standard Post');
+  const [ctaAction, setCtaAction] = useState<string>('CALL');
+  const [ctaUrl, setCtaUrl] = useState<string>('');
   const [isPublishing, setIsPublishing] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [mediaPickerVisible, setMediaPickerVisible] = useState(false);
+
+  useEffect(() => {
+    if (post) {
+      setHeadline(post.headline || post.title || '');
+      setCaption(post.caption || '');
+      setImageUrl(post.imageUrl);
+      setPostType(post.postType || 'Standard Post');
+      const action = post.ctaAction || 'CALL';
+      setCtaAction(action);
+      // Auto-fill CTA URL if action requires a URL
+      const initialUrl = post.ctaUrl || defaultWebsiteUrl || '';
+      setCtaUrl(initialUrl);
+    }
+  }, [post, defaultWebsiteUrl]);
+
+  if (!post || !visible) return null;
 
   const handlePickPhoto = async () => {
     Alert.alert('Change Post Photo', 'Update the image for this Google Business Profile post:', [
@@ -79,6 +95,12 @@ export function PostReviewEditModal({
           if (!res.canceled && res.assets?.[0]?.uri) {
             await uploadNewPhoto(res.assets[0]);
           }
+        },
+      },
+      {
+        text: 'Select from Uploaded Media 📁',
+        onPress: () => {
+          setMediaPickerVisible(true);
         },
       },
       { text: 'Cancel', style: 'cancel' },
@@ -200,6 +222,18 @@ export function PostReviewEditModal({
       Alert.alert('Schedule Notice', err instanceof Error ? err.message : 'Failed to schedule post.');
     } finally {
       setIsPublishing(false);
+    }
+  };
+
+  const handleSelectCta = (id: string) => {
+    setCtaAction(id);
+    if (id !== 'CALL' && id !== 'NONE') {
+      if (!ctaUrl.trim()) {
+        const auto = defaultWebsiteUrl || post?.ctaUrl || '';
+        if (auto) {
+          setCtaUrl(auto);
+        }
+      }
     }
   };
 
@@ -350,7 +384,7 @@ export function PostReviewEditModal({
               return (
                 <Pressable
                   key={opt.id}
-                  onPress={() => setCtaAction(opt.id)}
+                  onPress={() => handleSelectCta(opt.id)}
                   style={[styles.ctaChip, active && styles.ctaChipActive]}
                 >
                   <Text style={[styles.ctaChipText, active && styles.ctaChipTextActive]}>
@@ -367,10 +401,34 @@ export function PostReviewEditModal({
                 style={styles.urlInput}
                 value={ctaUrl}
                 onChangeText={setCtaUrl}
-                placeholder="https://yourwebsite.com/booking"
+                placeholder={
+                  ctaAction === 'BOOK'
+                    ? 'https://yourwebsite.com/booking'
+                    : ctaAction === 'ORDER'
+                      ? 'https://yourwebsite.com/order'
+                      : 'https://yourwebsite.com'
+                }
                 placeholderTextColor="#94A3B8"
                 autoCapitalize="none"
+                autoCorrect={false}
               />
+              <View style={styles.urlHelperRow}>
+                <View style={styles.autoFilledTag}>
+                  <MaterialIcons name="check-circle" size={13} color="#16A34A" />
+                  <Text style={styles.autoFilledText}>
+                    Auto-filled with your business link. You can edit or change it.
+                  </Text>
+                </View>
+                {defaultWebsiteUrl && ctaUrl !== defaultWebsiteUrl ? (
+                  <Pressable
+                    onPress={() => setCtaUrl(defaultWebsiteUrl)}
+                    hitSlop={6}
+                    style={styles.resetUrlBtn}
+                  >
+                    <Text style={styles.resetUrlText}>Reset to Website</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           ) : null}
 
@@ -402,6 +460,14 @@ export function PostReviewEditModal({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <GbpMediaPickerModal
+        visible={mediaPickerVisible}
+        onClose={() => setMediaPickerVisible(false)}
+        onSelectPhoto={(photo) => {
+          setImageUrl(photo.url);
+        }}
+      />
     </Modal>
   );
 }
@@ -589,6 +655,37 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 13,
     color: '#0F172A',
+  },
+  urlHelperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+    paddingHorizontal: 2,
+  },
+  autoFilledTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  autoFilledText: {
+    fontSize: 11.5,
+    color: '#15803D',
+    fontWeight: '500',
+  },
+  resetUrlBtn: {
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+    backgroundColor: '#EFF6FF',
+  },
+  resetUrlText: {
+    fontSize: 11,
+    color: '#2563EB',
+    fontWeight: '700',
   },
   bottomActions: {
     gap: 10,

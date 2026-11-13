@@ -19,6 +19,7 @@ interface GeneratePostRequest {
   badge?: string;
   photoUrl?: string;
   referenceImageUrl?: string;
+  attachedImageUrl?: string;
   postType?: 'standard' | 'offer' | 'event';
 }
 
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
         city: true,
         industry: true,
         website: true,
+        slug: true,
         settingsJson: true,
         brandProfile: {
           select: {
@@ -67,30 +69,40 @@ export async function POST(request: NextRequest) {
     const phone = tenant?.phone || '+91 61279 67087';
     const location = tenant?.brandProfile?.location || (tenant?.city ? `${tenant.city}, India` : 'Local Store & Online');
 
-    // 2. Generate Copy with AI (Gemini / OpenRouter via callAI)
+    // 2. Generate SEO-Friendly Copy with AI (Google Business Profile & Local Search Focused)
     const prompt = `
-You are an expert social media marketing strategist and copywriter for local businesses.
-Generate a high-converting, professional, SEO-friendly social media post based on the following context:
+You are an expert Google Business Profile (GBP) and local SEO copywriter.
+The user wants you to generate high-converting, local SEO-friendly Google Business Profile post text.
+Do NOT generate images or describe images. Generate TEXT CONTENT ONLY.
 
 Business Name: ${businessName}
-Industry: ${industry}
-Phone: ${phone}
-Location: ${location}
+Industry / Category: ${industry}
+Phone / Contact: ${phone}
+Location / Service Area: ${location}
 Brand Context: ${brandContext}
-Topic / Goal: ${topic}${targetKeyword ? `\nPriority Search Term to weave in naturally: "${targetKeyword}"` : ''}
+Topic / Goal: ${topic}${targetKeyword ? `\nPriority Search Term to rank for: "${targetKeyword}"` : ''}
 Theme: ${theme}
 Target Platforms: ${platforms.join(', ')}
 Tone: ${tone}
 
+Local SEO Guidelines:
+1. Title: Catchy, local-search friendly (under 60 chars). Include business or service benefit.
+2. Headline: Punchy 3 to 6 words highlighting the key proposition.
+3. Caption:
+   - High-impact hook incorporating local search keywords ("near me", city, service).
+   - 2-3 structured bullet points with emojis highlighting features, reliability, or exclusive perks.
+   - Clear Google Place action call-to-action (e.g. "Call us at ${phone}", "Book online", or "Visit us today in ${location}").
+4. Hashtags: 6 to 8 relevant local SEO tags (e.g., #${businessName.replace(/[^a-zA-Z0-9]/g, '')}, city tags, industry tags).
+
 Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just raw JSON):
 {
-  "title": "Short catchy title (under 60 chars) suitable for Google Business update & Facebook headline",
-  "headline": "Punchy graphic headline (3 to 6 words) for the image banner (e.g. 'Make more of your weekend.')",
-  "alternativeHeadlines": ["Punchy alternative headline 1", "Punchy alternative headline 2", "Punchy alternative headline 3"],
-  "subtitle": "Clear supporting sentence for the image banner (under 100 chars)",
+  "title": "Short catchy title (under 60 chars) suitable for Google Business update",
+  "headline": "Punchy headline (3 to 6 words)",
+  "alternativeHeadlines": ["Alternative headline 1", "Alternative headline 2", "Alternative headline 3"],
+  "subtitle": "Clear supporting sentence (under 100 chars)",
   "badge": "Short badge tag (e.g. '20% OFF', 'SPECIAL OFFER', 'POPULAR CHOICE', 'LIMITED TIME')",
-  "ctaText": "Short action button label (2 to 3 words, e.g. 'Book now', 'Claim offer', 'Order now', 'Get quote')",
-  "caption": "Full rich social media caption (100 to 200 words) formatted with natural spacing, 3 bullet points of benefits/highlights, and a strong call-to-action with phone and website mention",
+  "ctaText": "Short action button label (2 to 3 words, e.g. 'Call now', 'Book now', 'Claim offer', 'Get quote')",
+  "caption": "Full rich social media caption (100 to 200 words) formatted with natural spacing, 3 bullet points, and a strong local call-to-action",
   "hashtags": ["list", "of", "6-8", "local", "SEO", "hashtags", "with", "hash"]
 }
 `;
@@ -152,202 +164,206 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       ? `${generated.caption}\n\n${hashtagsText}`
       : `${topic}\n\nContact us at ${phone} to learn more.\n\n${hashtagsText}`;
 
-    // 3. Generate High-Res 1080x1080 Branded Graphic with Next.js ImageResponse (if no photo supplied)
-    const inputPhoto = body.photoUrl || body.referenceImageUrl || null;
+    // 3. Handle Media: When an authentic user/business photo is supplied (uploaded or selected from media library),
+    // use it directly without creating a synthetic graphic. The AI's role is purely SEO copywriting.
+    // If no photo was supplied, generate an optional branded card fallback.
+    const inputPhoto = body.attachedImageUrl || body.photoUrl || body.referenceImageUrl || null;
     let imageUrl = inputPhoto;
 
-    try {
-      const graphicElement = React.createElement(
-        'div',
-        {
-          style: {
-            width: '1080px',
-            height: '1080px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            padding: '70px',
-            background: 'linear-gradient(135deg, #070B2D 0%, #043B26 100%)',
-            color: '#FFFFFF',
-            fontFamily: 'sans-serif',
-          },
-        },
-        // Top Header
-        React.createElement(
+    if (!inputPhoto) {
+      try {
+        const graphicElement = React.createElement(
           'div',
           {
             style: {
+              width: '1080px',
+              height: '1080px',
               display: 'flex',
+              flexDirection: 'column',
               justifyContent: 'space-between',
-              alignItems: 'center',
-              width: '100%',
+              padding: '70px',
+              background: 'linear-gradient(135deg, #070B2D 0%, #043B26 100%)',
+              color: '#FFFFFF',
+              fontFamily: 'sans-serif',
             },
           },
+          // Top Header
           React.createElement(
             'div',
             {
               style: {
                 display: 'flex',
+                justifyContent: 'space-between',
                 alignItems: 'center',
-                gap: '12px',
+                width: '100%',
               },
             },
             React.createElement(
               'div',
               {
                 style: {
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '10px',
-                  backgroundColor: '#009F50',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 900,
-                  fontSize: '24px',
-                  color: '#FFFFFF',
+                  gap: '12px',
                 },
               },
-              businessName.charAt(0).toUpperCase()
+              React.createElement(
+                'div',
+                {
+                  style: {
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '10px',
+                    backgroundColor: '#009F50',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 900,
+                    fontSize: '24px',
+                    color: '#FFFFFF',
+                  },
+                },
+                businessName.charAt(0).toUpperCase()
+              ),
+              React.createElement(
+                'span',
+                {
+                  style: {
+                    fontSize: '26px',
+                    fontWeight: 800,
+                    letterSpacing: '1px',
+                    color: '#34D399',
+                    textTransform: 'uppercase',
+                  },
+                },
+                businessName
+              )
             ),
             React.createElement(
               'span',
               {
                 style: {
-                  fontSize: '26px',
-                  fontWeight: 800,
-                  letterSpacing: '1px',
-                  color: '#34D399',
-                  textTransform: 'uppercase',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  backgroundColor: '#009F50',
+                  color: '#FFFFFF',
+                  padding: '8px 24px',
+                  borderRadius: '999px',
+                  letterSpacing: '0.5px',
                 },
               },
-              businessName
+              finalBadge
             )
           ),
-          React.createElement(
-            'span',
-            {
-              style: {
-                fontSize: '18px',
-                fontWeight: 700,
-                backgroundColor: '#009F50',
-                color: '#FFFFFF',
-                padding: '8px 24px',
-                borderRadius: '999px',
-                letterSpacing: '0.5px',
-              },
-            },
-            finalBadge
-          )
-        ),
-        // Middle Body
-        React.createElement(
-          'div',
-          {
-            style: {
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '24px',
-              maxWidth: '920px',
-            },
-          },
-          React.createElement(
-            'h1',
-            {
-              style: {
-                fontSize: '62px',
-                fontWeight: 900,
-                lineHeight: 1.15,
-                color: '#FFFFFF',
-                margin: 0,
-              },
-            },
-            finalHeadline
-          ),
-          React.createElement(
-            'p',
-            {
-              style: {
-                fontSize: '28px',
-                color: '#E2E8F0',
-                lineHeight: 1.4,
-                margin: 0,
-              },
-            },
-            finalSubtitle
-          )
-        ),
-        // Bottom Footer
-        React.createElement(
-          'div',
-          {
-            style: {
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              width: '100%',
-              borderTop: '2px solid rgba(255, 255, 255, 0.15)',
-              paddingTop: '32px',
-            },
-          },
+          // Middle Body
           React.createElement(
             'div',
-            { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-            React.createElement('span', { style: { fontSize: '24px' } }, '📍'),
+            {
+              style: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '24px',
+                maxWidth: '920px',
+              },
+            },
             React.createElement(
-              'span',
+              'h1',
               {
                 style: {
-                  fontSize: '22px',
-                  color: '#94A3B8',
-                  fontWeight: 500,
+                  fontSize: '62px',
+                  fontWeight: 900,
+                  lineHeight: 1.15,
+                  color: '#FFFFFF',
+                  margin: 0,
                 },
               },
-              location
+              finalHeadline
+            ),
+            React.createElement(
+              'p',
+              {
+                style: {
+                  fontSize: '28px',
+                  color: '#E2E8F0',
+                  lineHeight: 1.4,
+                  margin: 0,
+                },
+              },
+              finalSubtitle
             )
           ),
+          // Bottom Footer
           React.createElement(
             'div',
-            { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-            React.createElement('span', { style: { fontSize: '24px' } }, '📞'),
-            React.createElement(
-              'span',
-              {
-                style: {
-                  fontSize: '24px',
-                  color: '#34D399',
-                  fontWeight: 800,
-                },
+            {
+              style: {
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                width: '100%',
+                borderTop: '2px solid rgba(255, 255, 255, 0.15)',
+                paddingTop: '32px',
               },
-              phone
+            },
+            React.createElement(
+              'div',
+              { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+              React.createElement('span', { style: { fontSize: '24px' } }, '📍'),
+              React.createElement(
+                'span',
+                {
+                  style: {
+                    fontSize: '22px',
+                    color: '#94A3B8',
+                    fontWeight: 500,
+                  },
+                },
+                location
+              )
+            ),
+            React.createElement(
+              'div',
+              { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+              React.createElement('span', { style: { fontSize: '24px' } }, '📞'),
+              React.createElement(
+                'span',
+                {
+                  style: {
+                    fontSize: '24px',
+                    color: '#34D399',
+                    fontWeight: 800,
+                  },
+                },
+                phone
+              )
             )
           )
-        )
-      );
+        );
 
-      const imageResponse = new ImageResponse(graphicElement, {
-        width: 1080,
-        height: 1080,
-      });
+        const imageResponse = new ImageResponse(graphicElement, {
+          width: 1080,
+          height: 1080,
+        });
 
-      const arrayBuffer = await imageResponse.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
+        const arrayBuffer = await imageResponse.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
 
-      // Upload directly to S3 / Supabase storage
-      const uploaded = await uploadFile({
-        bucket: 'company-assets',
-        file: buffer,
-        companyId: tenantId,
-        folder: 'social-posts',
-        fileName: `${Date.now()}_ai_post.png`,
-        contentType: 'image/png',
-      });
+        // Upload directly to S3 / Supabase storage
+        const uploaded = await uploadFile({
+          bucket: 'company-assets',
+          file: buffer,
+          companyId: tenantId,
+          folder: 'social-posts',
+          fileName: `${Date.now()}_ai_post.png`,
+          contentType: 'image/png',
+        });
 
-      if (uploaded?.url) {
-        imageUrl = uploaded.url;
+        if (uploaded?.url) {
+          imageUrl = uploaded.url;
+        }
+      } catch (renderErr) {
+        console.warn('[ai-generate-post] ImageResponse render/upload warning:', renderErr);
       }
-    } catch (renderErr) {
-      console.warn('[ai-generate-post] ImageResponse render/upload warning:', renderErr);
     }
 
     const finalCta = generated.ctaText || 'Book now';
@@ -432,12 +448,13 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       caption: finalCaption,
       hashtags: hashtagsArray,
       hashtagsText,
-      imageUrl: imageUrl || chosenPhoto,
-      photoUrl: chosenPhoto,
+      imageUrl: inputPhoto || imageUrl || chosenPhoto,
+      photoUrl: inputPhoto || chosenPhoto,
       layouts,
       bookingUrl:
         tenant?.brandProfile?.website ||
         (tenant?.website && !tenant.website.includes('fieseros.com') ? tenant.website : '') ||
+        (tenant?.slug ? `https://bgos.site/b/${tenant.slug}` : '') ||
         '',
       offerDetails: {
         discountText: finalBadge,

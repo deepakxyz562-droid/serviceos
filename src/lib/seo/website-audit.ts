@@ -11,6 +11,7 @@ import { fetchGoogleBusinessPlaceDetails, extractLocationRef } from '@/lib/socia
 import {
   resolveBusinessPresenceMode,
   normalizeSlugValue,
+  isFieserosHostedUrl,
   type BusinessPresenceMode,
   type PresenceResolution,
 } from './presence-mode';
@@ -1406,7 +1407,11 @@ export async function applyHostedOrActivationSeoFix(params: {
   void submitToIndexNow([presenceAfter.hostedCanonicalUrl]).catch(() => {});
 
   let syncedToGoogle = false;
-  if (params.syncToGoogle && actionKey === 'activate_hosted_site') {
+  const hasCustomWebsite =
+    presenceAfter.mode === 'custom_domain' ||
+    Boolean(tenant.website && !isFieserosHostedUrl(tenant.website));
+
+  if (params.syncToGoogle && actionKey === 'activate_hosted_site' && !hasCustomWebsite) {
     try {
       const googleAccount = await prepareGoogleAccount(tenantId);
       if (googleAccount?.accessToken && googleAccount.metadata) {

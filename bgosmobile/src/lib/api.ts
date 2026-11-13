@@ -155,7 +155,7 @@ async function performApiRequest<T = any>(
     response = await fetch(url, {
       method,
       headers: reqHeaders,
-      body: hasJsonBody ? JSON.stringify(body) : isFormData ? body : undefined,
+      body: hasJsonBody ? (typeof body === 'string' ? body : JSON.stringify(body)) : isFormData ? body : undefined,
       signal: controller.signal,
     });
   } catch (error) {

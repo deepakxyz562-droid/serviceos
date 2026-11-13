@@ -20,6 +20,7 @@ import {
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Screen,
@@ -217,6 +218,43 @@ function AgentsScreen() {
   const [generatingFaqs, setGeneratingFaqs] = useState(false);
   const [embedFormat, setEmbedFormat] = useState<'script' | 'iframe'>('script');
   const [copiedEmbed, setCopiedEmbed] = useState(false);
+
+  // Knowledge Hub: Documents & Website Crawling
+  const [knowledgeDocs, setKnowledgeDocs] = useState<
+    Array<{
+      id: string;
+      title: string;
+      sourceType: string;
+      mimeType?: string | null;
+      charCount?: number;
+      chunkCount?: number;
+      status: string;
+      error?: string | null;
+      createdAt: string;
+    }>
+  >([]);
+  const [loadingKnowledgeDocs, setLoadingKnowledgeDocs] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [crawlingWeb, setCrawlingWeb] = useState(false);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+
+  // Document Upload Form
+  const [docUploadModalOpen, setDocUploadModalOpen] = useState(false);
+  const [selectedDocFile, setSelectedDocFile] = useState<{
+    uri: string;
+    name: string;
+    size?: number;
+    mimeType?: string;
+  } | null>(null);
+  const [docTitleInput, setDocTitleInput] = useState('');
+
+  // Website Crawl Form
+  const [crawlModalOpen, setCrawlModalOpen] = useState(false);
+  const [crawlUrlInput, setCrawlUrlInput] = useState('');
+  const [crawlMode, setCrawlMode] = useState<'single' | 'sitemap'>('single');
+
+  // Knowledge Hub Sub-Tab ('documents' | 'websites' | 'faqs')
+  const [knowledgeSubTab, setKnowledgeSubTab] = useState<'documents' | 'websites' | 'faqs'>('documents');
 
   // Fast Creation Form
   const [customName, setCustomName] = useState('');
@@ -517,6 +555,202 @@ function AgentsScreen() {
     }
   }
 
+  // ── Knowledge Hub Actions (Documents & Website Crawling) ───────────────────
+  const loadKnowledgeDocs = useCallback(async () => {
+    setLoadingKnowledgeDocs(true);
+    try {
+      const res = await apiRequest<{
+        documents?: Array<{
+          id: string;
+          title: string;
+          sourceType: string;
+          mimeType?: string | null;
+          charCount?: number;
+          chunkCount?: number;
+          status: string;
+          error?: string | null;
+          createdAt: string;
+        }>;
+      }>('/api/ai/knowledge');
+      setKnowledgeDocs(res?.documents || []);
+    } catch (err) {
+      console.warn('[agents] Failed to load knowledge documents:', err);
+    } finally {
+      setLoadingKnowledgeDocs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'knowledge' || tab === 'test') {
+      void loadKnowledgeDocs();
+    }
+  }, [tab, loadKnowledgeDocs]);
+
+  async function handlePickDocument() {
+    triggerHaptic();
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/msword',
+          'text/plain',
+          'text/markdown',
+          'text/csv',
+          'application/json',
+        ],
+        copyToCacheDirectory: true,
+      });
+      if (res.canceled || !res.assets || res.assets.length === 0) return;
+      const picked = res.assets[0];
+      setSelectedDocFile({
+        uri: picked.uri,
+        name: picked.name,
+        size: picked.size,
+        mimeType: picked.mimeType,
+      });
+      const cleanTitle = picked.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      setDocTitleInput(cleanTitle);
+      setDocUploadModalOpen(true);
+    } catch (err) {
+      console.warn('[agents] Document pick error:', err);
+      Alert.alert('File Selection Failed', 'Could not open the file picker. Please try again.');
+    }
+  }
+
+  async function handleUploadDocument() {
+    if (!selectedDocFile || uploadingDoc) return;
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
+    setUploadingDoc(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri: selectedDocFile.uri,
+        name: selectedDocFile.name,
+        type: selectedDocFile.mimeType || 'application/pdf',
+      } as any);
+      if (docTitleInput.trim()) {
+        formData.append('title', docTitleInput.trim());
+      }
+
+      const res = await apiRequest<{ success?: boolean; document?: any; error?: string }>('/api/ai/knowledge/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.error) {
+        throw new Error(res.error);
+      }
+
+      setDocUploadModalOpen(false);
+      setSelectedDocFile(null);
+      setDocTitleInput('');
+      triggerHaptic(Haptics.ImpactFeedbackStyle.Heavy);
+      Alert.alert(
+        'Document Added! 🎉',
+        `"${res.document?.title || selectedDocFile.name}" has been uploaded and indexed (${res.document?.chunkCount || 1} knowledge chunks). Your AI Assistant can now answer customer questions from this source.`
+      );
+      await loadKnowledgeDocs();
+    } catch (err: any) {
+      console.error('[agents] Document upload failed:', err);
+      Alert.alert('Upload Failed', err?.message || 'Could not upload and index document. Make sure it contains readable text.');
+    } finally {
+      setUploadingDoc(false);
+    }
+  }
+
+  function handleOpenCrawlModal() {
+    triggerHaptic();
+    if (!crawlUrlInput.trim()) {
+      const suggested =
+        workspace.data?.bookingPageConfig?.website ||
+        (workspace.data?.publicSlug ? `${WEB_URL}/b/${workspace.data.publicSlug}` : '');
+      if (suggested) {
+        setCrawlUrlInput(suggested);
+      }
+    }
+    setCrawlModalOpen(true);
+  }
+
+  async function handleCrawlWebsite() {
+    const rawTarget = crawlUrlInput.trim();
+    if (!rawTarget || crawlingWeb) {
+      Alert.alert('Missing URL', 'Please enter a valid website URL to crawl.');
+      return;
+    }
+    let target = rawTarget;
+    if (!target.startsWith('http://') && !target.startsWith('https://')) {
+      target = 'https://' + target;
+    }
+
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
+    setCrawlingWeb(true);
+    try {
+      const res = await apiRequest<{
+        success?: boolean;
+        pagesDiscovered?: number;
+        ingestedCount?: number;
+        error?: string;
+      }>('/api/ai/knowledge/crawl', {
+        method: 'POST',
+        body: {
+          url: target,
+          mode: crawlMode,
+          autoIngest: true,
+          maxPages: crawlMode === 'sitemap' ? 10 : 1,
+        },
+      });
+
+      if (res.error) {
+        throw new Error(res.error);
+      }
+
+      setCrawlModalOpen(false);
+      setCrawlUrlInput('');
+      triggerHaptic(Haptics.ImpactFeedbackStyle.Heavy);
+      const count = res.ingestedCount ?? res.pagesDiscovered ?? 1;
+      Alert.alert(
+        'Website Crawled Successfully! 🌐',
+        `AI Assistant crawled and indexed ${count} page${count === 1 ? '' : 's'} from ${target}. It is now trained to answer questions directly from your website.`
+      );
+      await loadKnowledgeDocs();
+    } catch (err: any) {
+      console.error('[agents] Web crawl failed:', err);
+      Alert.alert('Crawl Failed', err?.message || 'Could not crawl website. Check that the website is online, public and accessible.');
+    } finally {
+      setCrawlingWeb(false);
+    }
+  }
+
+  function handleDeleteKnowledgeDoc(docId: string, title: string) {
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      'Delete Knowledge Source?',
+      `Are you sure you want to remove "${title}"? Your AI Assistant will no longer use this document or web page to answer questions.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingDocId(docId);
+            try {
+              await apiRequest(`/api/ai/knowledge/${encodeURIComponent(docId)}`, {
+                method: 'DELETE',
+              });
+              triggerHaptic(Haptics.ImpactFeedbackStyle.Light);
+              await loadKnowledgeDocs();
+            } catch (err: any) {
+              Alert.alert('Delete Failed', err?.message || 'Could not delete knowledge document.');
+            } finally {
+              setDeletingDocId(null);
+            }
+          },
+        },
+      ]
+    );
+  }
+
   async function testChat(overrideMessage?: string) {
     const textToSend = (overrideMessage || testInput).trim();
     if (!textToSend || !draft || testing) return;
@@ -577,6 +811,36 @@ function AgentsScreen() {
 
   // Derived setup readiness calculations
   const faqs = draft?.knowledge?.faqPairs || [];
+
+  const websiteDocs = useMemo(() => {
+    return knowledgeDocs.filter(
+      (doc) =>
+        doc.sourceType === 'file' &&
+        (doc.title.startsWith('http') ||
+          doc.title.includes('bgos.site') ||
+          doc.title.includes('www.') ||
+          doc.title.includes('.com') ||
+          doc.title.includes('.in') ||
+          doc.title.includes('.org') ||
+          doc.title.includes('Source URL'))
+    );
+  }, [knowledgeDocs]);
+
+  const fileDocs = useMemo(() => {
+    return knowledgeDocs.filter(
+      (doc) =>
+        !(
+          doc.sourceType === 'file' &&
+          (doc.title.startsWith('http') ||
+            doc.title.includes('bgos.site') ||
+            doc.title.includes('www.') ||
+            doc.title.includes('.com') ||
+            doc.title.includes('.in') ||
+            doc.title.includes('.org') ||
+            doc.title.includes('Source URL'))
+        )
+    );
+  }, [knowledgeDocs]);
   const filteredFaqs = useMemo(() => {
     let result = faqs;
     if (selectedCategory !== 'All') {
@@ -601,14 +865,15 @@ function AgentsScreen() {
     let score = 20; // base created
     if (draft.name && draft.roleTitle) score += 20;
     if (draft.welcomeGreeting && draft.welcomeGreeting.length > 15) score += 20;
-    if (faqs.length >= 1) score += 15;
-    if (faqs.length >= 3) score += 15;
+    if (faqs.length >= 1 || knowledgeDocs.length >= 1) score += 15;
+    if (faqs.length >= 3 || knowledgeDocs.length >= 2) score += 15;
     if (draft.avatarUrl) score += 10;
     return Math.min(100, score);
-  }, [draft, faqs]);
+  }, [draft, faqs, knowledgeDocs]);
 
   const readinessChecklist = useMemo(() => {
     if (!draft) return [];
+    const totalKnowledge = faqs.length + knowledgeDocs.length;
     return [
       {
         title: 'Assistant Identity',
@@ -624,8 +889,11 @@ function AgentsScreen() {
       },
       {
         title: 'Trained Knowledge Base',
-        detail: `${faqs.length} FAQs active (3 recommended)`,
-        done: faqs.length >= 3,
+        detail:
+          knowledgeDocs.length > 0
+            ? `${knowledgeDocs.length} source${knowledgeDocs.length === 1 ? '' : 's'} & ${faqs.length} FAQs active`
+            : `${faqs.length} FAQs active (3 recommended)`,
+        done: totalKnowledge >= 3 || knowledgeDocs.length >= 1,
         tab: 'knowledge' as const,
       },
       {
@@ -641,7 +909,7 @@ function AgentsScreen() {
         tab: 'channels' as const,
       },
     ];
-  }, [draft, faqs, channelStatus]);
+  }, [draft, faqs, knowledgeDocs, channelStatus]);
 
   const [syncSummary, setSyncSummary] = useState<{
     syncedAt: string;
@@ -1659,348 +1927,976 @@ function AgentsScreen() {
       {/* ── 4. Tab: Knowledge Base ── */}
       {tab === 'knowledge' && (
         <View style={{ gap: 12 }}>
-          {/* Action Header Card with ✨ AI Generate Button */}
-          <Card style={{ gap: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={ui.heading}>Business Knowledge</Text>
-                <Text style={ui.caption}>{faqs.length} questions trained</Text>
+          {/* ── Hero Card: AI Brain Status & Metrics ── */}
+          <Card style={{ backgroundColor: '#0F172A', borderColor: '#1E293B', padding: 16, gap: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: '#10B981',
+                  }}
+                />
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF' }}>
+                  AI Knowledge Brain
+                </Text>
+                <View
+                  style={{
+                    paddingHorizontal: 7,
+                    paddingVertical: 2,
+                    borderRadius: 6,
+                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(16, 185, 129, 0.4)',
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#34D399' }}>
+                    24/7 Live RAG
+                  </Text>
+                </View>
               </View>
+
               <Pressable
                 accessibilityRole="button"
-                onPress={() => handleOpenAddFaq()}
-                style={({ pressed }) => ({
-                  backgroundColor: colors.brand,
-                  flexDirection: 'row',
+                onPress={() => {
+                  triggerHaptic();
+                  void loadKnowledgeDocs();
+                }}
+                disabled={loadingKnowledgeDocs}
+                hitSlop={10}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  backgroundColor: 'rgba(255,255,255,0.08)',
                   alignItems: 'center',
-                  gap: 4,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 10,
-                  opacity: pressed ? 0.85 : 1,
-                })}
+                  justifyContent: 'center',
+                }}
               >
-                <MaterialIcons name="add" size={16} color="#FFFFFF" />
-                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>+ Add FAQ</Text>
+                {loadingKnowledgeDocs ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <MaterialIcons name="refresh" size={18} color="#94A3B8" />
+                )}
               </Pressable>
             </View>
 
-            {/* ✨ 1-Tap AI FAQ Generator Banner */}
-            <Pressable
-              accessibilityRole="button"
-              disabled={generatingFaqs}
-              onPress={() => void generateAiFaqs()}
-              style={({ pressed }) => ({
-                backgroundColor: colors.brandSoft,
-                borderWidth: 1,
-                borderColor: '#A7F3D0',
-                borderRadius: 12,
-                padding: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-                opacity: generatingFaqs ? 0.7 : pressed ? 0.9 : 1,
-              })}
-            >
-              {generatingFaqs ? (
-                <ActivityIndicator size="small" color={colors.brand} />
-              ) : (
-                <MaterialIcons name="auto-awesome" size={22} color={colors.brand} />
-              )}
-              <View style={{ flex: 1, gap: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46' }}>
-                  {generatingFaqs ? 'Crafting FAQs with AI…' : '✨ Auto-Generate FAQs from Business'}
-                </Text>
-                <Text style={{ fontSize: 11, color: '#047857' }}>
-                  Reads your services & generates 5 realistic customer questions
-                </Text>
-              </View>
-              <MaterialIcons name="arrow-forward" size={16} color={colors.brand} />
-            </Pressable>
-
-            {/* Search Input */}
+            {/* Metrics Bar */}
             <View
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                backgroundColor: '#F8FAFC',
-                borderRadius: 10,
-                paddingHorizontal: 10,
-                borderWidth: 1,
-                borderColor: '#E2E8F0',
-                gap: 8,
+                justifyContent: 'space-between',
+                paddingTop: 10,
+                borderTopWidth: 1,
+                borderTopColor: 'rgba(255,255,255,0.1)',
               }}
             >
-              <MaterialIcons name="search" size={18} color={colors.muted} />
-              <TextInput
-                value={faqSearch}
-                onChangeText={setFaqSearch}
-                placeholder="Search questions or keywords…"
-                placeholderTextColor={colors.muted}
-                style={{ flex: 1, paddingVertical: 8, fontSize: 13, color: colors.ink }}
-              />
-              {faqSearch ? (
-                <Pressable onPress={() => setFaqSearch('')} hitSlop={10}>
-                  <MaterialIcons name="close" size={16} color={colors.muted} />
-                </Pressable>
-              ) : null}
+              <View style={{ alignItems: 'center', flex: 1 }}>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFFFFF' }}>
+                  {fileDocs.length}
+                </Text>
+                <Text style={{ fontSize: 10.5, color: '#94A3B8', fontWeight: '600' }}>Documents</Text>
+              </View>
+              <View style={{ width: 1, height: 22, backgroundColor: 'rgba(255,255,255,0.12)' }} />
+              <View style={{ alignItems: 'center', flex: 1 }}>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFFFFF' }}>
+                  {websiteDocs.length}
+                </Text>
+                <Text style={{ fontSize: 10.5, color: '#94A3B8', fontWeight: '600' }}>Web Pages</Text>
+              </View>
+              <View style={{ width: 1, height: 22, backgroundColor: 'rgba(255,255,255,0.12)' }} />
+              <View style={{ alignItems: 'center', flex: 1 }}>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFFFFF' }}>
+                  {faqs.length}
+                </Text>
+                <Text style={{ fontSize: 10.5, color: '#94A3B8', fontWeight: '600' }}>Trained FAQs</Text>
+              </View>
+              <View style={{ width: 1, height: 22, backgroundColor: 'rgba(255,255,255,0.12)' }} />
+              <View style={{ alignItems: 'center', flex: 1 }}>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: '#38BDF8' }}>
+                  {knowledgeDocs.reduce((acc, d) => acc + (d.chunkCount || 1), 0)}
+                </Text>
+                <Text style={{ fontSize: 10.5, color: '#94A3B8', fontWeight: '600' }}>Chunks</Text>
+              </View>
             </View>
+          </Card>
 
-            {/* Category Filter Pills */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-              {FAQ_CATEGORIES.map((cat) => {
-                const isSelected = selectedCategory === cat;
-                return (
-                  <Pressable
-                    key={cat}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      triggerHaptic();
-                      setSelectedCategory(cat);
-                    }}
+          {/* ── Segmented Sub-Tab Switcher ── */}
+          <View
+            style={{
+              flexDirection: 'row',
+              backgroundColor: '#F1F5F9',
+              borderRadius: 12,
+              padding: 3,
+              gap: 4,
+            }}
+          >
+            {[
+              { key: 'documents' as const, label: 'Documents', count: fileDocs.length, icon: 'picture-as-pdf' as const },
+              { key: 'websites' as const, label: 'Websites', count: websiteDocs.length, icon: 'language' as const },
+              { key: 'faqs' as const, label: 'FAQs', count: faqs.length, icon: 'question-answer' as const },
+            ].map((s) => {
+              const active = knowledgeSubTab === s.key;
+              return (
+                <Pressable
+                  key={s.key}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    triggerHaptic();
+                    setKnowledgeSubTab(s.key);
+                  }}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 5,
+                    paddingVertical: 9,
+                    borderRadius: 9,
+                    backgroundColor: active ? '#FFFFFF' : 'transparent',
+                    shadowColor: active ? '#000' : 'transparent',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: active ? 0.08 : 0,
+                    shadowRadius: 2,
+                    elevation: active ? 2 : 0,
+                  }}
+                >
+                  <MaterialIcons
+                    name={s.icon}
+                    size={15}
+                    color={active ? colors.brand : colors.muted}
+                  />
+                  <Text
                     style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 4,
-                      borderRadius: 8,
-                      backgroundColor: isSelected ? colors.brand : '#F1F5F9',
+                      fontSize: 12,
+                      fontWeight: active ? '800' : '600',
+                      color: active ? colors.ink : colors.muted,
                     }}
                   >
-                    <Text
+                    {s.label}
+                  </Text>
+                  {s.count > 0 && (
+                    <View
                       style={{
-                        fontSize: 11,
-                        fontWeight: isSelected ? '800' : '600',
-                        color: isSelected ? '#FFFFFF' : colors.ink,
+                        paddingHorizontal: 5,
+                        paddingVertical: 1,
+                        borderRadius: 10,
+                        backgroundColor: active ? colors.brandSoft : '#E2E8F0',
                       }}
                     >
-                      {cat}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Card>
-
-          {/* 1-Tap FAQ Suggestions Tray */}
-          <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 12, fontWeight: '800', color: colors.ink, paddingHorizontal: 4 }}>
-              💡 Popular Questions to Add (1-Tap Prefill)
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
-              {FAQ_SUGGESTIONS.map((sug, idx) => {
-                const alreadyExists = faqs.some((f) => f.question.toLowerCase().includes(sug.category.toLowerCase()));
-                if (alreadyExists) return null;
-                return (
-                  <Pressable
-                    key={idx}
-                    accessibilityRole="button"
-                    onPress={() => handleOpenAddFaq(sug.question, sug.defaultAnswer)}
-                    style={({ pressed }) => ({
-                      backgroundColor: '#FFFFFF',
-                      borderWidth: 1,
-                      borderColor: '#CBD5E1',
-                      borderRadius: 12,
-                      paddingVertical: 8,
-                      paddingHorizontal: 12,
-                      gap: 2,
-                      opacity: pressed ? 0.8 : 1,
-                    })}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <MaterialIcons name="add-circle-outline" size={13} color={colors.brand} />
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.brand }}>
-                        {sug.category}
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontWeight: '800',
+                          color: active ? colors.brand : colors.muted,
+                        }}
+                      >
+                        {s.count}
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 11.5, color: colors.ink, maxWidth: 200 }} numberOfLines={1}>
-                      {sug.question}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+                  )}
+                </Pressable>
+              );
+            })}
           </View>
 
-          {/* Unanswered Visitor Questions (Train from Real Chats) */}
-          <Card style={{ gap: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ flex: 1 }}>
-                <Text style={ui.heading}>Unanswered Visitor Questions</Text>
-                <Text style={ui.caption}>Questions visitors asked that need your answer</Text>
-              </View>
-              <Badge
-                label={unansweredList.length > 0 ? `${unansweredList.length} pending` : 'All caught up'}
-                success={unansweredList.length === 0}
-              />
-            </View>
-
-            {unansweredList.length === 0 ? (
-              <Text style={{ fontSize: 12.5, color: colors.muted }}>
-                No pending questions right now. When your bot cannot answer a visitor confidently, it saves the question here so you can teach it in one tap.
-              </Text>
-            ) : (
-              <View style={{ gap: 8 }}>
-                {unansweredList.slice(0, 6).map((item) => (
-                  <View
-                    key={item.id}
-                    style={{
-                      backgroundColor: '#FFFBEB',
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: '#FDE68A',
-                      padding: 12,
-                      gap: 8,
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }}>
-                      “{item.question}”
+          {/* ── Sub-Tab 1: Documents & PDFs ── */}
+          {knowledgeSubTab === 'documents' && (
+            <View style={{ gap: 12 }}>
+              <Card style={{ gap: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={ui.heading}>Documents & Price Sheets</Text>
+                    <Text style={ui.caption}>
+                      {fileDocs.length} document{fileDocs.length === 1 ? '' : 's'} indexed in AI Brain
                     </Text>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => {
-                          setTeachItem({ id: item.id, question: item.question });
-                          setTeachAnswerText('');
-                        }}
-                        style={{
-                          flex: 1,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 6,
-                          paddingVertical: 8,
-                          borderRadius: 9,
-                          backgroundColor: colors.brand,
-                        }}
-                      >
-                        <MaterialIcons name="school" size={15} color="#FFFFFF" />
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
-                          Teach Answer
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => void handleDismissUnanswered(item.id)}
-                        style={{
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          borderRadius: 9,
-                          backgroundColor: '#FFFFFF',
-                          borderWidth: 1,
-                          borderColor: '#E2E8F0',
-                        }}
-                      >
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.muted }}>
-                          Dismiss
-                        </Text>
-                      </Pressable>
-                    </View>
                   </View>
-                ))}
-              </View>
-            )}
-          </Card>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={uploadingDoc}
+                    onPress={() => void handlePickDocument()}
+                    style={({ pressed }) => ({
+                      backgroundColor: colors.brand,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <MaterialIcons name="upload-file" size={16} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>+ Upload Doc</Text>
+                  </Pressable>
+                </View>
 
-          {/* Accordion FAQ Cards */}
-          {filteredFaqs.length === 0 ? (
-            <Card style={{ alignItems: 'center', padding: 24, gap: 8 }}>
-              <MaterialIcons name="help-outline" size={32} color={colors.muted} />
-              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.ink }}>
-                {faqSearch ? 'No matching questions found' : 'No custom FAQs added yet'}
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.muted, textAlign: 'center' }}>
-                {faqSearch
-                  ? 'Try clearing your search query.'
-                  : 'Add questions about your hours, location, rates, and policies.'}
-              </Text>
-            </Card>
-          ) : (
-            <View style={{ gap: 8 }}>
-              {filteredFaqs.map((faq) => {
-                const isExpanded = expandedFaqIds.has(faq.id);
-                return (
+                {/* Helper notice */}
+                <View
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    borderRadius: 10,
+                    padding: 10,
+                    flexDirection: 'row',
+                    gap: 8,
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                  }}
+                >
+                  <MaterialIcons name="info-outline" size={16} color={colors.brand} />
+                  <Text style={{ fontSize: 11, color: colors.muted, flex: 1, lineHeight: 15 }}>
+                    Accepts PDF, DOCX, TXT, CSV, JSON (max 10 MB). The AI automatically parses and cites these materials during customer chats.
+                  </Text>
+                </View>
+
+                {loadingKnowledgeDocs && fileDocs.length === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 20, gap: 8 }}>
+                    <ActivityIndicator size="small" color={colors.brand} />
+                    <Text style={{ fontSize: 12, color: colors.muted }}>Loading documents…</Text>
+                  </View>
+                ) : fileDocs.length === 0 ? (
                   <View
-                    key={faq.id}
                     style={{
                       backgroundColor: '#FFFFFF',
                       borderRadius: 14,
                       borderWidth: 1,
                       borderColor: '#E2E8F0',
-                      overflow: 'hidden',
+                      padding: 20,
+                      alignItems: 'center',
+                      gap: 10,
                     }}
                   >
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => toggleFaqAccordion(faq.id)}
+                    <View
                       style={{
-                        padding: 14,
-                        flexDirection: 'row',
+                        width: 48,
+                        height: 48,
+                        borderRadius: 24,
+                        backgroundColor: '#FEF2F2',
                         alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 8,
+                        justifyContent: 'center',
                       }}
                     >
-                      <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink, flex: 1 }}>
-                        {faq.question}
+                      <MaterialIcons name="picture-as-pdf" size={24} color="#DC2626" />
+                    </View>
+                    <View style={{ alignItems: 'center', gap: 3 }}>
+                      <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink }}>
+                        No documents uploaded yet
                       </Text>
-                      <MaterialIcons
-                        name={isExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                        size={20}
-                        color={colors.muted}
-                      />
+                      <Text style={{ fontSize: 11.5, color: colors.muted, textAlign: 'center', maxWidth: 280 }}>
+                        Upload your price list, service catalog, brochures or policies so your AI assistant can answer customer inquiries accurately.
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={uploadingDoc}
+                      onPress={() => void handlePickDocument()}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingVertical: 9,
+                        paddingHorizontal: 14,
+                        borderRadius: 10,
+                        backgroundColor: colors.brand,
+                        marginTop: 4,
+                      }}
+                    >
+                      <MaterialIcons name="file-upload" size={16} color="#FFFFFF" />
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
+                        Upload First Document
+                      </Text>
                     </Pressable>
+                  </View>
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {fileDocs.map((doc) => {
+                      const isPdf =
+                        doc.mimeType?.includes('pdf') || doc.title.toLowerCase().endsWith('.pdf');
+                      const isDeleting = deletingDocId === doc.id;
 
-                    {isExpanded && (
-                      <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 2, gap: 10, borderTopWidth: 1, borderTopColor: '#F8FAFC' }}>
-                        <Text style={{ fontSize: 12.5, color: colors.muted, lineHeight: 19 }}>
-                          {faq.answer}
-                        </Text>
-                        <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
-                          <Pressable
-                            accessibilityRole="button"
-                            onPress={() => handleOpenEditFaq(faq)}
+                      return (
+                        <View
+                          key={doc.id}
+                          style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                            padding: 12,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 10,
+                          }}
+                        >
+                          <View
                             style={{
-                              flexDirection: 'row',
+                              width: 38,
+                              height: 38,
+                              borderRadius: 10,
+                              backgroundColor: isPdf ? '#FEF2F2' : '#ECFDF5',
                               alignItems: 'center',
-                              gap: 4,
-                              paddingVertical: 6,
-                              paddingHorizontal: 10,
-                              borderRadius: 8,
-                              backgroundColor: '#F1F5F9',
+                              justifyContent: 'center',
                             }}
                           >
-                            <MaterialIcons name="edit" size={14} color={colors.ink} />
-                            <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.ink }}>Edit</Text>
+                            <MaterialIcons
+                              name={isPdf ? 'picture-as-pdf' : 'description'}
+                              size={20}
+                              color={isPdf ? '#DC2626' : '#059669'}
+                            />
+                          </View>
+
+                          <View style={{ flex: 1, gap: 2 }}>
+                            <Text
+                              style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}
+                              numberOfLines={1}
+                            >
+                              {doc.title}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <View
+                                style={{
+                                  paddingHorizontal: 6,
+                                  paddingVertical: 1,
+                                  borderRadius: 4,
+                                  backgroundColor:
+                                    doc.status === 'ready'
+                                      ? '#DCFCE7'
+                                      : doc.status === 'error'
+                                      ? '#FEE2E2'
+                                      : '#FEF3C7',
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 9.5,
+                                    fontWeight: '700',
+                                    color:
+                                      doc.status === 'ready'
+                                        ? '#15803D'
+                                        : doc.status === 'error'
+                                        ? '#B91C1C'
+                                        : '#B45309',
+                                  }}
+                                >
+                                  {doc.status === 'ready' ? 'Indexed' : doc.status}
+                                </Text>
+                              </View>
+                              <Text style={{ fontSize: 11, color: colors.muted }}>
+                                {doc.chunkCount || 1} chunks
+                              </Text>
+                              {doc.charCount ? (
+                                <>
+                                  <Text style={{ fontSize: 10, color: '#CBD5E1' }}>•</Text>
+                                  <Text style={{ fontSize: 11, color: colors.muted }}>
+                                    {(doc.charCount / 1000).toFixed(1)}k chars
+                                  </Text>
+                                </>
+                              ) : null}
+                            </View>
+                          </View>
+
+                          <Pressable
+                            accessibilityRole="button"
+                            disabled={isDeleting}
+                            onPress={() => handleDeleteKnowledgeDoc(doc.id, doc.title)}
+                            style={({ pressed }) => ({
+                              width: 32,
+                              height: 32,
+                              borderRadius: 8,
+                              backgroundColor: '#FEE2E2',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              opacity: pressed ? 0.75 : 1,
+                            })}
+                          >
+                            {isDeleting ? (
+                              <ActivityIndicator size="small" color="#DC2626" />
+                            ) : (
+                              <MaterialIcons name="delete-outline" size={16} color="#DC2626" />
+                            )}
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </Card>
+            </View>
+          )}
+
+          {/* ── Sub-Tab 2: Crawled Websites ── */}
+          {knowledgeSubTab === 'websites' && (
+            <View style={{ gap: 12 }}>
+              <Card style={{ gap: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={ui.heading}>Crawled Websites & Pages</Text>
+                    <Text style={ui.caption}>
+                      {websiteDocs.length} web page{websiteDocs.length === 1 ? '' : 's'} indexed in AI Brain
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={crawlingWeb}
+                    onPress={handleOpenCrawlModal}
+                    style={({ pressed }) => ({
+                      backgroundColor: '#2563EB',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <MaterialIcons name="language" size={16} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>+ Crawl Site</Text>
+                  </Pressable>
+                </View>
+
+                {/* Helper notice */}
+                <View
+                  style={{
+                    backgroundColor: '#EFF6FF',
+                    borderRadius: 10,
+                    padding: 10,
+                    flexDirection: 'row',
+                    gap: 8,
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: '#BFDBFE',
+                  }}
+                >
+                  <MaterialIcons name="verified" size={16} color="#2563EB" />
+                  <Text style={{ fontSize: 11, color: '#1E40AF', flex: 1, lineHeight: 15 }}>
+                    Dual-Brain AI scans your public website, extracting verified service offerings, business hours, and pricing for 100% chatbot accuracy.
+                  </Text>
+                </View>
+
+                {loadingKnowledgeDocs && websiteDocs.length === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 20, gap: 8 }}>
+                    <ActivityIndicator size="small" color="#2563EB" />
+                    <Text style={{ fontSize: 12, color: colors.muted }}>Loading websites…</Text>
+                  </View>
+                ) : websiteDocs.length === 0 ? (
+                  <View
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      padding: 20,
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 24,
+                        backgroundColor: '#EFF6FF',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <MaterialIcons name="language" size={24} color="#2563EB" />
+                    </View>
+                    <View style={{ alignItems: 'center', gap: 3 }}>
+                      <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink }}>
+                        No websites crawled yet
+                      </Text>
+                      <Text style={{ fontSize: 11.5, color: colors.muted, textAlign: 'center', maxWidth: 280 }}>
+                        Crawl your business website or BGOS page to automatically train your 24/7 AI assistant with your real online content.
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={crawlingWeb}
+                      onPress={handleOpenCrawlModal}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingVertical: 9,
+                        paddingHorizontal: 14,
+                        borderRadius: 10,
+                        backgroundColor: '#2563EB',
+                        marginTop: 4,
+                      }}
+                    >
+                      <MaterialIcons name="public" size={16} color="#FFFFFF" />
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
+                        Crawl Business Website
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {websiteDocs.map((doc) => {
+                      const isDeleting = deletingDocId === doc.id;
+                      return (
+                        <View
+                          key={doc.id}
+                          style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                            padding: 12,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 10,
+                          }}
+                        >
+                          <View
+                            style={{
+                              width: 38,
+                              height: 38,
+                              borderRadius: 10,
+                              backgroundColor: '#EFF6FF',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <MaterialIcons name="language" size={20} color="#2563EB" />
+                          </View>
+
+                          <View style={{ flex: 1, gap: 2 }}>
+                            <Text
+                              style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}
+                              numberOfLines={1}
+                            >
+                              {doc.title}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <View
+                                style={{
+                                  paddingHorizontal: 6,
+                                  paddingVertical: 1,
+                                  borderRadius: 4,
+                                  backgroundColor:
+                                    doc.status === 'ready'
+                                      ? '#DCFCE7'
+                                      : doc.status === 'error'
+                                      ? '#FEE2E2'
+                                      : '#FEF3C7',
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 9.5,
+                                    fontWeight: '700',
+                                    color:
+                                      doc.status === 'ready'
+                                        ? '#15803D'
+                                        : doc.status === 'error'
+                                        ? '#B91C1C'
+                                        : '#B45309',
+                                  }}
+                                >
+                                  {doc.status === 'ready' ? 'Indexed' : doc.status}
+                                </Text>
+                              </View>
+                              <Text style={{ fontSize: 11, color: colors.muted }}>
+                                {doc.chunkCount || 1} chunks
+                              </Text>
+                              {doc.charCount ? (
+                                <>
+                                  <Text style={{ fontSize: 10, color: '#CBD5E1' }}>•</Text>
+                                  <Text style={{ fontSize: 11, color: colors.muted }}>
+                                    {(doc.charCount / 1000).toFixed(1)}k chars
+                                  </Text>
+                                </>
+                              ) : null}
+                            </View>
+                          </View>
+
+                          <Pressable
+                            accessibilityRole="button"
+                            disabled={isDeleting}
+                            onPress={() => handleDeleteKnowledgeDoc(doc.id, doc.title)}
+                            style={({ pressed }) => ({
+                              width: 32,
+                              height: 32,
+                              borderRadius: 8,
+                              backgroundColor: '#FEE2E2',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              opacity: pressed ? 0.75 : 1,
+                            })}
+                          >
+                            {isDeleting ? (
+                              <ActivityIndicator size="small" color="#DC2626" />
+                            ) : (
+                              <MaterialIcons name="delete-outline" size={16} color="#DC2626" />
+                            )}
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </Card>
+            </View>
+          )}
+
+          {/* ── Sub-Tab 3: Custom FAQs ── */}
+          {knowledgeSubTab === 'faqs' && (
+            <View style={{ gap: 12 }}>
+              <Card style={{ gap: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={ui.heading}>Custom Q&A FAQs</Text>
+                    <Text style={ui.caption}>{faqs.length} question pairs trained</Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => handleOpenAddFaq()}
+                    style={({ pressed }) => ({
+                      backgroundColor: colors.brand,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <MaterialIcons name="add" size={16} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>+ Add FAQ</Text>
+                  </Pressable>
+                </View>
+
+                {/* ✨ 1-Tap AI FAQ Generator Banner */}
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={generatingFaqs}
+                  onPress={() => void generateAiFaqs()}
+                  style={({ pressed }) => ({
+                    backgroundColor: colors.brandSoft,
+                    borderWidth: 1,
+                    borderColor: '#A7F3D0',
+                    borderRadius: 12,
+                    padding: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    opacity: generatingFaqs ? 0.7 : pressed ? 0.9 : 1,
+                  })}
+                >
+                  {generatingFaqs ? (
+                    <ActivityIndicator size="small" color={colors.brand} />
+                  ) : (
+                    <MaterialIcons name="auto-awesome" size={22} color={colors.brand} />
+                  )}
+                  <View style={{ flex: 1, gap: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46' }}>
+                      {generatingFaqs ? 'Crafting FAQs with AI…' : '✨ Auto-Generate FAQs from Business'}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#047857' }}>
+                      Reads your services & generates 5 realistic customer questions
+                    </Text>
+                  </View>
+                  <MaterialIcons name="arrow-forward" size={16} color={colors.brand} />
+                </Pressable>
+
+                {/* Search Input */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#F8FAFC',
+                    borderRadius: 10,
+                    paddingHorizontal: 10,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    gap: 8,
+                  }}
+                >
+                  <MaterialIcons name="search" size={18} color={colors.muted} />
+                  <TextInput
+                    value={faqSearch}
+                    onChangeText={setFaqSearch}
+                    placeholder="Search questions or keywords…"
+                    placeholderTextColor={colors.muted}
+                    style={{ flex: 1, paddingVertical: 8, fontSize: 13, color: colors.ink }}
+                  />
+                  {faqSearch ? (
+                    <Pressable onPress={() => setFaqSearch('')} hitSlop={10}>
+                      <MaterialIcons name="close" size={16} color={colors.muted} />
+                    </Pressable>
+                  ) : null}
+                </View>
+
+                {/* Category Filter Pills */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                  {FAQ_CATEGORIES.map((cat) => {
+                    const isSelected = selectedCategory === cat;
+                    return (
+                      <Pressable
+                        key={cat}
+                        accessibilityRole="button"
+                        onPress={() => {
+                          triggerHaptic();
+                          setSelectedCategory(cat);
+                        }}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          borderRadius: 8,
+                          backgroundColor: isSelected ? colors.brand : '#F1F5F9',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: isSelected ? '800' : '600',
+                            color: isSelected ? '#FFFFFF' : colors.ink,
+                          }}
+                        >
+                          {cat}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </Card>
+
+              {/* 1-Tap FAQ Suggestions Tray */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: colors.ink, paddingHorizontal: 4 }}>
+                  💡 Popular Questions to Add (1-Tap Prefill)
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
+                  {FAQ_SUGGESTIONS.map((sug, idx) => {
+                    const alreadyExists = faqs.some((f) => f.question.toLowerCase().includes(sug.category.toLowerCase()));
+                    if (alreadyExists) return null;
+                    return (
+                      <Pressable
+                        key={idx}
+                        accessibilityRole="button"
+                        onPress={() => handleOpenAddFaq(sug.question, sug.defaultAnswer)}
+                        style={({ pressed }) => ({
+                          backgroundColor: '#FFFFFF',
+                          borderWidth: 1,
+                          borderColor: '#CBD5E1',
+                          borderRadius: 12,
+                          paddingVertical: 8,
+                          paddingHorizontal: 12,
+                          gap: 2,
+                          opacity: pressed ? 0.8 : 1,
+                        })}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <MaterialIcons name="add-circle-outline" size={13} color={colors.brand} />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: colors.brand }}>
+                            {sug.category}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 11.5, color: colors.ink, maxWidth: 200 }} numberOfLines={1}>
+                          {sug.question}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              {/* Unanswered Visitor Questions (Train from Real Chats) */}
+              <Card style={{ gap: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={ui.heading}>Unanswered Visitor Questions</Text>
+                    <Text style={ui.caption}>Questions visitors asked that need your answer</Text>
+                  </View>
+                  <Badge
+                    label={unansweredList.length > 0 ? `${unansweredList.length} pending` : 'All caught up'}
+                    success={unansweredList.length === 0}
+                  />
+                </View>
+
+                {unansweredList.length === 0 ? (
+                  <Text style={{ fontSize: 12.5, color: colors.muted }}>
+                    No pending questions right now. When your bot cannot answer a visitor confidently, it saves the question here so you can teach it in one tap.
+                  </Text>
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {unansweredList.slice(0, 6).map((item) => (
+                      <View
+                        key={item.id}
+                        style={{
+                          backgroundColor: '#FFFBEB',
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: '#FDE68A',
+                          padding: 12,
+                          gap: 8,
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }}>
+                          “{item.question}”
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <Pressable
+                            accessibilityRole="button"
+                            onPress={() => {
+                              setTeachItem({ id: item.id, question: item.question });
+                              setTeachAnswerText('');
+                            }}
+                            style={{
+                              flex: 1,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 6,
+                              paddingVertical: 8,
+                              borderRadius: 9,
+                              backgroundColor: colors.brand,
+                            }}
+                          >
+                            <MaterialIcons name="school" size={15} color="#FFFFFF" />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
+                              Teach Answer
+                            </Text>
                           </Pressable>
                           <Pressable
                             accessibilityRole="button"
-                            onPress={() => handleRemoveFaq(faq.id)}
+                            onPress={() => void handleDismissUnanswered(item.id)}
                             style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 4,
-                              paddingVertical: 6,
-                              paddingHorizontal: 10,
-                              borderRadius: 8,
-                              backgroundColor: '#FEE2E2',
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                              borderRadius: 9,
+                              backgroundColor: '#FFFFFF',
+                              borderWidth: 1,
+                              borderColor: '#E2E8F0',
                             }}
                           >
-                            <MaterialIcons name="delete-outline" size={14} color="#DC2626" />
-                            <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#DC2626' }}>Delete</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.muted }}>
+                              Dismiss
+                            </Text>
                           </Pressable>
                         </View>
                       </View>
-                    )}
+                    ))}
                   </View>
-                );
-              })}
+                )}
+              </Card>
+
+              {/* Accordion FAQ Cards */}
+              {filteredFaqs.length === 0 ? (
+                <Card style={{ alignItems: 'center', padding: 24, gap: 8 }}>
+                  <MaterialIcons name="help-outline" size={32} color={colors.muted} />
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: colors.ink }}>
+                    {faqSearch ? 'No matching questions found' : 'No custom FAQs added yet'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: colors.muted, textAlign: 'center' }}>
+                    {faqSearch
+                      ? 'Try clearing your search query.'
+                      : 'Add questions about your hours, location, rates, and policies.'}
+                  </Text>
+                </Card>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {filteredFaqs.map((faq) => {
+                    const isExpanded = expandedFaqIds.has(faq.id);
+                    return (
+                      <View
+                        key={faq.id}
+                        style={{
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: '#E2E8F0',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => toggleFaqAccordion(faq.id)}
+                          style={{
+                            padding: 14,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 8,
+                          }}
+                        >
+                          <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink, flex: 1 }}>
+                            {faq.question}
+                          </Text>
+                          <MaterialIcons
+                            name={isExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                            size={20}
+                            color={colors.muted}
+                          />
+                        </Pressable>
+
+                        {isExpanded && (
+                          <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 2, gap: 10, borderTopWidth: 1, borderTopColor: '#F8FAFC' }}>
+                            <Text style={{ fontSize: 12.5, color: colors.muted, lineHeight: 19 }}>
+                              {faq.answer}
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
+                              <Pressable
+                                accessibilityRole="button"
+                                onPress={() => handleOpenEditFaq(faq)}
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  paddingVertical: 6,
+                                  paddingHorizontal: 10,
+                                  borderRadius: 8,
+                                  backgroundColor: '#F1F5F9',
+                                }}
+                              >
+                                <MaterialIcons name="edit" size={14} color={colors.ink} />
+                                <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.ink }}>Edit</Text>
+                              </Pressable>
+                              <Pressable
+                                accessibilityRole="button"
+                                onPress={() => handleRemoveFaq(faq.id)}
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  paddingVertical: 6,
+                                  paddingHorizontal: 10,
+                                  borderRadius: 8,
+                                  backgroundColor: '#FEE2E2',
+                                }}
+                              >
+                                <MaterialIcons name="delete-outline" size={14} color="#DC2626" />
+                                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#DC2626' }}>Delete</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           )}
 
           {/* Web Studio Advanced Training Link */}
           <Card style={{ gap: 8 }}>
-            <Text style={ui.heading}>Website & Document Indexing</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <MaterialIcons name="auto-awesome" size={18} color={colors.brand} />
+              <Text style={ui.heading}>Dual-Brain Vector RAG</Text>
+            </View>
             <Text style={ui.body}>
-              Upload PDF price sheets, brochures, or crawl your website in the BGOS Knowledge Studio.
+              All documents, PDFs and crawled website pages are automatically parsed into semantic vector embeddings. For deep chunk-level inspection or manual embeddings, open the Web Knowledge Studio.
             </Text>
             <Action
               secondary
@@ -2794,6 +3690,337 @@ function AgentsScreen() {
                   label={teachingSaving ? 'Saving...' : 'Save & Train'}
                   disabled={!teachAnswerText.trim() || teachingSaving}
                   onPress={() => void handleTeachSubmit()}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Modal: Upload Knowledge Document (PDF / DOC / Text) ── */}
+      <Modal visible={docUploadModalOpen} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: '#FEE2E2',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialIcons name="picture-as-pdf" size={18} color="#DC2626" />
+                </View>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
+                  Upload Document
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  if (!uploadingDoc) {
+                    setDocUploadModalOpen(false);
+                    setSelectedDocFile(null);
+                  }
+                }}
+                hitSlop={10}
+              >
+                <MaterialIcons name="close" size={22} color={colors.muted} />
+              </Pressable>
+            </View>
+
+            <Text style={{ fontSize: 12, color: colors.muted, marginTop: -4 }}>
+              Train your AI on price lists, menus, service catalogs, or policy documents.
+            </Text>
+
+            {/* Selected File Box */}
+            {selectedDocFile && (
+              <View
+                style={{
+                  backgroundColor: '#F8FAFC',
+                  borderRadius: 12,
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <MaterialIcons
+                    name={selectedDocFile.name.toLowerCase().endsWith('.pdf') ? 'picture-as-pdf' : 'description'}
+                    size={22}
+                    color={selectedDocFile.name.toLowerCase().endsWith('.pdf') ? '#DC2626' : colors.brand}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }} numberOfLines={1}>
+                      {selectedDocFile.name}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.muted }}>
+                      {selectedDocFile.size ? `${(selectedDocFile.size / 1024).toFixed(0)} KB` : 'Document selected'}
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={uploadingDoc}
+                  onPress={() => void handlePickDocument()}
+                  style={{
+                    paddingVertical: 5,
+                    paddingHorizontal: 10,
+                    borderRadius: 8,
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                  }}
+                >
+                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.ink }}>Change</Text>
+                </Pressable>
+              </View>
+            )}
+
+            <Field
+              label="Knowledge Source Title"
+              value={docTitleInput}
+              onChangeText={setDocTitleInput}
+              placeholder="e.g. 2026 Price List & Packages"
+            />
+
+            <View
+              style={{
+                backgroundColor: '#EFF6FF',
+                borderRadius: 10,
+                padding: 10,
+                flexDirection: 'row',
+                gap: 8,
+                alignItems: 'center',
+              }}
+            >
+              <MaterialIcons name="auto-awesome" size={16} color="#2563EB" />
+              <Text style={{ fontSize: 11.5, color: '#1E40AF', flex: 1, lineHeight: 16 }}>
+                AI will split this document into semantic vector chunks so it can answer customer inquiries accurately.
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+              <View style={{ flex: 1 }}>
+                <Action
+                  label="Cancel"
+                  secondary
+                  disabled={uploadingDoc}
+                  onPress={() => {
+                    setDocUploadModalOpen(false);
+                    setSelectedDocFile(null);
+                  }}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Action
+                  label={uploadingDoc ? 'Indexing...' : 'Upload & Train'}
+                  disabled={!selectedDocFile || uploadingDoc}
+                  onPress={() => void handleUploadDocument()}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Modal: Crawl Website into AI Knowledge ── */}
+      <Modal visible={crawlModalOpen} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: '#EFF6FF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialIcons name="language" size={18} color="#2563EB" />
+                </View>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
+                  Crawl Website
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  if (!crawlingWeb) setCrawlModalOpen(false);
+                }}
+                hitSlop={10}
+              >
+                <MaterialIcons name="close" size={22} color={colors.muted} />
+              </Pressable>
+            </View>
+
+            <Text style={{ fontSize: 12, color: colors.muted, marginTop: -4 }}>
+              AI will index your public website pages, services, business hours, and rates.
+            </Text>
+
+            {/* Quick URL Suggestions */}
+            {(Boolean(workspace.data?.bookingPageConfig?.website) || Boolean(workspace.data?.publicSlug)) && (
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted }}>
+                  Quick Fill Business Link
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                  {workspace.data?.publicSlug ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => {
+                        triggerHaptic();
+                        setCrawlUrlInput(`${WEB_URL}/b/${workspace.data?.publicSlug}`);
+                      }}
+                      style={{
+                        paddingVertical: 5,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
+                        backgroundColor: '#F1F5F9',
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <MaterialIcons name="bolt" size={13} color="#F59E0B" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.ink }}>
+                        BGOS Site ({workspace.data.publicSlug})
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {workspace.data?.bookingPageConfig?.website ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => {
+                        triggerHaptic();
+                        setCrawlUrlInput(workspace.data?.bookingPageConfig?.website || '');
+                      }}
+                      style={{
+                        paddingVertical: 5,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
+                        backgroundColor: '#F1F5F9',
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <MaterialIcons name="link" size={13} color={colors.brand} />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.ink }}>
+                        {workspace.data.bookingPageConfig.website}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </ScrollView>
+              </View>
+            )}
+
+            <Field
+              label="Website or Webpage URL"
+              value={crawlUrlInput}
+              onChangeText={setCrawlUrlInput}
+              placeholder="https://yourbusiness.com"
+            />
+
+            {/* Crawl Scope Selection */}
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>
+                Crawl Scope
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    triggerHaptic();
+                    setCrawlMode('single');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: 10,
+                    borderRadius: 10,
+                    backgroundColor: crawlMode === 'single' ? '#ECFDF5' : '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: crawlMode === 'single' ? colors.brand : '#E2E8F0',
+                    gap: 2,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: crawlMode === 'single' ? colors.brand : colors.ink }}>
+                    Single Page
+                  </Text>
+                  <Text style={{ fontSize: 10.5, color: colors.muted }}>
+                    Fast · indexes this exact page
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    triggerHaptic();
+                    setCrawlMode('sitemap');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: 10,
+                    borderRadius: 10,
+                    backgroundColor: crawlMode === 'sitemap' ? '#ECFDF5' : '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: crawlMode === 'sitemap' ? colors.brand : '#E2E8F0',
+                    gap: 2,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: crawlMode === 'sitemap' ? colors.brand : colors.ink }}>
+                    Full Website
+                  </Text>
+                  <Text style={{ fontSize: 10.5, color: colors.muted }}>
+                    Sitemap · up to 10 pages
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View
+              style={{
+                backgroundColor: '#ECFDF5',
+                borderRadius: 10,
+                padding: 10,
+                flexDirection: 'row',
+                gap: 8,
+                alignItems: 'center',
+              }}
+            >
+              <MaterialIcons name="verified" size={16} color="#059669" />
+              <Text style={{ fontSize: 11.5, color: '#065F46', flex: 1, lineHeight: 16 }}>
+                Dual-Brain AI extracts verified business facts, service rates, and hours to make your chatbot answer inquiries with 100% accuracy.
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+              <View style={{ flex: 1 }}>
+                <Action
+                  label="Cancel"
+                  secondary
+                  disabled={crawlingWeb}
+                  onPress={() => setCrawlModalOpen(false)}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Action
+                  label={crawlingWeb ? 'Crawling...' : 'Crawl & Index'}
+                  disabled={!crawlUrlInput.trim() || crawlingWeb}
+                  onPress={() => void handleCrawlWebsite()}
                 />
               </View>
             </View>
