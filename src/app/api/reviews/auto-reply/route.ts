@@ -298,7 +298,7 @@ export async function POST(request: NextRequest) {
           moderationState,
           googleError,
           mapsUrl,
-          keywords: defaultKeywords,
+          keywords: reviewSeoKeywords,
         };
 
         await db.review.update({

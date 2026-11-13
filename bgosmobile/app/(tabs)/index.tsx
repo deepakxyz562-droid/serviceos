@@ -19,7 +19,7 @@ import { GooglePerformanceCard } from '../../src/components/gbp/google-performan
 import { SidebarDrawer } from '../../src/components/navigation/sidebar-drawer';
 import { PushPromptModal } from '../../src/components/notifications/push-prompt';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
-import { GrowthActionSheet } from '../../src/components/gbp/growth-action-sheet';
+import { GrowthActionSheet, type AutopilotGrowthActionItem, type RoadmapPhase } from '../../src/components/gbp/growth-action-sheet';
 import type { AnalyticsResult, GbpPlaceResult } from '../../src/components/gbp/types';
 import type { BgosConversation, BgosWorkspace } from '../../src/types/bgos-contracts';
 
@@ -84,6 +84,10 @@ type GrowthActionsResponse = {
   totalTarget: number;
   leftCount: number;
   pendingApprovalCount: number;
+  readinessScore?: number;
+  readinessGrade?: string;
+  autopilotActions?: AutopilotGrowthActionItem[];
+  roadmap?: RoadmapPhase[];
   seoPendingCount?: number;
   targets?: {
     weeklyPosts: number;
@@ -893,10 +897,12 @@ export default function HomeScreen() {
               </Animated.View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontWeight: '900', letterSpacing: -0.2 }}>
-                  Growth Actions
+                  Google Growth Autopilot
                 </Text>
                 <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '700' }}>
-                  {growthActions.loading && !growthActions.data ? 'Loading next steps…' : `${totalDone} of ${totalTarget} done • ${leftCount} remaining`}
+                  {growthActions.loading && !growthActions.data
+                    ? 'Loading next steps…'
+                    : `${growthActions.data?.readinessScore ?? 78}% Ready • ${growthActions.data?.pendingApprovalCount ?? leftCount} pending approvals`}
                 </Text>
               </View>
             </View>
@@ -1371,6 +1377,206 @@ export default function HomeScreen() {
           },
         ]}
       />
+
+      {/* ── Google Business Growth Action Center (AI Autopilot Hub) ── */}
+      <Card
+        style={{
+          padding: 16,
+          borderRadius: 18,
+          gap: 14,
+          borderColor: '#E2E8F0',
+          shadowColor: '#0F172A',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 8,
+          elevation: 2,
+        }}
+      >
+        {/* Header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 12,
+                backgroundColor: '#FEF3C7',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 20 }}>⚡</Text>
+            </View>
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
+                  Growth Action Center
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: '#DCFCE7',
+                    paddingHorizontal: 6,
+                    paddingVertical: 1,
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#16A34A' }}>AUTOPILOT</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 11.5, color: colors.muted, marginTop: 1 }}>
+                {growthActions.data?.readinessScore ?? 78}/100 Readiness · {growthActions.data?.pendingApprovalCount || 0} Approvals Waiting
+              </Text>
+            </View>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open Growth Autopilot Studio"
+            onPress={() => setGrowthModalOpen(true)}
+            style={{
+              backgroundColor: '#F1F5F9',
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.brand }}>
+              View All →
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Top 3 Prioritized Actions from Connected GBP Data */}
+        <View style={{ gap: 10 }}>
+          {(growthActions.data?.autopilotActions || []).slice(0, 3).map((act) => {
+            const isP0 = act.priorityLevel === 'P0';
+            return (
+              <Pressable
+                key={act.id}
+                accessibilityRole="button"
+                accessibilityLabel={act.title}
+                onPress={() => setGrowthModalOpen(true)}
+                style={({ pressed }) => ({
+                  backgroundColor: '#F8FAFC',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: isP0 ? '#FECACA' : '#E2E8F0',
+                  padding: 12,
+                  gap: 6,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View
+                      style={{
+                        backgroundColor: isP0 ? '#FEE2E2' : '#FEF3C7',
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Text style={{ fontSize: 9.5, fontWeight: '900', color: isP0 ? '#DC2626' : '#D97706' }}>
+                        {isP0 ? '🔥 P0 CRITICAL' : '⚡ P1 HIGH'}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>
+                      {act.phaseDays}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      backgroundColor:
+                        act.status === 'awaiting_approval'
+                          ? '#FFEDD5'
+                          : act.status === 'ready_for_review'
+                            ? '#E0E7FF'
+                            : '#F1F5F9',
+                      paddingHorizontal: 7,
+                      paddingVertical: 2,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 9.5,
+                        fontWeight: '800',
+                        color:
+                          act.status === 'awaiting_approval'
+                            ? '#EA580C'
+                            : act.status === 'ready_for_review'
+                              ? '#4338CA'
+                              : '#475569',
+                      }}
+                    >
+                      {act.status.replace(/_/g, ' ').toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
+                  {act.title}
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#475569', lineHeight: 16 }}>
+                  {act.finding}
+                </Text>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 2 }}>
+                  <View
+                    style={{
+                      backgroundColor: isP0 ? colors.brand : '#0F172A',
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <MaterialIcons name="bolt" size={14} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>
+                      {act.cta}
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* 90-Day Roadmap Quick Preview */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open 90-Day Growth Roadmap"
+          onPress={() => setGrowthModalOpen(true)}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: '#F0F9FF',
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: '#BAE6FD',
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: 16 }}>🗺️</Text>
+            <View>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#0369A1' }}>
+                90-Day Growth Roadmap Active
+              </Text>
+              <Text style={{ fontSize: 10.5, color: '#0284C7' }}>
+                Fix Foundation (Days 1–7) • Build Trust • Expand Visibility
+              </Text>
+            </View>
+          </View>
+          <MaterialIcons name="chevron-right" size={18} color="#0369A1" />
+        </Pressable>
+      </Card>
 
       {/* Google's Performance & Search Preview (100% Real GBP & Analytics Data) */}
       <GooglePerformanceCard

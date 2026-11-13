@@ -98,6 +98,22 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
     (brand?.aiGeneratedSummary && brand.aiGeneratedSummary.trim()) ||
     (typeof tenant.description === 'string' ? tenant.description.trim() : '');
 
+  const effectivePhone = (
+    tenant.phone ||
+    (brand as any)?.phone ||
+    settings.phone ||
+    settings.primaryPhone ||
+    ''
+  ).trim();
+
+  const effectiveWebsite = (
+    (brand as any)?.website ||
+    settings.website ||
+    settings.websiteUrl ||
+    settings.storeUrl ||
+    ((tenant as any).website || '')
+  ).trim();
+
   const checks: AuditCheckItem[] = [
     {
       id: 'business_name_and_category',
@@ -108,6 +124,26 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
       currentValue: `${tenant.name} (${brand?.industry || (tenant as any).businessType || 'Missing Category'})`,
       recommendation: 'Ensure your primary category matches your highest-revenue local search query.',
       actionRequired: 'Set your primary business category in Business Settings.',
+    },
+    {
+      id: 'phone_number',
+      category: 'Contact & Conversion',
+      label: 'Primary Phone Number & Direct Call Action',
+      passed: Boolean(effectivePhone && effectivePhone.length >= 7),
+      scoreWeight: 15,
+      currentValue: effectivePhone || 'Missing phone number',
+      recommendation: '60% of Google Maps mobile searchers call businesses directly. Adding a verified phone number boosts direct inquiries.',
+      actionRequired: 'Add your primary business phone number.',
+    },
+    {
+      id: 'website_url',
+      category: 'Contact & Conversion',
+      label: 'Website URL & Online Storefront Link',
+      passed: Boolean(effectiveWebsite && effectiveWebsite.length > 3),
+      scoreWeight: 10,
+      currentValue: effectiveWebsite || 'Missing website link',
+      recommendation: 'Profiles with a linked website receive 35% more clicks and drive qualified traffic to your online catalog.',
+      actionRequired: 'Add your website or BGOS storefront link.',
     },
     {
       id: 'secondary_categories',

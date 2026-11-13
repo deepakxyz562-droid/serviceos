@@ -188,6 +188,303 @@ export async function GET(request: NextRequest) {
     const uncoveredSearchTerms = autoPlan?.uncoveredSearchTerms || [];
     const seoPendingCount = seoPendingFixes.length + uncoveredSearchTerms.length;
 
+    // Specific audit flags for individual high-impact checks
+    const hasPhone = checks.find((c) => c.id === 'phone_number')?.passed ?? true;
+    const hasWebsite = checks.find((c) => c.id === 'website_url')?.passed ?? true;
+    const hasHours = checks.find((c) => c.id === 'business_hours')?.passed ?? true;
+    const hasBooking = checks.find((c) => c.id === 'booking_link')?.passed ?? true;
+    const hasDesc = checks.find((c) => c.id === 'optimized_description')?.passed ?? true;
+    const hasCategories = checks.find((c) => c.id === 'secondary_categories')?.passed ?? true;
+    const hasServices = checks.find((c) => c.id === 'services_catalog')?.passed ?? true;
+
+    // Build the prioritized 10 Growth Actions matching the BGOS Growth Autopilot Spec:
+    // Priority Score formula: (Impact * Confidence) / Effort
+    interface AutopilotGrowthActionItem {
+      id: string;
+      category: 'P0_foundation' | 'P0_trust' | 'P1_content' | 'P1_seo' | 'P1_conversion';
+      priorityLevel: 'P0' | 'P1' | 'P2';
+      priorityScore: number;
+      impact: number;
+      confidence: number;
+      effort: number;
+      title: string;
+      finding: string;
+      evidence: string;
+      status: 'ready_for_review' | 'awaiting_approval' | 'waiting_for_owner' | 'action_required' | 'completed';
+      executionMode: 'automatic_monitoring' | 'automatic_preparation' | 'authorized_execution';
+      phase: 'foundation' | 'trust' | 'visibility' | 'conversions';
+      phaseDays: string;
+      cta: string;
+      actionType: 'add_phone' | 'add_website' | 'set_hours' | 'approve_reviews' | 'approve_posts' | 'auto_optimize_seo' | 'upload_photos' | 'enable_booking' | 'add_services';
+      readyCount?: number;
+    }
+
+    const autopilotActions: AutopilotGrowthActionItem[] = [];
+
+    // 1. Primary Phone Number
+    if (!hasPhone) {
+      autopilotActions.push({
+        id: 'add_phone',
+        category: 'P0_foundation',
+        priorityLevel: 'P0',
+        priorityScore: (5 * 5) / 1, // 25
+        impact: 5,
+        confidence: 5,
+        effort: 1,
+        title: 'Add Primary Phone Number',
+        finding: 'No primary business phone number linked to your profile.',
+        evidence: '60% of Google Maps mobile searchers call businesses directly before visiting.',
+        status: 'action_required',
+        executionMode: 'authorized_execution',
+        phase: 'foundation',
+        phaseDays: 'Days 1–7',
+        cta: 'Add Phone Number',
+        actionType: 'add_phone',
+      });
+    }
+
+    // 2. Primary Website URL
+    if (!hasWebsite) {
+      autopilotActions.push({
+        id: 'add_website',
+        category: 'P0_foundation',
+        priorityLevel: 'P0',
+        priorityScore: (5 * 5) / 1, // 25
+        impact: 5,
+        confidence: 5,
+        effort: 1,
+        title: 'Add Website or Storefront Link',
+        finding: 'No website or storefront URL linked to Google Search & Maps.',
+        evidence: 'Profiles with a website receive 35% more clicks and capture direct customer inquiries.',
+        status: 'action_required',
+        executionMode: 'authorized_execution',
+        phase: 'foundation',
+        phaseDays: 'Days 1–7',
+        cta: 'Add Website URL',
+        actionType: 'add_website',
+      });
+    }
+
+    // 3. Customer Reviews Management
+    if (unrepliedReviews.length > 0) {
+      autopilotActions.push({
+        id: 'review_management',
+        category: 'P0_trust',
+        priorityLevel: 'P0',
+        priorityScore: (5 * 5) / 1, // 25
+        impact: 5,
+        confidence: 5,
+        effort: 1,
+        title: 'Reply to Customer Reviews',
+        finding: `${unrepliedReviews.length} personalized review response(s) prepared by AI.`,
+        evidence: 'Businesses with 100% review reply rate rank higher in the Google Local 3-Pack.',
+        status: 'awaiting_approval',
+        executionMode: 'authorized_execution',
+        phase: 'trust',
+        phaseDays: 'Days 8–30',
+        cta: `Approve ${unrepliedReviews.length} AI Repl${unrepliedReviews.length > 1 ? 'ies' : 'y'}`,
+        actionType: 'approve_reviews',
+        readyCount: unrepliedReviews.length,
+      });
+    }
+
+    // 4. Business Operating Hours
+    if (!hasHours) {
+      autopilotActions.push({
+        id: 'set_hours',
+        category: 'P0_foundation',
+        priorityLevel: 'P0',
+        priorityScore: (4 * 5) / 2, // 10
+        impact: 4,
+        confidence: 5,
+        effort: 2,
+        title: 'Set Business Operating Hours',
+        finding: 'Operating hours are missing or incomplete for your listing.',
+        evidence: 'Accurate opening hours prevent customer bounces and get 42% more directions.',
+        status: 'action_required',
+        executionMode: 'authorized_execution',
+        phase: 'foundation',
+        phaseDays: 'Days 1–7',
+        cta: 'Set Hours',
+        actionType: 'set_hours',
+      });
+    }
+
+    // 5. 750-Char Local SEO Description
+    if (!hasDesc) {
+      autopilotActions.push({
+        id: 'business_description',
+        category: 'P0_foundation',
+        priorityLevel: 'P0',
+        priorityScore: (4 * 4) / 1, // 16
+        impact: 4,
+        confidence: 4,
+        effort: 1,
+        title: 'Optimize 750-Char Local SEO Description',
+        finding: 'Profile description is short or missing targeted city & service keywords.',
+        evidence: 'Google gives up to 750 characters to showcase your local specialties and credibility.',
+        status: 'ready_for_review',
+        executionMode: 'automatic_preparation',
+        phase: 'foundation',
+        phaseDays: 'Days 1–7',
+        cta: 'Review AI Description',
+        actionType: 'auto_optimize_seo',
+      });
+    }
+
+    // 6. Connect Booking / Place Actions Link
+    if (!hasBooking) {
+      autopilotActions.push({
+        id: 'booking_link',
+        category: 'P0_foundation',
+        priorityLevel: 'P0',
+        priorityScore: (4 * 4) / 1, // 16
+        impact: 4,
+        confidence: 4,
+        effort: 1,
+        title: 'Connect Google Maps Booking / Order Link',
+        finding: 'Place Action link is inactive on Google Search and Maps.',
+        evidence: 'Direct "Order Online" or "Book Appointment" buttons increase visitor conversion by 2.4x.',
+        status: 'ready_for_review',
+        executionMode: 'authorized_execution',
+        phase: 'foundation',
+        phaseDays: 'Days 1–7',
+        cta: 'Enable Booking Link',
+        actionType: 'enable_booking',
+      });
+    }
+
+    // 7. Complete Service Details & Categories
+    if (!hasServices || !hasCategories || seoPendingFixes.length > 0) {
+      autopilotActions.push({
+        id: 'categories_and_services',
+        category: 'P0_foundation',
+        priorityLevel: 'P0',
+        priorityScore: (4 * 5) / 2, // 10
+        impact: 4,
+        confidence: 5,
+        effort: 2,
+        title: 'Complete Service Details & Categories',
+        finding: `${seoPendingFixes.length || 2} services need 300-500 char localized SEO descriptions.`,
+        evidence: 'Detailed service descriptions index your profile for high-intent local searches.',
+        status: 'ready_for_review',
+        executionMode: 'automatic_preparation',
+        phase: 'foundation',
+        phaseDays: 'Days 1–7',
+        cta: 'Apply 1-Click AI Fix',
+        actionType: 'add_services',
+      });
+    }
+
+    // 8. Google Posts Publishing & Scheduling
+    autopilotActions.push({
+      id: 'google_posts',
+      category: 'P1_content',
+      priorityLevel: 'P1',
+      priorityScore: (3 * 4) / 2, // 6
+      impact: 3,
+      confidence: 4,
+      effort: 2,
+      title: pendingPostsCount > 0 ? `Approve ${pendingPostsCount} Drafted Google Post(s)` : 'Publish Weekly Google Updates & Offers',
+      finding: pendingPostsCount > 0
+        ? `${pendingPostsCount} AI post(s) drafted and awaiting your approval.`
+        : 'Keep your profile fresh with a weekly Google update, offer, or event.',
+      evidence: 'Regular posts show Google your business is active and engaged with local searchers.',
+      status: pendingPostsCount > 0 ? 'awaiting_approval' : 'ready_for_review',
+      executionMode: 'authorized_execution',
+      phase: 'trust',
+      phaseDays: 'Days 8–30',
+      cta: pendingPostsCount > 0 ? `Approve ${pendingPostsCount} Posts` : 'Draft AI Post',
+      actionType: 'approve_posts',
+      readyCount: pendingPostsCount,
+    });
+
+    // 9. Authentic Work & Storefront Photos
+    autopilotActions.push({
+      id: 'photo_optimization',
+      category: 'P1_content',
+      priorityLevel: 'P1',
+      priorityScore: (4 * 4) / 3, // 5.3
+      impact: 4,
+      confidence: 4,
+      effort: 3,
+      title: 'Add Authentic Business Photos',
+      finding: `Upload recent work, storefront, or interior photos (${mediaPosts7d}/${targets.weeklyPhotos} uploaded this week).`,
+      evidence: 'Real photos evaluate your services for customers. Google rejects stock or synthetic images.',
+      status: mediaPosts7d >= targets.weeklyPhotos ? 'completed' : 'waiting_for_owner',
+      executionMode: 'authorized_execution',
+      phase: 'trust',
+      phaseDays: 'Days 8–30',
+      cta: 'Upload Real Photos',
+      actionType: 'upload_photos',
+    });
+
+    // 10. Local Search Demand Keywords
+    autopilotActions.push({
+      id: 'local_keywords',
+      category: 'P1_seo',
+      priorityLevel: 'P1',
+      priorityScore: (4 * 4) / 2, // 8
+      impact: 4,
+      confidence: 4,
+      effort: 2,
+      title: 'Target Local Search Demand Queries',
+      finding: uncoveredSearchTerms.length > 0
+        ? `${uncoveredSearchTerms.length} nearby search queries detected without dedicated services.`
+        : 'Discover queries nearby customers use to find businesses like yours.',
+      evidence: 'Matching your services to real search queries captures nearby high-intent searches.',
+      status: uncoveredSearchTerms.length > 0 ? 'ready_for_review' : 'completed',
+      executionMode: 'automatic_preparation',
+      phase: 'visibility',
+      phaseDays: 'Days 31–60',
+      cta: 'Optimize Keywords',
+      actionType: 'add_services',
+    });
+
+    // Sort by priorityScore descending
+    autopilotActions.sort((a, b) => b.priorityScore - a.priorityScore);
+
+    const pendingApprovalsCount = autopilotActions.filter(
+      (a) => a.status === 'awaiting_approval' || a.status === 'ready_for_review'
+    ).length;
+
+    const readinessScore = audit?.score ?? 78;
+
+    const roadmapPhases = [
+      {
+        phase: 1,
+        title: 'Days 1–7: Fix the Foundation',
+        objective: 'Verification, primary category, contact information, hours, website, and booking link.',
+        status: (hasPhone && hasWebsite && hasHours && hasBooking) ? 'completed' : 'in_progress',
+        itemsCount: 5,
+        completedCount: [hasPhone, hasWebsite, hasHours, hasBooking, hasCategories].filter(Boolean).length,
+      },
+      {
+        phase: 2,
+        title: 'Days 8–30: Improve Customer Trust',
+        objective: 'Review replies, authentic real photos, and weekly Google Posts publishing schedule.',
+        status: (unrepliedReviews.length === 0 && mediaPosts7d >= targets.weeklyPhotos) ? 'completed' : 'in_progress',
+        itemsCount: 3,
+        completedCount: (unrepliedReviews.length === 0 ? 1 : 0) + (mediaPosts7d >= targets.weeklyPhotos ? 1 : 0) + (pendingPostsCount === 0 ? 1 : 0),
+      },
+      {
+        phase: 3,
+        title: 'Days 31–60: Expand Visibility',
+        objective: 'Discover keyword search demand, localized 300-char service descriptions, and local SEO.',
+        status: (hasServices && uncoveredSearchTerms.length === 0) ? 'completed' : 'in_progress',
+        itemsCount: 4,
+        completedCount: hasServices ? 2 : 1,
+      },
+      {
+        phase: 4,
+        title: 'Days 61–90: Improve Conversions',
+        objective: 'Measure calls, direction requests, website clicks, and booking pathways.',
+        status: 'in_progress',
+        itemsCount: 3,
+        completedCount: 2,
+      },
+    ];
+
     const weeklyTotalTarget = targets.weeklyPosts + targets.weeklyPhotos + (targets.weeklyReviews || 4);
     const weeklyTotalDone = Math.min(
       weeklyTotalTarget,
@@ -204,7 +501,11 @@ export async function GET(request: NextRequest) {
       totalDone,
       totalTarget,
       leftCount,
-      pendingApprovalCount: pendingPostsCount + pendingReviewsCount + seoPendingCount,
+      pendingApprovalCount: pendingApprovalsCount,
+      readinessScore,
+      readinessGrade: audit?.grade ?? (readinessScore >= 80 ? 'A' : readinessScore >= 60 ? 'B' : 'C'),
+      autopilotActions,
+      roadmap: roadmapPhases,
       seoPendingCount,
       targets,
       segments: {
@@ -562,7 +863,65 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ─── 4. Legacy Task Dismiss / Undismiss ───────────────────────────────────
+    // ─── 4. Update Contact & Profile Details (Phone, Website, Hours) ────────
+    if (action === 'update_contact_info') {
+      const phone = typeof body?.phone === 'string' ? body.phone.trim() : undefined;
+      const website = typeof body?.website === 'string' ? body.website.trim() : undefined;
+      const hours = body?.hours && typeof body.hours === 'object' ? body.hours : undefined;
+
+      const tenant = await db.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { settingsJson: true },
+      });
+      let settings: Record<string, any> = {};
+      try {
+        settings = JSON.parse(tenant?.settingsJson || '{}');
+      } catch {}
+
+      const tenantUpdate: Record<string, any> = {};
+      const brandUpdate: Record<string, any> = {};
+
+      if (phone !== undefined) {
+        tenantUpdate.phone = phone;
+        settings.phone = phone;
+        settings.primaryPhone = phone;
+        brandUpdate.phone = phone;
+      }
+
+      if (website !== undefined) {
+        settings.website = website;
+        settings.websiteUrl = website;
+        brandUpdate.website = website;
+      }
+
+      if (hours !== undefined) {
+        settings.businessHours = hours;
+        settings.operatingHours = hours;
+      }
+
+      tenantUpdate.settingsJson = JSON.stringify(settings);
+
+      await db.tenant.update({
+        where: { id: user.tenantId },
+        data: tenantUpdate,
+      });
+
+      await db.brandProfile.upsert({
+        where: { tenantId: user.tenantId },
+        update: brandUpdate,
+        create: {
+          tenantId: user.tenantId,
+          ...brandUpdate,
+        },
+      }).catch(() => {});
+
+      return NextResponse.json({
+        success: true,
+        message: 'Contact details updated successfully.',
+      });
+    }
+
+    // ─── 5. Legacy Task Dismiss / Undismiss ───────────────────────────────────
     const id = String(body?.id || '');
     const VALID_IDS = ['complete_profile', 'upload_media', 'approve_post'];
     if (!VALID_IDS.includes(id)) {

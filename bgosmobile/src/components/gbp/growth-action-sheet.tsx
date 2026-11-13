@@ -5,6 +5,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  TextInput,
   ActivityIndicator,
   Alert,
 } from 'react-native';
@@ -12,6 +13,35 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors, ui } from '../ui';
 import { apiRequest } from '../../lib/api';
+
+export interface AutopilotGrowthActionItem {
+  id: string;
+  category: 'P0_foundation' | 'P0_trust' | 'P1_content' | 'P1_seo' | 'P1_conversion';
+  priorityLevel: 'P0' | 'P1' | 'P2';
+  priorityScore: number;
+  impact: number;
+  confidence: number;
+  effort: number;
+  title: string;
+  finding: string;
+  evidence: string;
+  status: 'ready_for_review' | 'awaiting_approval' | 'waiting_for_owner' | 'action_required' | 'completed';
+  executionMode: 'automatic_monitoring' | 'automatic_preparation' | 'authorized_execution';
+  phase: 'foundation' | 'trust' | 'visibility' | 'conversions';
+  phaseDays: string;
+  cta: string;
+  actionType: 'add_phone' | 'add_website' | 'set_hours' | 'approve_reviews' | 'approve_posts' | 'auto_optimize_seo' | 'upload_photos' | 'enable_booking' | 'add_services';
+  readyCount?: number;
+}
+
+export interface RoadmapPhase {
+  phase: number;
+  title: string;
+  objective: string;
+  status: 'completed' | 'in_progress' | 'upcoming';
+  itemsCount: number;
+  completedCount: number;
+}
 
 export interface GrowthSegmentReview {
   id: string;
@@ -63,6 +93,10 @@ export interface GrowthActionSheetProps {
     totalTarget: number;
     leftCount: number;
     pendingApprovalCount: number;
+    readinessScore?: number;
+    readinessGrade?: string;
+    autopilotActions?: AutopilotGrowthActionItem[];
+    roadmap?: RoadmapPhase[];
     seoPendingCount?: number;
     targets?: {
       weeklyPosts: number;
@@ -97,8 +131,13 @@ export function GrowthActionSheet({
   onRefresh,
 }: GrowthActionSheetProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'reviews' | 'posts' | 'audit' | 'targets'>('reviews');
+  const [activeTab, setActiveTab] = useState<'actions' | 'roadmap' | 'approvals' | 'audit'>('actions');
   const [approving, setApproving] = useState<string | null>(null);
+
+  // Quick edit modal states for missing contact info
+  const [quickInputType, setQuickInputType] = useState<'phone' | 'website' | null>(null);
+  const [quickInputValue, setQuickInputValue] = useState('');
+  const [savingQuickInput, setSavingQuickInput] = useState(false);
 
   const targets = growthData?.targets || { weeklyPosts: 5, weeklyPhotos: 5, weeklyReviews: 5 };
   const segments = growthData?.segments;
@@ -109,6 +148,12 @@ export function GrowthActionSheet({
   const seoItems = seoData?.items || [];
   const uncoveredTerms = seoData?.uncoveredSearchTerms || [];
   const seoBadgeCount = seoData?.pendingCount ?? auditItems.length;
+
+  const readinessScore = growthData?.readinessScore ?? 78;
+  const readinessGrade = growthData?.readinessGrade ?? (readinessScore >= 80 ? 'A' : 'B');
+  const autopilotActions = growthData?.autopilotActions || [];
+  const roadmapPhases = growthData?.roadmap || [];
+  const totalApprovals = reviewItems.length + postItems.length;
 
   const handleApproveSegment = async (segment: 'reviews' | 'posts') => {
     setApproving(`segment_${segment}`);
@@ -148,7 +193,7 @@ export function GrowthActionSheet({
         method: 'POST',
         body: { action: 'apply_seo_all' },
       });
-      Alert.alert('SEO Optimized', res.message || 'Safe GBP SEO optimizations applied.');
+      Alert.alert('SEO Autopilot', res.message || 'Updated GBP optimization.');
       await onRefresh();
     } catch (e: any) {
       Alert.alert('Optimization Failed', e?.message || 'Please try again.');
@@ -157,17 +202,17 @@ export function GrowthActionSheet({
     }
   };
 
-  const handleRunSeoStep = async (stepId: GrowthSegmentSeoItem['id']) => {
-    setApproving(`seo_step_${stepId}`);
+  const handleRunSeoStep = async (stepId: string) => {
+    setApproving(`step_${stepId}`);
     try {
       const res = await apiRequest<{ success: boolean; message?: string }>('/api/gbp/growth-actions', {
         method: 'POST',
         body: { action: 'apply_seo_step', stepId },
       });
-      Alert.alert('Step Applied', res.message || 'Optimization applied.');
+      Alert.alert('Step Applied', res.message || `Applied ${stepId} to your profile.`);
       await onRefresh();
     } catch (e: any) {
-      Alert.alert('Apply Failed', e?.message || 'Please try again.');
+      Alert.alert('Failed', e?.message || 'Could not apply step.');
     } finally {
       setApproving(null);
     }
@@ -180,10 +225,10 @@ export function GrowthActionSheet({
         method: 'POST',
         body: { action: 'rollback_seo' },
       });
-      Alert.alert('Reverted', res.message || 'Previous GBP SEO snapshot restored.');
+      Alert.alert('Reverted', res.message || 'Restored previous GBP state.');
       await onRefresh();
     } catch (e: any) {
-      Alert.alert('Undo Failed', e?.message || 'Unable to rollback.');
+      Alert.alert('Rollback Failed', e?.message || 'Could not revert changes.');
     } finally {
       setApproving(null);
     }
@@ -209,13 +254,76 @@ export function GrowthActionSheet({
     }
   };
 
+  const handleSaveQuickContact = async () => {
+    if (!quickInputType || !quickInputValue.trim()) return;
+    setSavingQuickInput(true);
+    try {
+      const payload: Record<string, any> = { action: 'update_contact_info' };
+      if (quickInputType === 'phone') payload.phone = quickInputValue.trim();
+      if (quickInputType === 'website') payload.website = quickInputValue.trim();
+
+      const res = await apiRequest<{ success: boolean; message: string }>('/api/gbp/growth-actions', {
+        method: 'POST',
+        body: payload,
+      });
+      Alert.alert('Saved & Synced', res.message || 'Contact detail saved.');
+      setQuickInputType(null);
+      setQuickInputValue('');
+      await onRefresh();
+    } catch (e: any) {
+      Alert.alert('Save Failed', e?.message || 'Could not save contact detail.');
+    } finally {
+      setSavingQuickInput(false);
+    }
+  };
+
+  const handleExecuteAction = async (action: AutopilotGrowthActionItem) => {
+    switch (action.actionType) {
+      case 'add_phone':
+        setQuickInputType('phone');
+        setQuickInputValue('');
+        break;
+      case 'add_website':
+        setQuickInputType('website');
+        setQuickInputValue('');
+        break;
+      case 'set_hours':
+        onClose();
+        router.push('/manage-profile');
+        break;
+      case 'approve_reviews':
+        await handleApproveSegment('reviews');
+        break;
+      case 'approve_posts':
+        await handleApproveSegment('posts');
+        break;
+      case 'auto_optimize_seo':
+        await handleRunSeoStep('description');
+        break;
+      case 'enable_booking':
+        await handleRunSeoStep('booking_link');
+        break;
+      case 'add_services':
+        await handleRunSeoStep('services');
+        break;
+      case 'upload_photos':
+        onClose();
+        router.push('/(tabs)/photos');
+        break;
+      default:
+        onClose();
+        router.push('/manage-profile');
+        break;
+    }
+  };
+
   const totalDone = growthData?.totalDone || 0;
   const totalTarget = growthData?.totalTarget || 10;
   const leftCount = growthData?.leftCount || 0;
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
         <View
           style={{
             backgroundColor: '#FFFFFF',
@@ -224,7 +332,7 @@ export function GrowthActionSheet({
             paddingTop: 14,
             paddingHorizontal: 20,
             paddingBottom: 24,
-            maxHeight: '90%',
+            maxHeight: '92%',
           }}
         >
           {/* Grab Handle */}
@@ -249,10 +357,10 @@ export function GrowthActionSheet({
               </View>
               <View>
                 <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
-                  Growth Action Center
+                  Google Growth Autopilot
                 </Text>
                 <Text style={{ fontSize: 11, color: colors.muted }}>
-                  {totalDone} of {totalTarget} done • {leftCount} remaining this week
+                  AI-managed local visibility, reviews &amp; conversion actions
                 </Text>
               </View>
             </View>
@@ -261,7 +369,42 @@ export function GrowthActionSheet({
             </Pressable>
           </View>
 
-          {/* Segment Selector Tabs */}
+          {/* Executive 3-Stat KPI Bar matching Spec */}
+          <View
+            style={{
+              flexDirection: 'row',
+              backgroundColor: '#F8FAFC',
+              borderRadius: 14,
+              padding: 10,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              marginBottom: 14,
+              justifyContent: 'space-around',
+            }}
+          >
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>Readiness</Text>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.brand }}>
+                {readinessScore}/100
+              </Text>
+            </View>
+            <View style={{ width: 1, backgroundColor: '#E2E8F0', marginVertical: 2 }} />
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>Action Plan</Text>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.ink }}>
+                {autopilotActions.length} Actions
+              </Text>
+            </View>
+            <View style={{ width: 1, backgroundColor: '#E2E8F0', marginVertical: 2 }} />
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>Approvals</Text>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: totalApprovals > 0 ? '#EA580C' : '#16A34A' }}>
+                {totalApprovals} Waiting
+              </Text>
+            </View>
+          </View>
+
+          {/* Segment Selector Tabs: Actions · 90-Day Roadmap · Approvals · SEO Audit */}
           <View
             style={{
               flexDirection: 'row',
@@ -273,59 +416,69 @@ export function GrowthActionSheet({
             }}
           >
             <Pressable
-              onPress={() => setActiveTab('reviews')}
+              onPress={() => setActiveTab('actions')}
               style={{
                 flex: 1,
                 paddingVertical: 8,
                 borderRadius: 11,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: activeTab === 'reviews' ? '#FFFFFF' : 'transparent',
+                backgroundColor: activeTab === 'actions' ? '#FFFFFF' : 'transparent',
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: activeTab === 'reviews' ? 0.08 : 0,
+                shadowOpacity: activeTab === 'actions' ? 0.08 : 0,
                 shadowRadius: 2,
               }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text
-                  style={{
-                    fontSize: 11.5,
-                    fontWeight: activeTab === 'reviews' ? '800' : '600',
-                    color: activeTab === 'reviews' ? colors.brand : colors.muted,
-                  }}
-                >
-                  Reviews
-                </Text>
-                {reviewItems.length > 0 && (
-                  <View
-                    style={{
-                      backgroundColor: '#DCFCE7',
-                      paddingHorizontal: 5,
-                      paddingVertical: 1,
-                      borderRadius: 10,
-                    }}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#16A34A' }}>
-                      {reviewItems.length}
-                    </Text>
-                  </View>
-                )}
-              </View>
+              <Text
+                style={{
+                  fontSize: 11.5,
+                  fontWeight: activeTab === 'actions' ? '800' : '600',
+                  color: activeTab === 'actions' ? colors.brand : colors.muted,
+                }}
+              >
+                Actions
+              </Text>
             </Pressable>
 
             <Pressable
-              onPress={() => setActiveTab('posts')}
+              onPress={() => setActiveTab('roadmap')}
               style={{
                 flex: 1,
                 paddingVertical: 8,
                 borderRadius: 11,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: activeTab === 'posts' ? '#FFFFFF' : 'transparent',
+                backgroundColor: activeTab === 'roadmap' ? '#FFFFFF' : 'transparent',
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: activeTab === 'posts' ? 0.08 : 0,
+                shadowOpacity: activeTab === 'roadmap' ? 0.08 : 0,
+                shadowRadius: 2,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11.5,
+                  fontWeight: activeTab === 'roadmap' ? '800' : '600',
+                  color: activeTab === 'roadmap' ? colors.brand : colors.muted,
+                }}
+              >
+                90D Plan
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setActiveTab('approvals')}
+              style={{
+                flex: 1,
+                paddingVertical: 8,
+                borderRadius: 11,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: activeTab === 'approvals' ? '#FFFFFF' : 'transparent',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: activeTab === 'approvals' ? 0.08 : 0,
                 shadowRadius: 2,
               }}
             >
@@ -333,13 +486,13 @@ export function GrowthActionSheet({
                 <Text
                   style={{
                     fontSize: 11.5,
-                    fontWeight: activeTab === 'posts' ? '800' : '600',
-                    color: activeTab === 'posts' ? colors.brand : colors.muted,
+                    fontWeight: activeTab === 'approvals' ? '800' : '600',
+                    color: activeTab === 'approvals' ? colors.brand : colors.muted,
                   }}
                 >
-                  Posts
+                  Approvals
                 </Text>
-                {postItems.length > 0 && (
+                {totalApprovals > 0 && (
                   <View
                     style={{
                       backgroundColor: '#FFEDD5',
@@ -349,7 +502,7 @@ export function GrowthActionSheet({
                     }}
                   >
                     <Text style={{ fontSize: 10, fontWeight: '800', color: '#EA580C' }}>
-                      {postItems.length}
+                      {totalApprovals}
                     </Text>
                   </View>
                 )}
@@ -379,7 +532,7 @@ export function GrowthActionSheet({
                     color: activeTab === 'audit' ? colors.brand : colors.muted,
                   }}
                 >
-                  SEO Fixes
+                  SEO Audit
                 </Text>
                 {seoBadgeCount > 0 && (
                   <View
@@ -397,240 +550,410 @@ export function GrowthActionSheet({
                 )}
               </View>
             </Pressable>
-
-            <Pressable
-              onPress={() => setActiveTab('targets')}
-              style={{
-                flex: 1,
-                paddingVertical: 8,
-                borderRadius: 11,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: activeTab === 'targets' ? '#FFFFFF' : 'transparent',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: activeTab === 'targets' ? 0.08 : 0,
-                shadowRadius: 2,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11.5,
-                  fontWeight: activeTab === 'targets' ? '800' : '600',
-                  color: activeTab === 'targets' ? colors.brand : colors.muted,
-                }}
-              >
-                Targets
-              </Text>
-            </Pressable>
           </View>
 
-          {/* TAB CONTENT */}
-          <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-            {/* 1. REVIEWS SEGMENT */}
-            {activeTab === 'reviews' && (
+          {/* TAB CONTENT SCROLLVIEW */}
+          <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+            {/* 1. RECOMMENDED ACTIONS TAB */}
+            {activeTab === 'actions' && (
               <View style={{ gap: 12 }}>
-                {reviewItems.length > 0 && (
-                  <Pressable
-                    onPress={() => handleApproveSegment('reviews')}
-                    disabled={approving === 'segment_reviews'}
-                    style={{
-                      backgroundColor: '#16A34A',
-                      paddingVertical: 11,
-                      borderRadius: 12,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexDirection: 'row',
-                      gap: 6,
-                    }}
-                  >
-                    {approving === 'segment_reviews' ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <MaterialIcons name="done-all" size={18} color="#FFFFFF" />
-                        <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
-                          Approve All {reviewItems.length} Review Replies
-                        </Text>
-                      </>
-                    )}
-                  </Pressable>
-                )}
-
-                {reviewItems.length === 0 ? (
-                  <View style={{ padding: 24, alignItems: 'center', gap: 8 }}>
-                    <MaterialIcons name="check-circle" size={44} color="#16A34A" />
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink }}>
-                      All Reviews Answered 🎉
+                {autopilotActions.length === 0 ? (
+                  <View style={{ padding: 28, alignItems: 'center', gap: 10 }}>
+                    <MaterialIcons name="verified" size={48} color="#16A34A" />
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: colors.ink }}>
+                      All Core Actions Completed 🎉
                     </Text>
-                    <Text style={{ fontSize: 12, color: colors.muted, textAlign: 'center' }}>
-                      Every customer review has received an authentic, SEO-rich response.
+                    <Text style={{ fontSize: 12, color: colors.muted, textAlign: 'center', lineHeight: 18 }}>
+                      Your Google profile has verified phone, website, hours, review replies, and active SEO optimizations.
                     </Text>
                   </View>
                 ) : (
-                  reviewItems.map((r) => (
-                    <View
-                      key={r.id}
-                      style={{
-                        backgroundColor: '#F8FAFC',
-                        borderRadius: 14,
-                        padding: 14,
-                        borderWidth: 1,
-                        borderColor: '#E2E8F0',
-                        gap: 8,
-                      }}
-                    >
-                      <View style={[ui.row, { justifyContent: 'space-between' }]}>
-                        <View style={[ui.row, { gap: 6 }]}>
-                          <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
-                            {r.authorName}
-                          </Text>
-                          <View style={{ flexDirection: 'row' }}>
-                            {Array.from({ length: r.rating || 5 }).map((_, i) => (
-                              <MaterialIcons key={i} name="star" size={13} color="#F59E0B" />
-                            ))}
+                  autopilotActions.map((action) => {
+                    const isP0 = action.priorityLevel === 'P0';
+                    const isCompleted = action.status === 'completed';
+                    const isApprovingThis = approving === action.id;
+
+                    return (
+                      <View
+                        key={action.id}
+                        style={{
+                          backgroundColor: isCompleted ? '#F0FDF4' : '#FFFFFF',
+                          borderRadius: 14,
+                          padding: 14,
+                          borderWidth: 1,
+                          borderColor: isCompleted ? '#BBF7D0' : isP0 ? '#FECACA' : '#E2E8F0',
+                          gap: 9,
+                        }}
+                      >
+                        {/* Priority Badge & Status Pill */}
+                        <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View
+                              style={{
+                                backgroundColor: isP0 ? '#FEE2E2' : '#FEF3C7',
+                                paddingHorizontal: 7,
+                                paddingVertical: 2,
+                                borderRadius: 6,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: '900',
+                                  color: isP0 ? '#DC2626' : '#D97706',
+                                }}
+                              >
+                                {isP0 ? '🔥 P0 CRITICAL' : '⚡ P1 HIGH'}
+                              </Text>
+                            </View>
+                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B' }}>
+                              {action.phaseDays}
+                            </Text>
+                          </View>
+
+                          <View
+                            style={{
+                              backgroundColor:
+                                action.status === 'awaiting_approval'
+                                  ? '#FFEDD5'
+                                  : action.status === 'ready_for_review'
+                                    ? '#E0E7FF'
+                                    : action.status === 'waiting_for_owner'
+                                      ? '#FEF3C7'
+                                      : action.status === 'completed'
+                                        ? '#DCFCE7'
+                                        : '#F1F5F9',
+                              paddingHorizontal: 8,
+                              paddingVertical: 2,
+                              borderRadius: 999,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: '800',
+                                color:
+                                  action.status === 'awaiting_approval'
+                                    ? '#EA580C'
+                                    : action.status === 'ready_for_review'
+                                      ? '#4338CA'
+                                      : action.status === 'waiting_for_owner'
+                                        ? '#B45309'
+                                        : action.status === 'completed'
+                                          ? '#16A34A'
+                                          : '#475569',
+                              }}
+                            >
+                              {action.status.replace(/_/g, ' ').toUpperCase()}
+                            </Text>
                           </View>
                         </View>
-                        <Pressable
-                          onPress={() => handleApproveItem('reviews', r.id)}
-                          disabled={approving === r.id}
+
+                        {/* Title & Finding */}
+                        <View style={{ gap: 3 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink }}>
+                            {action.title}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: '#334155', lineHeight: 17 }}>
+                            {action.finding}
+                          </Text>
+                        </View>
+
+                        {/* Evidence & ROI footnote */}
+                        <View
                           style={{
-                            backgroundColor: '#16A34A',
-                            paddingHorizontal: 12,
-                            paddingVertical: 5,
+                            backgroundColor: '#F8FAFC',
                             borderRadius: 8,
+                            paddingHorizontal: 9,
+                            paddingVertical: 6,
                           }}
                         >
-                          {approving === r.id ? (
-                            <ActivityIndicator size="small" color="#FFFFFF" />
-                          ) : (
-                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
-                              Approve
-                            </Text>
-                          )}
-                        </Pressable>
+                          <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 15 }}>
+                            💡 {action.evidence}
+                          </Text>
+                        </View>
+
+                        {/* 1-Tap Action Button */}
+                        {!isCompleted && (
+                          <Pressable
+                            onPress={() => handleExecuteAction(action)}
+                            disabled={isApprovingThis}
+                            style={{
+                              backgroundColor: isP0 ? colors.brand : '#0F172A',
+                              paddingVertical: 10,
+                              borderRadius: 10,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexDirection: 'row',
+                              gap: 6,
+                              marginTop: 2,
+                            }}
+                          >
+                            {isApprovingThis ? (
+                              <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                              <>
+                                <MaterialIcons name="bolt" size={16} color="#FFFFFF" />
+                                <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
+                                  {action.cta}
+                                </Text>
+                              </>
+                            )}
+                          </Pressable>
+                        )}
                       </View>
-                      <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 17 }}>
-                        {r.comment || '5-star rating without text'}
-                      </Text>
-                    </View>
-                  ))
+                    );
+                  })
                 )}
               </View>
             )}
 
-            {/* 2. POSTS SEGMENT */}
-            {activeTab === 'posts' && (
-              <View style={{ gap: 12 }}>
-                {postItems.length > 0 && (
-                  <Pressable
-                    onPress={() => handleApproveSegment('posts')}
-                    disabled={approving === 'segment_posts'}
-                    style={{
-                      backgroundColor: '#EA580C',
-                      paddingVertical: 11,
-                      borderRadius: 12,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexDirection: 'row',
-                      gap: 6,
-                    }}
-                  >
-                    {approving === 'segment_posts' ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <MaterialIcons name="done-all" size={18} color="#FFFFFF" />
-                        <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
-                          Approve All {postItems.length} Posts
-                        </Text>
-                      </>
-                    )}
-                  </Pressable>
-                )}
+            {/* 2. 90-DAY GROWTH ROADMAP TAB */}
+            {activeTab === 'roadmap' && (
+              <View style={{ gap: 14 }}>
+                <View
+                  style={{
+                    backgroundColor: '#F0F9FF',
+                    borderRadius: 14,
+                    padding: 12,
+                    borderWidth: 1,
+                    borderColor: '#BAE6FD',
+                  }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#0369A1' }}>
+                    Personalized 90-Day Google Growth Roadmap
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#0284C7', marginTop: 2, lineHeight: 16 }}>
+                    A systematic milestone plan to fix foundations, build customer trust, and drive attributable inquiries.
+                  </Text>
+                </View>
 
-                {postItems.length === 0 ? (
-                  <View style={{ padding: 24, alignItems: 'center', gap: 8 }}>
-                    <MaterialIcons name="done" size={44} color="#EA580C" />
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink }}>
-                      All Posts Approved 👍
-                    </Text>
-                    <Text style={{ fontSize: 12, color: colors.muted, textAlign: 'center' }}>
-                      No AI posts are currently awaiting review. Generate new ones in Marketing Studio.
-                    </Text>
-                    <Pressable
-                      onPress={() => {
-                        onClose();
-                        router.push('/(tabs)/marketing');
-                      }}
-                      style={{
-                        backgroundColor: '#EA580C',
-                        paddingHorizontal: 16,
-                        paddingVertical: 8,
-                        borderRadius: 10,
-                        marginTop: 6,
-                      }}
-                    >
-                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
-                        Create AI Post →
-                      </Text>
-                    </Pressable>
-                  </View>
-                ) : (
-                  postItems.map((p) => (
+                {roadmapPhases.map((phase) => {
+                  const isDone = phase.status === 'completed';
+
+                  return (
                     <View
-                      key={p.id}
+                      key={phase.phase}
                       style={{
-                        backgroundColor: '#F8FAFC',
+                        backgroundColor: '#FFFFFF',
                         borderRadius: 14,
                         padding: 14,
                         borderWidth: 1,
-                        borderColor: '#E2E8F0',
+                        borderColor: isDone ? '#BBF7D0' : '#E2E8F0',
                         gap: 8,
                       }}
                     >
                       <View style={[ui.row, { justifyContent: 'space-between' }]}>
-                        <View
-                          style={{
-                            backgroundColor: '#FFEDD5',
-                            paddingHorizontal: 8,
-                            paddingVertical: 3,
-                            borderRadius: 6,
-                          }}
-                        >
-                          <Text style={{ fontSize: 10, fontWeight: '800', color: '#EA580C' }}>
-                            {p.gbpPostType || "WHAT'S NEW"}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View
+                            style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: 11,
+                              backgroundColor: isDone ? '#DCFCE7' : '#FEF3C7',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                fontWeight: '900',
+                                color: isDone ? '#16A34A' : '#D97706',
+                              }}
+                            >
+                              {phase.phase}
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink }}>
+                            {phase.title}
                           </Text>
                         </View>
-                        <Pressable
-                          onPress={() => handleApproveItem('posts', p.id)}
-                          disabled={approving === p.id}
+
+                        <View
                           style={{
-                            backgroundColor: '#EA580C',
-                            paddingHorizontal: 12,
-                            paddingVertical: 5,
+                            backgroundColor: isDone ? '#DCFCE7' : '#F1F5F9',
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
                             borderRadius: 8,
                           }}
                         >
-                          {approving === p.id ? (
-                            <ActivityIndicator size="small" color="#FFFFFF" />
-                          ) : (
-                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
-                              Approve
-                            </Text>
-                          )}
-                        </Pressable>
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              fontWeight: '800',
+                              color: isDone ? '#16A34A' : '#475569',
+                            }}
+                          >
+                            {isDone ? 'COMPLETED 🏆' : 'IN PROGRESS'}
+                          </Text>
+                        </View>
                       </View>
-                      <Text style={{ fontSize: 12, color: colors.ink, lineHeight: 18 }} numberOfLines={3}>
-                        {p.content}
+
+                      <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 17 }}>
+                        {phase.objective}
                       </Text>
+
+                      {/* Progress Bar */}
+                      <View style={{ gap: 4, marginTop: 4 }}>
+                        <View style={{ height: 6, backgroundColor: '#F1F5F9', borderRadius: 3, overflow: 'hidden' }}>
+                          <View
+                            style={{
+                              width: `${Math.round((phase.completedCount / Math.max(1, phase.itemsCount)) * 100)}%`,
+                              height: '100%',
+                              backgroundColor: isDone ? '#16A34A' : colors.brand,
+                              borderRadius: 3,
+                            }}
+                          />
+                        </View>
+                        <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '700', textAlign: 'right' }}>
+                          {phase.completedCount} of {phase.itemsCount} milestone items on track
+                        </Text>
+                      </View>
                     </View>
-                  ))
-                )}
+                  );
+                })}
               </View>
             )}
 
-            {/* 3. INTERACTIVE SEO FIXES & SEARCH DEMANDS SEGMENT */}
+            {/* 3. APPROVALS QUEUE TAB */}
+            {activeTab === 'approvals' && (
+              <View style={{ gap: 14 }}>
+                {/* Reviews approval section */}
+                <View style={{ gap: 10 }}>
+                  <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink }}>
+                      Customer Reviews ({reviewItems.length})
+                    </Text>
+                    {reviewItems.length > 0 && (
+                      <Pressable
+                        onPress={() => handleApproveSegment('reviews')}
+                        disabled={approving === 'segment_reviews'}
+                        style={{
+                          backgroundColor: '#16A34A',
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
+                          Approve All ({reviewItems.length})
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {reviewItems.length === 0 ? (
+                    <View style={{ padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 12, color: colors.muted }}>All reviews have been replied to 🎉</Text>
+                    </View>
+                  ) : (
+                    reviewItems.map((r) => (
+                      <View
+                        key={r.id}
+                        style={{
+                          backgroundColor: '#F8FAFC',
+                          borderRadius: 12,
+                          padding: 12,
+                          borderWidth: 1,
+                          borderColor: '#E2E8F0',
+                          gap: 6,
+                        }}
+                      >
+                        <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                          <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.ink }}>
+                            {r.authorName} ({r.rating}★)
+                          </Text>
+                          <Pressable
+                            onPress={() => handleApproveItem('reviews', r.id)}
+                            disabled={approving === r.id}
+                            style={{
+                              backgroundColor: '#16A34A',
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                            }}
+                          >
+                            <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>Approve</Text>
+                          </Pressable>
+                        </View>
+                        <Text style={{ fontSize: 11.5, color: colors.muted }}>
+                          {r.comment || '5-star rating without text'}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+
+                {/* Posts approval section */}
+                <View style={{ gap: 10 }}>
+                  <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink }}>
+                      AI Google Posts ({postItems.length})
+                    </Text>
+                    {postItems.length > 0 && (
+                      <Pressable
+                        onPress={() => handleApproveSegment('posts')}
+                        disabled={approving === 'segment_posts'}
+                        style={{
+                          backgroundColor: '#EA580C',
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
+                          Approve All ({postItems.length})
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {postItems.length === 0 ? (
+                    <View style={{ padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 12, color: colors.muted }}>No drafts pending approval 👍</Text>
+                    </View>
+                  ) : (
+                    postItems.map((p) => (
+                      <View
+                        key={p.id}
+                        style={{
+                          backgroundColor: '#F8FAFC',
+                          borderRadius: 12,
+                          padding: 12,
+                          borderWidth: 1,
+                          borderColor: '#E2E8F0',
+                          gap: 6,
+                        }}
+                      >
+                        <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#EA580C' }}>
+                            {p.gbpPostType || "WHAT'S NEW"}
+                          </Text>
+                          <Pressable
+                            onPress={() => handleApproveItem('posts', p.id)}
+                            disabled={approving === p.id}
+                            style={{
+                              backgroundColor: '#EA580C',
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                            }}
+                          >
+                            <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>Approve</Text>
+                          </Pressable>
+                        </View>
+                        <Text style={{ fontSize: 11.5, color: colors.ink }} numberOfLines={2}>
+                          {p.content}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* 4. SEO & AUDIT TAB */}
             {activeTab === 'audit' && (
               <View style={{ gap: 12 }}>
                 {/* Score Banner + Batch 1-Tap Action */}
@@ -666,7 +989,7 @@ export function GrowthActionSheet({
                       }}
                     >
                       <Text style={{ fontSize: 12, fontWeight: '900', color: '#5B21B6' }}>
-                        {seoData?.score ?? '--'}% · {seoData?.grade ?? 'B'}
+                        {seoData?.score ?? readinessScore}% · {seoData?.grade ?? readinessGrade}
                       </Text>
                     </View>
                   </View>
@@ -742,85 +1065,37 @@ export function GrowthActionSheet({
                   >
                     <View style={[ui.row, { justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }]}>
                       <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                          <View
-                            style={{
-                              backgroundColor: item.impact === 'high' ? '#FEF3C7' : '#E0E7FF',
-                              paddingHorizontal: 6,
-                              paddingVertical: 1,
-                              borderRadius: 6,
-                            }}
-                          >
-                            <Text
-                              style={{
-                                fontSize: 9.5,
-                                fontWeight: '800',
-                                color: item.impact === 'high' ? '#B45309' : '#3730A3',
-                              }}
-                            >
-                              {item.impact === 'high' ? 'HIGH IMPACT' : 'TRUST BOOST'}
-                            </Text>
-                          </View>
-                          {item.alreadyOptimal && (
-                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#15803D' }}>
-                              ✓ Optimal
-                            </Text>
-                          )}
-                        </View>
-                        <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.ink }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
                           {item.title}
                         </Text>
-                        <Text style={{ fontSize: 11, color: colors.muted, lineHeight: 16, marginTop: 2 }}>
+                        <Text style={{ fontSize: 11.5, color: colors.muted, marginTop: 2 }}>
                           {item.subtitle}
                         </Text>
                       </View>
 
-                      {item.ready && !item.alreadyOptimal && (
+                      {item.ready && (
                         <Pressable
                           onPress={() => handleRunSeoStep(item.id)}
-                          disabled={approving === `seo_step_${item.id}`}
+                          disabled={approving === `step_${item.id}`}
                           style={{
-                            backgroundColor: '#EEF2FF',
-                            paddingHorizontal: 11,
-                            paddingVertical: 7,
-                            borderRadius: 10,
-                            borderWidth: 1,
-                            borderColor: '#C7D2FE',
+                            backgroundColor: colors.brand,
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 8,
                           }}
                         >
-                          {approving === `seo_step_${item.id}` ? (
-                            <ActivityIndicator size="small" color={colors.brand} />
+                          {approving === `step_${item.id}` ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
                           ) : (
-                            <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.brand }}>
-                              Apply
-                            </Text>
+                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Apply</Text>
                           )}
-                        </Pressable>
-                      )}
-
-                      {!item.ready && !item.alreadyOptimal && item.id === 'services' && (
-                        <Pressable
-                          onPress={() => {
-                            onClose();
-                            router.push('/services-management');
-                          }}
-                          style={{
-                            backgroundColor: '#F1F5F9',
-                            paddingHorizontal: 10,
-                            paddingVertical: 7,
-                            borderRadius: 10,
-                          }}
-                        >
-                          <Text style={{ fontSize: 11, fontWeight: '800', color: colors.ink }}>
-                            Add →
-                          </Text>
                         </Pressable>
                       )}
                     </View>
                   </View>
                 ))}
 
-                {/* Uncovered Search Demands -> 1-Tap 300-500 Char Service Creator */}
+                {/* Search Demands */}
                 {uncoveredTerms.length > 0 && (
                   <View
                     style={{
@@ -832,15 +1107,9 @@ export function GrowthActionSheet({
                       gap: 10,
                     }}
                   >
-                    <View>
-                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#92400E' }}>
-                        New Customer Search Demands ({uncoveredTerms.length})
-                      </Text>
-                      <Text style={{ fontSize: 11, color: '#B45309', marginTop: 2 }}>
-                        Real Google searches you don’t have a dedicated 300–500 char GBP service for yet:
-                      </Text>
-                    </View>
-
+                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#92400E' }}>
+                      New Customer Search Demands ({uncoveredTerms.length})
+                    </Text>
                     {uncoveredTerms.map((term) => (
                       <View
                         key={term.keyword}
@@ -861,10 +1130,9 @@ export function GrowthActionSheet({
                             “{term.keyword}”
                           </Text>
                           <Text style={{ fontSize: 10.5, color: colors.muted, marginTop: 1 }}>
-                            {term.count > 0 ? `${term.count} Google searches` : 'Live Search Term'} · Add as “{term.suggestedServiceName}”
+                            Add as “{term.suggestedServiceName}”
                           </Text>
                         </View>
-
                         <Pressable
                           onPress={() => handleCreateServiceFromTerm(term)}
                           disabled={approving === `term_${term.keyword}`}
@@ -875,148 +1143,123 @@ export function GrowthActionSheet({
                             borderRadius: 9,
                           }}
                         >
-                          {approving === `term_${term.keyword}` ? (
-                            <ActivityIndicator size="small" color="#FFFFFF" />
-                          ) : (
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
-                              + Service
-                            </Text>
-                          )}
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>+ Service</Text>
                         </Pressable>
                       </View>
                     ))}
                   </View>
                 )}
-
-                {/* Remaining Audit Context */}
-                {auditItems.slice(0, 3).map((a) => (
-                  <View
-                    key={a.id}
-                    style={{
-                      backgroundColor: '#F8FAFC',
-                      borderRadius: 12,
-                      padding: 12,
-                      borderWidth: 1,
-                      borderColor: '#E2E8F0',
-                      gap: 3,
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.ink }}>
-                      {a.label}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: '#7C3AED', fontWeight: '600' }}>
-                      💡 {a.recommendation}
-                    </Text>
-                    <Text style={{ fontSize: 10.5, color: colors.muted }}>
-                      {a.actionRequired}
-                    </Text>
-                  </View>
-                ))}
-
-                {/* Deep-Links into Growth Copilot & Dedicated SEO Modules */}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 }}>
-                  {[
-                    { label: 'SEO Copilot', route: '/seo-growth' as const },
-                    { label: 'Keyword Planner', route: '/keyword-planner' as const },
-                    { label: '300-500 Services', route: '/services-management' as const },
-                    { label: 'Growth Report', route: '/growth-report' as const },
-                  ].map((nav) => (
-                    <Pressable
-                      key={nav.route}
-                      onPress={() => {
-                        onClose();
-                        router.push(nav.route);
-                      }}
-                      style={{
-                        flexGrow: 1,
-                        minWidth: '46%',
-                        backgroundColor: '#F1F5F9',
-                        paddingVertical: 10,
-                        paddingHorizontal: 12,
-                        borderRadius: 11,
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.ink }}>
-                        {nav.label} →
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* 4. TARGETS SEGMENT */}
-            {activeTab === 'targets' && (
-              <View style={{ gap: 14 }}>
-                <View
-                  style={{
-                    backgroundColor: '#F8FAFC',
-                    borderRadius: 16,
-                    padding: 16,
-                    borderWidth: 1,
-                    borderColor: '#E2E8F0',
-                    gap: 12,
-                  }}
-                >
-                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink }}>
-                    Configurable Weekly Cadence
-                  </Text>
-                  <Text style={{ fontSize: 11.5, color: colors.muted, lineHeight: 17 }}>
-                    Unlike competitor apps with rigid quotas, BGOS adjusts to your business category and bandwidth.
-                  </Text>
-
-                  <View style={{ gap: 10, marginTop: 4 }}>
-                    <View style={[ui.row, { justifyContent: 'space-between' }]}>
-                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.ink }}>
-                        Weekly Google Posts
-                      </Text>
-                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.brand }}>
-                        {targets.weeklyPosts} / week
-                      </Text>
-                    </View>
-                    <View style={[ui.row, { justifyContent: 'space-between' }]}>
-                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.ink }}>
-                        Weekly Media Uploads
-                      </Text>
-                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.brand }}>
-                        {targets.weeklyPhotos} / week
-                      </Text>
-                    </View>
-                    <View style={[ui.row, { justifyContent: 'space-between' }]}>
-                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.ink }}>
-                        Review Responses
-                      </Text>
-                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.brand }}>
-                        {targets.weeklyReviews} / week
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                <Pressable
-                  onPress={() => {
-                    onClose();
-                    router.push('/preferences');
-                  }}
-                  style={{
-                    backgroundColor: '#F1F5F9',
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexDirection: 'row',
-                    gap: 6,
-                  }}
-                >
-                  <MaterialIcons name="tune" size={18} color={colors.ink} />
-                  <Text style={{ color: colors.ink, fontSize: 12.5, fontWeight: '800' }}>
-                    Customize Targets in Brand Brain →
-                  </Text>
-                </Pressable>
               </View>
             )}
           </ScrollView>
+
+          {/* Quick Input Modal for Phone / Website */}
+          {quickInputType !== null && (
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+                backgroundColor: 'rgba(0,0,0,0.65)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                paddingHorizontal: 20,
+                borderTopLeftRadius: 28,
+                borderTopRightRadius: 28,
+              }}
+            >
+              <View
+                style={{
+                  width: '100%',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 20,
+                  padding: 20,
+                  gap: 14,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 10,
+                  elevation: 10,
+                }}
+              >
+                <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
+                    {quickInputType === 'phone' ? '📞 Add Primary Phone Number' : '🌐 Add Website or Store URL'}
+                  </Text>
+                  <Pressable onPress={() => setQuickInputType(null)} hitSlop={10}>
+                    <MaterialIcons name="close" size={20} color={colors.muted} />
+                  </Pressable>
+                </View>
+
+                <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 17 }}>
+                  {quickInputType === 'phone'
+                    ? 'Customers on Google Maps will use this number to call your business directly.'
+                    : 'Link your official website or BGOS online storefront to capture customer visits and orders.'}
+                </Text>
+
+                <TextInput
+                  value={quickInputValue}
+                  onChangeText={setQuickInputValue}
+                  placeholder={quickInputType === 'phone' ? '+91 98765 43210' : 'https://mybusiness.com'}
+                  placeholderTextColor="#94A3B8"
+                  keyboardType={quickInputType === 'phone' ? 'phone-pad' : 'url'}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoFocus
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    fontSize: 14,
+                    color: colors.ink,
+                  }}
+                />
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <Pressable
+                    onPress={() => setQuickInputType(null)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#F1F5F9',
+                      paddingVertical: 12,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: colors.ink, fontSize: 13, fontWeight: '700' }}>Cancel</Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={handleSaveQuickContact}
+                    disabled={savingQuickInput || !quickInputValue.trim()}
+                    style={{
+                      flex: 2,
+                      backgroundColor: colors.brand,
+                      paddingVertical: 12,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: savingQuickInput || !quickInputValue.trim() ? 0.6 : 1,
+                    }}
+                  >
+                    {savingQuickInput ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                        Save &amp; Sync to Google
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
