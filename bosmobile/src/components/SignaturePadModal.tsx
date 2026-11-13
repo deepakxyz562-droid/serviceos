@@ -28,7 +28,7 @@ export function SignaturePadModal({
   // Use refs as single source of truth for smooth high-frequency touches
   const pathsRef = useRef<string[]>([]);
   const currentPathRef = useRef<string>('');
-  const canvasRef = useRef<View>(null);
+  const canvasRef = useRef<any>(null);
   const originRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const [penColor, setPenColor] = useState<string>('#1E3A8A'); // Classic Ink Blue
@@ -43,7 +43,7 @@ export function SignaturePadModal({
   // Measure canvas absolute position on screen
   const measureCanvas = () => {
     if (canvasRef.current) {
-      canvasRef.current.measure((_x, _y, width, height, pageX, pageY) => {
+      canvasRef.current.measure((_x: number, _y: number, width: number, height: number, pageX: number, pageY: number) => {
         if (pageX !== undefined && pageY !== undefined && (pageX > 0 || pageY > 0)) {
           originRef.current = { x: pageX, y: pageY };
         }

@@ -31,7 +31,7 @@ export default function TabsLayout() {
     {orderedScreens.map((name) => <Tabs.Screen key={name} name={name} options={{
       href: name === 'index' || name === 'more' || selected.has(name) ? undefined : null,
       title: name === 'index' ? homeText('home', home.language) : name === 'more' ? homeText('more', home.language) : selected.has(name) ? homeTabText(selected.get(name)!, home.language) : name,
-      tabBarIcon: ({ color }) => <MaterialIcons name={icons[name] || 'more-horiz'} size={24} color={color} />,
+      tabBarIcon: ({ color }) => <MaterialIcons name={icons[name] || 'more-horiz'} size={24} color={String(color || '#64748b')} />,
     }} />)}
   </Tabs>;
 }

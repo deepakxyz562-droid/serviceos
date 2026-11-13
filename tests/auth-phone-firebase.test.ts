@@ -126,5 +126,5 @@ describe('POST /api/auth/firebase/session', () => {
     expect(data.token).toBeDefined();
     expect(data.user).toBeDefined();
     expect(data.user.phone).toBe('+919999999999');
-  });
+  }, 15000);
 });

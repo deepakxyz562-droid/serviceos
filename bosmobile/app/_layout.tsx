@@ -41,7 +41,7 @@ export default function RootLayout() {
       const prev = appStateRef.current;
       appStateRef.current = nextAppState;
       // App came back to the foreground from background/inactive.
-      if (prev.match(/inactive|background/) && nextAppState === 'active') {
+      if (prev?.match(/inactive|background/) && nextAppState === 'active') {
         // If not authenticated, try to restore session
         if (!useAuthStore.getState().isAuthenticated) {
           bootstrap();
