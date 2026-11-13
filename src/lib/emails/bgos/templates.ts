@@ -2,10 +2,10 @@
  * BGOS Registered-User Email Templates
  * ====================================
  * Clean, Gmail/Outlook-compatible HTML + plain-text email builders tailored
- * exclusively for BGOS (bgos.fieseros.com). Pure functions — zero DB/network I/O.
+ * exclusively for BGOS (bgos.site). Pure functions — zero DB/network I/O.
  */
 
-export const DEFAULT_BGOS_URL = 'https://bgos.fieseros.com';
+export const DEFAULT_BGOS_URL = 'https://bgos.site';
 
 export type BgosEmailKey =
   | 'bgos_verification'
@@ -56,7 +56,7 @@ export function isSyntheticPlaceholderEmail(email: string | null | undefined): b
   if (domain.endsWith('.local') || domain.endsWith('.invalid')) {
     return true;
   }
-  if (domain === 'bgos.fieseros.com' && local.startsWith('phone_')) {
+  if ((domain === 'bgos.site' || domain === 'bgos.fieseros.com') && local.startsWith('phone_')) {
     return true;
   }
   // Apple fallback synthetic address when identityToken + clientEmail both omit real relay email

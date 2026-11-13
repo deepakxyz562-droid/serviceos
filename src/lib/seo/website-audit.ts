@@ -1383,7 +1383,7 @@ export async function applyHostedOrActivationSeoFix(params: {
           keywords: discoveryKeywords,
         });
 
-  const hostedShortUrl = `https://bgos.fieseros.com/b/${slug}`;
+  const hostedShortUrl = `https://bgos.site/b/${slug}`;
   const presenceAfter = resolveBusinessPresenceMode({
     tenant: { ...tenant, slug, website: tenant.website || hostedShortUrl, publicProfileEnabled: true, claimed: true },
   });

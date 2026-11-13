@@ -507,7 +507,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Ensure media URLs are absolute public URLs for external adapters (GBP, FB, IG)
-    const serverOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://bgos.fieseros.com';
+    const serverOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://bgos.site';
     if (Array.isArray(body.mediaUrls)) {
       body.mediaUrls = body.mediaUrls.map((u) => {
         if (typeof u === 'string' && u.startsWith('/')) {

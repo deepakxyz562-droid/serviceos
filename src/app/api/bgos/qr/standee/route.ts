@@ -478,7 +478,7 @@ export async function GET(request: NextRequest) {
       brandBrain?.brandDetails?.addressOnPoster || tenant?.address || '';
     const resolvedPlaceId = placeDetails?.placeId || tenant?.googlePlaceId || null;
 
-    const origin = (process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com').replace(/\/+$/, '');
+    const origin = (process.env.BGOS_PUBLIC_URL || 'https://bgos.site').replace(/\/+$/, '');
     const publicSlug =
       parsedSettings?.bookingPageConfig?.publicSlug ||
       tenant?.publicSlug ||
@@ -681,7 +681,7 @@ export async function POST(request: NextRequest) {
       brandBrain?.brandDetails?.addressOnPoster || tenant?.address || '';
     const resolvedPlaceId = placeDetails?.placeId || tenant?.googlePlaceId || null;
 
-    const origin = (process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com').replace(/\/+$/, '');
+    const origin = (process.env.BGOS_PUBLIC_URL || 'https://bgos.site').replace(/\/+$/, '');
     const publicSlug =
       parsedSettings?.bookingPageConfig?.publicSlug ||
       tenant?.publicSlug ||

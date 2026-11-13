@@ -56,7 +56,7 @@ export function resolveTenantPublicUrls(
   const origin = (
     process.env.BGOS_PUBLIC_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    'https://bgos.fieseros.com'
+    'https://bgos.site'
   ).replace(/\/+$/, '');
   const profileUrl = `${origin}/b/${encodeURIComponent(slug)}`;
   const customBooking =

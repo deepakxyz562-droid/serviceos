@@ -25,7 +25,7 @@ function resolveDefaultHost(): string {
       }
     } catch {}
   }
-  return 'https://bgos.fieseros.com';
+  return 'https://bgos.site';
 }
 
 // Default backend API base URL for BGOS (API endpoints can use local LAN dev IP during development)
@@ -37,7 +37,7 @@ export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://fieseros.com
 
 // Standalone BGOS Business Page & Booking Card host (never redirects to Marketplace)
 export const BGOS_PUBLIC_WEB_URL = (
-  process.env.EXPO_PUBLIC_BGOS_WEB_URL || 'https://bgos.fieseros.com'
+  process.env.EXPO_PUBLIC_BGOS_WEB_URL || 'https://bgos.site'
 ).replace(/\/$/, '');
 
 // BGOS Support details (Meta Verified WhatsApp Business)

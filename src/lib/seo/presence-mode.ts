@@ -43,6 +43,8 @@ const HOSTED_HOSTS = new Set([
   'fieseros.com',
   'www.fieseros.com',
   'bgos.fieseros.com',
+  'bgos.site',
+  'www.bgos.site',
   'app.fieseros.com',
   'marketplace.fieseros.com',
 ]);
@@ -127,7 +129,7 @@ export function resolveBusinessPresenceMode(params: {
   const industry = tenant.industry || tenant.brandProfile?.industry || null;
   const city = tenant.city || tenant.brandProfile?.location || null;
 
-  const shortHostedUrl = `https://bgos.fieseros.com/b/${slug}`;
+  const shortHostedUrl = `https://bgos.site/b/${slug}`;
   const hostedCanonicalUrl = buildHostedCanonicalUrl({ slug, industry, city });
   const publicProfileEnabled = Boolean(tenant.publicProfileEnabled);
   const claimed = Boolean(tenant.claimed);
@@ -195,7 +197,7 @@ export function resolveBusinessPresenceMode(params: {
       tenant.marketplaceOptIn === null ||
       Boolean(hostedUrl && /bgos\./i.test(hostedUrl));
     const effectiveCanonical = useBgosCardCanonical ? shortHostedUrl : hostedCanonicalUrl;
-    const effectiveDomain = useBgosCardCanonical ? 'bgos.fieseros.com' : 'fieseros.com';
+    const effectiveDomain = useBgosCardCanonical ? 'bgos.site' : 'fieseros.com';
     return {
       mode: 'bgos_hosted',
       slug,

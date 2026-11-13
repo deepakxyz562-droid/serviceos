@@ -56,7 +56,7 @@ export interface SendEmailOptions {
    * `tenantId` is provided for EmailUnsubscribeToken attribution.
    */
   skipTenantQuota?: boolean
-  /** Override base URL for unsubscribe / tracking links (e.g. https://bgos.fieseros.com). */
+  /** Override base URL for unsubscribe / tracking links (e.g. https://bgos.site). */
   trackingBaseUrl?: string
   /** Attachments for sending documents/PDFs (nodemailer format) */
   attachments?: Array<{ filename: string; content?: any; path?: string; contentType?: string }>

@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
     const planCode = body.plan as Exclude<BgosPlan, 'free'>;
     const chosenPlan = BGOS_PLANS[planCode];
     const billingCycle = body.billingCycle === 'yearly' ? 'yearly' : 'monthly';
-    const appBaseUrl = getProductAppUrl(request, 'bgos') || process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com';
+    const appBaseUrl = getProductAppUrl(request, 'bgos') || process.env.BGOS_PUBLIC_URL || 'https://bgos.site';
 
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;

@@ -7,7 +7,7 @@
  *   - Enforces BGOS user email preferences (`Tenant.settingsJson.bgosEmailPrefs`)
  *   - Deduplicates and rate-limits lifecycle sends via `NotificationLog`
  *   - Routes platform marketing/lifecycle emails with `platformMarketing: true`
- *     and `skipTenantQuota: true` so `bgos.fieseros.com` tracking links &
+ *     and `skipTenantQuota: true` so `bgos.site` tracking links &
  *     List-Unsubscribe work without touching customer monthly SMTP quotas.
  *
  * Uses flat DB queries compatible with both SQLite/Prisma and Supabase PostgREST.

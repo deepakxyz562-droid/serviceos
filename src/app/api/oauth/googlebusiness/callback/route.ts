@@ -1116,6 +1116,7 @@ function isAllowedOriginHost(uriOrHost: string): boolean {
     const canonicalHost = new URL(canonicalUrl).host;
     if (url.host === canonicalHost) return true;
     if (url.host === 'fieseros.com' || url.host.endsWith('.fieseros.com')) return true;
+    if (url.host === 'bgos.site' || url.host.endsWith('.bgos.site')) return true;
     if (url.host.startsWith('localhost') || /^\d+\.\d+\.\d+\.\d+$/.test(url.host)) return true;
     return false;
   } catch {

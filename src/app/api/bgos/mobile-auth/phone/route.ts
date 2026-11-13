@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       const displayName = fullName || `Owner ${tenDigits.slice(-4)}`;
       // Deterministic synthetic email to satisfy unique constraint
-      const syntheticEmail = `phone_${tenDigits}@bgos.fieseros.com`;
+      const syntheticEmail = `phone_${tenDigits}@bgos.site`;
 
       try {
         user = await db.user.create({

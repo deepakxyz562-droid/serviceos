@@ -1133,7 +1133,7 @@ export function MarketingCanvasStudio({
   const toAbsoluteUrl = useCallback((url: string) => {
     if (!url || typeof url !== 'string') return url;
     if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
-    const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://bgos.fieseros.com';
+    const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://bgos.site';
     return `${origin.replace(/\/+$/, '')}/${url.replace(/^\/+/, '')}`;
   }, []);
 

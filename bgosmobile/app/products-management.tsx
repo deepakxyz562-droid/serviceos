@@ -553,7 +553,7 @@ export default function ProductsManagementScreen() {
               label="External Ordering URL (Optional — defaults to your BGOS Page)"
               value={storeSettings.orderActionUrl || ''}
               onChangeText={(t) => setStoreSettings((prev) => ({ ...prev, orderActionUrl: t }))}
-              placeholder={storeRes.data?.canonicalUrl || 'https://bgos.fieseros.com/b/...'}
+              placeholder={storeRes.data?.canonicalUrl || 'https://bgos.site/b/...'}
             />
           </Card>
 

@@ -5,8 +5,8 @@ import Landing from './landing';
 export const metadata: Metadata = {
   title: 'BGOS — Your next stage of business growth',
   description: 'Bring your leads, conversations, appointments, forms and AI assistant together. A connected growth workspace for your business.',
-  alternates: { canonical: 'https://bgos.fieseros.com/' },
-  openGraph: { title: 'BGOS — Grow your business, all in one place', description: 'Your customers. Your conversations. Your next opportunity.', url: 'https://bgos.fieseros.com/', images: [{ url: 'https://bgos.fieseros.com/bgos/landing/assistant-hd.png' }] },
+  alternates: { canonical: 'https://bgos.site/' },
+  openGraph: { title: 'BGOS — Grow your business, all in one place', description: 'Your customers. Your conversations. Your next opportunity.', url: 'https://bgos.site/', images: [{ url: 'https://bgos.site/bgos/landing/assistant-hd.png' }] },
 };
 
 export default async function Page({ searchParams }: {

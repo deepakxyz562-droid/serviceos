@@ -559,7 +559,7 @@ export function SocialAccountsView({ embedded = false }: { embedded?: boolean } 
                 <code className="flex-1 bg-white dark:bg-zinc-900 px-2 py-1 rounded border text-[11px] truncate">
                   {typeof window !== 'undefined'
                     ? `${window.location.origin}/api/oauth/${setupPlatform?.key === 'googlebusiness' ? 'googlebusiness' : 'facebook'}/callback`
-                    : 'https://bgos.fieseros.com/api/oauth/facebook/callback'}
+                    : 'https://bgos.site/api/oauth/facebook/callback'}
                 </code>
                 <Button
                   type="button"

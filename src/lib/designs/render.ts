@@ -37,13 +37,13 @@ async function imageData(src: string): Promise<ArrayBuffer | null> {
       const buf = await readFile(localFilePath);
       return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
     } catch {
-      const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://bgos.fieseros.com';
+      const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://bgos.site';
       src = `${origin.replace(/\/+$/, '')}/${src.replace(/^\/+/, '')}`;
     }
   }
 
   const url = new URL(src);
-  const allowed = new Set(['images.unsplash.com', 'imagedelivery.net', 'bgos.fieseros.com', 'fieseros.com']);
+  const allowed = new Set(['images.unsplash.com', 'imagedelivery.net', 'bgos.fieseros.com', 'bgos.site', 'www.bgos.site', 'fieseros.com']);
   for (const candidate of [process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.AWS_S3_PUBLIC_URL, process.env.DESIGN_ASSET_ORIGIN, process.env.NEXT_PUBLIC_APP_URL]) {
     if (candidate) {
       try {

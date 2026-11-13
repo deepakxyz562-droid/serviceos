@@ -400,7 +400,7 @@ export default function TeamManagementScreen() {
 
                     <Pressable
                       onPress={() => {
-                        const msg = `Hello ${member.name || ''}, your login to ${businessName} BGOS:\nPortal: https://bgos.fieseros.com/login\nEmail: ${member.email}`;
+                        const msg = `Hello ${member.name || ''}, your login to ${businessName} BGOS:\nPortal: https://bgos.site/login\nEmail: ${member.email}`;
                         handleShareWhatsApp(msg, member.phone);
                       }}
                       style={[styles.actionPill, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}

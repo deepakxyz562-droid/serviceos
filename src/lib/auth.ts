@@ -421,7 +421,7 @@ export function getProductAppUrl(
     if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) {
       return `${proto}://${rawHost}`.replace(/\/+$/, '');
     }
-    return (process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com').replace(/\/+$/, '');
+    return (process.env.BGOS_PUBLIC_URL || 'https://bgos.site').replace(/\/+$/, '');
   }
   return getAppUrl(request);
 }

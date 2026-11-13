@@ -22,8 +22,8 @@ if (fs.existsSync(envPath)) {
 }
 
 // Production release defaults
-if (!process.env.EXPO_PUBLIC_API_URL) process.env.EXPO_PUBLIC_API_URL = 'https://bgos.fieseros.com';
-if (!process.env.EXPO_PUBLIC_WEB_URL) process.env.EXPO_PUBLIC_WEB_URL = 'https://bgos.fieseros.com';
+if (!process.env.EXPO_PUBLIC_API_URL) process.env.EXPO_PUBLIC_API_URL = 'https://bgos.site';
+if (!process.env.EXPO_PUBLIC_WEB_URL) process.env.EXPO_PUBLIC_WEB_URL = 'https://bgos.site';
 if (!process.env.EXPO_PUBLIC_EAS_PROJECT_ID) process.env.EXPO_PUBLIC_EAS_PROJECT_ID = '6671fda2-0cc6-41c5-be96-e3bef1b459f4';
 
 const errors = [];

@@ -363,7 +363,7 @@ export async function POST(request: NextRequest) {
       // 2. Send via WhatsApp matching User Template & Document Attachment
       if (recipientPhone) {
         try {
-          const reportPdfUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://bgos.fieseros.com'}/api/bgos/reports/monthly-pdf?tenantId=${tenant.id}`;
+          const reportPdfUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://bgos.site'}/api/bgos/reports/monthly-pdf?tenantId=${tenant.id}`;
           const waMessage = `Hi ${ownerName},\n\nYour ${monthNames[now.getMonth()]} ${shortYear} Google report is ready.`;
           const waRes = await sendWhatsAppMessage({
             to: recipientPhone,

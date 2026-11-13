@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
 
     // Ensure slug is clean and publicProfileEnabled is true
     const slug = tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const websiteUrl = `https://bgos.fieseros.com/b/${slug}`;
+    const websiteOrigin = (process.env.BGOS_PUBLIC_URL || 'https://bgos.site').replace(/\/+$/, '');
+    const websiteUrl = `${websiteOrigin}/b/${slug}`;
 
     const { getTenantSeoContext } = await import('@/lib/gbp/seo-context');
     const { revalidatePublicBusiness } = await import('@/lib/public-business');

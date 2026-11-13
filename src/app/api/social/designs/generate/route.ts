@@ -17,6 +17,8 @@ const ALLOWED_IMAGE_DOMAINS = [
   'imagedelivery.net',
   'api.fieseros.com',
   'bgos.fieseros.com',
+  'bgos.site',
+  'www.bgos.site',
   'fieseros.com',
 ];
 

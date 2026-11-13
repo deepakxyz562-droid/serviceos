@@ -42,14 +42,14 @@ export function GbpWebsiteBuilderCard({
 }: GbpWebsiteBuilderCardProps) {
   const [generating, setGenerating] = useState(false);
   const [enriching, setEnriching] = useState(false);
-  const [websiteUrl, setWebsiteUrl] = useState(`https://bgos.fieseros.com/b/${businessSlug}`);
+  const [websiteUrl, setWebsiteUrl] = useState(`https://bgos.site/b/${businessSlug}`);
   const [synced, setSynced] = useState(false);
   const [copied, setCopied] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
 
   useEffect(() => {
-    setWebsiteUrl(`https://bgos.fieseros.com/b/${businessSlug}`);
+    setWebsiteUrl(`https://bgos.site/b/${businessSlug}`);
     setQrDataUrl('');
   }, [businessSlug]);
 

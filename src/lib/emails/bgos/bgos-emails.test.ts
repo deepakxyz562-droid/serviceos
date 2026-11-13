@@ -121,6 +121,7 @@ describe('BGOS Email Templates & Helpers', () => {
     expect(isDeliverableEmail(null)).toBe(false);
     expect(isDeliverableEmail('')).toBe(false);
     expect(isDeliverableEmail('not-an-email')).toBe(false);
+    expect(isDeliverableEmail('phone_919876543210@bgos.site')).toBe(false);
     expect(isDeliverableEmail('phone_919876543210@bgos.fieseros.com')).toBe(false);
     expect(isDeliverableEmail('123456@merchant.bos.local')).toBe(false);
     expect(isDeliverableEmail('owner@tenant.test')).toBe(false);
@@ -133,6 +134,7 @@ describe('BGOS Email Templates & Helpers', () => {
     // Transactional password reset / verification still works on RFC 2606 example.com
     // test fixtures while rejecting truly synthetic unreachable placeholders.
     expect(isSyntheticPlaceholderEmail('owner@example.com')).toBe(false);
+    expect(isSyntheticPlaceholderEmail('phone_919876543210@bgos.site')).toBe(true);
     expect(isSyntheticPlaceholderEmail('phone_919876543210@bgos.fieseros.com')).toBe(true);
     expect(isSyntheticPlaceholderEmail('001234.abcdef1234567890abcdef.1234@privaterelay.appleid.com')).toBe(true);
   });
@@ -161,8 +163,9 @@ describe('BGOS Email Templates & Helpers', () => {
     expect(buildGoogleReviewLink('')).toBeNull();
     expect(buildGoogleReviewLink(null)).toBeNull();
 
+    expect(resolveBgosBaseUrl('https://bgos.site/')).toBe('https://bgos.site');
     expect(resolveBgosBaseUrl('https://bgos.fieseros.com/')).toBe('https://bgos.fieseros.com');
-    expect(resolveBgosBaseUrl('https://fieseros.com')).toBe('https://bgos.fieseros.com');
+    expect(resolveBgosBaseUrl('https://fieseros.com')).toBe('https://bgos.site');
     expect(resolveBgosBaseUrl('http://localhost:3000/')).toBe('http://localhost:3000');
   });
 
@@ -266,7 +269,7 @@ describe('BGOS Email Templates & Helpers', () => {
       businessName: 'Abc kirana',
       pendingCount: 2,
     });
-    expect(unrepliedRendered.html).toContain('bgos.fieseros.com/app?product=bgos&amp;view=reviews');
+    expect(unrepliedRendered.html).toContain('bgos.site/app?product=bgos&amp;view=reviews');
     expect(unrepliedRendered.html).toContain('{{unsubscribe_url}}');
 
     const promo = renderBgosPromoEmail({
@@ -276,7 +279,7 @@ describe('BGOS Email Templates & Helpers', () => {
       bodyParagraphs: ['Generate local promos for {{businessName}} using uploaded photos.'],
       highlights: ['Works with your existing photos', 'Publish straight to Google'],
       ctaLabel: 'Open AI Studio',
-      ctaUrl: 'https://bgos.fieseros.com/app?product=bgos&view=socialMedia',
+      ctaUrl: 'https://bgos.site/app?product=bgos&view=socialMedia',
     });
     expect(promo.subject).toBe('New AI Poster Studio for Abc kirana');
     expect(promo.html).toContain('Turn Abc kirana photos into posters');
@@ -590,7 +593,7 @@ describe('BGOS Sender Guardrails, Idempotency & Context Detection', () => {
         usageType: 'marketing',
         platformMarketing: true,
         skipTenantQuota: true,
-        trackingBaseUrl: 'https://bgos.fieseros.com',
+        trackingBaseUrl: 'https://bgos.site',
         tenantId: 't-1',
         campaignId: 'bgos_welcome',
       }),

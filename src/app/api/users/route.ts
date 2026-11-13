@@ -116,8 +116,8 @@ export async function POST(request: NextRequest) {
     const effectiveEmail =
       trimmedEmail ||
       (phoneDigits
-        ? `phone_${phoneDigits}@bgos.fieseros.com`
-        : `staff_${Date.now()}@bgos.fieseros.com`);
+        ? `phone_${phoneDigits}@bgos.site`
+        : `staff_${Date.now()}@bgos.site`);
 
     // Check if user already exists by email or phone
     let existing = await db.user.findUnique({ where: { email: effectiveEmail } });
@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
     const portalUrl =
       process.env.BGOS_PUBLIC_URL ||
       process.env.NEXT_PUBLIC_APP_URL ||
-      'https://bgos.fieseros.com';
+      'https://bgos.site';
 
     const loginUrl = `${portalUrl}/login`;
     const roleCapitalized = normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1);

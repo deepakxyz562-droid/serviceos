@@ -124,6 +124,7 @@ function isSyntheticEmail(email: string | null | undefined): boolean {
   const lower = String(email || '').trim().toLowerCase();
   return (
     !lower ||
+    lower.endsWith('@bgos.site') ||
     lower.endsWith('@bgos.fieseros.com') ||
     lower.endsWith('@merchant.bos.local')
   );

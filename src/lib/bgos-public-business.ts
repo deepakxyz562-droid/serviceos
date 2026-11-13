@@ -259,7 +259,7 @@ async function fetchPublicPlaceSnapshot(placeId?: string | null): Promise<Places
 }
 
 export function getBgosPublicCanonicalUrl(slug: string): string {
-  const base = (process.env.BGOS_PUBLIC_URL || 'https://bgos.fieseros.com').replace(/\/+$/, '');
+  const base = (process.env.BGOS_PUBLIC_URL || 'https://bgos.site').replace(/\/+$/, '');
   return `${base}/b/${encodeURIComponent(slug)}`;
 }
 

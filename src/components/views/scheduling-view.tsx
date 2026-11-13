@@ -1065,14 +1065,14 @@ export function SchedulingView({
                           Your Public Booking URL
                         </p>
                         <p className="mt-1 font-mono text-xs font-semibold text-emerald-950 truncate select-all">
-                          {typeof window !== 'undefined' ? `${window.location.origin}${workspaceData?.links?.booking || '/book'}` : `https://bgos.fieseros.com${workspaceData?.links?.booking || '/book'}`}
+                          {typeof window !== 'undefined' ? `${window.location.origin}${workspaceData?.links?.booking || '/book'}` : `https://bgos.site${workspaceData?.links?.booking || '/book'}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           type="button"
                           onClick={() => {
-                            const url = `${typeof window !== 'undefined' ? window.location.origin : 'https://bgos.fieseros.com'}${workspaceData?.links?.booking || '/book'}`;
+                            const url = `${typeof window !== 'undefined' ? window.location.origin : 'https://bgos.site'}${workspaceData?.links?.booking || '/book'}`;
                             if (typeof navigator !== 'undefined' && navigator.clipboard) {
                               navigator.clipboard.writeText(url);
                               toast.success('Copied booking link to clipboard!');
@@ -1084,7 +1084,7 @@ export function SchedulingView({
                           <span>Copy Link</span>
                         </button>
                         <a
-                          href={`${typeof window !== 'undefined' ? window.location.origin : 'https://bgos.fieseros.com'}${workspaceData?.links?.booking || '/book'}`}
+                          href={`${typeof window !== 'undefined' ? window.location.origin : 'https://bgos.site'}${workspaceData?.links?.booking || '/book'}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 rounded-lg bg-[#009F50] px-3.5 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-[#008A45] transition"
@@ -1093,7 +1093,7 @@ export function SchedulingView({
                           <span>Open Live Page</span>
                         </a>
                         <a
-                          href={`https://wa.me/?text=${encodeURIComponent(`Hello! You can view our services and book an appointment with us online here: ${typeof window !== 'undefined' ? window.location.origin : 'https://bgos.fieseros.com'}${workspaceData?.links?.booking || '/book'}`)}`}
+                          href={`https://wa.me/?text=${encodeURIComponent(`Hello! You can view our services and book an appointment with us online here: ${typeof window !== 'undefined' ? window.location.origin : 'https://bgos.site'}${workspaceData?.links?.booking || '/book'}`)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3.5 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-[#20bd5a] transition"
