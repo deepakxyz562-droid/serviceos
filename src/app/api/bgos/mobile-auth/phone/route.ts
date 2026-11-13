@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
         lastLoginAt: new Date(),
       },
     });
-    if (user.tenantId && !user.tenant?.phone) {
+    if (user.role === 'owner' && user.tenantId && !user.tenant?.phone) {
       await db.tenant.update({
         where: { id: user.tenantId },
         data: { phone: e164 },

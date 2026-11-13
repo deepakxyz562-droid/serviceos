@@ -343,7 +343,7 @@ export async function PATCH(request: NextRequest) {
         ? await syncGooglePlaceActionsForTenant({
             tenantId: user.tenantId,
             storeSettings: nextStoreSettings,
-            includeAppointment: true,
+            includeAppointment: Boolean(body?.includeAppointment),
             includeOrdering: Boolean(
               nextStoreSettings.foodOrderingEnabled ||
                 nextStoreSettings.pickupEnabled ||

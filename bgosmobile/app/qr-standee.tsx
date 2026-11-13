@@ -12,6 +12,7 @@ import {
   Switch,
   Modal,
   Platform,
+  Linking,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -220,9 +221,43 @@ export default function QrStandeeScreen() {
         showContact: String(showContact),
       });
       if (token) params.set('auth', token);
-      await WebBrowser.openBrowserAsync(`${WEB_URL}/api/bgos/qr/standee?${params.toString()}`);
+      const printableUrl = `${WEB_URL}/api/bgos/qr/standee?${params.toString()}`;
+
+      // Open in device default system browser (Safari/Chrome) where AirPrint and Save as PDF work natively
+      const canOpen = await Linking.canOpenURL(printableUrl).catch(() => false);
+      if (canOpen) {
+        await Linking.openURL(printableUrl);
+      } else {
+        await WebBrowser.openBrowserAsync(printableUrl);
+      }
     } catch (err: unknown) {
       Alert.alert('Print Preview', err instanceof Error ? err.message : 'Unable to open print preview.');
+    }
+  };
+
+  const handleShareStandee = async () => {
+    try {
+      const token = await getToken();
+      const params = new URLSearchParams({
+        format: 'html',
+        templateId: selectedTemplateId,
+        size: selectedSize,
+        target: qrTarget,
+        headline,
+        subheadline,
+        showRating: String(showRating),
+        showContact: String(showContact),
+      });
+      if (token) params.set('auth', token);
+      const printableUrl = `${WEB_URL}/api/bgos/qr/standee?${params.toString()}`;
+
+      await Share.share({
+        title: `${data?.businessName || 'Business'} - Print-Ready QR Standee (${selectedSize.toUpperCase()})`,
+        message: `Print-ready QR standee for ${data?.businessName || 'our business'}:\n\nPrint or Save PDF: ${printableUrl}\n\nDirect QR link: ${activeTargetUrl}`,
+        url: printableUrl,
+      });
+    } catch {
+      Alert.alert('Notice', 'Could not open share dialogue.');
     }
   };
 
@@ -242,29 +277,13 @@ export default function QrStandeeScreen() {
           logoUrl: includeLogo ? customLogoUrl : null,
         },
       });
-      setGeneratedHtml(res.html);
-      setPrintPreviewOpen(true);
-    } catch (e: any) {
-      if (activeTargetUrl) {
-        Alert.alert(
-          'Standee Ready',
-          `Your QR link is ready: ${activeTargetUrl}`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Share Link',
-              onPress: () => {
-                void Share.share({
-                  title: `${data?.businessName || 'Business'} - QR Standee`,
-                  message: `Scan or visit ${data?.businessName || 'our business'}: ${activeTargetUrl}`,
-                });
-              },
-            },
-          ]
-        );
-      } else {
-        Alert.alert('Notice', 'Please connect your Google Business Profile to generate standees.');
+      if (res?.html) {
+        setGeneratedHtml(res.html);
       }
+      setPrintPreviewOpen(true);
+    } catch {
+      // Offline or network fallback: open print studio with live client standee
+      setPrintPreviewOpen(true);
     } finally {
       setGenerating(false);
     }
@@ -332,16 +351,56 @@ export default function QrStandeeScreen() {
       ) : (
         <View style={{ gap: 16 }}>
           {/* 0. QR TARGET DESTINATION SWITCHER */}
-          <Card style={{ gap: 8 }}>
-            <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.ink }}>
-              What should customers scan to open?
-            </Text>
+          <Card style={{ gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
+                What should customers scan to open?
+              </Text>
+              <View
+                style={{
+                  backgroundColor: '#F1F5F9',
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderRadius: 8,
+                }}
+              >
+                <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B' }}>
+                  {qrTarget === 'review'
+                    ? 'Verified Review'
+                    : qrTarget === 'page'
+                      ? 'Catalog & Assistant'
+                      : 'Maps Navigation'}
+                </Text>
+              </View>
+            </View>
+
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {(
                 [
-                  { id: 'review', label: 'Google Review', icon: 'star' },
-                  { id: 'page', label: 'Book & Order Page', icon: 'storefront' },
-                  { id: 'maps', label: 'Google Maps', icon: 'place' },
+                  {
+                    id: 'review',
+                    label: 'Google Review',
+                    sub: '5-Star Feedback',
+                    icon: 'star',
+                    activeColor: '#EA4335',
+                    activeBg: '#FEF2F2',
+                  },
+                  {
+                    id: 'page',
+                    label: 'Book & Order',
+                    sub: 'Store & Chatbot',
+                    icon: 'storefront',
+                    activeColor: colors.brand,
+                    activeBg: colors.brandSoft,
+                  },
+                  {
+                    id: 'maps',
+                    label: 'Google Maps',
+                    sub: 'Route & Profile',
+                    icon: 'place',
+                    activeColor: '#1A73E8',
+                    activeBg: '#EFF6FF',
+                  },
                 ] as const
               ).map((opt) => {
                 const selected = qrTarget === opt.id;
@@ -351,32 +410,53 @@ export default function QrStandeeScreen() {
                     onPress={() => selectQrTarget(opt.id)}
                     style={{
                       flex: 1,
-                      flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 5,
-                      paddingVertical: 9,
-                      paddingHorizontal: 6,
-                      borderRadius: 10,
-                      backgroundColor: selected ? '#0F172A' : '#F8FAFC',
-                      borderWidth: 1,
-                      borderColor: selected ? '#0F172A' : '#E2E8F0',
+                      gap: 4,
+                      paddingVertical: 10,
+                      paddingHorizontal: 4,
+                      borderRadius: 12,
+                      backgroundColor: selected ? opt.activeBg : '#F8FAFC',
+                      borderWidth: selected ? 2 : 1,
+                      borderColor: selected ? opt.activeColor : '#E2E8F0',
                     }}
                   >
-                    <MaterialIcons
-                      name={opt.icon}
-                      size={14}
-                      color={selected ? '#FFFFFF' : '#475569'}
-                    />
+                    <View
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: selected ? opt.activeColor : '#E2E8F0',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <MaterialIcons
+                        name={opt.icon}
+                        size={15}
+                        color={selected ? '#FFFFFF' : '#64748B'}
+                      />
+                    </View>
                     <Text
                       numberOfLines={1}
                       style={{
-                        fontSize: 11,
-                        fontWeight: '700',
-                        color: selected ? '#FFFFFF' : '#334155',
+                        fontSize: 11.5,
+                        fontWeight: selected ? '800' : '600',
+                        color: selected ? opt.activeColor : colors.ink,
+                        textAlign: 'center',
                       }}
                     >
                       {opt.label}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        fontSize: 9.5,
+                        color: selected ? opt.activeColor : '#64748B',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {opt.sub}
                     </Text>
                   </Pressable>
                 );
@@ -591,32 +671,117 @@ export default function QrStandeeScreen() {
           </Card>
 
           {/* 2. THEME & TEMPLATE SELECTOR */}
-          <Card>
-            <Text style={ui.heading}>Design Theme</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+          <Card style={{ gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={ui.heading}>Design Theme</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: currentTemplate.themeColor }}>
+                {currentTemplate.name}
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
               {(data?.templates || []).map((t) => {
                 const isSelected = selectedTemplateId === t.id;
+                const isWave = t.id === 'google_grexa_standee';
                 return (
                   <Pressable
                     key={t.id}
                     onPress={() => setSelectedTemplateId(t.id)}
                     style={{
-                      flex: 1,
-                      minWidth: '45%',
-                      padding: 12,
-                      borderRadius: 12,
-                      borderWidth: 2,
+                      width: '48%',
+                      borderRadius: 14,
+                      borderWidth: isSelected ? 2 : 1,
                       borderColor: isSelected ? t.themeColor : '#E2E8F0',
-                      backgroundColor: isSelected ? '#F8FAFC' : '#FFFFFF',
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 8,
+                      backgroundColor: isSelected ? '#FFFFFF' : '#FAFAFA',
+                      overflow: 'hidden',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: isSelected ? 2 : 1 },
+                      shadowOpacity: isSelected ? 0.08 : 0.03,
+                      shadowRadius: isSelected ? 4 : 2,
+                      elevation: isSelected ? 2 : 1,
                     }}
                   >
-                    <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: t.themeColor }} />
-                    <Text style={{ fontSize: 12, fontWeight: isSelected ? '800' : '600', color: colors.ink }}>
-                      {t.name}
-                    </Text>
+                    {/* Miniature Standee Swatch Header */}
+                    {isWave ? (
+                      <View style={{ flexDirection: 'row', height: 6, width: '100%' }}>
+                        <View style={{ flex: 1, backgroundColor: '#EA4335' }} />
+                        <View style={{ flex: 1, backgroundColor: '#FBBC05' }} />
+                        <View style={{ flex: 1, backgroundColor: '#34A853' }} />
+                        <View style={{ flex: 1, backgroundColor: '#4285F4' }} />
+                      </View>
+                    ) : (
+                      <View style={{ height: 6, backgroundColor: t.themeColor }} />
+                    )}
+
+                    <View style={{ padding: 10, gap: 6 }}>
+                      {/* Mini Mockup Visual */}
+                      <View
+                        style={{
+                          height: 38,
+                          backgroundColor: t.bgColor,
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: t.cardBorder,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: 6,
+                        }}
+                      >
+                        {isWave ? (
+                          <Text style={{ fontSize: 11, fontWeight: '900', color: '#4285F4' }}>G</Text>
+                        ) : (
+                          <View
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 4,
+                              backgroundColor: t.themeColor,
+                            }}
+                          />
+                        )}
+                        <View
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 3,
+                            borderWidth: 1,
+                            borderColor: t.textColor,
+                            backgroundColor: '#FFFFFF',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <MaterialIcons name="qr-code-2" size={14} color={t.textColor} />
+                        </View>
+                        <Text style={{ fontSize: 9, color: '#F59E0B' }}>★★★</Text>
+                      </View>
+
+                      {/* Theme Name & Active Indicator */}
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 4,
+                        }}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            fontSize: 11.5,
+                            fontWeight: isSelected ? '800' : '600',
+                            color: isSelected ? t.textColor : '#334155',
+                            flex: 1,
+                          }}
+                        >
+                          {t.name.replace(' (With Logo)', '')}
+                        </Text>
+                        {isSelected ? (
+                          <MaterialIcons name="check-circle" size={15} color={t.themeColor} />
+                        ) : null}
+                      </View>
+                    </View>
                   </Pressable>
                 );
               })}
@@ -836,7 +1001,7 @@ export default function QrStandeeScreen() {
         <View
           style={{
             flex: 1,
-            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
             justifyContent: 'flex-end',
           }}
         >
@@ -846,76 +1011,180 @@ export default function QrStandeeScreen() {
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               padding: 20,
-              gap: 12,
+              gap: 14,
+              maxHeight: '90%',
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
-                Standee Ready to Print
-              </Text>
-              <Pressable onPress={() => setPrintPreviewOpen(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={22} color={colors.muted} />
+              <View>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.ink }}>
+                  Print-Ready Standee Studio
+                </Text>
+                <Text style={{ fontSize: 12, color: colors.brand, fontWeight: '700', marginTop: 2 }}>
+                  {currentTemplate.name} • {selectedSize.toUpperCase()} (300 DPI Vector)
+                </Text>
+              </View>
+              <Pressable onPress={() => setPrintPreviewOpen(false)} hitSlop={10} style={{ padding: 4 }}>
+                <MaterialIcons name="close" size={24} color={colors.muted} />
               </Pressable>
             </View>
-            <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 19 }}>
-              Print-ready {selectedSize.toUpperCase()} standee ({currentTemplate.name}) generated for{' '}
-              {data?.businessName || 'your business'} with your live rating and selected QR destination.
-            </Text>
+
+            {/* Visual Mini Standee Card Preview */}
+            <View
+              style={{
+                alignItems: 'center',
+                backgroundColor: currentTemplate.bgColor,
+                borderRadius: 16,
+                borderWidth: 1.5,
+                borderColor: currentTemplate.cardBorder,
+                padding: 14,
+                gap: 8,
+              }}
+            >
+              {selectedTemplateId === 'google_grexa_standee' ? (
+                <View style={{ flexDirection: 'row', height: 4, width: '100%', borderRadius: 2, overflow: 'hidden' }}>
+                  <View style={{ flex: 1, backgroundColor: '#EA4335' }} />
+                  <View style={{ flex: 1, backgroundColor: '#FBBC05' }} />
+                  <View style={{ flex: 1, backgroundColor: '#34A853' }} />
+                  <View style={{ flex: 1, backgroundColor: '#4285F4' }} />
+                </View>
+              ) : null}
+
+              <Text style={{ fontSize: 15, fontWeight: '800', color: currentTemplate.themeColor }}>
+                {data?.businessName}
+              </Text>
+
+              <View
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  paddingVertical: 5,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: currentTemplate.cardBorder,
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '800', color: currentTemplate.textColor }}>
+                  {headline}
+                </Text>
+              </View>
+
+              {activeQrDataUrl ? (
+                <Image
+                  source={{ uri: activeQrDataUrl }}
+                  style={{ width: 110, height: 110, borderRadius: 10, backgroundColor: '#FFFFFF' }}
+                  resizeMode="contain"
+                />
+              ) : null}
+
+              {showRating ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={{ fontSize: 11, color: '#FBBC05' }}>★★★★★</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: currentTemplate.textColor }}>
+                    {(data?.rating || 5.0).toFixed(1)} ★ ({data?.totalReviews || 0} reviews)
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Target Destination Chip */}
             <View
               style={{
                 backgroundColor: '#F8FAFC',
                 borderWidth: 1,
                 borderColor: '#E2E8F0',
                 borderRadius: 12,
-                padding: 12,
-                gap: 4,
+                padding: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
               }}
             >
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>QR TARGET LINK</Text>
-              <Text style={{ fontSize: 12, color: '#0F172A' }} numberOfLines={2}>
-                {activeTargetUrl || data?.reviewUrl}
-              </Text>
+              <MaterialIcons name="qr-code-2" size={18} color={colors.brand} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>
+                  QR DESTINATION: {qrTarget === 'review' ? 'GOOGLE REVIEW' : qrTarget === 'page' ? 'STORE PAGE' : 'GOOGLE MAPS'}
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#0F172A', fontWeight: '600' }} numberOfLines={1}>
+                  {activeTargetUrl || data?.reviewUrl}
+                </Text>
+              </View>
             </View>
-            <Pressable
-              onPress={() => {
-                setPrintPreviewOpen(false);
-                void handleOpenPrintPage();
-              }}
-              style={{
-                backgroundColor: colors.brand,
-                borderRadius: 12,
-                paddingVertical: 13,
-                alignItems: 'center',
-                flexDirection: 'row',
-                justifyContent: 'center',
-                gap: 8,
-              }}
-            >
-              <MaterialIcons name="print" size={18} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>
-                Open Printable Standee / Save PDF
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setPrintPreviewOpen(false);
-                void handleShareLink();
-              }}
-              style={{
-                backgroundColor: '#F1F5F9',
-                borderRadius: 12,
-                paddingVertical: 12,
-                alignItems: 'center',
-                flexDirection: 'row',
-                justifyContent: 'center',
-                gap: 8,
-              }}
-            >
-              <MaterialIcons name="share" size={18} color={colors.ink} />
-              <Text style={{ color: colors.ink, fontSize: 13, fontWeight: '700' }}>
-                Share Link Instead
-              </Text>
-            </Pressable>
+
+            {/* 3 Clear Action Buttons */}
+            <View style={{ gap: 8 }}>
+              {/* Button 1: Open System Print */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open print page or save PDF"
+                onPress={() => {
+                  setPrintPreviewOpen(false);
+                  void handleOpenPrintPage();
+                }}
+                style={{
+                  backgroundColor: colors.brand,
+                  borderRadius: 14,
+                  paddingVertical: 13,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <MaterialIcons name="print" size={20} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>
+                  Open Print Page / Save PDF
+                </Text>
+              </Pressable>
+
+              {/* Button 2: Share Standee File & Direct Link */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Share standee file and link"
+                onPress={() => {
+                  setPrintPreviewOpen(false);
+                  void handleShareStandee();
+                }}
+                style={{
+                  backgroundColor: '#0F172A',
+                  borderRadius: 14,
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <MaterialIcons name="share" size={18} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontWeight: '800' }}>
+                  Share Standee Graphic & PDF Link
+                </Text>
+              </Pressable>
+
+              {/* Button 3: Share QR Target Link */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Share target link only"
+                onPress={() => {
+                  setPrintPreviewOpen(false);
+                  void handleShareLink();
+                }}
+                style={{
+                  backgroundColor: '#F1F5F9',
+                  borderRadius: 14,
+                  paddingVertical: 11,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <MaterialIcons name="link" size={18} color={colors.ink} />
+                <Text style={{ color: colors.ink, fontSize: 13, fontWeight: '700' }}>
+                  Copy / Share Direct Link Instead
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>

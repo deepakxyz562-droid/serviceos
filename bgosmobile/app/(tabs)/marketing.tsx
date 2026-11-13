@@ -65,6 +65,8 @@ import { SocialCalendarView } from '../../src/components/gbp/social-calendar';
 import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
 import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
 import { UpcomingPostsCarousel } from '../../src/components/gbp/upcoming-posts-carousel';
+import { CreateGbpPostModal, type GeneratedPostData } from '../../src/components/gbp/create-gbp-post-modal';
+import { PostReviewEditModal } from '../../src/components/gbp/post-review-edit-modal';
 import { FullscreenImageModal } from '../../src/components/gbp/fullscreen-image-modal';
 import {
   IMAGE_PROVIDER_CHOICES,
@@ -669,9 +671,10 @@ export default function MarketingScreen() {
   const pendingRequest = useRef<{ body: string; key: string } | null>(null);
   const saving = useRef(false);
 
-  const [activeMode, setActiveMode] = useState<'studio' | 'autopilot' | 'posts'>(
-    params.mode === 'posts' || params.postId ? 'posts' : params.mode === 'autopilot' ? 'autopilot' : 'studio'
-  );
+  const [activeMode, setActiveMode] = useState<'studio' | 'autopilot' | 'posts'>('posts');
+  const [createPostModalOpen, setCreatePostModalOpen] = useState(false);
+  const [reviewPostModalOpen, setReviewPostModalOpen] = useState(false);
+  const [activeReviewPost, setActiveReviewPost] = useState<GeneratedPostData | null>(null);
   const [focusedPostId, setFocusedPostId] = useState<string | null>(
     typeof params.postId === 'string' && params.postId ? params.postId : null
   );
@@ -2603,13 +2606,13 @@ export default function MarketingScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: Math.max(insets.top, 12) }}>
-      {/* ── Single-Row Light Header Bar matching Design Kit ─────────────────── */}
+      {/* ── Single-Row Top Header Bar matching Benchmark Screenshot 1 ─────────────────── */}
       <View
         style={{
           backgroundColor: '#FFFFFF',
-          paddingHorizontal: 14,
+          paddingHorizontal: 16,
           paddingVertical: 10,
-          minHeight: 50,
+          minHeight: 54,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -2617,86 +2620,75 @@ export default function MarketingScreen() {
           borderBottomColor: '#EEF2F6',
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <View
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 9,
-              backgroundColor: '#E8F8EF',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <MaterialIcons name="auto-awesome" size={17} color="#0B9042" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {brandProfile.data?.brandDetails?.logoUrl || brandProfile.data?.logo ? (
+            <Image
+              source={{ uri: brandProfile.data?.brandDetails?.logoUrl || brandProfile.data?.logo || '' }}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 19,
+                backgroundColor: '#F1F5F9',
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+              }}
+              resizeMode="cover"
+            />
+          ) : (
+            <View
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 19,
+                backgroundColor: '#E0F2FE',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: '#BAE6FD',
+              }}
+            >
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0369A1' }}>
+                {(effectiveBusinessName || 'B').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <View>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 }}>
+              Posts
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              <Text numberOfLines={1} style={{ fontSize: 12.5, fontWeight: '600', color: '#2563EB', maxWidth: 160 }}>
+                {effectiveBusinessName && !effectiveBusinessName.toLowerCase().includes('fieseros')
+                  ? effectiveBusinessName
+                  : 'My Business'}
+              </Text>
+              <MaterialIcons name="expand-more" size={16} color="#2563EB" />
+            </View>
           </View>
-          <Text style={{ fontSize: 19, fontWeight: '800', color: '#070B2D', letterSpacing: -0.35 }}>
-            Marketing
-          </Text>
         </View>
-        {effectiveBusinessName ? (
-          <Text numberOfLines={1} style={{ fontSize: 11.5, fontWeight: '700', color: '#64748B', maxWidth: 150 }}>
-            {effectiveBusinessName}
-          </Text>
-        ) : null}
-      </View>
-
-      {/* ── Top Mode Switcher Bar ────────────────────────────────────────── */}
-      <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-      <View style={styles.modeBar}>
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeMode === 'studio' }}
-          onPress={() => setActiveMode('studio')}
-          style={[styles.modeTab, activeMode === 'studio' && styles.modeTabActive]}
-        >
-          <MaterialIcons
-            name="auto-awesome"
-            size={16}
-            color={activeMode === 'studio' ? '#009F50' : '#64748B'}
-          />
-          <Text style={[styles.modeTabText, activeMode === 'studio' && styles.modeTabTextActive]}>
-            Create
-          </Text>
-        </Pressable>
 
         <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeMode === 'autopilot' }}
+          accessibilityRole="button"
           onPress={() => {
-            setActiveMode('autopilot');
-
+            Alert.alert(
+              'Posts & Updates Help',
+              'BGOS automatically crafts SEO-optimized Google Business Profile posts to boost your local search ranking and Maps visibility.\n\nTap "Create Post with AI" to generate a tailored post with reference photos in seconds.',
+            );
           }}
-          style={[styles.modeTab, activeMode === 'autopilot' && styles.modeTabActive]}
+          style={{
+            backgroundColor: '#009F50',
+            paddingHorizontal: 14,
+            paddingVertical: 6,
+            borderRadius: 16,
+          }}
         >
-          <MaterialIcons
-            name="bolt"
-            size={16}
-            color={activeMode === 'autopilot' ? '#009F50' : '#64748B'}
-          />
-          <Text style={[styles.modeTabText, activeMode === 'autopilot' && styles.modeTabTextActive]}>
-            Autopilot
-          </Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeMode === 'posts' }}
-          onPress={() => setActiveMode('posts')}
-          style={[styles.modeTab, activeMode === 'posts' && styles.modeTabActive]}
-        >
-          <MaterialIcons
-            name="calendar-today"
-            size={15}
-            color={activeMode === 'posts' ? '#009F50' : '#64748B'}
-          />
-          <Text style={[styles.modeTabText, activeMode === 'posts' && styles.modeTabTextActive]}>
-            Posts
-          </Text>
+          <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' }}>Help</Text>
         </Pressable>
       </View>
 
-      {/* Global Alerts / Notices */}
+      {/* ── Main Content Container ────────────────────────────────────────── */}
+      <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+        {/* Global Alerts / Notices */}
       {successNotice && (
         <View style={styles.successNotice}>
           <MaterialIcons name="check-circle" size={16} color="#009F50" />
@@ -3038,13 +3030,26 @@ export default function MarketingScreen() {
           ══════════════════════════════════════════════════════════════════════ */}
       {activeMode === 'posts' && (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 90 }}>
-          {/* Grexa Benchmark: Upcoming Posts Carousel (Screenshot 2) */}
+          {/* Benchmark: Upcoming Posts Carousel (Screenshot 1) */}
           <UpcomingPostsCarousel
             businessName={effectiveBusinessName}
-            onCreateWithAi={() => {
-              setActiveMode('studio');
-              setStudioStep(1);
+            businessCategory={brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category}
+            onCreateWithAi={() => setCreatePostModalOpen(true)}
+            onViewPost={(post) => {
+              setActiveReviewPost({
+                id: post.id,
+                title: post.headline,
+                headline: post.headline,
+                caption: post.caption,
+                imageUrl: post.imageUrl,
+                postType: (post.type as any) || 'Standard Post',
+                ctaAction: post.ctaAction || 'CALL',
+                ctaUrl: post.ctaUrl,
+                scheduledTime: post.scheduledTime,
+              });
+              setReviewPostModalOpen(true);
             }}
+            onPostPublished={() => setBoardRefresh((k) => k + 1)}
           />
 
           {/* Connected Social Accounts Header */}
@@ -3083,14 +3088,26 @@ export default function MarketingScreen() {
 
           {postSubView === 'list' ? (
             <>
-              {/* Quick Header */}
+              {/* Quick Header with Posting Time Preference */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 12 }}>
                 <View>
                   <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Posts & Approvals</Text>
-                  <Text style={{ fontSize: 12, color: '#64748B' }}>Filter by live lifecycle status & platform</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Change daily posting time"
+                    onPress={() => setTimePickerOpen(true)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
+                  >
+                    <MaterialIcons name="schedule" size={13} color="#64748B" />
+                    <Text style={{ fontSize: 12, color: '#64748B' }}>
+                      Daily posting time: <Text style={{ color: '#2563EB', fontWeight: '700' }}>{apConfig.postingTime || '10:00 AM'}</Text> (Change)
+                    </Text>
+                  </Pressable>
                 </View>
                 <Pressable
-                  onPress={() => setActiveMode('studio')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Create New Post"
+                  onPress={() => setCreatePostModalOpen(true)}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -3112,7 +3129,7 @@ export default function MarketingScreen() {
                 initialPill={resolvedInitialPill}
                 focusedPostId={focusedPostId}
                 onClearFocusedPost={() => setFocusedPostId(null)}
-                onNeedCompose={() => setActiveMode('studio')}
+                onNeedCompose={() => setCreatePostModalOpen(true)}
               />
             </>
           ) : (
@@ -3120,7 +3137,7 @@ export default function MarketingScreen() {
             <SocialCalendarView
               refreshTrigger={boardRefresh}
               onScheduleForDate={() => {
-                setActiveMode('studio');
+                setCreatePostModalOpen(true);
               }}
             />
           )}
@@ -5473,7 +5490,7 @@ export default function MarketingScreen() {
               }}
               basePrompt={lastBgGenPrompt || promptInput}
               activeProvider={imageProvider}
-              allowProviderSwitch
+              allowProviderSwitch={false}
               regenerating={isGeneratingImage}
               errorMessage={error}
               onRegenerate={({ prompt, provider }) =>
@@ -5847,7 +5864,11 @@ export default function MarketingScreen() {
                     </View>
                     <View>
                       <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Smart Campaign Creator</Text>
-                      <Text style={{ fontSize: 11, color: '#64748B' }}>Tailored for {effectiveBusinessName}</Text>
+                      <Text style={{ fontSize: 11, color: '#64748B' }}>
+                        {effectiveBusinessName && !effectiveBusinessName.toLowerCase().includes('fieseros')
+                          ? `${effectiveBusinessName} • Google Business Profile`
+                          : 'Google Business Profile Campaign'}
+                      </Text>
                     </View>
                   </View>
                   <Pressable onPress={() => setIsCampaignSheetOpen(false)} hitSlop={8}>
@@ -6141,7 +6162,7 @@ export default function MarketingScreen() {
             }}
             basePrompt={lastBgGenPrompt || promptInput}
             activeProvider={imageProvider}
-            allowProviderSwitch={inspectMainFullscreen === 'photo'}
+            allowProviderSwitch={false}
             regenerating={isGeneratingImage}
             errorMessage={error}
             onRegenerate={
@@ -6323,6 +6344,32 @@ export default function MarketingScreen() {
           </View>
         </Modal>
       )}
+
+      {/* ── Create Post for GBP with AI Modal (Screenshot 2) ── */}
+      <CreateGbpPostModal
+        visible={createPostModalOpen}
+        onClose={() => setCreatePostModalOpen(false)}
+        onPostGenerated={(generated) => {
+          setActiveReviewPost(generated);
+          setReviewPostModalOpen(true);
+        }}
+        businessName={effectiveBusinessName}
+        businessCategory={brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category}
+      />
+
+      {/* ── Review & Dual-Edit Post Modal ── */}
+      <PostReviewEditModal
+        visible={reviewPostModalOpen}
+        onClose={() => {
+          setReviewPostModalOpen(false);
+          setActiveReviewPost(null);
+        }}
+        post={activeReviewPost}
+        businessName={effectiveBusinessName}
+        onPublished={() => {
+          setBoardRefresh((k) => k + 1);
+        }}
+      />
       </View>
     </KeyboardAvoidingView>
   );

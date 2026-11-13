@@ -20,7 +20,7 @@ import { GlobalUploadBanner } from '../../src/components/gbp/global-upload-banne
 const visible = [
   ['index', 'Home', 'home'],
   ['reviews', 'Reviews', 'rate-review'],
-  ['marketing', 'Marketing', 'auto-awesome'],
+  ['marketing', 'Posts', 'auto-awesome'],
   ['photos', 'Media', 'photo-library'],
   ['tools', 'Tools', 'grid-view'],
 ] as const;

@@ -1086,10 +1086,12 @@ export function MediaMetadataSheet({
           </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>
-              {isEditMode ? 'Edit Media Details' : 'AI Media Title, Tags & Schedule'}
+              {isEditMode ? 'Edit Post Details' : 'Review & Publish Post'}
             </Text>
             <Text style={styles.headerSub} numberOfLines={1}>
-              Tailored for {businessName}
+              {businessName && !businessName.toLowerCase().includes('fieseros')
+                ? `${businessName} • Google Business Profile`
+                : 'Google Business Profile Post'}
             </Text>
           </View>
           <Pressable
@@ -1487,31 +1489,6 @@ export function MediaMetadataSheet({
                         );
                       })}
                     </View>
-                    {selectedRefUrls.length === 0 ? (
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                        {(
-                          [
-                            { id: 'gemini', label: 'Gemini Vision' },
-                            { id: 'cloudflare', label: 'Cloudflare' },
-                            { id: 'openrouter', label: 'OpenRouter' },
-                            { id: 'siliconflow', label: 'SiliconFlow' },
-                          ] as Array<{ id: ImageProviderChoice; label: string }>
-                        ).map((eng) => {
-                          const active = aiProviderChoice === eng.id;
-                          return (
-                            <Pressable
-                              key={eng.id}
-                              onPress={() => setAiProviderChoice(eng.id)}
-                              style={[styles.chip, active && styles.chipBrandActive]}
-                            >
-                              <Text style={[styles.chipText, active && styles.chipBrandText]}>
-                                {eng.label}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    ) : null}
                   </View>
 
                   {/* Unified Smart Generation CTA */}
@@ -2312,7 +2289,7 @@ export function MediaMetadataSheet({
         }}
         basePrompt={lastAiUsedPrompt || aiPrompt}
         activeProvider={selectedRefUrls.length > 0 ? 'gemini' : aiProviderChoice}
-        allowProviderSwitch
+        allowProviderSwitch={false}
         regenerating={generatingAiImage}
         errorMessage={errorMsg}
         onRegenerate={({ prompt, provider }) =>

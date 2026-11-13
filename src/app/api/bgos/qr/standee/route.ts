@@ -362,33 +362,66 @@ function escapeXml(unsafe: string): string {
 }
 
 function buildStandeePrintableHtml(businessName: string, svg: string): string {
+  const safeTitle = escapeXml(businessName);
+  const fileSlug = safeTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeXml(businessName)} - Printable QR Standee</title>
+  <title>${safeTitle} - Printable QR Standee</title>
   <style>
     @page { size: auto; margin: 0; }
-    body { margin: 0; padding: 24px; display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center; background: #E2E8F0; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-    .toolbar { display: flex; gap: 10px; align-items: center; }
-    .print-btn { background: #009F50; color: #fff; border: 0; padding: 10px 18px; border-radius: 999px; font-weight: 700; cursor: pointer; font-size: 14px; }
-    .print-container { background: white; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border-radius: 12px; overflow: hidden; max-width: 100%; }
+    body { margin: 0; padding: 24px; display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center; background: #E2E8F0; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+    .print-btn { background: #009F50; color: #fff; border: 0; padding: 12px 22px; border-radius: 999px; font-weight: 800; cursor: pointer; font-size: 14px; box-shadow: 0 4px 12px rgba(0,159,80,0.3); transition: transform 0.1s; }
+    .print-btn:active { transform: scale(0.97); }
+    .download-btn { background: #0F172A; color: #fff; border: 0; padding: 12px 20px; border-radius: 999px; font-weight: 700; cursor: pointer; font-size: 13.5px; transition: transform 0.1s; }
+    .download-btn:active { transform: scale(0.97); }
+    .print-container { background: white; box-shadow: 0 14px 35px rgba(0,0,0,0.15); border-radius: 16px; overflow: hidden; max-width: 100%; border: 1px solid #CBD5E1; }
     .print-container svg { display: block; max-width: 100%; height: auto; }
     @media print {
       body { background: white; padding: 0; }
-      .print-container { box-shadow: none; border-radius: 0; }
+      .print-container { box-shadow: none; border-radius: 0; border: none; }
       .no-print { display: none !important; }
     }
   </style>
 </head>
 <body>
   <div class="toolbar no-print">
-    <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+    <button class="print-btn" onclick="window.print()">🖨️ Print Standee / Save PDF</button>
+    <button class="download-btn" onclick="downloadSvg()">📥 Download Vector SVG</button>
   </div>
   <div class="print-container">
     ${svg}
   </div>
+  <script>
+    function downloadSvg() {
+      try {
+        var svgEl = document.querySelector('.print-container svg');
+        if (!svgEl) return;
+        var serializer = new XMLSerializer();
+        var source = serializer.serializeToString(svgEl);
+        var blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = '${fileSlug}-qr-standee.svg';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert('Could not download SVG: ' + err.message);
+      }
+    }
+    // Auto-prompt print after DOM renders
+    window.addEventListener('DOMContentLoaded', function() {
+      setTimeout(function() {
+        try { window.print(); } catch(e) {}
+      }, 500);
+    });
+  </script>
 </body>
 </html>`;
 }

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser, hashPassword } from '@/lib/auth';
+import { buildPhoneVariants } from '@/lib/phone-account-lookup';
+import { isDeliverableEmail } from '@/lib/emails/bgos/templates';
+import { sendEmail } from '@/lib/email-send';
 
 // GET /api/users - List users and pending invitations in the current tenant
 export async function GET(request: NextRequest) {
@@ -89,14 +92,44 @@ export async function POST(request: NextRequest) {
     const trimmedName = (name || '').trim();
     const trimmedPhone = (phone || '').trim();
 
-    if (!trimmedEmail || !trimmedName) {
-      return NextResponse.json({ error: 'Name and email are required' }, { status: 400 });
+    if (!trimmedName) {
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    // Check if user already exists
-    const existing = await db.user.findUnique({ where: { email: trimmedEmail } });
-    if (existing) {
-      return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
+    if (!trimmedEmail && !trimmedPhone) {
+      return NextResponse.json(
+        { error: 'Please provide either a mobile phone number (for OTP login) or an email address.' },
+        { status: 400 }
+      );
+    }
+
+    // Normalize phone number (E.164) and resolve clean digits
+    let normalizedPhone: string | null = null;
+    let phoneDigits = '';
+    if (trimmedPhone) {
+      const pv = buildPhoneVariants(trimmedPhone);
+      normalizedPhone = pv.e164 || trimmedPhone;
+      phoneDigits = pv.cleanDigits.length >= 10 ? pv.cleanDigits.slice(-10) : pv.cleanDigits;
+    }
+
+    // Auto-synthesize internal email if only phone was supplied
+    const effectiveEmail =
+      trimmedEmail ||
+      (phoneDigits
+        ? `phone_${phoneDigits}@bgos.fieseros.com`
+        : `staff_${Date.now()}@bgos.fieseros.com`);
+
+    // Check if user already exists by email or phone
+    let existing = await db.user.findUnique({ where: { email: effectiveEmail } });
+    if (!existing && normalizedPhone && typeof (db.user as any).findFirst === 'function') {
+      const pv = buildPhoneVariants(normalizedPhone);
+      const orConditions: Record<string, unknown>[] = [
+        ...pv.variants.map((v) => ({ phone: v })),
+        ...(pv.tenDigits.length >= 10 ? [{ phone: { contains: pv.tenDigits } }] : []),
+      ];
+      existing = await db.user.findFirst({
+        where: { OR: orConditions },
+      });
     }
 
     const tenant = await db.tenant.findUnique({
@@ -116,28 +149,59 @@ export async function POST(request: NextRequest) {
     const tempPassword = Math.random().toString(36).slice(-5) + Math.random().toString(36).slice(-5);
     const passwordHash = await hashPassword(tempPassword);
 
-    const user = await db.user.create({
-      data: {
-        email: trimmedEmail,
-        name: trimmedName,
-        role: normalizedRole,
-        phone: trimmedPhone || null,
-        passwordHash,
-        tenantId: authUser.tenantId,
-        workspaceId: authUser.workspaceId,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        phone: true,
-        isActive: true,
-        lastLoginAt: true,
-        createdAt: true,
-      },
-    });
+    let user: any;
+
+    if (existing) {
+      // Re-link or update role for existing user
+      user = await db.user.update({
+        where: { id: existing.id },
+        data: {
+          name: trimmedName || existing.name,
+          role: normalizedRole,
+          phone: normalizedPhone || existing.phone,
+          tenantId: existing.tenantId || authUser.tenantId,
+          workspaceId: existing.workspaceId || authUser.workspaceId,
+          isActive: true,
+          emailVerified: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          phone: true,
+          isActive: true,
+          lastLoginAt: true,
+          createdAt: true,
+        },
+      });
+    } else {
+      // Create fresh user in the tenant
+      user = await db.user.create({
+        data: {
+          email: effectiveEmail,
+          name: trimmedName,
+          role: normalizedRole,
+          phone: normalizedPhone || null,
+          passwordHash,
+          tenantId: authUser.tenantId,
+          workspaceId: authUser.workspaceId,
+          isActive: true,
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          phone: true,
+          isActive: true,
+          lastLoginAt: true,
+          createdAt: true,
+        },
+      });
+    }
 
     const portalUrl =
       process.env.BGOS_PUBLIC_URL ||
@@ -147,17 +211,75 @@ export async function POST(request: NextRequest) {
     const loginUrl = `${portalUrl}/login`;
     const roleCapitalized = normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1);
 
-    const whatsappShareText = `Hello ${trimmedName}, you have been invited to join ${businessName} on ServiceOS BGOS as ${roleCapitalized}!\n\nAccess portal: ${loginUrl}\nEmail: ${trimmedEmail}\nTemporary Password: ${tempPassword}\n\nPlease log in and update your password.`;
+    // Dispatch branded invitation email if deliverable email was provided
+    let emailSent = false;
+    let emailError: string | null = null;
+    if (trimmedEmail && isDeliverableEmail(trimmedEmail)) {
+      try {
+        const html = `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #0F172A; background-color: #ffffff;">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <span style="font-size: 26px; font-weight: 800; color: #0B9042; letter-spacing: -0.5px;">BGOS</span>
+            </div>
+            <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 12px; color: #0F172A;">
+              You've been invited to join ${businessName}
+            </h1>
+            <p style="font-size: 15px; line-height: 24px; color: #334155; margin-bottom: 20px;">
+              Hello <strong>${trimmedName}</strong>,<br/><br/>
+              You have been added to <strong>${businessName}</strong> on ServiceOS BGOS as <strong>${roleCapitalized}</strong>.
+            </p>
+            <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
+              <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Sign-In Options</p>
+              ${normalizedPhone ? `<p style="margin: 6px 0; font-size: 14px; color: #0F172A;">📱 <strong>Phone + OTP (Recommended):</strong> Open the BGOS app and log in with <strong>${normalizedPhone}</strong></p>` : ''}
+              <p style="margin: 6px 0; font-size: 14px; color: #0F172A;">✉️ <strong>Email:</strong> ${trimmedEmail}</p>
+              <p style="margin: 6px 0; font-size: 14px; color: #0F172A;">🔑 <strong>Temporary Password:</strong> <code style="background: #E2E8F0; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${tempPassword}</code></p>
+            </div>
+            <div style="text-align: center; margin-bottom: 24px;">
+              <a href="${loginUrl}" style="display: inline-block; background-color: #0B9042; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 15px; padding: 12px 28px; border-radius: 10px;">
+                Open BGOS Portal &rarr;
+              </a>
+            </div>
+            <p style="font-size: 12px; color: #94A3B8; text-align: center; margin-top: 32px; border-top: 1px solid #F1F5F9; padding-top: 16px;">
+              If you did not expect this invitation, you can safely ignore this email.
+            </p>
+          </div>
+        `;
+        const text = `Hello ${trimmedName},\n\nYou have been invited to join ${businessName} on ServiceOS BGOS as ${roleCapitalized}!\n\nAccess portal: ${loginUrl}\nEmail: ${trimmedEmail}\nTemporary Password: ${tempPassword}\n\n${normalizedPhone ? `You can also sign in instantly on the BGOS mobile app with your phone number (${normalizedPhone}) and SMS OTP.` : ''}`;
+
+        const sendResult = await sendEmail({
+          to: trimmedEmail,
+          subject: `Invitation to join ${businessName} on BGOS`,
+          html,
+          text,
+          usageType: 'transactional',
+          tenantId: authUser.tenantId,
+        });
+
+        emailSent = Boolean(sendResult?.success);
+        if (!sendResult?.success) {
+          emailError = sendResult?.error || 'Email dispatch failed';
+        }
+      } catch (err: any) {
+        console.error('[api/users] Failed to send invitation email:', err);
+        emailError = err?.message || 'Email service error';
+      }
+    }
+
+    const whatsappShareText = normalizedPhone
+      ? `Hello ${trimmedName}, you have been added to ${businessName} on ServiceOS BGOS as ${roleCapitalized}!\n\n📱 Instant Mobile Sign-in: Open the BGOS app & log in with your phone (${normalizedPhone}) using SMS OTP.\n\n🌐 Web Portal: ${loginUrl}\nEmail: ${effectiveEmail}\nTemp Password: ${tempPassword}`
+      : `Hello ${trimmedName}, you have been invited to join ${businessName} on ServiceOS BGOS as ${roleCapitalized}!\n\nAccess portal: ${loginUrl}\nEmail: ${effectiveEmail}\nTemporary Password: ${tempPassword}\n\nPlease log in and update your password.`;
 
     return NextResponse.json(
       {
         user,
+        emailSent,
+        emailError,
         tempPassword,
         loginUrl,
         whatsappShareText,
         businessName,
       },
-      { status: 201 },
+      { status: existing ? 200 : 201 },
     );
   } catch (error) {
     console.error('Create user error:', error);

@@ -215,6 +215,8 @@ function AgentsScreen() {
   const [expandedFaqIds, setExpandedFaqIds] = useState<Set<string>>(new Set());
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [generatingFaqs, setGeneratingFaqs] = useState(false);
+  const [embedFormat, setEmbedFormat] = useState<'script' | 'iframe'>('script');
+  const [copiedEmbed, setCopiedEmbed] = useState(false);
 
   // Fast Creation Form
   const [customName, setCustomName] = useState('');
@@ -260,6 +262,14 @@ function AgentsScreen() {
       void Haptics.impactAsync(style);
     } catch {}
   }
+
+  const mainScrollRef = useRef<ScrollViewInstance | null>(null);
+
+  const changeTab = useCallback((nextTab: Tab) => {
+    triggerHaptic();
+    setTab(nextTab);
+    mainScrollRef.current?.scrollTo?.({ y: 0, animated: false });
+  }, []);
 
   function edit(patch: Partial<FormAgentData>) {
     if (!draft) return;
@@ -801,6 +811,37 @@ function AgentsScreen() {
     }
   }
 
+  const agentSlugOrId = draft?.slug || draft?.id || '';
+  const widgetScriptCode = `<!-- BGOS 24/7 AI Business Assistant Widget -->\n<script src="${WEB_URL}/api/public/agents/${agentSlugOrId}/embed.js" async></script>`;
+  const widgetIframeCode = `<!-- BGOS 24/7 AI Assistant Inline Booking Frame -->\n<iframe src="${WEB_URL}/agent/${agentSlugOrId}?embed=1" width="100%" height="650" frameborder="0"></iframe>`;
+  const activeEmbedCode = embedFormat === 'script' ? widgetScriptCode : widgetIframeCode;
+
+  async function handleCopyEmbedCode() {
+    try {
+      await Share.share({
+        title: `${draft?.name || 'Business'} AI Chatbot Embed Code`,
+        message: activeEmbedCode,
+      });
+      setCopiedEmbed(true);
+      setTimeout(() => setCopiedEmbed(false), 3000);
+      triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {
+      Alert.alert('Notice', 'Could not open share dialogue.');
+    }
+  }
+
+  async function handleSendToDeveloper() {
+    const devMessage = `Hi! Here is the code to add our 24/7 AI Business Assistant (${draft?.name || 'Business Assistant'}) to our website:\n\n${activeEmbedCode}\n\nInstallation Instructions:\n1. Paste the script tag right before the closing </body> tag on any page (or within your website builder's Custom Code / Footer settings).\n2. Works on WordPress, Shopify, Webflow, Wix, Squarespace, and custom HTML.\n3. The floating AI chat bubble will appear automatically to answer customer questions and book appointments 24/7.`;
+    try {
+      await Share.share({
+        title: 'Add AI Assistant to Website - Instructions for Web Developer',
+        message: devMessage,
+      });
+    } catch {
+      Alert.alert('Notice', 'Could not open share dialogue.');
+    }
+  }
+
   // ─── Render: Loading State ────────────────────────────────────────────────
   if (resource.loading && !resource.data) {
     return (
@@ -919,6 +960,7 @@ function AgentsScreen() {
       subtitle="AI Chat, Booking & Customer Intake"
       showBack
       scrollable={tab !== 'test'}
+      scrollViewRef={mainScrollRef as any}
       onRefresh={() => {
         if (dirty) reload();
         else void resource.refresh();
@@ -990,153 +1032,111 @@ function AgentsScreen() {
         </View>
       ) : null}
 
-      {/* ── 1. Hero Profile & Readiness Banner ── */}
-      <Card style={{ padding: 16, gap: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          {/* Avatar with Accessible 36x36 Edit Trigger */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Change assistant avatar"
-            onPress={() => setAvatarModalOpen(true)}
-            style={{ position: 'relative' }}
-          >
-            <Image
-              source={{
-                uri:
-                  draft.avatarUrl ||
-                  'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
-              }}
-              style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#E2E8F0' }}
-            />
-            <View
-              style={{
-                position: 'absolute',
-                bottom: -2,
-                right: -2,
-                backgroundColor: colors.brand,
-                width: 26,
-                height: 26,
-                borderRadius: 13,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderWidth: 2,
-                borderColor: '#FFFFFF',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.2,
-                shadowRadius: 2,
-                elevation: 2,
-              }}
-            >
-              <MaterialIcons name="photo-camera" size={13} color="#FFFFFF" />
-            </View>
-          </Pressable>
-
-          {/* Info & Status */}
-          <View style={{ flex: 1, gap: 2 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
-              <Text style={{ fontSize: 17, fontWeight: '900', color: colors.ink, flexShrink: 1 }} numberOfLines={1}>
-                {draft.name}
-              </Text>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 5,
-                  backgroundColor: '#ECFDF5',
-                  paddingHorizontal: 8,
-                  paddingVertical: 3,
-                  borderRadius: 10,
-                }}
-              >
-                <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#10B981' }} />
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#065F46' }}>Ready</Text>
-              </View>
-            </View>
-            <Text style={{ fontSize: 12.5, color: colors.muted }} numberOfLines={1}>
-              {draft.roleTitle || 'AI Business Assistant'}
-            </Text>
-            <Text style={{ fontSize: 11, color: colors.brand, fontWeight: '700' }}>
-              Tone: {draft.voiceTone ? draft.voiceTone.toUpperCase() : 'FRIENDLY'} • {faqs.length} FAQs Trained
-            </Text>
-          </View>
-        </View>
-
-        {/* Interactive Readiness Score Bar */}
+      {/* ── 1. Compact Assistant Header Bar (Sleek & Space-Efficient) ── */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: '#FFFFFF',
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: '#E2E8F0',
+          gap: 10,
+        }}
+      >
         <Pressable
           accessibilityRole="button"
-          onPress={() => setShowReadinessList((prev) => !prev)}
-          style={{ paddingTop: 6, borderTopWidth: 1, borderTopColor: '#F1F5F9', gap: 6 }}
+          accessibilityLabel="Change avatar"
+          onPress={() => setAvatarModalOpen(true)}
+          style={{ position: 'relative' }}
         >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.muted }}>
-                Setup Readiness
-              </Text>
-              <MaterialIcons
-                name={showReadinessList ? 'expand-less' : 'expand-more'}
-                size={16}
-                color={colors.muted}
-              />
-            </View>
-            <Text style={{ fontSize: 11.5, fontWeight: '800', color: readinessScore >= 80 ? '#10B981' : '#F59E0B' }}>
-              {readinessScore}% Complete
-            </Text>
-          </View>
-          <View style={{ height: 6, borderRadius: 3, backgroundColor: '#F1F5F9', overflow: 'hidden' }}>
-            <View
-              style={{
-                width: `${readinessScore}%`,
-                height: '100%',
-                backgroundColor: readinessScore >= 80 ? '#10B981' : '#F59E0B',
-                borderRadius: 3,
-              }}
-            />
+          <Image
+            source={{
+              uri:
+                draft.avatarUrl ||
+                'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
+            }}
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E2E8F0' }}
+          />
+          <View
+            style={{
+              position: 'absolute',
+              bottom: -2,
+              right: -2,
+              backgroundColor: colors.brand,
+              width: 17,
+              height: 17,
+              borderRadius: 8.5,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1.5,
+              borderColor: '#FFFFFF',
+            }}
+          >
+            <MaterialIcons name="edit" size={10} color="#FFFFFF" />
           </View>
         </Pressable>
 
-        {/* Expandable Readiness Checklist */}
-        {showReadinessList && (
-          <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 10, gap: 8, marginTop: 2 }}>
-            {readinessChecklist.map((item, idx) => (
-              <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                  <MaterialIcons
-                    name={item.done ? 'check-circle' : 'radio-button-unchecked'}
-                    size={16}
-                    color={item.done ? '#10B981' : colors.muted}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: item.done ? colors.muted : colors.ink }}>
-                      {item.title}
-                    </Text>
-                    <Text style={{ fontSize: 10.5, color: colors.muted }} numberOfLines={1}>
-                      {item.detail}
-                    </Text>
-                  </View>
-                </View>
-                {!item.done && (
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => {
-                      triggerHaptic();
-                      setTab(item.tab);
-                    }}
-                    style={{
-                      paddingHorizontal: 8,
-                      paddingVertical: 3,
-                      borderRadius: 6,
-                      backgroundColor: colors.brandSoft,
-                    }}
-                  >
-                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: colors.brand }}>Complete</Text>
-                  </Pressable>
-                )}
-              </View>
-            ))}
+        <View style={{ flex: 1, gap: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: colors.ink }} numberOfLines={1}>
+              {draft.name}
+            </Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: '#ECFDF5',
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 6,
+              }}
+            >
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
+              <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#065F46' }}>Ready</Text>
+            </View>
           </View>
-        )}
-      </Card>
+          <Text style={{ fontSize: 11.5, color: colors.muted }} numberOfLines={1}>
+            {draft.roleTitle || 'AI Business Assistant'} • {(draft.voiceTone || 'friendly').toUpperCase()}
+          </Text>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Setup readiness"
+          onPress={() => changeTab('overview')}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            paddingHorizontal: 8,
+            paddingVertical: 5,
+            borderRadius: 8,
+            backgroundColor: readinessScore >= 80 ? '#ECFDF5' : '#FFFBEB',
+            borderWidth: 1,
+            borderColor: readinessScore >= 80 ? '#A7F3D0' : '#FDE68A',
+          }}
+        >
+          <MaterialIcons
+            name={readinessScore >= 80 ? 'check-circle' : 'pending'}
+            size={13}
+            color={readinessScore >= 80 ? '#059669' : '#D97706'}
+          />
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: '800',
+              color: readinessScore >= 80 ? '#047857' : '#B45309',
+            }}
+          >
+            {readinessScore}%
+          </Text>
+        </Pressable>
+      </View>
 
       {/* Multi-Agent Switcher (if tenant has >1 assistant) */}
       {(resource.data?.agents.length || 0) > 1 && (
@@ -1160,57 +1160,58 @@ function AgentsScreen() {
         </ScrollView>
       )}
 
-      {/* ── 2. Segmented Navigation Tabs ── */}
-      <View
-        style={{
-          flexDirection: 'row',
-          backgroundColor: '#F1F5F9',
-          borderRadius: 14,
-          padding: 3,
-          gap: 2,
+      {/* ── 2. Segmented Navigation Tabs (Scrollable Pill Bar — Zero Overlap Guarantee) ── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{
+          gap: 8,
+          paddingVertical: 2,
+          paddingHorizontal: 2,
         }}
+        style={{ flexGrow: 0 }}
       >
         {(
           [
-            ['overview', 'Profile', 'person-outline'],
-            ['knowledge', `Knowledge (${faqs.length})`, 'auto-stories'],
-            ['channels', 'Channels', 'share'],
-            ['test', 'Live Test', 'chat'],
+            ['overview', 'Profile', 'person-outline', null],
+            ['knowledge', 'Knowledge', 'auto-stories', faqs.length],
+            ['channels', 'Widget & Code', 'code', null],
+            ['test', 'Live Test', 'chat', null],
           ] as const
-        ).map(([tabKey, label, iconName]) => {
+        ).map(([tabKey, label, iconName, badgeCount]) => {
           const isSelected = tab === tabKey;
           return (
             <Pressable
               key={tabKey}
               accessibilityRole="button"
-              onPress={() => {
-                triggerHaptic();
-                setTab(tabKey);
-              }}
-              style={{
-                flex: 1,
+              onPress={() => changeTab(tabKey)}
+              style={({ pressed }) => ({
                 paddingVertical: 9,
+                paddingHorizontal: 15,
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexDirection: 'row',
-                gap: 4,
-                backgroundColor: isSelected ? '#FFFFFF' : 'transparent',
-                borderRadius: 11,
-                shadowColor: isSelected ? '#000' : 'transparent',
-                shadowOffset: { width: 0, height: 1 },
+                gap: 6,
+                backgroundColor: isSelected ? '#FFFFFF' : '#F1F5F9',
+                borderRadius: 12,
+                borderWidth: 1.5,
+                borderColor: isSelected ? colors.brand : '#E2E8F0',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: isSelected ? 2 : 0 },
                 shadowOpacity: isSelected ? 0.08 : 0,
-                shadowRadius: 2,
-                elevation: isSelected ? 1 : 0,
-              }}
+                shadowRadius: isSelected ? 4 : 0,
+                elevation: isSelected ? 2 : 0,
+                opacity: pressed ? 0.85 : 1,
+              })}
             >
               <MaterialIcons
                 name={iconName}
-                size={15}
+                size={16}
                 color={isSelected ? colors.brand : colors.muted}
               />
               <Text
                 style={{
-                  fontSize: 11.5,
+                  fontSize: 12.5,
                   fontWeight: isSelected ? '800' : '600',
                   color: isSelected ? colors.ink : colors.muted,
                 }}
@@ -1218,15 +1219,126 @@ function AgentsScreen() {
               >
                 {label}
               </Text>
+              {badgeCount !== null && badgeCount > 0 ? (
+                <View
+                  style={{
+                    backgroundColor: isSelected ? colors.brandSoft : '#E2E8F0',
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: isSelected ? '#A7F3D0' : '#CBD5E1',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontWeight: '800',
+                      color: isSelected ? '#047857' : '#475569',
+                    }}
+                  >
+                    {badgeCount}
+                  </Text>
+                </View>
+              ) : null}
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
       {/* ── 3. Tab: Overview (Profile & Persona) ── */}
       {tab === 'overview' && (
         <View style={{ gap: 14 }}>
-          {/* Auto-Trained Business Knowledge Sync Card */}
+          {/* Setup Readiness & Checklist Card */}
+          <Card style={{ gap: 12 }}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setShowReadinessList((prev) => !prev)}
+              style={{ gap: 8 }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink }}>
+                    Assistant Readiness & Setup
+                  </Text>
+                  <MaterialIcons
+                    name={showReadinessList ? 'expand-less' : 'expand-more'}
+                    size={18}
+                    color={colors.muted}
+                  />
+                </View>
+                <View
+                  style={{
+                    backgroundColor: readinessScore >= 80 ? '#ECFDF5' : '#FFFBEB',
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 11.5,
+                      fontWeight: '800',
+                      color: readinessScore >= 80 ? '#047857' : '#B45309',
+                    }}
+                  >
+                    {readinessScore}% Complete
+                  </Text>
+                </View>
+              </View>
+              <View style={{ height: 6, borderRadius: 3, backgroundColor: '#F1F5F9', overflow: 'hidden' }}>
+                <View
+                  style={{
+                    width: `${readinessScore}%`,
+                    height: '100%',
+                    backgroundColor: readinessScore >= 80 ? '#10B981' : '#F59E0B',
+                    borderRadius: 3,
+                  }}
+                />
+              </View>
+            </Pressable>
+
+            {/* Expandable Readiness Checklist */}
+            {showReadinessList && (
+              <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 10, gap: 8 }}>
+                {readinessChecklist.map((item, idx) => (
+                  <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <MaterialIcons
+                        name={item.done ? 'check-circle' : 'radio-button-unchecked'}
+                        size={16}
+                        color={item.done ? '#10B981' : colors.muted}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: item.done ? colors.muted : colors.ink }}>
+                          {item.title}
+                        </Text>
+                        <Text style={{ fontSize: 10.5, color: colors.muted }} numberOfLines={1}>
+                          {item.detail}
+                        </Text>
+                      </View>
+                    </View>
+                    {!item.done && (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => changeTab(item.tab)}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 6,
+                          backgroundColor: colors.brandSoft,
+                        }}
+                      >
+                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: colors.brand }}>Complete</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+
+          {/* Auto-Trained Business Knowledge Sync Card (Executive Layout) */}
           <Card style={{ gap: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <View style={{ flex: 1 }}>
@@ -1243,15 +1355,18 @@ function AgentsScreen() {
             {syncSummary && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                 {[
-                  { label: `${syncSummary.servicesCount} Services`, ok: syncSummary.servicesCount > 0 },
-                  { label: syncSummary.hoursConfigured ? 'Hours Synced' : 'Hours Missing', ok: syncSummary.hoursConfigured },
-                  { label: syncSummary.hasLocation ? 'Location Synced' : 'No Address', ok: syncSummary.hasLocation },
-                  { label: syncSummary.hasBrandBrain ? 'Brand Voice' : 'Default Voice', ok: syncSummary.hasBrandBrain },
-                  { label: `${syncSummary.faqCount} FAQs`, ok: syncSummary.faqCount > 0 },
+                  { label: `${syncSummary.servicesCount} Services`, ok: syncSummary.servicesCount > 0, icon: 'business-center' as const },
+                  { label: syncSummary.hoursConfigured ? 'Hours Synced' : 'Hours Missing', ok: syncSummary.hoursConfigured, icon: 'schedule' as const },
+                  { label: syncSummary.hasLocation ? 'Location Synced' : 'No Address', ok: syncSummary.hasLocation, icon: 'place' as const },
+                  { label: syncSummary.hasBrandBrain ? 'Brand Voice' : 'Default Voice', ok: syncSummary.hasBrandBrain, icon: 'record-voice-over' as const },
+                  { label: `${syncSummary.faqCount} FAQs`, ok: syncSummary.faqCount > 0, icon: 'quiz' as const },
                 ].map((pill) => (
                   <View
                     key={pill.label}
                     style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
                       paddingHorizontal: 10,
                       paddingVertical: 5,
                       borderRadius: 999,
@@ -1260,9 +1375,14 @@ function AgentsScreen() {
                       borderColor: pill.ok ? '#A7F3D0' : '#E2E8F0',
                     }}
                   >
+                    <MaterialIcons
+                      name={pill.icon}
+                      size={12}
+                      color={pill.ok ? '#047857' : '#64748B'}
+                    />
                     <Text
                       style={{
-                        fontSize: 11.5,
+                        fontSize: 11,
                         fontWeight: '700',
                         color: pill.ok ? '#047857' : '#64748B',
                       }}
@@ -1274,25 +1394,38 @@ function AgentsScreen() {
               </View>
             )}
 
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <View style={{ flex: 1 }}>
-                <Action
-                  label={syncingBusiness ? 'Syncing...' : 'Sync Business Data'}
-                  icon="sync"
-                  disabled={syncingBusiness}
-                  onPress={() => void handleManualSyncBusiness()}
-                />
-              </View>
-              {syncSummary?.publicCardSlug ? (
+            {/* Structured 2-Tier Actions (Full-width Primary + Balanced Secondary) */}
+            <View style={{ gap: 8, marginTop: 4 }}>
+              <Action
+                label={syncingBusiness ? 'Syncing Business Data...' : 'Sync Business Knowledge'}
+                icon="sync"
+                disabled={syncingBusiness}
+                onPress={() => void handleManualSyncBusiness()}
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
                 <View style={{ flex: 1 }}>
                   <Action
                     secondary
-                    label="Preview Page"
-                    icon="open-in-new"
-                    onPress={() => void Linking.openURL(`${WEB_URL}/b/${syncSummary.publicCardSlug}`)}
+                    label="Embed Widget"
+                    icon="code"
+                    onPress={() => changeTab('channels')}
                   />
                 </View>
-              ) : null}
+                {syncSummary?.publicCardSlug ? (
+                  <View style={{ flex: 1 }}>
+                    <Action
+                      secondary
+                      label="Live Preview ↗"
+                      icon="open-in-new"
+                      onPress={() => {
+                        triggerHaptic();
+                        const url = getBgosWebUrl(`/b/${syncSummary.publicCardSlug}#assistant`);
+                        void Linking.openURL(url);
+                      }}
+                    />
+                  </View>
+                ) : null}
+              </View>
             </View>
           </Card>
 
@@ -1329,16 +1462,64 @@ function AgentsScreen() {
               placeholder="e.g. Always mention free site inspection, quote in INR, never commit to Sunday bookings without owner confirmation."
             />
           </Card>
-          {/* Identity Fields */}
+          {/* Identity Fields with Avatar Trigger */}
           <Card style={{ gap: 12 }}>
-            <Text style={ui.heading}>Assistant Identity</Text>
-            <Field
-              label="Assistant Display Name"
-              value={draft.name}
-              editable={!busy}
-              onChangeText={(name) => edit({ name })}
-              placeholder="e.g. Elena"
-            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={ui.heading}>Assistant Identity</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setAvatarModalOpen(true)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Change Avatar</Text>
+                <MaterialIcons name="chevron-right" size={16} color={colors.brand} />
+              </Pressable>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setAvatarModalOpen(true)}
+                style={{ position: 'relative' }}
+              >
+                <Image
+                  source={{
+                    uri:
+                      draft.avatarUrl ||
+                      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
+                  }}
+                  style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#E2E8F0' }}
+                />
+                <View
+                  style={{
+                    position: 'absolute',
+                    bottom: -2,
+                    right: -2,
+                    backgroundColor: colors.brand,
+                    width: 22,
+                    height: 22,
+                    borderRadius: 11,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 2,
+                    borderColor: '#FFFFFF',
+                  }}
+                >
+                  <MaterialIcons name="photo-camera" size={11} color="#FFFFFF" />
+                </View>
+              </Pressable>
+
+              <View style={{ flex: 1 }}>
+                <Field
+                  label="Assistant Display Name"
+                  value={draft.name}
+                  editable={!busy}
+                  onChangeText={(name) => edit({ name })}
+                  placeholder="e.g. Elena"
+                />
+              </View>
+            </View>
+
             <Field
               label="Role or Job Title"
               value={draft.roleTitle || ''}
@@ -1834,6 +2015,244 @@ function AgentsScreen() {
       {/* ── 5. Tab: Channels (Distribution) ── */}
       {tab === 'channels' && (
         <View style={{ gap: 14 }}>
+          {/* ── Website Widget Embed Card (Universal Website Integration) ── */}
+          <Card style={{ gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: '#ECFDF5',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: '#A7F3D0',
+                  }}
+                >
+                  <MaterialIcons name="code" size={20} color="#059669" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>Website Chatbot Widget</Text>
+                  <Text style={{ fontSize: 11.5, color: colors.muted }}>Embed 24/7 AI chat on your website or page</Text>
+                </View>
+              </View>
+              <Badge success label="Ready to Embed" />
+            </View>
+
+            {/* Live Widget Mini Preview Mockup */}
+            <View
+              style={{
+                backgroundColor: '#F8FAFC',
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                padding: 12,
+                gap: 10,
+              }}
+            >
+              {/* Fake Browser Top Bar */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, borderBottomWidth: 1, borderBottomColor: '#EEF2F6', paddingBottom: 8 }}>
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#F59E0B' }} />
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                </View>
+                <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 6, paddingVertical: 2, paddingHorizontal: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                  <Text style={{ fontSize: 10, color: '#64748B' }} numberOfLines={1}>
+                    https://your-website.com
+                  </Text>
+                </View>
+              </View>
+
+              {/* Floating Widget Corner Simulation */}
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-end', gap: 8, minHeight: 64 }}>
+                <View
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 12,
+                    borderBottomRightRadius: 2,
+                    padding: 8,
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    maxWidth: '75%',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 2,
+                    elevation: 1,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.ink }}>
+                    {draft.name} ({draft.roleTitle || 'AI Assistant'})
+                  </Text>
+                  <Text style={{ fontSize: 10.5, color: '#475569', marginTop: 1 }} numberOfLines={2}>
+                    {draft.welcomeGreeting || '👋 Hi! Have questions or want to book an appointment? Ask me 24/7!'}
+                  </Text>
+                </View>
+
+                {/* Floating Bubble Icon */}
+                <View style={{ position: 'relative' }}>
+                  <Image
+                    source={{
+                      uri:
+                        draft.avatarUrl ||
+                        'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
+                    }}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      borderWidth: 2,
+                      borderColor: colors.brand,
+                      backgroundColor: '#E2E8F0',
+                    }}
+                  />
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      right: 0,
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      backgroundColor: '#10B981',
+                      borderWidth: 2,
+                      borderColor: '#FFFFFF',
+                    }}
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Embed Format Switcher Pills */}
+            <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 10, padding: 3, gap: 2 }}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setEmbedFormat('script')}
+                style={{
+                  flex: 1,
+                  paddingVertical: 7,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: embedFormat === 'script' ? '#FFFFFF' : 'transparent',
+                  shadowColor: embedFormat === 'script' ? '#000' : 'transparent',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: embedFormat === 'script' ? 0.08 : 0,
+                  shadowRadius: 2,
+                  elevation: embedFormat === 'script' ? 1 : 0,
+                }}
+              >
+                <Text style={{ fontSize: 11.5, fontWeight: embedFormat === 'script' ? '800' : '600', color: embedFormat === 'script' ? colors.brand : colors.muted }}>
+                  1-Line Script (Floating Bubble)
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setEmbedFormat('iframe')}
+                style={{
+                  flex: 1,
+                  paddingVertical: 7,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: embedFormat === 'iframe' ? '#FFFFFF' : 'transparent',
+                  shadowColor: embedFormat === 'iframe' ? '#000' : 'transparent',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: embedFormat === 'iframe' ? 0.08 : 0,
+                  shadowRadius: 2,
+                  elevation: embedFormat === 'iframe' ? 1 : 0,
+                }}
+              >
+                <Text style={{ fontSize: 11.5, fontWeight: embedFormat === 'iframe' ? '800' : '600', color: embedFormat === 'iframe' ? colors.brand : colors.muted }}>
+                  Inline iFrame (Contact Page)
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Code Snippet Box */}
+            <View
+              style={{
+                backgroundColor: '#0F172A',
+                borderRadius: 12,
+                padding: 12,
+                gap: 6,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5 }}>
+                  {embedFormat === 'script' ? 'HTML SCRIPT TAG (PASTE BEFORE </BODY>)' : 'EMBED IFRAME CODE'}
+                </Text>
+                <Text style={{ fontSize: 10.5, color: '#38BDF8', fontWeight: '700' }}>
+                  {embedFormat === 'script' ? 'Universal' : 'Responsive'}
+                </Text>
+              </View>
+              <Text
+                style={{
+                  fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                  fontSize: 11,
+                  color: '#34D399',
+                  lineHeight: 16,
+                }}
+                selectable
+              >
+                {activeEmbedCode}
+              </Text>
+            </View>
+
+            {/* Action Buttons: Copy Snippet & WhatsApp to Developer */}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Copy widget embed code"
+                onPress={() => void handleCopyEmbedCode()}
+                style={{
+                  flex: 1,
+                  backgroundColor: colors.brand,
+                  borderRadius: 12,
+                  paddingVertical: 11,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <MaterialIcons name={copiedEmbed ? 'check' : 'content-copy'} size={16} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                  {copiedEmbed ? 'Code Shared!' : 'Copy Widget Code'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Send to web developer via WhatsApp"
+                onPress={() => void handleSendToDeveloper()}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#25D366',
+                  borderRadius: 12,
+                  paddingVertical: 11,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <MaterialIcons name="send" size={16} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                  Send to Developer
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Compatible CMS Platforms */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingTop: 4 }}>
+              <Text style={{ fontSize: 10.5, color: colors.muted, textAlign: 'center' }}>
+                Works on WordPress • Shopify • Wix • Webflow • Squarespace • Custom HTML
+              </Text>
+            </View>
+          </Card>
+
           {/* Public Web Link Card */}
           <Card style={{ gap: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -578,16 +578,16 @@ export default function HomeScreen() {
       : `${BGOS_PUBLIC_WEB_URL}${publicProfilePath}`
     : '';
 
-  // Restored full circular Google Business action dock (7 visible + More/Less toggle)
+  // Circular Google Business action dock (Performance first + highlighted, 7 visible + More/Less toggle)
   const actionIcons = useMemo(
     () => [
+      { id: 'performance', label: 'Performance', icon: 'insights' as const, onPress: () => router.push('/growth-report') },
       { id: 'edit_profile', label: 'Edit profile', icon: 'edit' as const, onPress: () => router.push('/manage-profile') },
       { id: 'edit_services', label: 'Services', icon: 'miscellaneous-services' as const, onPress: () => router.push('/services-management') },
       { id: 'products', label: 'Products', icon: 'shopping-bag' as const, onPress: () => router.push('/products-management') },
       { id: 'reviews', label: 'Reviews', icon: 'star-outline' as const, onPress: () => router.push('/(tabs)/reviews') },
       { id: 'add_photo', label: 'Add photo', icon: 'add-a-photo' as const, onPress: () => router.push('/(tabs)/photos') },
       { id: 'qr_standee', label: 'QR Standee', icon: 'qr-code-2' as const, onPress: () => router.push('/qr-standee') },
-      { id: 'performance', label: 'Performance', icon: 'insights' as const, onPress: () => router.push('/growth-report') },
       { id: 'page_settings', label: 'Page Setup', icon: 'tune' as const, onPress: () => router.push('/booking-page') },
       { id: 'bookings', label: 'Bookings', icon: 'event-available' as const, onPress: () => router.push('/appointments') },
       { id: 'pickup_delivery', label: 'Ordering', icon: 'local-shipping' as const, onPress: () => router.push('/products-management?tab=fulfillment') },
@@ -716,25 +716,6 @@ export default function HomeScreen() {
           <MaterialIcons name="menu" size={24} color="#0F172A" />
         </Pressable>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Image
-            source={brandMark}
-            style={{ width: 22, height: 22, resizeMode: 'contain' }}
-            accessibilityIgnoresInvertColors
-            alt="BGOS mark"
-          />
-          <Text
-            style={{
-              color: '#0B9042',
-              fontSize: 20,
-              fontWeight: '800',
-              letterSpacing: -0.6,
-            }}
-          >
-            bgos
-          </Text>
-        </View>
-
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Switch business profile"
@@ -742,24 +723,40 @@ export default function HomeScreen() {
           style={({ pressed }) => ({
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 2,
-            backgroundColor: '#F1F5F9',
-            borderRadius: 14,
-            paddingLeft: 9,
-            paddingRight: 5,
-            paddingVertical: 4,
-            maxWidth: 138,
-            flexShrink: 1,
+            gap: 6,
+            backgroundColor: '#F8FAFC',
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            borderRadius: 12,
+            paddingLeft: 8,
+            paddingRight: 8,
+            paddingVertical: 5,
+            flex: 1,
+            maxWidth: 220,
             opacity: pressed ? 0.75 : 1,
           })}
         >
+          <View
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 11,
+              backgroundColor: '#E0F2FE',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#0369A1' }}>
+              {(profileName || 'B').charAt(0).toUpperCase()}
+            </Text>
+          </View>
           <Text
             numberOfLines={1}
-            style={{ color: '#334155', fontSize: 11.5, fontWeight: '700', flexShrink: 1 }}
+            style={{ color: '#0F172A', fontSize: 13.5, fontWeight: '800', flexShrink: 1 }}
           >
             {profileName}
           </Text>
-          <MaterialIcons name="arrow-drop-down" size={16} color="#64748B" />
+          <MaterialIcons name="expand-more" size={17} color="#64748B" />
         </Pressable>
       </View>
 
@@ -1093,53 +1090,76 @@ export default function HomeScreen() {
             borderTopColor: '#F1F5F9',
           }}
         >
-          {visibleActionIcons.map((act) => (
-            <Pressable
-              key={act.id}
-              accessibilityRole="button"
-              accessibilityLabel={act.label}
-              onPress={act.onPress}
-              style={({ pressed }) => ({
-                width: '23%',
-                alignItems: 'center',
-                gap: 5,
-                opacity: pressed ? 0.75 : 1,
-              })}
-            >
-              <View
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: '#F8FAFC',
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
+          {visibleActionIcons.map((act) => {
+            const isPerformance = act.id === 'performance';
+            return (
+              <Pressable
+                key={act.id}
+                accessibilityRole="button"
+                accessibilityLabel={act.label}
+                onPress={act.onPress}
+                style={({ pressed }) => ({
+                  width: '23%',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  shadowColor: '#0F172A',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.05,
-                  shadowRadius: 2,
-                  elevation: 1,
-                }}
+                  gap: 5,
+                  opacity: pressed ? 0.75 : 1,
+                })}
               >
-                <MaterialIcons name={act.icon} size={22} color="#1E293B" />
-              </View>
-              <Text
-                numberOfLines={2}
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: '600',
-                  color: '#334155',
-                  textAlign: 'center',
-                  lineHeight: 13,
-                  minHeight: 26,
-                }}
-              >
-                {act.label}
-              </Text>
-            </Pressable>
-          ))}
+                <View
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: isPerformance ? '#EFF6FF' : '#F8FAFC',
+                    borderWidth: isPerformance ? 1.5 : 1,
+                    borderColor: isPerformance ? '#3B82F6' : '#E2E8F0',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: isPerformance ? '#2563EB' : '#0F172A',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: isPerformance ? 0.18 : 0.05,
+                    shadowRadius: isPerformance ? 3 : 2,
+                    elevation: isPerformance ? 3 : 1,
+                    position: 'relative',
+                  }}
+                >
+                  <MaterialIcons
+                    name={act.icon}
+                    size={22}
+                    color={isPerformance ? '#2563EB' : '#1E293B'}
+                  />
+                  {isPerformance ? (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: -2,
+                        right: -2,
+                        width: 9,
+                        height: 9,
+                        borderRadius: 4.5,
+                        backgroundColor: '#2563EB',
+                        borderWidth: 1.5,
+                        borderColor: '#FFFFFF',
+                      }}
+                    />
+                  ) : null}
+                </View>
+                <Text
+                  numberOfLines={2}
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: isPerformance ? '800' : '600',
+                    color: isPerformance ? '#1D4ED8' : '#334155',
+                    textAlign: 'center',
+                    lineHeight: 13,
+                    minHeight: 26,
+                  }}
+                >
+                  {act.label}
+                </Text>
+              </Pressable>
+            );
+          })}
 
           {/* More / Less Toggle */}
           <Pressable

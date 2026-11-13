@@ -102,6 +102,7 @@ export function Screen({
   extraBottomPadding = 0,
   floatingAction,
   scrollable = true,
+  scrollViewRef,
 }: {
   title?: string;
   subtitle?: string;
@@ -117,6 +118,7 @@ export function Screen({
   extraBottomPadding?: number;
   floatingAction?: React.ReactNode;
   scrollable?: boolean;
+  scrollViewRef?: React.RefObject<ScrollView | null>;
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -191,6 +193,7 @@ export function Screen({
         <View style={{ flex: 1, position: 'relative' }}>
           {scrollable ? (
             <ScrollView
+              ref={scrollViewRef as any}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={[ui.content, { paddingBottom: bottomInset }]}
               refreshControl={

@@ -50,7 +50,7 @@ export function UsersSettings() {
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
   const [showInviteUser, setShowInviteUser] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'agent' });
+  const [inviteForm, setInviteForm] = useState({ name: '', email: '', phone: '', role: 'agent' });
   const [inviting, setInviting] = useState(false);
 
   const fetchUsers = useCallback(async () => {
@@ -73,8 +73,8 @@ export function UsersSettings() {
   }, [fetchUsers]);
 
   const handleInviteUser = async () => {
-    if (!inviteForm.name || !inviteForm.email) {
-      toast.error('Name and email are required');
+    if (!inviteForm.name || (!inviteForm.email && !inviteForm.phone)) {
+      toast.error('Name and either email or phone number are required');
       return;
     }
     setInviting(true);
@@ -85,9 +85,14 @@ export function UsersSettings() {
         body: JSON.stringify(inviteForm),
       });
       if (res.ok) {
-        toast.success('User invited successfully');
+        const json = await res.json();
+        if (json.emailSent) {
+          toast.success('Invitation email sent & member added successfully');
+        } else {
+          toast.success('User added! They can log in immediately via Phone + OTP.');
+        }
         setShowInviteUser(false);
-        setInviteForm({ name: '', email: '', role: 'agent' });
+        setInviteForm({ name: '', email: '', phone: '', role: 'agent' });
         fetchUsers();
       } else {
         const err = await res.json();
@@ -183,18 +188,28 @@ export function UsersSettings() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Full Name</Label>
+              <Label>Full Name *</Label>
               <Input
-                placeholder="John Doe"
+                placeholder="Ramesh Kumar"
                 value={inviteForm.name}
                 onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
               />
             </div>
             <div className="space-y-2">
-              <Label>Email Address</Label>
+              <Label>Mobile Phone Number (for instant OTP login)</Label>
+              <Input
+                type="tel"
+                placeholder="+91 98765 43210"
+                value={inviteForm.phone}
+                onChange={(e) => setInviteForm({ ...inviteForm, phone: e.target.value })}
+              />
+              <p className="text-[11px] text-muted-foreground">Staff can log in immediately using this number and SMS OTP.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Email Address (Optional)</Label>
               <Input
                 type="email"
-                placeholder="john@example.com"
+                placeholder="ramesh@example.com"
                 value={inviteForm.email}
                 onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
               />
@@ -208,7 +223,7 @@ export function UsersSettings() {
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="agent">Agent</SelectItem>
+                  <SelectItem value="agent">Agent / Staff</SelectItem>
                   <SelectItem value="viewer">Viewer</SelectItem>
                 </SelectContent>
               </Select>
@@ -219,10 +234,10 @@ export function UsersSettings() {
             <Button
               className="bg-emerald-600 hover:bg-emerald-700"
               onClick={handleInviteUser}
-              disabled={!inviteForm.name || !inviteForm.email || inviting}
+              disabled={!inviteForm.name || (!inviteForm.email && !inviteForm.phone) || inviting}
             >
               {inviting ? <Loader2 className="size-4 animate-spin mr-1" /> : <UserPlus className="size-4 mr-1" />}
-              Send Invite
+              Add Member
             </Button>
           </DialogFooter>
         </DialogContent>

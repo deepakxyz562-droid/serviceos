@@ -1983,9 +1983,17 @@ export async function upsertGooglePlaceActionLink(
       );
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+        const rawMsg = err.error?.message || `HTTP ${res.status}`;
+        const isApiDisabled =
+          rawMsg.includes('My Business Place Actions API has not been used') ||
+          rawMsg.includes('is disabled') ||
+          rawMsg.includes('console.developers.google.com');
+        const userWarning = isApiDisabled
+          ? `${input.placeActionType}: Google Place Actions API is pending activation on your Google Cloud Project.`
+          : `${input.placeActionType}: ${rawMsg}`;
         return {
           ok: false,
-          warning: `${input.placeActionType}: ${err.error?.message || `HTTP ${res.status}`}`,
+          warning: userWarning,
         };
       }
       const updated = (await res.json().catch(() => ({}))) as { name?: string };
@@ -2011,9 +2019,17 @@ export async function upsertGooglePlaceActionLink(
     );
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+      const rawMsg = err.error?.message || `HTTP ${res.status}`;
+      const isApiDisabled =
+        rawMsg.includes('My Business Place Actions API has not been used') ||
+        rawMsg.includes('is disabled') ||
+        rawMsg.includes('console.developers.google.com');
+      const userWarning = isApiDisabled
+        ? `${input.placeActionType}: Google Place Actions API is pending activation on your Google Cloud Project.`
+        : `${input.placeActionType}: ${rawMsg}`;
       return {
         ok: false,
-        warning: `${input.placeActionType}: ${err.error?.message || `HTTP ${res.status}`}`,
+        warning: userWarning,
       };
     }
     const created = (await res.json().catch(() => ({}))) as { name?: string };

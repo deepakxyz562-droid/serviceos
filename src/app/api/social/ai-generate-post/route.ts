@@ -18,6 +18,8 @@ interface GeneratePostRequest {
   platforms?: string[];
   badge?: string;
   photoUrl?: string;
+  referenceImageUrl?: string;
+  postType?: 'standard' | 'offer' | 'event';
 }
 
 export async function POST(request: NextRequest) {
@@ -150,8 +152,9 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       ? `${generated.caption}\n\n${hashtagsText}`
       : `${topic}\n\nContact us at ${phone} to learn more.\n\n${hashtagsText}`;
 
-    // 3. Generate High-Res 1080x1080 Branded Graphic with Next.js ImageResponse
-    let imageUrl = body.photoUrl || null;
+    // 3. Generate High-Res 1080x1080 Branded Graphic with Next.js ImageResponse (if no photo supplied)
+    const inputPhoto = body.photoUrl || body.referenceImageUrl || null;
+    let imageUrl = inputPhoto;
 
     try {
       const graphicElement = React.createElement(
@@ -372,7 +375,10 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       return 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1200&q=80';
     };
 
-    const chosenPhoto = body.photoUrl || getContextPhoto(topic, tenant?.industry || '');
+    const chosenPhoto = inputPhoto || getContextPhoto(topic, tenant?.industry || '');
+
+    const gbpPostType = body.postType || (body.theme === 'promo' ? 'offer' : 'standard');
+    const gbpCtaAction = gbpPostType === 'offer' ? 'GET_OFFER' : 'CALL';
 
     const layouts = [
       {
@@ -411,6 +417,8 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       success: true,
       title: finalTitle,
       headline: finalHeadline,
+      gbpPostType,
+      gbpCtaAction,
       alternativeHeadlines: Array.isArray(generated.alternativeHeadlines) && generated.alternativeHeadlines.length > 0
         ? generated.alternativeHeadlines.slice(0, 3)
         : [

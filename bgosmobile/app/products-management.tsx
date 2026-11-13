@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -52,6 +52,11 @@ export default function ProductsManagementScreen() {
   const params = useLocalSearchParams<{ tab?: string }>();
   const storeRes = useResource<StoreApiResponse>('/api/bgos/products');
   const workspaceRes = useResource<BgosWorkspace>('/api/bgos/workspace');
+  const businessCity = useMemo(() => {
+    const raw = workspaceRes.data?.bookingPageConfig?.address || '';
+    const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    return parts.length > 0 ? parts[parts.length - 1] : '';
+  }, [workspaceRes.data?.bookingPageConfig?.address]);
   const [adKit, setAdKit] = useState<{
     headlines: string[];
     descriptions: string[];
@@ -132,7 +137,7 @@ export default function ProductsManagementScreen() {
         ? prod.fulfillmentModes
         : ['pickup', 'delivery'],
     );
-    setPublishToGooglePost(false);
+    setPublishToGooglePost(true);
     setModalOpen(true);
   }
 
@@ -266,13 +271,20 @@ export default function ProductsManagementScreen() {
       if (syncToGoogle) {
         const synced = res?.gbpSync?.syncedActions || [];
         const warns = res?.gbpSync?.warnings || [];
+        const cleanWarn = warns.length
+          ? warns[0].includes('console.developers.google.com') ||
+            warns[0].includes('My Business Place Actions API') ||
+            warns[0].includes('Place Actions API')
+            ? 'Google Maps action button is pending Google Cloud API approval.'
+            : warns[0]
+          : null;
         if (synced.length > 0) {
           setNotice(
-            `Saved & published Google action links (${synced.join(', ')})${warns.length ? `. Notes: ${warns[0]}` : '.'}`,
+            `Saved & published Google action links (${synced.join(', ')})${cleanWarn ? `. Note: ${cleanWarn}` : '.'}`,
           );
         } else {
           setNotice(
-            `Saved to BGOS Storefront & AI Chatbot. ${warns[0] || 'Google Place Actions may require category eligibility on your GBP profile.'}`,
+            `Saved to BGOS Storefront & AI Chatbot. ${cleanWarn ? `(${cleanWarn})` : 'Google Place Actions may require category eligibility on your GBP profile.'}`,
           );
         }
       } else {
@@ -426,6 +438,22 @@ export default function ProductsManagementScreen() {
                       <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
                         {prod.category || 'General'}
                       </Text>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 2,
+                          backgroundColor: '#EFF6FF',
+                          paddingHorizontal: 6,
+                          paddingVertical: 1,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <MaterialIcons name="verified" size={10} color="#2563EB" />
+                        <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#1D4ED8' }}>
+                          Google Synced
+                        </Text>
+                      </View>
                       {!prod.inStock ? (
                         <Text
                           style={{
@@ -519,7 +547,7 @@ export default function ProductsManagementScreen() {
               label="Delivery Area / Radius (Optional)"
               value={storeSettings.deliveryRadius || ''}
               onChangeText={(t) => setStoreSettings((prev) => ({ ...prev, deliveryRadius: t }))}
-              placeholder="e.g. Within 5 km of Patna"
+              placeholder={businessCity ? `e.g. Within 5 km of ${businessCity}` : 'e.g. Within 5 km of your store'}
             />
             <Field
               label="External Ordering URL (Optional — defaults to your BGOS Page)"

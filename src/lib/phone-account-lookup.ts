@@ -185,11 +185,11 @@ function scoreTuple(
 
   return [
     notSuspended,
+    directMatch,
     entitlementRank,
     roleRank,
     realEmail,
     onboardingCompleted,
-    directMatch,
     recentTs,
   ];
 }

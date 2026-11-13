@@ -20,7 +20,6 @@ import { enablePush, isPushPermissionGranted, unregisterPush } from '../../lib/p
 import { getBgosWebUrl } from '../../lib/bgos-urls';
 import { WEB_URL } from '../../lib/constants';
 import type { BgosWorkspace } from '../../types/bgos-contracts';
-import { WorkspaceSwitcherSection } from './workspace-switcher-section';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.75, 320);
@@ -277,9 +276,6 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                 onPress={() => navigate('/submissions')}
               />
             </View>
-
-            {/* BUSINESS WORKSPACES (1 Business = 1 Workspace & Plan) */}
-            <WorkspaceSwitcherSection onClose={onClose} />
 
             {/* AI & AUTOMATION */}
             <View style={{ gap: 6 }}>

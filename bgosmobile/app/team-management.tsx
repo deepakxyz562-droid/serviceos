@@ -111,8 +111,20 @@ export default function TeamManagementScreen() {
   };
 
   const handleSendInvite = async () => {
-    if (!inviteName.trim() || !inviteEmail.trim()) {
-      Alert.alert('Required Fields', 'Please enter member name and email address.');
+    const nameTrimmed = inviteName.trim();
+    const phoneTrimmed = invitePhone.trim();
+    const emailTrimmed = inviteEmail.trim();
+
+    if (!nameTrimmed) {
+      Alert.alert('Required Field', 'Please enter the team member’s full name.');
+      return;
+    }
+
+    if (!phoneTrimmed && !emailTrimmed) {
+      Alert.alert(
+        'Contact Required',
+        'Please enter a mobile phone number (for instant SMS OTP login) or an email address.',
+      );
       return;
     }
 
@@ -120,22 +132,36 @@ export default function TeamManagementScreen() {
     try {
       const res = await apiRequest<{
         user: TeamUser;
-        tempPassword: string;
+        emailSent?: boolean;
+        emailError?: string | null;
+        tempPassword?: string;
         loginUrl: string;
         whatsappShareText: string;
       }>('/api/users', {
         method: 'POST',
         body: {
-          name: inviteName.trim(),
-          email: inviteEmail.trim(),
-          phone: invitePhone.trim(),
+          name: nameTrimmed,
+          email: emailTrimmed,
+          phone: phoneTrimmed,
           role: inviteRole,
         },
       });
 
       await teamRes.refresh();
       setInviteModalOpen(false);
-      setInvitedResult(res);
+      setInvitedResult(res as any);
+
+      if (res.emailSent) {
+        Alert.alert(
+          'Invitation Sent!',
+          `Invitation email dispatched to ${emailTrimmed}. Your member can also log in instantly on the BGOS app with their phone number via SMS OTP.`,
+        );
+      } else if (phoneTrimmed) {
+        Alert.alert(
+          'Member Added!',
+          'Your team member can now log in immediately on the BGOS app using their mobile number and SMS OTP.',
+        );
+      }
     } catch (e: unknown) {
       Alert.alert('Invite Error', e instanceof Error ? e.message : 'Could not create member.');
     } finally {
@@ -413,6 +439,25 @@ export default function TeamManagementScreen() {
             </View>
 
             <ScrollView contentContainerStyle={{ gap: 12, paddingVertical: 14 }}>
+              {/* Instant Sign-in Banner */}
+              <View
+                style={{
+                  backgroundColor: '#F0FDF4',
+                  borderRadius: 10,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: '#BBF7D0',
+                  flexDirection: 'row',
+                  gap: 8,
+                  alignItems: 'center',
+                }}
+              >
+                <MaterialIcons name="bolt" size={20} color="#16A34A" />
+                <Text style={{ fontSize: 11.5, color: '#15803D', flex: 1, lineHeight: 16, fontWeight: '600' }}>
+                  Instant Sign-in: Enter your staff’s mobile number. They can log in immediately using SMS OTP on the BGOS app!
+                </Text>
+              </View>
+
               <View>
                 <Text style={styles.inputLabel}>Full Name *</Text>
                 <TextInput
@@ -425,7 +470,22 @@ export default function TeamManagementScreen() {
               </View>
 
               <View>
-                <Text style={styles.inputLabel}>Email Address *</Text>
+                <Text style={styles.inputLabel}>Mobile Phone Number *</Text>
+                <TextInput
+                  value={invitePhone}
+                  onChangeText={setInvitePhone}
+                  placeholder="e.g. +91 98765 43210 or 9876543210"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="phone-pad"
+                  style={styles.textInput}
+                />
+                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
+                  Staff will use this number to log in via SMS OTP without needing a password.
+                </Text>
+              </View>
+
+              <View>
+                <Text style={styles.inputLabel}>Email Address (Optional)</Text>
                 <TextInput
                   value={inviteEmail}
                   onChangeText={setInviteEmail}
@@ -435,18 +495,9 @@ export default function TeamManagementScreen() {
                   autoCapitalize="none"
                   style={styles.textInput}
                 />
-              </View>
-
-              <View>
-                <Text style={styles.inputLabel}>Mobile Phone (for WhatsApp Invite)</Text>
-                <TextInput
-                  value={invitePhone}
-                  onChangeText={setInvitePhone}
-                  placeholder="e.g. +91 98765 43210"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="phone-pad"
-                  style={styles.textInput}
-                />
+                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
+                  Optional. If entered, an invitation email with access links will also be sent.
+                </Text>
               </View>
 
               <View>
@@ -503,8 +554,8 @@ export default function TeamManagementScreen() {
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <>
-                    <MaterialIcons name="send" size={16} color="#FFFFFF" />
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>Send Invitation</Text>
+                    <MaterialIcons name="person-add" size={16} color="#FFFFFF" />
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>Add Team Member</Text>
                   </>
                 )}
               </Pressable>
