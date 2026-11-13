@@ -33,7 +33,7 @@ export default function DeleteAccountPage() {
               Account & Associated Data Deletion
             </h1>
             <p className="mt-3 text-base text-slate-600 dark:text-slate-400">
-              At Fieseros (developer of BGOS — Business Growth Operating System, app package: <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">com.fieseros.bgos</code>), we respect your data privacy and give you full control over your personal and business data.
+              At Fieseros (developer of BOS — Business Operating System, app package: <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">com.fieseros.bos</code>, and BGOS), we respect your data privacy and give you full control over your personal and business data.
             </p>
           </div>
 
