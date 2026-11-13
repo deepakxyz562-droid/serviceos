@@ -187,3 +187,56 @@ export async function resolveStaffSession(user: {
 
   return null;
 }
+
+/**
+ * Fast lookup of a staff member by normalized 10-digit phone number.
+ * Used during Phone OTP verification to automatically assign staff role,
+ * link the employee user account, and attach to the employer's store workspace.
+ */
+export async function lookupStaffMembershipByPhone(phone: string): Promise<{
+  staffMember: BosStaffMember;
+  business: any;
+  configId: string;
+} | null> {
+  const digits = phone.replace(/\D/g, '');
+  if (!digits || digits.length < 6) return null;
+  const tenDigit = digits.slice(-10);
+
+  const configs = await db.gptformCommerceConfig.findMany({
+    where: { fieldsJson: { contains: tenDigit } },
+    orderBy: { updatedAt: 'desc' },
+    take: 10,
+  });
+
+  for (const cfg of configs) {
+    try {
+      const raw = JSON.parse(cfg.fieldsJson || '{}');
+      const staffList: BosStaffMember[] = Array.isArray(raw.staffMembers) ? raw.staffMembers : [];
+      const match = staffList.find((s) => {
+        if (!s.isActive) return false;
+        const sPhoneClean = (s.phone || '').replace(/\D/g, '');
+        return sPhoneClean.endsWith(tenDigit);
+      });
+
+      if (match) {
+        let business = await db.aiBusiness.findUnique({
+          where: { id: cfg.businessId },
+        });
+        if (!business) {
+          business = await db.aiBusiness.findFirst({
+            where: {
+              OR: [{ id: cfg.businessId }, { tenantId: cfg.businessId }],
+            },
+          });
+        }
+        if (business) {
+          return { staffMember: match, business, configId: cfg.id };
+        }
+      }
+    } catch {
+      // Continue search on next config
+    }
+  }
+
+  return null;
+}

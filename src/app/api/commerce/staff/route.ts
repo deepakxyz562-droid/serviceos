@@ -216,6 +216,41 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Also sync to Prisma Employee table for unified workforce management
+    try {
+      const existingEmployee = await db.employee.findFirst({
+        where: {
+          phone: phone.trim(),
+          ...(business.tenantId ? { tenantId: business.tenantId } : {}),
+        },
+      });
+      if (existingEmployee) {
+        await db.employee.update({
+          where: { id: existingEmployee.id },
+          data: {
+            name: name.trim(),
+            role: staffRole,
+            userId: linkedUserId || existingEmployee.userId,
+          },
+        });
+      } else {
+        await db.employee.create({
+          data: {
+            name: name.trim(),
+            phone: phone.trim(),
+            email: email ? email.trim().toLowerCase() : null,
+            role: staffRole,
+            status: 'available',
+            tenantId: business.tenantId || null,
+            workspaceId: business.workspaceId || null,
+            userId: linkedUserId || null,
+          },
+        });
+      }
+    } catch (empErr) {
+      console.warn('[Staff API] Employee table sync note:', empErr);
+    }
+
     return NextResponse.json({
       success: true,
       staffMember: newMember,
@@ -305,6 +340,33 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
+    // Update synced Employee record if present
+    if (phone || name || updatedRole) {
+      try {
+        const targetPhone = (phone || member.phone || '').trim();
+        if (targetPhone) {
+          const emp = await db.employee.findFirst({
+            where: {
+              phone: targetPhone,
+              ...(business.tenantId ? { tenantId: business.tenantId } : {}),
+            },
+          });
+          if (emp) {
+            await db.employee.update({
+              where: { id: emp.id },
+              data: {
+                ...(name ? { name: name.trim() } : {}),
+                ...(newRole ? { role: newRole } : {}),
+                status: isActive === false ? 'inactive' : 'available',
+              },
+            });
+          }
+        }
+      } catch (empErr) {
+        console.warn('[Staff API] Employee update note:', empErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       staffMember: staffList[idx],
@@ -360,6 +422,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const staffList: BosStaffMember[] = Array.isArray(parsed.staffMembers) ? parsed.staffMembers : [];
+    const memberToDelete = staffList.find((s) => s.id === id);
     const filtered = staffList.filter((s) => s.id !== id);
 
     parsed.staffMembers = filtered;
@@ -370,6 +433,20 @@ export async function DELETE(req: NextRequest) {
         fieldsJson: JSON.stringify(parsed),
       },
     });
+
+    // Also remove from Prisma Employee table
+    if (memberToDelete?.phone) {
+      try {
+        await db.employee.deleteMany({
+          where: {
+            phone: memberToDelete.phone.trim(),
+            ...(business.tenantId ? { tenantId: business.tenantId } : {}),
+          },
+        });
+      } catch (empErr) {
+        console.warn('[Staff API] Employee delete note:', empErr);
+      }
+    }
 
     return NextResponse.json({
       success: true,

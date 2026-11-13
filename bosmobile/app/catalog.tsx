@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
+  RefreshControl,
   TouchableOpacity,
   TextInput,
   Alert,
@@ -55,6 +57,32 @@ const DEFAULT_CATEGORY_PILLS_BY_TYPE: Record<string, string[]> = {
   retail: ['Clothing', 'Footwear', 'Accessories', 'Electronics', 'Home'],
 };
 
+function getItemIcon(item: ProductItem, businessType: string): React.ComponentProps<typeof MaterialIcons>['name'] {
+  if (item.itemType === 'service') return 'build';
+  const cat = (item.category || '').toLowerCase();
+  const name = (item.name || '').toLowerCase();
+  const combined = `${cat} ${name}`;
+
+  if (combined.includes('drink') || combined.includes('beverage') || combined.includes('juice') || combined.includes('tea') || combined.includes('coffee') || combined.includes('water')) return 'local-cafe';
+  if (combined.includes('fruit') || combined.includes('veg') || combined.includes('egg') || combined.includes('dairy') || combined.includes('rice') || combined.includes('grocery') || combined.includes('atta') || combined.includes('dal') || combined.includes('oil')) return 'shopping-basket';
+  if (combined.includes('cloth') || combined.includes('shirt') || combined.includes('pant') || combined.includes('wear') || combined.includes('dress') || combined.includes('jeans') || combined.includes('suit') || combined.includes('saree')) return 'checkroom';
+  if (combined.includes('phone') || combined.includes('cable') || combined.includes('charger') || combined.includes('electronic') || combined.includes('battery') || combined.includes('wire')) return 'devices';
+  if (combined.includes('cut') || combined.includes('hair') || combined.includes('salon') || combined.includes('spa') || combined.includes('facial') || combined.includes('shampoo')) return 'content-cut';
+  if (combined.includes('repair') || combined.includes('service') || combined.includes('weld') || combined.includes('fab') || combined.includes('labor') || combined.includes('iron') || combined.includes('steel') || combined.includes('pipe')) return 'handyman';
+  if (combined.includes('food') || combined.includes('thali') || combined.includes('pizza') || combined.includes('burger') || combined.includes('roti') || combined.includes('biryani')) return 'restaurant';
+
+  switch (businessType) {
+    case 'restaurant': return 'restaurant';
+    case 'grocery': return 'shopping-basket';
+    case 'salon': return 'content-cut';
+    case 'services':
+    case 'manufacturing': return 'handyman';
+    case 'creative':
+    case 'freelancer': return 'brush';
+    default: return 'inventory-2';
+  }
+}
+
 export default function MobileCatalogScreen() {
   const router = useRouter();
   const { create, filter } = useLocalSearchParams<{ create?: string; filter?: string }>();
@@ -100,6 +128,37 @@ export default function MobileCatalogScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [syncBannerDismissed, setSyncBannerDismissed] = useState(false);
+
+  const handleAdjustStock = async (item: ProductItem, delta: number) => {
+    hapticFeedback.light();
+    const existing = quantities[item.id];
+    const currentQty = existing?.stock ?? 0;
+    const newQty = Math.max(0, currentQty + delta);
+
+    setQuantities((prev) => ({
+      ...prev,
+      [item.id]: {
+        id: existing?.id || item.id,
+        stock: newQty,
+        totalStock: newQty,
+        minStock: existing?.minStock || 0,
+      },
+    }));
+
+    const payload = { productId: existing?.id || item.id, newStock: newQty };
+    try {
+      await apiRequest(API_PATHS.commerceInventory, {
+        method: 'PATCH',
+        body: payload,
+        headers: { 'Idempotency-Key': stockTracker.current.for(payload) },
+      });
+      stockTracker.current.clear();
+    } catch {
+      void loadStock();
+    }
+  };
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -164,6 +223,16 @@ export default function MobileCatalogScreen() {
       setLoading(false);
     }
   };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    hapticFeedback.light();
+    await Promise.all([
+      fetchCatalog(true),
+      blueprint.capabilities.inventory ? loadStock() : Promise.resolve(),
+    ]);
+    setRefreshing(false);
+  }, [blueprint.capabilities.inventory]);
 
   useEffect(() => {
     let active = true;
@@ -416,6 +485,236 @@ export default function MobileCatalogScreen() {
 
   const activeCount = useMemo(() => catalog.filter((c) => c.isActive !== false).length, [catalog]);
 
+  const renderEmpty = useCallback(() => {
+    if (loading) return null;
+    return (
+      <View style={styles.emptyWrap}>
+        <MaterialIcons
+          name={
+            blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing'
+              ? 'handyman'
+              : blueprint.businessType === 'salon'
+              ? 'content-cut'
+              : blueprint.businessType === 'creative'
+              ? 'movie-creation'
+              : blueprint.businessType === 'restaurant'
+              ? 'restaurant-menu'
+              : 'inventory-2'
+          }
+          size={56}
+          color="#cbd5e1"
+        />
+        <Text style={styles.emptyTitle}>
+          {isServiceOrCreative
+            ? t('No services found', 'कोई सेवा नहीं मिली')
+            : t('No products found', 'कोई सामान नहीं मिला')}
+        </Text>
+        <Text style={styles.emptySubtitle}>
+          {searchQuery
+            ? `No results matching "${searchQuery}"`
+            : blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing'
+            ? t('Add your first service or material item to your catalog.', 'कैटलॉग में अपनी पहली सेवा या सामान जोड़ें।')
+            : blueprint.businessType === 'salon'
+            ? t('Add your first salon service or retail product.', 'कैटलॉग में पहली सेवा या सामान जोड़ें।')
+            : blueprint.businessType === 'creative' || blueprint.businessType === 'freelancer'
+            ? t('Add your first service package or shoot offer.', 'कैटलॉग में पहला पैकेज जोड़ें।')
+            : blueprint.businessType === 'restaurant'
+            ? t('Add your first menu item or sync from your e-commerce store.', 'मेन्यू में पहला आइटम जोड़ें।')
+            : t('Add your first item or sync from your e-commerce store.', 'कैटलॉग में पहला सामान जोड़ें।')}
+        </Text>
+        <TouchableOpacity
+          style={styles.emptyAddBtn}
+          accessibilityRole="button"
+          accessibilityLabel={isServiceOrCreative ? t('Add service', 'सेवा जोड़ें') : t('Add product', 'सामान जोड़ें')}
+          disabled={loading || !!error || saving}
+          onPress={handleOpenAddModal}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="add" size={20} color="#ffffff" style={{ marginRight: 6 }} />
+          <Text style={styles.emptyAddText}>
+            {isServiceOrCreative ? t('Add First Service', 'पहली सेवा जोड़ें') : t('Add First Item', 'पहला सामान जोड़ें')}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }, [loading, blueprint.businessType, isServiceOrCreative, searchQuery, error, saving, handleOpenAddModal, t]);
+
+  const renderProductCard = useCallback(({ item }: { item: ProductItem }) => {
+    const inStock = item.isActive !== false;
+    const itemStock = quantities[item.id]?.stock;
+    const hasInventory = blueprint.capabilities.inventory;
+
+    return (
+      <View key={item.id} style={[styles.itemCard, !inStock && styles.itemCardInactive]}>
+        {/* Product Thumbnail / Image */}
+        <View style={styles.thumbnailWrap}>
+          {item.imageUrl ? (
+            <Image
+              source={{ uri: item.imageUrl }}
+              style={styles.thumbnail}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.thumbnailFallback, { backgroundColor: item.itemType === 'service' ? '#f5f3ff' : '#f0fdf4' }]}>
+              <MaterialIcons
+                name={getItemIcon(item, blueprint.businessType)}
+                size={28}
+                color={item.itemType === 'service' ? '#7c3aed' : '#059669'}
+              />
+            </View>
+          )}
+          {item.source && item.source !== 'manual' && (
+            <View style={styles.sourceBadge}>
+              <Text style={styles.sourceBadgeText}>
+                {item.source === 'shopify' ? 'Shopify' : 'Woo'}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Details */}
+        <View style={styles.itemInfo}>
+          <View style={styles.titleRow}>
+            <Text style={styles.itemName} numberOfLines={1}>
+              {item.name}
+            </Text>
+          </View>
+
+          <View style={[styles.metaRow, { flexWrap: 'wrap', gap: 4 }]}>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryBadgeText}>{item.category || 'General'}</Text>
+            </View>
+            <View style={{ backgroundColor: item.itemType === 'service' ? '#f3e8ff' : '#eff6ff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: item.itemType === 'service' ? '#7e22ce' : '#1d4ed8' }}>
+                {item.itemType === 'service' ? '🛠️ Service' : '📦 Product'}
+              </Text>
+            </View>
+            {item.sacCode ? (
+              <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ fontSize: 10, color: '#475569', fontWeight: '600' }}>SAC: {item.sacCode}</Text>
+              </View>
+            ) : item.hsnCode ? (
+              <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ fontSize: 10, color: '#475569', fontWeight: '600' }}>HSN: {item.hsnCode}</Text>
+              </View>
+            ) : null}
+            {item.sku ? (
+              <Text style={styles.skuText}>SKU: {item.sku}</Text>
+            ) : null}
+          </View>
+
+          {item.wholesalePrice && item.wholesalePrice > 0 ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+              <MaterialIcons name="local-offer" size={12} color="#9333ea" />
+              <Text style={{ fontSize: 10, color: '#7e22ce', fontWeight: '700' }}>
+                Wholesale: ₹{item.wholesalePrice} {item.minWholesaleQty ? `(min ${item.minWholesaleQty})` : ''}
+              </Text>
+            </View>
+          ) : null}
+
+          {item.description ? (
+            <Text style={styles.descriptionText} numberOfLines={2}>
+              {item.description}
+            </Text>
+          ) : null}
+
+          {/* Price & Stock Adjustment Row */}
+          <View style={styles.priceRow}>
+            <View>
+              <Text style={styles.itemPrice}>
+                {countryPack.currency.symbol}{Number(item.price).toFixed(2)}
+                {item.unit ? <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748b' }}> / {item.unit}</Text> : null}
+              </Text>
+              <Text style={{ fontSize: 10, color: '#64748b' }}>
+                {item.priceWithTax ? t('Incl. Tax', 'कर सहित') : t('+ GST Extra', '+ जीएसटी अलग')}
+              </Text>
+            </View>
+
+            {/* Quick 1-Tap Stock Stepper */}
+            {hasInventory && (
+              <View style={styles.inlineStockRow}>
+                <TouchableOpacity
+                  onPress={() => handleAdjustStock(item, -1)}
+                  style={styles.stockBtn}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Decrease stock"
+                >
+                  <MaterialIcons name="remove" size={14} color="#475569" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    setStockProduct(item);
+                    setSaveError(null);
+                    const stock = quantities[item.id]?.totalStock ?? quantities[item.id]?.stock;
+                    setStockQuantity(stock == null ? '' : String(stock));
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.stockValueText}>
+                    {stockError
+                      ? '—'
+                      : itemStock == null
+                      ? t('Set', 'जोड़ें')
+                      : `${itemStock} ${item.unit || 'pcs'}`}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => handleAdjustStock(item, 1)}
+                  style={styles.stockBtn}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Increase stock"
+                >
+                  <MaterialIcons name="add" size={14} color="#047857" />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* In-Stock Status Badge */}
+            <TouchableOpacity
+              style={[styles.stockBadge, inStock ? styles.stockBadgeIn : styles.stockBadgeOut]}
+              onPress={() => handleToggleActive(item.id)}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[styles.stockDot, inStock ? styles.stockDotIn : styles.stockDotOut]}
+              />
+              <Text
+                style={[
+                  styles.stockBadgeText,
+                  inStock ? styles.stockBadgeTextIn : styles.stockBadgeTextOut,
+                ]}
+              >
+                {inStock ? t('Active', 'उपलब्ध') : t('Hidden', 'छिपा हुआ')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Actions (Edit / Delete) */}
+        <View style={styles.actionCol}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`${t('Edit', 'बदलें')} ${item.name}`}
+            onPress={() => handleOpenEditModal(item)}
+            style={styles.actionBtn}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="edit" size={18} color="#475569" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => handleDeleteProduct(item.id, item.name)}
+            style={styles.actionBtn}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="delete-outline" size={19} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }, [blueprint.capabilities.inventory, blueprint.businessType, countryPack.currency.symbol, quantities, stockError, handleAdjustStock, handleToggleActive, handleOpenEditModal, handleDeleteProduct, t]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Top Header */}
@@ -476,30 +775,39 @@ export default function MobileCatalogScreen() {
         </View>
       </View>
 
-      {/* WooCommerce & Shopify Sync Banner */}
-      {blueprint.capabilities.onlineStore&&<View style={styles.syncBanner}>
-        <View style={styles.syncBannerContent}>
-          <View style={styles.syncBannerIconWrap}>
-            <MaterialIcons name="cloud-sync" size={22} color="#0284c7" />
+      {/* WooCommerce & Shopify Sync Banner (Dismissible) */}
+      {blueprint.capabilities.onlineStore && !syncBannerDismissed && (
+        <View style={styles.syncBanner}>
+          <View style={styles.syncBannerContent}>
+            <View style={styles.syncBannerIconWrap}>
+              <MaterialIcons name="cloud-sync" size={22} color="#0284c7" />
+            </View>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.syncBannerTitle}>WooCommerce & Shopify Sync</Text>
+              <Text style={styles.syncBannerSubtitle}>
+                Auto-sync products to answer questions & power WhatsApp shop.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.syncBannerBtn}
+              onPress={() => {
+                hapticFeedback.medium();
+                setSyncModalVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.syncBannerBtnText}>Connect</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setSyncBannerDismissed(true)}
+              style={{ padding: 4, marginLeft: 4 }}
+              accessibilityLabel="Dismiss sync banner"
+            >
+              <MaterialIcons name="close" size={18} color="#94a3b8" />
+            </TouchableOpacity>
           </View>
-          <View style={{ flex: 1, paddingRight: 8 }}>
-            <Text style={styles.syncBannerTitle}>WooCommerce & Shopify Sync</Text>
-            <Text style={styles.syncBannerSubtitle}>
-              Auto-sync products to answer questions & power WhatsApp shop.
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.syncBannerBtn}
-            onPress={() => {
-              hapticFeedback.medium();
-              setSyncModalVisible(true);
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.syncBannerBtnText}>Connect</Text>
-          </TouchableOpacity>
         </View>
-      </View>}
+      )}
 
       {/* Category Filter Chips */}
       {categories.length > 1 && (
@@ -559,193 +867,47 @@ export default function MobileCatalogScreen() {
         </View>
       ) : null}
 
-      {/* Main List */}
-      {loading ? (
+      {/* Main List (Virtualized with FlatList) */}
+      {loading && catalog.length === 0 ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#10b981" />
           <Text style={styles.loadingText}>Loading products...</Text>
         </View>
-      ) : filteredCatalog.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <MaterialIcons
-            name={
-              blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing'
-                ? 'handyman'
-                : blueprint.businessType === 'salon'
-                ? 'content-cut'
-                : blueprint.businessType === 'creative'
-                ? 'movie-creation'
-                : blueprint.businessType === 'restaurant'
-                ? 'restaurant-menu'
-                : 'inventory-2'
-            }
-            size={56}
-            color="#cbd5e1"
-          />
-          <Text style={styles.emptyTitle}>
-            {isServiceOrCreative
-              ? t('No services found', 'कोई सेवा नहीं मिली')
-              : t('No products found', 'कोई सामान नहीं मिला')}
-          </Text>
-          <Text style={styles.emptySubtitle}>
-            {searchQuery
-              ? `No results matching "${searchQuery}"`
-              : blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing'
-              ? t('Add your first service or material item to your catalog.', 'कैटलॉग में अपनी पहली सेवा या सामान जोड़ें।')
-              : blueprint.businessType === 'salon'
-              ? t('Add your first salon service or retail product.', 'कैटलॉग में पहली सेवा या सामान जोड़ें।')
-              : blueprint.businessType === 'creative' || blueprint.businessType === 'freelancer'
-              ? t('Add your first service package or shoot offer.', 'कैटलॉग में पहला पैकेज जोड़ें।')
-              : blueprint.businessType === 'restaurant'
-              ? t('Add your first menu item or sync from your e-commerce store.', 'मेन्यू में पहला आइटम जोड़ें।')
-              : t('Add your first item or sync from your e-commerce store.', 'कैटलॉग में पहला सामान जोड़ें।')}
-          </Text>
-          <TouchableOpacity
-            style={styles.emptyAddBtn}
-            accessibilityRole="button"
-            accessibilityLabel={isServiceOrCreative ? t('Add service', 'सेवा जोड़ें') : t('Add product', 'सामान जोड़ें')}
-            disabled={loading || !!error || saving}
-            onPress={handleOpenAddModal}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="add" size={20} color="#ffffff" style={{ marginRight: 6 }} />
-            <Text style={styles.emptyAddText}>
-              {isServiceOrCreative ? t('Add First Service', 'पहली सेवा जोड़ें') : t('Add First Item', 'पहला सामान जोड़ें')}
-            </Text>
-          </TouchableOpacity>
-        </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-        >
-          {filteredCatalog.map((item) => {
-            const inStock = item.isActive !== false;
-            return (
-              <View key={item.id} style={[styles.itemCard, !inStock && styles.itemCardInactive]}>
-                {/* Product Thumbnail / Image */}
-                <View style={styles.thumbnailWrap}>
-                  {item.imageUrl ? (
-                    <Image
-                      source={{ uri: item.imageUrl }}
-                      style={styles.thumbnail}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.thumbnailFallback}>
-                      <MaterialIcons name="fastfood" size={24} color="#94a3b8" />
-                    </View>
-                  )}
-                  {item.source && item.source !== 'manual' && (
-                    <View style={styles.sourceBadge}>
-                      <Text style={styles.sourceBadgeText}>
-                        {item.source === 'shopify' ? 'Shopify' : 'Woo'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Details */}
-                <View style={styles.itemInfo}>
-                  <View style={styles.titleRow}>
-                    <Text style={styles.itemName} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                  </View>
-
-                  <View style={[styles.metaRow, { flexWrap: 'wrap', gap: 4 }]}>
-                    <View style={styles.categoryBadge}>
-                      <Text style={styles.categoryBadgeText}>{item.category || 'General'}</Text>
-                    </View>
-                    <View style={{ backgroundColor: item.itemType === 'service' ? '#f3e8ff' : '#eff6ff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: item.itemType === 'service' ? '#7e22ce' : '#1d4ed8' }}>
-                        {item.itemType === 'service' ? '🛠️ Service' : '📦 Product'}
-                      </Text>
-                    </View>
-                    {item.sacCode ? (
-                      <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 }}>
-                        <Text style={{ fontSize: 10, color: '#475569', fontWeight: '600' }}>SAC: {item.sacCode}</Text>
-                      </View>
-                    ) : item.hsnCode ? (
-                      <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 }}>
-                        <Text style={{ fontSize: 10, color: '#475569', fontWeight: '600' }}>HSN: {item.hsnCode}</Text>
-                      </View>
-                    ) : null}
-                    {item.sku ? (
-                      <Text style={styles.skuText}>SKU: {item.sku}</Text>
-                    ) : null}
-                  </View>
-
-                  {item.wholesalePrice && item.wholesalePrice > 0 ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
-                      <MaterialIcons name="local-offer" size={12} color="#9333ea" />
-                      <Text style={{ fontSize: 10, color: '#7e22ce', fontWeight: '700' }}>
-                        Wholesale: ₹{item.wholesalePrice} {item.minWholesaleQty ? `(min ${item.minWholesaleQty})` : ''}
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  {item.description ? (
-                    <Text style={styles.descriptionText} numberOfLines={2}>
-                      {item.description}
-                    </Text>
-                  ) : null}
-
-                  {blueprint.capabilities.inventory&&<TouchableOpacity accessibilityRole="button" disabled={stockError} onPress={()=>{setStockProduct(item);setSaveError(null);const stock=quantities[item.id]?.totalStock??quantities[item.id]?.stock;setStockQuantity(stock==null?'':String(stock));}} style={{paddingVertical:12}}><Text style={{color:'#047857',fontWeight:'600'}}>{stockError?t('Stock unavailable','स्टॉक उपलब्ध नहीं'):quantities[item.id]?.stock==null?t('Set stock quantity','स्टॉक की मात्रा जोड़ें'):`${t('In stock','स्टॉक')}: ${quantities[item.id].stock}`}  ·  {t('Update','बदलें')}</Text></TouchableOpacity>}
-                  <View style={styles.priceRow}>
-                    <View>
-                      <Text style={styles.itemPrice}>
-                        {countryPack.currency.symbol}{Number(item.price).toFixed(2)}
-                        {item.unit ? <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748b' }}> / {item.unit}</Text> : null}
-                      </Text>
-                      <Text style={{ fontSize: 10, color: '#64748b' }}>
-                        {item.priceWithTax ? t('Incl. Tax', 'कर सहित') : t('+ GST Extra', '+ जीएसटी अलग')}
-                      </Text>
-                    </View>
-
-                    {/* Stock Status Badge & Switch */}
-                    <TouchableOpacity
-                      style={[styles.stockBadge, inStock ? styles.stockBadgeIn : styles.stockBadgeOut]}
-                      onPress={() => handleToggleActive(item.id)}
-                      activeOpacity={0.7}
-                    >
-                      <View
-                        style={[styles.stockDot, inStock ? styles.stockDotIn : styles.stockDotOut]}
-                      />
-                      <Text
-                        style={[
-                          styles.stockBadgeText,
-                          inStock ? styles.stockBadgeTextIn : styles.stockBadgeTextOut,
-                        ]}
-                      >
-                        {inStock ? t('Available','उपलब्ध') : t('Hidden','छिपा हुआ')}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Actions (Edit / Delete) */}
-                <View style={styles.actionCol}>
-                  <TouchableOpacity
-                    accessibilityRole="button" accessibilityLabel={`${t('Edit','बदलें')} ${item.name}`} onPress={() => handleOpenEditModal(item)}
-                    style={styles.actionBtn}
-                    activeOpacity={0.7}
-                  >
-                    <MaterialIcons name="edit" size={18} color="#475569" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteProduct(item.id, item.name)}
-                    style={styles.actionBtn}
-                    activeOpacity={0.7}
-                  >
-                    <MaterialIcons name="delete-outline" size={19} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })}
-        </ScrollView>
+        <FlatList
+          data={filteredCatalog}
+          keyExtractor={(item) => item.id}
+          renderItem={renderProductCard}
+          contentContainerStyle={[styles.list, { paddingBottom: 110 }]}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS !== 'web'}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#10b981"
+              colors={['#10b981']}
+            />
+          }
+          ListEmptyComponent={renderEmpty}
+        />
       )}
+
+      {/* Floating Action Button (FAB) for + Add Product */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={handleOpenAddModal}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={isServiceOrCreative ? t('Add service', 'सेवा जोड़ें') : t('Add product', 'सामान जोड़ें')}
+      >
+        <MaterialIcons name="add" size={22} color="#ffffff" />
+        <Text style={styles.fabText}>
+          {isServiceOrCreative ? t('Add Service', 'सेवा जोड़ें') : t('Add Product', 'सामान जोड़ें')}
+        </Text>
+      </TouchableOpacity>
 
       {/* ─── ADD / EDIT PRODUCT MODAL ─── */}
       <Modal
@@ -1967,5 +2129,53 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
     marginTop: 12,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    backgroundColor: '#047857',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 30,
+    gap: 8,
+    shadowColor: '#047857',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  fabText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  inlineStockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    gap: 6,
+  },
+  stockBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  stockValueText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0f172a',
+    minWidth: 48,
+    textAlign: 'center',
   },
 });

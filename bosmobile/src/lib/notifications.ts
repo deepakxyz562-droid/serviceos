@@ -183,6 +183,25 @@ export async function registerForPushNotifications(userId?: string): Promise<Pus
     return { success: false, error: 'Push notifications are not supported on this platform' };
   }
 
+  // Gracefully skip push token requests when running inside Expo Go client,
+  // where remote push notifications are restricted by Apple/Google/Expo.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Constants = require('expo-constants');
+    const defaultConstants = Constants.default || Constants;
+    const isExpoGo =
+      defaultConstants?.executionEnvironment === 'storeClient' ||
+      defaultConstants?.appOwnership === 'expo';
+    if (isExpoGo) {
+      if (__DEV__) {
+        console.log('[notifications] In Expo Go: remote push notifications are skipped (supported in dev builds)');
+      }
+      return { success: false, error: 'Push notifications are not supported in Expo Go' };
+    }
+  } catch {
+    // Proceed if Constants lookup fails
+  }
+
   ensureNotificationHandler();
   await ensureNotificationChannels();
 

@@ -9,6 +9,7 @@ import {
 } from '@/lib/auth';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { resolveBestPhoneUser, findUserByEmailInsensitive } from '@/lib/phone-account-lookup';
+import { lookupStaffMembershipByPhone } from '@/lib/commerce/staff-helper';
 
 const FIREBASE_API_KEY =
   process.env.FIREBASE_WEB_API_KEY ||
@@ -120,7 +121,10 @@ export async function POST(request: NextRequest) {
     let user = phoneLookup.user;
     let isNewUser = false;
 
-    // 3. If User doesn't exist, auto-provision merchant account
+    // Check if this phone number is registered as a staff member for an active store
+    const staffMatch = await lookupStaffMembershipByPhone(withPlus).catch(() => null);
+
+    // 3. If User doesn't exist, auto-provision user account with staff or owner role
     if (!user) {
       const syntheticEmail = (firebaseUser.email || `${digits}@merchant.bos.local`).trim().toLowerCase();
 
@@ -130,10 +134,12 @@ export async function POST(request: NextRequest) {
       if (!user) {
         user = await db.user.create({
           data: {
-            name: firebaseUser.displayName || `Merchant ${tenDigit.slice(-4)}`,
+            name: staffMatch?.staffMember?.name || firebaseUser.displayName || `Merchant ${tenDigit.slice(-4)}`,
             email: syntheticEmail,
             phone: withPlus,
-            role: 'owner',
+            role: staffMatch?.staffMember?.role || 'owner',
+            tenantId: staffMatch?.business?.tenantId || null,
+            workspaceId: staffMatch?.business?.workspaceId || null,
             authProvider: 'firebase_phone',
             authProviderId: firebaseUser.localId || null,
             emailVerified: true,
@@ -147,11 +153,49 @@ export async function POST(request: NextRequest) {
           where: { id: user.id },
           data: {
             phone: withPlus,
+            role: staffMatch?.staffMember?.role || user.role,
+            tenantId: staffMatch?.business?.tenantId || user.tenantId,
+            workspaceId: staffMatch?.business?.workspaceId || user.workspaceId,
             authProvider: user.authProvider || 'firebase_phone',
             authProviderId: user.authProviderId || firebaseUser.localId || null,
           },
           include: { tenant: true, workspace: true },
         });
+      }
+    } else if (staffMatch && user.role !== staffMatch.staffMember.role) {
+      // User is an active staff member in a store — attach role and store workspace
+      const ownedBusiness = await db.aiBusiness.findUnique({ where: { ownerId: user.id } }).catch(() => null);
+      if (!ownedBusiness) {
+        user = await db.user.update({
+          where: { id: user.id },
+          data: {
+            role: staffMatch.staffMember.role,
+            tenantId: staffMatch.business.tenantId || user.tenantId,
+            workspaceId: staffMatch.business.workspaceId || user.workspaceId,
+          },
+          include: { tenant: true, workspace: true },
+        });
+      }
+    }
+
+    // Link staff member record to this user if not already linked
+    if (staffMatch && staffMatch.configId && !staffMatch.staffMember.userId && user) {
+      try {
+        const cfg = await db.gptformCommerceConfig.findUnique({ where: { id: staffMatch.configId } });
+        if (cfg?.fieldsJson) {
+          const raw = JSON.parse(cfg.fieldsJson);
+          if (Array.isArray(raw.staffMembers)) {
+            const updated = raw.staffMembers.map((s: any) =>
+              s.id === staffMatch.staffMember.id ? { ...s, userId: user.id } : s
+            );
+            await db.gptformCommerceConfig.update({
+              where: { id: cfg.id },
+              data: { fieldsJson: JSON.stringify({ ...raw, staffMembers: updated }) },
+            });
+          }
+        }
+      } catch (linkErr) {
+        console.warn('[Firebase Auth] Failed to link staff userId:', linkErr);
       }
     }
 
