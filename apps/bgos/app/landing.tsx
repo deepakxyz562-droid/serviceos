@@ -26,20 +26,46 @@ import {
   Clock,
   ChevronRight,
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import s from './landing.module.css';
 
-const signupUrl = '/app?product=bgos&auth=signup';
-const loginUrl = '/app?product=bgos&auth=login';
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.fieseros.bgos';
+
+function GooglePlayIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M325.3 234.3L104.6 13l280.8 161.2-60.1 60.1z" fill="#4285F4" />
+      <path d="M47 0C34 6.8 25.3 19.2 25.3 35.3v441.3c0 16.1 8.7 28.5 21.7 35.4l256.7-256L47 0z" fill="#34A853" />
+      <path d="M405.4 186.2L325.3 234.3l60.1 60.1 20-11.6c23.6-13.6 23.6-35.8 0-49.4l-20-11.6z" fill="#FBBC04" />
+      <path d="M325.3 277.7l-220.7 221.3 280.8-161.2-60.1-60.1z" fill="#EA4335" />
+    </svg>
+  );
+}
 
 function Logo() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <img src="/bgos/primary-logo.png" alt="BGOS — Business Growth Operating System" width="138" height="42" />
+      <img src="/bgos/primary-logo.png" alt="BGOS — Business Growth Operating System" width={138} height={42} />
     </div>
   );
 }
 
 export default function Landing() {
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  useEffect(() => {
+    QRCode.toDataURL(PLAY_STORE_URL, {
+      width: 140,
+      margin: 1,
+      color: {
+        dark: '#0f172a',
+        light: '#ffffff',
+      },
+    })
+      .then(setQrDataUrl)
+      .catch(() => {});
+  }, []);
+
   // ── 1. Hero Live Short URL Checker State ────────────────────────────────
   const [handleInput, setHandleInput] = useState('kanvi');
   const [checking, setChecking] = useState(false);
@@ -102,9 +128,14 @@ export default function Landing() {
           <a href="#faq">FAQ</a>
         </nav>
         <div className={s.headerActions}>
-          <a href={loginUrl}>Log In</a>
-          <a className={s.primary} href={signupUrl}>
-            Start Free Trial <ArrowRight size={15} />
+          <a
+            className={s.playStoreHeaderBtn}
+            href={PLAY_STORE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <GooglePlayIcon size={16} />
+            <span>Install on Google Play</span>
           </a>
         </div>
         <details className={s.mobileMenu}>
@@ -114,9 +145,21 @@ export default function Landing() {
             <a href="#solutions">Industries</a>
             <a href="#comparison">Why BGOS</a>
             <a href="#pricing">Pricing</a>
-            <a href={loginUrl}>Log In</a>
-            <a href={signupUrl} style={{ color: '#009f50', fontWeight: 'bold' }}>
-              Create Account →
+            <a href="#faq">FAQ</a>
+            <a
+              href={PLAY_STORE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: '#009f50',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <GooglePlayIcon size={16} />
+              Install on Google Play →
             </a>
           </nav>
         </details>
@@ -142,23 +185,48 @@ export default function Landing() {
                 </p>
 
                 <div className={s.heroActions}>
-                  <a className={s.primary} href={signupUrl}>
-                    Start 7-Day Free Trial <ArrowRight size={16} />
+                  <a
+                    className={s.playStoreHeroBtn}
+                    href={PLAY_STORE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <GooglePlayIcon size={22} />
+                    <div style={{ textAlign: 'left', lineHeight: 1.15 }}>
+                      <span style={{ fontSize: 9.5, letterSpacing: 0.6, textTransform: 'uppercase', opacity: 0.85, display: 'block' }}>GET IT ON</span>
+                      <span style={{ fontSize: 15, fontWeight: 800 }}>Google Play</span>
+                    </div>
                   </a>
-                  <a className={s.secondary} href="#demo">
-                    Explore Live Features
+                  <a className={s.secondary} href="#features">
+                    Explore Features
                   </a>
+
+                  {qrDataUrl ? (
+                    <div className={s.desktopQrBadge}>
+                      <img
+                        src={qrDataUrl}
+                        alt="Scan QR to install BGOS"
+                        width={58}
+                        height={58}
+                        className={s.desktopQrImg}
+                      />
+                      <div className={s.desktopQrText}>
+                        <span className={s.desktopQrTitle}>Install on Phone</span>
+                        <span className={s.desktopQrSub}>Scan with phone camera to download</span>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className={s.heroGuarantees}>
                   <span>
-                    <Check size={14} /> No Credit Card Required
+                    <Check size={14} /> 100% Free to Install
                   </span>
                   <span>
                     <Check size={14} /> Official Google API Partner
                   </span>
                   <span>
-                    <Check size={14} /> Setup in 2 Minutes
+                    <Check size={14} /> 7-Day Full Trial
                   </span>
                 </div>
 
@@ -196,15 +264,20 @@ export default function Landing() {
                             ✓ <b>bgos.site/{checkResult.slug}</b> is available!
                           </span>
                           <a
-                            href={`${signupUrl}&claimSlug=${encodeURIComponent(checkResult.slug)}`}
+                            href={PLAY_STORE_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             style={{
                               fontSize: 11.5,
                               fontWeight: 700,
                               color: '#008040',
                               textDecoration: 'underline',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
                             }}
                           >
-                            Claim Handle →
+                            Claim in BGOS App →
                           </a>
                         </div>
                       ) : (
@@ -392,7 +465,7 @@ export default function Landing() {
                       <CheckCircle2 size={16} /> <b>Weekly Radar Scan:</b> Tracks rank movements on Google Search &amp; Maps every 7 days.
                     </li>
                   </ul>
-                  <a className={s.primary} href={signupUrl}>
+                  <a className={s.primary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
                     Autopilot My Google Profile <ArrowRight size={15} />
                   </a>
                 </div>
@@ -444,8 +517,8 @@ export default function Landing() {
                       <CheckCircle2 size={16} /> <b>Multilingual Fluency:</b> Communicates fluently in English, Hindi, Hinglish, and regional dialects.
                     </li>
                   </ul>
-                  <a className={s.primary} href={signupUrl}>
-                    Try AI Receptionist Free <ArrowRight size={15} />
+                  <a className={s.primary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+                    Try AI Receptionist on App <ArrowRight size={15} />
                   </a>
                 </div>
                 <div className={s.pillarCardMock}>
@@ -494,7 +567,7 @@ export default function Landing() {
                       <CheckCircle2 size={16} /> <b>Integrated Booking &amp; Inquiry:</b> Customers book consultations without downloading any app.
                     </li>
                   </ul>
-                  <a className={s.primary} href={signupUrl}>
+                  <a className={s.primary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
                     Get My Free Website <ArrowRight size={15} />
                   </a>
                 </div>
@@ -541,8 +614,8 @@ export default function Landing() {
                       <CheckCircle2 size={16} /> <b>QR Code Tracking:</b> Know exactly how many scans turn into positive customer reviews.
                     </li>
                   </ul>
-                  <a className={s.primary} href={signupUrl}>
-                    Generate Standee Free <ArrowRight size={15} />
+                  <a className={s.primary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+                    Generate Standee in App <ArrowRight size={15} />
                   </a>
                 </div>
                 <div className={s.pillarCardMock}>
@@ -694,7 +767,7 @@ export default function Landing() {
             <div className={s.sectionHeader}>
               <div className={s.badge}>TRANSPARENT PRICING</div>
               <h2>Start Free. Upgrade As You Grow.</h2>
-              <p>7-Day full access trial on all paid plans. No credit card required to start.</p>
+              <p>Download the BGOS Android app from Google Play to activate your 7-day full access trial on any plan. No credit card required.</p>
             </div>
 
             <div className={s.pricingGrid}>
@@ -719,8 +792,8 @@ export default function Landing() {
                     <Check size={14} /> Up to 100 Customer Contacts
                   </li>
                 </ul>
-                <a className={s.secondary} href={`${signupUrl}&plan=free`}>
-                  Start Free
+                <a className={s.secondary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+                  Get on Google Play
                 </a>
               </div>
 
@@ -748,8 +821,8 @@ export default function Landing() {
                     <Check size={14} /> 1,000 Customer Contacts
                   </li>
                 </ul>
-                <a className={s.secondary} href={`${signupUrl}&plan=starter`}>
-                  Start 7-Day Trial
+                <a className={s.secondary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+                  Download &amp; Start Trial
                 </a>
               </div>
 
@@ -781,8 +854,8 @@ export default function Landing() {
                     <Check size={14} /> 10,000 Customer Contacts
                   </li>
                 </ul>
-                <a className={s.primary} href={`${signupUrl}&plan=growth`}>
-                  Start 7-Day Trial
+                <a className={s.primary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+                  Download &amp; Start 7-Day Trial
                 </a>
               </div>
 
@@ -813,8 +886,8 @@ export default function Landing() {
                     <Check size={14} /> 100,000 Contacts
                   </li>
                 </ul>
-                <a className={s.secondary} href={`${signupUrl}&plan=business`}>
-                  Contact for Business
+                <a className={s.secondary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+                  Download on Google Play
                 </a>
               </div>
             </div>
@@ -896,10 +969,20 @@ export default function Landing() {
               <p>Join thousands of local businesses dominating Google Maps and converting customers 24/7.</p>
             </div>
             <div className={s.ctaActions}>
-              <a className={s.primary} href={signupUrl} style={{ padding: '16px 32px', fontSize: 15 }}>
-                Start 7-Day Free Trial <ArrowRight size={16} />
+              <a
+                className={s.playStoreHeroBtn}
+                href={PLAY_STORE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ padding: '14px 28px' }}
+              >
+                <GooglePlayIcon size={24} />
+                <div style={{ textAlign: 'left', lineHeight: 1.15 }}>
+                  <span style={{ fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', opacity: 0.85, display: 'block' }}>GET IT ON</span>
+                  <span style={{ fontSize: 16, fontWeight: 800 }}>Google Play</span>
+                </div>
               </a>
-              <span style={{ fontSize: 12, color: '#94a3b8' }}>✓ No credit card required • 2 min setup</span>
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>✓ Free download • 7-day full trial • 2 min setup</span>
             </div>
           </div>
         </section>
@@ -935,9 +1018,15 @@ export default function Landing() {
             </div>
 
             <div className={s.footerCol}>
-              <h5>Account</h5>
-              <a href={loginUrl}>Merchant Login</a>
-              <a href={signupUrl}>Create Free Account</a>
+              <h5>Download &amp; Support</h5>
+              <a
+                href={PLAY_STORE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+              >
+                <GooglePlayIcon size={14} /> Android App (Google Play)
+              </a>
               <a href="mailto:support@fieseros.com">Contact Support</a>
               <a href="https://fieseros.com/privacy-policy">Privacy Policy</a>
               <a href="https://fieseros.com/terms-of-service">Terms of Service</a>

@@ -1,21 +1,24 @@
 import { redirect } from 'next/navigation';
 
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.fieseros.bgos';
+
 /**
- * BGOS entry route.
- *
- * Preserves sign-in callbacks and deep links while redirecting to the real
- * application shell at `/app`. We redirect to `/app` (NOT `/`) because `/`
- * is this very route — redirecting to `/` would create an infinite loop
- * (`ERR_TOO_MANY_REDIRECTS`).
+ * BGOS entry route (Option A: 100% Mobile / App-First).
+ * Redirects general login traffic directly to the Google Play Store.
+ * Preserves OAuth code/token callbacks if triggered by integrations.
  */
 export default async function BgosLogin({ searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(await searchParams)) {
-    for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) query.append(key, item);
+  const params = await searchParams;
+  if (params && ('code' in params || 'token' in params)) {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) query.append(key, item);
+    }
+    query.set('product', 'bgos');
+    redirect(`/app${query.size ? `?${query}` : ''}`);
   }
-  query.set('product', 'bgos');
-  if (!query.has('auth')) query.set('auth', 'login');
-  redirect(`/app${query.size ? `?${query}` : ''}`);
+
+  redirect(PLAY_STORE_URL);
 }
