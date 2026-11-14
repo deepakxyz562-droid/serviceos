@@ -247,8 +247,8 @@ export async function GET(request?: NextRequest): Promise<NextResponse> {
         profile:
           isAgencyMode && profile?.isEnabled && profile.handle
             ? `/p/${encodeURIComponent(profile.handle)}`
-            : `/b/${encodeURIComponent(businessSlug)}`,
-        booking: `/book/${encodeURIComponent(businessSlug)}`,
+            : `https://${encodeURIComponent(businessSlug)}.bgos.site`,
+        booking: `https://${encodeURIComponent(businessSlug)}.bgos.site/book`,
         form: form?.slug ? `/f/${encodeURIComponent(form.slug)}` : null,
         review: tenant.googlePlaceId ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(tenant.googlePlaceId)}` : null,
       },

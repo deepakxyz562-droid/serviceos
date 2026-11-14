@@ -98,7 +98,7 @@ export default function HelpScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
-  const workspace = useResource<BgosWorkspace>('/api/bgos/mobile/workspace');
+  const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
 
   const businessName = workspace.data?.name || user?.name || 'Kanvi';
   const userEmail = user?.email || '';

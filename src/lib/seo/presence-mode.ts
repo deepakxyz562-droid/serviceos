@@ -98,7 +98,7 @@ export function isFieserosHostedUrl(url: string | null | undefined): boolean {
   if (!url) return false;
   try {
     const host = new URL(url).hostname.toLowerCase();
-    return HOSTED_HOSTS.has(host) || host.endsWith('.fieseros.com');
+    return HOSTED_HOSTS.has(host) || host.endsWith('.fieseros.com') || host.endsWith('.bgos.site');
   } catch {
     return false;
   }

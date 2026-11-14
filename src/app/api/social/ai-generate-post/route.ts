@@ -454,7 +454,7 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       bookingUrl:
         tenant?.brandProfile?.website ||
         (tenant?.website && !tenant.website.includes('fieseros.com') ? tenant.website : '') ||
-        (tenant?.slug ? `https://bgos.site/b/${tenant.slug}` : '') ||
+        (tenant?.slug ? `https://${tenant.slug}.bgos.site` : '') ||
         '',
       offerDetails: {
         discountText: finalBadge,

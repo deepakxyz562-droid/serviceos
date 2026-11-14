@@ -1384,7 +1384,7 @@ export async function applyHostedOrActivationSeoFix(params: {
           keywords: discoveryKeywords,
         });
 
-  const hostedShortUrl = `https://bgos.site/b/${slug}`;
+  const hostedShortUrl = `https://${slug}.bgos.site`;
   const presenceAfter = resolveBusinessPresenceMode({
     tenant: { ...tenant, slug, website: tenant.website || hostedShortUrl, publicProfileEnabled: true, claimed: true },
   });

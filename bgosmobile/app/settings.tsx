@@ -43,7 +43,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { logout, user } = useAuthStore();
-  const workspace = useResource<BgosWorkspace>('/api/bgos/mobile/workspace');
+  const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
 
   // App preferences state
   const [selectedLanguage, setSelectedLanguage] = useState('English');

@@ -1504,7 +1504,7 @@ export default function SelectProfileScreen() {
               </Pressable>
             </View>
             <Text style={{ fontSize: 12.5, color: '#64748B', lineHeight: 18 }}>
-              Each business runs in an isolated workspace with its own Google location, public card URL (/b/...), auto-trained AI chatbot, CRM leads, and subscription (starts Free).
+              Each business runs in an isolated workspace with its own Google location, public business URL (your-business.bgos.site), auto-trained AI chatbot, CRM leads, and subscription (starts Free).
             </Text>
 
             <View style={{ gap: 10 }}>
