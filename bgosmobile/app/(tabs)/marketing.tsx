@@ -2656,14 +2656,18 @@ export default function MarketingScreen() {
             <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 }}>
               Posts
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-              <Text numberOfLines={1} style={{ fontSize: 12.5, fontWeight: '600', color: '#2563EB', maxWidth: 160 }}>
-                {effectiveBusinessName && !effectiveBusinessName.toLowerCase().includes('fieseros')
-                  ? effectiveBusinessName
-                  : 'My Business'}
+            {effectiveBusinessName &&
+            effectiveBusinessName !== 'My Business' &&
+            effectiveBusinessName !== 'Commercial Brand' &&
+            !effectiveBusinessName.toLowerCase().includes('fieseros') ? (
+              <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '600', color: '#64748B', maxWidth: 200, marginTop: 1 }}>
+                {effectiveBusinessName}
               </Text>
-              <MaterialIcons name="expand-more" size={16} color="#2563EB" />
-            </View>
+            ) : (
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#64748B', marginTop: 1 }}>
+                Google Updates & AI Studio
+              </Text>
+            )}
           </View>
         </View>
 

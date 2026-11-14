@@ -242,6 +242,8 @@ export function MediaMetadataSheet({
   const [aiLoading, setAiLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [scheduledCelebration, setScheduledCelebration] = useState(false);
+  const [celebrationMessage, setCelebrationMessage] = useState('');
 
   // Reference-aware AI image generation states
   const [ideasLoading, setIdeasLoading] = useState(false);
@@ -464,6 +466,8 @@ export function MediaMetadataSheet({
     const reqKey = sessionKeyRef.current;
     handedOffBatchRef.current = null;
     setErrorMsg(null);
+    setScheduledCelebration(false);
+    setCelebrationMessage('');
     setVideoWarning(null);
     setTagInput('');
     setIdeasError(null);
@@ -972,8 +976,13 @@ export function MediaMetadataSheet({
       handedOffBatchRef.current = activeBatchId;
       try {
         const finished = await submitBatchJob(activeBatchId, buildJobConfig());
-        await onSaved(finished.message || 'Media saved & scheduled successfully.');
-        onClose();
+        if (scheduleMode === 'daily' || scheduleMode === 'weekly') {
+          setCelebrationMessage(finished.message || 'Media saved & scheduled successfully.');
+          setScheduledCelebration(true);
+        } else {
+          await onSaved(finished.message || 'Media saved & scheduled successfully.');
+          onClose();
+        }
       } catch (err: unknown) {
         setErrorMsg(err instanceof Error ? err.message : 'Could not save media. Please try again.');
       } finally {
@@ -1032,8 +1041,13 @@ export function MediaMetadataSheet({
           timeZone: selectedTimeZone,
         },
       });
-      await onSaved(res?.message || 'Media saved & scheduled successfully.');
-      onClose();
+      if (scheduleMode === 'daily' || scheduleMode === 'weekly') {
+        setCelebrationMessage(res?.message || 'Media saved & scheduled successfully.');
+        setScheduledCelebration(true);
+      } else {
+        await onSaved(res?.message || 'Media saved & scheduled successfully.');
+        onClose();
+      }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Could not save media. Please try again.');
     } finally {
@@ -1073,7 +1087,52 @@ export function MediaMetadataSheet({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.root}
       >
-        {/* Top Bar */}
+        {scheduledCelebration ? (
+          <View style={styles.celebrationWrapper}>
+            <View style={styles.celebrationHeader}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                onPress={() => {
+                  setScheduledCelebration(false);
+                  void onSaved(celebrationMessage || 'Media saved & scheduled successfully.');
+                  onClose();
+                }}
+                style={styles.closeBtn}
+                hitSlop={8}
+              >
+                <MaterialIcons name="close" size={22} color={colors.ink} />
+              </Pressable>
+            </View>
+
+            <View style={styles.celebrationBody}>
+              <View style={styles.celebrationCheckCircle}>
+                <MaterialIcons name="check" size={38} color="#FFFFFF" />
+              </View>
+              <Text style={styles.celebrationTitle}>Scheduled!</Text>
+              <Text style={styles.celebrationSubtitle}>
+                Your photos set to auto-publish. The GBP agent selected best dates to enhance visibility on Google
+              </Text>
+            </View>
+
+            <View style={styles.celebrationFooter}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Go to Photos"
+                onPress={() => {
+                  setScheduledCelebration(false);
+                  void onSaved(celebrationMessage || 'Media saved & scheduled successfully.');
+                  onClose();
+                }}
+                style={styles.celebrationCta}
+              >
+                <Text style={styles.celebrationCtaText}>Go to Photos</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <>
+            {/* Top Bar */}
         <View style={styles.header}>
           <Pressable
             accessibilityRole="button"
@@ -2224,6 +2283,8 @@ export function MediaMetadataSheet({
             </>
           )}
         </View>
+          </>
+        )}
       </KeyboardAvoidingView>
 
       {/* Country & Timezone Picker Modal */}
@@ -2319,6 +2380,72 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  celebrationWrapper: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 24 : 16,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  celebrationHeader: {
+    alignItems: 'flex-start',
+  },
+  celebrationBody: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 16,
+    flex: 1,
+  },
+  celebrationCheckCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#009F50',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    elevation: 4,
+    shadowColor: '#009F50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  celebrationTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    letterSpacing: -0.4,
+  },
+  celebrationSubtitle: {
+    fontSize: 14.5,
+    fontWeight: '500',
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  celebrationFooter: {
+    paddingTop: 20,
+  },
+  celebrationCta: {
+    backgroundColor: '#2563EB',
+    paddingVertical: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  celebrationCtaText: {
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',

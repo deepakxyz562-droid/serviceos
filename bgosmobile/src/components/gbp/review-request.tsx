@@ -360,7 +360,7 @@ export function ReviewRequestSheet({
   const [queueActionBusy, setQueueActionBusy] = useState(false);
   const [bulkNote, setBulkNote] = useState<string | null>(null);
   const [bulkError, setBulkError] = useState<string | null>(null);
-  const [selectedMetaTemplateName, setSelectedMetaTemplateName] = useState<string>('bgos_review_invite_en');
+  const [selectedMetaTemplateName, setSelectedMetaTemplateName] = useState<string>('bgos_review_clean_feedback');
   const [customCloudNote, setCustomCloudNote] = useState<string>('');
   const [saveToCrm, setSaveToCrm] = useState<boolean>(true);
 
@@ -460,115 +460,27 @@ export function ReviewRequestSheet({
 
   const inviteText = useMemo(() => {
     if (lang === 'hi') {
-      const cleanGreetingHi = firstName ? `नमस्ते ${firstName},` : 'नमस्ते,';
-      const formalGreetingHi = firstName ? `सादर नमस्ते ${firstName} जी,` : 'सादर नमस्ते,';
-      const warmGreetingHi = firstName ? `नमस्ते ${firstName} जी,` : 'नमस्ते प्रिय ग्राहक जी,';
-
-      if (template === 'clean') {
-        return [
-          cleanGreetingHi,
-          '',
-          `कृपया *${cleanBusinessName}* में अपने हाल के अनुभव पर अपना फीडबैक शेयर करें:`,
-          effectiveReviewUrl,
-          '',
-          `*${cleanBusinessName}* टीम`,
-        ].join('\n');
-      }
-
-      if (template === 'executive' || template === '5star') {
-        return [
-          formalGreetingHi,
-          '',
-          `${cleanBusinessName} को सेवा का अवसर देने के लिए आपका हार्दिक धन्यवाद। हमारे लिए आपकी संतुष्टि और विश्वास सर्वोपरि है।`,
-          '',
-          `यदि आप हमारे कार्य और सेवा से संतुष्ट हैं, तो कृपया Google Maps पर 1 मिनट का समय निकालकर अपना बहुमूल्य रिव्यू अवश्य साझा करें:`,
-          '',
-          `👉 Google रिव्यू लिंक: ${effectiveReviewUrl}`,
-          '',
-          `सादर,`,
-          cleanBusinessName,
-        ].join('\n');
-      }
-
-      if (template === 'excellence' || template === 'experience') {
-        return [
-          warmGreetingHi,
-          '',
-          `${cleanBusinessName} से जुड़ने के लिए आपका बहुत-बहुत धन्यवाद। कृपया Google Maps पर अपना अनुभव रेट करें:`,
-          '',
-          `⭐ Google रिव्यू: ${effectiveReviewUrl}`,
-          '',
-          `धन्यवाद,`,
-          `${cleanBusinessName} टीम`,
-        ].join('\n');
-      }
-
+      const greetingHi = firstName ? `नमस्ते ${firstName},` : 'नमस्ते,';
       return [
-        formalGreetingHi,
+        greetingHi,
         '',
-        `${cleanBusinessName} पर आपके विश्वास के लिए हम आपके आभारी हैं। कृपया Google पर अपना फीडबैक शेयर करें:`,
-        '',
-        `👉 रिव्यू लिंक: ${effectiveReviewUrl}`,
-        '',
-        `सादर,`,
-        cleanBusinessName,
-      ].join('\n');
-    }
-
-    const cleanGreetingEn = firstName ? `Hello ${firstName},` : 'Hello there,';
-    const formalGreetingEn = firstName ? `Dear ${firstName},` : 'Dear Valued Client,';
-    const warmGreetingEn = firstName ? `Hello ${firstName},` : 'Hello,';
-
-    if (template === 'clean') {
-      return [
-        cleanGreetingEn,
-        '',
-        `Please share your feedback on your recent experience at *${cleanBusinessName}*:`,
+        `कृपया *${cleanBusinessName}* में अपने हाल के अनुभव पर अपना फीडबैक शेयर करें:`,
         effectiveReviewUrl,
         '',
-        `*${cleanBusinessName}* Team`,
+        `*${cleanBusinessName}* टीम`,
       ].join('\n');
     }
 
-    if (template === 'executive' || template === '5star') {
-      return [
-        formalGreetingEn,
-        '',
-        `Thank you for choosing ${cleanBusinessName}. We truly appreciate your trust and hope you had an exceptional experience with our team.`,
-        '',
-        `If you have a brief moment, we would be deeply grateful if you could share your feedback on our official Google Business Profile:`,
-        '',
-        `🔗 Share Your Feedback: ${effectiveReviewUrl}`,
-        '',
-        `Warm regards,`,
-        cleanBusinessName,
-      ].join('\n');
-    }
-
-    if (template === 'excellence' || template === 'experience') {
-      return [
-        warmGreetingEn,
-        '',
-        `Thank you for trusting ${cleanBusinessName}. Could you please take 30 seconds to rate your experience on Google Maps?`,
-        '',
-        `⭐ Rate Us on Google: ${effectiveReviewUrl}`,
-        '',
-        `Best regards,`,
-        `The ${cleanBusinessName} Team`,
-      ].join('\n');
-    }
-
+    const greetingEn = firstName ? `Hello ${firstName},` : 'Hello there,';
     return [
-      warmGreetingEn,
+      greetingEn,
       '',
-      `Thank you for visiting ${cleanBusinessName}! If you were pleased with our service today, please leave us a quick review on Google:`,
+      `Please share your feedback on your recent experience at *${cleanBusinessName}*:`,
+      effectiveReviewUrl,
       '',
-      `👉 Google Review Link: ${effectiveReviewUrl}`,
-      '',
-      `Sincerely,`,
-      cleanBusinessName,
+      `*${cleanBusinessName}* Team`,
     ].join('\n');
-  }, [lang, template, firstName, cleanBusinessName, effectiveReviewUrl]);
+  }, [lang, firstName, cleanBusinessName, effectiveReviewUrl]);
 
   const parsedPasted = useMemo(
     () => parseBulkRecipientText(pasteText, selectedCountry.callingCode, selectedCountry.digits),
@@ -1059,63 +971,35 @@ export function ReviewRequestSheet({
               </Pressable>
             </View>
 
-            {/* Language Switch */}
-            <View style={styles.sectionRow}>
-              <View style={styles.pillGroup}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setLang('en')}
-                  style={[styles.smallChip, lang === 'en' && styles.smallChipActive]}
-                >
-                  <Text style={[styles.smallChipText, lang === 'en' && styles.smallChipTextActive]}>
-                    English
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setLang('hi')}
-                  style={[styles.smallChip, lang === 'hi' && styles.smallChipActive]}
-                >
-                  <Text style={[styles.smallChipText, lang === 'hi' && styles.smallChipTextActive]}>
-                    🇮🇳 हिन्दी (Hindi)
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
             {sheetTab === 'single' ? (
               <>
-                {/* Template Selector Chips */}
-                <View style={styles.templateGroup}>
-                  {([
-                    { key: 'clean', icon: 'bolt', label: 'Clean Feedback' },
-                    { key: 'executive', icon: 'verified', label: 'Executive' },
-                    { key: 'excellence', icon: 'workspace-premium', label: 'Excellence' },
-                    { key: 'gratitude', icon: 'thumb-up', label: 'Gratitude' },
-                  ] as const).map((tpl) => {
-                    const active =
-                      template === tpl.key ||
-                      (tpl.key === 'executive' && template === '5star') ||
-                      (tpl.key === 'excellence' && template === 'experience') ||
-                      (tpl.key === 'gratitude' && template === 'thankyou');
-                    return (
-                      <Pressable
-                        key={tpl.key}
-                        accessibilityRole="button"
-                        onPress={() => setTemplate(tpl.key)}
-                        style={[styles.templateChip, active && styles.templateChipActive]}
-                      >
-                        <MaterialIcons
-                          name={tpl.icon}
-                          size={15}
-                          color={active ? colors.brand : colors.muted}
-                        />
-                        <Text style={[styles.templateChipText, active && styles.templateChipTextActive]}>
-                          {tpl.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                {/* Verified Meta Template Header & Language Switch */}
+                <View style={styles.templateHeaderRow}>
+                  <View style={styles.metaApprovedBadge}>
+                    <MaterialIcons name="verified" size={14} color="#059669" />
+                    <Text style={styles.metaApprovedBadgeText}>Meta-Approved Template</Text>
+                  </View>
+
+                  <View style={styles.langPillGroup}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setLang('en')}
+                      style={[styles.langChip, lang === 'en' && styles.langChipActive]}
+                    >
+                      <Text style={[styles.langChipText, lang === 'en' && styles.langChipTextActive]}>
+                        English
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setLang('hi')}
+                      style={[styles.langChip, lang === 'hi' && styles.langChipActive]}
+                    >
+                      <Text style={[styles.langChipText, lang === 'hi' && styles.langChipTextActive]}>
+                        हिन्दी
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
 
                 {/* Realistic WhatsApp Preview */}
@@ -1186,77 +1070,22 @@ export function ReviewRequestSheet({
                 {waConnected ? (
                   <View style={styles.metaCloudBox}>
                     <View style={styles.cardHeaderLine}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <MaterialIcons name="lock-outline" size={14} color={colors.brandDark} />
-                        <Text style={styles.metaCloudTitle}>Cloud API Meta Template</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <MaterialIcons name="verified" size={16} color="#059669" />
+                        <Text style={styles.metaCloudTitle}>WhatsApp Cloud API Connected</Text>
                       </View>
-                      <View
-                        style={[
-                          styles.metaStatusPill,
-                          selectedMetaTemplate.status === 'APPROVED'
-                            ? styles.metaStatusApproved
-                            : styles.metaStatusPending,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.metaStatusText,
-                            selectedMetaTemplate.status === 'APPROVED'
-                              ? styles.metaStatusTextApproved
-                              : styles.metaStatusTextPending,
-                          ]}
-                        >
-                          {selectedMetaTemplate.status === 'APPROVED' ? 'Approved' : 'Pending Approval'}
+                      <View style={[styles.metaStatusPill, styles.metaStatusApproved]}>
+                        <Text style={[styles.metaStatusText, styles.metaStatusTextApproved]}>
+                          Meta Approved
                         </Text>
                       </View>
                     </View>
-
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{ gap: 6 }}
-                    >
-                      {availableMetaTemplates.map((tpl) => {
-                        const active = tpl.name === selectedMetaTemplate.name;
-                        return (
-                          <Pressable
-                            key={tpl.name}
-                            onPress={() => setSelectedMetaTemplateName(tpl.name)}
-                            style={[styles.metaPresetPill, active && styles.metaPresetPillActive]}
-                          >
-                            <Text
-                              style={[
-                                styles.metaPresetPillText,
-                                active && styles.metaPresetPillTextActive,
-                              ]}
-                            >
-                              {tpl.displayName}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-
-                    {selectedMetaTemplate.supportsCustomNote ? (
-                      <View style={{ gap: 4 }}>
-                        <Text style={styles.microLabel}>
-                          Optional 1-Line Note ({customCloudNote.length}/120)
-                        </Text>
-                        <TextInput
-                          value={customCloudNote}
-                          onChangeText={(txt) =>
-                            setCustomCloudNote(txt.replace(/[\r\n\t]+/g, ' ').slice(0, 120))
-                          }
-                          maxLength={120}
-                          placeholder={DEFAULT_META_CLOSING_NOTE}
-                          placeholderTextColor={colors.muted}
-                          style={styles.metaNoteInput}
-                        />
-                      </View>
-                    ) : null}
-
-                    <Text style={styles.channelHint}>
-                      &ldquo;Send on WhatsApp (Direct)&rdquo; uses your tone preview above. &ldquo;Send via Cloud API&rdquo; uses this locked Meta template.
+                    <Text style={styles.metaCloudSub}>
+                      Delivery uses the official Meta-approved template{' '}
+                      <Text style={{ fontWeight: '700', color: colors.ink }}>
+                        bgos_review_clean_feedback
+                      </Text>{' '}
+                      for reliable 24/7 delivery outside the customer care window.
                     </Text>
                   </View>
                 ) : null}
@@ -1329,6 +1158,31 @@ export function ReviewRequestSheet({
               </>
             ) : (
               <>
+                {/* Language Switch for Bulk */}
+                <View style={styles.bulkLangRow}>
+                  <Text style={styles.bulkLangLabel}>Template Language</Text>
+                  <View style={styles.langPillGroup}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setLang('en')}
+                      style={[styles.langChip, lang === 'en' && styles.langChipActive]}
+                    >
+                      <Text style={[styles.langChipText, lang === 'en' && styles.langChipTextActive]}>
+                        English
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setLang('hi')}
+                      style={[styles.langChip, lang === 'hi' && styles.langChipActive]}
+                    >
+                      <Text style={[styles.langChipText, lang === 'hi' && styles.langChipTextActive]}>
+                        हिन्दी
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
                 {/* ── Card 1: Channel & Country Schedule Settings ── */}
                 <View style={styles.channelCard}>
                   <View style={styles.cardHeaderLine}>
@@ -1740,7 +1594,7 @@ export function ReviewRequestSheet({
                         </Text>
                       </View>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
                       <Pressable
                         accessibilityRole="button"
                         onPress={() => {
@@ -1752,36 +1606,10 @@ export function ReviewRequestSheet({
                         }}
                         style={[styles.smallChip, styles.smallChipActive]}
                       >
-                        <MaterialIcons name="bolt" size={13} color={colors.brand} />
-                        <Text style={[styles.smallChipText, styles.smallChipTextActive]}>Clean Feedback</Text>
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => {
-                          const tpl =
-                            lang === 'hi'
-                              ? `सादर नमस्ते {firstName} जी,\n\n${cleanBusinessName} को सेवा का अवसर देने के लिए आपका हार्दिक धन्यवाद। कृपया Google Maps पर अपना बहुमूल्य रिव्यू अवश्य साझा करें:\n\n👉 ${effectiveReviewUrl}\n\nसादर,\n${cleanBusinessName}`
-                              : `Dear {firstName},\n\nThank you for choosing ${cleanBusinessName}. If you have a brief moment, we would be deeply grateful if you could share your feedback on Google:\n\n🔗 ${effectiveReviewUrl}\n\nWarm regards,\n${cleanBusinessName}`;
-                          setCustomBulkMessage(tpl);
-                        }}
-                        style={styles.smallChip}
-                      >
-                        <MaterialIcons name="verified" size={13} color={colors.muted} />
-                        <Text style={styles.smallChipText}>Executive</Text>
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => {
-                          const tpl =
-                            lang === 'hi'
-                              ? `नमस्ते {firstName} जी,\n\n${cleanBusinessName} से जुड़ने के लिए बहुत धन्यवाद। कृपया अपना अनुभव रेट करें:\n\n⭐ ${effectiveReviewUrl}\n\nधन्यवाद,\n${cleanBusinessName} टीम`
-                              : `Hello {firstName},\n\nThank you for trusting ${cleanBusinessName}. Could you please take 30 seconds to rate your experience on Google Maps?\n\n⭐ ${effectiveReviewUrl}\n\nBest regards,\n${cleanBusinessName} Team`;
-                          setCustomBulkMessage(tpl);
-                        }}
-                        style={styles.smallChip}
-                      >
-                        <MaterialIcons name="workspace-premium" size={13} color={colors.muted} />
-                        <Text style={styles.smallChipText}>Excellence</Text>
+                        <MaterialIcons name="verified" size={13} color={colors.brand} />
+                        <Text style={[styles.smallChipText, styles.smallChipTextActive]}>
+                          Insert Meta-Approved Clean Template
+                        </Text>
                       </Pressable>
                     </View>
                     <TextInput
@@ -2205,35 +2033,75 @@ const styles = StyleSheet.create({
     color: colors.brandDark,
     fontWeight: '700',
   },
-  templateGroup: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  templateChip: {
-    flex: 1,
+  templateHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 7,
-    paddingHorizontal: 6,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+    gap: 8,
+  },
+  metaApprovedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: colors.line,
+    borderColor: '#A7F3D0',
   },
-  templateChipActive: {
-    backgroundColor: colors.brandSoft,
-    borderColor: colors.brand,
-  },
-  templateChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.muted,
-  },
-  templateChipTextActive: {
-    color: colors.brandDark,
+  metaApprovedBadgeText: {
+    fontSize: 12,
     fontWeight: '700',
+    color: '#065F46',
+  },
+  langPillGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    padding: 3,
+  },
+  langChip: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 7,
+  },
+  langChipActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  langChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  langChipTextActive: {
+    color: '#111827',
+    fontWeight: '700',
+  },
+  bulkLangRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+    marginBottom: 4,
+  },
+  bulkLangLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  metaCloudSub: {
+    fontSize: 12,
+    color: colors.muted,
+    lineHeight: 17,
   },
   waCard: {
     borderRadius: 16,

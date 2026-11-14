@@ -1,5 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
@@ -89,11 +101,27 @@ function LeadsScreen() {
   const [attempted, setAttempted] = useState(false);
   const [savedNotice, setSavedNotice] = useState('');
   const [matchedCustomer, setMatchedCustomer] = useState<string | null>(null);
+  const [askForReview, setAskForReview] = useState(true);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const workspaceRes = useResource<BgosWorkspace>('/api/bgos/workspace');
   const servicesRes = useResource<{ services: ServiceOption[] }>('/api/services?active=true&limit=25', 0, open);
+  const reviewQueue = useResource<{
+    businessName?: string;
+    reviewLink?: string;
+    items?: Array<{
+      id: string;
+      channel: string;
+      phone: string;
+      customerName: string;
+      message: string;
+      dueAt: string;
+      sentAt: string | null;
+      status: string;
+    }>;
+  }>('/api/reviews/request');
   const tenantCurrency = workspaceRes.data?.billing?.currency || 'USD';
 
   useEffect(() => {
@@ -125,6 +153,7 @@ function LeadsScreen() {
     setAttempted(false);
     setError(null);
     setMoreDetails(false);
+    setAskForReview(true);
   };
 
   const handleCloseAddLead = () => {
@@ -231,12 +260,78 @@ function LeadsScreen() {
           description: notes.trim() || undefined,
         },
       });
-      setSavedNotice(`${name.trim()} added to leads.`);
+
+      // If Ask for Google Review is enabled, trigger review invite + scheduled follow-up
+      if (askForReview) {
+        try {
+          await apiRequest('/api/reviews/request', {
+            method: 'POST',
+            body: {
+              recipients: [[formattedPhone, name.trim()]],
+              channel: 'whatsapp',
+              source: 'crm_lead',
+              saveToCustomers: true,
+              saveToLeads: true,
+            },
+          });
+          await reviewQueue.refresh();
+        } catch {}
+      }
+
+      setSavedNotice(`${name.trim()} added to leads${askForReview ? ' & review request queued.' : '.'}`);
       setOpen(false);
       resetAddForm();
       await resource.refresh();
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const selectedNormalizedDigits = (selected?.phone || '').replace(/\D/g, '');
+  const selectedScheduledMessages = useMemo(() => {
+    if (!selectedNormalizedDigits) return [];
+    const items = reviewQueue.data?.items || [];
+    return items.filter((item) => {
+      const itemDigits = (item.phone || '').replace(/\D/g, '');
+      return (
+        itemDigits.endsWith(selectedNormalizedDigits.slice(-8)) ||
+        selectedNormalizedDigits.endsWith(itemDigits.slice(-8))
+      );
+    });
+  }, [selectedNormalizedDigits, reviewQueue.data?.items]);
+
+  async function handleDeleteScheduledMessage(id: string) {
+    setDeletingMessageId(id);
+    try {
+      await apiRequest(`/api/reviews/request?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await reviewQueue.refresh();
+      Alert.alert('Deleted', 'Scheduled review follow-up reminder cancelled.');
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Could not delete scheduled message');
+    } finally {
+      setDeletingMessageId(null);
+    }
+  }
+
+  async function handleScheduleLeadReview(lead: Lead) {
+    setBusy(true);
+    try {
+      await apiRequest('/api/reviews/request', {
+        method: 'POST',
+        body: {
+          recipients: [[lead.phone, lead.name]],
+          channel: 'whatsapp',
+          source: 'crm_lead_detail',
+          saveToCustomers: true,
+          saveToLeads: true,
+        },
+      });
+      await reviewQueue.refresh();
+      Alert.alert('Review Drip Queued', `WhatsApp review invite & automated reminder queued for ${lead.name}.`);
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Could not schedule review request');
     } finally {
       setBusy(false);
     }
@@ -582,6 +677,39 @@ function LeadsScreen() {
                 })}
               </View>
             </View>
+
+            {/* Ask for Google Review (Video 3 & 4 Benchmark) */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: '#F0FDF4',
+                borderWidth: 1.5,
+                borderColor: '#BBF7D0',
+                borderRadius: 12,
+                padding: 12,
+                marginTop: 6,
+              }}
+            >
+              <View style={{ flex: 1, gap: 2, paddingRight: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="star" size={17} color="#F59E0B" />
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#15803D' }}>
+                    Ask for Google Review
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 11.5, color: '#166534', lineHeight: 16 }}>
+                  Automatically queue a WhatsApp review invite and gentle follow-up reminder.
+                </Text>
+              </View>
+              <Switch
+                value={askForReview}
+                onValueChange={setAskForReview}
+                trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
+                thumbColor={askForReview ? '#2563EB' : '#FFFFFF'}
+              />
+            </View>
           </Card>
 
           {/* Section 3: Optional Details */}
@@ -749,6 +877,100 @@ function LeadsScreen() {
                   />
                 ))}
               </View>
+            </Card>
+
+            {/* Scheduled Campaign Messages (Video 3 & 4 Benchmark) */}
+            <Card style={{ gap: 12 }}>
+              <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="schedule-send" size={18} color="#2563EB" />
+                  <Text style={ui.heading}>Scheduled Campaign Messages</Text>
+                </View>
+                <Badge
+                  label={`${selectedScheduledMessages.length} Queued`}
+                  accent={selectedScheduledMessages.length > 0}
+                />
+              </View>
+
+              {selectedScheduledMessages.length > 0 ? (
+                <View style={{ gap: 10 }}>
+                  {selectedScheduledMessages.map((msg) => (
+                    <View
+                      key={msg.id}
+                      style={{
+                        backgroundColor: '#F8FAFC',
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        padding: 12,
+                        gap: 8,
+                      }}
+                    >
+                      <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                        <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#1D4ED8' }}>
+                            Google Review Generation
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>
+                          {new Date(msg.dueAt).toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })} · {new Date(msg.dueAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+
+                      <Text style={{ fontSize: 12.5, color: '#334155', lineHeight: 18 }}>
+                        {msg.message}
+                      </Text>
+
+                      <View style={[ui.row, { justifyContent: 'space-between', marginTop: 4 }]}>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => whatsAppLead(msg.phone, selected.name)}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                        >
+                          <MaterialIcons name="chat" size={14} color="#009F50" />
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#009F50' }}>
+                            Send Review Link Now
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => handleDeleteScheduledMessage(msg.id)}
+                          disabled={deletingMessageId === msg.id}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                        >
+                          {deletingMessageId === msg.id ? (
+                            <ActivityIndicator size="small" color="#DC2626" />
+                          ) : (
+                            <>
+                              <MaterialIcons name="delete-outline" size={15} color="#DC2626" />
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#DC2626' }}>
+                                Delete Message
+                              </Text>
+                            </>
+                          )}
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={{ gap: 8, paddingVertical: 4 }}>
+                  <Text style={ui.body}>
+                    No review follow-up messages scheduled for this contact yet.
+                  </Text>
+                  <Action
+                    label="+ Schedule Google Review Drip (WhatsApp)"
+                    icon="send"
+                    onPress={() => handleScheduleLeadReview(selected)}
+                    disabled={busy || !selected.phone}
+                  />
+                </View>
+              )}
             </Card>
 
             <Action secondary label="← Back to Leads" disabled={busy} onPress={() => setSelected(null)} />

@@ -22,6 +22,7 @@ import { apiRequest } from '../../src/lib/api';
 import { relativeDate, formatReviewTime } from '../../src/components/gbp/bits';
 import { ReviewRequestSheet } from '../../src/components/gbp/review-request';
 import { ReviewReportSheet, parseClientFlagReport } from '../../src/components/gbp/review-report-sheet';
+import { TutorialVideoModal, type TutorialVideoId } from '../../src/components/gbp/tutorial-video-modal';
 import type { GbpConnectionState, GbpPlaceResult, Review } from '../../src/components/gbp/types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -158,6 +159,8 @@ export default function ReviewRepliesScreen() {
   const [filter, setFilter] = useState<ReviewFilter>('needs_reply');
   const [displayLimit, setDisplayLimit] = useState(15);
   const [settingsOpen,setSettingsOpen] = useState(false);
+  const [tutorialVideoOpen, setTutorialVideoOpen] = useState(false);
+  const [tutorialVideoId, setTutorialVideoId] = useState<TutorialVideoId>('reviews_trust');
   const pendingCount = useResource<{total:number}>(pendingCountPath,0,false);
   const [pendingPage,setPendingPage] = useState(1);
   const pendingFeed = useResource<ReviewsResponse>(`/api/reviews?source=google&needsReply=true&limit=50&page=${pendingPage}`,0,filter==='needs_reply');
@@ -633,6 +636,26 @@ export default function ReviewRepliesScreen() {
         }}
         rightAction={
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Watch Review Strategy Tutorial Video"
+              onPress={() => {
+                setTutorialVideoId('reviews_trust');
+                setTutorialVideoOpen(true);
+              }}
+              style={({ pressed }) => ({
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#EFF6FF',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <MaterialIcons name="play-circle-fill" size={19} color="#2563EB" />
+            </Pressable>
+
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="1-Tap WhatsApp Review Request"
@@ -1974,6 +1997,18 @@ export default function ReviewRepliesScreen() {
               [rev.id]: { text },
             }));
           }
+        }}
+      />
+
+      {/* Educational Video Tutorial Player */}
+      <TutorialVideoModal
+        visible={tutorialVideoOpen}
+        videoId={tutorialVideoId}
+        onClose={() => setTutorialVideoOpen(false)}
+        businessName={activeProfile?.name || gbpPlace.data?.place?.title || 'Our Business'}
+        onAction={() => {
+          setTutorialVideoOpen(false);
+          setReviewSheetOpen(true);
         }}
       />
     </View>

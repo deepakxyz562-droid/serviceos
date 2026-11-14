@@ -21,6 +21,7 @@ import { apiRequest } from '../src/lib/api';
 import { getToken } from '../src/lib/auth';
 import { WEB_URL } from '../src/lib/constants';
 import { PerformancePanel } from '../src/components/gbp/performance-panel';
+import { TutorialVideoModal } from '../src/components/gbp/tutorial-video-modal';
 
 interface MetricDelta {
   value: number;
@@ -123,6 +124,7 @@ export default function GrowthReportScreen() {
   const [activeTab, setActiveTab] = useState<'action' | 'performance'>('action');
   const [summaryPage, setSummaryPage] = useState(0);
   const [report, setReport] = useState<ReportData | null>(null);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
 
   const analyticsData = useMemo(() => {
     if (!report) return undefined;
@@ -815,6 +817,47 @@ export default function GrowthReportScreen() {
           ) : (
             /* ── TAB 2: Performance Report ── */
             <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
+              {/* Educational Video Banner (Video 2 Benchmark) */}
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setTutorialOpen(true)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#EFF6FF',
+                  borderWidth: 1,
+                  borderColor: '#BFDBFE',
+                  borderRadius: 12,
+                  padding: 12,
+                  marginBottom: 14,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: '#2563EB',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <MaterialIcons name="play-arrow" size={22} color="#FFFFFF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#1E40AF' }}>
+                      Is Your Profile Performing?
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#3B82F6' }}>
+                      Watch 3-minute guide on interpreting Views, Calls &amp; Trends
+                    </Text>
+                  </View>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color="#2563EB" />
+              </Pressable>
+
               {/* AI Executive Briefing */}
               <View style={[styles.aiBriefingCard, { marginBottom: 16 }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -833,6 +876,15 @@ export default function GrowthReportScreen() {
           )}
         </ScrollView>
       )}
+
+      {/* Educational Video Tutorial Player */}
+      <TutorialVideoModal
+        visible={tutorialOpen}
+        videoId="performance_analysis"
+        onClose={() => setTutorialOpen(false)}
+        businessName={report?.businessName || 'Your Business'}
+        onAction={() => setTutorialOpen(false)}
+      />
     </View>
   );
 }

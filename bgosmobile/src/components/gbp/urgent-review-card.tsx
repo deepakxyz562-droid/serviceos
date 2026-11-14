@@ -24,9 +24,11 @@ interface UrgentReviewCardProps {
   thisWeekCount?: number;
   weeklyTarget?: number;
   countryCode?: string;
-  onOpenQr?: () => void;
+  onAddCustomer?: () => void;
   onOpenBulk?: () => void;
+  onOpenQr?: () => void;
   onOpenSeoUpdates?: () => void;
+  onWatchVideo?: () => void;
 }
 
 export function UrgentReviewCard({
@@ -35,11 +37,13 @@ export function UrgentReviewCard({
   totalReviews = 0,
   lastReviewDate,
   thisWeekCount = 0,
-  weeklyTarget = 12,
+  weeklyTarget = 8,
   countryCode,
-  onOpenQr,
+  onAddCustomer,
   onOpenBulk,
+  onOpenQr,
   onOpenSeoUpdates,
+  onWatchVideo,
 }: UrgentReviewCardProps) {
   const defaultCountry: CountryItem = useMemo(
     () => (countryCode ? getCountryByCode(countryCode) : detectDeviceCountryAndTimezone().country),
@@ -65,6 +69,7 @@ export function UrgentReviewCard({
   }, [lastReviewDate]);
 
   const isHealthyWeek = thisWeekCount >= 1 || (daysAgo !== null && daysAgo <= 7);
+  const remaining = Math.max(0, weeklyTarget - thisWeekCount);
   const progressPercent = Math.min(
     100,
     Math.max(thisWeekCount > 0 ? 6 : 0, Math.round((thisWeekCount / Math.max(1, weeklyTarget)) * 100)),
@@ -113,22 +118,49 @@ export function UrgentReviewCard({
 
   return (
     <View style={styles.card}>
-      {/* ── Top Header: This Week's Reviews & Weekly Goal ── */}
+      {/* ── Top Header: This Week's Reviews, QR & Weekly Goal (Plan A) ── */}
       <View style={styles.headerRow}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.headerTitle}>This Week&apos;s Reviews</Text>
           <Text style={styles.headerSubtitle}>
             {thisWeekCount > 0
-              ? `${thisWeekCount} received this week · ${totalReviews} total`
+              ? `${thisWeekCount} received this week · ${totalReviews} total reviews`
               : totalReviews > 0
-                ? `0 received in last 7 days · ${totalReviews} total`
-                : 'No Google reviews synced yet'}
+                ? `0 received in last 7 days · ${totalReviews} total reviews`
+                : 'Turn your customers into Google reviews'}
           </Text>
         </View>
-        <View style={[styles.targetBadge, isHealthyWeek && styles.targetBadgeHealthy]}>
-          <Text style={[styles.targetBadgeText, isHealthyWeek && styles.targetBadgeTextHealthy]}>
-            {thisWeekCount}/{weeklyTarget}
-          </Text>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {onWatchVideo ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Watch Review Tutorial Video"
+              onPress={onWatchVideo}
+              style={({ pressed }) => [styles.headerPillBtn, pressed && { opacity: 0.8 }]}
+            >
+              <MaterialIcons name="play-circle-outline" size={13} color="#2563EB" />
+              <Text style={styles.headerPillBtnText}>Guide</Text>
+            </Pressable>
+          ) : null}
+
+          {onOpenQr ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="View Review QR Standee"
+              onPress={onOpenQr}
+              style={({ pressed }) => [styles.headerPillBtn, pressed && { opacity: 0.8 }]}
+            >
+              <MaterialIcons name="qr-code-2" size={14} color="#2563EB" />
+              <Text style={styles.headerPillBtnText}>QR</Text>
+            </Pressable>
+          ) : null}
+
+          <View style={[styles.targetBadge, isHealthyWeek && styles.targetBadgeHealthy]}>
+            <Text style={[styles.targetBadgeText, isHealthyWeek && styles.targetBadgeTextHealthy]}>
+              {thisWeekCount}/{weeklyTarget}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -163,7 +195,7 @@ export function UrgentReviewCard({
               <Text style={styles.alertHighlightHealthy}>
                 {daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo} days ago`}
               </Text>
-              . Keep requesting reviews toward your {weeklyTarget}/week target.
+              . Keep requesting reviews toward your {weeklyTarget}/week target ({remaining} more to go).
             </>
           ) : (
             <>
@@ -172,29 +204,6 @@ export function UrgentReviewCard({
             </>
           )}
         </Text>
-      </View>
-
-      {/* ── Bulk Review Automation Banner (5/day) ── */}
-      <View style={styles.bannerContainer}>
-        <View style={styles.bannerTopRow}>
-          <Text style={styles.bannerHeading}>Get Reviews Every Day, Automatically</Text>
-          <View style={styles.cadencePill}>
-            <Text style={styles.cadencePillText}>5 / day</Text>
-          </View>
-        </View>
-        <Text style={styles.bannerSubtext}>
-          Upload a CSV, paste numbers, or pick CRM contacts — BGOS queues and staggers 5 invites/day automatically.
-        </Text>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Schedule Review Messages in Bulk"
-          onPress={onOpenBulk}
-          style={({ pressed }) => [styles.bulkButton, pressed && { opacity: 0.9 }]}
-        >
-          <MaterialIcons name="schedule-send" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-          <Text style={styles.bulkButtonText}>Schedule Review Messages in Bulk</Text>
-        </Pressable>
       </View>
 
       {/* ── Message Style Chips ── */}
@@ -206,8 +215,8 @@ export function UrgentReviewCard({
               key={tpl.id}
               onPress={() => setSelectedTemplate(tpl.id)}
               style={{
-                paddingHorizontal: 10,
-                paddingVertical: 5,
+                paddingHorizontal: 9,
+                paddingVertical: 4,
                 borderRadius: 14,
                 backgroundColor: isActive ? colors.brandSoft : colors.background,
                 borderWidth: 1,
@@ -216,7 +225,7 @@ export function UrgentReviewCard({
             >
               <Text
                 style={{
-                  fontSize: 11.5,
+                  fontSize: 11,
                   fontWeight: isActive ? '700' : '600',
                   color: isActive ? colors.brandDark : colors.muted,
                 }}
@@ -245,60 +254,68 @@ export function UrgentReviewCard({
         />
         <Pressable
           accessibilityRole="button"
-          onPress={() => {
-            Alert.alert(
-              '1-Tap or Bulk Review Requests',
-              'Enter one mobile number here for an instant WhatsApp review invite, or tap "Schedule Review Messages in Bulk" above to upload CSV/paste many customers at 5/day.',
-            );
-          }}
-          hitSlop={8}
-          style={{ paddingRight: 10 }}
-        >
-          <MaterialIcons name="help-outline" size={18} color={colors.brand} />
-        </Pressable>
-      </View>
-
-      {/* ── Action Buttons: Send Review Link & Review QR ── */}
-      <View style={styles.actionButtonsRow}>
-        <Pressable
-          accessibilityRole="button"
           accessibilityLabel="Send Review Link"
           onPress={handleSendLink}
           disabled={isSending}
           style={({ pressed }) => [
-            styles.actionBtn,
+            styles.sendInlineBtn,
             pressed && { opacity: 0.85 },
           ]}
         >
-          <MaterialIcons name="send" size={16} color={colors.brandDark} style={{ marginRight: 6 }} />
-          <Text style={styles.actionBtnText}>Send Review Link</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="View Review QR"
-          onPress={onOpenQr}
-          style={({ pressed }) => [
-            styles.actionBtn,
-            pressed && { opacity: 0.85 },
-          ]}
-        >
-          <MaterialIcons name="qr-code-2" size={16} color={colors.brandDark} style={{ marginRight: 6 }} />
-          <Text style={styles.actionBtnText}>Review QR</Text>
+          <MaterialIcons name="send" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+          <Text style={styles.sendInlineBtnText}>Send Link</Text>
         </Pressable>
       </View>
 
-      {/* ── Footer Link: AI Agent Actions ── */}
+      {/* ── 2 Action Buttons (Plan A: 50/50 Balanced Symmetry) ── */}
+      <View style={styles.actionButtonsRow}>
+        {onAddCustomer ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add Customer"
+            onPress={onAddCustomer}
+            style={({ pressed }) => [
+              styles.primaryActionBtn,
+              pressed && { opacity: 0.9 },
+            ]}
+          >
+            <MaterialIcons name="person-add" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+            <Text style={styles.primaryActionBtnText}>+ Add Customer</Text>
+          </Pressable>
+        ) : null}
+
+        {onOpenBulk ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Bulk Upload"
+            onPress={onOpenBulk}
+            style={({ pressed }) => [
+              styles.secondaryActionBtn,
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <MaterialIcons name="upload-file" size={15} color="#2563EB" style={{ marginRight: 6 }} />
+            <Text style={styles.secondaryActionBtnText}>Bulk Upload</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {/* ── Footer Link: AI Agent Actions (100% Contained, Never Overflows) ── */}
       <View style={styles.footerRow}>
-        <Text style={styles.footerText}>Weekly Goal: {thisWeekCount}/{weeklyTarget} reviews</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onOpenSeoUpdates}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-        >
-          <Text style={styles.watchVideosLink}>See AI Agent Actions</Text>
-          <MaterialIcons name="auto-awesome" size={15} color={colors.brand} />
-        </Pressable>
+        <Text style={styles.footerText} numberOfLines={1} ellipsizeMode="tail">
+          Goal: {thisWeekCount}/{weeklyTarget} reviews {remaining > 0 ? `(${remaining} left)` : '🎉'}
+        </Text>
+
+        {onOpenSeoUpdates ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onOpenSeoUpdates}
+            style={styles.aiActionsLink}
+          >
+            <Text style={styles.watchVideosLink}>AI Actions →</Text>
+            <MaterialIcons name="auto-awesome" size={13} color={colors.brand} />
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -335,6 +352,22 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: colors.muted,
     fontWeight: '500',
+  },
+  headerPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  headerPillBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#2563EB',
   },
   targetBadge: {
     backgroundColor: colors.note,
@@ -409,58 +442,6 @@ const styles = StyleSheet.create({
     color: colors.brandDark,
     fontWeight: '800',
   },
-  bannerContainer: {
-    backgroundColor: '#F3F8F5',
-    borderRadius: 14,
-    padding: 13,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#D5E9DD',
-  },
-  bannerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  bannerHeading: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  cadencePill: {
-    backgroundColor: colors.brandSoft,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  cadencePillText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: colors.brandDark,
-  },
-  bannerSubtext: {
-    fontSize: 11.5,
-    color: colors.muted,
-    lineHeight: 16,
-    marginBottom: 4,
-  },
-  bulkButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.brand,
-    height: 42,
-    borderRadius: 11,
-  },
-  bulkButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -469,6 +450,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
     minHeight: 44,
+    paddingRight: 4,
   },
   countryPill: {
     paddingHorizontal: 10,
@@ -488,25 +470,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     height: 44,
   },
+  sendInlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.brand,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 9,
+  },
+  sendInlineBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
   actionButtonsRow: {
     flexDirection: 'row',
     gap: 10,
+    marginTop: 2,
   },
-  actionBtn: {
+  primaryActionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: colors.brandSoft,
-    borderWidth: 1,
-    borderColor: '#BBEAD1',
+    height: 42,
+    borderRadius: 11,
+    backgroundColor: '#2563EB',
   },
-  actionBtnText: {
-    fontSize: 12.5,
+  primaryActionBtnText: {
+    fontSize: 13,
     fontWeight: '800',
-    color: colors.brandDark,
+    color: '#FFFFFF',
+  },
+  secondaryActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 42,
+    borderRadius: 11,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
+  },
+  secondaryActionBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#2563EB',
   },
   footerRow: {
     flexDirection: 'row',
@@ -515,11 +525,19 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#EEF2F6',
+    gap: 8,
   },
   footerText: {
+    flex: 1,
     fontSize: 11.5,
     color: colors.muted,
     fontWeight: '600',
+  },
+  aiActionsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    flexShrink: 0,
   },
   watchVideosLink: {
     fontSize: 11.5,

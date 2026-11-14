@@ -16,6 +16,7 @@ import { colors } from '../ui';
 import { apiRequest } from '../../lib/api';
 import { detectDeviceCountryAndTimezone, getTimeZoneShortLabel } from '../../lib/country-codes';
 import { MediaPreviewModal, isVideoMediaAsset } from './media-preview-modal';
+import { TutorialVideoModal } from './tutorial-video-modal';
 import type { GbpConnectionState, GbpPhoto } from './types';
 
 export type MediaTabKey = 'scheduled' | 'uploaded' | 'unposted';
@@ -61,6 +62,7 @@ export function ScheduledPhotosTimeline({
 }: ScheduledPhotosTimelineProps) {
   const [activeTab, setActiveTab] = useState<MediaTabKey>(initialTab || 'scheduled');
   const [whyModalOpen, setWhyModalOpen] = useState(false);
+  const [tutorialModalOpen, setTutorialModalOpen] = useState(false);
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState<GbpPhoto | null>(null);
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
@@ -253,6 +255,19 @@ export function ScheduledPhotosTimeline({
         </View>
       ) : null}
 
+      {/* ── Top Hero AI Card (matching Grexa) ── */}
+      <View style={styles.heroAiBanner}>
+        <View style={{ flex: 1, paddingRight: 10 }}>
+          <Text style={styles.heroAiTitle}>BGOS keeps your profile active</Text>
+          <Text style={styles.heroAiSub}>
+            GBP AI Agent smartly publishes photos to help you rank higher on Google
+          </Text>
+        </View>
+        <View style={styles.heroAiStoreBadge}>
+          <MaterialIcons name="storefront" size={26} color="#0284C7" />
+        </View>
+      </View>
+
       {/* ── Top Section: Your Photos & Videos ── */}
       <View style={styles.sectionHeader}>
         <View>
@@ -360,10 +375,11 @@ export function ScheduledPhotosTimeline({
 
       <Pressable
         accessibilityRole="button"
-        onPress={() => setWhyModalOpen(true)}
+        onPress={() => setTutorialModalOpen(true)}
         style={styles.whyLinkWrapper}
       >
-        <Text style={styles.whyLinkText}>Why Publish Photos &amp; Videos?</Text>
+        <MaterialIcons name="play-circle-outline" size={17} color={colors.brand} />
+        <Text style={styles.whyLinkText}>Why Publish Photos &amp; Videos? (Watch Guide)</Text>
       </Pressable>
 
       <View style={styles.sectionDivider} />
@@ -717,6 +733,16 @@ export function ScheduledPhotosTimeline({
         }}
         businessName={businessName}
       />
+
+      <TutorialVideoModal
+        visible={tutorialModalOpen}
+        onClose={() => setTutorialModalOpen(false)}
+        onUploadNow={() => {
+          setTutorialModalOpen(false);
+          onUploadPress();
+        }}
+        businessName={businessName}
+      />
     </View>
   );
 }
@@ -725,6 +751,40 @@ const styles = StyleSheet.create({
   container: {
     gap: 12,
     paddingBottom: 24,
+  },
+  heroAiBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0F9FF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    padding: 14,
+    marginBottom: 4,
+  },
+  heroAiTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 3,
+    letterSpacing: -0.2,
+  },
+  heroAiSub: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#0369A1',
+    lineHeight: 17,
+  },
+  heroAiStoreBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   connectBanner: {
     flexDirection: 'row',
