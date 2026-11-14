@@ -58,12 +58,12 @@ export function resolveTenantPublicUrls(
     process.env.NEXT_PUBLIC_APP_URL ||
     'https://bgos.site'
   ).replace(/\/+$/, '');
-  const profileUrl = `https://${encodeURIComponent(slug)}.bgos.site`;
+  const profileUrl = `https://bgos.site/${encodeURIComponent(slug)}`;
   const customBooking =
     typeof settings?.bookingLink === 'string' && /^https?:\/\//i.test(settings.bookingLink.trim())
       ? settings.bookingLink.trim()
       : '';
-  const bookingUrl = customBooking || `https://${encodeURIComponent(slug)}.bgos.site/book`;
+  const bookingUrl = customBooking || `https://bgos.site/${encodeURIComponent(slug)}/book`;
   const productsFeedUrl = `${origin}/api/public/business/${encodeURIComponent(slug)}/products-feed`;
   const defaultOrderUrl = `${profileUrl}#products`;
   return { slug, origin, profileUrl, bookingUrl, productsFeedUrl, defaultOrderUrl };

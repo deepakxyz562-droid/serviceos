@@ -259,24 +259,26 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // ── BGOS Clean Short Path Routing: https://bgos.site/<slug> -> /b/<slug> ────
+  // ── BGOS Clean Short Path Routing: https://bgos.site/<slug>[/subpath] -> /b/<slug>[/subpath] ────
   if (
     (lowerHost === 'bgos.site' || lowerHost === 'www.bgos.site') &&
     ['GET', 'HEAD'].includes(request.method) &&
     pathname !== '/'
   ) {
-    const match = pathname.match(/^\/([a-zA-Z0-9_-]+)\/?$/);
+    const match = pathname.match(/^\/([a-zA-Z0-9_-]+)(\/.*)?$/);
     if (match) {
       const slugCandidate = match[1].toLowerCase();
       const BGOS_RESERVED = new Set([
         'api', '_next', 'b', 'app', 'login', 'recover', 'setup', 'terms', 'privacy',
         'terms-of-service', 'privacy-policy', 'data-deletion', 'auth', 'auth-callback',
         'gbp-callback', 'inbox', 'bgos-home', 'bos-home', 'quote-flow', 'marketplace',
-        'favicon.ico', 'robots.txt', 'sitemap.xml', 'images', 'uploads', 'assets', 'static'
+        'favicon.ico', 'robots.txt', 'sitemap.xml', 'images', 'uploads', 'assets', 'static',
+        'admin', 'dashboard', 'settings', 'help', 'pricing', 'manifest.json'
       ]);
       if (!BGOS_RESERVED.has(slugCandidate)) {
+        const subPath = match[2] || '';
         const url = request.nextUrl.clone();
-        url.pathname = `/b/${slugCandidate}`;
+        url.pathname = `/b/${slugCandidate}${subPath}`;
         const response = NextResponse.rewrite(url);
         response.headers.set('x-app-product', 'bgos');
         response.headers.set('X-Request-Id', generateRequestId());

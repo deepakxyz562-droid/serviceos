@@ -10,6 +10,7 @@ import {
   parseBgosStoreSettings,
   parseSocialProfiles,
 } from '@/lib/bgos-store-catalog';
+import { checkBgosSlugAvailability, normalizeBgosSlug } from '@/lib/bgos-slug-service';
 import type { BgosPageVisibility, BgosWorkspace } from '../../../../../shared/bgos-contracts';
 
 const pageVisibilityPatchSchema = z.object({
@@ -247,8 +248,8 @@ export async function GET(request?: NextRequest): Promise<NextResponse> {
         profile:
           isAgencyMode && profile?.isEnabled && profile.handle
             ? `/p/${encodeURIComponent(profile.handle)}`
-            : `https://${encodeURIComponent(businessSlug)}.bgos.site`,
-        booking: `https://${encodeURIComponent(businessSlug)}.bgos.site/book`,
+            : `https://bgos.site/${encodeURIComponent(businessSlug)}`,
+        booking: `https://bgos.site/${encodeURIComponent(businessSlug)}/book`,
         form: form?.slug ? `/f/${encodeURIComponent(form.slug)}` : null,
         review: tenant.googlePlaceId ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(tenant.googlePlaceId)}` : null,
       },
@@ -364,26 +365,26 @@ export async function PATCH(request: NextRequest) {
       }
 
       if (cfg.publicSlug !== undefined) {
-        const normalizedSlug = normalizePublicSlugInput(cfg.publicSlug);
-        if (normalizedSlug.length < 2) {
-          return NextResponse.json({ error: 'Page URL slug must be at least 2 alphanumeric characters.' }, { status: 400 });
+        const check = await checkBgosSlugAvailability({
+          slug: cfg.publicSlug,
+          excludeTenantId: user.tenantId,
+          businessName: cfg.businessName || tenant.name,
+          city: tenant.city || undefined,
+        });
+
+        if (!check.available) {
+          return NextResponse.json(
+            {
+              error: check.reason || check.error || 'This short URL is already taken.',
+              reason: check.reason || check.error,
+              suggestions: check.suggestions,
+            },
+            { status: 409 }
+          );
         }
-        const collision = db.tenant.findFirst
-          ? await db.tenant
-              .findFirst({
-                where: {
-                  id: { not: user.tenantId },
-                  OR: [{ publicSlug: normalizedSlug }, { slug: normalizedSlug }],
-                },
-                select: { id: true },
-              })
-              .catch(() => null)
-          : null;
-        if (collision) {
-          return NextResponse.json({ error: 'This page URL is already taken. Try a different handle.' }, { status: 409 });
-        }
-        nextCfg.publicSlug = normalizedSlug;
-        updateData.publicSlug = normalizedSlug;
+
+        nextCfg.publicSlug = check.slug;
+        updateData.publicSlug = check.slug;
       }
 
       if (cfg.pageVisibility) {

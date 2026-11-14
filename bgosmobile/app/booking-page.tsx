@@ -130,6 +130,15 @@ export default function BusinessPageSettingsScreen() {
   const [modalError, setModalError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
 
+  // Live Slug Availability & Smart Suggestion State
+  const [slugChecking, setSlugChecking] = useState(false);
+  const [slugStatus, setSlugStatus] = useState<{
+    available: boolean;
+    error?: string;
+    reason?: string;
+    suggestions: string[];
+  } | null>(null);
+
   const [editor, setEditor] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_SERVICE);
@@ -165,6 +174,51 @@ export default function BusinessPageSettingsScreen() {
     }, 300);
     return () => clearTimeout(t);
   }, [query]);
+
+  // Debounced real-time slug availability check
+  useEffect(() => {
+    const raw = (config.publicSlug || '').trim();
+    if (!raw) {
+      setSlugStatus(null);
+      setSlugChecking(false);
+      return;
+    }
+    const candidate = normalizeSlugPreview(raw);
+    const currentSlug = workspace.data?.publicSlug || '';
+    if (!candidate || candidate === currentSlug) {
+      setSlugStatus({ available: true, suggestions: [] });
+      setSlugChecking(false);
+      return;
+    }
+
+    setSlugChecking(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await apiRequest<{
+          available: boolean;
+          error?: string;
+          reason?: string;
+          suggestions?: string[];
+        }>(`/api/bgos/slug/check?slug=${encodeURIComponent(candidate)}&businessName=${encodeURIComponent(config.businessName || '')}`);
+        setSlugStatus({
+          available: Boolean(res?.available),
+          error: res?.error,
+          reason: res?.reason,
+          suggestions: Array.isArray(res?.suggestions) ? res.suggestions : [],
+        });
+      } catch (err: any) {
+        setSlugStatus({
+          available: false,
+          error: err?.message || 'Failed to check handle availability',
+          suggestions: [],
+        });
+      } finally {
+        setSlugChecking(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [config.publicSlug, workspace.data?.publicSlug, config.businessName]);
 
   const setField = <K extends keyof PageConfig>(key: K, value: PageConfig[K]) => {
     setDirty(true);
@@ -220,7 +274,7 @@ export default function BusinessPageSettingsScreen() {
     normalizeSlugPreview(workspace.data?.links?.profile?.replace(/^\/b\//, '') || '') ||
     'your-business';
 
-  const fullPublicUrl = `https://${slugCandidate}.bgos.site`;
+  const fullPublicUrl = `https://bgos.site/${slugCandidate}`;
   const currencySymbol = workspace.data?.billing?.currency === 'USD' ? '$' : '₹';
 
   const showToast = (msg: string) => {
@@ -290,6 +344,13 @@ export default function BusinessPageSettingsScreen() {
   const savePageConfig = async () => {
     if (uploadingMedia) {
       Alert.alert('Upload in progress', 'Please wait for your image upload to finish.');
+      return;
+    }
+    if (slugStatus && !slugStatus.available) {
+      Alert.alert(
+        'Handle Unavailable',
+        slugStatus.reason || slugStatus.error || 'This short URL is already taken. Please choose an available handle.'
+      );
       return;
     }
     setBusy(true);
@@ -748,19 +809,107 @@ export default function BusinessPageSettingsScreen() {
           {tab === 'info' ? (
             <>
               <Card>
-                <Text style={ui.heading}>Public Page URL</Text>
-                <Text style={styles.mutedText}>
-                  https://{slugCandidate}.bgos.site
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={ui.heading}>Public Short URL</Text>
+                  <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, backgroundColor: '#E0F2FE' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369A1' }}>bgos.site</Text>
+                  </View>
+                </View>
+
+                {/* Live Clean Short URL preview banner */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#F8FAFC',
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    marginVertical: 6,
+                  }}
+                >
+                  <MaterialIcons name="link" size={18} color="#009F50" style={{ marginRight: 8 }} />
+                  <Text style={{ flex: 1, fontSize: 13.5, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>
+                    https://bgos.site/{slugCandidate}
+                  </Text>
+                </View>
+
                 <Field
                   label="URL Handle (Slug)"
                   value={config.publicSlug || ''}
-                  onChangeText={(v) => setField('publicSlug', v)}
-                  placeholder="my-business-name"
+                  onChangeText={(v) => {
+                    setField('publicSlug', v);
+                    setDirty(true);
+                  }}
+                  placeholder="e.g. kanvi"
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
-                <View style={{ flexDirection: 'row', gap: 10 }}>
+
+                {/* Live Availability Feedback */}
+                {slugChecking ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -4, marginBottom: 8 }}>
+                    <ActivityIndicator size="small" color="#009F50" />
+                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '500' }}>
+                      Checking availability...
+                    </Text>
+                  </View>
+                ) : slugStatus ? (
+                  <View style={{ marginTop: -4, marginBottom: 10 }}>
+                    {slugStatus.available ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#DCFCE7' }}>
+                        <MaterialIcons name="check-circle" size={16} color="#15803D" />
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#15803D' }}>
+                          Available: bgos.site/{slugCandidate}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={{ gap: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#FEE2E2' }}>
+                          <MaterialIcons name="error-outline" size={16} color="#B91C1C" />
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#B91C1C', flex: 1 }}>
+                            {slugStatus.reason || slugStatus.error || 'This URL is already taken.'}
+                          </Text>
+                        </View>
+
+                        {slugStatus.suggestions.length > 0 ? (
+                          <View style={{ gap: 6 }}>
+                            <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#475569' }}>
+                              Recommended available handles:
+                            </Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                              {slugStatus.suggestions.map((sug) => (
+                                <Pressable
+                                  key={sug}
+                                  onPress={() => {
+                                    setField('publicSlug', sug);
+                                    setDirty(true);
+                                  }}
+                                  style={{
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 5,
+                                    borderRadius: 14,
+                                    backgroundColor: '#EFF6FF',
+                                    borderWidth: 1,
+                                    borderColor: '#BFDBFE',
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#1D4ED8' }}>
+                                    + {sug}
+                                  </Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                          </View>
+                        ) : null}
+                      </View>
+                    )}
+                  </View>
+                ) : null}
+
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
                   <View style={{ flex: 1 }}>
                     <Action label="Open Page" icon="open-in-new" secondary compact onPress={openLivePage} />
                   </View>

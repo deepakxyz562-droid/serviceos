@@ -664,7 +664,7 @@ function AgentsScreen() {
     if (!crawlUrlInput.trim()) {
       const suggested =
         workspace.data?.bookingPageConfig?.website ||
-        (workspace.data?.publicSlug ? `https://${workspace.data.publicSlug}.bgos.site` : '');
+        (workspace.data?.publicSlug ? `https://bgos.site/${workspace.data.publicSlug}` : '');
       if (suggested) {
         setCrawlUrlInput(suggested);
       }
@@ -1062,7 +1062,7 @@ function AgentsScreen() {
 
   const publicChatUrl = draft ? `${WEB_URL}/agent/${draft.slug || draft.id}` : '';
   const publicBusinessPageUrl = syncSummary?.publicCardSlug
-    ? `https://${syncSummary.publicCardSlug}.bgos.site`
+    ? `https://bgos.site/${syncSummary.publicCardSlug}`
     : publicChatUrl;
 
   async function handleSharePublicLink() {
@@ -1687,7 +1687,7 @@ function AgentsScreen() {
                       icon="open-in-new"
                       onPress={() => {
                         triggerHaptic();
-                        const url = `https://${syncSummary.publicCardSlug}.bgos.site#assistant`;
+                        const url = `https://bgos.site/${syncSummary.publicCardSlug}#assistant`;
                         void Linking.openURL(url);
                       }}
                     />
@@ -3879,7 +3879,7 @@ function AgentsScreen() {
                       accessibilityRole="button"
                       onPress={() => {
                         triggerHaptic();
-                        setCrawlUrlInput(`https://${workspace.data?.publicSlug}.bgos.site`);
+                        setCrawlUrlInput(`https://bgos.site/${workspace.data?.publicSlug}`);
                       }}
                       style={{
                         paddingVertical: 5,

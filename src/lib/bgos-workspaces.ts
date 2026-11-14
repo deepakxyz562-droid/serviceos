@@ -46,7 +46,7 @@ export function parseWorkspaceJson(raw?: string | null): Record<string, any> {
 }
 
 export function buildPublicBusinessPath(slug: string): string {
-  return `https://${slug}.bgos.site`;
+  return `https://bgos.site/${slug}`;
 }
 
 export function normalizeSlugCandidate(raw: string): string {

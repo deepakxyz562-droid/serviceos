@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     // Ensure slug is clean and publicProfileEnabled is true
     const slug = tenant.slug || tenant.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const websiteUrl = `https://${slug}.bgos.site`;
+    const websiteUrl = `https://bgos.site/${slug}`;
 
     const { getTenantSeoContext } = await import('@/lib/gbp/seo-context');
     const { revalidatePublicBusiness } = await import('@/lib/public-business');

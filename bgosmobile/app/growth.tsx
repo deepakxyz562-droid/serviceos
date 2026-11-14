@@ -1276,7 +1276,7 @@ function GrowthScreen() {
             {ctaActionType !== 'CALL' ? (
               <Field
                 label="Button Link URL (Optional — defaults to your BGOS Booking / Catalog link)"
-                placeholder="https://your-business.bgos.site"
+                placeholder="https://bgos.site/your-business"
                 value={ctaLinkUrl}
                 onChangeText={setCtaLinkUrl}
               />

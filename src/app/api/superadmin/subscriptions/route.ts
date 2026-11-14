@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
         ownerName: owner?.name || '',
         ownerEmail: owner?.email || '',
         ownerPhone: owner?.phone || '',
-        publicProfileUrl: slug ? `https://${slug}.bgos.site` : '',
+        publicProfileUrl: slug ? `https://bgos.site/${slug}` : '',
         marketplaceUrl: slug ? `${origin}/marketplace/${slug}` : '',
         adminDetailUrl: tenantId ? `${origin}/dashboard/superadmin/tenants/${tenantId}` : '',
         plan: s.plan,

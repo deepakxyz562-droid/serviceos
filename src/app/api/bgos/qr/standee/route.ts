@@ -484,7 +484,7 @@ export async function GET(request: NextRequest) {
       tenant?.publicSlug ||
       tenant?.slug ||
       user.tenantId;
-    const pageUrl = `https://${encodeURIComponent(publicSlug)}.bgos.site`;
+    const pageUrl = `https://bgos.site/${encodeURIComponent(publicSlug)}`;
     const reviewUrl = resolvedPlaceId
       ? `https://search.google.com/local/writereview?placeid=${resolvedPlaceId}`
       : placeDetails?.mapsUri || pageUrl;
@@ -687,7 +687,7 @@ export async function POST(request: NextRequest) {
       tenant?.publicSlug ||
       tenant?.slug ||
       user.tenantId;
-    const pageUrl = `https://${encodeURIComponent(publicSlug)}.bgos.site`;
+    const pageUrl = `https://bgos.site/${encodeURIComponent(publicSlug)}`;
     const reviewUrl = resolvedPlaceId
       ? `https://search.google.com/local/writereview?placeid=${resolvedPlaceId}`
       : placeDetails?.mapsUri || pageUrl;

@@ -1068,6 +1068,23 @@ export default function ManageGoogleProfileScreen() {
                 </Pressable>
               </View>
 
+              {/* BGOS Short URL */}
+              <View style={styles.rowItem}>
+                <MaterialIcons name="link" size={20} color="#009F50" style={styles.rowIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>BGOS Short URL</Text>
+                  <Text numberOfLines={1} style={[styles.rowValue, { color: '#009F50', fontWeight: '700' }]}>
+                    https://bgos.site/{workspaceRes.data?.publicSlug || 'your-business'}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => router.push({ pathname: '/booking-page', params: { tab: 'info' } })}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="edit" size={18} color="#009F50" />
+                </Pressable>
+              </View>
+
               {/* Chat on Google Maps Toggle */}
               <View style={styles.rowItem}>
                 <MaterialIcons name="chat" size={20} color="#0B9042" style={styles.rowIcon} />

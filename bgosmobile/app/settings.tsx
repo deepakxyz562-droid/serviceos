@@ -241,6 +241,12 @@ export default function SettingsScreen() {
             onPress={() => router.push('/logo-management')}
           />
           <MenuRowItem
+            icon="language"
+            title="Public Website & Short URL"
+            subtitle={workspace.data?.publicSlug ? `https://bgos.site/${workspace.data.publicSlug}` : 'https://bgos.site/...'}
+            onPress={() => router.push({ pathname: '/booking-page', params: { tab: 'info' } })}
+          />
+          <MenuRowItem
             icon="business-center"
             title="Business Information"
             onPress={() => router.push('/manage-profile')}
@@ -766,11 +772,13 @@ export default function SettingsScreen() {
 function MenuRowItem({
   icon,
   title,
+  subtitle,
   onPress,
   isLast = false,
 }: {
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
   title: string;
+  subtitle?: string;
   onPress: () => void;
   isLast?: boolean;
 }) {
@@ -785,9 +793,16 @@ function MenuRowItem({
         pressed && { backgroundColor: '#F8FAFC' },
       ]}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
         <MaterialIcons name={icon} size={21} color="#0F172A" />
-        <Text style={styles.menuRowTitle}>{title}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.menuRowTitle}>{title}</Text>
+          {subtitle ? (
+            <Text style={{ fontSize: 12, color: '#009F50', fontWeight: '600', marginTop: 1 }}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
       </View>
       <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
     </Pressable>
