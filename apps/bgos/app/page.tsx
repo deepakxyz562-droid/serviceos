@@ -3,10 +3,20 @@ import { redirect } from 'next/navigation';
 import Landing from './landing';
 
 export const metadata: Metadata = {
-  title: 'BGOS — Your next stage of business growth',
-  description: 'Bring your leads, conversations, appointments, forms and AI assistant together. A connected growth workspace for your business.',
+  title: 'BGOS — Autonomous Growth Engine for Local Businesses & Google Maps',
+  description: 'Rank #1 on Google Maps, answer customer inquiries 24/7 with an AI sales receptionist, and launch an instant booking website at bgos.site/yourname.',
   alternates: { canonical: 'https://bgos.site/' },
-  openGraph: { title: 'BGOS — Grow your business, all in one place', description: 'Your customers. Your conversations. Your next opportunity.', url: 'https://bgos.site/', images: [{ url: 'https://bgos.site/bgos/landing/assistant-hd.png' }] },
+  openGraph: {
+    title: 'BGOS — Autonomous Growth Engine for Local Businesses',
+    description: 'Autonomous Google Maps SEO, 24/7 AI Receptionist, QR Review Standees, and Instant Booking Website.',
+    url: 'https://bgos.site/',
+    images: [{ url: 'https://bgos.site/bgos/primary-logo.png' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'BGOS — Autonomous Growth Engine for Local Businesses',
+    description: 'Rank #1 on Google Maps, 24/7 AI Receptionist, and instant short booking website.',
+  },
 };
 
 export default async function Page({ searchParams }: {
