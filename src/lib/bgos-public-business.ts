@@ -259,8 +259,7 @@ async function fetchPublicPlaceSnapshot(placeId?: string | null): Promise<Places
 }
 
 export function getBgosPublicCanonicalUrl(slug: string): string {
-  const base = (process.env.BGOS_PUBLIC_URL || 'https://bgos.site').replace(/\/+$/, '');
-  return `${base}/b/${encodeURIComponent(slug)}`;
+  return `https://${encodeURIComponent(slug)}.bgos.site`;
 }
 
 /**

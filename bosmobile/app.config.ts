@@ -34,6 +34,7 @@ export default ({ config }: ConfigContext): any => ({
   },
   android: {
     package: 'com.fieseros.bos',
+    versionCode: 1,
     googleServicesFile: './google-services.json',
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',

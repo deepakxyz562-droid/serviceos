@@ -129,7 +129,7 @@ export function resolveBusinessPresenceMode(params: {
   const industry = tenant.industry || tenant.brandProfile?.industry || null;
   const city = tenant.city || tenant.brandProfile?.location || null;
 
-  const shortHostedUrl = `https://bgos.site/b/${slug}`;
+  const shortHostedUrl = `https://${slug}.bgos.site`;
   const hostedCanonicalUrl = buildHostedCanonicalUrl({ slug, industry, city });
   const publicProfileEnabled = Boolean(tenant.publicProfileEnabled);
   const claimed = Boolean(tenant.claimed);

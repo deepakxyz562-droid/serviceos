@@ -220,7 +220,7 @@ export default function BusinessPageSettingsScreen() {
     normalizeSlugPreview(workspace.data?.links?.profile?.replace(/^\/b\//, '') || '') ||
     'your-business';
 
-  const fullPublicUrl = `${BGOS_PUBLIC_WEB_URL}/b/${slugCandidate}`;
+  const fullPublicUrl = `https://${slugCandidate}.bgos.site`;
   const currencySymbol = workspace.data?.billing?.currency === 'USD' ? '$' : '₹';
 
   const showToast = (msg: string) => {
@@ -750,7 +750,7 @@ export default function BusinessPageSettingsScreen() {
               <Card>
                 <Text style={ui.heading}>Public Page URL</Text>
                 <Text style={styles.mutedText}>
-                  {BGOS_PUBLIC_WEB_URL}/b/{slugCandidate}
+                  https://{slugCandidate}.bgos.site
                 </Text>
                 <Field
                   label="URL Handle (Slug)"

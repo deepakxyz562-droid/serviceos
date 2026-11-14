@@ -678,8 +678,8 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      {/* Right: Clean Help + Notifications */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+      {/* Right: Clean Help + Notifications + Settings */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 0 }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Help and Support"
@@ -717,6 +717,24 @@ export default function HomeScreen() {
           })}
         >
           <MaterialIcons name="notifications-none" size={20} color="#0F172A" />
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+          onPress={() => router.push('/settings')}
+          hitSlop={8}
+          style={({ pressed }) => ({
+            width: 34,
+            height: 34,
+            borderRadius: 17,
+            backgroundColor: '#F8FAFC',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.65 : 1,
+          })}
+        >
+          <MaterialIcons name="settings" size={19} color="#0F172A" />
         </Pressable>
       </View>
     </View>

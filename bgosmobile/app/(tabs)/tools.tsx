@@ -144,6 +144,48 @@ export default function ToolsScreen() {
         </Card>
       ) : null}
 
+      {/* Settings Shortcut Banner */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Full Settings"
+        onPress={() => router.push('/settings')}
+        style={({ pressed }) => ({
+          backgroundColor: '#FAF5FF',
+          borderWidth: 1,
+          borderColor: '#E9D5FF',
+          borderRadius: 14,
+          padding: 14,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+          <View
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 19,
+              backgroundColor: '#EDE9FE',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <MaterialIcons name="settings" size={20} color="#7C3AED" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+              Full Business Settings
+            </Text>
+            <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 1 }}>
+              Subscription, logo, locations, team &amp; preferences
+            </Text>
+          </View>
+        </View>
+        <MaterialIcons name="chevron-right" size={22} color="#7C3AED" />
+      </Pressable>
+
       {/* ─────────────────────────────────────────────────────────────
           3. TOOLS & OPERATIONS
           ───────────────────────────────────────────────────────────── */}

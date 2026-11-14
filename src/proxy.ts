@@ -238,9 +238,56 @@ export async function proxy(request: NextRequest) {
   }
 
   const appProduct = productForHostname(lowerHost);
+
+  // ── BGOS Clean Subdomain Routing: https://<slug>.bgos.site -> /b/<slug> ────
+  const isBgosSubdomain =
+    lowerHost.endsWith('.bgos.site') &&
+    lowerHost !== 'bgos.site' &&
+    lowerHost !== 'www.bgos.site' &&
+    !lowerHost.startsWith('api.') &&
+    !lowerHost.startsWith('admin.');
+
+  if (isBgosSubdomain && ['GET', 'HEAD'].includes(request.method)) {
+    const slug = lowerHost.replace(/\.bgos\.site$/, '').replace(/^www\./, '');
+    if (slug && !pathname.startsWith('/_next/') && !pathname.startsWith('/api/')) {
+      const url = request.nextUrl.clone();
+      url.pathname = pathname === '/' || pathname === '' ? `/b/${slug}` : (pathname.startsWith('/b/') ? pathname : `/b/${slug}${pathname}`);
+      const response = NextResponse.rewrite(url);
+      response.headers.set('x-app-product', 'bgos');
+      response.headers.set('X-Request-Id', generateRequestId());
+      return response;
+    }
+  }
+
+  // ── BGOS Clean Short Path Routing: https://bgos.site/<slug> -> /b/<slug> ────
+  if (
+    (lowerHost === 'bgos.site' || lowerHost === 'www.bgos.site') &&
+    ['GET', 'HEAD'].includes(request.method) &&
+    pathname !== '/'
+  ) {
+    const match = pathname.match(/^\/([a-zA-Z0-9_-]+)\/?$/);
+    if (match) {
+      const slugCandidate = match[1].toLowerCase();
+      const BGOS_RESERVED = new Set([
+        'api', '_next', 'b', 'app', 'login', 'recover', 'setup', 'terms', 'privacy',
+        'terms-of-service', 'privacy-policy', 'data-deletion', 'auth', 'auth-callback',
+        'gbp-callback', 'inbox', 'bgos-home', 'bos-home', 'quote-flow', 'marketplace',
+        'favicon.ico', 'robots.txt', 'sitemap.xml', 'images', 'uploads', 'assets', 'static'
+      ]);
+      if (!BGOS_RESERVED.has(slugCandidate)) {
+        const url = request.nextUrl.clone();
+        url.pathname = `/b/${slugCandidate}`;
+        const response = NextResponse.rewrite(url);
+        response.headers.set('x-app-product', 'bgos');
+        response.headers.set('X-Request-Id', generateRequestId());
+        return response;
+      }
+    }
+  }
+
   // Serve the same BGOS entry in the core production build and standalone app.
   // Its page preserves authentication query parameters by forwarding them to /app.
-  if (appProduct === 'bgos' && pathname === '/' && ['GET', 'HEAD'].includes(request.method)) {
+  if ((lowerHost === 'bgos.site' || lowerHost === 'www.bgos.site') && pathname === '/' && ['GET', 'HEAD'].includes(request.method)) {
     const url = request.nextUrl.clone();
     url.pathname = '/bgos-home';
     const response = NextResponse.rewrite(url);

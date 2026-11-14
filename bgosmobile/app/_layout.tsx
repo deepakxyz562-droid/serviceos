@@ -268,6 +268,7 @@ export default function RootLayout() {
         <Stack.Screen name="logo-management" />
         <Stack.Screen name="preferences" />
         <Stack.Screen name="help" />
+        <Stack.Screen name="settings" />
       </Stack>
       <AnimatedSplash ready={fontsLoaded && !isLoading} />
     </RootErrorBoundary>

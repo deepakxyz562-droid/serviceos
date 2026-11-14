@@ -21,6 +21,8 @@ export interface DailyPromoCopy {
   title: string;
   body: string;
   themeKey: string;
+  actionUrl?: string;
+  actionLabel?: string;
 }
 
 export interface DailyPushRunOptions {
@@ -62,10 +64,73 @@ export function buildDailyPromoPushCopy(params: {
   now?: Date;
   localMonth?: number;
   localDay?: number;
+  localHour?: number;
+  localDayOfWeek?: number;
+  unrepliedReviewsCount?: number;
+  daysSinceLastPhoto?: number;
+  daysSinceLastPost?: number;
 }): DailyPromoCopy {
   const biz = (params.businessName || 'your business').trim();
   const ind = (params.industry || '').trim();
   const indSnippet = ind ? `${ind.toLowerCase()} ` : '';
+
+  // 1. Critical Urgency: Unreplied Google Reviews
+  if ((params.unrepliedReviewsCount ?? 0) > 0) {
+    const count = params.unrepliedReviewsCount!;
+    const reviewWord = count === 1 ? 'review' : 'reviews';
+    return {
+      themeKey: 'unreplied_review',
+      title: `⭐ ${count} Google ${reviewWord} waiting for reply`,
+      body: `Replying quickly signals high responsiveness to Google and boosts ${biz}'s Maps rank. Tap to 1-tap AI reply.`,
+      actionUrl: '/app?product=bgos&view=reviews',
+      actionLabel: 'Reply to Review',
+    };
+  }
+
+  // 2. High Priority: Photo Freshness decay (> 5 days without photo upload)
+  if ((params.daysSinceLastPhoto ?? 0) >= 5) {
+    return {
+      themeKey: 'fresh_photo',
+      title: `📸 Keep ${biz} visible on Google Maps`,
+      body: `Businesses with weekly photos receive 42% more direction requests. Upload a fresh photo for ${biz} today!`,
+      actionUrl: '/app?product=bgos&view=photos',
+      actionLabel: 'Upload Photo',
+    };
+  }
+
+  // 3. High Priority: Expired Google Post (> 5 days without a post)
+  if ((params.daysSinceLastPost ?? 0) >= 5) {
+    return {
+      themeKey: 'post_update',
+      title: `✍️ Keep ${biz} on top of Google Search`,
+      body: `Your Google update is expiring. Publish a fresh AI post with local keywords today to stay ahead of nearby competitors.`,
+      actionUrl: '/app?product=bgos&view=socialMedia&socialTab=ai-content',
+      actionLabel: 'Create Post',
+    };
+  }
+
+  // 4. Afternoon Review Generation Window (4:00 PM – 7:30 PM local time)
+  if (typeof params.localHour === 'number' && params.localHour >= 16 && params.localHour <= 19) {
+    return {
+      themeKey: 'afternoon_review_rush',
+      title: `💬 Served customers today at ${biz}?`,
+      body: `Send 2 quick 1-tap WhatsApp review invites before closing to hit your 5★ goal on Google this week.`,
+      actionUrl: '/app?product=bgos&view=reviews',
+      actionLabel: 'Ask Review',
+    };
+  }
+
+  // 5. Weekend / Monday Morning Local Visibility Radar
+  if (typeof params.localDayOfWeek === 'number' && (params.localDayOfWeek === 0 || params.localDayOfWeek === 1)) {
+    return {
+      themeKey: 'weekly_radar',
+      title: `📈 Local visibility report for ${biz}`,
+      body: `Check how many nearby customers searched and viewed your business on Google Maps this week.`,
+      actionUrl: '/app?product=bgos&view=growthReport',
+      actionLabel: 'View Radar',
+    };
+  }
+
   const refDate = params.now ?? new Date();
   const daySeed =
     typeof params.localDay === 'number' && typeof params.localMonth === 'number'
@@ -77,36 +142,50 @@ export function buildDailyPromoPushCopy(params: {
       themeKey: 'monday_boost',
       title: `Post today's update for ${biz}`,
       body: `Share a quick Google post or seasonal promo today to attract more nearby customers to ${biz}.`,
+      actionUrl: '/app?product=bgos&view=socialMedia&socialTab=ai-content',
+      actionLabel: 'Create Post',
     },
     {
       themeKey: 'fresh_photo',
       title: `Keep ${biz} visible on Google Maps`,
       body: `Uploading a fresh ${indSnippet}photo or short video today helps your Google profile win more calls & direction clicks.`,
+      actionUrl: '/app?product=bgos&view=photos',
+      actionLabel: 'Upload Photo',
     },
     {
       themeKey: 'midweek_offer',
       title: `Launch a quick mid-week offer`,
       body: `Turn a 10% deal or featured service for ${biz} into an AI poster in seconds and publish straight to Google.`,
+      actionUrl: '/app?product=bgos&view=socialMedia&socialTab=ai-content',
+      actionLabel: 'Create Post',
     },
     {
       themeKey: 'trust_story',
       title: `Share what sets ${biz} apart`,
       body: `Publish a helpful ${indSnippet}tip or customer highlight today so locals choose ${biz} first.`,
+      actionUrl: '/app?product=bgos&view=socialMedia&socialTab=ai-content',
+      actionLabel: 'Create Post',
     },
     {
       themeKey: 'weekend_special',
       title: `Promote your weekend availability`,
       body: `Post a crisp weekend promo or booking reminder for ${biz} before peak local searches kick in.`,
+      actionUrl: '/app?product=bgos&view=socialMedia&socialTab=ai-content',
+      actionLabel: 'Create Post',
     },
     {
       themeKey: 'ai_poster_idea',
       title: `Ready-to-post idea for ${biz}`,
       body: `Open AI Studio to generate a branded poster and caption for ${biz} in one tap.`,
+      actionUrl: '/app?product=bgos&view=socialMedia&socialTab=ai-content',
+      actionLabel: 'Create Post',
     },
     {
       themeKey: 'weekly_plan',
       title: `Stay active on Google this week`,
       body: `Schedule a couple of posts for ${biz} today so your profile stays active all week automatically.`,
+      actionUrl: '/app?product=bgos&view=socialMedia&socialTab=ai-content',
+      actionLabel: 'Create Post',
     },
   ];
 
@@ -288,6 +367,7 @@ export async function runBgosDailyPushBatch(
       productSubscriptions,
       brandProfiles,
       recentPosts,
+      recentReviews,
       recentDailyNotifs,
       prefsRows,
     ] = await Promise.all([
@@ -375,6 +455,25 @@ export async function runBgosDailyPushBatch(
                 createdAt: true,
                 scheduledAt: true,
                 publishedAt: true,
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 500,
+            })
+            .catch(() => [])
+        : Promise.resolve([]),
+      typeof (db as any).review?.findMany === 'function'
+        ? (db as any).review
+            .findMany({
+              where: {
+                tenantId: { in: chunkIds },
+                status: 'published',
+              },
+              select: {
+                id: true,
+                tenantId: true,
+                rating: true,
+                responseJson: true,
+                createdAt: true,
               },
               orderBy: { createdAt: 'desc' },
               take: 500,
@@ -483,6 +582,19 @@ export async function runBgosDailyPushBatch(
       const dayStartMs = dayStartUtc.getTime();
       const dayEndMs = dayEndUtc.getTime();
 
+      const tenantReviews = (Array.isArray(recentReviews) ? recentReviews : []).filter(
+        (r: any) => r.tenantId === tenant.id,
+      );
+      const unrepliedCount = tenantReviews.filter((r: any) => {
+        if (!r.responseJson || r.responseJson === '{}') return true;
+        try {
+          const parsed = JSON.parse(r.responseJson);
+          return !parsed.text;
+        } catch {
+          return true;
+        }
+      }).length;
+
       const tenantPosts = (Array.isArray(recentPosts) ? recentPosts : []).filter(
         (p: any) => p.tenantId === tenant.id,
       );
@@ -493,7 +605,8 @@ export async function runBgosDailyPushBatch(
           isWithinLocalWindow(p.createdAt, dayStartMs, dayEndMs),
       );
 
-      if (hasPostToday) {
+      // If tenant already posted today AND has no unreplied reviews, skip to avoid over-notifying
+      if (hasPostToday && unrepliedCount === 0) {
         skippedTenants++;
         results.push({
           tenantId: tenant.id,
@@ -525,13 +638,38 @@ export async function runBgosDailyPushBatch(
         continue;
       }
 
+      const lastPost = tenantPosts[0];
+      const lastPostDate = lastPost ? new Date(lastPost.publishedAt || lastPost.createdAt).getTime() : 0;
+      const daysSinceLastPost = lastPostDate > 0 ? Math.floor((now.getTime() - lastPostDate) / (24 * 60 * 60 * 1000)) : 999;
+
+      const postsWithPhotos = tenantPosts.filter((p: any) => p.mediaUrls && p.mediaUrls !== '[]' && p.mediaUrls !== '""');
+      const lastPhoto = postsWithPhotos[0];
+      const lastPhotoDate = lastPhoto ? new Date(lastPhoto.publishedAt || lastPhoto.createdAt).getTime() : 0;
+      const daysSinceLastPhoto = lastPhotoDate > 0 ? Math.floor((now.getTime() - lastPhotoDate) / (24 * 60 * 60 * 1000)) : 999;
+
       const copy = buildDailyPromoPushCopy({
         businessName,
         industry: brand?.industry,
         now,
         localMonth: localParts.month,
         localDay: localParts.day,
+        localHour: localParts.hour,
+        localDayOfWeek: localParts.dayOfWeek,
+        unrepliedReviewsCount: unrepliedCount,
+        daysSinceLastPhoto,
+        daysSinceLastPost,
       });
+
+      const effectiveActionUrl = copy.actionUrl || DAILY_ACTION_URL;
+      const effectiveActionLabel = copy.actionLabel || 'Create Post';
+      const mobileDeepLink =
+        copy.themeKey === 'unreplied_review' || copy.themeKey === 'afternoon_review_rush'
+          ? '/(tabs)/reviews'
+          : copy.themeKey === 'fresh_photo'
+          ? '/(tabs)/photos'
+          : copy.themeKey === 'weekly_radar'
+          ? '/growth-report'
+          : '/(tabs)/marketing';
 
       let tenantRecipientsNotified = 0;
       let tenantPushesSent = 0;
@@ -582,11 +720,11 @@ export async function runBgosDailyPushBatch(
           category: 'workflow',
           title: copy.title,
           message: copy.body,
-          actionUrl: DAILY_ACTION_URL,
-          actionLabel: 'Create Post',
+          actionUrl: effectiveActionUrl,
+          actionLabel: effectiveActionLabel,
           metadataJson: JSON.stringify({
             themeKey: copy.themeKey,
-            url: DAILY_ACTION_URL,
+            url: effectiveActionUrl,
           }),
         }).catch(() => null);
 
@@ -600,10 +738,10 @@ export async function runBgosDailyPushBatch(
           const pushRes = await sendWebPushToUser(user.id, tenant.id, {
             title: copy.title,
             body: copy.body,
-            url: DAILY_ACTION_URL,
+            url: effectiveActionUrl,
             tag: 'bgos-daily-push',
             data: {
-              route: '/(tabs)/marketing',
+              route: mobileDeepLink,
               mode: 'studio',
               themeKey: copy.themeKey,
             },
