@@ -132,6 +132,9 @@ function deslugifyCity(slug: string): string {
 // doesn't crash the build (the route still works at runtime via
 // force-dynamic, just without ISR pre-rendering).
 export async function generateStaticParams() {
+  if (process.env.BUILDING === '1' || process.env.CI === '1') {
+    return [];
+  }
   try {
     const cities = await db.directoryLocation.findMany({
       where: { isActive: true },

@@ -8,6 +8,9 @@ const STATIC_CITY_LIMIT = 50;
  * cities are still generated on demand through dynamicParams + ISR.
  */
 export async function getContractorStaticCityParams(industryId: string) {
+  if (process.env.BUILDING === '1' || process.env.CI === '1') {
+    return [];
+  }
   const tenants = await db.tenant.findMany({
     where: {
       publicProfileEnabled: true,

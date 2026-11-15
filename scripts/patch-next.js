@@ -48,7 +48,7 @@ for (const filePath of filesToPatch) {
   }
 }
 
-// Patch 2: Forward 6144MB memory to Next.js child worker processes so they do not crash at 4GB
+// Patch 2: Forward 4096MB memory to Next.js child worker processes so they do not OOM on memory-constrained VPS instances
 const workerFile = path.join(__dirname, '..', 'node_modules', 'next', 'dist', 'lib', 'worker.js');
 if (fs.existsSync(workerFile)) {
   try {
@@ -62,7 +62,7 @@ if (fs.existsSync(workerFile)) {
             delete nodeOptions['max_old_space_size'];
         }
         if (!nodeOptions['max-old-space-size'] && !nodeOptions['max_old_space_size']) {
-            nodeOptions['max-old-space-size'] = '6144';
+            nodeOptions['max-old-space-size'] = '4096';
         }`;
 
     if (content.includes(workerTarget)) {

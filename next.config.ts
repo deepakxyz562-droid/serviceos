@@ -26,10 +26,6 @@ const nextConfig: NextConfig = {
     // Type checking is handled locally and in dedicated CI jobs with 8GB heap.
     ignoreBuildErrors: true,
   },
-  eslint: {
-    // Skip ESLint in production Docker container builds to prevent memory spikes
-    ignoreDuringBuilds: true,
-  },
   staticPageGenerationTimeout: 180,
   reactStrictMode: false,
   serverExternalPackages: ["bcryptjs", "jsonwebtoken", "@react-pdf/renderer", "@react-pdf/font", "pdfkit"],

@@ -1582,6 +1582,9 @@ function buildOpeningHours(
 // Wrapped in try/catch so a DB failure during build doesn't crash the
 // build — the route still works at runtime via ISR.
 export async function generateStaticParams() {
+  if (process.env.BUILDING === '1' || process.env.CI === '1') {
+    return [];
+  }
   try {
     const urls = await listIndexableBusinessUrls({ limit: 200 })
     const params: Array<{ companySlug: string; city: string; slug: string }> = []
