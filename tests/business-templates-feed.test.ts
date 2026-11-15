@@ -122,11 +122,14 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     expect(diwaliTemplate.photoUrl).not.toContain('photo-1508214751196-bcfd4ca60f91');
 
     // Must use authentic festival photography (diya/lights/festive)
-    expect(
-      diwaliTemplate.photoUrl.includes('photo-1605647540924') ||
-      diwaliTemplate.photoUrl.includes('photo-1577083552431') ||
-      diwaliTemplate.photoUrl.includes('/images/bgos/templates/diwali.webp')
-    ).toBe(true);
+    expect(diwaliTemplate.photoUrl).toBe('/images/bgos/templates/diwali.webp');
+
+    // Specifically test Holi template
+    const holiTemplate = data.templates.find(
+      (t: any) => t.id === 'festival-holi-universal' || /holi/i.test(t.headline)
+    );
+    expect(holiTemplate).toBeDefined();
+    expect(holiTemplate.photoUrl).toBe('/images/bgos/templates/edition-holi.webp');
 
     // Check that every festival template photo URL is festival-themed or webp, never dental/trade clinic photo
     for (const item of data.templates) {
@@ -141,14 +144,64 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     expect(CURATED_TEMPLATES.length).toBeGreaterThanOrEqual(16);
 
     for (const tpl of CURATED_TEMPLATES) {
-      expect(tpl.referenceUrl).toMatch(/^https:\/\/images\.unsplash\.com\/photo-/);
+      expect(tpl.referenceUrl).toMatch(/^(https:\/\/images\.unsplash\.com\/photo-|\/images\/bgos\/templates\/)/);
       // Ensure the old 404 URL is gone
       expect(tpl.referenceUrl).not.toContain('photo-1486006920555-c77dce18193b');
-      // Ensure the mismatched Diwali photo is gone
-      if (tpl.id === 'it-diwali-festival') {
+      // Ensure the mismatched Diwali photo is gone and replaced with verified authentic diya
+      if (tpl.id === 'it-diwali-festival' || tpl.id === 'festival-diwali-universal') {
         expect(tpl.referenceUrl).not.toContain('photo-1508214751196-bcfd4ca60f91');
-        expect(tpl.referenceUrl).toContain('photo-1605647540924-852290f6b0d5');
+        expect(tpl.referenceUrl).not.toContain('photo-1605647540924-852290f6b0d5');
+        expect(tpl.referenceUrl).not.toContain('photo-1577083552431-6e5fd01aa342');
+        expect(tpl.referenceUrl).toBe('/images/bgos/templates/diwali.webp');
       }
+      if (tpl.id === 'festival-holi-universal') {
+        expect(tpl.referenceUrl).not.toContain('photo-1583083527882-4bee9aba2eea'); // elf cat
+        expect(tpl.referenceUrl).toBe('/images/bgos/templates/edition-holi.webp');
+      }
+    }
+  });
+
+  it('strictly isolates business categories so merchants never see unrelated trades', async () => {
+    // 1. Test dental merchant (Health & wellness)
+    mockGetAuthUser.mockResolvedValueOnce({ id: 'user-1', tenantId: 'tenant-123' });
+    const { GET } = await import('@/app/api/social/designs/templates/route');
+    const dentalReq = new NextRequest('http://localhost:3000/api/social/designs/templates?tab=for_business&limit=20');
+    const dentalRes = await GET(dentalReq);
+    expect(dentalRes.status).toBe(200);
+    const dentalData = await dentalRes.json();
+
+    expect(dentalData.businessContext.matchedGroup).toBe('Health & wellness');
+    // None of the business templates should be auto, home services, salon, dining, or IT
+    for (const item of dentalData.templates) {
+      expect(item.tab).toBe('for_business');
+      const headline = item.headline.toLowerCase();
+      expect(headline).not.toContain('car wash');
+      expect(headline).not.toContain('plumbing');
+      expect(headline).not.toContain('plywood');
+    }
+
+    // 2. Test plywood merchant (Home services)
+    tenantStore.name = 'Patna Plywood & Timber Works';
+    tenantStore.industry = 'Plywood Shop';
+    tenantStore.settingsJson = JSON.stringify({ activeGbpTitle: 'Patna Plywood & Timber Works', activeGbpCategory: 'Plywood supplier' });
+    brandProfileStore.businessName = 'Patna Plywood & Timber Works';
+    brandProfileStore.industry = 'Plywood Shop';
+
+    mockGetAuthUser.mockResolvedValueOnce({ id: 'user-2', tenantId: 'tenant-456' });
+    const plywoodReq = new NextRequest('http://localhost:3000/api/social/designs/templates?tab=for_business&limit=20');
+    const plywoodRes = await GET(plywoodReq);
+    expect(plywoodRes.status).toBe(200);
+    const plywoodData = await plywoodRes.json();
+
+    expect(plywoodData.businessContext.matchedGroup).toBe('Home services');
+    for (const item of plywoodData.templates) {
+      expect(item.tab).toBe('for_business');
+      const headline = item.headline.toLowerCase();
+      // Must NOT contain dental, car wash, salon, or restaurant headlines
+      expect(headline).not.toContain('dentist');
+      expect(headline).not.toContain('dental');
+      expect(headline).not.toContain('car wash');
+      expect(headline).not.toContain('salon');
     }
   });
 });

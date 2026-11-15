@@ -25,4 +25,6 @@ export const PROFESSIONAL_ASSETS:Record<string,number>={
   '/images/bgos/templates/edition-rakhi.webp':require('../../../assets/poster-templates/edition-rakhi.webp'),
   '/images/bgos/templates/edition-republic-day.webp':require('../../../assets/poster-templates/edition-republic-day.webp'),
   '/images/bgos/templates/edition-valentine.webp':require('../../../assets/poster-templates/edition-valentine.webp'),
+  '/images/bgos/templates/it_software.webp':require('../../../assets/poster-templates/it_software.webp'),
+  '/images/bgos/templates/security_cctv.webp':require('../../../assets/poster-templates/security_cctv.webp'),
 };

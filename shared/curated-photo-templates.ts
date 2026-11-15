@@ -196,7 +196,7 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
       { keyword: 'software company greetings', volume: 100 },
     ],
     estimatedViews: 50,
-    referenceUrl: 'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
+    referenceUrl: '/images/bgos/templates/diwali.webp',
     aspectRatio: '4:5',
     ctaText: 'CELEBRATE WITH US',
     sourceName: 'pinterest',
@@ -583,7 +583,7 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
       { keyword: 'diwali festive offers', volume: 1200 },
     ],
     estimatedViews: 85,
-    referenceUrl: 'https://images.unsplash.com/photo-1572798089532-487718bc9d26?w=1200&auto=format&fit=crop&q=80',
+    referenceUrl: '/images/bgos/templates/diwali.webp',
     aspectRatio: '4:5',
     ctaText: 'HAPPY DIWALI',
     sourceName: 'pinterest',
@@ -607,7 +607,7 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
       { keyword: 'new year special offers', volume: 1500 },
     ],
     estimatedViews: 80,
-    referenceUrl: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=1200&auto=format&fit=crop&q=80',
+    referenceUrl: '/images/bgos/templates/edition-new-year.webp',
     aspectRatio: '4:5',
     ctaText: 'CELEBRATE NEW YEAR',
     sourceName: 'behance',
@@ -631,7 +631,7 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
       { keyword: 'holi greetings', volume: 1100 },
     ],
     estimatedViews: 75,
-    referenceUrl: 'https://images.unsplash.com/photo-1583083527882-4bee9aba2eea?w=1200&auto=format&fit=crop&q=80',
+    referenceUrl: '/images/bgos/templates/edition-holi.webp',
     aspectRatio: '4:5',
     ctaText: 'HAPPY HOLI',
     sourceName: 'pinterest',
@@ -655,7 +655,7 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
       { keyword: 'eid festival greetings', volume: 900 },
     ],
     estimatedViews: 70,
-    referenceUrl: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=1200&auto=format&fit=crop&q=80',
+    referenceUrl: '/images/bgos/templates/edition-eid.webp',
     aspectRatio: '4:5',
     ctaText: 'EID MUBARAK',
     sourceName: 'meta_ads',
@@ -679,7 +679,7 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
       { keyword: 'proud to be indian', volume: 800 },
     ],
     estimatedViews: 65,
-    referenceUrl: 'https://images.unsplash.com/photo-1532375810709-75b1da00537c?w=1200&auto=format&fit=crop&q=80',
+    referenceUrl: '/images/bgos/templates/edition-independence-day.webp',
     aspectRatio: '4:5',
     ctaText: 'JAI HIND',
     sourceName: 'behance',
@@ -703,7 +703,7 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
       { keyword: 'holiday season greetings', volume: 1300 },
     ],
     estimatedViews: 75,
-    referenceUrl: 'https://images.unsplash.com/photo-1512389142860-9c449e58a543?w=1200&auto=format&fit=crop&q=80',
+    referenceUrl: '/images/bgos/templates/edition-christmas.webp',
     aspectRatio: '4:5',
     ctaText: 'MERRY CHRISTMAS',
     sourceName: 'pinterest',
@@ -740,7 +740,10 @@ export function getCuratedTemplatesForBusiness(params: {
     (t) => t.categoryId === targetCategory || t.categoryId === 'festivals',
   );
 
-  const fallback = matched.length > 0 ? matched : CURATED_TEMPLATES;
+  const fallback =
+    matched.length > 0
+      ? matched
+      : CURATED_TEMPLATES.filter((t) => t.categoryId === 'festivals');
 
   const bucketFiltered =
     !params.bucketKey || params.bucketKey === 'all'

@@ -23,56 +23,59 @@ import {
 
 const FESTIVAL_VISUAL_POOL: Record<string, string[]> = {
   diwali: [
-    'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
+    '/images/bgos/templates/diwali.webp',
     'https://images.unsplash.com/photo-1572798089532-487718bc9d26?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1606293926075-69a00dbfde81?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1634401609694-f6ac6dd8474b?w=1200&auto=format&fit=crop&q=80',
   ],
   holi: [
-    'https://images.unsplash.com/photo-1583083527882-4bee9aba2eea?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1615870216519-2f9fa575fa5c?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200&auto=format&fit=crop&q=80',
+    '/images/bgos/templates/edition-holi.webp',
+    'https://images.unsplash.com/photo-1503127241807-fdc42d3acb95?w=1200&auto=format&fit=crop&q=80',
   ],
   eid: [
+    '/images/bgos/templates/edition-eid.webp',
     'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=1200&auto=format&fit=crop&q=80',
   ],
   christmas: [
+    '/images/bgos/templates/edition-christmas.webp',
     'https://images.unsplash.com/photo-1512389142860-9c449e58a543?w=1200&auto=format&fit=crop&q=80',
   ],
   new_year: [
+    '/images/bgos/templates/edition-new-year.webp',
     'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=1200&auto=format&fit=crop&q=80',
   ],
   independence_day: [
+    '/images/bgos/templates/edition-independence-day.webp',
     'https://images.unsplash.com/photo-1532375810709-75b1da00537c?w=1200&auto=format&fit=crop&q=80',
   ],
   republic_day: [
+    '/images/bgos/templates/edition-republic-day.webp',
     'https://images.unsplash.com/photo-1532375810709-75b1da00537c?w=1200&auto=format&fit=crop&q=80',
   ],
   rakhi: [
-    'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=1200&auto=format&fit=crop&q=80',
+    '/images/bgos/templates/edition-rakhi.webp',
+    '/images/bgos/templates/diwali.webp',
   ],
   navratri: [
-    'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
+    '/images/bgos/templates/edition-navratri.webp',
     'https://images.unsplash.com/photo-1572798089532-487718bc9d26?w=1200&auto=format&fit=crop&q=80',
   ],
   dussehra: [
-    'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1606293926075-69a00dbfde81?w=1200&auto=format&fit=crop&q=80',
+    '/images/bgos/templates/edition-navratri.webp',
+    '/images/bgos/templates/diwali.webp',
   ],
   chhath_puja: [
-    'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
+    '/images/bgos/templates/diwali.webp',
     'https://images.unsplash.com/photo-1572798089532-487718bc9d26?w=1200&auto=format&fit=crop&q=80',
   ],
   valentine: [
+    '/images/bgos/templates/edition-valentine.webp',
     'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=1200&auto=format&fit=crop&q=80',
   ],
   mothers_day: [
-    'https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=1200&auto=format&fit=crop&q=80',
+    '/images/bgos/templates/edition-mothers-day.webp',
   ],
   fathers_day: [
-    'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=1200&auto=format&fit=crop&q=80',
+    '/images/bgos/templates/edition-fathers-day.webp',
   ],
 };
 
@@ -178,32 +181,44 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 3. Filter templates from BUSINESS_EDITIONS
+  // 3. Filter templates from BUSINESS_EDITIONS with strict category isolation
+  const hasActiveSearch = Boolean(searchQuery.trim());
   let candidates = BUSINESS_EDITIONS;
 
-  if (searchQuery.trim()) {
+  if (hasActiveSearch) {
     candidates = candidates.filter((tpl) => templateMatches(tpl, searchQuery));
     if (candidates.length === 0) {
-      // If exact query matches no edition, show editions from the matched group
-      candidates = BUSINESS_EDITIONS.filter((tpl) => tpl.edition?.group === matchedGroup || tpl.edition?.purpose === 'Promotion');
+      // If exact query matches no edition, strictly fallback to merchant's trade group & universal festivals
+      candidates = BUSINESS_EDITIONS.filter(
+        (tpl) => tpl.edition?.group === matchedGroup || tpl.edition?.purpose === 'Festival',
+      );
     }
+  } else {
+    // Default feed browsing: strictly isolate to the merchant's business category group + universal festivals
+    candidates = BUSINESS_EDITIONS.filter(
+      (tpl) => tpl.edition?.group === matchedGroup || tpl.edition?.purpose === 'Festival',
+    );
   }
 
   if (requestedAspect && ['1:1', '4:5', '9:16'].includes(requestedAspect)) {
     candidates = candidates.filter((tpl) => tpl.aspect === requestedAspect);
   }
 
-  // Group into tabs
+  // Group into tabs: strictly guarantee that business profile, promotions, and reviews only belong to matchedGroup
   const forBusinessList = candidates.filter(
     (t) =>
-      t.edition?.purpose === 'Business profile' ||
-      t.edition?.purpose === 'Engagement' ||
-      t.edition?.purpose === 'Conversion' ||
-      t.edition?.group === matchedGroup,
+      (hasActiveSearch || t.edition?.group === matchedGroup) &&
+      (t.edition?.purpose === 'Business profile' ||
+        t.edition?.purpose === 'Engagement' ||
+        t.edition?.purpose === 'Conversion'),
   );
-  const promotionsList = candidates.filter((t) => t.edition?.purpose === 'Promotion');
-  const festivalsList = candidates.filter((t) => t.edition?.purpose === 'Festival');
-  const reviewsList = candidates.filter((t) => t.edition?.purpose === 'Trust-building');
+  const promotionsList = candidates.filter(
+    (t) => (hasActiveSearch || t.edition?.group === matchedGroup) && t.edition?.purpose === 'Promotion',
+  );
+  const festivalsList = candidates.filter((t) => t.edition?.purpose === 'Festival' || Boolean(t.occasionId));
+  const reviewsList = candidates.filter(
+    (t) => (hasActiveSearch || t.edition?.group === matchedGroup) && t.edition?.purpose === 'Trust-building',
+  );
 
   let selectedTemplates: typeof BUSINESS_EDITIONS = [];
 
@@ -397,24 +412,29 @@ export async function GET(request: NextRequest) {
 
     let assignedPhoto = template.photo;
     if (isFestival) {
-      const textToInspect = `${template.occasionId || ''} ${template.headline || ''} ${template.name || ''}`.toLowerCase();
-      let occasion = 'diwali';
-      if (/holi|gulal/i.test(textToInspect)) occasion = 'holi';
-      else if (/eid/i.test(textToInspect)) occasion = 'eid';
-      else if (/christmas/i.test(textToInspect)) occasion = 'christmas';
-      else if (/new year|nye/i.test(textToInspect)) occasion = 'new_year';
-      else if (/independence/i.test(textToInspect)) occasion = 'independence_day';
-      else if (/republic/i.test(textToInspect)) occasion = 'republic_day';
-      else if (/rakhi/i.test(textToInspect)) occasion = 'rakhi';
-      else if (/navratri|durga/i.test(textToInspect)) occasion = 'navratri';
-      else if (/dussehra/i.test(textToInspect)) occasion = 'dussehra';
-      else if (/chhath/i.test(textToInspect)) occasion = 'chhath_puja';
-      else if (searchContext.isFestival && searchContext.detectedOccasion) {
-        occasion = searchContext.detectedOccasion;
-      }
+      if (template.photo && template.photo.startsWith('/images/bgos/templates/')) {
+        // Keep verified authentic local festival asset
+        assignedPhoto = template.photo;
+      } else {
+        const textToInspect = `${template.occasionId || ''} ${template.headline || ''} ${template.name || ''}`.toLowerCase();
+        let occasion = 'diwali';
+        if (/holi|gulal/i.test(textToInspect)) occasion = 'holi';
+        else if (/eid/i.test(textToInspect)) occasion = 'eid';
+        else if (/christmas/i.test(textToInspect)) occasion = 'christmas';
+        else if (/new year|nye/i.test(textToInspect)) occasion = 'new_year';
+        else if (/independence/i.test(textToInspect)) occasion = 'independence_day';
+        else if (/republic/i.test(textToInspect)) occasion = 'republic_day';
+        else if (/rakhi/i.test(textToInspect)) occasion = 'rakhi';
+        else if (/navratri|durga/i.test(textToInspect)) occasion = 'navratri';
+        else if (/dussehra/i.test(textToInspect)) occasion = 'dussehra';
+        else if (/chhath/i.test(textToInspect)) occasion = 'chhath_puja';
+        else if (searchContext.isFestival && searchContext.detectedOccasion) {
+          occasion = searchContext.detectedOccasion;
+        }
 
-      const festivalPhotos = FESTIVAL_VISUAL_POOL[occasion] || FESTIVAL_VISUAL_POOL.diwali;
-      assignedPhoto = festivalPhotos[idx % festivalPhotos.length] || festivalPhotos[0];
+        const festivalPhotos = FESTIVAL_VISUAL_POOL[occasion] || FESTIVAL_VISUAL_POOL.diwali;
+        assignedPhoto = festivalPhotos[idx % festivalPhotos.length] || festivalPhotos[0];
+      }
     } else {
       assignedPhoto =
         visuals[idx % visuals.length] ||
