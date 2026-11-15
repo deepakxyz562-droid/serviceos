@@ -7,6 +7,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { fetchGoogleBusinessPerformanceMetrics, listGoogleBusinessMedia } from '@/lib/social/adapters/googlebusiness';
 import { getOrGenerateAiBusinessProfile } from '@/lib/gbp/ai-business-profiler';
+import { isDeliverableEmail } from '@/lib/emails/bgos/templates';
 
 export const dynamic = 'force-dynamic';
 
@@ -104,7 +105,16 @@ export async function POST(request: NextRequest) {
 
       const businessName = googlePlace?.title || meta.locationTitle || parsedSettings.locationName || tenant.brandProfile?.businessName || tenant.name || 'My Business';
       const ownerName = ownerUser?.name || tenant.name || businessName;
-      const recipientEmail = ownerUser?.email || tenant.brandProfile?.contactEmail;
+      const candidateEmails = [
+        meta.googleEmail,
+        googleAccount?.metadata && typeof googleAccount.metadata === 'object' ? (googleAccount.metadata as any).googleEmail : null,
+        meta.admins?.[0]?.adminName,
+        tenant.brandProfile?.contactEmail,
+        tenant.email,
+        ownerUser?.email,
+      ].filter((e): e is string => Boolean(e) && typeof e === 'string');
+
+      const recipientEmail = candidateEmails.find((e) => isDeliverableEmail(e)) || null;
       const recipientPhone = ownerUser?.phone || tenant.phone || tenant.brandProfile?.contactPhone;
       const address = googlePlace?.address || meta.address || parsedSettings.address || tenant.brandProfile?.location || tenant.city || '';
       const settingsCategory = String(parsedSettings.locationCategory || parsedSettings.activeGbpCategory || '').trim();
@@ -331,8 +341,8 @@ export async function POST(request: NextRequest) {
       let emailSuccess = false;
       let whatsappSuccess = false;
 
-      // 1. Send via Email with PDF Attachment
-      if (recipientEmail) {
+      // 1. Send via Email with PDF Attachment (only if deliverable address exists)
+      if (recipientEmail && isDeliverableEmail(recipientEmail)) {
         try {
           const emailRes = await sendEmail({
             to: recipientEmail,
@@ -345,7 +355,7 @@ export async function POST(request: NextRequest) {
                 </div>
                 <p style="font-size: 15px; margin-bottom: 14px;">Hi <strong>${ownerName}</strong>,</p>
                 <p style="font-size: 14.5px; line-height: 1.5; color: #334155;">
-                  Your <strong>${curMonthName}</strong> Google Business performance report is compiled and ready. Your 5 AI Growth Agents have tracked your search impressions, customer review responses, and local keyword traction.
+                  Your <strong>${curMonthName}</strong> Google Business performance report is compiled and ready. Your AI Growth Agents have tracked your search impressions, customer review responses, and local keyword traction.
                 </p>
                 <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px; margin: 18px 0;">
                   <h4 style="margin: 0 0 10px 0; color: #0F172A; font-size: 14px;">Performance Snapshot:</h4>
@@ -378,6 +388,10 @@ export async function POST(request: NextRequest) {
         } catch (e) {
           console.error(`[Cron] Email dispatch failed for ${recipientEmail}:`, e);
         }
+      } else {
+        console.log(
+          `[monthly-marketing-report] Skipping email for tenant ${tenant.id} (${businessName}): no deliverable email address found (found: ${recipientEmail || 'none'}).`,
+        );
       }
 
       // 2. Send via WhatsApp matching User Template & Document Attachment

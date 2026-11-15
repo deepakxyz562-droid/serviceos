@@ -5,6 +5,7 @@ import { encryptToken } from '@/lib/social/crypto';
 import { logActivity } from '@/lib/activity-log';
 import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
 import { invalidatePlacePayloadCacheForTenant } from '@/lib/social/google-connection-state';
+import { isSyntheticPlaceholderEmail } from '@/lib/emails/bgos/templates';
 
 /**
  * CRITICAL: OAuth callback routes MUST be dynamic. Without this, Next.js may
@@ -1086,6 +1087,48 @@ async function upsertLocationAccount(args: {
     description: `Connected Google Business Profile location "${account.accountName}".`,
     severity: 'info',
   }).catch(() => {});
+
+  // Auto-promote verified Google email to User and Tenant if current email is synthetic/empty
+  if (args.googleEmail && !isSyntheticPlaceholderEmail(args.googleEmail)) {
+    try {
+      if (args.userId) {
+        const currentUser = await db.user.findUnique({
+          where: { id: args.userId },
+          select: { email: true },
+        });
+        if (currentUser && isSyntheticPlaceholderEmail(currentUser.email)) {
+          await db.user.update({
+            where: { id: args.userId },
+            data: { email: args.googleEmail },
+          });
+        }
+      }
+
+      const tenant = await db.tenant.findUnique({
+        where: { id: args.tenantId },
+        select: { email: true, brandProfile: { select: { id: true, contactEmail: true } } },
+      });
+      if (tenant) {
+        if (!tenant.email || isSyntheticPlaceholderEmail(tenant.email)) {
+          await db.tenant.update({
+            where: { id: args.tenantId },
+            data: { email: args.googleEmail },
+          });
+        }
+        if (
+          tenant.brandProfile &&
+          (!tenant.brandProfile.contactEmail || isSyntheticPlaceholderEmail(tenant.brandProfile.contactEmail))
+        ) {
+          await db.brandProfile.update({
+            where: { id: tenant.brandProfile.id },
+            data: { contactEmail: args.googleEmail },
+          });
+        }
+      }
+    } catch (promoteErr) {
+      console.warn('[oauth/googlebusiness] Google email auto-promotion notice:', promoteErr);
+    }
+  }
 }
 
 /**

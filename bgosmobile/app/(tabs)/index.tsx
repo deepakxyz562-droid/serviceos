@@ -471,11 +471,26 @@ export default function HomeScreen() {
     error: bootstrap.error,
     refresh: bootstrap.refresh,
   };
+  const shouldFetchDirectPlace = Boolean(
+    bootstrap.data?.gbpPlace?.isConnected &&
+      (!bootstrap.data.gbpPlace.metrics || bootstrap.data.gbpPlace.metrics.totalViews === 0),
+  );
+  const gbpPlaceDirect = useResource<GbpPlaceResult>(
+    '/api/gbp/place',
+    0,
+    shouldFetchDirectPlace,
+  );
   const gbpPlace = {
-    data: bootstrap.data?.gbpPlace ?? null,
-    loading: bootstrap.loading,
-    error: bootstrap.error,
-    refresh: bootstrap.refresh,
+    data: (gbpPlaceDirect.data ?? bootstrap.data?.gbpPlace ?? null) as GbpPlaceResult | null,
+    loading: bootstrap.loading || gbpPlaceDirect.loading,
+    error: bootstrap.error || gbpPlaceDirect.error,
+    refresh: async () => {
+      await Promise.all(
+        [bootstrap.refresh(), gbpPlaceDirect.refresh()].map((p) =>
+          Promise.resolve(p).catch(() => {}),
+        ),
+      );
+    },
   };
   const discover = {
     data: bootstrap.data?.discover ?? null,
@@ -1516,9 +1531,16 @@ export default function HomeScreen() {
       {/* Google's Performance & Search Preview (100% Real GBP & Analytics Data) */}
       <GooglePerformanceCard
         metrics={{
-          views: perf?.totalViews ?? gbpAnalytics.data?.metrics?.totalViews ?? ((perf?.searchImpressions || 0) + (perf?.mapsImpressions || 0)),
+          views:
+            perf?.totalViews ??
+            gbpAnalytics.data?.metrics?.totalViews ??
+            ((perf?.searchImpressions || 0) + (perf?.mapsImpressions || (perf as any)?.mapsViews || 0)),
           searchImpressions: perf?.searchImpressions ?? gbpAnalytics.data?.metrics?.searchImpressions ?? 0,
-          mapsImpressions: perf?.mapsImpressions ?? gbpAnalytics.data?.metrics?.mapsImpressions ?? 0,
+          mapsImpressions:
+            perf?.mapsImpressions ??
+            (perf as any)?.mapsViews ??
+            gbpAnalytics.data?.metrics?.mapsImpressions ??
+            0,
           calls: perf?.callClicks ?? gbpAnalytics.data?.metrics?.callClicks ?? 0,
           directions: perf?.directionRequests ?? gbpAnalytics.data?.metrics?.directionRequests ?? 0,
           websiteClicks: perf?.websiteClicks ?? gbpAnalytics.data?.metrics?.websiteClicks ?? 0,
@@ -1564,7 +1586,10 @@ export default function HomeScreen() {
                 bookings: perf.last30Days.bookings,
               }
             : null,
-          monthlyTrends: gbpAnalytics.data?.sixMonthTrends || null,
+          monthlyTrends:
+            perf?.monthlyTrends ||
+            gbpAnalytics.data?.sixMonthTrends ||
+            null,
         }}
         onBoostPost={() => router.push('/(tabs)/marketing?generate=1')}
         onEditProfile={() => router.push('/manage-profile')}

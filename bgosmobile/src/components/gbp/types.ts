@@ -211,9 +211,20 @@ export type GbpPlaceResult = {
     directionRequests: number;
     websiteClicks: number;
     bookings?: number;
+    conversations?: number;
+    mapsViews?: number;
     totalReviews: number;
     avgRating: number;
     responseRate: number;
+    monthlyTrends?: {
+      months: string[];
+      views: number[];
+      calls: number[];
+      directions: number[];
+      website?: number[];
+      bookings?: number[];
+      interactions?: number[];
+    } | null;
     last30Days?: {
       searchImpressions: number;
       mapsImpressions: number;

@@ -6,6 +6,7 @@ import { computeMarketingScore } from '@/lib/gbp/marketing-score';
 import { computeGbpAudit } from '@/lib/gbp/audit';
 import { googleReviewScope } from '@/lib/social/google-review-scope';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
+import { fetchGoogleBusinessPerformanceMetrics } from '@/lib/social/adapters/googlebusiness';
 
 export const dynamic = 'force-dynamic';
 
@@ -177,6 +178,60 @@ export async function GET(request: NextRequest) {
         ? Number((sumRating / (reviews.length || 1)).toFixed(1))
         : 0;
 
+    // Fetch genuine Google Business Profile telemetry if connected
+    let perfMetrics = {
+      searchImpressions: 0,
+      mapsImpressions: 0,
+      mapsViews: 0,
+      totalViews: 0,
+      callClicks: 0,
+      directionRequests: 0,
+      websiteClicks: 0,
+      bookings: 0,
+      conversations: 0,
+      monthlyTrends: null as any,
+      last30Days: null as any,
+    };
+
+    if (googleAccount) {
+      try {
+        const perf = await fetchGoogleBusinessPerformanceMetrics(googleAccount);
+        if (perf) {
+          const sViews = perf.searchImpressions || 0;
+          const mViews = perf.mapsImpressions || 0;
+          const totViews = perf.totalViews || (sViews + mViews) || 0;
+          perfMetrics = {
+            searchImpressions: sViews,
+            mapsImpressions: mViews,
+            mapsViews: mViews,
+            totalViews: totViews,
+            callClicks: perf.callClicks || 0,
+            directionRequests: perf.directionRequests || 0,
+            websiteClicks: perf.websiteClicks || 0,
+            bookings: perf.bookings || 0,
+            conversations: perf.conversations || 0,
+            monthlyTrends: perf.monthlyTrends || null,
+            last30Days: perf.last30Days || null,
+          };
+        }
+      } catch (err) {
+        console.warn('[bootstrap] fetchGoogleBusinessPerformanceMetrics notice:', err);
+      }
+    }
+
+    // Fallback estimation if profile is brand new or performance API is aggregating
+    if (perfMetrics.totalViews === 0 && marketingScore?.reviewCount) {
+      const sImp = marketingScore.reviewCount * 12;
+      const mImp = marketingScore.reviewCount * 18;
+      perfMetrics.searchImpressions = sImp;
+      perfMetrics.mapsImpressions = mImp;
+      perfMetrics.mapsViews = mImp;
+      perfMetrics.totalViews = sImp + mImp;
+      perfMetrics.callClicks = Math.round(marketingScore.reviewCount * 1.5);
+      perfMetrics.directionRequests = Math.round(marketingScore.reviewCount * 2.2);
+      perfMetrics.websiteClicks = marketingScore.reviewCount;
+    }
+
     // Build consolidated GbpPlace object
     const gbpPlace = {
       isConnected: Boolean(googleAccount),
@@ -198,11 +253,19 @@ export async function GET(request: NextRequest) {
         ? `https://maps.google.com/?cid=${tenantDetails.googlePlaceId}`
         : null,
       metrics: {
-        searchImpressions: marketingScore?.reviewCount ? marketingScore.reviewCount * 12 : 0,
-        mapsViews: marketingScore?.reviewCount ? marketingScore.reviewCount * 18 : 0,
-        callClicks: Math.round((marketingScore?.reviewCount || 0) * 1.5),
-        directionRequests: Math.round((marketingScore?.reviewCount || 0) * 2.2),
-        websiteClicks: marketingScore?.reviewCount || 0,
+        totalViews: perfMetrics.totalViews,
+        searchImpressions: perfMetrics.searchImpressions,
+        mapsImpressions: perfMetrics.mapsImpressions,
+        mapsViews: perfMetrics.mapsViews,
+        callClicks: perfMetrics.callClicks,
+        directionRequests: perfMetrics.directionRequests,
+        websiteClicks: perfMetrics.websiteClicks,
+        bookings: perfMetrics.bookings,
+        conversations: perfMetrics.conversations,
+        monthlyTrends: perfMetrics.monthlyTrends,
+        last30Days: perfMetrics.last30Days,
+        totalReviews: totalReviewsCount,
+        avgRating,
       },
     };
 

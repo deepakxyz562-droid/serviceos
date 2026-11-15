@@ -77,15 +77,6 @@ export function HomeStoryBubblesStrip({
       borderColor: '#34D399',
       onPress: onAddPhotos || (() => router.push('/(tabs)/photos')),
     },
-    {
-      id: 's_video',
-      title: 'Viral Video',
-      subtitle: 'Video Agent',
-      icon: 'smart-display' as const,
-      color: '#E11D48',
-      borderColor: '#FB7185',
-      onPress: onOpenPosts || (() => router.push('/(tabs)/marketing?mode=video')),
-    },
   ];
 
   return (
@@ -207,21 +198,6 @@ export function GbpAiAgentHomeCard({
       iconBg: '#DCFCE7',
       onPress: onAddPhotos,
     },
-    {
-      id: 'agent_video',
-      number: '5',
-      title: 'Viral Video & Post Agent',
-      subtitle:
-        scheduledPostsCount > 0
-          ? `${scheduledPostsCount} post${scheduledPostsCount === 1 ? '' : 's'} scheduled in queue`
-          : '30-Day Viral Content Calendar ready',
-      badge: '30-Day Calendar',
-      badgeType: 'purple' as const,
-      icon: 'smart-display' as const,
-      iconColor: '#E11D48',
-      iconBg: '#FFE4E6',
-      onPress: onOpenPosts || (() => router.push('/(tabs)/marketing?mode=video')),
-    },
   ];
 
   const hasScheduledMedia = scheduledPhotosCount > 0;
@@ -237,7 +213,7 @@ export function GbpAiAgentHomeCard({
           </View>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.agentTitle}>Five AI Marketing Agents</Text>
+              <Text style={styles.agentTitle}>Four AI Marketing Agents</Text>
             </View>
             <Text style={styles.agentSub} numberOfLines={1}>
               Trained on {businessName} • 24/7 Autopilot
@@ -247,7 +223,7 @@ export function GbpAiAgentHomeCard({
 
         <View style={styles.activePill}>
           <View style={styles.activeDot} />
-          <Text style={styles.activePillText}>5 Active</Text>
+          <Text style={styles.activePillText}>4 Active</Text>
         </View>
       </View>
 
