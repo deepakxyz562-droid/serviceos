@@ -6,6 +6,7 @@ import { sendEmail } from '@/lib/email-send';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { fetchGoogleBusinessPerformanceMetrics, listGoogleBusinessMedia } from '@/lib/social/adapters/googlebusiness';
+import { getOrGenerateAiBusinessProfile } from '@/lib/gbp/ai-business-profiler';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +38,13 @@ function deriveCategoryKeywords(category: string, city: string, locality: string
     res.push({ keyword: `weekend farmhouse resort booking ${city}`, volume: 300, usedCount: 2 });
     if (locality2) res.push({ keyword: `family pool stay near ${locality2}`, volume: 180, usedCount: 1 });
     res.push({ keyword: `pool party venue near me`, volume: 500, usedCount: 1 });
-  } else if (cat.includes('software') || cat.includes('it') || cat.includes('tech') || cat.includes('web') || cat.includes('consult')) {
+  } else if (cat.includes('security') || cat.includes('guard') || cat.includes('bouncer') || cat.includes('gunman') || cat.includes('pso') || cat.includes('sos')) {
+    res.push({ keyword: `private security agency in ${city}`, volume: 500, usedCount: 2 });
+    res.push({ keyword: `bouncer and bodyguard service ${city}`, volume: 350, usedCount: 2 });
+    res.push({ keyword: `armed pso gunmen security ${city}`, volume: 250, usedCount: 2 });
+    res.push({ keyword: `emergency security services near me`, volume: 400, usedCount: 1 });
+    res.push({ keyword: `best security guard company in ${city}`, volume: 450, usedCount: 1 });
+  } else if (/\b(software company|saas|web development|app development|it services company)\b/i.test(cat)) {
     res.push({ keyword: `best crm software for small businesses`, volume: 500, usedCount: 2 });
     res.push({ keyword: `software development company`, volume: 500, usedCount: 2 });
     res.push({ keyword: `software development company in ${city}`, volume: 100, usedCount: 2 });
@@ -90,15 +97,21 @@ export async function POST(request: NextRequest) {
       const meta = (googleAccount?.metadata || {}) as Record<string, any>;
 
       const ownerUser = tenant.users?.[0] || null;
-      const businessName = googlePlace?.title || meta.locationTitle || tenant.brandProfile?.businessName || tenant.name || 'My Business';
+      let parsedSettings: Record<string, any> = {};
+      try {
+        parsedSettings = JSON.parse(tenant.settingsJson || '{}');
+      } catch {}
+
+      const businessName = googlePlace?.title || meta.locationTitle || parsedSettings.locationName || tenant.brandProfile?.businessName || tenant.name || 'My Business';
       const ownerName = ownerUser?.name || tenant.name || businessName;
       const recipientEmail = ownerUser?.email || tenant.brandProfile?.contactEmail;
       const recipientPhone = ownerUser?.phone || tenant.phone || tenant.brandProfile?.contactPhone;
-      const address = googlePlace?.address || meta.address || tenant.brandProfile?.location || tenant.city || '';
-      const category = String(meta.category || meta.locationCategory || tenant.brandProfile?.industry || tenant.industry || 'Local Business');
+      const address = googlePlace?.address || meta.address || parsedSettings.address || tenant.brandProfile?.location || tenant.city || '';
+      const settingsCategory = String(parsedSettings.locationCategory || parsedSettings.activeGbpCategory || '').trim();
+      const category = String(settingsCategory || meta.category || meta.locationCategory || tenant.brandProfile?.industry || tenant.industry || 'Local Business');
 
       // Locality resolution
-      let city = 'Patna';
+      let city = String(tenant.city || parsedSettings.city || '').trim();
       const localities: string[] = [];
       if (address) {
         const rawParts = address
@@ -177,8 +190,15 @@ export async function POST(request: NextRequest) {
       const scheduledPosts = allPosts.filter((p) => p.status === 'scheduled');
       const mediaPosts = allPosts.filter((p) => Boolean(p.mediaUrls && p.mediaUrls.length > 2));
 
-      // Dynamic Keywords
-      const dynamicKeywords = deriveCategoryKeywords(category, city, localities[0] || '', localities[1] || '');
+      // Dynamic Keywords — powered by AI Semantic Business Profiler
+      const aiProfile = await getOrGenerateAiBusinessProfile(tenant).catch(() => null);
+      const dynamicKeywords = aiProfile?.highIntentKeywords?.length
+        ? aiProfile.highIntentKeywords.map((k) => ({
+            keyword: k.keyword,
+            volume: k.volume,
+            usedCount: k.defaultUsed || 1,
+          }))
+        : deriveCategoryKeywords(category, city, localities[0] || '', localities[1] || '');
       const creativeKeywords = dynamicKeywords.slice(0, 3);
 
       // Trajectory

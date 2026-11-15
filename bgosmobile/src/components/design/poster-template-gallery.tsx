@@ -113,6 +113,7 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
   const chips: Array<{ id: string; label: string; icon?: string }> = [
     { id: 'for_you', label: 'For you', icon: 'auto-awesome' },
     { id: 'all', label: 'All', icon: 'apps' },
+    { id: 'festival', label: 'Festivals', icon: 'celebration' },
     { id: 'sale_offer', label: 'Sale & Offers', icon: 'local-offer' },
     { id: 'service_spotlight', label: 'Services', icon: 'handyman' },
     { id: 'appointment', label: 'Bookings', icon: 'event-available' },

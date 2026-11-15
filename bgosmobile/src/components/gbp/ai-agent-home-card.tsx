@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors } from '../ui';
@@ -19,60 +19,81 @@ interface AiAgentHomeCardProps {
   onAddPhotos: () => void;
   onOpenReviews?: () => void;
   onOpenPosts?: () => void;
+  onOpenPosters?: () => void;
 }
 
 /**
  * Top Circular Action Story Bubbles:
- * [Add Photos] [Editing Posts] [Reviews Mgmt] [Photo Boost]
+ * The 5 Autonomous AI Marketing Agents
  */
 export function HomeStoryBubblesStrip({
   onAddPhotos,
   onOpenPosts,
   onOpenReviews,
-  onPhotoBoost,
+  onOpenSeo,
+  onOpenPosters,
 }: {
   onAddPhotos: () => void;
   onOpenPosts: () => void;
   onOpenReviews: () => void;
-  onPhotoBoost: () => void;
+  onOpenSeo?: () => void;
+  onOpenPosters?: () => void;
 }) {
+  const router = useRouter();
   const stories = [
     {
-      id: 's1',
-      title: 'Add Photos',
-      icon: 'add-a-photo' as const,
-      color: '#009F50',
-      borderColor: '#34D399',
-      onPress: onAddPhotos,
+      id: 's_creative',
+      title: 'Poster Studio',
+      subtitle: 'Creative Agent',
+      icon: 'auto-awesome' as const,
+      color: '#4F46E5',
+      borderColor: '#818CF8',
+      onPress: onOpenPosters || (() => router.push('/(tabs)/marketing?mode=posters')),
     },
     {
-      id: 's2',
-      title: 'Editing Posts',
-      icon: 'edit' as const,
-      color: '#3B82F6',
-      borderColor: '#60A5FA',
-      onPress: onOpenPosts,
+      id: 's_ranking',
+      title: 'Rank Tracker',
+      subtitle: 'SEO Agent',
+      icon: 'trending-up' as const,
+      color: '#6440CD',
+      borderColor: '#A78BFA',
+      onPress: onOpenSeo || (() => router.push('/growth')),
     },
     {
-      id: 's3',
-      title: 'Reviews Mgmt',
+      id: 's_reviews',
+      title: 'Get Reviews',
+      subtitle: 'Review Agent',
       icon: 'star' as const,
-      color: '#F59E0B',
+      color: '#D97706',
       borderColor: '#FCD34D',
-      onPress: onOpenReviews,
+      onPress: onOpenReviews || (() => router.push('/(tabs)/reviews')),
     },
     {
-      id: 's4',
-      title: 'Photo Boost',
-      icon: 'auto-fix-high' as const,
-      color: '#8B5CF6',
-      borderColor: '#C084FC',
-      onPress: onPhotoBoost,
+      id: 's_media',
+      title: 'Post Media',
+      subtitle: 'Media Agent',
+      icon: 'add-a-photo' as const,
+      color: '#059669',
+      borderColor: '#34D399',
+      onPress: onAddPhotos || (() => router.push('/(tabs)/photos')),
+    },
+    {
+      id: 's_video',
+      title: 'Viral Video',
+      subtitle: 'Video Agent',
+      icon: 'smart-display' as const,
+      color: '#E11D48',
+      borderColor: '#FB7185',
+      onPress: onOpenPosts || (() => router.push('/(tabs)/marketing?mode=video')),
     },
   ];
 
   return (
-    <View style={styles.storiesContainer}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.storiesContainer}
+    >
       {stories.map((s) => (
         <Pressable
           key={s.id}
@@ -86,7 +107,7 @@ export function HomeStoryBubblesStrip({
         >
           <View style={[styles.storyRing, { borderColor: s.borderColor }]}>
             <View style={[styles.storyCircle, { backgroundColor: s.color }]}>
-              <MaterialIcons name={s.icon} size={22} color="#FFFFFF" />
+              <MaterialIcons name={s.icon} size={20} color="#FFFFFF" />
             </View>
           </View>
           <Text style={styles.storyTitle} numberOfLines={1}>
@@ -94,12 +115,13 @@ export function HomeStoryBubblesStrip({
           </Text>
         </Pressable>
       ))}
-    </View>
+    </ScrollView>
   );
 }
 
 /**
- * Active "GBP AI Agent" Checklist Card — Light BGOS UI + live workspace stats
+ * Five Autonomous AI Marketing Agents Card
+ * Trained on your business — 24/7 Autopilot across Google Maps & Social
  */
 export function GbpAiAgentHomeCard({
   businessName = 'My Business',
@@ -116,6 +138,7 @@ export function GbpAiAgentHomeCard({
   onAddPhotos,
   onOpenReviews,
   onOpenPosts,
+  onOpenPosters,
 }: AiAgentHomeCardProps) {
   const router = useRouter();
 
@@ -125,7 +148,7 @@ export function GbpAiAgentHomeCard({
     reviewSummaryParts.push(`${totalReviewsCount} total`);
     if (replyRate != null) reviewSummaryParts.push(`${Math.round(replyRate)}% replied`);
   } else {
-    reviewSummaryParts.push('Send invite links to start collecting reviews');
+    reviewSummaryParts.push('Collect reviews via QR Standee & WhatsApp');
   }
   if (totalInvites > 0) {
     reviewSummaryParts.push(
@@ -135,12 +158,13 @@ export function GbpAiAgentHomeCard({
     );
   }
 
-  const checklist = [
+  const agents = [
     {
-      id: 'c1',
-      title: 'GBP Profile SEO',
-      subtitle: `${seoUpdatesCount} automated SEO checks & updates`,
-      badge: `⚡ ${seoUpdatesCount} Active`,
+      id: 'agent_ranking',
+      number: '1',
+      title: 'Ranking & Local SEO Agent',
+      subtitle: `${seoUpdatesCount} Delhi keyword checks • Maps Rank Autopilot active`,
+      badge: 'Active',
       badgeType: 'purple' as const,
       icon: 'tune' as const,
       iconColor: '#6440CD',
@@ -148,48 +172,55 @@ export function GbpAiAgentHomeCard({
       onPress: onOpenSeoUpdates,
     },
     {
-      id: 'c2',
-      title: 'GBP Posting Autopilot',
-      subtitle:
-        scheduledPostsCount > 0
-          ? `${scheduledPostsCount} scheduled post${scheduledPostsCount === 1 ? '' : 's'} in queue`
-          : `Create or schedule posts for ${businessName}`,
-      icon: 'schedule' as const,
-      iconColor: '#B45309',
-      iconBg: '#FEF3C7',
-      onPress: onOpenPosts || (() => router.push('/(tabs)/marketing')),
+      id: 'agent_creative',
+      number: '2',
+      title: 'Creative & Poster Studio Agent',
+      subtitle: 'Festivals, Offer Flyers, Discount Banners & Cards',
+      badge: 'Studio Ready',
+      badgeType: 'purple' as const,
+      icon: 'auto-awesome' as const,
+      iconColor: '#4F46E5',
+      iconBg: '#EEF2FF',
+      onPress: onOpenPosters || (() => router.push('/(tabs)/marketing?mode=posters')),
     },
     {
-      id: 'c3',
-      title: `${publishedPhotosCount} Photos/Videos Live`,
-      subtitle:
-        scheduledPhotosCount > 0
-          ? `${scheduledPhotosCount} scheduled to publish`
-          : 'Upload photos or short videos for steady weekly posting',
-      badge: publishedPhotosCount === 0 && scheduledPhotosCount === 0 ? 'Add media' : undefined,
-      badgeType: 'amber' as const,
-      icon: 'photo-library' as const,
-      iconColor: colors.brandDark,
-      iconBg: colors.brandSoft,
-      onPress: onAddPhotos,
-    },
-    {
-      id: 'c4',
-      title: `${newReviewsCount} New Reviews This Week`,
+      id: 'agent_review',
+      number: '3',
+      title: 'Review & Reputation Agent',
       subtitle: reviewSummaryParts.join(' · '),
+      badge: totalReviewsCount > 0 ? `${totalReviewsCount} Reviews` : 'Collect Reviews',
+      badgeType: 'amber' as const,
       icon: 'star' as const,
       iconColor: '#D97706',
       iconBg: '#FFFBEB',
       onPress: onOpenReviews || (() => router.push('/(tabs)/reviews')),
     },
     {
-      id: 'c5',
-      title: 'Performance Analysis',
-      subtitle: 'Live Google Search views, calls & direction clicks',
-      icon: 'bar-chart' as const,
-      iconColor: '#0284C7',
-      iconBg: '#E0F2FE',
-      onPress: () => router.push('/growth'),
+      id: 'agent_media',
+      number: '4',
+      title: 'Media & Storefront Agent',
+      subtitle: `${publishedPhotosCount} live on Google • ${scheduledPhotosCount} scheduled`,
+      badge: scheduledPhotosCount > 0 ? `${scheduledPhotosCount} Queued` : 'Schedule Photos',
+      badgeType: 'amber' as const,
+      icon: 'photo-library' as const,
+      iconColor: '#059669',
+      iconBg: '#DCFCE7',
+      onPress: onAddPhotos,
+    },
+    {
+      id: 'agent_video',
+      number: '5',
+      title: 'Viral Video & Post Agent',
+      subtitle:
+        scheduledPostsCount > 0
+          ? `${scheduledPostsCount} post${scheduledPostsCount === 1 ? '' : 's'} scheduled in queue`
+          : '30-Day Viral Content Calendar ready',
+      badge: '30-Day Calendar',
+      badgeType: 'purple' as const,
+      icon: 'smart-display' as const,
+      iconColor: '#E11D48',
+      iconBg: '#FFE4E6',
+      onPress: onOpenPosts || (() => router.push('/(tabs)/marketing?mode=video')),
     },
   ];
 
@@ -205,20 +236,22 @@ export function GbpAiAgentHomeCard({
             <MaterialIcons name="smart-toy" size={20} color={colors.brand} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.agentTitle}>GBP AI Agent</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.agentTitle}>Five AI Marketing Agents</Text>
+            </View>
             <Text style={styles.agentSub} numberOfLines={1}>
-              Continuously optimizing {businessName}
+              Trained on {businessName} • 24/7 Autopilot
             </Text>
           </View>
         </View>
 
         <View style={styles.activePill}>
           <View style={styles.activeDot} />
-          <Text style={styles.activePillText}>Active</Text>
+          <Text style={styles.activePillText}>5 Active</Text>
         </View>
       </View>
 
-      {/* ── Media Readiness Banner (Honest Live Count) ── */}
+      {/* ── Media Readiness Banner ── */}
       <View style={[styles.photoBanner, !hasAnyMedia && styles.photoBannerAttention]}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.photoBannerTitle}>
@@ -258,16 +291,16 @@ export function GbpAiAgentHomeCard({
         </Pressable>
       </View>
 
-      {/* ── Checklist Rows ── */}
+      {/* ── 5 Autonomous Agents Rows ── */}
       <View style={styles.checklistColumn}>
-        {checklist.map((item, idx) => (
+        {agents.map((item, idx) => (
           <Pressable
             key={item.id}
             accessibilityRole="button"
             onPress={item.onPress}
             style={({ pressed }) => [
               styles.checklistItem,
-              idx === checklist.length - 1 && { borderBottomWidth: 0, paddingBottom: 2 },
+              idx === agents.length - 1 && { borderBottomWidth: 0, paddingBottom: 2 },
               pressed && { opacity: 0.8 },
             ]}
           >
@@ -309,29 +342,29 @@ export function GbpAiAgentHomeCard({
 const styles = StyleSheet.create({
   storiesContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 12,
     paddingVertical: 10,
     paddingHorizontal: 4,
     marginBottom: 4,
   },
   storyItem: {
     alignItems: 'center',
-    gap: 6,
-    width: '23%',
+    gap: 5,
+    width: 68,
   },
   storyRing: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 2,
   },
   storyCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },

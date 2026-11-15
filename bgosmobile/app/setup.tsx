@@ -33,6 +33,8 @@ interface DiscoveredLocation {
   placeId: string | null;
   phone?: string;
   website?: string;
+  rating?: number;
+  reviewCount?: number;
   isVerified: boolean;
 }
 
@@ -205,8 +207,8 @@ export default function SetupScreen() {
 
   // AI-suggested keywords
   const aiSuggestedKeywords = useMemo(() => {
-    const name = data?.businessName || 'best cafe';
-    const ind = data?.industry || 'vashi';
+    const name = data?.businessName || user?.name || 'Local Business';
+    const ind = data?.industry || 'Services';
     return [
       `${name} near me`,
       `${ind} near me`,
@@ -337,7 +339,7 @@ export default function SetupScreen() {
           setLocationName(fallbackLocation.name || defaultName);
           setLocationAddress(fallbackLocation.address || '');
           setLocationCategory(fallbackLocation.category || 'Field Service');
-          setLocationPinCode(fallbackLocation.address?.match(/\b\d{6}\b/)?.[0] || '400703');
+          setLocationPinCode(fallbackLocation.address?.match(/\b\d{6}\b/)?.[0] || '');
           setLocationPhone(fallbackLocation.phone || disc?.phone || '');
         } else {
           setLocationName(defaultName);
@@ -801,18 +803,49 @@ export default function SetupScreen() {
                   </View>
 
                   <Text style={{ fontSize: 18, fontWeight: '800', color: colors.ink, marginTop: 8 }}>
-                    {data.activeLocation?.name || data.businessName || 'Cafe Vashi'}
+                    {data.activeLocation?.name || data.businessName || user?.name || 'Business Location'}
                   </Text>
 
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink }}>5.0</Text>
-                    <StarRow rating={5} size={15} />
-                    <Text style={{ fontSize: 12, color: colors.muted }}>(Verified Listing)</Text>
-                  </View>
+                  {typeof data.activeLocation?.rating === 'number' && data.activeLocation.rating > 0 ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink }}>
+                        {data.activeLocation.rating.toFixed(1)}
+                      </Text>
+                      <StarRow rating={Math.round(data.activeLocation.rating)} size={15} />
+                      <Text style={{ fontSize: 12, color: colors.muted }}>
+                        ({data.activeLocation.reviewCount ?? 0} Reviews)
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 13, color: colors.muted }}>
+                        New Listing • No reviews yet
+                      </Text>
+                    </View>
+                  )}
 
-                  <Text style={{ fontSize: 12.5, color: colors.muted, lineHeight: 18 }}>
-                    {data.activeLocation?.address || 'Sector 17, Vashi, Navi Mumbai, Maharashtra 400703'}
-                  </Text>
+                  {data.activeLocation?.address ? (
+                    <Text style={{ fontSize: 12.5, color: colors.muted, lineHeight: 18 }}>
+                      {data.activeLocation.address}
+                    </Text>
+                  ) : (
+                    <View style={{ gap: 6, marginVertical: 4 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFFBEB', padding: 8, borderRadius: 8, borderWidth: 1, borderColor: '#FDE68A' }}>
+                        <MaterialIcons name="warning" size={16} color="#D97706" />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#B45309', flex: 1 }}>
+                          Storefront Address Missing on Google
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => setStep(2)}
+                        style={{ alignSelf: 'flex-start', paddingVertical: 5, paddingHorizontal: 10, backgroundColor: colors.brandSoft, borderRadius: 6 }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brandDark }}>
+                          + Add / Update Business Address →
+                        </Text>
+                      </Pressable>
+                    </View>
+                  )}
 
                   {data.activeLocation?.category ? (
                     <View style={styles.categoryPill}>
@@ -863,7 +896,7 @@ export default function SetupScreen() {
                 {locationName || data?.activeLocation?.name || 'Your Business Location'}
               </Text>
               <Text style={{ fontSize: 12, color: colors.muted, textAlign: 'center', paddingHorizontal: 20 }}>
-                {locationAddress || data?.activeLocation?.address || 'Address verified from Google Maps API'}
+                {locationAddress || data?.activeLocation?.address || 'Enter your storefront address or service city below'}
               </Text>
             </View>
 
@@ -932,7 +965,7 @@ export default function SetupScreen() {
                   label="Pin Code"
                   value={locationPinCode}
                   onChangeText={setLocationPinCode}
-                  placeholder="e.g. 400703"
+                  placeholder="e.g. 6-digit PIN"
                   keyboardType="numeric"
                 />
               </View>

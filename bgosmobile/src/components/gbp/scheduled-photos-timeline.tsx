@@ -16,7 +16,6 @@ import { colors } from '../ui';
 import { apiRequest } from '../../lib/api';
 import { detectDeviceCountryAndTimezone, getTimeZoneShortLabel } from '../../lib/country-codes';
 import { MediaPreviewModal, isVideoMediaAsset } from './media-preview-modal';
-import { TutorialVideoModal } from './tutorial-video-modal';
 import type { GbpConnectionState, GbpPhoto } from './types';
 
 export type MediaTabKey = 'scheduled' | 'uploaded' | 'unposted';
@@ -61,8 +60,6 @@ export function ScheduledPhotosTimeline({
   onClearFocus,
 }: ScheduledPhotosTimelineProps) {
   const [activeTab, setActiveTab] = useState<MediaTabKey>(initialTab || 'scheduled');
-  const [whyModalOpen, setWhyModalOpen] = useState(false);
-  const [tutorialModalOpen, setTutorialModalOpen] = useState(false);
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState<GbpPhoto | null>(null);
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
@@ -255,19 +252,6 @@ export function ScheduledPhotosTimeline({
         </View>
       ) : null}
 
-      {/* ── Top Hero AI Card (matching Grexa) ── */}
-      <View style={styles.heroAiBanner}>
-        <View style={{ flex: 1, paddingRight: 10 }}>
-          <Text style={styles.heroAiTitle}>BGOS keeps your profile active</Text>
-          <Text style={styles.heroAiSub}>
-            GBP AI Agent smartly publishes photos to help you rank higher on Google
-          </Text>
-        </View>
-        <View style={styles.heroAiStoreBadge}>
-          <MaterialIcons name="storefront" size={26} color="#0284C7" />
-        </View>
-      </View>
-
       {/* ── Top Section: Your Photos & Videos ── */}
       <View style={styles.sectionHeader}>
         <View>
@@ -372,15 +356,6 @@ export function ScheduledPhotosTimeline({
           </Pressable>
         ) : null}
       </View>
-
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => setTutorialModalOpen(true)}
-        style={styles.whyLinkWrapper}
-      >
-        <MaterialIcons name="play-circle-outline" size={17} color={colors.brand} />
-        <Text style={styles.whyLinkText}>Why Publish Photos &amp; Videos? (Watch Guide)</Text>
-      </Pressable>
 
       <View style={styles.sectionDivider} />
 
@@ -618,76 +593,6 @@ export function ScheduledPhotosTimeline({
         </View>
       )}
 
-      {/* ── Modal: Why Publish Photos & Videos? ── */}
-      <Modal
-        visible={whyModalOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setWhyModalOpen(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <MaterialIcons name="auto-awesome" size={22} color={colors.brand} />
-                <Text style={styles.modalTitle}>Why Publish Photos &amp; Videos?</Text>
-              </View>
-              <Pressable onPress={() => setWhyModalOpen(false)} hitSlop={10} style={styles.closeBtn}>
-                <MaterialIcons name="close" size={20} color={colors.ink} />
-              </Pressable>
-            </View>
-
-            <View style={{ paddingVertical: 14, gap: 12 }}>
-              <View style={styles.benefitRow}>
-                <View style={styles.benefitIconCircle}>
-                  <MaterialIcons name="visibility" size={18} color={colors.brand} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.benefitHeading}>More Google Maps Discovery</Text>
-                  <Text style={styles.benefitDesc}>
-                    Active profiles with recent customer-relevant photos and videos get more direction taps, calls, and clicks.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.benefitRow}>
-                <View style={styles.benefitIconCircle}>
-                  <MaterialIcons name="auto-awesome" size={18} color="#7C3AED" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.benefitHeading}>AI Title, Tags &amp; SEO Descriptions</Text>
-                  <Text style={styles.benefitDesc}>
-                    Every upload gets an editable local-SEO title, keyword tags, and Google category tailored to {businessName}.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.benefitRow}>
-                <View style={styles.benefitIconCircle}>
-                  <MaterialIcons name="schedule" size={18} color="#D97706" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.benefitHeading}>Hands-Free Scheduled Publishing</Text>
-                  <Text style={styles.benefitDesc}>
-                    Upload in batches once and let BGOS publish them steadily so your profile stays fresh every week.
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <Pressable
-              onPress={() => {
-                setWhyModalOpen(false);
-                onUploadPress();
-              }}
-              style={styles.modalActionBtn}
-            >
-              <Text style={styles.modalActionBtnText}>Add Photos &amp; Videos Now</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
       {/* ── Modal: View All Gallery ── */}
       <Modal
         visible={viewAllOpen}
@@ -733,16 +638,6 @@ export function ScheduledPhotosTimeline({
         }}
         businessName={businessName}
       />
-
-      <TutorialVideoModal
-        visible={tutorialModalOpen}
-        onClose={() => setTutorialModalOpen(false)}
-        onUploadNow={() => {
-          setTutorialModalOpen(false);
-          onUploadPress();
-        }}
-        businessName={businessName}
-      />
     </View>
   );
 }
@@ -751,40 +646,6 @@ const styles = StyleSheet.create({
   container: {
     gap: 12,
     paddingBottom: 24,
-  },
-  heroAiBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F0F9FF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    padding: 14,
-    marginBottom: 4,
-  },
-  heroAiTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 3,
-    letterSpacing: -0.2,
-  },
-  heroAiSub: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#0369A1',
-    lineHeight: 17,
-  },
-  heroAiStoreBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#E0F2FE',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   connectBanner: {
     flexDirection: 'row',
@@ -921,15 +782,6 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '800',
     letterSpacing: -0.2,
-  },
-  whyLinkWrapper: {
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  whyLinkText: {
-    color: colors.brandDark,
-    fontSize: 12.5,
-    fontWeight: '700',
   },
   sectionDivider: {
     height: 1,
@@ -1190,43 +1042,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  benefitRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  benefitIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  benefitHeading: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  benefitDesc: {
-    fontSize: 11.5,
-    color: colors.muted,
-    lineHeight: 17,
-    marginTop: 2,
-  },
-  modalActionBtn: {
-    backgroundColor: colors.brand,
-    borderRadius: 12,
-    height: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  modalActionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
   },
   videoTileDark: {
     backgroundColor: '#0F172A',

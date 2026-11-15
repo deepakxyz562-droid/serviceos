@@ -387,7 +387,57 @@ export function getDynamicOfferings(businessName: string, category?: string): Pr
     ];
   }
 
-  if (cat.includes('software') || cat.includes('tech') || cat.includes('it') || cat.includes('developer') || cat.includes('crm')) {
+  if (cat.includes('security') || cat.includes('guard') || cat.includes('bouncer') || cat.includes('gunman') || cat.includes('pso') || cat.includes('sos') || cat.includes('patrol')) {
+    return [
+      {
+        name: 'Private Security & Guarding',
+        icon: '🛡️',
+        concept:
+          'Verified, disciplined private security personnel and guarding teams from {business}. Protecting residential, commercial, and VIP properties 24/7.',
+        badge: 'Verified Guards',
+        headline: 'Professional Security Guarding',
+        type: 'Showcase',
+      },
+      {
+        name: 'Bouncer & Event Protection',
+        icon: '💪',
+        concept:
+          'Experienced bouncers and crowd management teams for VIP events, clubs, parties, and corporate gatherings by {business}.',
+        badge: 'VIP Bouncers',
+        headline: 'Event & Club Bouncer Services',
+        type: 'Promo',
+      },
+      {
+        name: 'Armed PSO & Gunmen Security',
+        icon: '🎖️',
+        concept:
+          'Licensed Personal Security Officers (PSO) and trained armed guards for high-priority personal, family, and asset protection from {business}.',
+        badge: 'Armed PSO',
+        headline: 'Elite Armed Protection Officers',
+        type: 'Announcement',
+      },
+      {
+        name: '24/7 Emergency SOS Response',
+        icon: '🚨',
+        concept:
+          'Instant emergency SOS deployment and responsive rapid security dispatch by {business}. Keep your premises safeguarded around the clock.',
+        badge: '24/7 Rapid SOS',
+        headline: 'Rapid Emergency Response',
+        type: 'Urgent',
+      },
+      {
+        name: 'Free Security Assessment',
+        icon: '📋',
+        concept:
+          'Schedule a comprehensive on-site security risk audit for your premises with {business}. Transparent pricing and tailored deployment plans.',
+        badge: 'Free Assessment',
+        headline: 'Complimentary Security Audit',
+        type: 'Urgent',
+      },
+    ];
+  }
+
+  if (/\b(software company|saas|web development|app development|it services|software development)\b/i.test(cat)) {
     return [
       {
         name: 'Custom Software Development',

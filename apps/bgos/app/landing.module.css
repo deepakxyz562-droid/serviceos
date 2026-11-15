@@ -1153,3 +1153,369 @@
   max-width: 155px;
   line-height: 1.3;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * 15-Second Google Maps Growth Score Audit Widget (Dhanda / Grexa Top-of-Funnel)
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+.auditSection {
+  padding: 68px 0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.auditHeader {
+  text-align: center;
+  max-width: 720px;
+  margin: 0 auto 32px;
+}
+
+.auditHeader h2 {
+  font-size: 32px;
+  font-weight: 900;
+  color: #0f172a;
+  letter-spacing: -0.6px;
+  margin-top: 10px;
+}
+
+.auditHeader p {
+  font-size: 15.5px;
+  color: #64748b;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.auditCard {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: 0 16px 40px -10px rgba(15, 23, 42, 0.08);
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.auditForm {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.auditInputWrap {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.auditInputLabel {
+  font-size: 11px;
+  font-weight: 800;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.auditInput {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  outline: none;
+  background: #f8fafc;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.auditInput:focus {
+  border-color: #009f50;
+  background: #ffffff;
+}
+
+.auditBtn {
+  align-self: flex-end;
+  background: #009f50;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+  height: 44px;
+}
+
+.auditBtn:hover {
+  background: #008040;
+  transform: translateY(-1px);
+}
+
+.auditBtn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.auditPills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.auditPillLabel {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.auditPillBtn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 4px 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.auditPillBtn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.auditScanningBox {
+  text-align: center;
+  padding: 44px 20px;
+}
+
+.auditScanningSpinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #009f50;
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.auditScanningText {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.auditScanningSub {
+  font-size: 12.5px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.auditResultWrap {
+  margin-top: 26px;
+  padding-top: 26px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.auditScoreHero {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 20px 22px;
+  border: 1px solid #e2e8f0;
+}
+
+.scoreDial {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  border: 6px solid #eab308;
+  background: #ffffff;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(234, 179, 8, 0.15);
+}
+
+.scoreValue {
+  font-size: 28px;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.scoreMax {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.scoreHeroInfo {
+  flex: 1;
+  min-width: 240px;
+}
+
+.scoreHeroTitle {
+  font-size: 18px;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.scoreHeroSub {
+  font-size: 13px;
+  color: #475569;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
+.scoreHeroBenchmark {
+  font-size: 12px;
+  font-weight: 800;
+  color: #008040;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.checkpointsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.checkpointCard {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.checkpointTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.checkpointTitle {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.checkpointBadge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.checkpointWarning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.checkpointCritical {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.checkpointGood {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.checkpointDiagnostic {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.checkpointFix {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #008040;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.35;
+}
+
+.auditSolutionBox {
+  margin-top: 22px;
+  background: #0f172a;
+  color: #ffffff;
+  border-radius: 14px;
+  padding: 20px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.auditSolutionLeft {
+  flex: 1;
+  min-width: 280px;
+}
+
+.auditSolutionTitle {
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+.auditSolutionSub {
+  font-size: 12.5px;
+  color: #94a3b8;
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.auditSolutionBtn {
+  background: #009f50;
+  color: #ffffff !important;
+  padding: 11px 20px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 800;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.auditSolutionBtn:hover {
+  background: #008040;
+  transform: translateY(-1px);
+}

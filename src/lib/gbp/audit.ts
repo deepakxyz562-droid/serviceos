@@ -114,6 +114,15 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
     ((tenant as any).website || '')
   ).trim();
 
+  const effectiveAddress = (
+    tenant.address ||
+    (brand as any)?.address ||
+    settings.address ||
+    settings.businessAddress ||
+    settings.streetAddress ||
+    ((tenant as any).locationAddress || '')
+  ).trim();
+
   const checks: AuditCheckItem[] = [
     {
       id: 'business_name_and_category',
@@ -124,6 +133,16 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
       currentValue: `${tenant.name} (${brand?.industry || (tenant as any).businessType || 'Missing Category'})`,
       recommendation: 'Ensure your primary category matches your highest-revenue local search query.',
       actionRequired: 'Set your primary business category in Business Settings.',
+    },
+    {
+      id: 'business_address',
+      category: 'Core Identity',
+      label: 'Storefront Address & GPS Location',
+      passed: Boolean(effectiveAddress && effectiveAddress.length >= 8),
+      scoreWeight: 15,
+      currentValue: effectiveAddress || 'Missing physical storefront address',
+      recommendation: 'Google Maps requires an exact street address to rank your listing in "Near Me" searches and calculate driving directions.',
+      actionRequired: 'Add your business street address and GPS pin in Business Profile.',
     },
     {
       id: 'phone_number',

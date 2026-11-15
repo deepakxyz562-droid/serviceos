@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -30,7 +30,7 @@ export interface AutopilotGrowthActionItem {
   phase: 'foundation' | 'trust' | 'visibility' | 'conversions';
   phaseDays: string;
   cta: string;
-  actionType: 'add_phone' | 'add_website' | 'set_hours' | 'approve_reviews' | 'approve_posts' | 'auto_optimize_seo' | 'upload_photos' | 'enable_booking' | 'add_services';
+  actionType: 'add_address' | 'add_phone' | 'add_website' | 'set_hours' | 'approve_reviews' | 'approve_posts' | 'auto_optimize_seo' | 'upload_photos' | 'enable_booking' | 'add_services';
   readyCount?: number;
 }
 
@@ -143,10 +143,23 @@ export function GrowthActionSheet({
   const [activeTab, setActiveTab] = useState<'actions' | 'roadmap' | 'approvals' | 'audit'>('actions');
   const [approving, setApproving] = useState<string | null>(null);
 
-  // Quick edit modal states for missing contact info
-  const [quickInputType, setQuickInputType] = useState<'phone' | 'website' | null>(null);
+  // Quick edit modal states for missing contact info (address, phone, website)
+  const [quickInputType, setQuickInputType] = useState<'address' | 'phone' | 'website' | null>(null);
   const [quickInputValue, setQuickInputValue] = useState('');
   const [savingQuickInput, setSavingQuickInput] = useState(false);
+  const [inAppNotice, setInAppNotice] = useState<{ title: string; message: string; type: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    if (!inAppNotice) return;
+    const t = setTimeout(() => {
+      setInAppNotice(null);
+    }, 4500);
+    return () => clearTimeout(t);
+  }, [inAppNotice]);
+
+  const showNotice = (title: string, message: string, type: 'success' | 'error' = 'success') => {
+    setInAppNotice({ title, message, type });
+  };
 
   const targets = growthData?.targets || { weeklyPosts: 5, weeklyPhotos: 5, weeklyReviews: 5 };
   const segments = growthData?.segments;
@@ -234,10 +247,10 @@ export function GrowthActionSheet({
         method: 'POST',
         body: { action: 'approve_segment', segment },
       });
-      Alert.alert('Approved', res.message || `Successfully approved ${segment}.`);
+      showNotice('✓ Approved', res.message || `Successfully approved ${segment}.`, 'success');
       await onRefresh();
     } catch (e: any) {
-      Alert.alert('Approval Failed', e?.message || 'Please try again.');
+      showNotice('Approval Issue', e?.message || 'Please try again.', 'error');
     } finally {
       setApproving(null);
     }
@@ -250,9 +263,10 @@ export function GrowthActionSheet({
         method: 'POST',
         body: { action: 'approve_item', segment, itemId },
       });
+      showNotice('✓ Approved', `Item approved & synced to Google.`, 'success');
       await onRefresh();
     } catch (e: any) {
-      Alert.alert('Approval Failed', e?.message || 'Please try again.');
+      showNotice('Approval Issue', e?.message || 'Please try again.', 'error');
     } finally {
       setApproving(null);
     }
@@ -265,10 +279,10 @@ export function GrowthActionSheet({
         method: 'POST',
         body: { action: 'apply_seo_all' },
       });
-      Alert.alert('SEO Autopilot', res.message || 'Updated GBP optimization.');
+      showNotice('✓ SEO Autopilot Complete', res.message || 'Updated GBP optimization.', 'success');
       await onRefresh();
     } catch (e: any) {
-      Alert.alert('Optimization Failed', e?.message || 'Please try again.');
+      showNotice('Optimization Issue', e?.message || 'Please try again.', 'error');
     } finally {
       setApproving(null);
     }
@@ -281,10 +295,10 @@ export function GrowthActionSheet({
         method: 'POST',
         body: { action: 'apply_seo_step', stepId },
       });
-      Alert.alert('Step Applied', res.message || `Applied ${stepId} to your profile.`);
+      showNotice('✓ Step Applied', res.message || `Applied ${stepId} to your profile.`, 'success');
       await onRefresh();
     } catch (e: any) {
-      Alert.alert('Failed', e?.message || 'Could not apply step.');
+      showNotice('Optimization Issue', e?.message || 'Could not apply step.', 'error');
     } finally {
       setApproving(null);
     }
@@ -297,10 +311,10 @@ export function GrowthActionSheet({
         method: 'POST',
         body: { action: 'rollback_seo' },
       });
-      Alert.alert('Reverted', res.message || 'Restored previous GBP state.');
+      showNotice('Reverted', res.message || 'Restored previous GBP state.', 'success');
       await onRefresh();
     } catch (e: any) {
-      Alert.alert('Rollback Failed', e?.message || 'Could not revert changes.');
+      showNotice('Rollback Issue', e?.message || 'Could not revert changes.', 'error');
     } finally {
       setApproving(null);
     }
@@ -317,10 +331,10 @@ export function GrowthActionSheet({
           serviceName: term.suggestedServiceName,
         },
       });
-      Alert.alert('Service Created', res.message || `Added "${term.suggestedServiceName}" with 300-500 char SEO copy.`);
+      showNotice('✓ Service Created', res.message || `Added "${term.suggestedServiceName}" with 300-500 char SEO copy.`, 'success');
       await onRefresh();
     } catch (e: any) {
-      Alert.alert('Creation Failed', e?.message || 'Could not create localized service.');
+      showNotice('Creation Issue', e?.message || 'Could not create localized service.', 'error');
     } finally {
       setApproving(null);
     }
@@ -331,6 +345,7 @@ export function GrowthActionSheet({
     setSavingQuickInput(true);
     try {
       const payload: Record<string, any> = { action: 'update_contact_info' };
+      if (quickInputType === 'address') payload.address = quickInputValue.trim();
       if (quickInputType === 'phone') payload.phone = quickInputValue.trim();
       if (quickInputType === 'website') payload.website = quickInputValue.trim();
 
@@ -338,12 +353,12 @@ export function GrowthActionSheet({
         method: 'POST',
         body: payload,
       });
-      Alert.alert('Saved & Synced', res.message || 'Contact detail saved.');
+      showNotice('✓ Saved & Synced', res.message || 'Details saved successfully.', 'success');
       setQuickInputType(null);
       setQuickInputValue('');
       await onRefresh();
     } catch (e: any) {
-      Alert.alert('Save Failed', e?.message || 'Could not save contact detail.');
+      showNotice('Save Issue', e?.message || 'Could not save detail.', 'error');
     } finally {
       setSavingQuickInput(false);
     }
@@ -351,6 +366,10 @@ export function GrowthActionSheet({
 
   const handleExecuteAction = async (action: AutopilotGrowthActionItem) => {
     switch (action.actionType) {
+      case 'add_address':
+        setQuickInputType('address');
+        setQuickInputValue('');
+        break;
       case 'add_phone':
         setQuickInputType('phone');
         setQuickInputValue('');
@@ -475,6 +494,40 @@ export function GrowthActionSheet({
               </Text>
             </View>
           </View>
+
+          {/* In-App Branded Notice Banner (Replaces raw system popup) */}
+          {inAppNotice && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: inAppNotice.type === 'success' ? '#F0FDF4' : '#FEF2F2',
+                borderColor: inAppNotice.type === 'success' ? '#86EFAC' : '#FECACA',
+                borderWidth: 1,
+                borderRadius: 14,
+                padding: 12,
+                gap: 10,
+                marginBottom: 14,
+              }}
+            >
+              <MaterialIcons
+                name={inAppNotice.type === 'success' ? 'check-circle' : 'info'}
+                size={22}
+                color={inAppNotice.type === 'success' ? '#16A34A' : '#DC2626'}
+              />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: inAppNotice.type === 'success' ? '#15803D' : '#991B1B' }}>
+                  {inAppNotice.title}
+                </Text>
+                <Text style={{ fontSize: 12, color: inAppNotice.type === 'success' ? '#166534' : '#7F1D1D', lineHeight: 16 }}>
+                  {inAppNotice.message}
+                </Text>
+              </View>
+              <Pressable onPress={() => setInAppNotice(null)} hitSlop={10}>
+                <MaterialIcons name="close" size={18} color={colors.muted} />
+              </Pressable>
+            </View>
+          )}
 
           {/* Segment Selector Tabs: Actions · 90-Day Roadmap · Approvals · SEO Audit */}
           <View
@@ -1335,7 +1388,11 @@ export function GrowthActionSheet({
               >
                 <View style={[ui.row, { justifyContent: 'space-between' }]}>
                   <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
-                    {quickInputType === 'phone' ? '📞 Add Primary Phone Number' : '🌐 Add Website or Store URL'}
+                    {quickInputType === 'address'
+                      ? '📍 Add Storefront Address'
+                      : quickInputType === 'phone'
+                        ? '📞 Add Primary Phone Number'
+                        : '🌐 Add Website or Store URL'}
                   </Text>
                   <Pressable onPress={() => setQuickInputType(null)} hitSlop={10}>
                     <MaterialIcons name="close" size={20} color={colors.muted} />
@@ -1343,19 +1400,28 @@ export function GrowthActionSheet({
                 </View>
 
                 <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 17 }}>
-                  {quickInputType === 'phone'
-                    ? 'Customers on Google Maps will use this number to call your business directly.'
-                    : 'Link your official website or BGOS online storefront to capture customer visits and orders.'}
+                  {quickInputType === 'address'
+                    ? 'Enter your street address, building, and city so Google Maps can index you for "Near Me" searches and calculate driving directions.'
+                    : quickInputType === 'phone'
+                      ? 'Customers on Google Maps will use this number to call your business directly.'
+                      : 'Link your official website or BGOS online storefront to capture customer visits and orders.'}
                 </Text>
 
                 <TextInput
                   value={quickInputValue}
                   onChangeText={setQuickInputValue}
-                  placeholder={quickInputType === 'phone' ? '+91 98765 43210' : 'https://mybusiness.com'}
+                  placeholder={
+                    quickInputType === 'address'
+                      ? 'e.g. 104, Trade Tower, Barakhamba Road, New Delhi 110001'
+                      : quickInputType === 'phone'
+                        ? '+91 98765 43210'
+                        : 'https://mybusiness.com'
+                  }
                   placeholderTextColor="#94A3B8"
-                  keyboardType={quickInputType === 'phone' ? 'phone-pad' : 'url'}
-                  autoCapitalize="none"
-                  autoCorrect={false}
+                  keyboardType={quickInputType === 'phone' ? 'phone-pad' : quickInputType === 'address' ? 'default' : 'url'}
+                  autoCapitalize={quickInputType === 'address' ? 'words' : 'none'}
+                  autoCorrect={quickInputType === 'address'}
+                  multiline={quickInputType === 'address'}
                   autoFocus
                   style={{
                     backgroundColor: '#F8FAFC',
@@ -1366,6 +1432,8 @@ export function GrowthActionSheet({
                     paddingVertical: 12,
                     fontSize: 14,
                     color: colors.ink,
+                    minHeight: quickInputType === 'address' ? 70 : undefined,
+                    textAlignVertical: quickInputType === 'address' ? 'top' : 'center',
                   }}
                 />
 

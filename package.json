@@ -59,6 +59,8 @@
     "worker:bgos-autopilot": "node --env-file=.env scripts/workers/bgos-autopilot.mjs"
   },
   "workspaces": [
+    "nimo-mobile",
+    "quote-flow-mobile",
     "bosmobile",
     "bgosmobile",
     "mobile-customer",

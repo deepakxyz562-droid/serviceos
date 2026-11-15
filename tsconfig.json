@@ -59,6 +59,7 @@
     "apps",
     "bgosmobile",
     "bos-customer-mobile",
-    "mobile-employee"
+    "mobile-employee",
+    "nimo-mobile"
   ]
 }

@@ -189,6 +189,7 @@ export async function GET(request: NextRequest) {
     const seoPendingCount = seoPendingFixes.length + uncoveredSearchTerms.length;
 
     // Specific audit flags for individual high-impact checks
+    const hasAddress = checks.find((c) => c.id === 'business_address')?.passed ?? true;
     const hasPhone = checks.find((c) => c.id === 'phone_number')?.passed ?? true;
     const hasWebsite = checks.find((c) => c.id === 'website_url')?.passed ?? true;
     const hasHours = checks.find((c) => c.id === 'business_hours')?.passed ?? true;
@@ -215,11 +216,33 @@ export async function GET(request: NextRequest) {
       phase: 'foundation' | 'trust' | 'visibility' | 'conversions';
       phaseDays: string;
       cta: string;
-      actionType: 'add_phone' | 'add_website' | 'set_hours' | 'approve_reviews' | 'approve_posts' | 'auto_optimize_seo' | 'upload_photos' | 'enable_booking' | 'add_services';
+      actionType: 'add_address' | 'add_phone' | 'add_website' | 'set_hours' | 'approve_reviews' | 'approve_posts' | 'auto_optimize_seo' | 'upload_photos' | 'enable_booking' | 'add_services';
       readyCount?: number;
     }
 
     const autopilotActions: AutopilotGrowthActionItem[] = [];
+
+    // 0. Storefront Address & GPS Location (P0 Foundation)
+    if (!hasAddress) {
+      autopilotActions.push({
+        id: 'add_address',
+        category: 'P0_foundation',
+        priorityLevel: 'P0',
+        priorityScore: (5 * 5) / 1, // 25
+        impact: 5,
+        confidence: 5,
+        effort: 1,
+        title: 'Add Storefront Address & GPS Pin',
+        finding: 'No physical storefront address or location linked to your listing.',
+        evidence: 'Google Maps requires an exact address to rank your listing in "Near Me" searches and calculate driving directions.',
+        status: 'action_required',
+        executionMode: 'authorized_execution',
+        phase: 'foundation',
+        phaseDays: 'Days 1–7',
+        cta: 'Add Address',
+        actionType: 'add_address',
+      });
+    }
 
     // 1. Primary Phone Number
     if (!hasPhone) {
@@ -789,9 +812,11 @@ export async function POST(request: NextRequest) {
         locationId: typeof body?.locationId === 'string' ? body.locationId : undefined,
         syncCompetitors: true,
       });
+      const scoreDiff = result.scoreAfter - result.scoreBefore;
+      const scoreNote = scoreDiff > 0 ? ` (+${scoreDiff}% SEO boost)` : '';
       return NextResponse.json({
         ...result,
-        message: `Applied ${result.appliedSteps.length} SEO fix(es)${result.syncedToGoogle ? ' & synced to Google' : ' to BGOS'}. Score: ${result.scoreBefore}% → ${result.scoreAfter}%.`,
+        message: `Applied ${result.appliedSteps.length} SEO fix(es)${result.syncedToGoogle ? ' and synced to Google Business Profile' : ''}.${scoreNote}`,
       });
     }
 
@@ -814,10 +839,20 @@ export async function POST(request: NextRequest) {
         locationId: typeof body?.locationId === 'string' ? body.locationId : undefined,
         syncCompetitors: true,
       });
+      const stepLabel =
+        stepId === 'booking_link'
+          ? 'Booking link'
+          : stepId === 'landing_page'
+            ? 'Dedicated GBP landing page'
+            : stepId === 'description'
+              ? 'Local SEO description'
+              : stepId.replace('_', ' ');
+      const scoreDiff = result.scoreAfter - result.scoreBefore;
+      const scoreNote = scoreDiff > 0 ? ` (+${scoreDiff}% SEO boost)` : '';
       return NextResponse.json({
         ...result,
         stepId,
-        message: `Applied ${stepId.replace('_', ' ')}${result.syncedToGoogle ? ' & synced to Google' : ' to BGOS'}. Score: ${result.scoreBefore}% → ${result.scoreAfter}%.`,
+        message: `${stepLabel} successfully ${result.syncedToGoogle ? 'synced to Google Business Profile' : 'applied'}.${scoreNote}`,
       });
     }
 
@@ -863,8 +898,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ─── 4. Update Contact & Profile Details (Phone, Website, Hours) ────────
+    // ─── 4. Update Contact & Profile Details (Address, Phone, Website, Hours) ────────
     if (action === 'update_contact_info') {
+      const address = typeof body?.address === 'string' ? body.address.trim() : undefined;
+      const city = typeof body?.city === 'string' ? body.city.trim() : undefined;
+      const pinCode = typeof body?.pinCode === 'string' ? body.pinCode.trim() : undefined;
       const phone = typeof body?.phone === 'string' ? body.phone.trim() : undefined;
       const website = typeof body?.website === 'string' ? body.website.trim() : undefined;
       const hours = body?.hours && typeof body.hours === 'object' ? body.hours : undefined;
@@ -880,6 +918,22 @@ export async function POST(request: NextRequest) {
 
       const tenantUpdate: Record<string, any> = {};
       const brandUpdate: Record<string, any> = {};
+
+      if (address !== undefined) {
+        tenantUpdate.address = address;
+        settings.address = address;
+        settings.businessAddress = address;
+        brandUpdate.address = address;
+      }
+
+      if (city !== undefined) {
+        tenantUpdate.city = city;
+        brandUpdate.location = city;
+      }
+
+      if (pinCode !== undefined) {
+        settings.pinCode = pinCode;
+      }
 
       if (phone !== undefined) {
         tenantUpdate.phone = phone;
@@ -906,14 +960,18 @@ export async function POST(request: NextRequest) {
         data: tenantUpdate,
       });
 
-      await db.brandProfile.upsert({
-        where: { tenantId: user.tenantId },
-        update: brandUpdate,
-        create: {
-          tenantId: user.tenantId,
-          ...brandUpdate,
-        },
-      }).catch(() => {});
+      if (Object.keys(brandUpdate).length > 0) {
+        await (db.brandProfile as any).upsert({
+          where: { tenantId: user.tenantId },
+          update: brandUpdate,
+          create: {
+            tenantId: user.tenantId,
+            businessName: 'Business',
+            industry: 'Services',
+            ...brandUpdate,
+          },
+        }).catch(() => {});
+      }
 
       return NextResponse.json({
         success: true,

@@ -69,11 +69,10 @@ function normalizePublicSlugInput(raw: string): string {
     .slice(0, 64);
 }
 
-export async function GET(): Promise<NextResponse>;
-export async function GET(request: NextRequest): Promise<NextResponse>;
-export async function GET(request?: NextRequest): Promise<NextResponse> {
-  const user = await getAuthUser(request);
-  if (!user?.tenantId || user.role === 'customer') return NextResponse.json({ error: 'Workspace authentication required' }, { status: 401 });
+export async function resolveWorkspaceData(
+  user: { tenantId: string; workspaceId?: string; role?: string },
+  request?: NextRequest,
+): Promise<BgosWorkspace | null> {
   try {
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
@@ -271,8 +270,26 @@ export async function GET(request?: NextRequest): Promise<NextResponse> {
         startingPriceLabel: locationBilling.startingPriceLabel,
       },
     };
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export async function GET(): Promise<NextResponse>;
+export async function GET(request: NextRequest): Promise<NextResponse>;
+export async function GET(request?: NextRequest): Promise<NextResponse> {
+  const user = await getAuthUser(request);
+  if (!user?.tenantId || user.role === 'customer') {
+    return NextResponse.json({ error: 'Workspace authentication required' }, { status: 401 });
+  }
+  try {
+    const data = await resolveWorkspaceData(user, request);
+    if (!data) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     return NextResponse.json(data, { headers: { 'Cache-Control': 'private, no-store' } });
-  } catch { return NextResponse.json({ error: 'Workspace unavailable. Please retry.' }, { status: 503 }); }
+  } catch {
+    return NextResponse.json({ error: 'Workspace unavailable. Please retry.' }, { status: 503 });
+  }
 }
 
 export async function PATCH(request: NextRequest) {

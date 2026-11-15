@@ -225,8 +225,8 @@ export function BgosGbpOnboardingWizard({
 
   // AI suggestions for keywords
   const aiKeywords = useMemo(() => {
-    const name = data?.businessName || 'best cafe';
-    const ind = data?.industry || 'vashi';
+    const name = data?.businessName || 'Local Business';
+    const ind = data?.industry || 'Services';
     return [
       `${name} near me`,
       `${ind} near me`,
@@ -484,7 +484,7 @@ export function BgosGbpOnboardingWizard({
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-700">Pincode</label>
-                    <Input value={data?.activeLocation?.address?.match(/\b\d{6}\b/)?.[0] || '400703'} readOnly className="bg-slate-50 text-xs mt-1" />
+                    <Input value={data?.activeLocation?.address?.match(/\b\d{6}\b/)?.[0] || ''} placeholder="e.g. 110001" readOnly className="bg-slate-50 text-xs mt-1" />
                   </div>
                 </div>
               </div>

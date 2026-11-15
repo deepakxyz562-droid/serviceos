@@ -55,12 +55,6 @@ interface ParsedReply {
   keywords?: KeywordUsage[];
 }
 
-const DEFAULT_KEYWORDS_FALLBACK: KeywordUsage[] = [
-  { keyword: 'quality customer service', volume: '500 ↗' },
-  { keyword: 'top rated local business', volume: '350 ↗' },
-  { keyword: 'verified customer satisfaction', volume: '250 ↗' },
-];
-
 function parseReply(review: Review): ParsedReply | null {
   try {
     const parsed =
@@ -81,7 +75,7 @@ function parseReply(review: Review): ParsedReply | null {
         mapsUrl: parsed.mapsUrl || null,
         keywords: Array.isArray(parsed.keywords) && parsed.keywords.length > 0
           ? parsed.keywords
-          : DEFAULT_KEYWORDS_FALLBACK,
+          : [],
       };
     }
     return null;
@@ -517,7 +511,7 @@ export default function ReviewRepliesScreen() {
       }
 
       let caption = '';
-      let keywords: KeywordUsage[] = DEFAULT_KEYWORDS_FALLBACK;
+      let keywords: KeywordUsage[] = [];
       try {
         const res = await apiRequest<{ caption: string; keywords?: KeywordUsage[] }>('/api/social/ai-caption', {
           method: 'POST',
@@ -567,7 +561,7 @@ export default function ReviewRepliesScreen() {
         method: 'POST',
         body: {
           replyText: text.trim(),
-          keywords: kw || drafts[review.id]?.keywords || DEFAULT_KEYWORDS_FALLBACK,
+          keywords: kw || drafts[review.id]?.keywords || [],
         },
       });
       setDrafts((prev) => {
@@ -1686,62 +1680,64 @@ export default function ReviewRepliesScreen() {
                     </View>
 
                     {/* KEYWORD USED & SEARCH VOLUME TABLE */}
-                    <View
-                      style={{
-                        borderRadius: 10,
-                        borderWidth: 1,
-                        borderColor: '#E2E8F0',
-                        overflow: 'hidden',
-                        backgroundColor: '#FFFFFF',
-                      }}
-                    >
-                      {/* Table Header */}
+                    {reply.keywords && reply.keywords.length > 0 ? (
                       <View
                         style={{
-                          flexDirection: 'row',
-                          backgroundColor: '#F8FAFC',
-                          paddingVertical: 9,
-                          paddingHorizontal: 12,
-                          borderBottomWidth: 1,
-                          borderBottomColor: '#E2E8F0',
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: '#E2E8F0',
+                          overflow: 'hidden',
+                          backgroundColor: '#FFFFFF',
                         }}
                       >
-                        <Text style={{ flex: 1.5, fontSize: 12, fontWeight: '700', color: '#64748B' }}>
-                          Keyword Used
-                        </Text>
-                        <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: '#64748B', textAlign: 'right' }}>
-                          Search Volume
-                        </Text>
-                      </View>
-
-                      {/* Table Rows */}
-                      {(reply.keywords || DEFAULT_KEYWORDS_FALLBACK).map((kw, i) => (
+                        {/* Table Header */}
                         <View
-                          key={i}
                           style={{
                             flexDirection: 'row',
-                            alignItems: 'center',
-                            paddingVertical: 10,
+                            backgroundColor: '#F8FAFC',
+                            paddingVertical: 9,
                             paddingHorizontal: 12,
-                            borderBottomWidth: i < (reply.keywords?.length || 3) - 1 ? 1 : 0,
-                            borderBottomColor: '#F1F5F9',
+                            borderBottomWidth: 1,
+                            borderBottomColor: '#E2E8F0',
                           }}
                         >
-                          <View style={{ flex: 1.5, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <MaterialIcons name="search" size={15} color="#94A3B8" />
-                            <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#0F172A', flex: 1 }}>
-                              {kw.keyword}
-                            </Text>
-                          </View>
-                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                            <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>
-                              {kw.volume.replace(' ↗', '')}
-                            </Text>
-                            <MaterialIcons name="trending-up" size={14} color="#2563EB" />
-                          </View>
+                          <Text style={{ flex: 1.5, fontSize: 12, fontWeight: '700', color: '#64748B' }}>
+                            Keyword Used
+                          </Text>
+                          <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: '#64748B', textAlign: 'right' }}>
+                            Search Volume
+                          </Text>
                         </View>
-                      ))}
-                    </View>
+
+                        {/* Table Rows */}
+                        {reply.keywords.map((kw, i) => (
+                          <View
+                            key={i}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              paddingVertical: 10,
+                              paddingHorizontal: 12,
+                              borderBottomWidth: i < (reply.keywords?.length || 0) - 1 ? 1 : 0,
+                              borderBottomColor: '#F1F5F9',
+                            }}
+                          >
+                            <View style={{ flex: 1.5, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <MaterialIcons name="search" size={15} color="#94A3B8" />
+                              <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#0F172A', flex: 1 }}>
+                                {kw.keyword}
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                              <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>
+                                {kw.volume.replace(' ↗', '')}
+                              </Text>
+                              <MaterialIcons name="trending-up" size={14} color="#2563EB" />
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
 
                     {/* Inline Edit Mode or Rendered Text with Read More */}
                     {editingId === review.id ? (

@@ -66,9 +66,9 @@ export default function SettingsScreen() {
       ? Math.max(insets.top, 48)
       : Math.max(insets.top, (RNStatusBar.currentHeight || 28) + 12);
 
-  const orgId = user?.tenantId || user?.workspaceId || user?.id || '6ae304d0507c3fe1a973de821b';
+  const orgId = user?.tenantId || user?.workspaceId || user?.id || '';
   const displayOrgId =
-    orgId.length > 24 ? `${orgId.slice(0, 20)}...` : orgId;
+    orgId ? (orgId.length > 24 ? `${orgId.slice(0, 20)}...` : orgId) : '—';
 
   function handleBack() {
     if (router.canGoBack?.()) router.back();

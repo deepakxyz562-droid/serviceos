@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
+import { getOrGenerateAiBusinessProfile } from '@/lib/gbp/ai-business-profiler';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import {
   fetchGoogleBusinessPerformanceMetrics,
@@ -331,12 +332,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Filter out seed defaults like "IT Company" or "Dallas" if they don't match the user's real business
-    const rawIndustry = (tenant?.brandProfile?.industry || tenant?.industry || '').trim();
-    const isSeedIndustry = rawIndustry.toLowerCase() === 'it company' && !googleCategory;
-    const effectiveCategory = googleCategory || (!isSeedIndustry ? rawIndustry : '');
+    let parsedReportSettings: Record<string, any> = {};
+    try {
+      parsedReportSettings = JSON.parse(tenant?.settingsJson || '{}') || {};
+    } catch {}
 
-    const rawCity = (tenant?.city || tenant?.brandProfile?.location || '').trim();
+    const settingsCategory = String(parsedReportSettings.locationCategory || parsedReportSettings.activeGbpCategory || '').trim();
+    const rawIndustry = (settingsCategory || tenant?.brandProfile?.industry || tenant?.industry || '').trim();
+    const isSeedIndustry = rawIndustry.toLowerCase() === 'it company' && !googleCategory;
+    const cleanGoogleCat = googleCategory && googleCategory.toLowerCase() !== 'services' ? googleCategory : '';
+    const effectiveCategory = cleanGoogleCat || (!isSeedIndustry ? rawIndustry : '') || 'local services';
+
+    const rawCity = (tenant?.city || parsedReportSettings.city || tenant?.brandProfile?.location || '').trim();
     const isSeedCity = rawCity.toLowerCase() === 'dallas' && !extractedGoogleCity;
     const effectiveCity = extractedGoogleCity || (!isSeedCity ? rawCity : '');
     const safeCategory = effectiveCategory.trim() || 'local business';
@@ -483,12 +490,7 @@ export async function GET(request: NextRequest) {
         defaultUsed: 1,
       }));
 
-    let parsedReportSettings: Record<string, any> = {};
-    try {
-      parsedReportSettings = JSON.parse(tenant?.settingsJson || '{}') || {};
-    } catch {}
-
-    // If tenant has no tracked keywords yet, check Google Search Terms first, then derive authentic local keywords
+    // If tenant has no tracked keywords yet, check Google Search Terms first, then AI Semantic Business Profile
     if (candidateKeywords.length === 0) {
       const discoveryKeywords = Array.isArray(parsedReportSettings?.googleDiscovery?.keywords)
         ? parsedReportSettings.googleDiscovery.keywords
@@ -503,65 +505,16 @@ export async function GET(request: NextRequest) {
         });
       }
     }
+
     if (candidateKeywords.length === 0) {
-      const dynamicList: Array<{ keyword: string; volume: number; defaultUsed: number }> = [];
-      const catLower = (effectiveCategory || '').toLowerCase();
-      const bizNameLower = (tenant?.brandProfile?.businessName || tenant?.name || '').toLowerCase();
-      const isMarketOrRetail =
-        bizNameLower.includes('market') ||
-        bizNameLower.includes('mart') ||
-        bizNameLower.includes('store') ||
-        bizNameLower.includes('kirana') ||
-        catLower.includes('market') ||
-        catLower.includes('retail') ||
-        catLower.includes('grocery');
-      const isTechOrSoftware =
-        !isMarketOrRetail &&
-        (catLower.includes('software') || (catLower.includes('it') && !catLower.includes('market')) || catLower.includes('tech') || catLower.includes('consult'));
-      const locality = extractedLocalities[0] || '';
-      const locality2 = extractedLocalities[1] || '';
-
-      if (isMarketOrRetail) {
-        const term = effectiveCategory && !isSeedIndustry ? effectiveCategory.toLowerCase() : 'supermarket';
-        dynamicList.push({ keyword: `best ${term}${citySuffix}`, volume: 500, defaultUsed: 2 });
-        dynamicList.push({ keyword: `${term} near me`, volume: 500, defaultUsed: 2 });
-        dynamicList.push({ keyword: `top rated ${term}${citySuffix}`, volume: 300, defaultUsed: 1 });
-        dynamicList.push({ keyword: `grocery and retail store${citySuffix}`, volume: 250, defaultUsed: 1 });
-        if (locality) {
-          dynamicList.push({ keyword: `${term} near ${locality}`, volume: 150, defaultUsed: 1 });
-        }
-        if (locality2) {
-          dynamicList.push({ keyword: `${term} near ${locality2}`, volume: 100, defaultUsed: 1 });
-        }
-        if (effectiveCity) {
-          dynamicList.push({ keyword: `daily essentials store ${effectiveCity}`, volume: 200, defaultUsed: 1 });
-        }
-      } else if (isTechOrSoftware) {
-        dynamicList.push({ keyword: 'best crm software for small businesses', volume: 500, defaultUsed: 2 });
-        dynamicList.push({ keyword: 'software development company', volume: 500, defaultUsed: 2 });
-        dynamicList.push({ keyword: `software development company${citySuffix}`, volume: 100, defaultUsed: 2 });
-        dynamicList.push({ keyword: `business software solutions${effectiveCity ? ` ${effectiveCity}` : ''}`, volume: 100, defaultUsed: 2 });
-        dynamicList.push({ keyword: 'sales software for small business', volume: 500, defaultUsed: 1 });
-        if (locality) {
-          dynamicList.push({ keyword: `software company near ${locality}`, volume: 80, defaultUsed: 1 });
-        }
-        if (locality2) {
-          dynamicList.push({ keyword: `software company near ${locality2}`, volume: 50, defaultUsed: 1 });
-        }
-      } else {
-        // Industry-specific for Bakery / Cake / Pool / Hardware / Retail / etc.
-        dynamicList.push({ keyword: `best ${safeCategory.toLowerCase()}${citySuffix}`, volume: 500, defaultUsed: 2 });
-        dynamicList.push({ keyword: `${safeCategory.toLowerCase()} services${citySuffix}`, volume: 300, defaultUsed: 2 });
-        if (locality) {
-          dynamicList.push({ keyword: `${safeCategory.toLowerCase()} near ${locality}`, volume: 150, defaultUsed: 1 });
-        }
-        if (locality2) {
-          dynamicList.push({ keyword: `${safeCategory.toLowerCase()} near ${locality2}`, volume: 100, defaultUsed: 1 });
-        }
-        dynamicList.push({ keyword: `top rated ${safeCategory.toLowerCase()} near me`, volume: 450, defaultUsed: 1 });
+      const aiProfile = await getOrGenerateAiBusinessProfile(tenant).catch(() => null);
+      if (aiProfile && Array.isArray(aiProfile.highIntentKeywords) && aiProfile.highIntentKeywords.length > 0) {
+        candidateKeywords = aiProfile.highIntentKeywords.map((k) => ({
+          keyword: k.keyword,
+          volume: k.volume || 300,
+          defaultUsed: k.defaultUsed || 1,
+        }));
       }
-
-      candidateKeywords = dynamicList.slice(0, 7);
     }
 
     const keywordsUsed = candidateKeywords.map((kw) => {

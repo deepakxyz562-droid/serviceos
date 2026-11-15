@@ -671,8 +671,15 @@ export default function MarketingScreen() {
   const pendingRequest = useRef<{ body: string; key: string } | null>(null);
   const saving = useRef(false);
 
-  const [activeMode, setActiveMode] = useState<'studio' | 'autopilot' | 'posts'>('posts');
+  const [activeMode, setActiveMode] = useState<'studio' | 'autopilot' | 'posts'>(
+    params.mode === 'posters' || params.mode === 'studio'
+      ? 'studio'
+      : params.mode === 'autopilot'
+        ? 'autopilot'
+        : 'posts'
+  );
   const [createPostModalOpen, setCreatePostModalOpen] = useState(false);
+  const [viralVideoModalOpen, setViralVideoModalOpen] = useState(params.mode === 'video');
   const [reviewPostModalOpen, setReviewPostModalOpen] = useState(false);
   const [activeReviewPost, setActiveReviewPost] = useState<GeneratedPostData | null>(null);
   const [focusedPostId, setFocusedPostId] = useState<string | null>(
@@ -695,8 +702,13 @@ export default function MarketingScreen() {
       if (params.view !== 'calendar') setPostSubView('list');
     } else if (params.mode === 'autopilot') {
       setActiveMode('autopilot');
-    } else if (params.mode === 'studio') {
+    } else if (params.mode === 'studio' || params.mode === 'posters') {
       setActiveMode('studio');
+      setStudioCreateTab('templates');
+    } else if (params.mode === 'video') {
+      setActiveMode('posts');
+      setPostSubView('calendar');
+      setViralVideoModalOpen(true);
     }
     if (typeof params.postId === 'string' && params.postId) {
       setFocusedPostId(params.postId);
@@ -706,7 +718,9 @@ export default function MarketingScreen() {
   const [showCreationOptions,setShowCreationOptions] = useState(false);
   const [templateSearchOpen, setTemplateSearchOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState('');
-  const [studioCreateTab, setStudioCreateTab] = useState<'templates' | 'ideas' | 'search' | 'drafts'>('ideas');
+  const [studioCreateTab, setStudioCreateTab] = useState<'templates' | 'ideas' | 'search' | 'drafts'>(
+    params.mode === 'posters' ? 'templates' : 'ideas'
+  );
   // ── Resources ─────────────────────────────────────────────────────────────
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
@@ -1349,7 +1363,11 @@ export default function MarketingScreen() {
     }
     return 'My Business';
   }, [brandName, discover.data?.activeProfile?.name, gbpAccount?.accountName, gbpPlace.data?.place?.title, gbpPlace.data?.tenantFallback?.name, brandProfile.data?.profile?.businessName, workspace.data?.bookingPageConfig?.businessName, workspace.data?.name]);
-  const effectiveBusinessPhone = brandPhone || workspace.data?.bookingPageConfig?.phone || '';
+  const effectiveBusinessPhone =
+    brandPhone ||
+    workspace.data?.bookingPageConfig?.phone ||
+    gbpPlace.data?.place?.phone ||
+    '';
   const rawSite =
     brandWebsite ||
     brandProfile.data?.profile?.website ||
@@ -6383,6 +6401,13 @@ export default function MarketingScreen() {
         onPublished={() => {
           setBoardRefresh((k) => k + 1);
         }}
+      />
+
+      {/* ── Viral Video Reels & Posts Script Modal ── */}
+      <ViralVideoModal
+        visible={viralVideoModalOpen}
+        onClose={() => setViralVideoModalOpen(false)}
+        businessName={effectiveBusinessName}
       />
       </View>
     </KeyboardAvoidingView>
