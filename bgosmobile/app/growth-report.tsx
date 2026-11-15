@@ -45,6 +45,7 @@ interface PostWeekItem {
 interface ReportData {
   businessName: string;
   businessPhone: string;
+  businessSlug?: string;
   storeId?: string;
   appVersion: string;
   isConnected?: boolean;
@@ -179,17 +180,17 @@ export default function GrowthReportScreen() {
 
   const [sendingWa, setSendingWa] = useState(false);
 
-  const handleDownload9PagePdf = async () => {
+  const handleDownloadExecutivePdf = async () => {
     if (downloadingPdf) return;
     setDownloadingPdf(true);
     try {
-      const token = await getToken();
-      const pdfUrl = `${WEB_URL}/api/bgos/reports/monthly-pdf${
-        token ? `?auth=${encodeURIComponent(token)}` : ''
-      }`;
+      const slug = report?.businessSlug || report?.storeId || '';
+      const pdfUrl = slug
+        ? `${WEB_URL}/api/bgos/reports/monthly-pdf?slug=${encodeURIComponent(slug)}`
+        : `${WEB_URL}/api/bgos/reports/monthly-pdf`;
       await WebBrowser.openBrowserAsync(pdfUrl);
     } catch (err: any) {
-      Alert.alert('Download Error', err?.message || 'Could not open 9-page PDF report.');
+      Alert.alert('Download Error', err?.message || 'Could not open PDF report.');
     } finally {
       setDownloadingPdf(false);
     }
@@ -198,15 +199,17 @@ export default function GrowthReportScreen() {
   const handleSendWhatsAppReport = async () => {
     try {
       setSendingWa(true);
+      const slug = report?.businessSlug || report?.storeId || '';
+      const reportWebUrl = slug ? `${WEB_URL}/report/${encodeURIComponent(slug)}` : `${WEB_URL}/growth-report`;
+      const pdfLink = slug ? `${WEB_URL}/api/bgos/reports/monthly-pdf?slug=${encodeURIComponent(slug)}` : `${WEB_URL}/api/bgos/reports/monthly-pdf`;
+      const waMsg = `Hi ${report?.businessName || 'Business Owner'},\n\nYour monthly Google marketing report is ready.\n\n📊 View Online: ${reportWebUrl}\n📄 Download PDF: ${pdfLink}`;
+
       const res = await apiRequest<{ success: boolean; message?: string }>('/api/cron/monthly-marketing-report', {
         method: 'POST',
       });
       if (res?.success) {
-        Alert.alert('Report Sent', 'Your monthly 9-page marketing report was dispatched to your WhatsApp number!');
+        Alert.alert('Report Sent', 'Your monthly marketing report was dispatched to your WhatsApp number!');
       } else {
-        const token = await getToken();
-        const pdfLink = `${WEB_URL}/api/bgos/reports/monthly-pdf${token ? `?auth=${encodeURIComponent(token)}` : ''}`;
-        const waMsg = `Hi ${report?.businessName || 'Business Owner'},\n\nYour monthly Google marketing report is ready.\n\n📄 Download PDF: ${pdfLink}`;
         const waUrl = `whatsapp://send?text=${encodeURIComponent(waMsg)}`;
         const canOpen = await Linking.canOpenURL(waUrl);
         if (canOpen) {
@@ -216,9 +219,10 @@ export default function GrowthReportScreen() {
         }
       }
     } catch {
-      const token = await getToken();
-      const pdfLink = `${WEB_URL}/api/bgos/reports/monthly-pdf${token ? `?auth=${encodeURIComponent(token)}` : ''}`;
-      const waMsg = `Hi ${report?.businessName || 'Business Owner'},\n\nYour monthly Google marketing report is ready.\n\n📄 Download PDF: ${pdfLink}`;
+      const slug = report?.businessSlug || report?.storeId || '';
+      const reportWebUrl = slug ? `${WEB_URL}/report/${encodeURIComponent(slug)}` : `${WEB_URL}/growth-report`;
+      const pdfLink = slug ? `${WEB_URL}/api/bgos/reports/monthly-pdf?slug=${encodeURIComponent(slug)}` : `${WEB_URL}/api/bgos/reports/monthly-pdf`;
+      const waMsg = `Hi ${report?.businessName || 'Business Owner'},\n\nYour monthly Google marketing report is ready.\n\n📊 View Online: ${reportWebUrl}\n📄 Download PDF: ${pdfLink}`;
       await Share.share({ message: waMsg });
     } finally {
       setSendingWa(false);
@@ -402,7 +406,7 @@ export default function GrowthReportScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Download Report"
-          onPress={handleDownload9PagePdf}
+          onPress={handleDownloadExecutivePdf}
           disabled={downloadingPdf}
           style={({ pressed }) => [styles.downloadButton, { opacity: pressed || downloadingPdf ? 0.75 : 1 }]}
         >
@@ -455,20 +459,20 @@ export default function GrowthReportScreen() {
                 </Text>
               </View>
               <View style={{ backgroundColor: 'rgba(52, 211, 153, 0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4 }}>
-                <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#34D399' }}>9-PAGE PDF</Text>
+                <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#34D399' }}>EXECUTIVE PDF</Text>
               </View>
             </View>
 
             <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 }}>
-              Full 9-Page Google Marketing Report
+              Executive Google Marketing Report
             </Text>
             <Text style={{ fontSize: 11.5, color: '#94A3B8', lineHeight: 16, marginBottom: 14 }}>
-              Complete breakdown of your 5 AI Growth Agents, verified keyword impressions, replied reviews, and 6-month growth trajectory.
+              Concise 4-page executive briefing of your 5 AI Growth Agents, Google verified score, and 6-month growth trajectory.
             </Text>
 
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable
-                onPress={handleDownload9PagePdf}
+                onPress={handleDownloadExecutivePdf}
                 disabled={downloadingPdf}
                 style={{
                   flex: 1,
@@ -484,7 +488,7 @@ export default function GrowthReportScreen() {
               >
                 <MaterialIcons name="picture-as-pdf" size={16} color="#0F172A" />
                 <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>
-                  {downloadingPdf ? 'Opening PDF...' : 'View 9-Page PDF'}
+                  {downloadingPdf ? 'Opening PDF...' : 'View Executive PDF'}
                 </Text>
               </Pressable>
 

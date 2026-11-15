@@ -833,18 +833,14 @@ Write exactly 2 concise, executive sentences for the owner. Highlight one growth
 
     // Auto-populate from candidateKeywords if trackedKeywords is empty or has fewer than 4 items
     if (keywordMap.size < 4 && Array.isArray(candidateKeywords) && candidateKeywords.length > 0) {
-      const baseSelfRank = typeof selfMeasuredRank === 'number' && selfMeasuredRank > 0
-        ? selfMeasuredRank
-        : Math.min(5, Math.max(1, Math.round(avgRating >= 4.5 ? 2 : 4)));
-
-      candidateKeywords.forEach((ck, idx) => {
+      candidateKeywords.forEach((ck) => {
         const key = ck.keyword.trim().toLowerCase();
         if (!keywordMap.has(key) && keywordMap.size < 5) {
-          const estimatedRank = Math.min(10, baseSelfRank + (idx > 0 ? (idx % 3) : 0));
+          // Authentic representation: unmeasured keywords show null rank and 0 rankChange until scanned
           keywordMap.set(key, {
             keyword: ck.keyword,
-            rank: estimatedRank,
-            rankChange: idx % 2 === 0 ? 1 : 0,
+            rank: typeof (ck as any).rank === 'number' ? (ck as any).rank : null,
+            rankChange: typeof (ck as any).rankChange === 'number' ? (ck as any).rankChange : 0,
           });
         }
       });
@@ -946,6 +942,7 @@ Write exactly 2 concise, executive sentences for the owner. Highlight one growth
     return NextResponse.json({
       businessName,
       businessPhone,
+      businessSlug: tenant?.publicSlug || tenant?.slug || tenantId || '',
       storeId,
       appVersion,
       isConnected: Boolean(googleAccount),
