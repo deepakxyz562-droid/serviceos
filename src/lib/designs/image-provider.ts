@@ -862,13 +862,21 @@ export function buildHighQualityImagePrompt(
       'Award-winning commercial gourmet food photography, mouthwatering artisanal confections, rich appetizing textures';
     settingDescriptor =
       `warm gourmet food studio lighting, shallow depth of field, artful festive food styling with negative space`;
-    domainSubject = pickScene([
-      'Artisanal celebration cakes and gourmet pastries with fresh berry toppings and rich cream layers, styled on a modern marble counter with warm patisserie ambient lighting',
-      'Delicate handcrafted confectionery and traditional sweets with silver vark and pistachio garnishes, styled on an authentic royal brass platter',
-      'Mouthwatering fresh bakery display with artisanal sourdough loaves, flaky croissants, and golden baked pastries in a rustic chic cafe setting',
-      'Close-up culinary composition of a decadent celebration cake slice with luscious filling and edible gold accents, editorial dessert photography',
-      'Artfully composed dessert table with assorted handcrafted confections, macarons, and warm celebration tea settings',
+    const isMithaiOrTraditional = hasWord(`${catLower} ${offLower} ${pLower}`, [
+      'mithai', 'sweet', 'sweets', 'ladoo', 'katli', 'rasgulla', 'gulab jamun', 'halwa', 'barfi', 'jalebi',
     ]);
+    if (isMithaiOrTraditional) {
+      domainSubject =
+        'Delicate handcrafted artisanal mithai and traditional royal sweets with silver vark, cardamom, saffron, and crushed pistachio garnishes, styled on an authentic antique brass platter with festive ambient warmth';
+    } else {
+      domainSubject = pickScene([
+        'Artisanal celebration cakes and gourmet pastries with fresh berry toppings and rich cream layers, styled on a modern marble counter with warm patisserie ambient lighting',
+        'Delicate handcrafted confectionery and traditional sweets with silver vark and pistachio garnishes, styled on an authentic royal brass platter',
+        'Mouthwatering fresh bakery display with artisanal sourdough loaves, flaky croissants, and golden baked pastries in a rustic chic cafe setting',
+        'Close-up culinary composition of a decadent celebration cake slice with luscious filling and edible gold accents, editorial dessert photography',
+        'Artfully composed dessert table with assorted handcrafted confections, macarons, and warm celebration tea settings',
+      ]);
+    }
   } else if (winningArchetype === 'paint') {
     styleDescriptor =
       'Award-winning commercial architectural paint and luxury wall finish photography, rich color vibrancy and immaculate surface textures';

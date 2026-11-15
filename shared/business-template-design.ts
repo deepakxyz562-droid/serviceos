@@ -59,8 +59,22 @@ export function composeBusinessEdition(input:StudioPosterInput) {
   function box(id:string,x:number,y:number,width:number,height:number,color:string,radius=0) {
     layers.push({...base(id,'shape',x,y,width,height),background:color,borderRadius:radius});
   }
+  const isEligibleImage = (src?: string | null): boolean => {
+    if (!src || typeof src !== 'string') return false;
+    const trimmed = src.trim();
+    return (
+      trimmed.length > 0 &&
+      (/^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,|data:image\/svg\+xml)/i.test(trimmed) ||
+        /^\/images\/bgos\/templates\/[a-z0-9-_]+\.webp$/i.test(trimmed))
+    );
+  };
+  const safeLogo = isEligibleImage(input.logoUrl) ? input.logoUrl!.trim() : undefined;
+  const safePhoto = isEligibleImage(input.photo)
+    ? input.photo!.trim()
+    : 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1200&auto=format&fit=crop&q=80';
+
   function image(id:string,x:number,y:number,width:number,height:number) {
-    if(input.photo) layers.push({...base(id,'image',x,y,width,height),src:input.photo,photoFit:'cover',cropX:50,cropY:50});
+    if(safePhoto) layers.push({...base(id,'image',x,y,width,height),src:safePhoto,photoFit:'cover',cropX:50,cropY:50});
   }
 
   const margin=54;
@@ -73,11 +87,11 @@ export function composeBusinessEdition(input:StudioPosterInput) {
   const x=left+margin;
   const lineWidth=panelWidth-2*margin;
   const top=story?96:42;
-  const brandX=x+(input.logoUrl?70:0);
+  const brandX=x+(safeLogo?70:0);
   const brandWidth=lineWidth-(brandX-x);
   const brandSize=Math.min(input.brand.length>42?28:38,Math.max(18,Math.floor(brandWidth/(Math.max(input.brand.length,1)*.55))));
   const brandHeight=Math.max(52,textHeight(input.brand,brandWidth,brandSize));
-  if(input.logoUrl) layers.push({...base('logo','image',x,top,52,52),src:input.logoUrl,photoFit:'contain'});
+  if(safeLogo) layers.push({...base('logo','image',x,top,52,52),src:safeLogo,photoFit:'contain'});
   text('brand',input.brand,brandX,top,brandWidth,brandHeight,brandSize,{fontWeight:700});
   const headerEnd=top+brandHeight+24;
   const badge=input.badge?.trim() || '';

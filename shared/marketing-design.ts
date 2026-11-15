@@ -200,33 +200,47 @@ export function createCommercialPosterDesign(input: {
   };
   const [width, height] = sizes[input.ratio || '4:5'] || sizes['4:5'];
 
-  if (input.layout?.startsWith('business_')) return composeBusinessEdition(input);
-  if (input.layout?.startsWith('kit_')) return composeKitPoster(input);
-  if (input.layout?.startsWith('professional_')) return composeProfessionalPoster(input);
-  if (input.layout?.startsWith('studio_')) return composeStudioPoster(input);
-  const layout = input.layout || 'bold_offer';
-  const themeColors = (COMMERCIAL_THEMES[input.theme as CommercialTheme] || COMMERCIAL_THEMES.emerald);
-
-  const brandText = (input.brand || 'Professional Business').trim();
-  const headlineText = (input.headline || 'Top-Rated Professional Services').trim();
-  const badgeText = (input.badge || 'SPECIAL OFFER').trim().toUpperCase();
-  const subText = (input.subtitle || 'Premium quality & 100% satisfaction guaranteed.').trim();
-  const ctaLabel = (input.cta || (layout === 'urgent_callout' ? 'CALL NOW 📞' : 'VISIT STORE')).trim().toUpperCase();
-  const taglineText = input.tagline ? ` • ${input.tagline.trim()}` : '';
-  const webText = input.website
-    ? input.website.replace(/^https?:\/\//, '').replace(/\/$/, '')
-    : 'visit website';
   const isEligibleImage = (src?: string | null): boolean => {
     if (!src || typeof src !== 'string') return false;
     const trimmed = src.trim();
-    return trimmed.length > 0 && /^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,)/i.test(trimmed);
+    return (
+      trimmed.length > 0 &&
+      (/^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,|data:image\/svg\+xml)/i.test(trimmed) ||
+        /^\/images\/bgos\/templates\/[a-z0-9-_]+\.webp$/i.test(trimmed))
+    );
   };
 
-  const isCustomUserPhoto = isEligibleImage(input.photo);
-  const photoSrc = isCustomUserPhoto
+  const cleanLogoUrl = isEligibleImage(input.logoUrl) ? input.logoUrl!.trim() : undefined;
+  const cleanPhoto = isEligibleImage(input.photo)
     ? input.photo!.trim()
-    : 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80';
-  const logoSrc = isEligibleImage(input.logoUrl) ? input.logoUrl!.trim() : undefined;
+    : 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1200&auto=format&fit=crop&q=80';
+
+  const sanitizedInput = {
+    ...input,
+    logoUrl: cleanLogoUrl,
+    photo: cleanPhoto,
+  };
+
+  if (sanitizedInput.layout?.startsWith('business_')) return composeBusinessEdition(sanitizedInput);
+  if (sanitizedInput.layout?.startsWith('kit_')) return composeKitPoster(sanitizedInput);
+  if (sanitizedInput.layout?.startsWith('professional_')) return composeProfessionalPoster(sanitizedInput);
+  if (sanitizedInput.layout?.startsWith('studio_')) return composeStudioPoster(sanitizedInput);
+  const layout = sanitizedInput.layout || 'bold_offer';
+  const themeColors = (COMMERCIAL_THEMES[sanitizedInput.theme as CommercialTheme] || COMMERCIAL_THEMES.emerald);
+
+  const brandText = (sanitizedInput.brand || 'Professional Business').trim();
+  const headlineText = (sanitizedInput.headline || 'Top-Rated Professional Services').trim();
+  const badgeText = (sanitizedInput.badge || 'SPECIAL OFFER').trim().toUpperCase();
+  const subText = (sanitizedInput.subtitle || 'Premium quality & 100% satisfaction guaranteed.').trim();
+  const ctaLabel = (sanitizedInput.cta || (layout === 'urgent_callout' ? 'CALL NOW 📞' : 'VISIT STORE')).trim().toUpperCase();
+  const taglineText = sanitizedInput.tagline ? ` • ${sanitizedInput.tagline.trim()}` : '';
+  const webText = sanitizedInput.website
+    ? sanitizedInput.website.replace(/^https?:\/\//, '').replace(/\/$/, '')
+    : 'visit website';
+
+  const isCustomUserPhoto = isEligibleImage(sanitizedInput.photo);
+  const photoSrc = isCustomUserPhoto ? sanitizedInput.photo!.trim() : cleanPhoto;
+  const logoSrc = cleanLogoUrl;
 
   const footerH = 140;
 

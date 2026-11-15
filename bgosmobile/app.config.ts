@@ -20,7 +20,7 @@ export default ({ config, projectRoot }: ConfigContext): any => {
   slug: 'bgos',
   owner: 'deepakchandra076',
   version: '1.0.0',
-  icon: './assets/app-icon.png',
+  icon: './assets/icon.png',
   splash: { image: './assets/icon-squircle.png', resizeMode: 'contain', backgroundColor: '#F5FBF8' },
   orientation: 'portrait',
   scheme: SCHEME,

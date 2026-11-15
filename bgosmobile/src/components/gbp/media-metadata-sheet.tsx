@@ -674,100 +674,16 @@ export function MediaMetadataSheet({
                 </View>
               </View>
 
-              {/* ── CARD 2: TARGET KEYWORDS & MONTHLY SEARCH VOLUME (DHANDA STYLE) ── */}
-              <View style={styles.cardContainer}>
-                <View style={styles.cardHeaderRow}>
-                  <MaterialIcons name="search" size={20} color="#2563EB" />
-                  <Text style={styles.cardTitle}>This post targets the following keywords</Text>
-                </View>
-
-                {/* Keywords Table */}
-                <View style={styles.keywordsTable}>
-                  <View style={styles.tableHeaderRow}>
-                    <Text style={[styles.tableHeaderText, { flex: 2 }]}>Keywords</Text>
-                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'right' }]}>
-                      Search Volume (monthly)
-                    </Text>
-                  </View>
-
-                  {targetKeywords.map((item, idx) => (
-                    <View key={`kw-${idx}`} style={styles.tableDataRow}>
-                      <Text style={[styles.tableKeywordText, { flex: 2 }]}>{item.keyword}</Text>
-                      <Text style={[styles.tableVolumeText, { flex: 1, textAlign: 'right' }]}>
-                        {item.monthlyVolume}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-
-                {/* Estimated Views Pill */}
-                <View style={styles.viewsBadgeRow}>
-                  <View style={styles.viewsBadge}>
-                    <MaterialIcons name="visibility" size={16} color="#166534" />
-                    <Text style={styles.viewsBadgeText}>
-                      ~ {estimatedViews} estimated views
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Google Tip Callout */}
-                <View style={styles.googleTipBox}>
-                  <MaterialIcons name="lightbulb" size={18} color="#F59E0B" />
-                  <Text style={styles.googleTipText}>
-                    Google reads post description to match it with customer searches
-                  </Text>
-                  <MaterialIcons name="info-outline" size={16} color="#64748B" />
-                </View>
-              </View>
-
-              {/* ── CARD 3: POST DESCRIPTION WITH INLINE EDIT (DHANDA STYLE) ── */}
-              <View style={styles.cardContainer}>
-                <View style={styles.descHeaderRow}>
-                  <Text style={styles.cardTitle}>Post Description</Text>
-                  <Pressable
-                    hitSlop={8}
-                    onPress={() => setIsEditingDescription(!isEditingDescription)}
-                    style={styles.editPencilBtn}
-                  >
-                    <MaterialIcons
-                      name={isEditingDescription ? 'check' : 'edit'}
-                      size={18}
-                      color="#2563EB"
-                    />
-                    <Text style={styles.editPencilText}>
-                      {isEditingDescription ? 'Done' : 'Edit'}
-                    </Text>
-                  </Pressable>
-                </View>
-
-                {isEditingDescription ? (
-                  <View style={{ gap: 10 }}>
-                    <TextInput
-                      value={description}
-                      onChangeText={setDescription}
-                      style={styles.descriptionInput}
-                      multiline
-                      numberOfLines={5}
-                      placeholder="Enter post description..."
-                    />
-                  </View>
-                ) : (
-                  <View style={styles.descriptionTextBox}>
-                    <Text style={styles.descriptionText}>
-                      {description ||
-                        `${effectiveBusinessName} provides reputable ${effectiveIndustry.toLowerCase()} with dependable results.`}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {/* ── CARD 4: MORE READY CREATIVES PICKER ── */}
+              {/* ── CARD 2: READY CREATIVES PICKER (DHANDA / LOOKSY STUDIO GALLERY) ── */}
               <View style={styles.cardContainer}>
                 <View style={styles.templatesHeaderRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.templatesTitle}>More Ready Creatives</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="auto-awesome" size={18} color="#009F50" />
+                      <Text style={styles.templatesTitle}>Ready Creatives for You</Text>
+                    </View>
                     <Text style={styles.templatesSub}>
-                      Personalized for {effectiveBusinessName}
+                      Curated for {effectiveBusinessName} · Tap to apply design instantly
                     </Text>
                   </View>
                   <Pressable
@@ -847,6 +763,93 @@ export function MediaMetadataSheet({
                       );
                     })}
                   </ScrollView>
+                )}
+              </View>
+
+              {/* ── CARD 3: TARGET KEYWORDS & MONTHLY SEARCH VOLUME (DHANDA STYLE) ── */}
+              <View style={styles.cardContainer}>
+                <View style={styles.cardHeaderRow}>
+                  <MaterialIcons name="search" size={20} color="#2563EB" />
+                  <Text style={styles.cardTitle}>This post targets the following keywords</Text>
+                </View>
+
+                {/* Keywords Table */}
+                <View style={styles.keywordsTable}>
+                  <View style={styles.tableHeaderRow}>
+                    <Text style={[styles.tableHeaderText, { flex: 2 }]}>Keywords</Text>
+                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'right' }]}>
+                      Search Volume (monthly)
+                    </Text>
+                  </View>
+
+                  {targetKeywords.map((item, idx) => (
+                    <View key={`kw-${idx}`} style={styles.tableDataRow}>
+                      <Text style={[styles.tableKeywordText, { flex: 2 }]}>{item.keyword}</Text>
+                      <Text style={[styles.tableVolumeText, { flex: 1, textAlign: 'right' }]}>
+                        {item.monthlyVolume}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Estimated Views Pill */}
+                <View style={styles.viewsBadgeRow}>
+                  <View style={styles.viewsBadge}>
+                    <MaterialIcons name="visibility" size={16} color="#166534" />
+                    <Text style={styles.viewsBadgeText}>
+                      ~ {estimatedViews} estimated views
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Google Tip Callout */}
+                <View style={styles.googleTipBox}>
+                  <MaterialIcons name="lightbulb" size={18} color="#F59E0B" />
+                  <Text style={styles.googleTipText}>
+                    Google reads post description to match it with customer searches
+                  </Text>
+                  <MaterialIcons name="info-outline" size={16} color="#64748B" />
+                </View>
+              </View>
+
+              {/* ── CARD 4: POST DESCRIPTION WITH INLINE EDIT (DHANDA STYLE) ── */}
+              <View style={styles.cardContainer}>
+                <View style={styles.descHeaderRow}>
+                  <Text style={styles.cardTitle}>Post Description</Text>
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => setIsEditingDescription(!isEditingDescription)}
+                    style={styles.editPencilBtn}
+                  >
+                    <MaterialIcons
+                      name={isEditingDescription ? 'check' : 'edit'}
+                      size={18}
+                      color="#2563EB"
+                    />
+                    <Text style={styles.editPencilText}>
+                      {isEditingDescription ? 'Done' : 'Edit'}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {isEditingDescription ? (
+                  <View style={{ gap: 10 }}>
+                    <TextInput
+                      value={description}
+                      onChangeText={setDescription}
+                      style={styles.descriptionInput}
+                      multiline
+                      numberOfLines={5}
+                      placeholder="Enter post description..."
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.descriptionTextBox}>
+                    <Text style={styles.descriptionText}>
+                      {description ||
+                        `${effectiveBusinessName} provides reputable ${effectiveIndustry.toLowerCase()} with dependable results.`}
+                    </Text>
+                  </View>
                 )}
               </View>
             </ScrollView>
@@ -1321,6 +1324,11 @@ const styles = StyleSheet.create({
   },
   templateThumbCardSelected: {
     borderColor: '#009F50',
+    borderWidth: 2.5,
+    shadowColor: '#009F50',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   templateThumbImage: {
     width: '100%',

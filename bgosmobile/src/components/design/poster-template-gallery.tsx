@@ -159,7 +159,13 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
                   style={{ flexDirection: 'row', gap: 14, alignItems: 'center', paddingVertical: 8 }}
                 >
                   <View style={{ width: 72 }}>
-                    <TemplateThumb doc={buildTemplateDesignDoc(slide, business)} />
+                    {(() => {
+                      try {
+                        return <TemplateThumb doc={buildTemplateDesignDoc(slide, business)} />;
+                      } catch {
+                        return null;
+                      }
+                    })()}
                   </View>
                   <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: '#0F172A' }}>
                     {index + 1}. {title}
@@ -287,7 +293,14 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
             ]}
           >
             <View style={{ borderRadius: 12, overflow: 'hidden' }}>
-              <TemplateThumb doc={buildTemplateDesignDoc(t, { ...business, logoUrl: business.logoUri || undefined })} />
+              {(() => {
+                try {
+                  const doc = buildTemplateDesignDoc(t, { ...business, logoUrl: business.logoUri || undefined });
+                  return <TemplateThumb doc={doc} />;
+                } catch {
+                  return null;
+                }
+              })()}
             </View>
             <View style={styles.cardFooter}>
               <Text style={styles.cardName} numberOfLines={1}>
