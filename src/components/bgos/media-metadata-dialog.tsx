@@ -344,6 +344,11 @@ export function WebMediaMetadataDialog({
   const [aiLightboxError, setAiLightboxError] = useState<string | null>(null);
   const [uploadingRefPhoto, setUploadingRefPhoto] = useState(false);
   const [seoChecklistOpen, setSeoChecklistOpen] = useState(false);
+  const [studioMode, setStudioMode] = useState<'templates' | 'custom_ai'>('templates');
+  const [templateCategoryTab, setTemplateCategoryTab] = useState<'for_business' | 'promotions' | 'festivals' | 'reviews'>('for_business');
+  const [businessTemplates, setBusinessTemplates] = useState<any[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const refFileInputRef = useRef<HTMLInputElement>(null);
@@ -467,6 +472,45 @@ export function WebMediaMetadataDialog({
     } finally {
       if (reqSession === sessionRef.current) setIdeasLoading(false);
     }
+  };
+
+  const loadBusinessTemplates = async (
+    tab: 'for_business' | 'promotions' | 'festivals' | 'reviews' = templateCategoryTab,
+  ) => {
+    const reqSession = sessionRef.current;
+    setTemplatesLoading(true);
+    try {
+      const res = await fetch(`/api/social/designs/templates?tab=${tab}&limit=16`);
+      if (reqSession !== sessionRef.current) return;
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.templates)) {
+          setBusinessTemplates(data.templates);
+        }
+      }
+    } catch (err) {
+      console.warn('[media-metadata-dialog] Failed loading templates:', err);
+    } finally {
+      if (reqSession === sessionRef.current) setTemplatesLoading(false);
+    }
+  };
+
+  const applyTemplate = (template: any) => {
+    setSelectedTemplateId(template.id);
+    setGeneratedImageUrl(template.photoUrl);
+    setAiAspectRatio(template.aspectRatio || '4:5');
+    if (template.bgPrompt) setAiPrompt(template.bgPrompt);
+    setTitle(`${template.headline} | ${effectiveBusinessName}`);
+    setDescription(
+      `${template.headline} — ${template.subtitle}. Visit ${effectiveBusinessName} or contact us today!`,
+    );
+    setTags(
+      [
+        effectiveBusinessName,
+        template.badge,
+        template.tab === 'festivals' ? 'Festival Celebration' : 'Special Offer',
+      ].filter(Boolean) as string[],
+    );
   };
 
   const generateAiMetadata = async (
@@ -614,6 +658,7 @@ export function WebMediaMetadataDialog({
     }
 
     void loadAiImageIdeas();
+    void loadBusinessTemplates(templateCategoryTab);
   }, [open, editingItem, initialFiles, defaultScheduleMode, businessName, initialMode]);
 
   const uploadSingleFile = async (file: File): Promise<string> => {
@@ -1372,7 +1417,151 @@ export function WebMediaMetadataDialog({
                 </div>
               ) : composerMode === 'ai_generate' ? (
                 <div className="space-y-3 rounded-xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/40 dark:bg-purple-950/15 p-3.5">
-                  {/* Previous Business Photos Reference Strip */}
+                  {/* Studio Mode Selector (Ready Templates vs Custom AI Visual) */}
+                  <div className="flex items-center rounded-lg bg-muted/60 p-1 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setStudioMode('templates')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+                        studioMode === 'templates'
+                          ? 'bg-background text-purple-700 dark:text-purple-300 shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Sparkles className="size-3.5" />
+                      Ready Templates
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStudioMode('custom_ai')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+                        studioMode === 'custom_ai'
+                          ? 'bg-background text-purple-700 dark:text-purple-300 shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Wand2 className="size-3.5" />
+                      Custom AI Visual
+                    </button>
+                  </div>
+
+                  {studioMode === 'templates' ? (
+                    <div className="space-y-3">
+                      {/* Template Category Tabs */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                        {[
+                          { id: 'for_business', label: '🌟 For Your Shop' },
+                          { id: 'promotions', label: '🏷️ Promotions' },
+                          { id: 'festivals', label: '🪔 Festivals' },
+                          { id: 'reviews', label: '⭐ Customer Reviews' },
+                        ].map((tabItem) => {
+                          const active = templateCategoryTab === tabItem.id;
+                          return (
+                            <button
+                              key={tabItem.id}
+                              type="button"
+                              onClick={() => {
+                                const nextTab = tabItem.id as any;
+                                setTemplateCategoryTab(nextTab);
+                                void loadBusinessTemplates(nextTab);
+                              }}
+                              className={`px-3 py-1 rounded-full text-[11px] font-bold shrink-0 transition-all ${
+                                active
+                                  ? 'bg-purple-600 text-white shadow-xs'
+                                  : 'bg-background border border-border text-foreground hover:border-purple-400'
+                              }`}
+                            >
+                              {tabItem.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {templatesLoading && businessTemplates.length === 0 ? (
+                        <div className="py-8 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                          <Loader2 className="size-4 animate-spin text-purple-600" />
+                          <span className="text-xs">Loading tailored templates for {effectiveBusinessName}…</span>
+                        </div>
+                      ) : businessTemplates.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[340px] overflow-y-auto pr-1">
+                          {businessTemplates.map((template) => {
+                            const isSelected =
+                              selectedTemplateId === template.id || generatedImageUrl === template.photoUrl;
+                            return (
+                              <button
+                                key={template.id}
+                                type="button"
+                                onClick={() => applyTemplate(template)}
+                                className={`text-left rounded-xl border overflow-hidden relative transition-all group ${
+                                  isSelected
+                                    ? 'border-purple-600 ring-2 ring-purple-600/30 bg-purple-500/5'
+                                    : 'border-border bg-card hover:border-purple-300'
+                                }`}
+                              >
+                                <div className="aspect-[4/3] w-full overflow-hidden bg-muted relative">
+                                  <img
+                                    src={template.photoUrl}
+                                    alt={template.headline}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    loading="lazy"
+                                  />
+                                  <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-black/75 text-white uppercase tracking-wider">
+                                    {template.badge || template.tab}
+                                  </span>
+                                  {isSelected && (
+                                    <span className="absolute top-1.5 right-1.5 size-5 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-xs">
+                                      <Check className="size-3" />
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="p-2 space-y-0.5">
+                                  <p className="text-[11.5px] font-bold text-foreground line-clamp-1">
+                                    {template.headline}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground line-clamp-1">
+                                    {effectiveBusinessName}
+                                  </p>
+                                  <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400">
+                                    {template.cta} →
+                                  </p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="py-6 text-center text-xs text-muted-foreground">
+                          No templates found for this category.
+                        </div>
+                      )}
+
+                      {/* Selected Template Action Toolbar */}
+                      {generatedImageUrl && (
+                        <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-purple-900 dark:text-purple-200 truncate">
+                              ✓ Template Selected: {title || effectiveBusinessName}
+                            </p>
+                            <p className="text-[10.5px] text-purple-700 dark:text-purple-300 truncate">
+                              Ratio: {aiAspectRatio} · Tap &quot;Make It AI&quot; to synthesize custom artwork for this template.
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={generatingAiImage}
+                            onClick={() => void handleGenerateAiPhoto(true)}
+                            className="h-7 px-2.5 rounded-md bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold shrink-0 gap-1"
+                          >
+                            {generatingAiImage ? <Loader2 className="size-3 animate-spin" /> : <Wand2 className="size-3" />}
+                            Make It AI
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Previous Business Photos Reference Strip */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
@@ -1598,17 +1787,19 @@ export function WebMediaMetadataDialog({
                     </div>
                   )}
 
-                  {aiLightboxError && !generatingAiImage && (
-                    <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
-                      <span className="min-w-0">{aiLightboxError}</span>
-                      <button
-                        type="button"
-                        onClick={() => void handleGenerateAiPhoto(!aiPrompt.trim())}
-                        className="shrink-0 font-bold underline"
-                      >
-                        Retry
-                      </button>
-                    </div>
+                      {aiLightboxError && !generatingAiImage && (
+                        <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+                          <span className="min-w-0">{aiLightboxError}</span>
+                          <button
+                            type="button"
+                            onClick={() => void handleGenerateAiPhoto(!aiPrompt.trim())}
+                            className="shrink-0 font-bold underline"
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {generatedImageUrl && (

@@ -53,6 +53,13 @@ function sanitizeAndValidateReferenceUrls(raw: unknown): {
     }
     try {
       const parsed = new URL(trimmed);
+      if (parsed.pathname.startsWith('/uploads/')) {
+        if (parsed.pathname.includes('..')) {
+          return { urls: [], error: 'Invalid local reference image path' };
+        }
+        urls.push(parsed.pathname);
+        continue;
+      }
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
         return { urls: [], error: 'Reference image URLs must use http, https, or /uploads/' };
       }

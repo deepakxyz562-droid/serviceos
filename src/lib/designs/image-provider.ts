@@ -294,9 +294,24 @@ export async function fetchReferenceImages(
 
   const loaded = await Promise.all(
     cleaned.map(async (refUrl) => {
+      let localUploadSubPath: string | null = null;
       if (refUrl.startsWith('/uploads/')) {
-        const relativeSubPath = refUrl.replace(/^\/uploads\//, '');
-        const resolvedPath = path.resolve(publicUploadsRoot, relativeSubPath);
+        localUploadSubPath = refUrl.replace(/^\/uploads\//, '');
+      } else {
+        try {
+          const parsed = new URL(refUrl);
+          if (parsed.pathname.startsWith('/uploads/')) {
+            localUploadSubPath = parsed.pathname.replace(/^\/uploads\//, '');
+          }
+        } catch {}
+      }
+
+      if (localUploadSubPath !== null) {
+        let decodedSubPath = localUploadSubPath;
+        try {
+          decodedSubPath = decodeURIComponent(localUploadSubPath);
+        } catch {}
+        const resolvedPath = path.resolve(publicUploadsRoot, decodedSubPath);
         if (resolvedPath !== publicUploadsRoot && !resolvedPath.startsWith(publicUploadsRoot + path.sep)) {
           throw new Error('Blocked path traversal in reference image path');
         }

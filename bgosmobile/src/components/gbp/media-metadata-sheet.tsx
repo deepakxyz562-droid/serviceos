@@ -159,6 +159,23 @@ interface BusinessImageIdea {
   searchKeyword?: string;
 }
 
+export interface BusinessTemplateItem {
+  id: string;
+  layout: string;
+  name: string;
+  headline: string;
+  subtitle: string;
+  badge: string;
+  cta: string;
+  tab: 'for_business' | 'promotions' | 'festivals' | 'reviews';
+  purpose: string;
+  theme: string;
+  aspectRatio: '1:1' | '4:5' | '9:16';
+  photoUrl: string;
+  bgPrompt?: string;
+  occasionId?: string;
+}
+
 interface BusinessAiContext {
   name?: string;
   category?: string;
@@ -246,6 +263,11 @@ export function MediaMetadataSheet({
   const [celebrationMessage, setCelebrationMessage] = useState('');
 
   // Reference-aware AI image generation states
+  const [studioMode, setStudioMode] = useState<'templates' | 'custom_ai'>('templates');
+  const [templateCategoryTab, setTemplateCategoryTab] = useState<'for_business' | 'promotions' | 'festivals' | 'reviews'>('for_business');
+  const [businessTemplates, setBusinessTemplates] = useState<BusinessTemplateItem[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [ideasLoading, setIdeasLoading] = useState(false);
   const [ideasError, setIdeasError] = useState<string | null>(null);
   const [businessContext, setBusinessContext] = useState<BusinessAiContext | null>(null);
@@ -386,6 +408,45 @@ export function MediaMetadataSheet({
     }
   }
 
+  async function loadBusinessTemplates(
+    tab: 'for_business' | 'promotions' | 'festivals' | 'reviews' = templateCategoryTab,
+  ) {
+    const reqKey = sessionKeyRef.current;
+    setTemplatesLoading(true);
+    try {
+      const res = await apiRequest<{
+        templates: BusinessTemplateItem[];
+        businessContext?: any;
+      }>(`/api/social/designs/templates?tab=${tab}&limit=16`);
+      if (reqKey !== sessionKeyRef.current) return;
+      if (Array.isArray(res?.templates)) {
+        setBusinessTemplates(res.templates);
+      }
+    } catch (err) {
+      console.warn('[media-metadata-sheet] Failed loading templates:', err);
+    } finally {
+      if (reqKey === sessionKeyRef.current) setTemplatesLoading(false);
+    }
+  }
+
+  function applyTemplate(item: BusinessTemplateItem) {
+    setSelectedTemplateId(item.id);
+    setGeneratedImageUrl(item.photoUrl);
+    setAiAspectRatio(item.aspectRatio);
+    if (item.bgPrompt) setAiPrompt(item.bgPrompt);
+    setTitle(`${item.headline} | ${effectiveBusinessName}`);
+    setDescription(
+      `${item.headline} — ${item.subtitle}. Visit ${effectiveBusinessName} or contact us today!`,
+    );
+    setTags(
+      [
+        effectiveBusinessName,
+        item.badge,
+        item.tab === 'festivals' ? 'Festival Celebration' : 'Special Offer',
+      ].filter(Boolean) as string[],
+    );
+  }
+
   async function runAiMetadata(
     filenames: string[],
     selectedIntent: AiMediaIntent,
@@ -522,14 +583,20 @@ export function MediaMetadataSheet({
 
     if (nextMode === 'ai_generate') {
       void loadAiImageIdeas();
+      void loadBusinessTemplates(templateCategoryTab);
     }
 
     startBatchUploads(normalized, reqKey);
   }, [visible, editingItem, pendingAssets, initialScheduleMode, initialMode, businessName, workspaceLocale]);
 
   useEffect(() => {
-    if (visible && !isEditMode && composerMode === 'ai_generate' && aiIdeas.length === 0 && !ideasLoading && !ideasError) {
-      void loadAiImageIdeas();
+    if (visible && !isEditMode && composerMode === 'ai_generate') {
+      if (aiIdeas.length === 0 && !ideasLoading && !ideasError) {
+        void loadAiImageIdeas();
+      }
+      if (businessTemplates.length === 0 && !templatesLoading) {
+        void loadBusinessTemplates(templateCategoryTab);
+      }
     }
   }, [visible, isEditMode, composerMode]);
 
@@ -1328,24 +1395,190 @@ export function MediaMetadataSheet({
                 <View style={{ gap: 12 }}>
                   <View style={styles.aiStudioHeaderRow}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.aiStudioTitle}>Generate Photo for {effectiveBusinessName}</Text>
+                      <Text style={styles.aiStudioTitle}>Marketing Studio for {effectiveBusinessName}</Text>
                       <Text style={styles.aiStudioSub}>
-                        Pick reference photos to preserve your real storefront/products, choose a style preset, or tap Auto-Generate from your GBP profile.
+                        Choose a business-ready marketing template below, or create a custom visual tailored to your storefront &amp; services.
                       </Text>
                     </View>
                   </View>
 
-                  {ideasError ? (
-                    <View style={styles.uploadFailBanner}>
-                      <MaterialIcons name="info-outline" size={14} color={colors.danger} />
-                      <Text style={styles.uploadFailText}>{ideasError}</Text>
-                      <Pressable onPress={() => void loadAiImageIdeas()} style={styles.retryMiniBtn}>
-                        <Text style={styles.retryMiniText}>Retry</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
+                  {/* Studio Mode Selector (Ready Templates vs Custom AI Visual) */}
+                  <View style={styles.templateModeBar}>
+                    <Pressable
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: studioMode === 'templates' }}
+                      onPress={() => setStudioMode('templates')}
+                      style={[styles.templateModeBtn, studioMode === 'templates' && styles.templateModeBtnActive]}
+                    >
+                      <MaterialIcons
+                        name="dashboard"
+                        size={15}
+                        color={studioMode === 'templates' ? '#6D28D9' : '#64748B'}
+                      />
+                      <Text
+                        style={[
+                          styles.templateModeText,
+                          studioMode === 'templates' && styles.templateModeTextActive,
+                        ]}
+                      >
+                        Ready Templates
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: studioMode === 'custom_ai' }}
+                      onPress={() => setStudioMode('custom_ai')}
+                      style={[styles.templateModeBtn, studioMode === 'custom_ai' && styles.templateModeBtnActive]}
+                    >
+                      <MaterialIcons
+                        name="auto-awesome"
+                        size={15}
+                        color={studioMode === 'custom_ai' ? '#6D28D9' : '#64748B'}
+                      />
+                      <Text
+                        style={[
+                          styles.templateModeText,
+                          studioMode === 'custom_ai' && styles.templateModeTextActive,
+                        ]}
+                      >
+                        Custom AI Visual
+                      </Text>
+                    </Pressable>
+                  </View>
 
-                  {/* Reference Photos Selector */}
+                  {studioMode === 'templates' ? (
+                    <View style={{ gap: 10 }}>
+                      {/* Template Category Pills */}
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ gap: 6, paddingVertical: 2 }}
+                      >
+                        {[
+                          { id: 'for_business', label: '🌟 For Your Shop' },
+                          { id: 'promotions', label: '🏷️ Promotions' },
+                          { id: 'festivals', label: '🪔 Festivals' },
+                          { id: 'reviews', label: '⭐ Customer Reviews' },
+                        ].map((tabItem) => {
+                          const active = templateCategoryTab === tabItem.id;
+                          return (
+                            <Pressable
+                              key={tabItem.id}
+                              onPress={() => {
+                                const nextTab = tabItem.id as any;
+                                setTemplateCategoryTab(nextTab);
+                                void loadBusinessTemplates(nextTab);
+                              }}
+                              style={[styles.chip, active && styles.chipPurpleActive]}
+                            >
+                              <Text style={[styles.chipText, active && styles.chipPurpleText]}>
+                                {tabItem.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+
+                      {templatesLoading && businessTemplates.length === 0 ? (
+                        <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                          <ActivityIndicator size="small" color="#7C3AED" />
+                          <Text style={{ fontSize: 12, color: colors.muted }}>
+                            Loading tailored templates for {effectiveBusinessName}…
+                          </Text>
+                        </View>
+                      ) : businessTemplates.length > 0 ? (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
+                        >
+                          {businessTemplates.map((template) => {
+                            const isSelected =
+                              selectedTemplateId === template.id || generatedImageUrl === template.photoUrl;
+                            return (
+                              <Pressable
+                                key={template.id}
+                                onPress={() => applyTemplate(template)}
+                                style={[styles.templateCard, isSelected && styles.templateCardActive]}
+                              >
+                                <Image
+                                  source={{ uri: template.photoUrl }}
+                                  style={styles.templateCardImg}
+                                  resizeMode="cover"
+                                />
+                                <View style={styles.templateBadgePill}>
+                                  <Text style={styles.templateBadgeText}>{template.badge || template.tab}</Text>
+                                </View>
+                                {isSelected ? (
+                                  <View style={styles.templateSelectedCheck}>
+                                    <MaterialIcons name="check" size={12} color="#FFFFFF" />
+                                  </View>
+                                ) : null}
+                                <View style={styles.templateCardBody}>
+                                  <Text style={styles.templateCardHeadline} numberOfLines={1}>
+                                    {template.headline}
+                                  </Text>
+                                  <Text style={styles.templateCardBrand} numberOfLines={1}>
+                                    {effectiveBusinessName}
+                                  </Text>
+                                  <Text style={styles.templateCardCta} numberOfLines={1}>
+                                    {template.cta} →
+                                  </Text>
+                                </View>
+                              </Pressable>
+                            );
+                          })}
+                        </ScrollView>
+                      ) : (
+                        <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 12, color: colors.muted }}>
+                            No templates found for this tab.
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Selected Template Action Toolbar */}
+                      {generatedImageUrl ? (
+                        <View style={styles.templateActionBanner}>
+                          <View style={{ flex: 1, gap: 2 }}>
+                            <Text style={styles.templateActionTitle} numberOfLines={1}>
+                              {title || effectiveBusinessName}
+                            </Text>
+                            <Text style={styles.templateActionSub} numberOfLines={1}>
+                              Ratio: {aiAspectRatio} · Tap below to regenerate visual with AI or continue.
+                            </Text>
+                          </View>
+                          <Pressable
+                            accessibilityRole="button"
+                            onPress={() => void handleGenerateAiImage(true)}
+                            disabled={generatingAiImage}
+                            style={styles.templateAiBtn}
+                          >
+                            {generatingAiImage ? (
+                              <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                              <MaterialIcons name="auto-awesome" size={14} color="#FFFFFF" />
+                            )}
+                            <Text style={styles.templateAiBtnText}>
+                              {generatingAiImage ? 'Generating…' : 'Make It AI'}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : (
+                    <>
+                      {ideasError ? (
+                        <View style={styles.uploadFailBanner}>
+                          <MaterialIcons name="info-outline" size={14} color={colors.danger} />
+                          <Text style={styles.uploadFailText}>{ideasError}</Text>
+                          <Pressable onPress={() => void loadAiImageIdeas()} style={styles.retryMiniBtn}>
+                            <Text style={styles.retryMiniText}>Retry</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
+
+                      {/* Reference Photos Selector */}
                   <View style={{ gap: 8 }}>
                     <View style={styles.labelRow}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1571,6 +1804,8 @@ export function MediaMetadataSheet({
                             : 'Auto-Generate Business Photo'}
                     </Text>
                   </Pressable>
+                </>
+              )}
 
                   {generatedImageUrl ? (
                     <View style={styles.generatedPreviewCard}>
@@ -3541,5 +3776,137 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: colors.ink,
+  },
+  templateModeBar: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 3,
+    gap: 4,
+  },
+  templateModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 9,
+  },
+  templateModeBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  templateModeText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  templateModeTextActive: {
+    color: '#6D28D9',
+  },
+  templateCard: {
+    width: 155,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  templateCardActive: {
+    borderColor: '#7C3AED',
+    borderWidth: 2,
+    shadowColor: '#7C3AED',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  templateCardImg: {
+    width: '100%',
+    height: 110,
+    backgroundColor: '#0F172A',
+  },
+  templateBadgePill: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  templateBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+  },
+  templateSelectedCheck: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#7C3AED',
+    borderRadius: 999,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  templateCardBody: {
+    padding: 8,
+    gap: 2,
+  },
+  templateCardHeadline: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  templateCardBrand: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  templateCardCta: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#7C3AED',
+    marginTop: 2,
+  },
+  templateActionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    borderRadius: 12,
+    padding: 10,
+    gap: 8,
+  },
+  templateActionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#5B21B6',
+  },
+  templateActionSub: {
+    fontSize: 10.5,
+    color: '#6D28D9',
+  },
+  templateAiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  templateAiBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
