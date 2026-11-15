@@ -51,6 +51,15 @@ const nextConfig: NextConfig = {
       'node_modules/pdfkit/js/data/**/*',
     ],
   },
+  outputFileTracingExcludes: {
+    '*': [
+      'node_modules/@swc/core-linux-x64-gnu',
+      'node_modules/@swc/core-linux-x64-musl',
+      'node_modules/esbuild-linux-64',
+      '**/tests/**',
+      '**/playwright/**',
+    ],
+  },
   images: {
     // P1-6 (SEO): Enable next/image optimization for AVIF + WebP output.
     // AVIF is ~50% smaller than JPEG, WebP ~30% smaller — both cut LCP
