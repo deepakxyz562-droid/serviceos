@@ -39,6 +39,7 @@ export default function PhotosScreen() {
   const [pendingAssets, setPendingAssets] = useState<PendingUpload[]>([]);
   const [composerVisible, setComposerVisible] = useState(false);
   const [composerMode, setComposerMode] = useState<'upload' | 'ai_generate'>('upload');
+  const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<GbpPhoto | null>(null);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
@@ -179,6 +180,7 @@ export default function PhotosScreen() {
       );
 
       setEditingItem(null);
+      setSelectedTemplate(null);
       setPendingAssets(normalized);
       setComposerMode('upload');
       setComposerVisible(true);
@@ -189,6 +191,7 @@ export default function PhotosScreen() {
 
   const handleEditItem = (item: GbpPhoto) => {
     setPendingAssets([]);
+    setSelectedTemplate(null);
     setEditingItem(item);
     setComposerMode('upload');
     setComposerVisible(true);
@@ -196,7 +199,16 @@ export default function PhotosScreen() {
 
   const handleAiCreate = () => {
     setPendingAssets([]);
+    setSelectedTemplate(null);
     setEditingItem(null);
+    setComposerMode('ai_generate');
+    setComposerVisible(true);
+  };
+
+  const handleSelectTemplate = (tpl: any) => {
+    setPendingAssets([]);
+    setEditingItem(null);
+    setSelectedTemplate(tpl);
     setComposerMode('ai_generate');
     setComposerVisible(true);
   };
@@ -249,6 +261,7 @@ export default function PhotosScreen() {
             locale={photosRes.data?.locale?.locale}
             onUploadPress={handleUpload}
             onAiCreatePress={handleAiCreate}
+            onSelectTemplate={handleSelectTemplate}
             onEditItem={handleEditItem}
             onRefreshNeeded={() => photosRes.refresh()}
             initialTab={initialTab}
@@ -264,6 +277,7 @@ export default function PhotosScreen() {
         businessName={profileName}
         pendingAssets={pendingAssets}
         editingItem={editingItem}
+        selectedTemplate={selectedTemplate}
         workspaceLocale={photosRes.data?.locale || null}
         initialMode={composerMode}
         onSaved={async (msg) => {

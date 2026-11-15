@@ -551,8 +551,28 @@ export function WebMediaMetadataDialog({
     if (template.bgPrompt) setAiPrompt(template.bgPrompt);
     setTitle(`${template.headline} | ${effectiveBusinessName}`);
     setDescription(
-      `${template.headline} — ${template.subtitle}. Visit ${effectiveBusinessName} or contact us today!`,
+      template.defaultCaption
+        ? template.defaultCaption
+            .replace(/\{businessName\}/g, effectiveBusinessName)
+            .replace(/\{city\}/g, businessCtx?.city || 'Patna')
+        : `${template.headline} — ${template.subtitle}. Visit ${effectiveBusinessName} or contact us today!`,
     );
+    if (Array.isArray(template.targetKeywords) && template.targetKeywords.length > 0) {
+      setTargetKeywords(
+        template.targetKeywords.map((k: any) => ({
+          keyword: k.keyword,
+          monthlyVolume:
+            typeof k.monthlyVolume === 'number'
+              ? k.monthlyVolume
+              : typeof k.volume === 'number'
+                ? k.volume
+                : 250,
+        })),
+      );
+    }
+    if (typeof template.estimatedViews === 'number') {
+      setEstimatedViews(template.estimatedViews);
+    }
     setTags(
       [
         effectiveBusinessName,

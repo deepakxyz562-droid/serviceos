@@ -91,15 +91,18 @@ export interface BusinessTemplateItem {
   occasionId?: string;
 }
 
+export type TemplateTabType = 'all' | 'for_business' | 'promotions' | 'festivals' | 'reviews';
+
 const TEMPLATE_TABS: Array<{
-  id: 'for_business' | 'promotions' | 'festivals' | 'reviews';
+  id: TemplateTabType;
   label: string;
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
 }> = [
-  { id: 'for_business', label: 'For Your Shop', icon: 'storefront' },
-  { id: 'promotions', label: 'Promotions', icon: 'local-offer' },
+  { id: 'all', label: 'All Designs', icon: 'auto-awesome' },
+  { id: 'for_business', label: 'Core Services', icon: 'storefront' },
+  { id: 'promotions', label: 'Special Offers', icon: 'local-offer' },
   { id: 'festivals', label: 'Festivals', icon: 'celebration' },
-  { id: 'reviews', label: 'Customer Reviews', icon: 'star' },
+  { id: 'reviews', label: 'Highlights', icon: 'star' },
 ];
 
 export function MediaMetadataSheet({
@@ -108,6 +111,7 @@ export function MediaMetadataSheet({
   businessName,
   pendingAssets = [],
   editingItem = null,
+  selectedTemplate = null,
   initialScheduleMode = 'daily',
   initialMode = 'upload',
   workspaceLocale = null,
@@ -118,6 +122,7 @@ export function MediaMetadataSheet({
   businessName: string;
   pendingAssets?: PendingUpload[];
   editingItem?: GbpPhoto | null;
+  selectedTemplate?: any | null;
   initialScheduleMode?: MediaScheduleMode;
   initialMode?: 'upload' | 'ai_generate';
   workspaceLocale?: WorkspaceLocaleInfo | null;
@@ -130,6 +135,8 @@ export function MediaMetadataSheet({
   // ── Branding & Toggle State ──
   const [addBranding, setAddBranding] = useState<boolean>(true);
   const [isEditingDescription, setIsEditingDescription] = useState<boolean>(false);
+  const [activeBullets, setActiveBullets] = useState<string[]>([]);
+  const [activeHeadline, setActiveHeadline] = useState<string>('');
 
   // ── Post Content State ──
   const [title, setTitle] = useState('');
@@ -153,7 +160,7 @@ export function MediaMetadataSheet({
   const [businessInfo, setBusinessInfo] = useState<BusinessInfoDetails | null>(null);
 
   // ── Templates State ──
-  const [templateTab, setTemplateTab] = useState<'for_business' | 'promotions' | 'festivals' | 'reviews'>('for_business');
+  const [templateTab, setTemplateTab] = useState<TemplateTabType>('all');
   const [templates, setTemplates] = useState<BusinessTemplateItem[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -205,6 +212,8 @@ export function MediaMetadataSheet({
       if (editingItem.title) setTitle(editingItem.title);
       if (editingItem.description) setDescription(editingItem.description);
       if (Array.isArray(editingItem.tags)) setTags(editingItem.tags);
+    } else if (selectedTemplate) {
+      applyTemplate(selectedTemplate);
     } else if (pendingAssets.length > 0) {
       const first = pendingAssets[0];
       setActiveUploadItem(first);
@@ -214,7 +223,7 @@ export function MediaMetadataSheet({
 
     void loadBusinessMetadata(reqKey);
     void loadTemplates(templateTab, reqKey);
-  }, [visible, editingItem, pendingAssets]);
+  }, [visible, editingItem, pendingAssets, selectedTemplate]);
 
   async function handleUploadPending(asset: PendingUpload) {
     setUploadingMedia(true);
@@ -265,7 +274,7 @@ export function MediaMetadataSheet({
       if (typeof res?.estimatedViews === 'number') {
         setEstimatedViews(res.estimatedViews);
       }
-      if (!isEditMode) {
+      if (!isEditMode && !selectedTemplate && !selectedTemplateId) {
         if (res?.title) setTitle(res.title);
         if (res?.description) setDescription(res.description);
         if (Array.isArray(res?.tags)) setTags(res.tags);
@@ -281,17 +290,17 @@ export function MediaMetadataSheet({
     }
   }
 
-  async function loadTemplates(tab: typeof templateTab, reqKey: number) {
+  async function loadTemplates(tab: TemplateTabType, reqKey: number) {
     setTemplatesLoading(true);
     try {
       const res = await apiRequest<{ templates: BusinessTemplateItem[] }>(
-        `/api/social/designs/templates?tab=${tab}&limit=16`,
+        `/api/social/designs/templates?tab=${tab}&limit=24`,
       );
       if (reqKey !== sessionKeyRef.current) return;
       if (Array.isArray(res?.templates)) {
         setTemplates(res.templates);
-        // If no photo currently selected and in AI create mode, select first template
-        if (!currentPhotoUrl && res.templates.length > 0) {
+        // If no photo currently selected and in create mode, select first template
+        if (!currentPhotoUrl && !editingItem && !selectedTemplate && res.templates.length > 0) {
           applyTemplate(res.templates[0]);
         }
       }
@@ -302,18 +311,78 @@ export function MediaMetadataSheet({
     }
   }
 
-  function handleTabChange(tab: typeof templateTab) {
+  function handleTabChange(tab: TemplateTabType) {
     setTemplateTab(tab);
     void loadTemplates(tab, sessionKeyRef.current);
   }
 
-  function applyTemplate(tpl: BusinessTemplateItem) {
+  function applyTemplate(tpl: any) {
+    if (!tpl) return;
     setSelectedTemplateId(tpl.id);
-    setCurrentPhotoUrl(tpl.photoUrl);
-    setTitle(`${tpl.headline} | ${effectiveBusinessName}`);
-    setDescription(
-      `${effectiveBusinessName} is a reputable ${effectiveIndustry.toLowerCase()}${businessInfo?.city ? ` in ${businessInfo.city}` : ''}, offering trusted solutions. ${tpl.headline}: ${tpl.subtitle}. Contact us today to learn more! #${effectiveIndustry.replace(/\s+/g, '').toLowerCase()} #localevents`,
-    );
+    const photo = tpl.photoUrl || tpl.previewUrl || tpl.referenceUrl || tpl.url;
+    if (photo) setCurrentPhotoUrl(photo);
+
+    const hLine = tpl.headline || tpl.name || '';
+    setActiveHeadline(hLine);
+
+    if (Array.isArray(tpl.defaultBullets) && tpl.defaultBullets.length > 0) {
+      setActiveBullets(tpl.defaultBullets);
+    } else if (tpl.subtitle) {
+      setActiveBullets([tpl.subtitle]);
+    } else {
+      setActiveBullets([]);
+    }
+
+    if (Array.isArray(tpl.targetKeywords) && tpl.targetKeywords.length > 0) {
+      setTargetKeywords(
+        tpl.targetKeywords.map((k: any) => ({
+          keyword: k.keyword,
+          monthlyVolume:
+            typeof k.monthlyVolume === 'number'
+              ? k.monthlyVolume
+              : typeof k.volume === 'number'
+                ? k.volume
+                : 250,
+        })),
+      );
+    }
+
+    if (typeof tpl.estimatedViews === 'number') {
+      setEstimatedViews(tpl.estimatedViews);
+    }
+
+    const bName = effectiveBusinessName;
+    setTitle(hLine ? `${hLine} | ${bName}` : bName);
+
+    if (tpl.defaultCaption) {
+      setDescription(
+        tpl.defaultCaption
+          .replace(/\{businessName\}/g, bName)
+          .replace(/\{city\}/g, businessInfo?.city || 'Patna'),
+      );
+    } else {
+      const sub = tpl.subtitle ? `: ${tpl.subtitle}` : '';
+      setDescription(
+        `${bName} is your trusted ${effectiveIndustry.toLowerCase()}${
+          businessInfo?.city ? ` in ${businessInfo.city}` : ''
+        }. ${hLine}${sub}. Contact us today to learn more! #${effectiveIndustry.replace(/\s+/g, '').toLowerCase()} #localbusiness`,
+      );
+    }
+  }
+
+  async function handleWhatsAppShare() {
+    try {
+      const shareText = `${title || effectiveBusinessName}\n\n${description}\n\n${currentPhotoUrl || ''}`;
+      const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(shareText)}`;
+      const canOpen = await Linking.canOpenURL(whatsappUrl).catch(() => false);
+      if (canOpen) {
+        await Linking.openURL(whatsappUrl);
+      } else {
+        await handleShare();
+      }
+    } catch {
+      await handleShare();
+    }
   }
 
   async function handlePickLocalPhoto() {
@@ -488,7 +557,124 @@ export function MediaMetadataSheet({
                 </View>
               ) : null}
 
-              {/* ── CARD 1: TARGET KEYWORDS & MONTHLY SEARCH VOLUME (DHANDA STYLE) ── */}
+              {/* ── CARD 1: THE BRANDED POSTER / IMAGE WITH OVERLAY & BRANDING SWITCH ── */}
+              <View style={styles.posterCard}>
+                <View style={styles.photoCanvas}>
+                  {currentPhotoUrl ? (
+                    <Image
+                      source={{ uri: currentPhotoUrl }}
+                      style={styles.heroPosterImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.emptyPhotoBox}>
+                      <MaterialIcons name="photo" size={48} color="#94A3B8" />
+                      <Text style={styles.emptyPhotoText}>Select a template or upload a photo</Text>
+                    </View>
+                  )}
+
+                  {/* Top Brand Banner Overlay (Toggle-based) */}
+                  {addBranding && (
+                    <View style={styles.brandTopOverlay}>
+                      <View style={styles.brandLogoBox}>
+                        {effectiveLogoUrl ? (
+                          <Image
+                            source={{ uri: effectiveLogoUrl }}
+                            style={styles.brandLogoImage}
+                            resizeMode="contain"
+                          />
+                        ) : (
+                          <View style={styles.monogramBox}>
+                            <Text style={styles.monogramText}>
+                              {(effectiveBusinessName[0] || 'B').toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text numberOfLines={1} style={styles.brandOverlayTitle}>
+                          {effectiveBusinessName}
+                        </Text>
+                        <Text numberOfLines={1} style={styles.brandOverlaySub}>
+                          {effectiveIndustry}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Middle Bullets & Highlights Overlay (Toggle-based) */}
+                  {addBranding && (activeHeadline || activeBullets.length > 0) ? (
+                    <View
+                      style={[
+                        styles.bulletsOverlay,
+                        { bottom: effectivePhone || effectiveAddress ? 56 : 12 },
+                      ]}
+                    >
+                      {activeHeadline ? (
+                        <Text numberOfLines={1} style={styles.canvasHeadlineText}>
+                          {activeHeadline}
+                        </Text>
+                      ) : null}
+                      {activeBullets.slice(0, 3).map((bullet, idx) => (
+                        <View key={`b-${idx}`} style={styles.bulletItemRow}>
+                          <MaterialIcons name="check-circle" size={13} color="#22C55E" />
+                          <Text numberOfLines={1} style={styles.bulletItemText}>
+                            {bullet}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {/* Bottom Contact Footer Overlay (Toggle-based) */}
+                  {addBranding && (effectivePhone || effectiveAddress) ? (
+                    <View style={styles.brandBottomOverlay}>
+                      {effectivePhone ? (
+                        <View style={styles.overlayPhoneRow}>
+                          <MaterialIcons name="phone" size={14} color="#009F50" />
+                          <Text style={styles.overlayPhoneText}>{effectivePhone}</Text>
+                        </View>
+                      ) : null}
+                      {effectiveAddress ? (
+                        <View style={styles.overlayAddressRow}>
+                          <MaterialIcons name="place" size={14} color="#EA580C" />
+                          <Text numberOfLines={1} style={styles.overlayAddressText}>
+                            {effectiveAddress}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  {/* Fullscreen Expand Icon Button */}
+                  <Pressable
+                    accessibilityLabel="View full image"
+                    onPress={() => setFullscreenOpen(true)}
+                    style={styles.expandIconBtn}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons name="fullscreen" size={22} color="#0F172A" />
+                  </Pressable>
+                </View>
+
+                {/* ── BRANDING TOGGLE SWITCH ── */}
+                <View style={styles.brandingToggleRow}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.toggleTitle}>Business Branding</Text>
+                    <Text style={styles.toggleSubtitle}>
+                      Overlay company logo on top, highlights &amp; contact details
+                    </Text>
+                  </View>
+                  <Switch
+                    value={addBranding}
+                    onValueChange={setAddBranding}
+                    trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+                    thumbColor={addBranding ? '#009F50' : '#FFFFFF'}
+                  />
+                </View>
+              </View>
+
+              {/* ── CARD 2: TARGET KEYWORDS & MONTHLY SEARCH VOLUME (DHANDA STYLE) ── */}
               <View style={styles.cardContainer}>
                 <View style={styles.cardHeaderRow}>
                   <MaterialIcons name="search" size={20} color="#2563EB" />
@@ -534,104 +720,52 @@ export function MediaMetadataSheet({
                 </View>
               </View>
 
-              {/* ── CARD 2: THE BRANDED POSTER / IMAGE WITH OVERLAY ── */}
-              <View style={styles.posterCard}>
-                <View style={styles.photoCanvas}>
-                  {currentPhotoUrl ? (
-                    <Image
-                      source={{ uri: currentPhotoUrl }}
-                      style={styles.heroPosterImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.emptyPhotoBox}>
-                      <MaterialIcons name="photo" size={48} color="#94A3B8" />
-                      <Text style={styles.emptyPhotoText}>Select a template or upload a photo</Text>
-                    </View>
-                  )}
-
-                  {/* Top Brand Banner Overlay (Toggle-based) */}
-                  {addBranding && (
-                    <View style={styles.brandTopOverlay}>
-                      <View style={styles.brandLogoBox}>
-                        {effectiveLogoUrl ? (
-                          <Image
-                            source={{ uri: effectiveLogoUrl }}
-                            style={styles.brandLogoImage}
-                            resizeMode="contain"
-                          />
-                        ) : (
-                          <View style={styles.monogramBox}>
-                            <Text style={styles.monogramText}>
-                              {(effectiveBusinessName[0] || 'B').toUpperCase()}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text numberOfLines={1} style={styles.brandOverlayTitle}>
-                          {effectiveBusinessName}
-                        </Text>
-                        <Text numberOfLines={1} style={styles.brandOverlaySub}>
-                          {effectiveIndustry}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Bottom Contact Footer Overlay (Toggle-based) */}
-                  {addBranding && (
-                    <View style={styles.brandBottomOverlay}>
-                      {effectivePhone ? (
-                        <View style={styles.overlayPhoneRow}>
-                          <MaterialIcons name="phone" size={14} color="#009F50" />
-                          <Text style={styles.overlayPhoneText}>{effectivePhone}</Text>
-                        </View>
-                      ) : null}
-                      {effectiveAddress ? (
-                        <View style={styles.overlayAddressRow}>
-                          <MaterialIcons name="place" size={14} color="#EA580C" />
-                          <Text numberOfLines={1} style={styles.overlayAddressText}>
-                            {effectiveAddress}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  )}
-
-                  {/* Fullscreen Expand Icon Button */}
+              {/* ── CARD 3: POST DESCRIPTION WITH INLINE EDIT (DHANDA STYLE) ── */}
+              <View style={styles.cardContainer}>
+                <View style={styles.descHeaderRow}>
+                  <Text style={styles.cardTitle}>Post Description</Text>
                   <Pressable
-                    accessibilityLabel="View full image"
-                    onPress={() => setFullscreenOpen(true)}
-                    style={styles.expandIconBtn}
                     hitSlop={8}
+                    onPress={() => setIsEditingDescription(!isEditingDescription)}
+                    style={styles.editPencilBtn}
                   >
-                    <MaterialIcons name="fullscreen" size={22} color="#0F172A" />
+                    <MaterialIcons
+                      name={isEditingDescription ? 'check' : 'edit'}
+                      size={18}
+                      color="#2563EB"
+                    />
+                    <Text style={styles.editPencilText}>
+                      {isEditingDescription ? 'Done' : 'Edit'}
+                    </Text>
                   </Pressable>
                 </View>
 
-                {/* ── BRANDING TOGGLE SWITCH ── */}
-                <View style={styles.brandingToggleRow}>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={styles.toggleTitle}>Business Branding</Text>
-                    <Text style={styles.toggleSubtitle}>
-                      Overlay company logo on top &amp; contact details on footer
+                {isEditingDescription ? (
+                  <View style={{ gap: 10 }}>
+                    <TextInput
+                      value={description}
+                      onChangeText={setDescription}
+                      style={styles.descriptionInput}
+                      multiline
+                      numberOfLines={5}
+                      placeholder="Enter post description..."
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.descriptionTextBox}>
+                    <Text style={styles.descriptionText}>
+                      {description ||
+                        `${effectiveBusinessName} provides reputable ${effectiveIndustry.toLowerCase()} with dependable results.`}
                     </Text>
                   </View>
-                  <Switch
-                    value={addBranding}
-                    onValueChange={setAddBranding}
-                    trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
-                    thumbColor={addBranding ? '#009F50' : '#FFFFFF'}
-                  />
-                </View>
+                )}
               </View>
 
-              {/* ── CARD 3: TEMPLATES PICKER OR UPLOAD PHOTO ── */}
+              {/* ── CARD 4: MORE READY CREATIVES PICKER ── */}
               <View style={styles.cardContainer}>
                 <View style={styles.templatesHeaderRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.templatesTitle}>Ready Business Creatives</Text>
+                    <Text style={styles.templatesTitle}>More Ready Creatives</Text>
                     <Text style={styles.templatesSub}>
                       Personalized for {effectiveBusinessName}
                     </Text>
@@ -715,59 +849,18 @@ export function MediaMetadataSheet({
                   </ScrollView>
                 )}
               </View>
-
-              {/* ── CARD 4: POST DESCRIPTION WITH INLINE EDIT (DHANDA STYLE) ── */}
-              <View style={styles.cardContainer}>
-                <View style={styles.descHeaderRow}>
-                  <Text style={styles.cardTitle}>Post Description</Text>
-                  <Pressable
-                    hitSlop={8}
-                    onPress={() => setIsEditingDescription(!isEditingDescription)}
-                    style={styles.editPencilBtn}
-                  >
-                    <MaterialIcons
-                      name={isEditingDescription ? 'check' : 'edit'}
-                      size={18}
-                      color="#2563EB"
-                    />
-                    <Text style={styles.editPencilText}>
-                      {isEditingDescription ? 'Done' : 'Edit'}
-                    </Text>
-                  </Pressable>
-                </View>
-
-                {isEditingDescription ? (
-                  <View style={{ gap: 10 }}>
-                    <TextInput
-                      value={description}
-                      onChangeText={setDescription}
-                      style={styles.descriptionInput}
-                      multiline
-                      numberOfLines={5}
-                      placeholder="Enter post description..."
-                    />
-                  </View>
-                ) : (
-                  <View style={styles.descriptionTextBox}>
-                    <Text style={styles.descriptionText}>
-                      {description ||
-                        `${effectiveBusinessName} provides reputable ${effectiveIndustry.toLowerCase()} with dependable results.`}
-                    </Text>
-                  </View>
-                )}
-              </View>
             </ScrollView>
 
             {/* ── FIXED BOTTOM ACTION BAR (SHARE, DOWNLOAD, POST TO GOOGLE) ── */}
             <View style={styles.bottomActionBar}>
               <Pressable
-                onPress={handleShare}
+                onPress={handleWhatsAppShare}
                 style={styles.actionOutlineBtn}
                 accessibilityRole="button"
                 accessibilityLabel="Share post"
               >
-                <MaterialIcons name="share" size={18} color="#0F172A" />
-                <Text style={styles.actionOutlineBtnText}>Share</Text>
+                <MaterialIcons name="share" size={18} color="#009F50" />
+                <Text style={[styles.actionOutlineBtnText, { color: '#009F50' }]}>Share</Text>
               </Pressable>
 
               <Pressable
@@ -1091,6 +1184,33 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#475569',
     lineHeight: 14,
+  },
+  bulletsOverlay: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  canvasHeadlineText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#86EFAC',
+    marginBottom: 2,
+  },
+  bulletItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bulletItemText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   expandIconBtn: {
     position: 'absolute',

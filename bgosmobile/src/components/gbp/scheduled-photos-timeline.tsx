@@ -26,6 +26,7 @@ interface ScheduledPhotosTimelineProps {
   draftPhotos?: GbpPhoto[];
   onUploadPress: () => void;
   onAiCreatePress?: () => void;
+  onSelectTemplate?: (tpl: any) => void;
   onEditItem?: (item: GbpPhoto) => void;
   onRefreshNeeded?: () => void | Promise<void>;
   onConnectPress?: () => void;
@@ -46,6 +47,7 @@ export function ScheduledPhotosTimeline({
   draftPhotos = [],
   onUploadPress,
   onAiCreatePress,
+  onSelectTemplate,
   onEditItem,
   onRefreshNeeded,
   onConnectPress,
@@ -63,6 +65,34 @@ export function ScheduledPhotosTimeline({
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState<GbpPhoto | null>(null);
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
+
+  // Ready templates state (Top 50 Matrix)
+  const [readyTemplates, setReadyTemplates] = useState<any[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [activeBucket, setActiveBucket] = useState<'all' | 'promotions' | 'for_business' | 'reviews' | 'festivals'>('all');
+
+  useEffect(() => {
+    let cancelled = false;
+    setTemplatesLoading(true);
+    apiRequest<{ templates: any[] }>('/api/social/designs/templates?limit=24')
+      .then((res) => {
+        if (!cancelled && Array.isArray(res?.templates)) {
+          setReadyTemplates(res.templates);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setTemplatesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filteredTemplates = useMemo(() => {
+    if (activeBucket === 'all') return readyTemplates;
+    return readyTemplates.filter((t) => t.tab === activeBucket);
+  }, [readyTemplates, activeBucket]);
 
   const handleQuickPublish = async (item: GbpPhoto) => {
     const targetId = item.postId || item.id;
@@ -356,6 +386,90 @@ export function ScheduledPhotosTimeline({
           </Pressable>
         ) : null}
       </View>
+
+      {/* ── Ready Creatives for Your Business (Top 50 Matrix) ── */}
+      <View style={[styles.sectionHeader, { marginTop: 16 }]}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialIcons name="auto-awesome" size={17} color="#009F50" />
+            <Text style={styles.sectionTitle}>Ready Creatives for You</Text>
+          </View>
+          <Text style={styles.sectionSubtitle}>
+            Curated for {businessName} · 1-Tap to customize &amp; publish
+          </Text>
+        </View>
+      </View>
+
+      {/* Bucket Filter Pills */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.bucketFilterTrack}
+      >
+        {[
+          { id: 'all', label: 'All Designs' },
+          { id: 'promotions', label: 'Special Offers' },
+          { id: 'for_business', label: 'Core Services' },
+          { id: 'reviews', label: 'Highlights' },
+          { id: 'festivals', label: 'Festivals' },
+        ].map((bucket) => {
+          const active = activeBucket === bucket.id;
+          return (
+            <Pressable
+              key={bucket.id}
+              onPress={() => setActiveBucket(bucket.id as any)}
+              style={[styles.bucketPill, active && styles.bucketPillActive]}
+            >
+              <Text style={[styles.bucketPillText, active && styles.bucketPillTextActive]}>
+                {bucket.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {/* Horizontal Cards Scroll */}
+      {templatesLoading && readyTemplates.length === 0 ? (
+        <View style={styles.creativesLoadingBox}>
+          <ActivityIndicator size="small" color="#009F50" />
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.creativesTrack}
+        >
+          {filteredTemplates.map((tpl) => (
+            <Pressable
+              key={tpl.id}
+              onPress={() => {
+                if (onSelectTemplate) {
+                  onSelectTemplate(tpl);
+                } else {
+                  onAiCreatePress?.();
+                }
+              }}
+              style={styles.creativeCard}
+            >
+              <Image source={{ uri: tpl.photoUrl }} style={styles.creativeImage} resizeMode="cover" />
+              <View style={styles.creativeTopBadge}>
+                <Text numberOfLines={1} style={styles.creativeTopBadgeText}>
+                  {tpl.badge || 'Ready'}
+                </Text>
+              </View>
+              <View style={styles.creativeOverlay}>
+                <Text numberOfLines={2} style={styles.creativeTitle}>
+                  {tpl.headline}
+                </Text>
+                <View style={styles.creativeUseRow}>
+                  <Text style={styles.creativeUseText}>Use Design</Text>
+                  <MaterialIcons name="arrow-forward" size={13} color="#FFFFFF" />
+                </View>
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
 
       <View style={styles.sectionDivider} />
 
@@ -1068,6 +1182,100 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     fontWeight: '800',
     letterSpacing: 0.6,
+  },
+  bucketFilterTrack: {
+    paddingHorizontal: 16,
+    gap: 8,
+    paddingBottom: 10,
+  },
+  bucketPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  bucketPillActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  bucketPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  bucketPillTextActive: {
+    color: '#009F50',
+  },
+  creativesLoadingBox: {
+    height: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  creativesTrack: {
+    paddingHorizontal: 16,
+    gap: 12,
+    paddingBottom: 14,
+  },
+  creativeCard: {
+    width: 150,
+    height: 190,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  creativeImage: {
+    width: '100%',
+    height: '100%',
+  },
+  creativeTopBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  creativeTopBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+  },
+  creativeOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 10,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    gap: 4,
+  },
+  creativeTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    lineHeight: 16,
+  },
+  creativeUseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  creativeUseText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#34D399',
   },
   aiCreateButton: {
     flexDirection: 'row',

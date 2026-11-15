@@ -213,9 +213,48 @@ function isPrivateIpAddress(ip: string): boolean {
   return false;
 }
 
+function isTrustedStorageHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  const s3Bucket = process.env.AWS_S3_BUCKET?.toLowerCase();
+  if (host.endsWith('.amazonaws.com')) return true;
+  if (s3Bucket && host.includes(s3Bucket)) return true;
+
+  // Whitelist our own domain / Supabase storage domain (which may resolve to docker container IP)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  if (supabaseUrl) {
+    try {
+      const parsedSupa = new URL(supabaseUrl);
+      if (host === parsedSupa.hostname.toLowerCase()) return true;
+    } catch {}
+  }
+
+  // Whitelist app domain
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  if (appUrl) {
+    try {
+      const parsedApp = new URL(appUrl);
+      if (host === parsedApp.hostname.toLowerCase()) return true;
+    } catch {}
+  }
+
+  // Whitelist known public photo CDN hosts
+  if (
+    host.endsWith('unsplash.com') ||
+    host.endsWith('pexels.com') ||
+    host.endsWith('pixabay.com') ||
+    host.endsWith('cloudinary.com')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function isUnsafeReferenceHostname(hostname: string): boolean {
   const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '');
   if (!host) return true;
+  if (isTrustedStorageHost(host)) {
+    return false;
+  }
   if (
     host === 'localhost' ||
     host.endsWith('.localhost') ||
@@ -238,6 +277,9 @@ async function assertSafeRemoteUrl(rawUrl: string): Promise<URL> {
   }
   if (parsed.username || parsed.password) {
     throw new Error('Credentials are not allowed in reference image URLs');
+  }
+  if (isTrustedStorageHost(parsed.hostname)) {
+    return parsed;
   }
   if (isUnsafeReferenceHostname(parsed.hostname)) {
     throw new Error('Blocked private or loopback reference image host');

@@ -13,6 +13,11 @@ import {
   getCategoryVisualPool,
   CURATED_SMB_IMAGE_REGISTRY,
 } from '@/lib/designs/dynamic-visual-resolver';
+import {
+  getCuratedTemplatesForBusiness,
+  TEMPLATE_BUCKETS,
+  type CuratedTemplateItem,
+} from '../../../../../../shared/curated-photo-templates';
 
 export interface BusinessTemplateResponseItem {
   id: string;
@@ -30,6 +35,10 @@ export interface BusinessTemplateResponseItem {
   bgPrompt?: string;
   occasionId?: string;
   design?: any;
+  defaultBullets?: string[];
+  targetKeywords?: Array<{ keyword: string; volume: number }>;
+  estimatedViews?: number;
+  defaultCaption?: string;
 }
 
 function mapPurposeToTab(purpose?: Purpose): 'for_business' | 'promotions' | 'festivals' | 'reviews' {
@@ -56,7 +65,7 @@ export async function GET(request: NextRequest) {
   const [tenant, brandProfile] = await Promise.all([
     db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { name: true, industry: true, phone: true, settingsJson: true },
+      select: { name: true, industry: true, phone: true, address: true, city: true, settingsJson: true },
     }).catch(() => null),
     db.brandProfile.findUnique({
       where: { id: user.tenantId },
@@ -67,7 +76,9 @@ export async function GET(request: NextRequest) {
   let industry = brandProfile?.industry || tenant?.industry || 'Retail & Local Services';
   let phone = tenant?.phone || '';
   let website = brandProfile?.website || '';
-  let logoUrl = brandProfile?.logoUrl || '';
+  let logoUrl = (brandProfile as any)?.logoUrl || '';
+  let address = tenant?.address || '';
+  let city = (tenant as any)?.city || brandProfile?.location || 'Patna';
 
   // Parse GBP / Brand Brain overrides from settingsJson if available
   if (tenant?.settingsJson) {
@@ -78,6 +89,8 @@ export async function GET(request: NextRequest) {
         industry = parsed.activeGbpCategory;
       }
       if (parsed?.activeGbpPhone) phone = parsed.activeGbpPhone;
+      if (parsed?.activeGbpAddress) address = parsed.activeGbpAddress;
+      if (parsed?.activeGbpCity) city = parsed.activeGbpCity;
     } catch {}
   }
 
@@ -146,6 +159,95 @@ export async function GET(request: NextRequest) {
     ];
   }
 
+  // 3b. Fetch curated trade references (Pinterest / Meta Ad Library benchmarks)
+  const curatedList = getCuratedTemplatesForBusiness({
+    categoryOrTitle: `${industry} ${businessName}`,
+    limit: 20,
+  });
+
+  const curatedResponseItems: BusinessTemplateResponseItem[] = curatedList
+    .filter((tpl) => {
+      if (requestedTab === 'all') return true;
+      if (requestedTab === 'promotions') return tpl.bucketKey === 'special_offers';
+      if (requestedTab === 'festivals') return tpl.bucketKey === 'festivals';
+      if (requestedTab === 'reviews') return tpl.bucketKey === 'new_highlights';
+      if (requestedTab === 'for_business') return tpl.bucketKey === 'services_products';
+      return true;
+    })
+    .map((tpl) => {
+      const formattedHeadline = tpl.headlinePattern
+        .replace(/\{businessName\}/g, businessName)
+        .replace(/\{city\}/g, city);
+      const formattedCaption = tpl.defaultCaption
+        .replace(/\{businessName\}/g, businessName)
+        .replace(/\{city\}/g, city);
+
+      const tab =
+        tpl.bucketKey === 'special_offers'
+          ? 'promotions'
+          : tpl.bucketKey === 'festivals'
+            ? 'festivals'
+            : tpl.bucketKey === 'new_highlights'
+              ? 'reviews'
+              : 'for_business';
+
+      let composedCuratedDesign: any = null;
+      if (includeDesign) {
+        try {
+          const fallbackLayout = String(BUSINESS_EDITIONS[0]?.layout || 'business_0');
+          composedCuratedDesign = composeBusinessEdition({
+            layout: fallbackLayout,
+            ratio: (tpl.aspectRatio as any) || '4:5',
+            brand: businessName,
+            headline: formattedHeadline,
+            subtitle: tpl.subtitle,
+            badge:
+              tpl.bucketKey === 'special_offers'
+                ? 'Special Offer'
+                : tpl.bucketKey === 'festivals'
+                  ? 'Festival'
+                  : 'Featured',
+            cta: tpl.ctaText,
+            phone,
+            website: website ? website.replace(/^https?:\/\//, '') : undefined,
+            logoUrl: logoUrl || undefined,
+            photo: tpl.referenceUrl,
+            theme: 'emerald',
+          });
+        } catch {}
+      }
+
+      return {
+        id: tpl.id,
+        layout: 'curated_commercial',
+        name: tpl.title,
+        headline: formattedHeadline,
+        subtitle: tpl.subtitle,
+        badge:
+          tpl.bucketKey === 'special_offers'
+            ? 'Special Offer'
+            : tpl.bucketKey === 'festivals'
+              ? 'Festival'
+              : 'Featured',
+        cta: tpl.ctaText,
+        tab,
+        purpose: (tpl.bucketKey === 'special_offers'
+          ? 'Promotion'
+          : tpl.bucketKey === 'festivals'
+            ? 'Festival'
+            : 'Business profile') as Purpose,
+        theme: 'emerald',
+        aspectRatio: tpl.aspectRatio,
+        photoUrl: tpl.referenceUrl,
+        bgPrompt: tpl.title,
+        design: composedCuratedDesign,
+        defaultBullets: tpl.defaultBullets,
+        targetKeywords: tpl.targetKeywords,
+        estimatedViews: tpl.estimatedViews,
+        defaultCaption: formattedCaption,
+      };
+    });
+
   // 4. Map & compose templates with merchant's branding
   const items: BusinessTemplateResponseItem[] = selectedTemplates.map((template, idx) => {
     const assignedPhoto =
@@ -193,8 +295,16 @@ export async function GET(request: NextRequest) {
       bgPrompt: template.bgPrompt,
       occasionId: template.occasionId,
       design: composedDesign,
+      targetKeywords: [
+        { keyword: `${industry.toLowerCase()} company`, volume: 500 },
+        { keyword: `${industry.toLowerCase()} in ${city}`, volume: 100 },
+      ],
+      estimatedViews: 30,
+      defaultCaption: `${businessName} provides professional ${industry.toLowerCase()} in ${city}.\n\n#${industry.toLowerCase().replace(/[^a-z0-9]/g, '')} #${city.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
     };
   });
+
+  const combinedTemplates = [...curatedResponseItems, ...items].slice(0, limit);
 
   return NextResponse.json({
     businessContext: {
@@ -205,14 +315,17 @@ export async function GET(request: NextRequest) {
       phone,
       website,
       logoUrl,
+      address,
+      city,
     },
     counts: {
-      total: candidates.length,
+      total: candidates.length + curatedList.length,
       for_business: forBusinessList.length,
       promotions: promotionsList.length,
       festivals: festivalsList.length,
       reviews: reviewsList.length,
     },
-    templates: items,
+    buckets: TEMPLATE_BUCKETS,
+    templates: combinedTemplates,
   });
 }

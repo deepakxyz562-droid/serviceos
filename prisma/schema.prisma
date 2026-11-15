@@ -362,6 +362,7 @@ model Tenant {
   rankGridScans         RankGridScan[]
   aiVisibilityScans     AiVisibilityScan[]
   seoFixTasks           SeoFixTask[]
+  photoStudioGenerations PhotoStudioGeneration[]
 
   @@index([slug])
   @@index([plan])
@@ -9713,4 +9714,54 @@ model SeoFixTask {
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, status, createdAt])
+}
+
+// ==========================================
+// BGOS 2.0 — AI PHOTO STUDIO (URL-BASED DISCOVERY)
+// ==========================================
+
+model PhotoTemplateCategory {
+  id          String          @id // "it_software", "hardware_plywood", "dental_clinic", "salon_spa", etc.
+  name        String          // "IT & Software Development"
+  icon        String          // "laptop", "construction", "content-cut"
+  sortOrder   Int             @default(0)
+  templates   PhotoTemplate[]
+  createdAt   DateTime        @default(now())
+}
+
+model PhotoTemplate {
+  id              String                @id // e.g. "it-support-smart"
+  categoryId      String
+  category        PhotoTemplateCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  bucketKey       String                // "special_offers" | "services_products" | "new_highlights" | "festivals"
+  title           String                // "Smart IT Support"
+  referenceUrl    String                // High-res public reference image URL (Pinterest / Behance / Pexels / CDN)
+  headlinePattern String                // "{businessName} Smart IT Support"
+  defaultBullets  String                @default("[]") // JSON: ["System Support", "Network Security", "Cloud Solutions"]
+  targetKeywords  String                @default("[]") // JSON: [{"keyword":"software development company","volume":500}]
+  aspectRatio     String                @default("4:5")
+  sourceName      String                @default("curated") // "pinterest", "meta_ads", "behance", "curated"
+  isActive        Boolean               @default(true)
+  createdAt       DateTime              @default(now())
+
+  generations     PhotoStudioGeneration[]
+
+  @@index([categoryId, bucketKey, isActive])
+}
+
+model PhotoStudioGeneration {
+  id             String         @id @default(cuid())
+  tenantId       String
+  templateId     String?
+  template       PhotoTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  outputS3Url    String         // Final rendered output stored in AWS S3 (serviceos-uploads)
+  withBranding   Boolean        @default(true)
+  caption        String?
+  targetKeywords String         @default("[]")
+  publishedToGbp Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
 }
