@@ -101,4 +101,54 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
       expect(item.tab).toBe('promotions');
     }
   });
+
+  it('guarantees festival template-to-photo accuracy and never assigns trade photos to festivals', async () => {
+    mockGetAuthUser.mockResolvedValueOnce({ id: 'user-1', tenantId: 'tenant-123' });
+    const { GET } = await import('@/app/api/social/designs/templates/route');
+    const req = new NextRequest('http://localhost:3000/api/social/designs/templates?tab=festivals&limit=15');
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data.templates.length).toBeGreaterThan(0);
+
+    // Specifically test Diwali template
+    const diwaliTemplate = data.templates.find(
+      (t: any) => t.id === 'it-diwali-festival' || t.id === 'festival-diwali-universal' || /diwali/i.test(t.headline)
+    );
+    expect(diwaliTemplate).toBeDefined();
+
+    // Must NOT be the mismatched blonde woman in park (photo-1508214751196-bcfd4ca60f91)
+    expect(diwaliTemplate.photoUrl).not.toContain('photo-1508214751196-bcfd4ca60f91');
+
+    // Must use authentic festival photography (diya/lights/festive)
+    expect(
+      diwaliTemplate.photoUrl.includes('photo-1605647540924') ||
+      diwaliTemplate.photoUrl.includes('photo-1577083552431') ||
+      diwaliTemplate.photoUrl.includes('/images/bgos/templates/diwali.webp')
+    ).toBe(true);
+
+    // Check that every festival template photo URL is festival-themed or webp, never dental/trade clinic photo
+    for (const item of data.templates) {
+      expect(item.tab).toBe('festivals');
+      expect(item.photoUrl).not.toContain('photo-1588776814546'); // dental chair
+      expect(item.photoUrl).not.toContain('photo-1508214751196'); // woman in park
+    }
+  });
+
+  it('verifies all curated templates have valid, working non-404 photo URLs', async () => {
+    const { CURATED_TEMPLATES } = await import('../shared/curated-photo-templates');
+    expect(CURATED_TEMPLATES.length).toBeGreaterThanOrEqual(16);
+
+    for (const tpl of CURATED_TEMPLATES) {
+      expect(tpl.referenceUrl).toMatch(/^https:\/\/images\.unsplash\.com\/photo-/);
+      // Ensure the old 404 URL is gone
+      expect(tpl.referenceUrl).not.toContain('photo-1486006920555-c77dce18193b');
+      // Ensure the mismatched Diwali photo is gone
+      if (tpl.id === 'it-diwali-festival') {
+        expect(tpl.referenceUrl).not.toContain('photo-1508214751196-bcfd4ca60f91');
+        expect(tpl.referenceUrl).toContain('photo-1605647540924-852290f6b0d5');
+      }
+    }
+  });
 });

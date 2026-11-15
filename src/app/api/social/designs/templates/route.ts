@@ -19,6 +19,46 @@ import {
   type CuratedTemplateItem,
 } from '../../../../../../shared/curated-photo-templates';
 
+export const FESTIVAL_VISUAL_POOL: Record<string, string[]> = {
+  diwali: [
+    'https://images.unsplash.com/photo-1605647540924-852290f6b0d5?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
+  ],
+  holi: [
+    'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=1200&auto=format&fit=crop&q=80',
+  ],
+  eid: [
+    'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=1200&auto=format&fit=crop&q=80',
+  ],
+  christmas: [
+    'https://images.unsplash.com/photo-1512389142860-9c449e58a543?w=1200&auto=format&fit=crop&q=80',
+  ],
+  new_year: [
+    'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=1200&auto=format&fit=crop&q=80',
+  ],
+  independence_day: [
+    'https://images.unsplash.com/photo-1532375810709-75b1da00537c?w=1200&auto=format&fit=crop&q=80',
+  ],
+  republic_day: [
+    'https://images.unsplash.com/photo-1532375810709-75b1da00537c?w=1200&auto=format&fit=crop&q=80',
+  ],
+  rakhi: [
+    'https://images.unsplash.com/photo-1605647540924-852290f6b0d5?w=1200&auto=format&fit=crop&q=80',
+  ],
+  navratri: [
+    'https://images.unsplash.com/photo-1605647540924-852290f6b0d5?w=1200&auto=format&fit=crop&q=80',
+  ],
+  valentine: [
+    'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=1200&auto=format&fit=crop&q=80',
+  ],
+  mothers_day: [
+    'https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=1200&auto=format&fit=crop&q=80',
+  ],
+  fathers_day: [
+    'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=1200&auto=format&fit=crop&q=80',
+  ],
+};
+
 export interface BusinessTemplateResponseItem {
   id: string;
   layout: string;
@@ -167,6 +207,9 @@ export async function GET(request: NextRequest) {
 
   const curatedResponseItems: BusinessTemplateResponseItem[] = curatedList
     .filter((tpl) => {
+      if (requestedAspect && ['1:1', '4:5', '9:16'].includes(requestedAspect)) {
+        if (tpl.aspectRatio !== requestedAspect) return false;
+      }
       if (requestedTab === 'all') return true;
       if (requestedTab === 'promotions') return tpl.bucketKey === 'special_offers';
       if (requestedTab === 'festivals') return tpl.bucketKey === 'festivals';
@@ -250,10 +293,23 @@ export async function GET(request: NextRequest) {
 
   // 4. Map & compose templates with merchant's branding
   const items: BusinessTemplateResponseItem[] = selectedTemplates.map((template, idx) => {
-    const assignedPhoto =
-      visuals[idx % visuals.length] ||
-      fallbackUnsplashPhotos[idx % fallbackUnsplashPhotos.length] ||
-      template.photo;
+    const isFestival =
+      template.edition?.purpose === 'Festival' ||
+      Boolean(template.occasionId) ||
+      template.badge?.toLowerCase().includes('festival') ||
+      /diwali|holi|eid|christmas|new year|independence|republic|rakhi|navratri|valentine/i.test(template.headline || '');
+
+    let assignedPhoto = template.photo;
+    if (isFestival) {
+      const occasion = (template.occasionId || 'diwali').toLowerCase();
+      const festivalPhotos = FESTIVAL_VISUAL_POOL[occasion] || FESTIVAL_VISUAL_POOL.diwali;
+      assignedPhoto = festivalPhotos[idx % festivalPhotos.length] || template.photo;
+    } else {
+      assignedPhoto =
+        visuals[idx % visuals.length] ||
+        fallbackUnsplashPhotos[idx % fallbackUnsplashPhotos.length] ||
+        template.photo;
+    }
 
     const tab = mapPurposeToTab(template.edition?.purpose);
 
