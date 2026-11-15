@@ -2,7 +2,9 @@ import type { PosterAspect, PosterCategoryId, PosterTemplate } from './poster-te
 import type { CommercialTheme } from './marketing-design-core';
 
 export const BUSINESS_GROUPS = {
-  'Health & wellness': 'dental clinic|skin clinic|physiotherapy|gym|yoga|nutritionist|pathology lab|eye clinic',
+  'IT & Software solutions': 'software development company|it company|software company|web development|app development|it support|tech startup|saas|digital solutions',
+  'Security & Facility services': 'security guard service|security service|bouncer service|cctv installation|facility management',
+  'Health & wellness': 'dentist|dental|dental clinic|skin clinic|physiotherapy|gym|yoga|nutritionist|pathology lab|eye clinic',
   'Beauty & personal care': 'salon|spa|nail studio|makeup artist|barber shop|tattoo studio',
   'Food & hospitality': 'restaurant|cafe|bakery|cloud kitchen|hotel|homestay|catering',
   'Education & coaching': 'school|coaching center|tuition|spoken English|computer classes|dance class|music class',
@@ -92,7 +94,7 @@ const briefs: Record<Purpose,string[]> = {
   ],
 };
 const occasionIds=['diwali','holi','eid','christmas','new_year','independence_day','republic_day','rakhi','navratri','valentine','mothers_day','fathers_day'];
-const backgrounds=['dental','salon','restaurant','coaching','plumbing','automotive','fashion','property','edition-professional-services','edition-events-lifestyle'];
+const backgrounds=['it_software','security_cctv','dental','salon','restaurant','coaching','plumbing','automotive','fashion','property','edition-professional-services','edition-events-lifestyle'];
 const groups=Object.keys(BUSINESS_GROUPS) as (keyof typeof BUSINESS_GROUPS)[];
 const slug=(value:string)=>value.toLowerCase().replace(/[’']/g,'').replace(/[^a-z0-9]+/g,'-').replace(/-$/,'');
 const supporting:Record<Purpose,string[]>={

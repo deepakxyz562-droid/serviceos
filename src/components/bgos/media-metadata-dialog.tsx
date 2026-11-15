@@ -9,8 +9,15 @@ import {
   Loader2,
   MapPin,
   Maximize2,
+  Phone,
   Plus,
   RefreshCw,
+  Search,
+  Share2,
+  Download,
+  Edit3,
+  Eye,
+  Lightbulb,
   Sparkles,
   Tag,
   Trash2,
@@ -18,6 +25,7 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -107,10 +115,15 @@ interface BusinessIdeasContext {
   category?: string;
   location?: string;
   city?: string | null;
+  phone?: string;
+  address?: string;
+  logoUrl?: string;
   services?: string | string[];
   products?: string | string[];
   website?: string;
   topSearchTerms?: Array<{ keyword: string; impressions?: number; threshold?: number | null }>;
+  targetKeywords?: Array<{ keyword: string; monthlyVolume: number }>;
+  estimatedViews?: number;
   geoCoordinates?: { latitude: number; longitude: number } | null;
 }
 
@@ -374,6 +387,31 @@ export function WebMediaMetadataDialog({
     };
   }, [previews]);
 
+  const [addBranding, setAddBranding] = useState<boolean>(true);
+  const [targetKeywords, setTargetKeywords] = useState<Array<{ keyword: string; monthlyVolume: number }>>([]);
+  const [estimatedViews, setEstimatedViews] = useState<number>(30);
+  const [isEditingDescription, setIsEditingDescription] = useState<boolean>(false);
+
+  const effectiveBusinessName = useMemo(() => {
+    return (businessCtx?.name || businessCtx?.businessName || businessName || 'My Business').trim();
+  }, [businessCtx, businessName]);
+
+  const effectivePhone = useMemo(() => {
+    return businessCtx?.phone || '';
+  }, [businessCtx?.phone]);
+
+  const effectiveAddress = useMemo(() => {
+    return businessCtx?.address || businessCtx?.location || businessCtx?.city || '';
+  }, [businessCtx?.address, businessCtx?.location, businessCtx?.city]);
+
+  const effectiveLogoUrl = useMemo(() => {
+    return businessCtx?.logoUrl || null;
+  }, [businessCtx?.logoUrl]);
+
+  const effectiveIndustry = useMemo(() => {
+    return businessCtx?.category || 'Local Services';
+  }, [businessCtx?.category]);
+
   const effectiveSeoFilename = useMemo(() => {
     if (aiSeoFilename) return aiSeoFilename;
     if (files[0]?.name) return files[0].name;
@@ -439,6 +477,17 @@ export function WebMediaMetadataDialog({
         setBusinessCtx(data.business);
         if (Array.isArray(data.business.topSearchTerms) && data.business.topSearchTerms.length > 0) {
           setUsedSearchTerms(data.business.topSearchTerms.map((t) => t.keyword).filter(Boolean));
+        }
+        if (Array.isArray(data.business.targetKeywords) && data.business.targetKeywords.length > 0) {
+          setTargetKeywords(data.business.targetKeywords);
+        } else {
+          setTargetKeywords([
+            { keyword: `${(data.business.category || 'business').toLowerCase()} company`, monthlyVolume: 500 },
+            { keyword: `trusted ${(data.business.category || 'services').toLowerCase()}${data.business.city ? ` ${data.business.city}` : ''}`, monthlyVolume: 100 },
+          ]);
+        }
+        if (typeof data.business.estimatedViews === 'number') {
+          setEstimatedViews(data.business.estimatedViews);
         }
       }
       if (Array.isArray(data.previousPhotos)) {
@@ -547,6 +596,12 @@ export function WebMediaMetadataDialog({
       if (Array.isArray(data?.suggestedTags)) setSuggestedTags(data.suggestedTags);
       if (Array.isArray(data?.usedSearchTerms) && data.usedSearchTerms.length > 0) {
         setUsedSearchTerms(data.usedSearchTerms);
+      }
+      if (Array.isArray((data as any)?.targetKeywords) && (data as any).targetKeywords.length > 0) {
+        setTargetKeywords((data as any).targetKeywords);
+      }
+      if (typeof (data as any)?.estimatedViews === 'number') {
+        setEstimatedViews((data as any).estimatedViews);
       }
       if (data?.seoFilename && !aiSeoFilename) {
         setAiSeoFilename(data.seoFilename);
@@ -1841,14 +1896,63 @@ export function WebMediaMetadataDialog({
                             className="w-full max-h-64 object-contain mx-auto"
                           />
                         </button>
+
+                        {/* Top Brand Banner Overlay (Toggle-based) */}
+                        {addBranding && (
+                          <div className="absolute top-2.5 left-2.5 right-12 bg-slate-950/85 backdrop-blur-xs rounded-lg p-2 flex items-center gap-2 border border-white/10 shadow-md">
+                            <div className="size-6 rounded-md bg-white flex items-center justify-center overflow-hidden shrink-0">
+                              {effectiveLogoUrl ? (
+                                <img src={effectiveLogoUrl} alt="Logo" className="w-full h-full object-contain" />
+                              ) : (
+                                <span className="text-emerald-700 font-black text-xs">
+                                  {(effectiveBusinessName[0] || 'B').toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-bold text-white truncate">{effectiveBusinessName}</p>
+                              <p className="text-[9.5px] text-slate-300 truncate">{effectiveIndustry}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Bottom Contact Footer Overlay (Toggle-based) */}
+                        {addBranding && (
+                          <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-border px-3 py-1.5 space-y-0.5 shadow-md">
+                            {effectivePhone && (
+                              <div className="flex items-center gap-1.5 text-[11px] font-bold text-foreground">
+                                <Phone className="size-3 text-emerald-600 shrink-0" />
+                                <span>{effectivePhone}</span>
+                              </div>
+                            )}
+                            {effectiveAddress && (
+                              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                                <MapPin className="size-3 text-orange-600 shrink-0" />
+                                <span className="truncate">{effectiveAddress}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => setFullscreenOpen(true)}
                           className="absolute top-2 right-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/85 border border-white/20 text-white text-[11px] font-bold hover:bg-slate-900 cursor-pointer"
                         >
                           <Maximize2 className="size-3" />
-                          Full Screen
                         </button>
+                      </div>
+
+                      {/* Branding Toggle */}
+                      <div className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-background">
+                        <div className="space-y-0.5">
+                          <div className="text-xs font-bold text-foreground">Business Branding</div>
+                          <div className="text-[10px] text-muted-foreground">Overlay company logo on top &amp; contact details on footer</div>
+                        </div>
+                        <Switch
+                          checked={addBranding}
+                          onCheckedChange={setAddBranding}
+                        />
                       </div>
 
                       <div className="flex items-center justify-between gap-2 px-0.5 text-[10px] text-muted-foreground">
@@ -2006,6 +2110,41 @@ export function WebMediaMetadataDialog({
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Target Keywords Card (Dhanda Style) */}
+              <div className="rounded-xl border border-border bg-card p-3.5 space-y-2.5 shadow-xs">
+                <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                  <Search className="size-3.5 text-blue-600" />
+                  <span>This post targets the following keywords</span>
+                </div>
+
+                <div className="rounded-lg border border-border overflow-hidden bg-background">
+                  <div className="grid grid-cols-3 bg-muted/60 px-3 py-1.5 text-[10.5px] font-bold text-muted-foreground border-b border-border">
+                    <span className="col-span-2">Keywords</span>
+                    <span className="text-right">Search Volume (monthly)</span>
+                  </div>
+                  {(targetKeywords.length > 0 ? targetKeywords : [
+                    { keyword: `${effectiveIndustry.toLowerCase()} company`, monthlyVolume: 500 },
+                    { keyword: `trusted ${effectiveIndustry.toLowerCase()}${businessCtx?.city ? ` ${businessCtx.city}` : ''}`, monthlyVolume: 100 },
+                  ]).map((item, idx) => (
+                    <div key={`kw-${idx}`} className="grid grid-cols-3 px-3 py-1.5 text-xs border-b border-border/40 last:border-b-0">
+                      <span className="col-span-2 font-semibold text-foreground">{item.keyword}</span>
+                      <span className="text-right font-bold text-muted-foreground">{item.monthlyVolume}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-center">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
+                    <Eye className="size-3" /> ~ {estimatedViews} estimated views
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-50/70 dark:bg-blue-950/25 border-l-2 border-blue-500 text-[10.5px] text-blue-900 dark:text-blue-200">
+                  <Lightbulb className="size-3 text-amber-500 shrink-0" />
+                  <span>Google reads post description to match it with customer searches</span>
+                </div>
               </div>
 
               {/* AI Focus Intent Chips */}
@@ -2252,6 +2391,50 @@ export function WebMediaMetadataDialog({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {generatedImageUrl && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (navigator.share) {
+                      void navigator.share({
+                        title: title || effectiveBusinessName,
+                        text: description,
+                        url: generatedImageUrl,
+                      });
+                    } else if (navigator.clipboard) {
+                      void navigator.clipboard.writeText(`${title}\n\n${description}\n\n${generatedImageUrl}`);
+                      toast.success('Post text copied to clipboard!');
+                    }
+                  }}
+                  className="rounded-xl text-xs font-bold gap-1"
+                >
+                  <Share2 className="size-3.5" />
+                  Share
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = generatedImageUrl;
+                    link.download = `${slugifySeoFilename(effectiveBusinessName, businessCtx?.city || null, 'jpg')}`;
+                    link.target = '_blank';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    toast.success('Image downloading.');
+                  }}
+                  className="rounded-xl text-xs font-bold gap-1"
+                >
+                  <Download className="size-3.5" />
+                  Download
+                </Button>
+              </>
+            )}
             {submitting && !isEditMode ? (
               <Button
                 type="button"

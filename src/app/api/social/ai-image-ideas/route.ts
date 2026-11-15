@@ -11,11 +11,16 @@ export interface BusinessAiContext {
   category: string;
   location: string;
   city?: string;
+  phone?: string;
+  address?: string;
+  logoUrl?: string;
   products: string[];
   services: string[];
   website: string;
   topSearchTerms?: string[];
   trackedKeywords?: string[];
+  targetKeywords?: Array<{ keyword: string; monthlyVolume: number }>;
+  estimatedViews?: number;
   missingCategories?: string[];
   geoCoordinates?: { lat: number; lng: number } | null;
 }
@@ -370,6 +375,8 @@ async function gatherContextAndPhotos(
         select: {
           name: true,
           industry: true,
+          phone: true,
+          whatsappPhone: true,
           address: true,
           city: true,
           state: true,
@@ -571,11 +578,29 @@ async function gatherContextAndPhotos(
 
   const missingCategories = CORE_GBP_MEDIA_CATEGORIES.filter((c) => !coveredGbpCategories.has(c));
 
+  const resolvedPhone = tenant?.phone || tenant?.whatsappPhone || (parsedSettings.phone as string) || '';
+  const resolvedAddress = tenant?.address || brandProfile?.location || (gbpMeta.address as string) || '';
+  const resolvedLogoUrl = brandProfile?.logoUrl || (tenant as any)?.logo || (parsedSettings.logoUrl as string) || '';
+
+  const rawCity = seoCtx.city || tenant?.city || brandProfile?.location?.split(',')[0]?.trim() || '';
+  const primaryKw = seoCtx.searchTerms[0]?.keyword || seoCtx.trackedKeywords[0]?.keyword || (Array.isArray(brandProfile?.services) ? (brandProfile.services as string[])[0] : '') || resolvedCategory;
+  const secondaryKw = seoCtx.searchTerms[1]?.keyword || `${(Array.isArray(brandProfile?.services) ? (brandProfile.services as string[])[1] : '') || resolvedCategory}${rawCity ? ` ${rawCity}` : ''}`;
+  const tertiaryKw = `${resolvedCategory}${rawCity ? ` in ${rawCity}` : ''}`;
+
+  const targetKeywords = [
+    { keyword: primaryKw, monthlyVolume: 500 },
+    { keyword: secondaryKw, monthlyVolume: 250 },
+    { keyword: tertiaryKw, monthlyVolume: 100 },
+  ].filter((k, idx, arr) => k.keyword && arr.findIndex((x) => x.keyword.toLowerCase() === k.keyword.toLowerCase()) === idx);
+
   const business: BusinessAiContext = {
     name: resolvedBusinessName,
     category: resolvedCategory,
     location: brandProfile?.location || tenant?.address || gbpMeta.address || seoCtx.city || '',
     city: seoCtx.city || brandProfile?.location || '',
+    phone: resolvedPhone,
+    address: resolvedAddress,
+    logoUrl: resolvedLogoUrl,
     products: Array.from(new Set([...parseStringArray(brandProfile?.products), ...seoCtx.products])).slice(0, 12),
     services: Array.from(new Set([...parseStringArray(brandProfile?.services), ...seoCtx.services])).slice(0, 12),
     website:
@@ -586,6 +611,8 @@ async function gatherContextAndPhotos(
           : '',
     topSearchTerms: seoCtx.searchTerms.slice(0, 6).map((s) => s.keyword),
     trackedKeywords: seoCtx.trackedKeywords.slice(0, 6).map((t) => t.keyword),
+    targetKeywords,
+    estimatedViews: 30,
     missingCategories: Array.from(missingCategories),
     geoCoordinates:
       seoCtx.latitude !== null && seoCtx.longitude !== null

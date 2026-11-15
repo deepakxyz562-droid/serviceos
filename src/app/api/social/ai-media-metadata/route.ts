@@ -390,6 +390,17 @@ Rules:
       geoTagged: isGeoTagged,
     });
 
+    const resolvedPhone = tenant?.phone || (tenant as any)?.whatsappPhone || '';
+    const resolvedAddress = tenant?.address || location || '';
+    const resolvedLogoUrl = brandRaw?.logoUrl || (tenant as any)?.logo || '';
+    const rawCity = seoCtx?.city || location.split(',')[0]?.trim() || '';
+
+    const targetKeywords = [
+      { keyword: primaryService, monthlyVolume: 500 },
+      { keyword: `${secondaryService}${rawCity ? ` ${rawCity}` : ''}`, monthlyVolume: 250 },
+      { keyword: `${industry}${rawCity ? ` in ${rawCity}` : ''}`, monthlyVolume: 100 },
+    ].filter((k, idx, arr) => k.keyword && arr.findIndex((x) => x.keyword.toLowerCase() === k.keyword.toLowerCase()) === idx);
+
     return NextResponse.json({
       success: true,
       title: finalTitle,
@@ -401,6 +412,16 @@ Rules:
       suggestedTags,
       tone,
       businessName,
+      businessInfo: {
+        name: businessName,
+        industry,
+        phone: resolvedPhone,
+        address: resolvedAddress,
+        logoUrl: resolvedLogoUrl,
+        city: rawCity,
+      },
+      targetKeywords,
+      estimatedViews: 30,
       seoFilename,
       usedSearchTerms,
       geoTagged: isGeoTagged,

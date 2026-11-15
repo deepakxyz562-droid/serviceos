@@ -4,11 +4,14 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -31,30 +34,14 @@ import {
   COUNTRIES,
   detectDeviceCountryAndTimezone,
   getCountryByCode,
-  getTimeZoneShortLabel,
   type CountryItem,
 } from '../../lib/country-codes';
 import type { GbpPhoto } from './types';
 import { FullscreenImageModal } from './fullscreen-image-modal';
 import {
-  appendImageCandidate,
   computeMediaSeoReadiness,
-  getAspectRatioNumeric,
   slugifySeoFilename,
-  type AiPhotoStylePreset,
-  type ImageCandidate,
-  type ImageGenerationSourceType,
-  type ImageProviderChoice,
 } from '../../../../shared/image-review';
-
-const MOBILE_STYLE_PRESETS: Array<{ id: AiPhotoStylePreset; label: string }> = [
-  { id: 'real_photo', label: 'Real Photo' },
-  { id: 'product_studio', label: 'Product Studio' },
-  { id: 'team_action', label: 'Team Action' },
-  { id: 'before_after', label: 'Finished Work' },
-  { id: 'lifestyle', label: 'Lifestyle' },
-  { id: 'festive', label: 'Festive' },
-];
 
 export type MediaScheduleMode = 'daily' | 'weekly' | 'instant' | 'draft';
 export type GbpCategoryType =
@@ -64,16 +51,6 @@ export type GbpCategoryType =
   | 'PRODUCT'
   | 'AT_WORK'
   | 'TEAMS';
-export type AiMediaIntent = 'local_seo' | 'showcase' | 'behind_the_scenes' | 'team' | 'offer';
-
-interface UploadedMediaState {
-  local: PendingUpload;
-  cloudUrl?: string;
-  thumbnailUrl?: string;
-  uploading: boolean;
-  progress?: number;
-  error?: string;
-}
 
 interface WorkspaceLocaleInfo {
   country?: string;
@@ -83,80 +60,18 @@ interface WorkspaceLocaleInfo {
   locale?: string;
 }
 
-interface AiMetadataResponse {
-  success?: boolean;
-  title?: string;
-  description?: string;
-  altText?: string;
-  tags?: string[];
-  category?: GbpCategoryType;
-  suggestedTitles?: string[];
-  suggestedTags?: string[];
-  businessName?: string;
-  seoFilename?: string;
-  usedSearchTerms?: string[];
-  geoTagged?: boolean;
-  seoScore?: number;
+interface TargetKeywordItem {
+  keyword: string;
+  monthlyVolume: number;
 }
 
-const GBP_CATEGORIES: { value: GbpCategoryType; label: string }[] = [
-  { value: 'ADDITIONAL', label: 'General' },
-  { value: 'EXTERIOR', label: 'Exterior' },
-  { value: 'INTERIOR', label: 'Interior' },
-  { value: 'PRODUCT', label: 'Product / Service' },
-  { value: 'AT_WORK', label: 'At Work' },
-  { value: 'TEAMS', label: 'Team' },
-];
-
-const AI_INTENTS: { value: AiMediaIntent; label: string }[] = [
-  { value: 'local_seo', label: 'Local SEO' },
-  { value: 'showcase', label: 'Showcase' },
-  { value: 'behind_the_scenes', label: 'Work in Action' },
-  { value: 'team', label: 'Team' },
-  { value: 'offer', label: 'Highlight / Offer' },
-];
-
-const SCHEDULE_MODES: {
-  value: MediaScheduleMode;
-  label: string;
-  sub: string;
-  icon: React.ComponentProps<typeof MaterialIcons>['name'];
-}[] = [
-  { value: 'daily', label: 'Daily Schedule', sub: '1/day local cadence', icon: 'today' },
-  { value: 'weekly', label: 'Weekly Schedule', sub: '1/week steady flow', icon: 'date-range' },
-  { value: 'instant', label: 'Publish Now', sub: 'Direct to Google', icon: 'bolt' },
-  { value: 'draft', label: 'Save Draft', sub: 'Keep in Not Posted', icon: 'bookmark-border' },
-];
-
-const PUBLISH_TIMES: { value: string; label: string }[] = [
-  { value: '09:00', label: '9:00 AM' },
-  { value: '10:00', label: '10:00 AM' },
-  { value: '12:00', label: '12:00 PM' },
-  { value: '16:00', label: '4:00 PM' },
-  { value: '19:00', label: '7:00 PM' },
-];
-
-const VIDEO_URL_RE = /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i;
-
-function isVideoPhotoItem(item?: { mediaFormat?: string; url?: string } | null): boolean {
-  if (!item) return false;
-  return item.mediaFormat === 'VIDEO' || VIDEO_URL_RE.test(item.url || '');
-}
-
-interface PreviousBusinessPhoto {
-  id: string;
-  url: string;
-  title?: string;
-  source: 'library' | 'post' | 'google';
-}
-
-interface BusinessImageIdea {
-  id: string;
-  title: string;
-  icon: string;
-  prompt: string;
-  gbpCategory?: string;
-  searchKeyword?: string;
+interface BusinessInfoDetails {
+  name: string;
+  industry?: string;
+  phone?: string;
+  address?: string;
+  logoUrl?: string;
+  city?: string;
 }
 
 export interface BusinessTemplateItem {
@@ -176,17 +91,16 @@ export interface BusinessTemplateItem {
   occasionId?: string;
 }
 
-interface BusinessAiContext {
-  name?: string;
-  category?: string;
-  location?: string;
-  city?: string | null;
-  products?: string[];
-  services?: string[];
-  website?: string;
-  topSearchTerms?: Array<{ keyword: string; impressions?: number; threshold?: number | null }>;
-  geoCoordinates?: { latitude: number; longitude: number } | null;
-}
+const TEMPLATE_TABS: Array<{
+  id: 'for_business' | 'promotions' | 'festivals' | 'reviews';
+  label: string;
+  icon: React.ComponentProps<typeof MaterialIcons>['name'];
+}> = [
+  { id: 'for_business', label: 'For Your Shop', icon: 'storefront' },
+  { id: 'promotions', label: 'Promotions', icon: 'local-offer' },
+  { id: 'festivals', label: 'Festivals', icon: 'celebration' },
+  { id: 'reviews', label: 'Customer Reviews', icon: 'star' },
+];
 
 export function MediaMetadataSheet({
   visible,
@@ -210,946 +124,302 @@ export function MediaMetadataSheet({
   onSaved: (message: string) => void | Promise<void>;
 }) {
   const detected = detectDeviceCountryAndTimezone();
-  const [composerMode, setComposerMode] = useState<'upload' | 'ai_generate'>(initialMode);
-  const [aiStep, setAiStep] = useState<1 | 2>(1);
-  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
-  const [aiUploads, setAiUploads] = useState<UploadedMediaState[]>([]);
-  const [videoWarning, setVideoWarning] = useState<string | null>(null);
+  const sessionKeyRef = useRef(0);
+  const isEditMode = Boolean(editingItem && (editingItem.postId || editingItem.id));
 
-  const activeBatches = useMediaUploadStore((s) => s.activeBatches);
-  const batchWarnings = useMediaUploadStore((s) => s.batchWarnings);
-  const startBatch = useMediaUploadStore((s) => s.startBatch);
-  const retryBatchFile = useMediaUploadStore((s) => s.retryBatchFile);
-  const submitBatchJob = useMediaUploadStore((s) => s.submitBatchJob);
+  // ── Branding & Toggle State ──
+  const [addBranding, setAddBranding] = useState<boolean>(true);
+  const [isEditingDescription, setIsEditingDescription] = useState<boolean>(false);
 
-  const uploads: UploadedMediaState[] =
-    composerMode === 'ai_generate'
-      ? aiUploads
-      : activeBatchId && activeBatches[activeBatchId]
-        ? activeBatches[activeBatchId].map((b) => ({
-            local: b.local,
-            cloudUrl: b.cloudUrl,
-            thumbnailUrl: b.thumbnailUrl,
-            uploading: b.uploading,
-            progress: b.progress,
-            error: b.error,
-          }))
-        : [];
-  const effectiveVideoWarning =
-    (activeBatchId ? batchWarnings[activeBatchId] : null) || videoWarning;
+  // ── Post Content State ──
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [aiAltText, setAiAltText] = useState('');
   const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState('');
   const [category, setCategory] = useState<GbpCategoryType>('ADDITIONAL');
   const [scheduleMode, setScheduleMode] = useState<MediaScheduleMode>(initialScheduleMode);
-  const [preferredTime, setPreferredTime] = useState('10:00');
-  const [selectedCountry, setSelectedCountry] = useState<CountryItem>(
+  const [preferredTime] = useState('10:00');
+  const [selectedCountry] = useState<CountryItem>(
     workspaceLocale?.country ? getCountryByCode(workspaceLocale.country) : detected.country,
   );
-  const [selectedTimeZone, setSelectedTimeZone] = useState<string>(
+  const [selectedTimeZone] = useState<string>(
     workspaceLocale?.timeZone || detected.timeZone,
   );
-  const [countryPickerOpen, setCountryPickerOpen] = useState(false);
-  const [intent, setIntent] = useState<AiMediaIntent>('local_seo');
-  const [suggestedTitles, setSuggestedTitles] = useState<string[]>([]);
-  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
-  const [usedSearchTerms, setUsedSearchTerms] = useState<string[]>([]);
-  const [aiLoading, setAiLoading] = useState(false);
+
+  // ── Target Keywords State (Dhanda Style) ──
+  const [targetKeywords, setTargetKeywords] = useState<TargetKeywordItem[]>([]);
+  const [estimatedViews, setEstimatedViews] = useState<number>(30);
+
+  // ── Business Profile Info (Header & Footer) ──
+  const [businessInfo, setBusinessInfo] = useState<BusinessInfoDetails | null>(null);
+
+  // ── Templates State ──
+  const [templateTab, setTemplateTab] = useState<'for_business' | 'promotions' | 'festivals' | 'reviews'>('for_business');
+  const [templates, setTemplates] = useState<BusinessTemplateItem[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+
+  // ── Media / Image State ──
+  const [currentPhotoUrl, setCurrentPhotoUrl] = useState<string | null>(null);
+  const [activeUploadItem, setActiveUploadItem] = useState<PendingUpload | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [scheduledCelebration, setScheduledCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState('');
 
-  // Reference-aware AI image generation states
-  const [studioMode, setStudioMode] = useState<'templates' | 'custom_ai'>('templates');
-  const [templateCategoryTab, setTemplateCategoryTab] = useState<'for_business' | 'promotions' | 'festivals' | 'reviews'>('for_business');
-  const [businessTemplates, setBusinessTemplates] = useState<BusinessTemplateItem[]>([]);
-  const [templatesLoading, setTemplatesLoading] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [ideasLoading, setIdeasLoading] = useState(false);
-  const [ideasError, setIdeasError] = useState<string | null>(null);
-  const [businessContext, setBusinessContext] = useState<BusinessAiContext | null>(null);
-  const [previousPhotos, setPreviousPhotos] = useState<PreviousBusinessPhoto[]>([]);
-  const [aiIdeas, setAiIdeas] = useState<BusinessImageIdea[]>([]);
-  const [selectedRefUrls, setSelectedRefUrls] = useState<string[]>([]);
-  const [uploadingRef, setUploadingRef] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiStylePreset, setAiStylePreset] = useState<AiPhotoStylePreset>('real_photo');
-  const [aiAspectRatio, setAiAspectRatio] = useState<'1:1' | '4:5' | '9:16'>('4:5');
-  const [aiProviderChoice, setAiProviderChoice] = useState<ImageProviderChoice>('gemini');
-  const [generatingAiImage, setGeneratingAiImage] = useState(false);
-  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
-  const [aiSeoFilename, setAiSeoFilename] = useState<string | null>(null);
-  const [aiGeoTagged, setAiGeoTagged] = useState<boolean>(false);
-  const [aiSourceType, setAiSourceType] = useState<ImageGenerationSourceType | null>(null);
-  const [aiFallbackReason, setAiFallbackReason] = useState<string | null>(null);
-  const [aiCandidates, setAiCandidates] = useState<ImageCandidate[]>([]);
-  const [aiApprovedUrl, setAiApprovedUrl] = useState<string | null>(null);
-  const [fullscreenOpen, setFullscreenOpen] = useState(false);
-  const [inspectStaticUrl, setInspectStaticUrl] = useState<string | null>(null);
-  const [inspectStaticTitle, setInspectStaticTitle] = useState<string | null>(null);
-  const [lastAiUsedPrompt, setLastAiUsedPrompt] = useState('');
-  const [seoChecklistExpanded, setSeoChecklistExpanded] = useState(false);
+  const submitBatchJob = useMediaUploadStore((s) => s.submitBatchJob);
 
-  const isPersonalOrGenericName = (candidate?: string | null): boolean => {
-    if (!candidate) return true;
-    const n = candidate.trim().toLowerCase();
-    return (
-      n === 'my business' ||
-      n === 'your business' ||
-      n === 'business' ||
-      n === 'business profile' ||
-      n.includes('workspace')
-    );
-  };
-
+  // ── Business Identity Fallback ──
   const effectiveBusinessName = useMemo(() => {
-    if (businessName && !isPersonalOrGenericName(businessName)) {
-      return businessName.trim();
-    }
-    if (businessContext?.name && !isPersonalOrGenericName(businessContext.name)) {
-      return businessContext.name.trim();
-    }
-    return (businessName || businessContext?.name || 'Business').trim();
-  }, [businessName, businessContext?.name]);
+    return (businessInfo?.name || businessName || 'My Business').trim();
+  }, [businessInfo?.name, businessName]);
 
-  const effectiveSeoFilename = useMemo(() => {
-    if (aiSeoFilename) return aiSeoFilename;
-    if (composerMode !== 'ai_generate' && uploads[0]?.local?.name) {
-      return uploads[0].local.name;
-    }
-    return slugifySeoFilename(
-      title || aiPrompt || effectiveBusinessName || 'business-photo',
-      businessContext?.city || businessContext?.location?.split(',')[0] || null,
-      'jpg',
-    );
-  }, [
-    aiSeoFilename,
-    composerMode,
-    uploads,
-    title,
-    aiPrompt,
-    effectiveBusinessName,
-    businessContext?.city,
-    businessContext?.location,
-  ]);
+  const effectivePhone = useMemo(() => {
+    return businessInfo?.phone?.trim() || '';
+  }, [businessInfo?.phone]);
 
-  const liveSeoReadiness = useMemo(
-    () =>
-      computeMediaSeoReadiness({
-        title,
-        description,
-        tags,
-        category,
-        city: businessContext?.city || businessContext?.location?.split(',')[0]?.trim() || null,
-        searchTerms: usedSearchTerms,
-        seoFilename: effectiveSeoFilename,
-        url: generatedImageUrl || uploads[0]?.cloudUrl || editingItem?.url,
-        geoTagged:
-          composerMode === 'ai_generate'
-            ? aiGeoTagged || Boolean(businessContext?.geoCoordinates)
-            : false,
-      }),
-    [
-      title,
-      description,
-      tags,
-      category,
-      businessContext?.city,
-      businessContext?.location,
-      businessContext?.geoCoordinates,
-      usedSearchTerms,
-      effectiveSeoFilename,
-      generatedImageUrl,
-      uploads,
-      editingItem?.url,
-      composerMode,
-      aiGeoTagged,
-    ],
-  );
+  const effectiveAddress = useMemo(() => {
+    return businessInfo?.address?.trim() || businessInfo?.city?.trim() || '';
+  }, [businessInfo?.address, businessInfo?.city]);
 
-  function openPhotoInspection(url: string, photoTitle?: string) {
-    setInspectStaticTitle(photoTitle || `${effectiveBusinessName} Photo`);
-    setInspectStaticUrl(url);
-  }
+  const effectiveLogoUrl = useMemo(() => {
+    return businessInfo?.logoUrl?.trim() || null;
+  }, [businessInfo?.logoUrl]);
 
-  const sessionKeyRef = useRef(0);
-  const lastInitKeyRef = useRef('');
-  const handedOffBatchRef = useRef<string | null>(null);
-  const isEditMode = Boolean(editingItem && (editingItem.postId || editingItem.id));
+  const effectiveIndustry = useMemo(() => {
+    return businessInfo?.industry?.trim() || 'Local Services';
+  }, [businessInfo?.industry]);
 
-  async function loadAiImageIdeas(topic?: string) {
+  // ── Load Business Details & Templates on Open ──
+  useEffect(() => {
+    if (!visible) return;
+    sessionKeyRef.current += 1;
     const reqKey = sessionKeyRef.current;
-    setIdeasLoading(true);
-    setIdeasError(null);
+    setErrorMsg(null);
+    setIsEditingDescription(false);
+
+    // Initial image selection
+    if (editingItem) {
+      setCurrentPhotoUrl(editingItem.thumbnailUrl || editingItem.url || null);
+      if (editingItem.title) setTitle(editingItem.title);
+      if (editingItem.description) setDescription(editingItem.description);
+      if (Array.isArray(editingItem.tags)) setTags(editingItem.tags);
+    } else if (pendingAssets.length > 0) {
+      const first = pendingAssets[0];
+      setActiveUploadItem(first);
+      setCurrentPhotoUrl(first.uri);
+      void handleUploadPending(first);
+    }
+
+    void loadBusinessMetadata(reqKey);
+    void loadTemplates(templateTab, reqKey);
+  }, [visible, editingItem, pendingAssets]);
+
+  async function handleUploadPending(asset: PendingUpload) {
+    setUploadingMedia(true);
     try {
-      const qs = topic?.trim() ? `?topic=${encodeURIComponent(topic.trim())}` : '';
-      const res = await apiRequest<{
-        business?: BusinessAiContext;
-        previousPhotos?: PreviousBusinessPhoto[];
-        ideas?: BusinessImageIdea[];
-      }>(`/api/social/ai-image-ideas${qs}`);
-      if (reqKey !== sessionKeyRef.current) return;
-      if (res?.business) {
-        setBusinessContext(res.business);
-        if (Array.isArray(res.business.topSearchTerms) && res.business.topSearchTerms.length > 0) {
-          setUsedSearchTerms(res.business.topSearchTerms.map((t) => t.keyword).filter(Boolean));
-        }
-      }
-      if (Array.isArray(res?.previousPhotos)) setPreviousPhotos(res.previousPhotos);
-      if (Array.isArray(res?.ideas)) setAiIdeas(res.ideas);
-    } catch (err: unknown) {
-      if (reqKey !== sessionKeyRef.current) return;
-      setIdeasError(err instanceof Error ? err.message : 'Could not load business photos & AI ideas.');
+      const cloudUrl = await uploadFileToStorage(asset, {
+        folder: 'gbp-media',
+        visibility: 'public',
+      });
+      setCurrentPhotoUrl(cloudUrl);
+    } catch (err) {
+      console.warn('[handleUploadPending] Cloud upload notice:', err);
     } finally {
-      if (reqKey === sessionKeyRef.current) setIdeasLoading(false);
+      setUploadingMedia(false);
     }
   }
 
-  async function loadBusinessTemplates(
-    tab: 'for_business' | 'promotions' | 'festivals' | 'reviews' = templateCategoryTab,
-  ) {
-    const reqKey = sessionKeyRef.current;
+  async function loadBusinessMetadata(reqKey: number) {
+    try {
+      const res = await apiRequest<{
+        businessInfo?: BusinessInfoDetails;
+        targetKeywords?: TargetKeywordItem[];
+        estimatedViews?: number;
+        title?: string;
+        description?: string;
+        tags?: string[];
+      }>('/api/social/ai-media-metadata', {
+        method: 'POST',
+        body: {
+          mediaType: 'photo',
+          intent: 'local_seo',
+        },
+      });
+
+      if (reqKey !== sessionKeyRef.current) return;
+
+      if (res?.businessInfo) {
+        setBusinessInfo(res.businessInfo);
+      }
+      if (Array.isArray(res?.targetKeywords) && res.targetKeywords.length > 0) {
+        setTargetKeywords(res.targetKeywords);
+      } else {
+        // Fallback target keywords based on business
+        setTargetKeywords([
+          { keyword: `${effectiveIndustry.toLowerCase()} company`, monthlyVolume: 500 },
+          { keyword: `${effectiveIndustry.toLowerCase()} in ${businessInfo?.city || 'city'}`, monthlyVolume: 100 },
+        ]);
+      }
+      if (typeof res?.estimatedViews === 'number') {
+        setEstimatedViews(res.estimatedViews);
+      }
+      if (!isEditMode) {
+        if (res?.title) setTitle(res.title);
+        if (res?.description) setDescription(res.description);
+        if (Array.isArray(res?.tags)) setTags(res.tags);
+      }
+    } catch {
+      // Graceful fallback
+      if (reqKey === sessionKeyRef.current && !targetKeywords.length) {
+        setTargetKeywords([
+          { keyword: `${effectiveIndustry.toLowerCase()} company`, monthlyVolume: 500 },
+          { keyword: `trusted ${effectiveIndustry.toLowerCase()}`, monthlyVolume: 100 },
+        ]);
+      }
+    }
+  }
+
+  async function loadTemplates(tab: typeof templateTab, reqKey: number) {
     setTemplatesLoading(true);
     try {
-      const res = await apiRequest<{
-        templates: BusinessTemplateItem[];
-        businessContext?: any;
-      }>(`/api/social/designs/templates?tab=${tab}&limit=16`);
+      const res = await apiRequest<{ templates: BusinessTemplateItem[] }>(
+        `/api/social/designs/templates?tab=${tab}&limit=16`,
+      );
       if (reqKey !== sessionKeyRef.current) return;
       if (Array.isArray(res?.templates)) {
-        setBusinessTemplates(res.templates);
+        setTemplates(res.templates);
+        // If no photo currently selected and in AI create mode, select first template
+        if (!currentPhotoUrl && res.templates.length > 0) {
+          applyTemplate(res.templates[0]);
+        }
       }
     } catch (err) {
-      console.warn('[media-metadata-sheet] Failed loading templates:', err);
+      console.warn('[loadTemplates] Error:', err);
     } finally {
       if (reqKey === sessionKeyRef.current) setTemplatesLoading(false);
     }
   }
 
-  function applyTemplate(item: BusinessTemplateItem) {
-    setSelectedTemplateId(item.id);
-    setGeneratedImageUrl(item.photoUrl);
-    setAiAspectRatio(item.aspectRatio);
-    if (item.bgPrompt) setAiPrompt(item.bgPrompt);
-    setTitle(`${item.headline} | ${effectiveBusinessName}`);
+  function handleTabChange(tab: typeof templateTab) {
+    setTemplateTab(tab);
+    void loadTemplates(tab, sessionKeyRef.current);
+  }
+
+  function applyTemplate(tpl: BusinessTemplateItem) {
+    setSelectedTemplateId(tpl.id);
+    setCurrentPhotoUrl(tpl.photoUrl);
+    setTitle(`${tpl.headline} | ${effectiveBusinessName}`);
     setDescription(
-      `${item.headline} — ${item.subtitle}. Visit ${effectiveBusinessName} or contact us today!`,
-    );
-    setTags(
-      [
-        effectiveBusinessName,
-        item.badge,
-        item.tab === 'festivals' ? 'Festival Celebration' : 'Special Offer',
-      ].filter(Boolean) as string[],
+      `${effectiveBusinessName} is a reputable ${effectiveIndustry.toLowerCase()}${businessInfo?.city ? ` in ${businessInfo.city}` : ''}, offering trusted solutions. ${tpl.headline}: ${tpl.subtitle}. Contact us today to learn more! #${effectiveIndustry.replace(/\s+/g, '').toLowerCase()} #localevents`,
     );
   }
 
-  async function runAiMetadata(
-    filenames: string[],
-    selectedIntent: AiMediaIntent,
-    mediaType: 'photo' | 'video',
-    hint?: string,
-    opts?: { imageUrl?: string; aiPrompt?: string; geoTagged?: boolean },
-  ) {
-    const reqKey = sessionKeyRef.current;
-    setAiLoading(true);
-    try {
-      const res = await apiRequest<AiMetadataResponse>('/api/social/ai-media-metadata', {
-        method: 'POST',
-        body: {
-          filenames,
-          mediaType,
-          intent: selectedIntent,
-          customHint: hint,
-          imageUrl: opts?.imageUrl || (composerMode === 'ai_generate' ? generatedImageUrl : undefined),
-          aiPrompt: opts?.aiPrompt || (composerMode === 'ai_generate' ? aiPrompt.trim() || undefined : undefined),
-          geoTagged: opts?.geoTagged ?? aiGeoTagged,
-        },
-      });
-      if (reqKey !== sessionKeyRef.current) return;
-      if (res?.title) setTitle(res.title);
-      if (res?.description) setDescription(res.description);
-      if (res?.altText) setAiAltText(res.altText);
-      if (Array.isArray(res?.tags) && res.tags.length > 0) setTags(res.tags);
-      if (res?.category) setCategory(res.category);
-      if (Array.isArray(res?.suggestedTitles)) setSuggestedTitles(res.suggestedTitles);
-      if (Array.isArray(res?.suggestedTags)) setSuggestedTags(res.suggestedTags);
-      if (Array.isArray(res?.usedSearchTerms) && res.usedSearchTerms.length > 0) {
-        setUsedSearchTerms(res.usedSearchTerms);
-      }
-      if (res?.seoFilename && !aiSeoFilename) setAiSeoFilename(res.seoFilename);
-    } catch {
-      // Fall back cleanly using business name without blocking user
-      if (reqKey === sessionKeyRef.current && !title) {
-        setTitle(`${businessName} · Recent ${mediaType === 'video' ? 'Video' : 'Showcase'}`);
-        setDescription(
-          `Latest update from ${businessName}. Visit our Google Business Profile or get in touch for reliable local service.`,
-        );
-        setTags([businessName, 'Local Business', 'Customer Showcase']);
-      }
-    } finally {
-      if (reqKey === sessionKeyRef.current) setAiLoading(false);
-    }
-  }
-
-  function startBatchUploads(normalized: PendingUpload[], _reqKey: number) {
-    if (!normalized.length) {
-      setActiveBatchId(null);
-      setAiUploads([]);
-      return;
-    }
-    handedOffBatchRef.current = null;
-    const batchId = startBatch(normalized);
-    setActiveBatchId(batchId);
-
-    const hasVideo = normalized.some((n) => n.mediaType === 'video');
-    void runAiMetadata(
-      normalized.map((n) => n.name),
-      intent,
-      hasVideo ? 'video' : 'photo',
-    );
-  }
-
-  useEffect(() => {
-    if (!visible) {
-      lastInitKeyRef.current = '';
-      return;
-    }
-    const pendingKey = pendingAssets.map((a) => `${a.uri}:${a.name}`).join(',');
-    const openKey = `${editingItem?.postId || editingItem?.id || ''}|${initialMode}|${pendingKey}`;
-    if (lastInitKeyRef.current === openKey) return;
-    lastInitKeyRef.current = openKey;
-
-    sessionKeyRef.current += 1;
-    const reqKey = sessionKeyRef.current;
-    handedOffBatchRef.current = null;
-    setErrorMsg(null);
-    setScheduledCelebration(false);
-    setCelebrationMessage('');
-    setVideoWarning(null);
-    setTagInput('');
-    setIdeasError(null);
-    setAiStep(1);
-    setGeneratedImageUrl(null);
-    setAiSeoFilename(null);
-    setAiGeoTagged(false);
-    setAiSourceType(null);
-    setAiFallbackReason(null);
-    setAiAltText('');
-    setSeoChecklistExpanded(false);
-    setAiCandidates([]);
-    setAiApprovedUrl(null);
-    setFullscreenOpen(false);
-    setInspectStaticUrl(null);
-    setLastAiUsedPrompt('');
-    setAiPrompt('');
-    setAiStylePreset('real_photo');
-    setSelectedRefUrls([]);
-
-    const d = detectDeviceCountryAndTimezone();
-    setSelectedCountry(workspaceLocale?.country ? getCountryByCode(workspaceLocale.country) : d.country);
-    setSelectedTimeZone(workspaceLocale?.timeZone || d.timeZone);
-
-    if (editingItem) {
-      setComposerMode('upload');
-      setActiveBatchId(null);
-      setAiUploads([]);
-      setTitle(editingItem.title || `${businessName} Showcase`);
-      setDescription(editingItem.description || editingItem.caption || '');
-      setTags(Array.isArray(editingItem.tags) ? editingItem.tags : []);
-      const cat = String(editingItem.gbpCategory || editingItem.category || 'ADDITIONAL').toUpperCase();
-      setCategory(
-        GBP_CATEGORIES.some((c) => c.value === cat) ? (cat as GbpCategoryType) : 'ADDITIONAL',
-      );
-      setScheduleMode(editingItem.status === 'draft' ? 'draft' : 'daily');
-      setSuggestedTitles([]);
-      setSuggestedTags([]);
-      return;
-    }
-
-    const nextMode = pendingAssets.length > 0 ? 'upload' : initialMode;
-    setComposerMode(nextMode);
-    const normalized = pendingAssets.map((a, idx) => normalizePendingUpload(a, idx));
-    setScheduleMode(initialScheduleMode);
-    setIntent('local_seo');
-    setTitle('');
-    setDescription('');
-    setTags([]);
-    setSuggestedTitles([]);
-    setSuggestedTags([]);
-
-    if (nextMode === 'ai_generate') {
-      void loadAiImageIdeas();
-      void loadBusinessTemplates(templateCategoryTab);
-    }
-
-    startBatchUploads(normalized, reqKey);
-  }, [visible, editingItem, pendingAssets, initialScheduleMode, initialMode, businessName, workspaceLocale]);
-
-  useEffect(() => {
-    if (visible && !isEditMode && composerMode === 'ai_generate') {
-      if (aiIdeas.length === 0 && !ideasLoading && !ideasError) {
-        void loadAiImageIdeas();
-      }
-      if (businessTemplates.length === 0 && !templatesLoading) {
-        void loadBusinessTemplates(templateCategoryTab);
-      }
-    }
-  }, [visible, isEditMode, composerMode]);
-
-  async function pickUploadMediaInsideSheet() {
-    setErrorMsg(null);
+  async function handlePickLocalPhoto() {
     try {
       if (Platform.OS !== 'web') {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) {
-          Alert.alert('Permission Needed', 'Please allow photo & video access in Settings to upload media.');
+          Alert.alert('Permission Needed', 'Allow photo library access to upload a picture.');
           return;
         }
       }
+
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images', 'videos'],
-        allowsMultipleSelection: true,
-        selectionLimit: 10,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
         quality: 0.85,
-        exif: false,
       });
-      if (res.canceled || !res.assets?.length) return;
-      const mapped = res.assets.map((asset, idx) =>
-        normalizePendingUpload(
-          {
-            uri: asset.uri,
-            name: asset.fileName || `${asset.type === 'video' ? 'video' : 'photo'}-${Date.now()}-${idx}`,
-            mimeType: asset.mimeType || (asset.type === 'video' ? 'video/mp4' : 'image/jpeg'),
-            file: (asset as any).file,
-            fileSize: asset.fileSize,
-            mediaType: asset.type === 'video' ? 'video' : 'image',
-          },
-          idx,
-        ),
-      );
-      startBatchUploads(mapped, sessionKeyRef.current);
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Could not pick media from library.');
-    }
-  }
 
-  function toggleReferencePhoto(url: string) {
-    setErrorMsg(null);
-    setSelectedRefUrls((prev) => {
-      if (prev.includes(url)) {
-        return prev.filter((u) => u !== url);
-      }
-      if (prev.length >= 3) {
-        setErrorMsg('You can select up to 3 reference photos at once.');
-        return prev;
-      }
-      return [...prev, url];
-    });
-  }
-
-  async function pickReferencePhotoFromDevice() {
-    setErrorMsg(null);
-    try {
-      if (Platform.OS !== 'web') {
-        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!perm.granted) {
-          Alert.alert('Permission Needed', 'Allow photo library access to upload a reference photo.');
-          return;
-        }
-      }
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsMultipleSelection: false,
-        quality: 0.85,
-        exif: false,
-      });
-      if (res.canceled || !res.assets?.[0]) return;
-      const asset = res.assets[0];
-      const normalized = normalizePendingUpload({
-        uri: asset.uri,
-        name: asset.fileName || `ref-photo-${Date.now()}.jpg`,
-        mimeType: asset.mimeType || 'image/jpeg',
-        file: (asset as any).file,
-        fileSize: asset.fileSize,
-        mediaType: 'image',
-      });
-      setUploadingRef(true);
-      const cloudUrl = await uploadFileToStorage(normalized, {
-        folder: 'gbp-media',
-        visibility: 'public',
-      });
-      setPreviousPhotos((prev) => [
-        { id: `ref-${Date.now()}`, url: cloudUrl, title: 'Uploaded Ref', source: 'library' },
-        ...prev.filter((p) => p.url !== cloudUrl),
-      ]);
-      setSelectedRefUrls((prev) => (prev.includes(cloudUrl) ? prev : [...prev.slice(0, 2), cloudUrl]));
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Could not upload reference photo.');
-    } finally {
-      setUploadingRef(false);
-    }
-  }
-
-  function applyGeneratedCandidateUrl(
-    url: string,
-    meta?: {
-      seoFilename?: string | null;
-      geoTagged?: boolean;
-      sourceType?: ImageGenerationSourceType | null;
-      fallbackReason?: string | null;
-    },
-  ) {
-    setGeneratedImageUrl(url);
-    if (meta) {
-      if (meta.seoFilename !== undefined) setAiSeoFilename(meta.seoFilename || null);
-      if (meta.geoTagged !== undefined) setAiGeoTagged(Boolean(meta.geoTagged));
-      if (meta.sourceType !== undefined) setAiSourceType(meta.sourceType || null);
-      if (meta.fallbackReason !== undefined) setAiFallbackReason(meta.fallbackReason || null);
-    }
-    const localItem = normalizePendingUpload({
-      uri: url,
-      name: meta?.seoFilename || `ai-business-photo-${Date.now()}.jpg`,
-      mimeType: 'image/jpeg',
-      mediaType: 'image',
-    });
-    setActiveBatchId(null);
-    setAiUploads([
-      {
-        local: localItem,
-        cloudUrl: url,
-        uploading: false,
-        progress: 100,
-      },
-    ]);
-    return localItem;
-  }
-
-  async function handleGenerateAiImage(
-    autoFromBusiness: boolean,
-    opts?: {
-      promptOverride?: string;
-      providerOverride?: ImageProviderChoice;
-    },
-  ) {
-    if (generatingAiImage) return;
-    const reqKey = sessionKeyRef.current;
-    setErrorMsg(null);
-    setGeneratingAiImage(true);
-    try {
-      const requestId = `mob-ai-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      const trimmedPrompt = (opts?.promptOverride ?? aiPrompt).trim();
-      if (opts?.promptOverride !== undefined) {
-        setAiPrompt(trimmedPrompt);
-      }
-      if (opts?.providerOverride) {
-        setAiProviderChoice(opts.providerOverride);
-      }
-      const useAuto = autoFromBusiness || (!trimmedPrompt && selectedRefUrls.length === 0);
-      const effectiveProvider: ImageProviderChoice =
-        opts?.providerOverride || (selectedRefUrls.length > 0 ? 'gemini' : aiProviderChoice);
-      setLastAiUsedPrompt(
-        trimmedPrompt ||
-          `${effectiveBusinessName} commercial showcase`,
-      );
-      const startRes = await apiRequest<{ jobId: string; status: string }>('/api/social/designs/image', {
-        method: 'POST',
-        retryTransient: 2,
-        body: {
-          requestId,
-          prompt: trimmedPrompt || undefined,
-          autoFromBusiness: useAuto,
-          isPoster: false,
-          isGbpPhoto: true,
-          stylePreset: aiStylePreset,
-          referenceImageUrls: selectedRefUrls,
-          aspectRatio: aiAspectRatio,
-          provider: effectiveProvider,
-          businessName: effectiveBusinessName,
-          category: businessContext?.category,
-          products: businessContext?.products,
-          services: businessContext?.services,
-          website: businessContext?.website,
-        },
-      });
-      if (reqKey !== sessionKeyRef.current) return;
-      const jobId = startRes?.jobId || requestId;
-      const pollStart = Date.now();
-      let completedResult: {
-        url: string;
-        sourceType?: ImageGenerationSourceType;
-        model?: string;
-        fallbackReason?: string;
-        seoFilename?: string;
-        geoTagged?: boolean;
-        geoCoordinates?: { latitude: number; longitude: number } | null;
-      } | null = null;
-      let transientPollErrors = 0;
-      while (Date.now() - pollStart < 95000) {
-        if (reqKey !== sessionKeyRef.current) return;
-        let statusRes: {
-          status: string;
-          error?: string;
-          result?: {
-            url?: string;
-            assetId?: string;
-            sourceType?: ImageGenerationSourceType;
-            model?: string;
-            fallbackReason?: string;
-            seoFilename?: string;
-            geoTagged?: boolean;
-            geoCoordinates?: { latitude: number; longitude: number } | null;
-          } | null;
-        };
-        try {
-          statusRes = await apiRequest(`/api/social/designs/image?id=${encodeURIComponent(jobId)}`);
-          transientPollErrors = 0;
-        } catch (pollErr: unknown) {
-          const statusCode =
-            typeof (pollErr as { statusCode?: unknown })?.statusCode === 'number'
-              ? (pollErr as { statusCode: number }).statusCode
-              : 0;
-          if (statusCode === 0 || statusCode === 408 || statusCode === 502 || statusCode === 503 || statusCode === 504) {
-            transientPollErrors += 1;
-            if (transientPollErrors <= 4) {
-              await new Promise((r) => setTimeout(r, 2000));
-              continue;
-            }
-          }
-          throw pollErr;
-        }
-        if (reqKey !== sessionKeyRef.current) return;
-        if (statusRes?.status === 'completed' && statusRes.result?.url) {
-          completedResult = {
-            url: statusRes.result.url,
-            sourceType: statusRes.result.sourceType,
-            model: statusRes.result.model,
-            fallbackReason: statusRes.result.fallbackReason,
-            seoFilename: statusRes.result.seoFilename,
-            geoTagged: statusRes.result.geoTagged,
-            geoCoordinates: statusRes.result.geoCoordinates ?? null,
-          };
-          break;
-        }
-        if (statusRes?.status === 'failed' || statusRes?.status === 'cancelled' || statusRes?.status === 'uncertain') {
-          throw new Error(statusRes.error || 'AI image generation failed.');
-        }
-        await new Promise((r) => setTimeout(r, 2000));
-      }
-      if (!completedResult) {
-        throw new Error('Image generation timed out. Please try again.');
-      }
-
-      const resolvedSourceType: ImageGenerationSourceType =
-        completedResult.sourceType ||
-        (selectedRefUrls.length > 0 ? 'ai_reference' : 'ai_text');
-      const localItem = applyGeneratedCandidateUrl(completedResult.url, {
-        seoFilename: completedResult.seoFilename || null,
-        geoTagged: Boolean(completedResult.geoTagged),
-        sourceType: resolvedSourceType,
-        fallbackReason: completedResult.fallbackReason || null,
-      });
-      setAiCandidates((prev) =>
-        appendImageCandidate(prev, {
-          url: completedResult.url,
-          prompt: trimmedPrompt || undefined,
-          provider: effectiveProvider,
-          aspectRatio: aiAspectRatio,
-          sourceType: resolvedSourceType,
-          model: completedResult.model,
-          fallbackReason: completedResult.fallbackReason,
-          seoFilename: completedResult.seoFilename,
-          geoTagged: completedResult.geoTagged,
-          geoCoordinates: completedResult.geoCoordinates ?? null,
-        }),
-      );
-      setAiApprovedUrl(null);
-      setFullscreenOpen(true);
-      void runAiMetadata(
-        [trimmedPrompt || localItem.name],
-        intent,
-        'photo',
-        trimmedPrompt || `${effectiveBusinessName} commercial showcase`,
-        {
-          imageUrl: completedResult.url,
-          aiPrompt: trimmedPrompt || undefined,
-          geoTagged: Boolean(completedResult.geoTagged),
-        },
-      );
-    } catch (err: unknown) {
-      if (reqKey === sessionKeyRef.current) {
-        setErrorMsg(err instanceof Error ? err.message : 'Could not generate AI image. Please try again.');
-      }
-    } finally {
-      if (reqKey === sessionKeyRef.current) setGeneratingAiImage(false);
-    }
-  }
-
-  async function retrySingleUpload(index: number) {
-    setErrorMsg(null);
-    if (composerMode !== 'ai_generate' && activeBatchId) {
-      retryBatchFile(activeBatchId, index);
-      return;
-    }
-    const target = aiUploads[index];
-    if (!target) return;
-    setAiUploads((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, uploading: true, progress: 0, error: undefined } : row)),
-    );
-    try {
-      const cloudUrl = await uploadFileToStorage(target.local, {
-        folder: 'gbp-media',
-        visibility: 'public',
-        onWarning: (w) => setVideoWarning(w),
-        onProgress: (pct) => {
-          setAiUploads((prev) =>
-            prev.map((row, i) => (i === index ? { ...row, progress: pct } : row)),
-          );
-        },
-      });
-      setAiUploads((prev) =>
-        prev.map((row, i) =>
-          i === index ? { ...row, cloudUrl, uploading: false, progress: 100, error: undefined } : row,
-        ),
-      );
-    } catch (err: unknown) {
-      setAiUploads((prev) =>
-        prev.map((row, i) =>
-          i === index
-            ? { ...row, uploading: false, error: err instanceof Error ? err.message : 'Retry failed' }
-            : row,
-        ),
-      );
-    }
-  }
-
-  function addCustomTag() {
-    const cleaned = tagInput.replace(/^#+/, '').trim();
-    if (!cleaned) return;
-    if (!tags.some((t) => t.toLowerCase() === cleaned.toLowerCase())) {
-      setTags((prev) => [...prev, cleaned].slice(0, 12));
-    }
-    setTagInput('');
-  }
-
-  function toggleSuggestedTag(tag: string) {
-    if (tags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
-      setTags((prev) => prev.filter((t) => t.toLowerCase() !== tag.toLowerCase()));
-    } else {
-      setTags((prev) => [...prev, tag].slice(0, 12));
-    }
-  }
-
-  const stillUploading = uploads.some((u) => u.uploading);
-  const readyUrls = uploads.filter((u) => Boolean(u.cloudUrl));
-  const failedUploads = uploads.filter((u) => Boolean(u.error));
-
-  function buildJobConfig(): MediaJobSaveConfig {
-    return {
-      title: title.trim() || `${businessName} Media`,
-      description: description.trim() || undefined,
-      tags,
-      category,
-      scheduleMode: scheduleMode as BackgroundScheduleMode,
-      preferredTime,
-      country: selectedCountry.code,
-      timeZone: selectedTimeZone,
-      businessName,
-    };
-  }
-
-  function handleRequestClose() {
-    if (inspectStaticUrl) {
-      setInspectStaticUrl(null);
-      return;
-    }
-    if (fullscreenOpen) {
-      setFullscreenOpen(false);
-      return;
-    }
-    if (
-      !isEditMode &&
-      composerMode !== 'ai_generate' &&
-      activeBatchId &&
-      stillUploading &&
-      handedOffBatchRef.current !== activeBatchId
-    ) {
-      handedOffBatchRef.current = activeBatchId;
-      void submitBatchJob(activeBatchId, buildJobConfig()).catch(() => {});
-      void Promise.resolve(
-        onSaved('Upload continues in background — we will notify you once complete.'),
-      );
-    }
-    onClose();
-  }
-
-  async function handleSubmit() {
-    setErrorMsg(null);
-    if (isEditMode && editingItem) {
-      setSubmitting(true);
-      try {
-        const res = await apiRequest<{ success?: boolean; published?: boolean; error?: string }>('/api/social/photos', {
-          method: 'PATCH',
-          body: {
-            postId: editingItem.postId || editingItem.id,
-            title: title.trim() || `${businessName} Media`,
-            description: description.trim(),
-            tags,
-            category,
-            publishNow: scheduleMode === 'instant',
-            status: scheduleMode === 'instant' ? 'published' : scheduleMode === 'draft' ? 'draft' : 'scheduled',
-          },
+      if (!res.canceled && res.assets?.[0]?.uri) {
+        const asset = res.assets[0];
+        const normalized = normalizePendingUpload({
+          uri: asset.uri,
+          name: asset.fileName || `photo-${Date.now()}.jpg`,
+          mimeType: asset.mimeType || 'image/jpeg',
+          fileSize: asset.fileSize,
+          mediaType: 'image',
         });
-        if (!res?.success) throw new Error(res?.error || 'Could not update media details.');
-        await onSaved(
-          scheduleMode === 'instant'
-            ? 'Published media live to Google Business Profile!'
-            : 'Media details updated.',
-        );
-        onClose();
-      } catch (err: unknown) {
-        setErrorMsg(err instanceof Error ? err.message : 'Update failed. Please try again.');
-      } finally {
-        setSubmitting(false);
+        setActiveUploadItem(normalized);
+        setCurrentPhotoUrl(asset.uri);
+        setSelectedTemplateId(null);
+        void handleUploadPending(normalized);
       }
+    } catch {
+      Alert.alert('Notice', 'Could not open photo library.');
+    }
+  }
+
+  async function handleShare() {
+    try {
+      await Share.share({
+        title: title || effectiveBusinessName,
+        message: `${title || effectiveBusinessName}\n\n${description}\n\n${currentPhotoUrl || ''}`,
+        url: currentPhotoUrl || undefined,
+      });
+    } catch (err) {
+      console.warn('[Share] Error:', err);
+    }
+  }
+
+  function handleDownload() {
+    if (!currentPhotoUrl) {
+      Alert.alert('Notice', 'No image available to download.');
       return;
     }
-
-    if (composerMode !== 'ai_generate') {
-      if (!activeBatchId || !uploads.length) {
-        setErrorMsg('Select at least one photo or video to upload first.');
-        return;
-      }
-      if (!stillUploading && !readyUrls.length) {
-        setErrorMsg(
-          failedUploads[0]?.error ||
-            'Select at least one photo or video to upload, or tap Retry on failed files.',
-        );
-        return;
-      }
-
-      if (stillUploading) {
-        handedOffBatchRef.current = activeBatchId;
-        void submitBatchJob(activeBatchId, buildJobConfig()).catch(() => {});
-        await onSaved('Uploading in background — we will notify you once complete.');
-        onClose();
-        return;
-      }
-
-      setSubmitting(true);
-      handedOffBatchRef.current = activeBatchId;
-      try {
-        const finished = await submitBatchJob(activeBatchId, buildJobConfig());
-        if (scheduleMode === 'daily' || scheduleMode === 'weekly') {
-          setCelebrationMessage(finished.message || 'Media saved & scheduled successfully.');
-          setScheduledCelebration(true);
-        } else {
-          await onSaved(finished.message || 'Media saved & scheduled successfully.');
-          onClose();
-        }
-      } catch (err: unknown) {
-        setErrorMsg(err instanceof Error ? err.message : 'Could not save media. Please try again.');
-      } finally {
-        setSubmitting(false);
-      }
-      return;
+    if (Platform.OS === 'web') {
+      const link = document.createElement('a');
+      link.href = currentPhotoUrl;
+      link.download = `${slugifySeoFilename(effectiveBusinessName, businessInfo?.city || null, 'jpg')}`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      Alert.alert('Download Started', 'Image downloading to your device.');
+    } else {
+      void Linking.openURL(currentPhotoUrl).catch(() => {
+        Alert.alert('Download', 'Opening image in your browser to save.');
+      });
     }
+  }
 
-    if (stillUploading) {
-      setErrorMsg('Please wait for your selected media upload(s) to finish.');
-      return;
-    }
-    if (!readyUrls.length) {
-      setErrorMsg(
-        failedUploads[0]?.error || 'Tap Auto-Create or Generate Image first before saving.',
-      );
-      return;
-    }
-
+  async function handlePublishOrSchedule() {
+    setErrorMsg(null);
     setSubmitting(true);
     try {
-      const resolvedAlt = aiAltText.trim() || title.trim() || undefined;
-      const items = readyUrls.map((u, idx) => ({
-        url: u.cloudUrl as string,
-        thumbnailUrl: u.thumbnailUrl,
-        title:
-          readyUrls.length > 1 && title.trim()
-            ? `${title.trim()} (${idx + 1})`
-            : title.trim() || `${businessName} Media`,
-        description: description.trim() || undefined,
-        tags,
-        category,
-        mediaFormat: u.local.mediaType === 'video' ? ('VIDEO' as const) : ('PHOTO' as const),
-        seoFilename: effectiveSeoFilename,
-        geoTagged: aiGeoTagged,
-        altText: resolvedAlt,
-        seoScore: liveSeoReadiness.score,
-      }));
-
       const res = await apiRequest<{ success?: boolean; message?: string }>('/api/social/photos', {
-        method: 'POST',
+        method: isEditMode ? 'PATCH' : 'POST',
         body: {
-          items,
-          photos: items.map((i) => i.url),
-          title: title.trim(),
-          description: description.trim() || undefined,
+          postId: editingItem?.postId || editingItem?.id,
+          title: title.trim() || `${effectiveBusinessName} Post`,
+          description: description.trim(),
           tags,
           category,
-          seoFilename: effectiveSeoFilename,
-          geoTagged: aiGeoTagged,
-          altText: resolvedAlt,
-          seoScore: liveSeoReadiness.score,
+          mediaUrls: currentPhotoUrl ? [currentPhotoUrl] : [],
           scheduleMode,
           preferredTime,
           country: selectedCountry.code,
           timeZone: selectedTimeZone,
         },
       });
+
       if (scheduleMode === 'daily' || scheduleMode === 'weekly') {
-        setCelebrationMessage(res?.message || 'Media saved & scheduled successfully.');
+        setCelebrationMessage(res?.message || 'Post scheduled successfully for best Google visibility!');
         setScheduledCelebration(true);
       } else {
-        await onSaved(res?.message || 'Media saved & scheduled successfully.');
+        await onSaved(res?.message || 'Published to Google Business Profile successfully.');
         onClose();
       }
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Could not save media. Please try again.');
+      setErrorMsg(err instanceof Error ? err.message : 'Could not publish post. Please try again.');
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleDelete() {
-    if (!editingItem) return;
-    Alert.alert('Remove from queue?', 'This removes the scheduled/draft item from your queue.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          setSubmitting(true);
-          try {
-            await apiRequest(
-              `/api/social/photos?id=${encodeURIComponent(editingItem.postId || editingItem.id)}`,
-              { method: 'DELETE' },
-            );
-            await onSaved('Removed media item from queue.');
-            onClose();
-          } catch (err: unknown) {
-            setErrorMsg(err instanceof Error ? err.message : 'Could not delete item.');
-          } finally {
-            setSubmitting(false);
-          }
-        },
-      },
-    ]);
-  }
-
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleRequestClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.root}
@@ -1157,1456 +427,391 @@ export function MediaMetadataSheet({
         {scheduledCelebration ? (
           <View style={styles.celebrationWrapper}>
             <View style={styles.celebrationHeader}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                onPress={() => {
-                  setScheduledCelebration(false);
-                  void onSaved(celebrationMessage || 'Media saved & scheduled successfully.');
-                  onClose();
-                }}
-                style={styles.closeBtn}
-                hitSlop={8}
-              >
-                <MaterialIcons name="close" size={22} color={colors.ink} />
+              <Pressable onPress={onClose} style={styles.iconCircleBtn}>
+                <MaterialIcons name="close" size={22} color="#0F172A" />
               </Pressable>
             </View>
-
             <View style={styles.celebrationBody}>
               <View style={styles.celebrationCheckCircle}>
                 <MaterialIcons name="check" size={38} color="#FFFFFF" />
               </View>
-              <Text style={styles.celebrationTitle}>Scheduled!</Text>
+              <Text style={styles.celebrationTitle}>Scheduled to Publish!</Text>
               <Text style={styles.celebrationSubtitle}>
-                Your photos set to auto-publish. The GBP agent selected best dates to enhance visibility on Google
+                Your branded post has been added to the calendar with high-converting local keywords.
               </Text>
             </View>
-
             <View style={styles.celebrationFooter}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Go to Photos"
-                onPress={() => {
-                  setScheduledCelebration(false);
-                  void onSaved(celebrationMessage || 'Media saved & scheduled successfully.');
-                  onClose();
-                }}
-                style={styles.celebrationCta}
-              >
-                <Text style={styles.celebrationCtaText}>Go to Photos</Text>
+              <Pressable onPress={onClose} style={styles.celebrationCta}>
+                <Text style={styles.celebrationCtaText}>Go to Media &amp; Posts</Text>
               </Pressable>
             </View>
           </View>
         ) : (
-          <>
-            {/* Top Bar */}
-        <View style={styles.header}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close media composer"
-            onPress={handleRequestClose}
-            style={styles.closeBtn}
-            hitSlop={8}
-          >
-            <MaterialIcons name="close" size={20} color={colors.ink} />
-          </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>
-              {isEditMode ? 'Edit Post Details' : 'Review & Publish Post'}
-            </Text>
-            <Text style={styles.headerSub} numberOfLines={1}>
-              {businessName && !businessName.toLowerCase().includes('fieseros')
-                ? `${businessName} • Google Business Profile`
-                : 'Google Business Profile Post'}
-            </Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Regenerate with AI"
-            onPress={() =>
-              void runAiMetadata(
-                isEditMode
-                  ? [title || businessName]
-                  : uploads.map((u) => u.local.name),
-                intent,
-                isVideoPhotoItem(editingItem) ||
-                  uploads.some((u) => u.local.mediaType === 'video')
-                  ? 'video'
-                  : 'photo',
-                title || undefined,
-              )
-            }
-            disabled={aiLoading}
-            style={[styles.aiRegenBtn, aiLoading && { opacity: 0.6 }]}
-          >
-            <MaterialIcons name="auto-awesome" size={14} color="#7C3AED" />
-            <Text style={styles.aiRegenText}>{aiLoading ? 'Writing…' : 'AI Rewrite'}</Text>
-          </Pressable>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          {errorMsg ? (
-            <View style={styles.errorCard}>
-              <MaterialIcons name="error-outline" size={16} color={colors.danger} />
-              <Text style={styles.errorText}>{errorMsg}</Text>
-            </View>
-          ) : null}
-
-          {!isEditMode ? (
-            <View style={styles.modeToggleBar}>
+          <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+            {/* ── TOP NAV BAR ── */}
+            <View style={styles.navBar}>
               <Pressable
-                accessibilityRole="tab"
-                accessibilityState={{ selected: composerMode === 'upload' }}
-                onPress={() => setComposerMode('upload')}
-                style={[styles.modeToggleBtn, composerMode === 'upload' && styles.modeToggleBtnActive]}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                onPress={onClose}
+                style={styles.navBackBtn}
+                hitSlop={12}
               >
-                <MaterialIcons
-                  name="cloud-upload"
-                  size={15}
-                  color={composerMode === 'upload' ? '#FFFFFF' : colors.muted}
-                />
-                <Text
-                  style={[
-                    styles.modeToggleText,
-                    composerMode === 'upload' && styles.modeToggleTextActive,
-                  ]}
-                >
-                  Upload Media
-                </Text>
+                <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
               </Pressable>
 
-              <Pressable
-                accessibilityRole="tab"
-                accessibilityState={{ selected: composerMode === 'ai_generate' }}
-                onPress={() => setComposerMode('ai_generate')}
-                style={[styles.modeToggleBtn, composerMode === 'ai_generate' && styles.modeToggleBtnAiActive]}
-              >
-                <MaterialIcons
-                  name="auto-awesome"
-                  size={15}
-                  color={composerMode === 'ai_generate' ? '#FFFFFF' : '#7C3AED'}
-                />
-                <Text
-                  style={[
-                    styles.modeToggleText,
-                    composerMode === 'ai_generate' && styles.modeToggleTextActive,
-                  ]}
-                >
-                  Create with AI
+              <View style={styles.datePill}>
+                <Text style={styles.datePillText}>
+                  {isEditMode ? 'Editing Post' : 'Ready to Post'}
                 </Text>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                onPress={onClose}
+                style={styles.navCloseBtn}
+                hitSlop={12}
+              >
+                <MaterialIcons name="close" size={22} color="#64748B" />
               </Pressable>
             </View>
-          ) : null}
 
-          {/* Media Thumbnails & Cloud Upload Progress / Reference-Aware AI Generator */}
-          {isEditMode && editingItem ? (
-            <View style={styles.editPreviewCard}>
-              {isVideoPhotoItem(editingItem) ? (
-                editingItem.thumbnailUrl ? (
-                  <View style={[styles.editPreviewImg, { overflow: 'hidden', position: 'relative' }]}>
-                    <Image
-                      source={{ uri: editingItem.thumbnailUrl }}
-                      style={{ width: '100%', height: '100%' }}
-                      resizeMode="cover"
-                      alt={editingItem.title || 'Selected video preview'}
-                    />
-                    <View style={styles.videoPill}>
-                      <MaterialIcons name="play-arrow" size={12} color="#FFFFFF" />
-                    </View>
-                  </View>
-                ) : Platform.OS === 'web' && editingItem.url ? (
-                  <View style={[styles.editPreviewImg, { overflow: 'hidden', position: 'relative', backgroundColor: '#0F172A' }]}>
-                    {React.createElement('video', {
-                      src: editingItem.url,
-                      muted: true,
-                      playsInline: true,
-                      preload: 'metadata',
-                      style: { width: '100%', height: '100%', objectFit: 'cover' },
-                    })}
-                    <View style={styles.videoPill}>
-                      <MaterialIcons name="play-arrow" size={12} color="#FFFFFF" />
-                    </View>
-                  </View>
-                ) : (
-                  <View style={[styles.editPreviewImg, styles.videoTileDark]}>
-                    <MaterialIcons name="videocam" size={24} color="#34D399" />
-                    <Text style={styles.videoTileLabel}>VIDEO</Text>
-                  </View>
-                )
-              ) : (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Inspect media full screen"
-                  onPress={() => {
-                    const uri = editingItem.thumbnailUrl || editingItem.url;
-                    if (uri) setInspectStaticUrl(uri);
-                  }}
-                >
-                  <Image
-                    source={{ uri: editingItem.thumbnailUrl || editingItem.url }}
-                    style={styles.editPreviewImg}
-                    resizeMode="cover"
-                    alt={editingItem.title || 'Selected media preview'}
-                  />
-                </Pressable>
-              )}
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={styles.previewBadgeText}>
-                  {editingItem.status === 'draft' ? 'Not Posted (Draft)' : 'Scheduled to Publish'}
-                </Text>
-                <Text style={styles.previewHint}>
-                  Update title, SEO description, tags, or category anytime before publishing.
-                </Text>
-              </View>
-            </View>
-          ) : composerMode === 'ai_generate' ? (
-            <View style={styles.aiStudioBox}>
-              {/* 2-Step Wizard Segmented Bar */}
-              <View style={styles.wizardStepBar}>
-                <Pressable
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: aiStep === 1 }}
-                  onPress={() => setAiStep(1)}
-                  style={[styles.wizardStepBtn, aiStep === 1 && styles.wizardStepBtnActive]}
-                >
-                  <View style={[styles.wizardStepNum, aiStep === 1 && styles.wizardStepNumActive]}>
-                    <Text style={[styles.wizardStepNumText, aiStep === 1 && { color: '#FFFFFF' }]}>1</Text>
-                  </View>
-                  <Text style={[styles.wizardStepLabel, aiStep === 1 && styles.wizardStepLabelActive]}>
-                    Create Visual
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: aiStep === 2 }}
-                  onPress={() => setAiStep(2)}
-                  style={[styles.wizardStepBtn, aiStep === 2 && styles.wizardStepBtnActive]}
-                >
-                  <View style={[styles.wizardStepNum, aiStep === 2 && styles.wizardStepNumActive]}>
-                    <Text style={[styles.wizardStepNumText, aiStep === 2 && { color: '#FFFFFF' }]}>2</Text>
-                  </View>
-                  <Text style={[styles.wizardStepLabel, aiStep === 2 && styles.wizardStepLabelActive]}>
-                    SEO &amp; Schedule {generatedImageUrl ? `(${liveSeoReadiness.score}%)` : ''}
-                  </Text>
-                </Pressable>
-              </View>
-
-              {aiStep === 1 ? (
-                <View style={{ gap: 12 }}>
-                  <View style={styles.aiStudioHeaderRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.aiStudioTitle}>Marketing Studio for {effectiveBusinessName}</Text>
-                      <Text style={styles.aiStudioSub}>
-                        Choose a business-ready marketing template below, or create a custom visual tailored to your storefront &amp; services.
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Studio Mode Selector (Ready Templates vs Custom AI Visual) */}
-                  <View style={styles.templateModeBar}>
-                    <Pressable
-                      accessibilityRole="tab"
-                      accessibilityState={{ selected: studioMode === 'templates' }}
-                      onPress={() => setStudioMode('templates')}
-                      style={[styles.templateModeBtn, studioMode === 'templates' && styles.templateModeBtnActive]}
-                    >
-                      <MaterialIcons
-                        name="dashboard"
-                        size={15}
-                        color={studioMode === 'templates' ? '#6D28D9' : '#64748B'}
-                      />
-                      <Text
-                        style={[
-                          styles.templateModeText,
-                          studioMode === 'templates' && styles.templateModeTextActive,
-                        ]}
-                      >
-                        Ready Templates
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="tab"
-                      accessibilityState={{ selected: studioMode === 'custom_ai' }}
-                      onPress={() => setStudioMode('custom_ai')}
-                      style={[styles.templateModeBtn, studioMode === 'custom_ai' && styles.templateModeBtnActive]}
-                    >
-                      <MaterialIcons
-                        name="auto-awesome"
-                        size={15}
-                        color={studioMode === 'custom_ai' ? '#6D28D9' : '#64748B'}
-                      />
-                      <Text
-                        style={[
-                          styles.templateModeText,
-                          studioMode === 'custom_ai' && styles.templateModeTextActive,
-                        ]}
-                      >
-                        Custom AI Visual
-                      </Text>
-                    </Pressable>
-                  </View>
-
-                  {studioMode === 'templates' ? (
-                    <View style={{ gap: 10 }}>
-                      {/* Template Category Pills */}
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: 6, paddingVertical: 2 }}
-                      >
-                        {[
-                          { id: 'for_business', label: '🌟 For Your Shop' },
-                          { id: 'promotions', label: '🏷️ Promotions' },
-                          { id: 'festivals', label: '🪔 Festivals' },
-                          { id: 'reviews', label: '⭐ Customer Reviews' },
-                        ].map((tabItem) => {
-                          const active = templateCategoryTab === tabItem.id;
-                          return (
-                            <Pressable
-                              key={tabItem.id}
-                              onPress={() => {
-                                const nextTab = tabItem.id as any;
-                                setTemplateCategoryTab(nextTab);
-                                void loadBusinessTemplates(nextTab);
-                              }}
-                              style={[styles.chip, active && styles.chipPurpleActive]}
-                            >
-                              <Text style={[styles.chipText, active && styles.chipPurpleText]}>
-                                {tabItem.label}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-
-                      {templatesLoading && businessTemplates.length === 0 ? (
-                        <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                          <ActivityIndicator size="small" color="#7C3AED" />
-                          <Text style={{ fontSize: 12, color: colors.muted }}>
-                            Loading tailored templates for {effectiveBusinessName}…
-                          </Text>
-                        </View>
-                      ) : businessTemplates.length > 0 ? (
-                        <ScrollView
-                          horizontal
-                          showsHorizontalScrollIndicator={false}
-                          contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
-                        >
-                          {businessTemplates.map((template) => {
-                            const isSelected =
-                              selectedTemplateId === template.id || generatedImageUrl === template.photoUrl;
-                            return (
-                              <Pressable
-                                key={template.id}
-                                onPress={() => applyTemplate(template)}
-                                style={[styles.templateCard, isSelected && styles.templateCardActive]}
-                              >
-                                <Image
-                                  source={{ uri: template.photoUrl }}
-                                  style={styles.templateCardImg}
-                                  resizeMode="cover"
-                                />
-                                <View style={styles.templateBadgePill}>
-                                  <Text style={styles.templateBadgeText}>{template.badge || template.tab}</Text>
-                                </View>
-                                {isSelected ? (
-                                  <View style={styles.templateSelectedCheck}>
-                                    <MaterialIcons name="check" size={12} color="#FFFFFF" />
-                                  </View>
-                                ) : null}
-                                <View style={styles.templateCardBody}>
-                                  <Text style={styles.templateCardHeadline} numberOfLines={1}>
-                                    {template.headline}
-                                  </Text>
-                                  <Text style={styles.templateCardBrand} numberOfLines={1}>
-                                    {effectiveBusinessName}
-                                  </Text>
-                                  <Text style={styles.templateCardCta} numberOfLines={1}>
-                                    {template.cta} →
-                                  </Text>
-                                </View>
-                              </Pressable>
-                            );
-                          })}
-                        </ScrollView>
-                      ) : (
-                        <View style={{ paddingVertical: 16, alignItems: 'center' }}>
-                          <Text style={{ fontSize: 12, color: colors.muted }}>
-                            No templates found for this tab.
-                          </Text>
-                        </View>
-                      )}
-
-                      {/* Selected Template Action Toolbar */}
-                      {generatedImageUrl ? (
-                        <View style={styles.templateActionBanner}>
-                          <View style={{ flex: 1, gap: 2 }}>
-                            <Text style={styles.templateActionTitle} numberOfLines={1}>
-                              {title || effectiveBusinessName}
-                            </Text>
-                            <Text style={styles.templateActionSub} numberOfLines={1}>
-                              Ratio: {aiAspectRatio} · Tap below to regenerate visual with AI or continue.
-                            </Text>
-                          </View>
-                          <Pressable
-                            accessibilityRole="button"
-                            onPress={() => void handleGenerateAiImage(true)}
-                            disabled={generatingAiImage}
-                            style={styles.templateAiBtn}
-                          >
-                            {generatingAiImage ? (
-                              <ActivityIndicator size="small" color="#FFFFFF" />
-                            ) : (
-                              <MaterialIcons name="auto-awesome" size={14} color="#FFFFFF" />
-                            )}
-                            <Text style={styles.templateAiBtnText}>
-                              {generatingAiImage ? 'Generating…' : 'Make It AI'}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      ) : null}
-                    </View>
-                  ) : (
-                    <>
-                      {ideasError ? (
-                        <View style={styles.uploadFailBanner}>
-                          <MaterialIcons name="info-outline" size={14} color={colors.danger} />
-                          <Text style={styles.uploadFailText}>{ideasError}</Text>
-                          <Pressable onPress={() => void loadAiImageIdeas()} style={styles.retryMiniBtn}>
-                            <Text style={styles.retryMiniText}>Retry</Text>
-                          </Pressable>
-                        </View>
-                      ) : null}
-
-                      {/* Reference Photos Selector */}
-                  <View style={{ gap: 8 }}>
-                    <View style={styles.labelRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={styles.aiSubLabel}>
-                          Business Reference Photos ({selectedRefUrls.length}/3)
-                        </Text>
-                        {selectedRefUrls.length > 0 ? (
-                          <View style={styles.activeRefPill}>
-                            <Text style={styles.activeRefPillText}>{selectedRefUrls.length} Active</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <Pressable
-                        onPress={() => void pickReferencePhotoFromDevice()}
-                        disabled={uploadingRef || generatingAiImage}
-                        style={styles.uploadRefBtn}
-                      >
-                        {uploadingRef ? (
-                          <ActivityIndicator size="small" color={colors.brandDark} />
-                        ) : (
-                          <MaterialIcons name="add-a-photo" size={13} color={colors.brandDark} />
-                        )}
-                        <Text style={styles.uploadRefText}>
-                          {uploadingRef ? 'Uploading…' : 'Upload Ref'}
-                        </Text>
-                      </Pressable>
-                    </View>
-
-                    {ideasLoading && previousPhotos.length === 0 ? (
-                      <View style={{ paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <ActivityIndicator size="small" color="#7C3AED" />
-                        <Text style={{ fontSize: 11.5, color: colors.muted }}>Loading your previous business photos…</Text>
-                      </View>
-                    ) : previousPhotos.length > 0 ? (
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 2 }}>
-                        {previousPhotos.map((photo) => {
-                          const selected = selectedRefUrls.includes(photo.url);
-                          const isGbp = photo.source === 'google';
-                          return (
-                            <View key={photo.id} style={{ position: 'relative' }}>
-                              <Pressable
-                                onPress={() => toggleReferencePhoto(photo.url)}
-                                onLongPress={() => openPhotoInspection(photo.url, photo.title)}
-                                style={[styles.refPhotoCard, selected && styles.refPhotoCardActive]}
-                              >
-                                <Image
-                                  source={{ uri: photo.url }}
-                                  style={styles.refPhotoImg}
-                                  resizeMode="cover"
-                                  alt={photo.title || 'Previous business photo'}
-                                />
-                                {isGbp ? (
-                                  <View style={styles.refGbpBadge}>
-                                    <Text style={styles.refGbpBadgeText}>GBP</Text>
-                                  </View>
-                                ) : null}
-                                {selected ? (
-                                  <View style={styles.refPhotoCheck}>
-                                    <MaterialIcons name="check" size={12} color="#FFFFFF" />
-                                  </View>
-                                ) : null}
-                              </Pressable>
-                              <Pressable
-                                onPress={() => openPhotoInspection(photo.url, photo.title)}
-                                hitSlop={6}
-                                style={styles.refPhotoInspectBtn}
-                              >
-                                <MaterialIcons name="zoom-in" size={14} color="#FFFFFF" />
-                              </Pressable>
-                            </View>
-                          );
-                        })}
-                      </ScrollView>
-                    ) : (
-                      <Text style={{ fontSize: 11.5, color: colors.muted }}>
-                        No previous photos saved yet — tap &quot;Upload Ref&quot; to use a real photo of your space, or Auto-Generate below.
-                      </Text>
-                    )}
-
-                    {/* Active Reference Photos Preview Strip */}
-                    {selectedRefUrls.length > 0 ? (
-                      <View style={styles.selectedRefsCard}>
-                        <View style={styles.selectedRefsHeader}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                            <MaterialIcons name="auto-fix-high" size={13} color="#7C3AED" />
-                            <Text style={styles.selectedRefsTitle}>
-                              Reference-Aware Mode ({selectedRefUrls.length}/3)
-                            </Text>
-                          </View>
-                          <Pressable onPress={() => setSelectedRefUrls([])}>
-                            <Text style={styles.clearRefsText}>Clear All</Text>
-                          </Pressable>
-                        </View>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
-                          {selectedRefUrls.map((url, idx) => {
-                            const photoMatch = previousPhotos.find((p) => p.url === url);
-                            return (
-                              <View key={url} style={styles.selectedRefChipCard}>
-                                <Pressable onPress={() => openPhotoInspection(url, photoMatch?.title)}>
-                                  <Image source={{ uri: url }} style={styles.selectedRefChipImg} resizeMode="cover" />
-                                </Pressable>
-                                <View style={{ flex: 1, paddingHorizontal: 4, justifyContent: 'center' }}>
-                                  <Text style={styles.selectedRefChipTitle} numberOfLines={1}>
-                                    {photoMatch?.title || `Reference #${idx + 1}`}
-                                  </Text>
-                                  <Pressable onPress={() => openPhotoInspection(url, photoMatch?.title)} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                                    <MaterialIcons name="zoom-in" size={11} color="#7C3AED" />
-                                    <Text style={styles.selectedRefPreviewLink}>Preview</Text>
-                                  </Pressable>
-                                </View>
-                                <Pressable
-                                  onPress={() => toggleReferencePhoto(url)}
-                                  style={styles.removeRefBtn}
-                                  hitSlop={8}
-                                >
-                                  <MaterialIcons name="close" size={14} color={colors.muted} />
-                                </Pressable>
-                              </View>
-                            );
-                          })}
-                        </ScrollView>
-                        <Text style={styles.selectedRefsHint}>
-                          AI preserves your property architecture, branding, and real products.
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  {/* Smart Search-Term Business Idea Prompts */}
-                  {aiIdeas.length > 0 ? (
-                    <View style={{ gap: 6 }}>
-                      <Text style={styles.aiSubLabel}>Quick SEO Scene Ideas</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                        {aiIdeas.map((idea) => (
-                          <Pressable
-                            key={idea.id}
-                            onPress={() => {
-                              setAiPrompt(idea.prompt);
-                              if (
-                                idea.gbpCategory &&
-                                GBP_CATEGORIES.some((c) => c.value === idea.gbpCategory)
-                              ) {
-                                setCategory(idea.gbpCategory as GbpCategoryType);
-                              }
-                            }}
-                            style={styles.ideaChip}
-                          >
-                            <Text style={styles.ideaChipText}>{idea.title}</Text>
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  ) : null}
-
-                  {/* Style Preset Chips */}
-                  <View style={{ gap: 6 }}>
-                    <Text style={styles.aiSubLabel}>Photo Style Preset</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {MOBILE_STYLE_PRESETS.map((preset) => {
-                        const active = aiStylePreset === preset.id;
-                        return (
-                          <Pressable
-                            key={preset.id}
-                            onPress={() => setAiStylePreset(preset.id)}
-                            style={[styles.chip, active && styles.chipPurpleActive]}
-                          >
-                            <Text style={[styles.chipText, active && styles.chipPurpleText]}>
-                              {preset.label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-
-                  {/* Custom Prompt + Aspect Ratio + Engine */}
-                  <View style={{ gap: 8 }}>
-                    <Text style={styles.aiSubLabel}>Scene Prompt (optional — blank auto-builds from GBP)</Text>
-                    <TextInput
-                      value={aiPrompt}
-                      onChangeText={setAiPrompt}
-                      placeholder={`e.g. Modern commercial showcase at ${effectiveBusinessName}, highlight our authentic space and quality`}
-                      placeholderTextColor={colors.muted}
-                      multiline
-                      style={[styles.input, { minHeight: 68, textAlignVertical: 'top' }]}
-                    />
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                      {(['1:1', '4:5', '9:16'] as const).map((ratio) => {
-                        const active = aiAspectRatio === ratio;
-                        return (
-                          <Pressable
-                            key={ratio}
-                            onPress={() => setAiAspectRatio(ratio)}
-                            style={[styles.chip, active && styles.chipPurpleActive]}
-                          >
-                            <Text style={[styles.chipText, active && styles.chipPurpleText]}>
-                              {ratio === '1:1' ? 'Square 1:1' : ratio === '4:5' ? 'Portrait 4:5' : 'Story 9:16'}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  {/* Unified Smart Generation CTA */}
-                  <Pressable
-                    disabled={generatingAiImage || uploadingRef}
-                    onPress={() => void handleGenerateAiImage(!aiPrompt.trim())}
-                    style={[styles.aiGenBtn, (generatingAiImage || uploadingRef) && { opacity: 0.6 }]}
-                  >
-                    {generatingAiImage ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <MaterialIcons name="auto-fix-high" size={16} color="#FFFFFF" />
-                    )}
-                    <Text style={styles.aiGenBtnText}>
-                      {generatingAiImage
-                        ? 'Creating Photo…'
-                        : generatedImageUrl
-                          ? 'Regenerate Image'
-                          : aiPrompt.trim()
-                            ? 'Generate Image'
-                            : 'Auto-Generate Business Photo'}
-                    </Text>
-                  </Pressable>
-                </>
-              )}
-
-                  {generatedImageUrl ? (
-                    <View style={styles.generatedPreviewCard}>
-                      <View style={styles.sourceExifRow}>
-                        <View
-                          style={[
-                            styles.sourcePill,
-                            aiSourceType === 'ai_reference'
-                              ? styles.sourcePillRef
-                              : aiSourceType === 'stock_fallback'
-                                ? styles.sourcePillFallback
-                                : styles.sourcePillAi,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.sourcePillText,
-                              aiSourceType === 'ai_reference'
-                                ? { color: '#047857' }
-                                : aiSourceType === 'stock_fallback'
-                                  ? { color: '#B45309' }
-                                  : { color: '#6D28D9' },
-                            ]}
-                          >
-                            {aiSourceType === 'ai_reference'
-                              ? '✨ AI + Your Photo'
-                              : aiSourceType === 'stock_fallback'
-                                ? '📷 Stock Fallback'
-                                : '✨ AI Generated'}
-                          </Text>
-                        </View>
-                        <View style={styles.exifPill}>
-                          <MaterialIcons
-                            name={aiGeoTagged ? 'location-on' : 'photo-camera'}
-                            size={11}
-                            color={aiGeoTagged ? '#047857' : colors.muted}
-                          />
-                          <Text style={[styles.exifPillText, aiGeoTagged && { color: '#047857' }]}>
-                            {aiGeoTagged ? 'GPS EXIF Tagged' : 'Standard EXIF'}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {aiFallbackReason ? (
-                        <Text style={styles.fallbackReasonNote}>{aiFallbackReason}</Text>
-                      ) : null}
-
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Inspect generated image in full screen"
-                        onPress={() => setFullscreenOpen(true)}
-                        style={styles.generatedHeroWrap}
-                      >
-                        <Image
-                          source={{ uri: generatedImageUrl }}
-                          style={[
-                            styles.generatedPreviewImg,
-                            { aspectRatio: getAspectRatioNumeric(aiAspectRatio) },
-                          ]}
-                          resizeMode="contain"
-                          alt="Generated AI business image"
-                        />
-                        <View style={styles.fullscreenPillBadge}>
-                          <MaterialIcons name="fullscreen" size={14} color="#FFFFFF" />
-                          <Text style={styles.fullscreenPillText}>Full Screen</Text>
-                        </View>
-                      </Pressable>
-
-                      <Text style={styles.seoSlugPreview} numberOfLines={1}>
-                        📄 {effectiveSeoFilename}
-                      </Text>
-
-                      <View style={styles.generatedMetaRow}>
-                        <View style={{ flex: 1, gap: 2 }}>
-                          <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.brandDark }}>
-                            {aiApprovedUrl === generatedImageUrl
-                              ? '✓ Approved — Ready to Schedule or Publish'
-                              : 'Generated · Tap image to judge quality'}
-                          </Text>
-                          <Text style={{ fontSize: 11, color: colors.muted }}>
-                            {aiCandidates.length > 1
-                              ? `${aiCandidates.length} variations generated this session — tap Full Screen to compare.`
-                              : 'Open full screen to zoom & verify quality, then continue to SEO.'}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.generatedActionRow}>
-                        <Pressable
-                          accessibilityRole="button"
-                          onPress={() => setFullscreenOpen(true)}
-                          style={styles.inspectPrimaryBtn}
-                        >
-                          <MaterialIcons name="zoom-in" size={15} color="#FFFFFF" />
-                          <Text style={styles.inspectPrimaryText}>Inspect</Text>
-                        </Pressable>
-                        <Pressable
-                          accessibilityRole="button"
-                          disabled={generatingAiImage}
-                          onPress={() => void handleGenerateAiImage(!aiPrompt.trim())}
-                          style={[styles.regenSecondaryBtn, generatingAiImage && { opacity: 0.6 }]}
-                        >
-                          <MaterialIcons name="refresh" size={14} color="#6D28D9" />
-                          <Text style={styles.regenSecondaryText}>Regenerate</Text>
-                        </Pressable>
-                      </View>
-
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => setAiStep(2)}
-                        style={styles.continueStepBtn}
-                      >
-                        <Text style={styles.continueStepBtnText}>
-                          Continue to SEO &amp; Schedule ({liveSeoReadiness.score}/100)
-                        </Text>
-                        <MaterialIcons name="arrow-forward" size={16} color="#FFFFFF" />
-                      </Pressable>
-                    </View>
-                  ) : null}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollContent}
+            >
+              {errorMsg ? (
+                <View style={styles.errorBanner}>
+                  <MaterialIcons name="error-outline" size={18} color="#DC2626" />
+                  <Text style={styles.errorBannerText}>{errorMsg}</Text>
                 </View>
-              ) : (
-                /* Step 2 Compact Selected Visual Header */
-                <View style={styles.step2VisualSummary}>
-                  {generatedImageUrl ? (
-                    <Pressable onPress={() => setFullscreenOpen(true)}>
-                      <Image
-                        source={{ uri: generatedImageUrl }}
-                        style={styles.step2Thumb}
-                        resizeMode="cover"
-                        alt="Selected AI Photo"
-                      />
-                    </Pressable>
+              ) : null}
+
+              {/* ── CARD 1: TARGET KEYWORDS & MONTHLY SEARCH VOLUME (DHANDA STYLE) ── */}
+              <View style={styles.cardContainer}>
+                <View style={styles.cardHeaderRow}>
+                  <MaterialIcons name="search" size={20} color="#2563EB" />
+                  <Text style={styles.cardTitle}>This post targets the following keywords</Text>
+                </View>
+
+                {/* Keywords Table */}
+                <View style={styles.keywordsTable}>
+                  <View style={styles.tableHeaderRow}>
+                    <Text style={[styles.tableHeaderText, { flex: 2 }]}>Keywords</Text>
+                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'right' }]}>
+                      Search Volume (monthly)
+                    </Text>
+                  </View>
+
+                  {targetKeywords.map((item, idx) => (
+                    <View key={`kw-${idx}`} style={styles.tableDataRow}>
+                      <Text style={[styles.tableKeywordText, { flex: 2 }]}>{item.keyword}</Text>
+                      <Text style={[styles.tableVolumeText, { flex: 1, textAlign: 'right' }]}>
+                        {item.monthlyVolume}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Estimated Views Pill */}
+                <View style={styles.viewsBadgeRow}>
+                  <View style={styles.viewsBadge}>
+                    <MaterialIcons name="visibility" size={16} color="#166534" />
+                    <Text style={styles.viewsBadgeText}>
+                      ~ {estimatedViews} estimated views
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Google Tip Callout */}
+                <View style={styles.googleTipBox}>
+                  <MaterialIcons name="lightbulb" size={18} color="#F59E0B" />
+                  <Text style={styles.googleTipText}>
+                    Google reads post description to match it with customer searches
+                  </Text>
+                  <MaterialIcons name="info-outline" size={16} color="#64748B" />
+                </View>
+              </View>
+
+              {/* ── CARD 2: THE BRANDED POSTER / IMAGE WITH OVERLAY ── */}
+              <View style={styles.posterCard}>
+                <View style={styles.photoCanvas}>
+                  {currentPhotoUrl ? (
+                    <Image
+                      source={{ uri: currentPhotoUrl }}
+                      style={styles.heroPosterImage}
+                      resizeMode="cover"
+                    />
                   ) : (
-                    <View style={[styles.step2Thumb, { alignItems: 'center', justifyContent: 'center' }]}>
-                      <MaterialIcons name="image" size={22} color={colors.muted} />
+                    <View style={styles.emptyPhotoBox}>
+                      <MaterialIcons name="photo" size={48} color="#94A3B8" />
+                      <Text style={styles.emptyPhotoText}>Select a template or upload a photo</Text>
                     </View>
                   )}
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.ink }}>
-                      {generatedImageUrl
-                        ? aiApprovedUrl === generatedImageUrl
-                          ? '✓ Visual Approved'
-                          : 'AI Photo Ready'
-                        : 'No photo generated yet'}
-                    </Text>
-                    <Text style={{ fontSize: 10.5, color: colors.muted }} numberOfLines={1}>
-                      {effectiveSeoFilename} · {aiGeoTagged ? '📍 GPS EXIF' : 'Standard EXIF'}
-                    </Text>
-                  </View>
-                  <Pressable onPress={() => setAiStep(1)} style={styles.changeVisualBtn}>
-                    <Text style={styles.changeVisualBtnText}>
-                      {generatedImageUrl ? 'Edit Visual' : 'Go Create'}
-                    </Text>
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          ) : (
-            <View style={{ gap: 8 }}>
-              {uploads.length === 0 ? (
-                <Pressable
-                  onPress={() => void pickUploadMediaInsideSheet()}
-                  style={styles.pickInsideCard}
-                >
-                  <MaterialIcons name="add-photo-alternate" size={28} color={colors.brand} />
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
-                    Select Photos or Videos from Device
-                  </Text>
-                  <Text style={{ fontSize: 11, color: colors.muted, textAlign: 'center' }}>
-                    Supports JPG, PNG, WEBP &amp; MP4, MOV, 3GP, MKV videos (up to 100MB; Google recommends under 75MB / 30s).
-                  </Text>
-                </Pressable>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbRow}>
-                  {uploads.map((item, idx) => (
-                    <View key={`${item.local.uri}-${idx}`} style={styles.thumbCard}>
-                      {item.local.mediaType === 'video' ? (
-                        item.thumbnailUrl ? (
-                          <View style={[styles.thumbImage, { position: 'relative' }]}>
-                            <Image
-                              source={{ uri: item.thumbnailUrl }}
-                              style={styles.thumbImage}
-                              resizeMode="cover"
-                              alt={item.local.name || 'Video thumbnail'}
-                            />
-                            <View style={styles.videoPill}>
-                              <MaterialIcons name="play-arrow" size={12} color="#FFFFFF" />
-                            </View>
-                          </View>
-                        ) : Platform.OS === 'web' && item.local.uri ? (
-                          <View style={[styles.thumbImage, { position: 'relative', backgroundColor: '#0F172A' }]}>
-                            {React.createElement('video', {
-                              src: item.local.uri,
-                              muted: true,
-                              playsInline: true,
-                              preload: 'metadata',
-                              style: { width: '100%', height: '100%', objectFit: 'cover' },
-                            })}
-                            <View style={styles.videoPill}>
-                              <MaterialIcons name="play-arrow" size={12} color="#FFFFFF" />
-                            </View>
-                          </View>
-                        ) : (
-                          <View style={[styles.thumbImage, styles.videoTileDark]}>
-                            <MaterialIcons name="videocam" size={24} color="#34D399" />
-                            <Text style={styles.videoTileLabel}>VIDEO</Text>
-                          </View>
-                        )
-                      ) : (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={`Inspect ${item.local.name || 'photo'} full screen`}
-                          onPress={() => {
-                            const target = item.cloudUrl || item.local.uri;
-                            if (target) setInspectStaticUrl(target);
-                          }}
-                          style={styles.thumbImage}
-                        >
+
+                  {/* Top Brand Banner Overlay (Toggle-based) */}
+                  {addBranding && (
+                    <View style={styles.brandTopOverlay}>
+                      <View style={styles.brandLogoBox}>
+                        {effectiveLogoUrl ? (
                           <Image
-                            source={{ uri: item.local.uri }}
-                            style={styles.thumbImage}
-                            resizeMode="cover"
-                            alt={item.local.name || 'Upload preview'}
+                            source={{ uri: effectiveLogoUrl }}
+                            style={styles.brandLogoImage}
+                            resizeMode="contain"
                           />
-                        </Pressable>
-                      )}
-                      {item.uploading ? (
-                        <View style={styles.thumbOverlay}>
-                          <ActivityIndicator size="small" color="#FFFFFF" />
-                          <Text style={styles.thumbOverlayText}>
-                            {item.progress && item.progress > 0 ? `${item.progress}%` : 'Uploading'}
+                        ) : (
+                          <View style={styles.monogramBox}>
+                            <Text style={styles.monogramText}>
+                              {(effectiveBusinessName[0] || 'B').toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text numberOfLines={1} style={styles.brandOverlayTitle}>
+                          {effectiveBusinessName}
+                        </Text>
+                        <Text numberOfLines={1} style={styles.brandOverlaySub}>
+                          {effectiveIndustry}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Bottom Contact Footer Overlay (Toggle-based) */}
+                  {addBranding && (
+                    <View style={styles.brandBottomOverlay}>
+                      {effectivePhone ? (
+                        <View style={styles.overlayPhoneRow}>
+                          <MaterialIcons name="phone" size={14} color="#009F50" />
+                          <Text style={styles.overlayPhoneText}>{effectivePhone}</Text>
+                        </View>
+                      ) : null}
+                      {effectiveAddress ? (
+                        <View style={styles.overlayAddressRow}>
+                          <MaterialIcons name="place" size={14} color="#EA580C" />
+                          <Text numberOfLines={1} style={styles.overlayAddressText}>
+                            {effectiveAddress}
                           </Text>
                         </View>
-                      ) : item.error ? (
-                        <Pressable
-                          onPress={() => void retrySingleUpload(idx)}
-                          style={[styles.thumbOverlay, { backgroundColor: 'rgba(186,53,71,0.88)' }]}
-                        >
-                          <MaterialIcons name="refresh" size={16} color="#FFFFFF" />
-                          <Text style={styles.thumbOverlayText}>Tap Retry</Text>
-                        </Pressable>
-                      ) : (
-                        <View style={styles.donePill}>
-                          <MaterialIcons name="check-circle" size={14} color="#FFFFFF" />
-                        </View>
-                      )}
+                      ) : null}
                     </View>
-                  ))}
-                  <Pressable onPress={() => void pickUploadMediaInsideSheet()} style={styles.thumbAddMore}>
-                    <MaterialIcons name="add" size={22} color={colors.brand} />
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.brandDark }}>Change</Text>
-                  </Pressable>
-                </ScrollView>
-              )}
+                  )}
 
-              {(effectiveVideoWarning || uploads.some((u) => u.local.mediaType === 'video') || stillUploading) ? (
-                <View style={styles.videoNoticeBanner}>
-                  <MaterialIcons name="videocam" size={15} color={colors.noteText} />
-                  <Text style={styles.videoNoticeText}>
-                    {stillUploading
-                      ? 'Upload running — tap Save & Upload in Background or close this screen and we will finish in the background & notify you.'
-                      : effectiveVideoWarning ||
-                        'Google Business Profile works best with MP4/MOV videos under 75MB (up to 30s at 1080p).'}
-                  </Text>
-                </View>
-              ) : null}
-
-              {failedUploads.length > 0 ? (
-                <View style={styles.uploadFailBanner}>
-                  <MaterialIcons name="warning-amber" size={15} color={colors.danger} />
-                  <Text style={styles.uploadFailText} numberOfLines={2}>
-                    {failedUploads[0]?.error || 'Upload failed'}
-                  </Text>
+                  {/* Fullscreen Expand Icon Button */}
                   <Pressable
-                    onPress={() => {
-                      uploads.forEach((u, i) => {
-                        if (u.error) void retrySingleUpload(i);
-                      });
-                    }}
-                    style={styles.retryMiniBtn}
+                    accessibilityLabel="View full image"
+                    onPress={() => setFullscreenOpen(true)}
+                    style={styles.expandIconBtn}
+                    hitSlop={8}
                   >
-                    <Text style={styles.retryMiniText}>Retry All</Text>
+                    <MaterialIcons name="fullscreen" size={22} color="#0F172A" />
                   </Pressable>
                 </View>
-              ) : null}
-            </View>
-          )}
 
-          {(isEditMode || composerMode !== 'ai_generate' || aiStep === 2) ? (
-            <>
-              {/* Live Local SEO Readiness Score (0–100 across 5 checks) */}
-              <View style={styles.seoScoreCard}>
-                <View style={styles.seoScoreHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <MaterialIcons name="verified" size={16} color={liveSeoReadiness.score >= 80 ? '#15803D' : '#B45309'} />
-                    <Text style={styles.seoScoreTitle}>Local SEO Readiness</Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.seoScoreBadge,
-                      { backgroundColor: liveSeoReadiness.score >= 80 ? '#DCFCE7' : '#FEF3C7' },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.seoScoreBadgeText,
-                        { color: liveSeoReadiness.score >= 80 ? '#15803D' : '#B45309' },
-                      ]}
-                    >
-                      {liveSeoReadiness.score}/100
+                {/* ── BRANDING TOGGLE SWITCH ── */}
+                <View style={styles.brandingToggleRow}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.toggleTitle}>Business Branding</Text>
+                    <Text style={styles.toggleSubtitle}>
+                      Overlay company logo on top &amp; contact details on footer
                     </Text>
                   </View>
-                </View>
-                <View style={styles.seoBarTrack}>
-                  <View
-                    style={[
-                      styles.seoBarFill,
-                      {
-                        width: `${Math.max(6, Math.min(100, liveSeoReadiness.score))}%`,
-                        backgroundColor: liveSeoReadiness.score >= 80 ? '#16A34A' : '#D97706',
-                      },
-                    ]}
+                  <Switch
+                    value={addBranding}
+                    onValueChange={setAddBranding}
+                    trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+                    thumbColor={addBranding ? '#009F50' : '#FFFFFF'}
                   />
-                </View>
-                <View style={{ gap: 4, marginTop: 6 }}>
-                  {liveSeoReadiness.checks.map((chk) => (
-                    <View key={chk.id} style={styles.seoCheckRow}>
-                      <MaterialIcons
-                        name={chk.passed ? 'check-circle' : 'radio-button-unchecked'}
-                        size={14}
-                        color={chk.passed ? '#16A34A' : '#94A3B8'}
-                      />
-                      <Text style={styles.seoCheckText}>
-                        {chk.label}
-                        {!chk.passed && chk.detail ? ` — ${chk.detail}` : ''}
-                      </Text>
-                    </View>
-                  ))}
                 </View>
               </View>
 
-              {/* AI Intent Chips */}
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>AI Focus</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                  {AI_INTENTS.map((item) => {
-                    const active = item.value === intent;
+              {/* ── CARD 3: TEMPLATES PICKER OR UPLOAD PHOTO ── */}
+              <View style={styles.cardContainer}>
+                <View style={styles.templatesHeaderRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.templatesTitle}>Ready Business Creatives</Text>
+                    <Text style={styles.templatesSub}>
+                      Personalized for {effectiveBusinessName}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={handlePickLocalPhoto}
+                    style={styles.uploadPhotoBtn}
+                  >
+                    <MaterialIcons name="file-upload" size={16} color="#009F50" />
+                    <Text style={styles.uploadPhotoBtnText}>Upload Photo</Text>
+                  </Pressable>
+                </View>
+
+                {/* Category Pills */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.categoryPillsScroll}
+                >
+                  {TEMPLATE_TABS.map((tab) => {
+                    const active = templateTab === tab.id;
                     return (
                       <Pressable
-                        key={item.value}
-                        onPress={() => {
-                          setIntent(item.value);
-                          void runAiMetadata(
-                            isEditMode
-                              ? [title || businessName]
-                              : composerMode === 'ai_generate'
-                                ? [title || aiPrompt || businessName]
-                                : uploads.map((u) => u.local.name),
-                            item.value,
-                            isVideoPhotoItem(editingItem) ||
-                              uploads.some((u) => u.local.mediaType === 'video')
-                              ? 'video'
-                              : 'photo',
-                          );
-                        }}
-                        style={[styles.chip, active && styles.chipPurpleActive]}
+                        key={tab.id}
+                        onPress={() => handleTabChange(tab.id)}
+                        style={[styles.categoryPill, active && styles.categoryPillActive]}
                       >
-                        <Text style={[styles.chipText, active && styles.chipPurpleText]}>
-                          ✨ {item.label}
+                        <MaterialIcons
+                          name={tab.icon}
+                          size={15}
+                          color={active ? '#009F50' : '#64748B'}
+                        />
+                        <Text style={[styles.categoryPillText, active && styles.categoryPillTextActive]}>
+                          {tab.label}
                         </Text>
                       </Pressable>
                     );
                   })}
                 </ScrollView>
-              </View>
 
-          {/* Title Field + Alternatives */}
-          <View style={styles.section}>
-            <View style={styles.labelRow}>
-              <Text style={styles.sectionLabel}>Title</Text>
-              {aiLoading ? <Text style={styles.aiStatusHint}>AI generating…</Text> : null}
-            </View>
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
-              placeholder={`e.g. Featured Showcase at ${businessName}`}
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-            />
-            {suggestedTitles.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 4 }}>
-                {suggestedTitles.map((cand) => (
-                  <Pressable
-                    key={cand}
-                    onPress={() => setTitle(cand)}
-                    style={styles.altChip}
-                  >
-                    <Text style={styles.altChipText} numberOfLines={1}>
-                      {cand}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            ) : null}
-          </View>
-
-          {/* Description Field */}
-          <View style={styles.section}>
-            <View style={styles.labelRow}>
-              <Text style={styles.sectionLabel}>SEO Description</Text>
-              <Text style={styles.charCount}>{description.length}/1500</Text>
-            </View>
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Write or refine your customer-facing media description..."
-              placeholderTextColor={colors.muted}
-              multiline
-              style={[styles.input, styles.textArea]}
-            />
-          </View>
-
-          {/* Tags */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Tags & Local SEO Keywords</Text>
-            <View style={styles.tagsWrap}>
-              {tags.map((tag) => (
-                <Pressable
-                  key={tag}
-                  onPress={() => setTags((prev) => prev.filter((t) => t !== tag))}
-                  style={styles.selectedTagPill}
-                >
-                  <Text style={styles.selectedTagText}>#{tag}</Text>
-                  <MaterialIcons name="close" size={12} color={colors.brandDark} />
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.tagInputRow}>
-              <TextInput
-                value={tagInput}
-                onChangeText={setTagInput}
-                onSubmitEditing={addCustomTag}
-                placeholder="Add custom tag (e.g. Weekend Event)"
-                placeholderTextColor={colors.muted}
-                style={[styles.input, { flex: 1, height: 40 }]}
-              />
-              <Pressable onPress={addCustomTag} style={styles.addTagBtn}>
-                <MaterialIcons name="add" size={18} color="#FFFFFF" />
-              </Pressable>
-            </View>
-            {suggestedTags.length > 0 ? (
-              <View style={styles.tagsWrap}>
-                {suggestedTags.map((st) => (
-                  <Pressable
-                    key={st}
-                    onPress={() => toggleSuggestedTag(st)}
-                    style={styles.suggestTagPill}
-                  >
-                    <Text style={styles.suggestTagText}>+ {st}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-            {usedSearchTerms.filter((t) => !tags.some((x) => x.toLowerCase() === t.toLowerCase())).length > 0 ? (
-              <View style={{ marginTop: 6, gap: 4 }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369A1' }}>
-                  Top GBP Search Terms — tap to add as SEO tags
-                </Text>
-                <View style={styles.tagsWrap}>
-                  {usedSearchTerms
-                    .filter((t) => !tags.some((x) => x.toLowerCase() === t.toLowerCase()))
-                    .map((term) => (
-                      <Pressable
-                        key={term}
-                        onPress={() => toggleSuggestedTag(term)}
-                        style={styles.gTermPill}
-                      >
-                        <Text style={styles.gTermPillText}>+ {term}</Text>
-                      </Pressable>
-                    ))}
-                </View>
-              </View>
-            ) : null}
-            <Text style={styles.helperCaption}>
-              Tags organize your BGOS media library &amp; enrich your Google Business Profile SEO description.
-            </Text>
-          </View>
-
-          {/* GBP Category */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Google Profile Category</Text>
-            <View style={styles.tagsWrap}>
-              {GBP_CATEGORIES.map((cat) => {
-                const active = cat.value === category;
-                return (
-                  <Pressable
-                    key={cat.value}
-                    onPress={() => setCategory(cat.value)}
-                    style={[styles.chip, active && styles.chipBrandActive]}
-                  >
-                    <Text style={[styles.chipText, active && styles.chipBrandText]}>
-                      {cat.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Publish Timing */}
-          {!isEditMode ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Where & When to Publish</Text>
-              <View style={styles.scheduleGrid}>
-                {SCHEDULE_MODES.map((opt) => {
-                  const active = opt.value === scheduleMode;
-                  return (
-                    <Pressable
-                      key={opt.value}
-                      onPress={() => setScheduleMode(opt.value)}
-                      style={[styles.scheduleCard, active && styles.scheduleCardActive]}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <MaterialIcons
-                          name={opt.icon}
-                          size={16}
-                          color={active ? colors.brand : colors.muted}
-                        />
-                        <Text style={[styles.scheduleTitle, active && { color: colors.brandDark }]}>
-                          {opt.label}
-                        </Text>
-                      </View>
-                      <Text style={styles.scheduleSub}>{opt.sub}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              {(scheduleMode === 'daily' || scheduleMode === 'weekly') ? (
-                <View style={styles.tzCard}>
-                  <View style={styles.tzHeaderRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.tzTitle}>
-                        {selectedCountry.flag} {selectedCountry.name} ({getTimeZoneShortLabel(selectedTimeZone)})
-                      </Text>
-                      <Text style={styles.tzSub} numberOfLines={1}>
-                        Scheduled in {selectedTimeZone}
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={() => setCountryPickerOpen(true)}
-                      style={styles.changeTzBtn}
-                    >
-                      <Text style={styles.changeTzText}>Change Country</Text>
-                    </Pressable>
+                {/* Horizontal Template Carousel */}
+                {templatesLoading ? (
+                  <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color="#009F50" />
                   </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingTop: 4 }}>
-                    {PUBLISH_TIMES.map((slot) => {
-                      const active = preferredTime === slot.value;
+                ) : (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.templatesCarousel}
+                  >
+                    {templates.map((tpl) => {
+                      const selected = selectedTemplateId === tpl.id;
                       return (
                         <Pressable
-                          key={slot.value}
-                          onPress={() => setPreferredTime(slot.value)}
-                          style={[styles.timeChip, active && styles.timeChipActive]}
+                          key={tpl.id}
+                          onPress={() => applyTemplate(tpl)}
+                          style={[styles.templateThumbCard, selected && styles.templateThumbCardSelected]}
                         >
-                          <MaterialIcons
-                            name="schedule"
-                            size={12}
-                            color={active ? colors.brandDark : colors.muted}
+                          <Image
+                            source={{ uri: tpl.photoUrl }}
+                            style={styles.templateThumbImage}
+                            resizeMode="cover"
                           />
-                          <Text style={[styles.timeChipText, active && styles.timeChipTextActive]}>
-                            {slot.label}
-                          </Text>
+                          <View style={styles.templateThumbOverlay}>
+                            <Text numberOfLines={1} style={styles.templateThumbHeadline}>
+                              {tpl.headline}
+                            </Text>
+                            <Text numberOfLines={1} style={styles.templateThumbBadge}>
+                              {tpl.badge}
+                            </Text>
+                          </View>
+                          {selected ? (
+                            <View style={styles.selectedCheckBadge}>
+                              <MaterialIcons name="check" size={12} color="#FFFFFF" />
+                            </View>
+                          ) : null}
                         </Pressable>
                       );
                     })}
                   </ScrollView>
-                </View>
-              ) : null}
-            </View>
-          ) : (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Status &amp; Publishing</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                <Pressable
-                  onPress={() => setScheduleMode('daily')}
-                  style={[styles.chip, scheduleMode !== 'draft' && scheduleMode !== 'instant' && styles.chipBrandActive]}
-                >
-                  <Text style={[styles.chipText, scheduleMode !== 'draft' && scheduleMode !== 'instant' && styles.chipBrandText]}>
-                    Scheduled
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setScheduleMode('instant')}
-                  style={[styles.chip, scheduleMode === 'instant' && styles.chipBrandActive]}
-                >
-                  <Text style={[styles.chipText, scheduleMode === 'instant' && styles.chipBrandText]}>
-                    Publish Now
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setScheduleMode('draft')}
-                  style={[styles.chip, scheduleMode === 'draft' && styles.chipBrandActive]}
-                >
-                  <Text style={[styles.chipText, scheduleMode === 'draft' && styles.chipBrandText]}>
-                    Draft (Not Posted)
-                  </Text>
-                </Pressable>
+                )}
               </View>
-            </View>
-          )}
-            </>
-          ) : null}
-        </ScrollView>
 
-        {/* Bottom Sticky CTA */}
-        <View style={styles.footer}>
-          {isEditMode ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => void handleDelete()}
-              disabled={submitting}
-              style={styles.deleteBtn}
-            >
-              <MaterialIcons name="delete-outline" size={19} color={colors.danger} />
-            </Pressable>
-          ) : null}
-          {!isEditMode && composerMode === 'ai_generate' && aiStep === 1 ? (
-            generatedImageUrl ? (
+              {/* ── CARD 4: POST DESCRIPTION WITH INLINE EDIT (DHANDA STYLE) ── */}
+              <View style={styles.cardContainer}>
+                <View style={styles.descHeaderRow}>
+                  <Text style={styles.cardTitle}>Post Description</Text>
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => setIsEditingDescription(!isEditingDescription)}
+                    style={styles.editPencilBtn}
+                  >
+                    <MaterialIcons
+                      name={isEditingDescription ? 'check' : 'edit'}
+                      size={18}
+                      color="#2563EB"
+                    />
+                    <Text style={styles.editPencilText}>
+                      {isEditingDescription ? 'Done' : 'Edit'}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {isEditingDescription ? (
+                  <View style={{ gap: 10 }}>
+                    <TextInput
+                      value={description}
+                      onChangeText={setDescription}
+                      style={styles.descriptionInput}
+                      multiline
+                      numberOfLines={5}
+                      placeholder="Enter post description..."
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.descriptionTextBox}>
+                    <Text style={styles.descriptionText}>
+                      {description ||
+                        `${effectiveBusinessName} provides reputable ${effectiveIndustry.toLowerCase()} with dependable results.`}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+
+            {/* ── FIXED BOTTOM ACTION BAR (SHARE, DOWNLOAD, POST TO GOOGLE) ── */}
+            <View style={styles.bottomActionBar}>
               <Pressable
+                onPress={handleShare}
+                style={styles.actionOutlineBtn}
                 accessibilityRole="button"
-                onPress={() => setAiStep(2)}
-                style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.9 }]}
+                accessibilityLabel="Share post"
               >
-                <Text style={styles.saveBtnText}>
-                  Continue to SEO &amp; Schedule ({liveSeoReadiness.score}%)
-                </Text>
-                <MaterialIcons name="arrow-forward" size={18} color="#FFFFFF" />
+                <MaterialIcons name="share" size={18} color="#0F172A" />
+                <Text style={styles.actionOutlineBtnText}>Share</Text>
               </Pressable>
-            ) : (
+
               <Pressable
+                onPress={handleDownload}
+                style={styles.actionOutlineBtn}
                 accessibilityRole="button"
-                onPress={() => void handleGenerateAiImage(!aiPrompt.trim())}
-                disabled={generatingAiImage || uploadingRef}
-                style={({ pressed }) => [
-                  styles.saveBtn,
-                  { backgroundColor: '#6D28D9' },
-                  (generatingAiImage || uploadingRef) && { opacity: 0.65 },
-                  pressed && { opacity: 0.9 },
-                ]}
+                accessibilityLabel="Download image"
               >
-                {generatingAiImage ? (
+                <MaterialIcons name="file-download" size={18} color="#0F172A" />
+                <Text style={styles.actionOutlineBtnText}>Download</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={handlePublishOrSchedule}
+                disabled={submitting || uploadingMedia}
+                style={[styles.actionPrimaryBtn, (submitting || uploadingMedia) && { opacity: 0.7 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Post to Google"
+              >
+                {submitting || uploadingMedia ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <MaterialIcons name="auto-awesome" size={18} color="#FFFFFF" />
+                  <>
+                    <MaterialIcons name="publish" size={18} color="#FFFFFF" />
+                    <Text style={styles.actionPrimaryBtnText}>
+                      {isEditMode ? 'Update' : 'Post to Google'}
+                    </Text>
+                  </>
                 )}
-                <Text style={styles.saveBtnText}>
-                  {generatingAiImage
-                    ? 'Generating Visual…'
-                    : aiPrompt.trim()
-                      ? 'Generate Image'
-                      : 'Create Auto SEO Photo'}
-                </Text>
               </Pressable>
-            )
-          ) : (
-            <>
-              {!isEditMode && composerMode === 'ai_generate' && aiStep === 2 ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setAiStep(1)}
-                  disabled={submitting}
-                  style={styles.stepBackBtn}
-                >
-                  <MaterialIcons name="arrow-back" size={17} color={colors.ink} />
-                  <Text style={styles.stepBackBtnText}>Visual</Text>
-                </Pressable>
-              ) : null}
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void handleSubmit()}
-                disabled={submitting}
-                style={({ pressed }) => [
-                  styles.saveBtn,
-                  submitting && { opacity: 0.65 },
-                  pressed && { opacity: 0.9 },
-                ]}
-              >
-                {submitting ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <MaterialIcons name="check-circle" size={18} color="#FFFFFF" />
-                )}
-                <Text style={styles.saveBtnText}>
-                  {submitting
-                    ? 'Saving…'
-                    : isEditMode
-                      ? scheduleMode === 'instant'
-                        ? 'Publish to Google Now'
-                        : 'Save Changes'
-                      : stillUploading
-                        ? 'Save & Upload in Background'
-                        : scheduleMode === 'instant'
-                          ? 'Publish to Google Now'
-                          : scheduleMode === 'draft'
-                            ? 'Save as Draft'
-                            : 'Save & Schedule'}
-                </Text>
-              </Pressable>
-            </>
-          )}
-        </View>
-          </>
+            </View>
+          </View>
         )}
       </KeyboardAvoidingView>
 
-      {/* Country & Timezone Picker Modal */}
-      <Modal
-        visible={countryPickerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCountryPickerOpen(false)}
-      >
-        <View style={styles.pickerOverlay}>
-          <View style={styles.pickerCard}>
-            <View style={styles.pickerHeader}>
-              <Text style={styles.pickerTitle}>Select Country &amp; Timezone</Text>
-              <Pressable onPress={() => setCountryPickerOpen(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={20} color={colors.ink} />
-              </Pressable>
-            </View>
-            <ScrollView style={{ maxHeight: 360 }}>
-              {COUNTRIES.map((c) => {
-                const active = c.code === selectedCountry.code;
-                return (
-                  <Pressable
-                    key={c.code}
-                    onPress={() => {
-                      setSelectedCountry(c);
-                      setSelectedTimeZone(c.timeZone);
-                      setCountryPickerOpen(false);
-                    }}
-                    style={[styles.pickerRow, active && styles.pickerRowActive]}
-                  >
-                    <Text style={{ fontSize: 18 }}>{c.flag}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.pickerCountry}>{c.name}</Text>
-                      <Text style={styles.pickerTz}>{c.timeZone}</Text>
-                    </View>
-                    {active ? <MaterialIcons name="check" size={18} color={colors.brand} /> : null}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Fullscreen AI Image Quality Reviewer (overlay inside sheet modal) */}
-      <FullscreenImageModal
-        asOverlay
-        visible={fullscreenOpen}
-        onClose={() => setFullscreenOpen(false)}
-        imageUrl={generatedImageUrl}
-        title={title.trim() || `${effectiveBusinessName} · AI Photo`}
-        subtitle={`${aiAspectRatio} · Check faces, text, and framing`}
-        candidates={aiCandidates}
-        selectedUrl={generatedImageUrl}
-        onSelectCandidate={(cand) => {
-          applyGeneratedCandidateUrl(cand.url, cand);
-        }}
-        reviewMode
-        isApproved={Boolean(generatedImageUrl && aiApprovedUrl === generatedImageUrl)}
-        onApprove={(url) => {
-          applyGeneratedCandidateUrl(url);
-          setAiApprovedUrl(url);
-        }}
-        basePrompt={lastAiUsedPrompt || aiPrompt}
-        activeProvider={selectedRefUrls.length > 0 ? 'gemini' : aiProviderChoice}
-        allowProviderSwitch={false}
-        regenerating={generatingAiImage}
-        errorMessage={errorMsg}
-        onRegenerate={({ prompt, provider }) =>
-          handleGenerateAiImage(false, {
-            promptOverride: prompt,
-            providerOverride: provider,
-          })
-        }
-      />
-
-      {/* Fullscreen Read-Only Photo Viewer for uploads / editing items / previous photos */}
-      <FullscreenImageModal
-        asOverlay
-        visible={Boolean(inspectStaticUrl)}
-        onClose={() => {
-          setInspectStaticUrl(null);
-          setInspectStaticTitle(null);
-        }}
-        imageUrl={inspectStaticUrl}
-        title={inspectStaticTitle || title.trim() || editingItem?.title || `${effectiveBusinessName} Photo`}
-      />
+      {/* Fullscreen Lightbox Modal */}
+      {fullscreenOpen && currentPhotoUrl ? (
+        <FullscreenImageModal
+          visible={fullscreenOpen}
+          imageUrl={currentPhotoUrl}
+          title={title || effectiveBusinessName}
+          onClose={() => setFullscreenOpen(false)}
+        />
+      ) : null}
     </Modal>
   );
 }
@@ -2614,1299 +819,575 @@ export function MediaMetadataSheet({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
+  },
+  navBar: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  navBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  datePill: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  datePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  navCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 96,
+    gap: 16,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#DC2626',
+    fontWeight: '500',
+  },
+  cardContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  keywordsTable: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  tableHeaderRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  tableHeaderText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  tableDataRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  tableKeywordText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  tableVolumeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  viewsBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  viewsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  viewsBadgeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  googleTipBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#3B82F6',
+  },
+  googleTipText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#1E40AF',
+    lineHeight: 16,
+  },
+  posterCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  photoCanvas: {
+    width: '100%',
+    aspectRatio: 4 / 5,
+    backgroundColor: '#0F172A',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  heroPosterImage: {
+    width: '100%',
+    height: '100%',
+  },
+  emptyPhotoBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  emptyPhotoText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  brandTopOverlay: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  brandLogoBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  brandLogoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  monogramBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#009F50',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monogramText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  brandOverlayTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  brandOverlaySub: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  brandBottomOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  overlayPhoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  overlayPhoneText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  overlayAddressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  overlayAddressText: {
+    flex: 1,
+    fontSize: 10,
+    color: '#475569',
+    lineHeight: 14,
+  },
+  expandIconBtn: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  brandingToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  toggleTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  toggleSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  templatesHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  templatesTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  templatesSub: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  uploadPhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  uploadPhotoBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#009F50',
+  },
+  categoryPillsScroll: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  categoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  categoryPillActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#86EFAC',
+  },
+  categoryPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  categoryPillTextActive: {
+    color: '#009F50',
+    fontWeight: '800',
+  },
+  templatesCarousel: {
+    gap: 12,
+    paddingVertical: 4,
+  },
+  templateThumbCard: {
+    width: 140,
+    height: 175,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
+    position: 'relative',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  templateThumbCardSelected: {
+    borderColor: '#009F50',
+  },
+  templateThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  templateThumbOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 2,
+  },
+  templateThumbHeadline: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  templateThumbBadge: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#86EFAC',
+  },
+  selectedCheckBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#009F50',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  descHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  editPencilBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  editPencilText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  descriptionTextBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  descriptionText: {
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 19,
+  },
+  descriptionInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    fontSize: 13,
+    color: '#0F172A',
+    textAlignVertical: 'top',
+    minHeight: 100,
+  },
+  bottomActionBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 72,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  actionOutlineBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  actionOutlineBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  actionPrimaryBtn: {
+    flex: 1.6,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#009F50',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  actionPrimaryBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   celebrationWrapper: {
     flex: 1,
     backgroundColor: '#FFFFFF',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 24 : 16,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    padding: 24,
   },
   celebrationHeader: {
-    alignItems: 'flex-start',
+    alignItems: 'flex-end',
+  },
+  iconCircleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   celebrationBody: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
     gap: 16,
-    flex: 1,
   },
   celebrationCheckCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#009F50',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
-    elevation: 4,
     shadowColor: '#009F50',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    elevation: 6,
   },
   celebrationTitle: {
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#0F172A',
-    textAlign: 'center',
-    letterSpacing: -0.4,
   },
   celebrationSubtitle: {
-    fontSize: 14.5,
-    fontWeight: '500',
+    fontSize: 14,
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 22,
+    maxWidth: 300,
   },
   celebrationFooter: {
-    paddingTop: 20,
+    paddingBottom: 16,
   },
   celebrationCta: {
-    backgroundColor: '#2563EB',
-    paddingVertical: 15,
-    borderRadius: 12,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#009F50',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
   },
   celebrationCtaText: {
-    fontSize: 15.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: colors.ink,
-  },
-  headerSub: {
-    fontSize: 11.5,
-    color: colors.muted,
-    marginTop: 1,
-  },
-  aiRegenBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.aiPurpleSoft,
-    borderWidth: 1,
-    borderColor: '#D8B4FE',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  aiRegenText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#6D28D9',
-  },
-  body: {
-    padding: 16,
-    paddingBottom: 32,
-    gap: 16,
-  },
-  errorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.dangerSoft,
-    borderColor: '#FECDD3',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 12,
-    color: colors.danger,
-    fontWeight: '600',
-  },
-  editPreviewCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: colors.surface,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  editPreviewImg: {
-    width: 72,
-    height: 72,
-    borderRadius: 10,
-    backgroundColor: colors.soft,
-  },
-  previewBadgeText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  previewHint: {
-    fontSize: 11.5,
-    color: colors.muted,
-    lineHeight: 16,
-  },
-  thumbRow: {
-    gap: 10,
-  },
-  thumbCard: {
-    width: 86,
-    height: 86,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: colors.soft,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  thumbImage: {
-    width: '100%',
-    height: '100%',
-  },
-  thumbOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(15,23,42,0.62)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  thumbOverlayText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  videoPill: {
-    position: 'absolute',
-    left: 6,
-    top: 6,
-    backgroundColor: 'rgba(15,23,42,0.75)',
-    borderRadius: 6,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-  donePill: {
-    position: 'absolute',
-    right: 6,
-    bottom: 6,
-    backgroundColor: colors.brand,
-    borderRadius: 10,
-    padding: 2,
-  },
-  section: {
-    gap: 6,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sectionLabel: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  aiStatusHint: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#7C3AED',
-  },
-  charCount: {
-    fontSize: 11,
-    color: colors.muted,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-    color: colors.ink,
-  },
-  textArea: {
-    minHeight: 88,
-    textAlignVertical: 'top',
-  },
-  chip: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 16,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-  },
-  chipPurpleActive: {
-    backgroundColor: colors.aiPurpleSoft,
-    borderColor: '#C084FC',
-  },
-  chipBrandActive: {
-    backgroundColor: colors.brandSoft,
-    borderColor: colors.brand,
-  },
-  chipText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: colors.muted,
-  },
-  chipPurpleText: {
-    color: '#6D28D9',
-    fontWeight: '800',
-  },
-  chipBrandText: {
-    color: colors.brandDark,
-    fontWeight: '800',
-  },
-  altChip: {
-    maxWidth: 220,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  altChipText: {
-    fontSize: 11,
-    color: colors.ink,
-    fontWeight: '600',
-  },
-  tagsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  selectedTagPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.brandSoft,
-    borderWidth: 1,
-    borderColor: '#86EFAC',
-    borderRadius: 14,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  selectedTagText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: colors.brandDark,
-  },
-  suggestTagPill: {
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 14,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  suggestTagText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.ink,
-  },
-  tagInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  addTagBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  helperCaption: {
-    fontSize: 11,
-    color: colors.muted,
-    lineHeight: 15,
-  },
-  scheduleGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  scheduleCard: {
-    width: '48.5%',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 12,
-    padding: 10,
-    gap: 3,
-  },
-  scheduleCardActive: {
-    backgroundColor: colors.brandSoft,
-    borderColor: colors.brand,
-  },
-  scheduleTitle: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  scheduleSub: {
-    fontSize: 10.5,
-    color: colors.muted,
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  deleteBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FECDD3',
-    backgroundColor: colors.dangerSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveBtn: {
-    flex: 1,
-    height: 46,
-    borderRadius: 12,
-    backgroundColor: colors.brand,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  saveBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  uploadFailBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.dangerSoft,
-    borderWidth: 1,
-    borderColor: '#FECDD3',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  uploadFailText: {
-    flex: 1,
-    fontSize: 11.5,
-    color: colors.danger,
-    fontWeight: '600',
-  },
-  retryMiniBtn: {
-    backgroundColor: colors.danger,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  retryMiniText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  tzCard: {
-    marginTop: 6,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 12,
-    padding: 10,
-    gap: 6,
-  },
-  tzHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  tzTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  tzSub: {
-    fontSize: 10.5,
-    color: colors.muted,
-    marginTop: 1,
-  },
-  changeTzBtn: {
-    backgroundColor: colors.brandSoft,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    borderRadius: 10,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  changeTzText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.brandDark,
-  },
-  timeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.soft,
-  },
-  timeChipActive: {
-    backgroundColor: colors.brandSoft,
-    borderColor: colors.brand,
-  },
-  timeChipText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: colors.muted,
-  },
-  timeChipTextActive: {
-    color: colors.brandDark,
-    fontWeight: '800',
-  },
-  pickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.5)',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  pickerCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 16,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  pickerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  pickerTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  pickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-  },
-  pickerRowActive: {
-    backgroundColor: colors.brandSoft,
-  },
-  pickerCountry: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  pickerTz: {
-    fontSize: 11,
-    color: colors.muted,
-  },
-  modeToggleBar: {
-    flexDirection: 'row',
-    backgroundColor: '#EEF2F6',
-    borderRadius: 14,
-    padding: 4,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  modeToggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 9,
-    borderRadius: 10,
-  },
-  modeToggleBtnActive: {
-    backgroundColor: colors.brand,
-  },
-  modeToggleBtnAiActive: {
-    backgroundColor: '#7C3AED',
-  },
-  modeToggleText: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: colors.muted,
-  },
-  modeToggleTextActive: {
-    color: '#FFFFFF',
-  },
-  videoTileDark: {
-    backgroundColor: '#0F172A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  videoTileLabel: {
-    color: '#E2E8F0',
-    fontSize: 9.5,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
-  aiStudioBox: {
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
-    padding: 12,
-    gap: 10,
-  },
-  aiStudioHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  aiStudioTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  aiStudioSub: {
-    fontSize: 11,
-    color: colors.muted,
-    lineHeight: 16,
-    marginTop: 2,
-  },
-  aiSubLabel: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  uploadRefBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.brandSoft,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  uploadRefText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.brandDark,
-  },
-  refPhotoCard: {
-    width: 82,
-    height: 82,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: colors.line,
-    backgroundColor: colors.soft,
-    position: 'relative',
-  },
-  refPhotoCardActive: {
-    borderColor: '#7C3AED',
-  },
-  refPhotoImg: {
-    width: '100%',
-    height: '100%',
-  },
-  refPhotoCheck: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#7C3AED',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 2,
-  },
-  refGbpBadge: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-  },
-  refGbpBadgeText: {
-    fontSize: 8.5,
-    fontWeight: '800',
-    color: '#38BDF8',
-  },
-  refPhotoInspectBtn: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  activeRefPill: {
-    backgroundColor: '#EDE9FE',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 10,
-  },
-  activeRefPillText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#7C3AED',
-  },
-  selectedRefsCard: {
-    backgroundColor: '#F5F3FF',
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
-    borderRadius: 12,
-    padding: 8,
-    gap: 6,
-    marginTop: 2,
-  },
-  selectedRefsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  selectedRefsTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#6D28D9',
-  },
-  clearRefsText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: colors.muted,
-  },
-  selectedRefChipCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
-    borderRadius: 8,
-    padding: 4,
-    paddingRight: 6,
-    width: 164,
-    gap: 6,
-  },
-  selectedRefChipImg: {
-    width: 36,
-    height: 36,
-    borderRadius: 6,
-    backgroundColor: colors.soft,
-  },
-  selectedRefChipTitle: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  selectedRefPreviewLink: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#7C3AED',
-  },
-  removeRefBtn: {
-    padding: 2,
-  },
-  selectedRefsHint: {
-    fontSize: 10,
-    color: '#6D28D9',
-    lineHeight: 13,
-  },
-  ideaChip: {
-    backgroundColor: colors.aiPurpleSoft,
-    borderWidth: 1,
-    borderColor: '#D8B4FE',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  ideaChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#6D28D9',
-  },
-  aiAutoBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: colors.aiPurpleSoft,
-    borderWidth: 1,
-    borderColor: '#C084FC',
-    borderRadius: 12,
-    height: 42,
-  },
-  aiAutoBtnText: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#6D28D9',
-  },
-  aiGenBtn: {
-    flex: 1.35,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#7C3AED',
-    borderRadius: 12,
-    height: 42,
-  },
-  aiGenBtnText: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  generatedPreviewCard: {
-    gap: 10,
-    backgroundColor: colors.brandSoft,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    borderRadius: 14,
-    padding: 10,
-  },
-  generatedHeroWrap: {
-    width: '100%',
-    maxHeight: 280,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#0F172A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  generatedPreviewImg: {
-    width: '100%',
-    maxHeight: 280,
-    backgroundColor: '#0F172A',
-  },
-  fullscreenPillBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(15, 23, 42, 0.82)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    borderRadius: 14,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  fullscreenPillText: {
-    color: '#FFFFFF',
-    fontSize: 10.5,
-    fontWeight: '800',
-  },
-  generatedMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  generatedActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  inspectPrimaryBtn: {
-    flex: 1.3,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.brand,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-  },
-  inspectPrimaryText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  regenSecondaryBtn: {
-    flex: 1,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#F5F3FF',
-    borderWidth: 1,
-    borderColor: '#D8B4FE',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  regenSecondaryText: {
-    color: '#6D28D9',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  pickInsideCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: colors.brand,
-    borderRadius: 14,
-    padding: 18,
-  },
-  thumbAddMore: {
-    width: 86,
-    height: 86,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: colors.brand,
-    backgroundColor: colors.brandSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  videoNoticeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.note,
-    borderWidth: 1,
-    borderColor: colors.noteBorder,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  videoNoticeText: {
-    flex: 1,
-    fontSize: 11,
-    color: colors.noteText,
-    fontWeight: '600',
-    lineHeight: 15,
-  },
-  wizardStepBar: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  wizardStepBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 9,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-  },
-  wizardStepBtnActive: {
-    borderColor: '#6D28D9',
-    backgroundColor: '#F5F3FF',
-  },
-  wizardStepNum: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E2E8F0',
-  },
-  wizardStepNumActive: {
-    backgroundColor: '#6D28D9',
-  },
-  wizardStepNumText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#475569',
-  },
-  wizardStepLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
-    flexShrink: 1,
-  },
-  wizardStepLabelActive: {
-    color: '#4C1D95',
-  },
-  sourceExifRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
-  },
-  sourcePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  sourcePillRef: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
-  },
-  sourcePillFallback: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
-  },
-  sourcePillAi: {
-    backgroundColor: '#F5F3FF',
-    borderColor: '#DDD6FE',
-  },
-  sourcePillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  exifPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  exifPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  fallbackReasonNote: {
-    fontSize: 11,
-    color: '#B45309',
-    backgroundColor: '#FFFBEB',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
-    marginTop: 6,
-    lineHeight: 15,
-  },
-  seoSlugPreview: {
-    fontSize: 11,
-    color: '#0369A1',
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  continueStepBtn: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.brand,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-  },
-  continueStepBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  step2VisualSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 12,
-  },
-  step2Thumb: {
-    width: 52,
-    height: 52,
-    borderRadius: 10,
-    backgroundColor: '#E2E8F0',
-  },
-  changeVisualBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#F5F3FF',
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
-  },
-  changeVisualBtnText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#6D28D9',
-  },
-  seoScoreCard: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 14,
-  },
-  seoScoreHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  seoScoreTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  seoScoreBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  seoScoreBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  seoBarTrack: {
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: '#E2E8F0',
-    overflow: 'hidden',
-  },
-  seoBarFill: {
-    height: 6,
-    borderRadius: 999,
-  },
-  seoCheckRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  seoCheckText: {
-    flex: 1,
-    fontSize: 11.5,
-    color: '#334155',
-    fontWeight: '500',
-  },
-  gTermPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: '#E0F2FE',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-  },
-  gTermPillText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0369A1',
-  },
-  stepBackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  stepBackBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  templateModeBar: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 3,
-    gap: 4,
-  },
-  templateModeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 9,
-  },
-  templateModeBtnActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  templateModeText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  templateModeTextActive: {
-    color: '#6D28D9',
-  },
-  templateCard: {
-    width: 155,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  templateCardActive: {
-    borderColor: '#7C3AED',
-    borderWidth: 2,
-    shadowColor: '#7C3AED',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  templateCardImg: {
-    width: '100%',
-    height: 110,
-    backgroundColor: '#0F172A',
-  },
-  templateBadgePill: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  templateBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    textTransform: 'uppercase',
-  },
-  templateSelectedCheck: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: '#7C3AED',
-    borderRadius: 999,
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  templateCardBody: {
-    padding: 8,
-    gap: 2,
-  },
-  templateCardHeadline: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  templateCardBrand: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  templateCardCta: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#7C3AED',
-    marginTop: 2,
-  },
-  templateActionBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F3FF',
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
-    borderRadius: 12,
-    padding: 10,
-    gap: 8,
-  },
-  templateActionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#5B21B6',
-  },
-  templateActionSub: {
-    fontSize: 10.5,
-    color: '#6D28D9',
-  },
-  templateAiBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#7C3AED',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  templateAiBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
     color: '#FFFFFF',
   },
 });
