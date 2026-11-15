@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../ui';
 import { apiRequest } from '../../lib/api';
 import {
@@ -128,6 +129,7 @@ export function MediaMetadataSheet({
   workspaceLocale?: WorkspaceLocaleInfo | null;
   onSaved: (message: string) => void | Promise<void>;
 }) {
+  const insets = useSafeAreaInsets();
   const detected = detectDeviceCountryAndTimezone();
   const sessionKeyRef = useRef(0);
   const isEditMode = Boolean(editingItem && (editingItem.postId || editingItem.id));
@@ -517,8 +519,8 @@ export function MediaMetadataSheet({
           </View>
         ) : (
           <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-            {/* ── TOP NAV BAR ── */}
-            <View style={styles.navBar}>
+            {/* ── TOP NAV BAR (WITH SAFE AREA INSETS) ── */}
+            <View style={[styles.navBar, { paddingTop: insets.top, height: 56 + insets.top }]}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
@@ -548,7 +550,7 @@ export function MediaMetadataSheet({
 
             <ScrollView
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.scrollContent}
+              contentContainerStyle={[styles.scrollContent, { paddingBottom: 96 + insets.bottom }]}
             >
               {errorMsg ? (
                 <View style={styles.errorBanner}>
@@ -855,7 +857,7 @@ export function MediaMetadataSheet({
             </ScrollView>
 
             {/* ── FIXED BOTTOM ACTION BAR (SHARE, DOWNLOAD, POST TO GOOGLE) ── */}
-            <View style={styles.bottomActionBar}>
+            <View style={[styles.bottomActionBar, { height: 72 + insets.bottom, paddingBottom: insets.bottom }]}>
               <Pressable
                 onPress={handleWhatsAppShare}
                 style={styles.actionOutlineBtn}

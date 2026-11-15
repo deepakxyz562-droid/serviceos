@@ -9,6 +9,7 @@ import { normalizePendingUpload, type PendingUpload } from '../../src/lib/upload
 import { useMediaUploadStore } from '../../src/stores/media-upload-store';
 import { ScheduledPhotosTimeline, type MediaTabKey } from '../../src/components/gbp/scheduled-photos-timeline';
 import { MediaMetadataSheet } from '../../src/components/gbp/media-metadata-sheet';
+import { AiStudioFeed } from '../../src/components/gbp/ai-studio-feed';
 import type {
   GbpConnectionState,
   GbpPhoto,
@@ -31,11 +32,14 @@ interface DiscoverResponse {
  */
 export default function PhotosScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ mediaId?: string; photoId?: string; tab?: string }>();
+  const params = useLocalSearchParams<{ mediaId?: string; photoId?: string; tab?: string; mode?: string }>();
   const photosRes = useResource<PhotosResponse>('/api/social/photos');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
 
+  const [viewMode, setViewMode] = useState<'media' | 'studio'>(
+    params.mode === 'studio' ? 'studio' : 'media'
+  );
   const [pendingAssets, setPendingAssets] = useState<PendingUpload[]>([]);
   const [composerVisible, setComposerVisible] = useState(false);
   const [composerMode, setComposerMode] = useState<'upload' | 'ai_generate'>('upload');
@@ -60,6 +64,12 @@ export default function PhotosScreen() {
 
   const lastCompletionSeq = useMediaUploadStore((s) => s.lastCompletionSeq);
   const lastCompletedJob = useMediaUploadStore((s) => s.lastCompletedJob);
+
+  useEffect(() => {
+    if (params.mode === 'studio') {
+      setViewMode('studio');
+    }
+  }, [params.mode]);
 
   useEffect(() => {
     const nextId = params.mediaId || params.photoId || null;
@@ -198,11 +208,7 @@ export default function PhotosScreen() {
   };
 
   const handleAiCreate = () => {
-    setPendingAssets([]);
-    setSelectedTemplate(null);
-    setEditingItem(null);
-    setComposerMode('ai_generate');
-    setComposerVisible(true);
+    setViewMode('studio');
   };
 
   const handleSelectTemplate = (tpl: any) => {
@@ -223,6 +229,41 @@ export default function PhotosScreen() {
       <Text style={styles.helpButtonText}>Help</Text>
     </Pressable>
   );
+
+  if (viewMode === 'studio') {
+    return (
+      <View style={styles.screenWrapper}>
+        <AiStudioFeed
+          businessName={profileName}
+          industry={
+            gbpPlace.data?.place?.category ||
+            gbpPlace.data?.tenantFallback?.category ||
+            'IT & Software Development'
+          }
+          city={gbpPlace.data?.place?.city || (gbpPlace.data?.tenantFallback as any)?.city || 'Patna'}
+          phone={gbpPlace.data?.place?.phone || gbpPlace.data?.tenantFallback?.phone || undefined}
+          logoUrl={gbpPlace.data?.googlePicture || undefined}
+          onSelectTemplate={handleSelectTemplate}
+          onBack={() => setViewMode('media')}
+        />
+
+        <MediaMetadataSheet
+          visible={composerVisible}
+          onClose={() => setComposerVisible(false)}
+          businessName={profileName}
+          pendingAssets={pendingAssets}
+          editingItem={editingItem}
+          selectedTemplate={selectedTemplate}
+          workspaceLocale={photosRes.data?.locale || null}
+          initialMode={composerMode}
+          onSaved={async (msg) => {
+            setStatusBanner(msg);
+            await photosRes.refresh();
+          }}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screenWrapper}>

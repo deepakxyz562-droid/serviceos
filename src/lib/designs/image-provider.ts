@@ -242,7 +242,10 @@ function isTrustedStorageHost(hostname: string): boolean {
     host.endsWith('unsplash.com') ||
     host.endsWith('pexels.com') ||
     host.endsWith('pixabay.com') ||
-    host.endsWith('cloudinary.com')
+    host.endsWith('cloudinary.com') ||
+    host.endsWith('pinterest.com') ||
+    host.endsWith('pinimg.com') ||
+    host.endsWith('behance.net')
   ) {
     return true;
   }

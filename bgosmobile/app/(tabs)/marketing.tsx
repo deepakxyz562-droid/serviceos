@@ -62,7 +62,6 @@ import { futureLocalTime } from '../../src/lib/dates';
 import { loadJson, saveJson } from '../../src/lib/device-storage';
 import { PostsBoard, PostDetailModal, type PostPill, type SocialPostRow } from '../../src/components/gbp/posts-list';
 import { SocialCalendarView } from '../../src/components/gbp/social-calendar';
-import { ViralVideoModal } from '../../src/components/gbp/viral-video-modal';
 import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
 import { UpcomingPostsCarousel } from '../../src/components/gbp/upcoming-posts-carousel';
 import { CreateGbpPostModal, type GeneratedPostData } from '../../src/components/gbp/create-gbp-post-modal';
@@ -679,7 +678,6 @@ export default function MarketingScreen() {
         : 'posts'
   );
   const [createPostModalOpen, setCreatePostModalOpen] = useState(false);
-  const [viralVideoModalOpen, setViralVideoModalOpen] = useState(params.mode === 'video');
   const [reviewPostModalOpen, setReviewPostModalOpen] = useState(false);
   const [activeReviewPost, setActiveReviewPost] = useState<GeneratedPostData | null>(null);
   const [focusedPostId, setFocusedPostId] = useState<string | null>(
@@ -703,12 +701,7 @@ export default function MarketingScreen() {
     } else if (params.mode === 'autopilot') {
       setActiveMode('autopilot');
     } else if (params.mode === 'studio' || params.mode === 'posters') {
-      setActiveMode('studio');
-      setStudioCreateTab('templates');
-    } else if (params.mode === 'video') {
-      setActiveMode('posts');
-      setPostSubView('calendar');
-      setViralVideoModalOpen(true);
+      router.replace('/photos?mode=studio');
     }
     if (typeof params.postId === 'string' && params.postId) {
       setFocusedPostId(params.postId);
@@ -6403,12 +6396,7 @@ export default function MarketingScreen() {
         }}
       />
 
-      {/* ── Viral Video Reels & Posts Script Modal ── */}
-      <ViralVideoModal
-        visible={viralVideoModalOpen}
-        onClose={() => setViralVideoModalOpen(false)}
-        businessName={effectiveBusinessName}
-      />
+
       </View>
     </KeyboardAvoidingView>
   );

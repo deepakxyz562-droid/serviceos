@@ -398,6 +398,16 @@ export function ScheduledPhotosTimeline({
             Curated for {businessName} · 1-Tap to customize &amp; publish
           </Text>
         </View>
+        {onAiCreatePress ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open AI Studio"
+            onPress={onAiCreatePress}
+            hitSlop={8}
+          >
+            <Text style={styles.viewAllLink}>Studio (50) &gt;</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Bucket Filter Pills */}
