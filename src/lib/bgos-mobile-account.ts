@@ -65,6 +65,7 @@ export async function ensureBgosTenantAndWorkspace(
         trialEndsAt,
         country: geo.countryCode,
         currency: geo.currency,
+        publicProfileEnabled: true,
         ...(deviceTz
           ? {
               settingsJson: JSON.stringify({

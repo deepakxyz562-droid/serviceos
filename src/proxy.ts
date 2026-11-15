@@ -265,6 +265,17 @@ export async function proxy(request: NextRequest) {
     ['GET', 'HEAD'].includes(request.method) &&
     pathname !== '/'
   ) {
+    // Never rewrite static assets (files with extensions) or framework chunks
+    if (
+      pathname.startsWith('/_next/') ||
+      pathname.startsWith('/api/') ||
+      pathname.includes('.') ||
+      /\.[a-zA-Z0-9]+$/.test(pathname)
+    ) {
+      // Allow Next.js static asset handler to serve the file directly
+      return NextResponse.next();
+    }
+
     const match = pathname.match(/^\/([a-zA-Z0-9_-]+)(\/.*)?$/);
     if (match) {
       const slugCandidate = match[1].toLowerCase();
@@ -273,7 +284,8 @@ export async function proxy(request: NextRequest) {
         'terms-of-service', 'privacy-policy', 'data-deletion', 'auth', 'auth-callback',
         'gbp-callback', 'inbox', 'bgos-home', 'bos-home', 'quote-flow', 'marketplace',
         'favicon.ico', 'robots.txt', 'sitemap.xml', 'images', 'uploads', 'assets', 'static',
-        'admin', 'dashboard', 'settings', 'help', 'pricing', 'manifest.json', 'report'
+        'admin', 'dashboard', 'settings', 'help', 'pricing', 'manifest.json', 'report',
+        'bgos', 'bos', 'fieseros', 'brand', 'icons', 'fonts'
       ]);
       if (!BGOS_RESERVED.has(slugCandidate)) {
         const subPath = match[2] || '';

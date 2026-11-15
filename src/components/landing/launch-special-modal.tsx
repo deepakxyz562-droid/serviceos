@@ -75,6 +75,19 @@ export function LaunchSpecialModal() {
   // users + only when the launch_special promo is still active).
   useEffect(() => {
     if (!launchSpecialActive) return;
+    if (typeof window !== 'undefined') {
+      const host = window.location.host.toLowerCase();
+      const path = window.location.pathname.toLowerCase();
+      if (
+        host === 'bgos.site' ||
+        host === 'www.bgos.site' ||
+        host.endsWith('.bgos.site') ||
+        path.startsWith('/b/') ||
+        path.startsWith('/bgos-home')
+      ) {
+        return;
+      }
+    }
     if (isAuthenticated() || wasDismissed()) return;
 
     const timer = setTimeout(() => {

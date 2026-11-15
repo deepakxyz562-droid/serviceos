@@ -76,6 +76,25 @@ function isIOS(): boolean {
   return /iPad|iPhone|iPod/.test(ua) || isIpad;
 }
 
+function isInstallPromptSuppressed(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const host = window.location.host.toLowerCase();
+    const path = window.location.pathname.toLowerCase();
+    if (
+      host === 'bgos.site' ||
+      host === 'www.bgos.site' ||
+      host.endsWith('.bgos.site') ||
+      path.startsWith('/b/') ||
+      path.startsWith('/bgos-home') ||
+      (path === '/' && (host === 'bgos.site' || host.endsWith('.bgos.site')))
+    ) {
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
 /**
  * Install banner — shows when `beforeinstallprompt` fires AND the app is not
  * installed AND the user hasn't dismissed in the last 7 days.
@@ -100,7 +119,7 @@ export default function InstallPrompt() {
   const iosDismissKey = isBgos ? BGOS_IOS_DISMISS_KEY : IOS_DISMISS_KEY;
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || isInstallPromptSuppressed()) return;
     setIsBgos(detectBgosBrand());
 
     const observer = new MutationObserver(() => {
@@ -208,7 +227,7 @@ export default function InstallPrompt() {
     setIosVisible(false);
   }, [iosDismissKey]);
 
-  if (installed) return null;
+  if (installed || isInstallPromptSuppressed()) return null;
 
   // Android / Chrome desktop install banner
   if (visible && deferredPrompt) {

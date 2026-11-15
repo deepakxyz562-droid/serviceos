@@ -43,9 +43,24 @@ function GooglePlayIcon({ size = 20 }: { size?: number }) {
 }
 
 function Logo() {
+  const [imgError, setImgError] = useState(false);
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <img src="/bgos/primary-logo.png" alt="BGOS — Business Growth Operating System" width={138} height={42} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      {!imgError ? (
+        <img
+          src="/bgos/primary-logo.png"
+          alt="BGOS — Business Growth Operating System"
+          width={138}
+          height={42}
+          onError={() => setImgError(true)}
+          style={{ height: 38, width: 'auto', objectFit: 'contain', display: 'block' }}
+        />
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 900, fontSize: 22, color: '#009f50', letterSpacing: -0.5 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 8, background: '#009f50', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 900 }}>b</div>
+          <span style={{ color: '#0f172a' }}>BGOS</span>
+        </div>
+      )}
     </div>
   );
 }
