@@ -29,6 +29,9 @@ mobile-pro/*
 !mobile-pro/package.json
 mobile-employee/*
 !mobile-employee/package.json
+nimo-mobile
+quote-flow-mobile
+bos-customer-mobile
 docs
 playwright-report
 test-results
