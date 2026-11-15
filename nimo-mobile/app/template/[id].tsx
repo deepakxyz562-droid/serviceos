@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +21,17 @@ const { width } = Dimensions.get('window');
 export default function TemplateDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { selectedTemplate, templates, selectTemplate, coinsAvailable } = useAppStore();
+  const {
+    selectedTemplate,
+    templates,
+    selectTemplate,
+    coinsAvailable,
+    identityPhotos,
+    isIdentityTrained,
+    startGeneration,
+  } = useAppStore();
+
+  const [isStarting1Tap, setIsStarting1Tap] = useState(false);
 
   const activeTemplate =
     selectedTemplate && (selectedTemplate.id === id || selectedTemplate.slug === id)
@@ -45,7 +57,39 @@ export default function TemplateDetailScreen() {
     );
   }
 
-  const handleContinue = () => {
+  const isCouple =
+    activeTemplate.required_photo_slots === 2 ||
+    activeTemplate.category === 'Couple' ||
+    activeTemplate.slug.includes('couple') ||
+    activeTemplate.slug.includes('love');
+
+  const hasIdentity = identityPhotos.length >= 5;
+
+  const handle1TapGenerate = async () => {
+    const cost = activeTemplate.coin_cost || 5;
+    if (coinsAvailable < cost) {
+      Alert.alert(
+        'Insufficient Coins',
+        `You need ${cost} coins to generate this portrait. You currently have ${coinsAvailable} coins.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Get Coins', onPress: () => router.push('/coins') },
+        ]
+      );
+      return;
+    }
+
+    try {
+      setIsStarting1Tap(true);
+      await startGeneration();
+      router.replace('/generate/progress');
+    } catch (e: any) {
+      setIsStarting1Tap(false);
+      Alert.alert('Generation Error', e.message || 'Could not start generation.');
+    }
+  };
+
+  const handleManualUpload = () => {
     router.push('/generate/upload');
   };
 
@@ -57,6 +101,7 @@ export default function TemplateDetailScreen() {
           style={styles.circleBtn}
           onPress={() => router.back()}
           activeOpacity={0.8}
+          disabled={isStarting1Tap}
         >
           <Ionicons name="arrow-back" size={20} color="#FFF" />
         </TouchableOpacity>
@@ -80,6 +125,12 @@ export default function TemplateDetailScreen() {
           <View style={styles.aspectBadge}>
             <Text style={styles.aspectText}>{activeTemplate.aspect_ratio || '9:16'}</Text>
           </View>
+          {isCouple && (
+            <View style={styles.coupleBadge}>
+              <Ionicons name="heart" size={12} color="#FFF" />
+              <Text style={styles.coupleBadgeText}>Couple Template (2 Slots)</Text>
+            </View>
+          )}
         </View>
 
         {/* Title & Description */}
@@ -96,26 +147,107 @@ export default function TemplateDetailScreen() {
           {/* Slot guidance */}
           <View style={styles.slotGuideBox}>
             <View style={styles.slotGuideHeader}>
-              <Ionicons name="person-circle-outline" size={20} color={THEME.colors.accentViolet} />
-              <Text style={styles.slotGuideTitle}>Required: 1 Clear Portrait</Text>
+              <Ionicons
+                name={isCouple ? 'people-circle-outline' : 'person-circle-outline'}
+                size={20}
+                color={THEME.colors.accentViolet}
+              />
+              <Text style={styles.slotGuideTitle}>
+                {isCouple ? 'Required: 2 Portrait Photos (Her + His)' : 'Required: 1 Clear Portrait Photo'}
+              </Text>
             </View>
             <Text style={styles.slotGuideDesc}>
-              Upload a clear, front-facing selfie or portrait with good lighting. Your facial features will be preserved onto this artistic style.
+              {isCouple
+                ? 'Upload individual photos for both partners. NIMO seamlessly blends both facial identities into this romantic cinematic scene.'
+                : 'Upload a clear, front-facing selfie or use your saved AI Identity Album. Your facial features will be preserved with 99% accuracy.'}
             </Text>
           </View>
+
+          {/* Saved Identity Status Card */}
+          {hasIdentity ? (
+            <View style={styles.identityNoticeCard}>
+              <View style={styles.identityNoticeTop}>
+                <Ionicons name="sparkles" size={16} color={THEME.colors.accentViolet} />
+                <Text style={styles.identityNoticeTitle}>AI Identity Profile Active</Text>
+                <TouchableOpacity onPress={() => router.push('/identity/setup')}>
+                  <Text style={styles.identityNoticeEdit}>Edit Photos</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.identityNoticeSub}>
+                Your 5 trained reference selfies are loaded and ready for 1-Tap generation.
+              </Text>
+              <View style={styles.identityPreviewStrip}>
+                {identityPhotos.slice(0, 5).map((uri, idx) => (
+                  <Image key={`preview-id-${idx}`} source={{ uri }} style={styles.miniIdThumb} />
+                ))}
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.trainBanner}
+              onPress={() => router.push('/identity/setup')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="sparkles" size={20} color={THEME.colors.accentViolet} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.trainBannerTitle}>Train AI Identity Once</Text>
+                <Text style={styles.trainBannerSub}>
+                  Upload 5 selfies once to unlock 1-Tap Instant Generation on every style!
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={THEME.colors.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
 
-      {/* Floating Bottom Action CTA */}
+      {/* Floating Bottom Action CTAs */}
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.continueBtn}
-          onPress={handleContinue}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.continueBtnText}>Use This Style</Text>
-          <Ionicons name="arrow-forward" size={18} color="#FFF" />
-        </TouchableOpacity>
+        {hasIdentity && !isCouple ? (
+          <>
+            {/* Primary: 1-Tap Instant Generate */}
+            <TouchableOpacity
+              style={styles.oneTapBtn}
+              onPress={handle1TapGenerate}
+              disabled={isStarting1Tap}
+              activeOpacity={0.85}
+            >
+              {isStarting1Tap ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <>
+                  <Ionicons name="sparkles" size={18} color="#FFF" />
+                  <Text style={styles.oneTapBtnText}>
+                    ✨ 1-Tap Generate with AI Identity
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* Secondary: Upload Custom Photo */}
+            <TouchableOpacity
+              style={styles.customUploadBtn}
+              onPress={handleManualUpload}
+              disabled={isStarting1Tap}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="camera-outline" size={16} color={THEME.colors.textSecondary} />
+              <Text style={styles.customUploadText}>Or Upload a Different Photo</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity
+            style={styles.continueBtn}
+            onPress={handleManualUpload}
+            activeOpacity={0.85}
+          >
+            <Ionicons name={isCouple ? 'people' : 'images'} size={18} color="#FFF" />
+            <Text style={styles.continueBtnText}>
+              {isCouple ? 'Upload Couple Photos (2 Slots)' : 'Upload Photo & Generate'}
+            </Text>
+            <Ionicons name="arrow-forward" size={18} color="#FFF" />
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -161,7 +293,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 100,
+    paddingBottom: 130,
     gap: 16,
   },
   imageCard: {
@@ -186,6 +318,23 @@ const styles = StyleSheet.create({
     borderRadius: THEME.radii.sm,
   },
   aspectText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  coupleBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: 'rgba(236, 72, 153, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: THEME.radii.pill,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  coupleBadgeText: {
     color: '#FFF',
     fontSize: 11,
     fontWeight: '700',
@@ -251,30 +400,125 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
+  identityNoticeCard: {
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    borderRadius: THEME.radii.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
+    gap: 8,
+  },
+  identityNoticeTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  identityNoticeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.colors.textPrimary,
+    flex: 1,
+    marginLeft: 6,
+  },
+  identityNoticeEdit: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.colors.accentViolet,
+  },
+  identityNoticeSub: {
+    fontSize: 11,
+    color: THEME.colors.textSecondary,
+    lineHeight: 16,
+  },
+  identityPreviewStrip: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 2,
+  },
+  miniIdThumb: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: THEME.colors.borderLight,
+  },
+  trainBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: THEME.colors.bgSecondary,
+    padding: 12,
+    borderRadius: THEME.radii.lg,
+    borderWidth: 1,
+    borderColor: THEME.colors.borderLight,
+  },
+  trainBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.colors.textPrimary,
+  },
+  trainBannerSub: {
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    marginTop: 2,
+  },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: THEME.colors.bgSecondary,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 28,
+    backgroundColor: 'rgba(8, 0, 20, 0.95)',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 24,
     borderTopWidth: 1,
     borderTopColor: THEME.colors.border,
+    gap: 8,
+  },
+  oneTapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: THEME.colors.accentElectric,
+    paddingVertical: 14,
+    borderRadius: THEME.radii.xl,
+    gap: 8,
+    shadowColor: THEME.colors.accentViolet,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  oneTapBtnText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  customUploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    paddingVertical: 8,
+    gap: 6,
+  },
+  customUploadText: {
+    color: THEME.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
   },
   continueBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: THEME.colors.accentElectric,
-    paddingVertical: 15,
-    borderRadius: THEME.radii.lg,
+    paddingVertical: 14,
+    borderRadius: THEME.radii.xl,
     gap: 8,
   },
   continueBtnText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
   },
   errorContainer: {

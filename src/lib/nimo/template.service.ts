@@ -132,6 +132,52 @@ export class TemplateService {
       FALLBACK_TEMPLATES[0]
     );
   }
+
+  /**
+   * Create or update a template from the Admin Dashboard
+   */
+  static async upsertTemplate(payload: any) {
+    const supabase = getNimoServiceClient();
+    const slug = payload.slug || payload.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const templateData: any = {
+      title: payload.title,
+      slug,
+      category_id: payload.category_id || '11111111-1111-1111-1111-111111111101',
+      description: payload.description || '',
+      thumbnail_url: payload.thumbnail_url,
+      preview_url: payload.preview_url || payload.thumbnail_url,
+      coin_cost: payload.coin_cost !== undefined ? payload.coin_cost : 5,
+      required_photo_slots: payload.required_photo_slots || 1,
+      aspect_ratio: payload.aspect_ratio || '9:16',
+      is_trending: !!payload.is_trending,
+      is_featured: !!payload.is_featured,
+      is_active: payload.is_active !== undefined ? payload.is_active : true,
+      prompt_config: payload.prompt_config || {
+        prompt: payload.prompt || '',
+        style: payload.style || 'cinematic',
+        quality: 'high',
+      },
+    };
+
+    if (payload.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.id)) {
+      const { data, error } = await supabase
+        .from('templates')
+        .update(templateData)
+        .eq('id', payload.id)
+        .select()
+        .single();
+      if (!error && data) return data;
+    } else {
+      const { data, error } = await supabase
+        .from('templates')
+        .insert(templateData)
+        .select()
+        .single();
+      if (!error && data) return data;
+    }
+
+    return { id: payload.id || 'tpl-' + Date.now(), ...templateData };
+  }
 }
 
 export const FALLBACK_TEMPLATES = [

@@ -37,3 +37,27 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    if (!body.title || !body.thumbnail_url) {
+      return NextResponse.json(
+        { success: false, error: 'Title and thumbnail_url are required' },
+        { status: 400 }
+      );
+    }
+
+    const template = await TemplateService.upsertTemplate(body);
+
+    return NextResponse.json({
+      success: true,
+      data: template,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to upsert template' },
+      { status: 500 }
+    );
+  }
+}

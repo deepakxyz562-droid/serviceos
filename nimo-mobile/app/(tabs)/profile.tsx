@@ -15,7 +15,7 @@ import { useAppStore } from '../../src/store/useAppStore';
 
 export default function MyProfileScreen() {
   const router = useRouter();
-  const { userName, userEmail, coinsAvailable, creationsCount, subscriptionPlan } = useAppStore();
+  const { userName, userEmail, coinsAvailable, creationsCount, subscriptionPlan, identityPhotos } = useAppStore();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -78,6 +78,43 @@ export default function MyProfileScreen() {
             <Text style={styles.statLabel}>Plan</Text>
           </TouchableOpacity>
         </View>
+
+        {/* VIP AI Identity Album Card */}
+        <TouchableOpacity
+          style={styles.identityCard}
+          onPress={() => router.push('/identity/setup')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.identityCardHeader}>
+            <View style={styles.identityIconBadge}>
+              <Ionicons name="sparkles" size={18} color={THEME.colors.accentViolet} />
+            </View>
+            <View style={styles.identityTitleCol}>
+              <Text style={styles.identityTitle}>My AI Identity Profile</Text>
+              <Text style={styles.identitySubtitle}>
+                {identityPhotos.length >= 5
+                  ? `${identityPhotos.length} Photos Trained • 1-Tap Ready ✨`
+                  : `${identityPhotos.length}/5 Photos • Complete to unlock 1-Tap`}
+              </Text>
+            </View>
+            <View style={styles.identityActionBtn}>
+              <Text style={styles.identityActionText}>Manage</Text>
+              <Ionicons name="chevron-forward" size={14} color={THEME.colors.accentViolet} />
+            </View>
+          </View>
+
+          {/* Quick Photo Preview Strip */}
+          <View style={styles.identityThumbsRow}>
+            {identityPhotos.slice(0, 5).map((uri, idx) => (
+              <Image key={`id-thumb-${idx}`} source={{ uri }} style={styles.identityThumb} resizeMode="cover" />
+            ))}
+            {identityPhotos.length < 5 && (
+              <View style={styles.identityThumbEmpty}>
+                <Ionicons name="add" size={16} color={THEME.colors.textMuted} />
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
 
         {/* Menu Navigation Rows */}
         <View style={styles.menuContainer}>
@@ -261,6 +298,77 @@ const styles = StyleSheet.create({
     height: 32,
     backgroundColor: THEME.colors.border,
     alignSelf: 'center',
+  },
+  identityCard: {
+    backgroundColor: THEME.colors.bgCard,
+    borderRadius: THEME.radii.xl,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: THEME.colors.borderLight,
+    marginBottom: 16,
+    gap: 12,
+  },
+  identityCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  identityIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(139, 92, 246, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  identityTitleCol: {
+    flex: 1,
+  },
+  identityTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: THEME.colors.textPrimary,
+  },
+  identitySubtitle: {
+    fontSize: 12,
+    color: THEME.colors.accentViolet,
+    marginTop: 2,
+  },
+  identityActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: THEME.radii.pill,
+  },
+  identityActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.colors.accentViolet,
+  },
+  identityThumbsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  identityThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: THEME.colors.borderLight,
+  },
+  identityThumbEmpty: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: THEME.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
   menuContainer: {
     backgroundColor: THEME.colors.bgCard,

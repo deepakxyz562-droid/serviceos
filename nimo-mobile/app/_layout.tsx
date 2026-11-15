@@ -33,6 +33,7 @@ export default function RootLayout() {
         <Stack.Screen name="video-studio/create" options={{ headerShown: false, animation: 'slide_from_right' }} />
 
         {/* Generation & Results Stack */}
+        <Stack.Screen name="identity/setup" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="template/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="generate/upload" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="generate/progress" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />

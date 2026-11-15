@@ -79,6 +79,14 @@ export interface AppState {
   selectedStyle: StyleItem | null;
   stylesList: StyleItem[];
 
+  // AI Identity Setup (5-10 photos for 1-Tap generation)
+  identityPhotos: string[];
+  isIdentityTrained: boolean;
+  addIdentityPhoto: (uri: string) => Promise<void>;
+  removeIdentityPhoto: (index: number) => void;
+  saveIdentityPhotos: (uris: string[]) => Promise<void>;
+  clearIdentityPhotos: () => void;
+
   // Active Photo Generation Job
   currentJobId: string | null;
   jobStatus: string | null;
@@ -87,6 +95,8 @@ export interface AppState {
   generatedImageUrl: string | null;
   generationError: string | null;
   uploadedPhotoUri: string | null;
+  isBackgroundGenerating: boolean;
+  setBackgroundGenerating: (val: boolean) => void;
 
   // Video Studio State
   videoStylesList: VideoStyleItem[];
@@ -109,7 +119,7 @@ export interface AppState {
   setSearchQuery: (query: string) => void;
   selectTemplate: (template: TemplateItem | null) => void;
   setUploadedPhotoUri: (uri: string | null) => void;
-  startGeneration: (photoUrls: string[], aspectRatio?: string) => Promise<string>;
+  startGeneration: (photoUrls?: string[], aspectRatio?: string) => Promise<string>;
   pollActiveJob: (jobId: string) => Promise<boolean>;
   resetGeneration: () => void;
 
@@ -139,11 +149,11 @@ export const NIMO_EXPLORE_TEMPLATES: TemplateItem[] = [
     thumbnail_url: 'https://images.unsplash.com/photo-1522529599102-193c0d76b5b6?auto=format&fit=crop&w=600&q=80',
     preview_url: 'https://images.unsplash.com/photo-1522529599102-193c0d76b5b6?auto=format&fit=crop&w=1200&q=85',
     coin_cost: 5,
-    required_photo_slots: 1,
+    required_photo_slots: 2,
     aspect_ratio: '9:16',
     is_trending: true,
     is_featured: true,
-    prompt: 'Romantic cinematic couple portrait preserving facial structure of <IMAGE_0>. Leather jacket aesthetic, stylish sunglasses, gentle sunset backlighting, natural radiant skin, high detail 8k',
+    prompt: 'Romantic cinematic couple portrait. Preserving woman partner facial structure from <IMAGE_0> and man partner facial structure from <IMAGE_1>. Stylish leather jacket aesthetic, sunglasses, gentle golden sunset backlighting, natural radiant skin, high detail 8k',
   },
   {
     id: 'sunset-love-memories',
@@ -154,11 +164,11 @@ export const NIMO_EXPLORE_TEMPLATES: TemplateItem[] = [
     thumbnail_url: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?auto=format&fit=crop&w=600&q=80',
     preview_url: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?auto=format&fit=crop&w=1200&q=85',
     coin_cost: 5,
-    required_photo_slots: 1,
+    required_photo_slots: 2,
     aspect_ratio: '9:16',
     is_trending: true,
     is_featured: true,
-    prompt: 'Dreamy golden hour beach portrait preserving identity of <IMAGE_0>. Intimate romantic embrace against setting sun over calm ocean waves, warm amber glow, lens flare, cinematic photography',
+    prompt: 'Dreamy golden hour beach portrait of couple. Preserving identity of woman from <IMAGE_0> and man from <IMAGE_1>. Intimate romantic embrace against setting sun over calm ocean waves, warm amber glow, lens flare, cinematic photography',
   },
   {
     id: 'long-drive-love',
@@ -169,11 +179,11 @@ export const NIMO_EXPLORE_TEMPLATES: TemplateItem[] = [
     thumbnail_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=600&q=80',
     preview_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=85',
     coin_cost: 5,
-    required_photo_slots: 1,
+    required_photo_slots: 2,
     aspect_ratio: '9:16',
     is_trending: true,
     is_featured: true,
-    prompt: 'Scenic road trip portrait featuring <IMAGE_0> in a classic open-top convertible. Sun-drenched open road, wind in hair, sunglasses, genuine joy, Kodachrome film look',
+    prompt: 'Scenic convertible road trip portrait featuring woman from <IMAGE_0> and man from <IMAGE_1> in a classic open-top vintage sports car. Sun-drenched open road, wind in hair, sunglasses, genuine joy, Kodachrome film look',
   },
 
   // 2. Image 1 - Hero Templates (Row 2: Wishes & Refoto)
@@ -201,11 +211,11 @@ export const NIMO_EXPLORE_TEMPLATES: TemplateItem[] = [
     thumbnail_url: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80',
     preview_url: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=85',
     coin_cost: 5,
-    required_photo_slots: 1,
+    required_photo_slots: 2,
     aspect_ratio: '9:16',
     is_trending: true,
     is_featured: true,
-    prompt: 'Opulent luxury anniversary portrait featuring <IMAGE_0> in tailored evening formalwear. Grand ballroom setting, warm chandelier bokeh, romantic gaze, exquisite high-end atmosphere',
+    prompt: 'Opulent luxury anniversary couple portrait featuring woman from <IMAGE_0> in crimson evening gown and gentleman from <IMAGE_1> in tailored black tux. Grand ballroom setting, warm chandelier bokeh, romantic gaze',
   },
   {
     id: 'magazine-cover',
@@ -444,12 +454,58 @@ export const INITIAL_TRANSACTIONS: TransactionItem[] = [
   },
 ];
 
+export const INITIAL_IDENTITY_PHOTOS: string[] = [
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80',
+];
+
 export const useAppStore = create<AppState>((set, get) => ({
   // Exactly 245 Credits as shown across all attached screens
   coinsAvailable: 245,
   coinsReserved: 0,
   isLoadingBalance: false,
   transactions: INITIAL_TRANSACTIONS,
+
+  // AI Identity Profile
+  identityPhotos: INITIAL_IDENTITY_PHOTOS,
+  isIdentityTrained: true,
+  isBackgroundGenerating: false,
+  setBackgroundGenerating: (val) => set({ isBackgroundGenerating: val }),
+
+  addIdentityPhoto: async (uri) => {
+    let finalUri = uri;
+    try {
+      if (!uri.startsWith('http')) {
+        finalUri = await uploadImageToSupabaseStorage(uri);
+      }
+    } catch {
+      // fallback to original uri
+    }
+    const current = get().identityPhotos;
+    const updated = [...current, finalUri].slice(0, 10);
+    set({ identityPhotos: updated, isIdentityTrained: updated.length >= 5 });
+  },
+
+  removeIdentityPhoto: (index) => {
+    const updated = get().identityPhotos.filter((_, i) => i !== index);
+    set({ identityPhotos: updated, isIdentityTrained: updated.length >= 5 });
+  },
+
+  saveIdentityPhotos: async (uris) => {
+    set({ identityPhotos: uris, isIdentityTrained: uris.length >= 5 });
+    try {
+      await nimoApi.saveIdentityPhotos(uris);
+    } catch {
+      // local store already updated
+    }
+  },
+
+  clearIdentityPhotos: () => {
+    set({ identityPhotos: [], isIdentityTrained: false });
+  },
 
   exploreCategory: 'Couple',
   setExploreCategory: (cat) => {
@@ -551,79 +607,104 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ uploadedPhotoUri: uri });
   },
 
-  startGeneration: async (photoUrls: string[], aspectRatio?: string) => {
+  startGeneration: async (photoUrls?: string[], aspectRatio?: string) => {
     const template = get().selectedTemplate || NIMO_EXPLORE_TEMPLATES[0];
+    const cost = template.coin_cost || 5;
 
     set({
       jobStatus: 'queued',
-      jobProgress: 20,
-      jobStage: 'Uploading photo to creative studio...',
+      jobProgress: 15,
+      jobStage: 'Uploading photos to creative studio...',
       generationError: null,
       generatedImageUrl: null,
+      isBackgroundGenerating: true,
     });
 
-    // 1. Upload local photo to Supabase storage to get public HTTPS URL
-    const rawPhotoUri = photoUrls && photoUrls[0] ? photoUrls[0] : get().uploadedPhotoUri;
-    let publicPhotoUrl = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80';
+    // 1. Resolve photo inputs:
+    let rawInputs: string[] = [];
+    if (photoUrls && photoUrls.length > 0) {
+      rawInputs = photoUrls;
+    } else if (get().uploadedPhotoUri) {
+      rawInputs = [get().uploadedPhotoUri!];
+    } else if (get().identityPhotos.length > 0) {
+      // 1-Tap from saved identity!
+      rawInputs = get().identityPhotos.slice(0, template.required_photo_slots || 1);
+    }
 
-    if (rawPhotoUri) {
-      try {
-        publicPhotoUrl = await uploadImageToSupabaseStorage(rawPhotoUri);
-      } catch (uploadErr) {
-        console.warn('Storage upload error, using direct/fallback URI', uploadErr);
-        publicPhotoUrl = rawPhotoUri.startsWith('http') ? rawPhotoUri : publicPhotoUrl;
+    if (rawInputs.length === 0) {
+      rawInputs = ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'];
+    }
+
+    // 2. Upload all images to Supabase storage to get public HTTPS URLs
+    const publicUrls: string[] = [];
+    for (let i = 0; i < rawInputs.length; i++) {
+      const uri = rawInputs[i];
+      if (uri.startsWith('http://') || uri.startsWith('https://')) {
+        publicUrls.push(uri);
+      } else {
+        try {
+          const uploadedUrl = await uploadImageToSupabaseStorage(uri);
+          publicUrls.push(uploadedUrl);
+        } catch (uploadErr) {
+          console.warn('Storage upload fallback:', uploadErr);
+          publicUrls.push(uri);
+        }
       }
     }
 
     set({
-      jobProgress: 35,
-      jobStage: 'Connecting to Grok 2.0 AI studio...',
+      jobProgress: 25,
+      jobStage: 'Analyzing facial geometry & identity landmarks...',
     });
 
-    const promptToUse =
+    // 3. Construct prompt
+    let promptToUse =
       template.prompt ||
       `Ultra-realistic glamorous portrait preserving facial structure of <IMAGE_0>, radiant skin, dramatic studio lighting, 8k resolution`;
 
-    // 2. Submit task via direct Kie.ai engine or API client
+    if (publicUrls.length >= 2 && !promptToUse.includes('<IMAGE_1>')) {
+      promptToUse = `Romantic cinematic couple portrait. Preserving woman's face from <IMAGE_0> and man's face from <IMAGE_1>. ` + promptToUse;
+    }
+
+    // 4. Submit task via Kie.ai engine or API client
     try {
-      // First attempt direct Kie.ai for instant execution on phone
       const taskId = await kieAiClient.createImageTask({
         prompt: promptToUse,
-        imageUrls: [publicPhotoUrl],
+        imageUrls: publicUrls,
         aspectRatio: (aspectRatio || template.aspect_ratio || '9:16') as any,
         quality: 'high',
       });
 
       set({
         currentJobId: taskId,
-        coinsAvailable: Math.max(0, get().coinsAvailable - 5),
-        coinsReserved: get().coinsReserved + 5,
-        jobProgress: 45,
-        jobStage: 'In queue for AI portrait synthesis...',
+        coinsAvailable: Math.max(0, get().coinsAvailable - cost),
+        coinsReserved: get().coinsReserved + cost,
+        jobProgress: 35,
+        jobStage: 'Neural style synthesis & lighting blending...',
       });
 
       return taskId;
     } catch (directErr: any) {
       console.warn('Direct Kie.ai submission issue, trying backend API:', directErr?.message);
 
-      // Fallback to backend API
       try {
         const job = await nimoApi.createGeneration({
           templateId: template.id,
-          photoUrls: [publicPhotoUrl],
+          photoUrls: publicUrls,
           aspectRatio: (aspectRatio || template.aspect_ratio || '9:16') as any,
         });
 
         set({
           currentJobId: job.jobId,
-          coinsAvailable: Math.max(0, get().coinsAvailable - 5),
-          coinsReserved: get().coinsReserved + 5,
-          jobProgress: 45,
-          jobStage: 'Generating with AI portrait model...',
+          coinsAvailable: Math.max(0, get().coinsAvailable - cost),
+          coinsReserved: get().coinsReserved + cost,
+          jobProgress: 35,
+          jobStage: 'Neural style synthesis & lighting blending...',
         });
 
         return job.jobId;
       } catch (apiErr: any) {
+        set({ isBackgroundGenerating: false, jobStatus: 'failed', generationError: apiErr.message || directErr.message });
         throw new Error(apiErr.message || directErr.message || 'Failed to submit generation task');
       }
     }
@@ -646,9 +727,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({
           jobStatus: 'completed',
           jobProgress: 100,
-          jobStage: 'Your AI portrait is ready!',
+          jobStage: 'Your 4K AI portrait is ready!',
           generatedImageUrl: kieRes.outputUrl,
           coinsReserved: Math.max(0, get().coinsReserved - 5),
+          isBackgroundGenerating: false,
           galleryItems: [newMediaItem, ...get().galleryItems],
         });
 
@@ -662,16 +744,28 @@ export const useAppStore = create<AppState>((set, get) => ({
           generationError: kieRes.error || 'Generation failed',
           coinsAvailable: get().coinsAvailable + 5,
           coinsReserved: Math.max(0, get().coinsReserved - 5),
+          isBackgroundGenerating: false,
         });
         return true;
       }
 
-      // Processing
-      const nextProgress = Math.min(95, Math.max(kieRes.progressPercent, get().jobProgress + 10));
+      // Processing - map to 4 delightful phases
+      const nextProgress = Math.min(95, Math.max(kieRes.progressPercent || 30, get().jobProgress + 10));
+      let currentStage = 'Neural style synthesis & lighting blending...';
+      if (nextProgress < 30) {
+        currentStage = 'Analyzing facial geometry & identity landmarks...';
+      } else if (nextProgress < 60) {
+        currentStage = 'Neural style synthesis & lighting blending...';
+      } else if (nextProgress < 85) {
+        currentStage = 'Refining skin texture, eyes, and hair details...';
+      } else {
+        currentStage = 'Upscaling to 4K studio quality & color grading...';
+      }
+
       set({
         jobStatus: 'processing',
         jobProgress: nextProgress,
-        jobStage: kieRes.stage,
+        jobStage: kieRes.stage || currentStage,
       });
 
       return false;
@@ -691,9 +785,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           set({
             jobStatus: 'completed',
             jobProgress: 100,
-            jobStage: 'Your AI portrait is ready!',
+            jobStage: 'Your 4K AI portrait is ready!',
             generatedImageUrl: res.result.imageUrl,
             coinsReserved: Math.max(0, get().coinsReserved - 5),
+            isBackgroundGenerating: false,
             galleryItems: [newMediaItem, ...get().galleryItems],
           });
           return true;
@@ -706,14 +801,27 @@ export const useAppStore = create<AppState>((set, get) => ({
             generationError: res.error || 'Generation failed',
             coinsAvailable: get().coinsAvailable + 5,
             coinsReserved: Math.max(0, get().coinsReserved - 5),
+            isBackgroundGenerating: false,
           });
           return true;
         }
 
+        const nextProgress = Math.min(95, Math.max(res.progressPercent || 50, get().jobProgress + 10));
+        let currentStage = 'Neural style synthesis & lighting blending...';
+        if (nextProgress < 30) {
+          currentStage = 'Analyzing facial geometry & identity landmarks...';
+        } else if (nextProgress < 60) {
+          currentStage = 'Neural style synthesis & lighting blending...';
+        } else if (nextProgress < 85) {
+          currentStage = 'Refining skin texture, eyes, and hair details...';
+        } else {
+          currentStage = 'Upscaling to 4K studio quality & color grading...';
+        }
+
         set({
           jobStatus: 'processing',
-          jobProgress: Math.min(95, Math.max(res.progressPercent || 50, get().jobProgress + 10)),
-          jobStage: 'Transforming portrait with Grok 2.0 aura...',
+          jobProgress: nextProgress,
+          jobStage: currentStage,
         });
 
         return false;

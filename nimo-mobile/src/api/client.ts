@@ -139,6 +139,18 @@ export const nimoApi = {
     });
   },
 
+  // AI Identity Profile
+  async getIdentityPhotos() {
+    return request<any>('/api/nimo/identity');
+  },
+
+  async saveIdentityPhotos(photoUrls: string[]) {
+    return request<any>('/api/nimo/identity', {
+      method: 'POST',
+      body: JSON.stringify({ photoUrls }),
+    });
+  },
+
   // Profile & Moderation
   async getProfile() {
     return request<any>('/api/nimo/me');
