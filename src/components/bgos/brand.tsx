@@ -57,7 +57,7 @@ export function BgosBrand({
     return (
       <span className={`bgos-logo inline-flex items-center shrink-0 ${className}`}>
         <Image
-          src="/bgos/primary-logo.png"
+          src="/bgos/primary-logo.png?v=2"
           alt="BGOS — Business Growth OS"
           width={width}
           height={size}
@@ -67,7 +67,7 @@ export function BgosBrand({
           className="object-contain dark:hidden"
         />
         <Image
-          src="/bgos/primary-logo-dark.png"
+          src="/bgos/primary-logo-dark.png?v=2"
           alt="BGOS — Business Growth OS"
           width={width}
           height={size}
@@ -83,7 +83,7 @@ export function BgosBrand({
   return (
     <span className={`bgos-logo inline-flex items-center shrink-0 ${className}`}>
       <Image
-        src={inverted ? '/bgos/primary-logo-dark.png' : '/bgos/primary-logo.png'}
+        src={inverted ? '/bgos/primary-logo-dark.png?v=2' : '/bgos/primary-logo.png?v=2'}
         alt="BGOS — Business Growth OS"
         width={width}
         height={size}

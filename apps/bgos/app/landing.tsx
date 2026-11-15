@@ -48,7 +48,7 @@ function Logo() {
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       {!imgError ? (
         <img
-          src="/bgos/primary-logo.png"
+          src="/bgos/primary-logo.png?v=2"
           alt="BGOS — Business Growth Operating System"
           width={138}
           height={42}

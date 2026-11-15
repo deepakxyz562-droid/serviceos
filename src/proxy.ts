@@ -249,7 +249,16 @@ export async function proxy(request: NextRequest) {
 
   if (isBgosSubdomain && ['GET', 'HEAD'].includes(request.method)) {
     const slug = lowerHost.replace(/\.bgos\.site$/, '').replace(/^www\./, '');
-    if (slug && !pathname.startsWith('/_next/') && !pathname.startsWith('/api/')) {
+    if (
+      slug &&
+      !pathname.startsWith('/_next/') &&
+      !pathname.startsWith('/api/') &&
+      !pathname.startsWith('/bgos/') &&
+      !pathname.startsWith('/bos/') &&
+      !pathname.startsWith('/images/') &&
+      !pathname.includes('.') &&
+      !/\.[a-zA-Z0-9]+$/.test(pathname)
+    ) {
       const url = request.nextUrl.clone();
       url.pathname = pathname === '/' || pathname === '' ? `/b/${slug}` : (pathname.startsWith('/b/') ? pathname : `/b/${slug}${pathname}`);
       const response = NextResponse.rewrite(url);

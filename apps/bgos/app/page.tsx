@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     title: 'BGOS — Autonomous Growth Engine for Local Businesses',
     description: 'Autonomous Google Maps SEO, 24/7 AI Receptionist, QR Review Standees, and Instant Booking Website.',
     url: 'https://bgos.site/',
-    images: [{ url: 'https://bgos.site/bgos/primary-logo.png' }],
+    images: [{ url: 'https://bgos.site/bgos/primary-logo.png?v=2' }],
   },
   twitter: {
     card: 'summary_large_image',

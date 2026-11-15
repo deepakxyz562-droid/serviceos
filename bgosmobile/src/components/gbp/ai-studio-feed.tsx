@@ -8,22 +8,11 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../../lib/api';
-
-const QUICK_SEARCH_CHIPS = [
-  { id: 'all', label: '⚡ All Topics', query: '' },
-  { id: 'diwali', label: '🪔 Diwali', query: 'diwali' },
-  { id: 'holi', label: '🎨 Holi', query: 'holi' },
-  { id: 'plywood', label: '🪵 Plywood & Timber', query: 'plywood' },
-  { id: 'sweets', label: '🍬 Sweets & Mithai', query: 'sweets' },
-  { id: 'salon', label: '✂️ Salon & Grooming', query: 'saloon' },
-  { id: 'offers', label: '🏷️ Special Offers', query: 'discount offer' },
-];
 
 export type StudioTabKey = 'all' | 'promotions' | 'for_business' | 'reviews' | 'festivals';
 
@@ -65,8 +54,6 @@ export function AiStudioFeed({
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<StudioTabKey>('all');
   const [brandFrame, setBrandFrame] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [templates, setTemplates] = useState<StudioTemplateItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState({
@@ -77,20 +64,11 @@ export function AiStudioFeed({
     festivals: 14,
   });
 
-  // Debounce search query to prevent rapid network requests
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedQuery(searchQuery.trim());
-    }, 300);
-    return () => clearTimeout(handler);
-  }, [searchQuery]);
-
   useEffect(() => {
     let cancelled = false;
     async function fetchTemplates() {
       setLoading(true);
       try {
-        const queryParam = debouncedQuery ? `&q=${encodeURIComponent(debouncedQuery)}` : '';
         const res = await apiRequest<{
           templates: StudioTemplateItem[];
           counts?: {
@@ -100,7 +78,7 @@ export function AiStudioFeed({
             reviews: number;
             festivals: number;
           };
-        }>(`/api/social/designs/templates?tab=${activeTab}&limit=50${queryParam}`);
+        }>(`/api/social/designs/templates?tab=${activeTab}&limit=50`);
         if (!cancelled && res?.templates) {
           setTemplates(res.templates);
           if (res.counts) setCounts(res.counts);
@@ -115,7 +93,7 @@ export function AiStudioFeed({
     return () => {
       cancelled = true;
     };
-  }, [activeTab, debouncedQuery]);
+  }, [activeTab]);
 
   const tabs: Array<{ id: StudioTabKey; label: string; icon: keyof typeof MaterialIcons.glyphMap; count: number }> = [
     { id: 'all', label: 'All Designs', icon: 'auto-awesome', count: counts.total || 50 },
@@ -185,56 +163,6 @@ export function AiStudioFeed({
         </View>
       </View>
 
-      {/* ── SEARCH & TOPIC DISCOVERY BAR ── */}
-      <View style={styles.searchBarWrapper}>
-        <View style={styles.searchBarInner}>
-          <MaterialIcons name="search" size={20} color="#64748B" />
-          <TextInput
-            placeholder="Search e.g. Diwali, Holi, Plywood, Sweets, Salon..."
-            placeholderTextColor="#94A3B8"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            style={styles.searchInput}
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-          />
-          {searchQuery.length > 0 && (
-            <Pressable
-              onPress={() => setSearchQuery('')}
-              hitSlop={8}
-              style={styles.clearSearchBtn}
-            >
-              <MaterialIcons name="cancel" size={18} color="#94A3B8" />
-            </Pressable>
-          )}
-        </View>
-
-        {/* Quick Topic Chips for 1-Tap Discovery */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.quickChipsContent}
-        >
-          {QUICK_SEARCH_CHIPS.map((chip) => {
-            const isSelected =
-              chip.query === ''
-                ? searchQuery.trim() === ''
-                : searchQuery.toLowerCase() === chip.query.toLowerCase();
-            return (
-              <Pressable
-                key={chip.id}
-                onPress={() => setSearchQuery(isSelected && chip.query !== '' ? '' : chip.query)}
-                style={[styles.quickChip, isSelected && styles.quickChipActive]}
-              >
-                <Text style={[styles.quickChipText, isSelected && styles.quickChipTextActive]}>
-                  {chip.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
       {/* ── CATEGORY FILTER PILLS ── */}
       <View style={styles.tabsTrack}>
         <ScrollView
@@ -283,20 +211,13 @@ export function AiStudioFeed({
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptySearchBox}>
-              <MaterialIcons name="search-off" size={44} color="#94A3B8" />
+              <MaterialIcons name="auto-awesome" size={44} color="#94A3B8" />
               <Text style={styles.emptyTitle}>
-                {debouncedQuery
-                  ? `No designs found for "${debouncedQuery}"`
-                  : 'No designs available in this category'}
+                No designs available in this category
               </Text>
               <Text style={styles.emptySubtitle}>
-                Try searching for Diwali, Holi, Plywood, Sweets, Salon, or tap Reset.
+                Select another category tab above to explore more designs tailored for {businessName}.
               </Text>
-              {debouncedQuery.length > 0 && (
-                <Pressable onPress={() => setSearchQuery('')} style={styles.resetSearchBtn}>
-                  <Text style={styles.resetSearchBtnText}>Reset Search</Text>
-                </Pressable>
-              )}
             </View>
           }
           renderItem={({ item }) => (
