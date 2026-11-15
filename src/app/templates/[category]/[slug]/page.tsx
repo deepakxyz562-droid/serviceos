@@ -26,6 +26,9 @@ import { TemplateRuntimePreview } from './template-runtime-preview';
 export const dynamicParams = true;
 
 export async function generateStaticParams() {
+  if (process.env.BUILDING === '1' || process.env.CI === '1') {
+    return [];
+  }
   const all = getAllTemplates();
   // Prerender the top 1,000 canonical templates at build time for fast SSG,
   // and dynamically render all remaining 20,000+ templates on demand.

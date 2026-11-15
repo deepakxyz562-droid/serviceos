@@ -18,6 +18,9 @@ import { ChevronRight, ArrowLeft } from 'lucide-react';
  * "HVAC") with SEO metadata tailored to that industry.
  */
 export async function generateStaticParams() {
+  if (process.env.BUILDING === '1' || process.env.CI === '1') {
+    return [];
+  }
   const all = getAllTemplates();
   const indSet = new Set<string>();
   for (const t of all) {

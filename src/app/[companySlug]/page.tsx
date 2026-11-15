@@ -83,6 +83,9 @@ function getIndustryPluralDisplayName(industryId: string): string {
 // ── generateStaticParams ────────────────────────────────────────────────────
 // Pre-render all known plural industry slugs at build time.
 export async function generateStaticParams() {
+  if (process.env.BUILDING === '1' || process.env.CI === '1') {
+    return [];
+  }
   return Object.keys(
     await import('@/lib/seo/plural-industry-slugs').then((m) => m.PLURAL_SLUG_TO_INDUSTRY)
   ).map((slug) => ({ companySlug: slug }));

@@ -18,6 +18,9 @@ import { ChevronRight, ArrowLeft } from 'lucide-react';
  * metadata tailored to that category (e.g. "Contact Form Templates").
  */
 export async function generateStaticParams() {
+  if (process.env.BUILDING === '1' || process.env.CI === '1') {
+    return [];
+  }
   // Pre-render a page for every category that has at least 1 template.
   const all = getAllTemplates();
   const catSet = new Set<string>();
