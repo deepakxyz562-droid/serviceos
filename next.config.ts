@@ -26,6 +26,10 @@ const nextConfig: NextConfig = {
     // Type checking is handled locally and in dedicated CI jobs with 8GB heap.
     ignoreBuildErrors: true,
   },
+  eslint: {
+    // Skip ESLint in production Docker container builds to prevent memory spikes
+    ignoreDuringBuilds: true,
+  },
   staticPageGenerationTimeout: 180,
   reactStrictMode: false,
   serverExternalPackages: ["bcryptjs", "jsonwebtoken", "@react-pdf/renderer", "@react-pdf/font", "pdfkit"],
@@ -56,8 +60,17 @@ const nextConfig: NextConfig = {
       'node_modules/@swc/core-linux-x64-gnu',
       'node_modules/@swc/core-linux-x64-musl',
       'node_modules/esbuild-linux-64',
+      'node_modules/esbuild',
       '**/tests/**',
       '**/playwright/**',
+      '**/cypress/**',
+      '**/mobile-*/**',
+      '**/bosmobile/**',
+      '**/bgosmobile/**',
+      '**/nimo-mobile/**',
+      '**/quote-flow-mobile/**',
+      '**/bos-customer-mobile/**',
+      '**/server/rembg-service/**',
     ],
   },
   images: {
@@ -90,9 +103,9 @@ const nextConfig: NextConfig = {
     // page — they then have to scroll back down to find their place, which
     // feels slow even if the page rendered instantly.
     scrollRestoration: true,
-    // Run Webpack inside an isolated worker process so its ~2.5GB AST/module heap
-    // is completely reclaimed before "Collecting page data" starts.
-    webpackBuildWorker: true,
+    // Disable Webpack worker threads to allow compilation directly within the main Node
+    // process so it utilizes the full NODE_OPTIONS --max-old-space-size allocation.
+    webpackBuildWorker: false,
     // Reduce peak V8 heap during Webpack production compilation
     webpackMemoryOptimizations: true,
     serverSourceMaps: false,

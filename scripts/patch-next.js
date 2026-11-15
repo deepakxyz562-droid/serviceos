@@ -17,6 +17,7 @@ const filesToPatch = [
   path.join(__dirname, '..', 'node_modules', 'next', 'dist', 'esm', 'lib', 'metadata', 'resolve-metadata.js'),
 ];
 
+// Patch 1: resolve-metadata workStore bug
 for (const filePath of filesToPatch) {
   if (!fs.existsSync(filePath)) continue;
 
@@ -44,5 +45,32 @@ for (const filePath of filesToPatch) {
     }
   } catch (err) {
     console.warn(`[Patch-Next] Could not patch ${filePath}:`, err.message);
+  }
+}
+
+// Patch 2: Forward 6144MB memory to Next.js child worker processes so they do not crash at 4GB
+const workerFile = path.join(__dirname, '..', 'node_modules', 'next', 'dist', 'lib', 'worker.js');
+if (fs.existsSync(workerFile)) {
+  try {
+    let content = fs.readFileSync(workerFile, 'utf8');
+    const workerTarget = `if (isolatedMemory) {
+            delete nodeOptions['max-old-space-size'];
+            delete nodeOptions['max_old_space_size'];
+        }`;
+    const workerReplacement = `if (isolatedMemory) {
+            delete nodeOptions['max-old-space-size'];
+            delete nodeOptions['max_old_space_size'];
+        }
+        if (!nodeOptions['max-old-space-size'] && !nodeOptions['max_old_space_size']) {
+            nodeOptions['max-old-space-size'] = '6144';
+        }`;
+
+    if (content.includes(workerTarget)) {
+      content = content.replace(workerTarget, workerReplacement);
+      fs.writeFileSync(workerFile, content, 'utf8');
+      console.log(`[Patch-Next] Successfully patched worker memory in ${workerFile}`);
+    }
+  } catch (err) {
+    console.warn(`[Patch-Next] Could not patch worker memory:`, err.message);
   }
 }
