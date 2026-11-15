@@ -1615,7 +1615,7 @@ export default function HomeScreen() {
         }
       />
 
-      <Text style={ui.heading}>Today</Text>
+      <Text style={ui.heading}>Business Activity &amp; Schedule</Text>
       {/* 2x2 Metric Tiles */}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         <MetricCard
@@ -1637,7 +1637,7 @@ export default function HomeScreen() {
           icon="chat-bubble-outline"
         />
         <MetricCard
-          value={appointments?.length ?? '—'}
+          value={appointments?.length ?? 0}
           label="Today's Schedule"
           trendPositive={true}
           icon="event"
@@ -1678,9 +1678,33 @@ export default function HomeScreen() {
               </View>
             ))
           ) : (
-            <Text style={ui.body}>
-              {bookings.loading ? 'Loading your schedule…' : 'No appointments scheduled for today.'}
-            </Text>
+            <View style={{ gap: 8, paddingVertical: 4 }}>
+              <Text style={ui.body}>
+                {bookings.loading
+                  ? 'Loading your schedule…'
+                  : 'No appointments scheduled for today. Book clients or invite recent visitors for a Google review.'}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                <View style={{ flex: 1 }}>
+                  <Action
+                    label="+ Add Booking"
+                    icon="add"
+                    onPress={() => router.push('/appointments')}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Action
+                    secondary
+                    label="Invite Reviews"
+                    icon="star-outline"
+                    onPress={() => {
+                      setReviewModalTab('single');
+                      setReviewModalOpen(true);
+                    }}
+                  />
+                </View>
+              </View>
+            </View>
           )}
 
           <Action
@@ -1851,24 +1875,63 @@ export default function HomeScreen() {
             })}
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Launch AI Growth Autopilot"
               onPress={() => router.push('/seo-growth')}
               style={({ pressed }) => ({
-                marginTop: 6,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 10,
-                backgroundColor: colors.brandSoft,
+                marginTop: 12,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                backgroundColor: '#4338CA',
                 flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                opacity: pressed ? 0.85 : 1,
+                justifyContent: 'space-between',
+                shadowColor: '#4338CA',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.25,
+                shadowRadius: 8,
+                elevation: 4,
+                opacity: pressed ? 0.92 : 1,
+                transform: [{ scale: pressed ? 0.98 : 1 }],
               })}
             >
-              <MaterialIcons name="auto-awesome" size={16} color={colors.brandDark} />
-              <Text style={{ fontSize: 12, fontWeight: '800', color: colors.brandDark }}>
-                AI Growth Autopilot (Auto-Apply Opportunities) →
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: 'rgba(255,255,255,0.2)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialIcons name="auto-awesome" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.2 }}>
+                      Launch AI Growth Autopilot
+                    </Text>
+                    <View
+                      style={{
+                        backgroundColor: '#10B981',
+                        paddingHorizontal: 6,
+                        paddingVertical: 1.5,
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#FFFFFF', textTransform: 'uppercase' }}>
+                        Active
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11.5, fontWeight: '600', color: 'rgba(255,255,255,0.85)', marginTop: 2 }}>
+                    Auto-apply keywords, ranking fixes &amp; GBP optimization
+                  </Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={22} color="#FFFFFF" />
             </Pressable>
           </>
         )}

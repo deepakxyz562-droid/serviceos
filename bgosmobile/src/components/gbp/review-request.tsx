@@ -330,7 +330,6 @@ export function ReviewRequestSheet({
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
   const [template, setTemplate] = useState<TemplateKey>('clean');
-  const [lang, setLang] = useState<'en' | 'hi'>('en');
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
@@ -339,11 +338,11 @@ export function ReviewRequestSheet({
   const [selectedTimeZone, setSelectedTimeZone] = useState<string>(detected.timeZone);
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
 
-  // Bulk invites state
+  // Bulk invites state (auto-decided safe WhatsApp pacing)
   const [bulkSource, setBulkSource] = useState<BulkSourceTab>('paste');
-  const [channel, setChannel] = useState<'whatsapp' | 'sms'>('whatsapp');
-  const [dailyLimit, setDailyLimit] = useState<3 | 5 | 10>(5);
-  const [preferredTime, setPreferredTime] = useState<string>('10:00');
+  const channel = 'whatsapp';
+  const dailyLimit = 5;
+  const preferredTime = '10:00';
   const [customBulkMessage, setCustomBulkMessage] = useState('');
   const [pasteText, setPasteText] = useState('');
   const [csvName, setCsvName] = useState<string | null>(null);
@@ -442,35 +441,11 @@ export function ReviewRequestSheet({
   }, [visible, initialTab, loadQueue]);
 
   useEffect(() => {
-    const defaultTpl =
-      lang === 'hi'
-        ? `नमस्ते {firstName},\n\nकृपया *${cleanBusinessName}* में अपने हाल के अनुभव पर अपना फीडबैक शेयर करें:\n${effectiveReviewUrl}\n\n*${cleanBusinessName}* टीम`
-        : `Hello {firstName},\n\nPlease share your feedback on your recent experience at *${cleanBusinessName}*:\n${effectiveReviewUrl}\n\n*${cleanBusinessName}* Team`;
+    const defaultTpl = `Hello {firstName},\n\nPlease share your feedback on your recent experience at *${cleanBusinessName}*:\n${effectiveReviewUrl}\n\n*${cleanBusinessName}* Team`;
     setCustomBulkMessage(defaultTpl);
-  }, [lang, cleanBusinessName, effectiveReviewUrl]);
-
-  useEffect(() => {
-    if (lang === 'hi') {
-      const hiTpl = availableMetaTemplates.find((t) => t.language.toLowerCase().startsWith('hi'));
-      if (hiTpl) setSelectedMetaTemplateName(hiTpl.name);
-    } else if (selectedMetaTemplateName === 'bgos_review_invite_hi') {
-      setSelectedMetaTemplateName('bgos_review_clean_feedback');
-    }
-  }, [lang, availableMetaTemplates, selectedMetaTemplateName]);
+  }, [cleanBusinessName, effectiveReviewUrl]);
 
   const inviteText = useMemo(() => {
-    if (lang === 'hi') {
-      const greetingHi = firstName ? `नमस्ते ${firstName},` : 'नमस्ते,';
-      return [
-        greetingHi,
-        '',
-        `कृपया *${cleanBusinessName}* में अपने हाल के अनुभव पर अपना फीडबैक शेयर करें:`,
-        effectiveReviewUrl,
-        '',
-        `*${cleanBusinessName}* टीम`,
-      ].join('\n');
-    }
-
     const greetingEn = firstName ? `Hello ${firstName},` : 'Hello there,';
     return [
       greetingEn,
@@ -480,7 +455,7 @@ export function ReviewRequestSheet({
       '',
       `*${cleanBusinessName}* Team`,
     ].join('\n');
-  }, [lang, firstName, cleanBusinessName, effectiveReviewUrl]);
+  }, [firstName, cleanBusinessName, effectiveReviewUrl]);
 
   const parsedPasted = useMemo(
     () => parseBulkRecipientText(pasteText, selectedCountry.callingCode, selectedCountry.digits),
@@ -747,8 +722,6 @@ export function ReviewRequestSheet({
 
     setBulkBusy(true);
     try {
-      const isLockedMetaMode = channel === 'whatsapp' && waConnected;
-      const cleanClosing = sanitizeMetaClosingNote(customCloudNote).trim();
       const res = await apiRequest<{
         success?: boolean;
         scheduledCount?: number;
@@ -766,10 +739,10 @@ export function ReviewRequestSheet({
         method: 'POST',
         body: {
           mode: 'scheduled',
-          waDeliveryMode: isLockedMetaMode ? 'template' : 'direct_queue',
-          channel,
-          dailyLimit,
-          preferredTime,
+          waDeliveryMode: 'direct_queue',
+          channel: 'whatsapp',
+          dailyLimit: 5,
+          preferredTime: '10:00',
           country: selectedCountry.code,
           timeZone: selectedTimeZone,
           source: bulkSource,
@@ -779,16 +752,7 @@ export function ReviewRequestSheet({
           saveToCustomers: saveToCrm,
           saveToLeads: saveToCrm,
           leadStatus: 'won',
-          ...(isLockedMetaMode
-            ? {
-                templateName: selectedMetaTemplate.name,
-                templateLanguage: selectedMetaTemplate.language,
-                customNote:
-                  selectedMetaTemplate.supportsCustomNote && cleanClosing ? cleanClosing : undefined,
-              }
-            : {
-                messageTemplate: customBulkMessage.trim() || undefined,
-              }),
+          messageTemplate: customBulkMessage.trim() || undefined,
           recipients: activeBulkRecipients,
         },
       });
@@ -796,7 +760,7 @@ export function ReviewRequestSheet({
       if (res?.error) throw new Error(res.error);
       setBulkNote(
         (res?.message ||
-          `Scheduled ${res?.scheduledCount ?? activeBulkRecipients.length} review invite(s) (${dailyLimit}/day).`) +
+          `Scheduled ${res?.scheduledCount ?? activeBulkRecipients.length} review invite(s) (5/day).`) +
           formatCrmSyncSuffix(res?.crmSync),
       );
       if (bulkSource === 'paste') setPasteText('');
@@ -966,42 +930,13 @@ export function ReviewRequestSheet({
                   color={sheetTab === 'bulk' ? '#FFFFFF' : colors.muted}
                 />
                 <Text style={[styles.topTabText, sheetTab === 'bulk' && styles.topTabTextActive]}>
-                  Bulk Schedule ({dailyLimit}/Day)
+                  Bulk Schedule
                 </Text>
               </Pressable>
             </View>
 
             {sheetTab === 'single' ? (
               <>
-                {/* Verified Meta Template Header & Language Switch */}
-                <View style={styles.templateHeaderRow}>
-                  <View style={styles.metaApprovedBadge}>
-                    <MaterialIcons name="verified" size={14} color="#059669" />
-                    <Text style={styles.metaApprovedBadgeText}>Meta-Approved Template</Text>
-                  </View>
-
-                  <View style={styles.langPillGroup}>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setLang('en')}
-                      style={[styles.langChip, lang === 'en' && styles.langChipActive]}
-                    >
-                      <Text style={[styles.langChipText, lang === 'en' && styles.langChipTextActive]}>
-                        English
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setLang('hi')}
-                      style={[styles.langChip, lang === 'hi' && styles.langChipActive]}
-                    >
-                      <Text style={[styles.langChipText, lang === 'hi' && styles.langChipTextActive]}>
-                        हिन्दी
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-
                 {/* Realistic WhatsApp Preview */}
                 <View style={styles.waCard}>
                   <View style={styles.waHeader}>
@@ -1067,29 +1002,6 @@ export function ReviewRequestSheet({
                   </View>
                 </View>
 
-                {waConnected ? (
-                  <View style={styles.metaCloudBox}>
-                    <View style={styles.cardHeaderLine}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <MaterialIcons name="verified" size={16} color="#059669" />
-                        <Text style={styles.metaCloudTitle}>WhatsApp Cloud API Connected</Text>
-                      </View>
-                      <View style={[styles.metaStatusPill, styles.metaStatusApproved]}>
-                        <Text style={[styles.metaStatusText, styles.metaStatusTextApproved]}>
-                          Meta Approved
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.metaCloudSub}>
-                      Delivery uses the official Meta-approved template{' '}
-                      <Text style={{ fontWeight: '700', color: colors.ink }}>
-                        bgos_review_clean_feedback
-                      </Text>{' '}
-                      for reliable 24/7 delivery outside the customer care window.
-                    </Text>
-                  </View>
-                ) : null}
-
                 <Pressable
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: saveToCrm }}
@@ -1143,14 +1055,14 @@ export function ReviewRequestSheet({
 
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Send invite through connected WhatsApp provider"
+                      accessibilityLabel="Save invite to queue"
                       onPress={sendViaProvider}
                       disabled={sending}
                       style={[styles.secondaryActionBtn, sending && { opacity: 0.6 }]}
                     >
-                      <MaterialIcons name="send" size={16} color={colors.brand} />
+                      <MaterialIcons name="schedule-send" size={16} color={colors.brand} />
                       <Text style={styles.secondaryActionText}>
-                        {sending ? 'Sending…' : waConnected ? 'Send via Cloud API' : 'Save to Queue'}
+                        {sending ? 'Saving…' : 'Save to Queue'}
                       </Text>
                     </Pressable>
                   </View>
@@ -1158,152 +1070,22 @@ export function ReviewRequestSheet({
               </>
             ) : (
               <>
-                {/* Language Switch for Bulk */}
-                <View style={styles.bulkLangRow}>
-                  <Text style={styles.bulkLangLabel}>Template Language</Text>
-                  <View style={styles.langPillGroup}>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setLang('en')}
-                      style={[styles.langChip, lang === 'en' && styles.langChipActive]}
-                    >
-                      <Text style={[styles.langChipText, lang === 'en' && styles.langChipTextActive]}>
-                        English
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setLang('hi')}
-                      style={[styles.langChip, lang === 'hi' && styles.langChipActive]}
-                    >
-                      <Text style={[styles.langChipText, lang === 'hi' && styles.langChipTextActive]}>
-                        हिन्दी
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                {/* ── Card 1: Channel & Country Schedule Settings ── */}
+                {/* ── Card 1: Delivery Schedule ── */}
                 <View style={styles.channelCard}>
                   <View style={styles.cardHeaderLine}>
-                    <Text style={styles.bulkLabel}>1. Channel &amp; Send Schedule</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="schedule-send" size={16} color={colors.brandDark} />
+                      <Text style={styles.bulkLabel}>Automated WhatsApp Delivery</Text>
+                    </View>
                     <Pressable onPress={() => setCountryPickerOpen(true)} style={styles.inlineChangeBtn}>
                       <Text style={styles.inlineChangeText}>
                         {selectedCountry.flag} {tzShort} ✎
                       </Text>
                     </Pressable>
                   </View>
-
-                  <View style={styles.pillGroup}>
-                    <Pressable
-                      onPress={() => setChannel('whatsapp')}
-                      style={[styles.channelBtn, channel === 'whatsapp' && styles.channelBtnActive]}
-                    >
-                      <MaterialIcons
-                        name="chat"
-                        size={15}
-                        color={channel === 'whatsapp' ? colors.brandDark : colors.muted}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[
-                            styles.channelBtnText,
-                            channel === 'whatsapp' && styles.channelBtnTextActive,
-                          ]}
-                        >
-                          WhatsApp
-                        </Text>
-                        <Text style={styles.channelStatusSub}>
-                          {waConnected ? 'Cloud API Active' : 'Queue + 1-Tap Send'}
-                        </Text>
-                      </View>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => setChannel('sms')}
-                      style={[styles.channelBtn, channel === 'sms' && styles.channelBtnActive]}
-                    >
-                      <MaterialIcons
-                        name="sms"
-                        size={15}
-                        color={channel === 'sms' ? colors.brandDark : colors.muted}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[
-                            styles.channelBtnText,
-                            channel === 'sms' && styles.channelBtnTextActive,
-                          ]}
-                        >
-                          SMS
-                        </Text>
-                        <Text style={styles.channelStatusSub}>
-                          {smsReady ? 'Auto Scheduled' : 'Gateway Needed'}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  </View>
-
-                  {channel === 'whatsapp' && !waConnected ? (
-                    <View style={styles.infoBannerSoft}>
-                      <MaterialIcons name="info-outline" size={14} color={colors.noteText} />
-                      <Text style={styles.infoBannerSoftText}>
-                        WhatsApp Cloud API isn&apos;t connected yet — invites queue cleanly with 1-tap &ldquo;Send WA&rdquo; buttons below.
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  {channel === 'sms' && !smsReady ? (
-                    <View style={styles.infoBannerSoft}>
-                      <MaterialIcons name="warning-amber" size={14} color={colors.noteText} />
-                      <Text style={styles.infoBannerSoftText}>
-                        SMS gateway is not configured in Integrations — switch to WhatsApp for 1-tap sending or connect SMS/Twilio first.
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  {/* Batch Size + Local Time Selector */}
-                  <View style={styles.cadenceRow}>
-                    <View style={{ flex: 1, gap: 4 }}>
-                      <Text style={styles.microLabel}>Daily Limit</Text>
-                      <View style={{ flexDirection: 'row', gap: 5 }}>
-                        {BATCH_SIZES.map((sz) => {
-                          const active = dailyLimit === sz;
-                          return (
-                            <Pressable
-                              key={sz}
-                              onPress={() => setDailyLimit(sz)}
-                              style={[styles.miniPill, active && styles.miniPillActive]}
-                            >
-                              <Text style={[styles.miniPillText, active && styles.miniPillTextActive]}>
-                                {sz}/day
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    </View>
-
-                    <View style={{ flex: 1.2, gap: 4 }}>
-                      <Text style={styles.microLabel}>Local Send Time ({tzShort})</Text>
-                      <View style={{ flexDirection: 'row', gap: 5 }}>
-                        {SEND_TIMES.map((slot) => {
-                          const active = preferredTime === slot.value;
-                          return (
-                            <Pressable
-                              key={slot.value}
-                              onPress={() => setPreferredTime(slot.value)}
-                              style={[styles.miniPill, active && styles.miniPillActive]}
-                            >
-                              <Text style={[styles.miniPillText, active && styles.miniPillTextActive]}>
-                                {slot.label.replace(':00 ', '')}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  </View>
+                  <Text style={styles.channelHint}>
+                    Invites are queued and sent via WhatsApp with 5/day safe pacing during morning hours (10:00 AM {tzShort}).
+                  </Text>
                 </View>
 
                 {/* ── Card 2: Recipient Input Sources ── */}
@@ -1465,164 +1247,24 @@ export function ReviewRequestSheet({
                   )}
                 </View>
 
-                {/* ── Card 3: Channel-Aware Invite Message Preview ── */}
-                {channel === 'whatsapp' && waConnected ? (
-                  <View style={styles.bulkInputCard}>
-                    <View style={styles.cardHeaderLine}>
-                      <Text style={styles.bulkLabel}>3. Meta Template Preview</Text>
-                      <View style={styles.lockedBadge}>
-                        <MaterialIcons name="lock-outline" size={12} color={colors.brandDark} />
-                        <Text style={styles.lockedBadgeText}>Locked for Meta Cloud API</Text>
-                      </View>
+                {/* ── Card 3: Invite Message Preview ── */}
+                <View style={styles.bulkInputCard}>
+                  <View style={styles.cardHeaderLine}>
+                    <Text style={styles.bulkLabel}>Invite Message</Text>
+                    <View style={styles.editableBadge}>
+                      <Text style={styles.editableBadgeText}>WhatsApp Message</Text>
                     </View>
-
-                    <View style={styles.cardHeaderLine}>
-                      <Text style={styles.microLabel}>Select Approved Preset</Text>
-                      <View
-                        style={[
-                          styles.metaStatusPill,
-                          selectedMetaTemplate.status === 'APPROVED'
-                            ? styles.metaStatusApproved
-                            : styles.metaStatusPending,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.metaStatusText,
-                            selectedMetaTemplate.status === 'APPROVED'
-                              ? styles.metaStatusTextApproved
-                              : styles.metaStatusTextPending,
-                          ]}
-                        >
-                          {selectedMetaTemplate.status === 'APPROVED'
-                            ? 'Approved'
-                            : 'Pending Meta Approval'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{ gap: 6 }}
-                    >
-                      {availableMetaTemplates.map((tpl) => {
-                        const active = tpl.name === selectedMetaTemplate.name;
-                        return (
-                          <Pressable
-                            key={tpl.name}
-                            onPress={() => setSelectedMetaTemplateName(tpl.name)}
-                            style={[styles.metaPresetPill, active && styles.metaPresetPillActive]}
-                          >
-                            <Text
-                              style={[
-                                styles.metaPresetPillText,
-                                active && styles.metaPresetPillTextActive,
-                              ]}
-                            >
-                              {tpl.displayName}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-
-                    {selectedMetaTemplate.status !== 'APPROVED' ? (
-                      <View style={styles.infoBannerSoft}>
-                        <MaterialIcons name="info-outline" size={14} color={colors.noteText} />
-                        <Text style={styles.infoBannerSoftText}>
-                          Wording is fixed by Meta template rules. Sync/approve &ldquo;{selectedMetaTemplate.name}&rdquo; in Marketing → Meta Templates before Cloud API delivery, or use 1-Tap Send WA on queued rows.
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    {/* Read-only Meta Template WhatsApp Bubble Preview */}
-                    <View style={styles.metaReadOnlyBubbleWrap}>
-                      <View style={styles.metaReadOnlyBubble}>
-                        <Text style={styles.bubbleMessageText}>
-                          {renderLockedMetaBody(
-                            selectedMetaTemplate,
-                            'Priya',
-                            cleanBusinessName,
-                            customCloudNote,
-                          )}
-                        </Text>
-                        {selectedMetaTemplate.buttonText ? (
-                          <View style={styles.metaCtaPreviewRow}>
-                            <MaterialIcons name="open-in-new" size={13} color={WA_GREEN_DARK} />
-                            <Text style={styles.metaCtaPreviewText} numberOfLines={1}>
-                              {selectedMetaTemplate.buttonText} → {displayShortCtaUrl}
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </View>
-
-                    {selectedMetaTemplate.supportsCustomNote ? (
-                      <View style={{ gap: 4 }}>
-                        <View style={styles.cardHeaderLine}>
-                          <Text style={styles.microLabel}>Optional 1-Line Closing Note</Text>
-                          <Text style={styles.microLabel}>{customCloudNote.length}/120</Text>
-                        </View>
-                        <TextInput
-                          value={customCloudNote}
-                          onChangeText={(txt) =>
-                            setCustomCloudNote(txt.replace(/[\r\n\t]+/g, ' ').slice(0, 120))
-                          }
-                          maxLength={120}
-                          placeholder={DEFAULT_META_CLOSING_NOTE}
-                          placeholderTextColor={colors.muted}
-                          style={styles.metaNoteInput}
-                        />
-                        <Text style={styles.channelHint}>
-                          Only this closing line is customized (URLs and line breaks are automatically removed for Meta compliance).
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.channelHint}>
-                        Meta Cloud API keeps template wording fixed to guarantee 24/7 template delivery. Pick &ldquo;Friendly + Note&rdquo; above if you want a customizable closing line.
-                      </Text>
-                    )}
                   </View>
-                ) : (
-                  <View style={styles.bulkInputCard}>
-                    <View style={styles.cardHeaderLine}>
-                      <Text style={styles.bulkLabel}>3. Invite Message Preview</Text>
-                      <View style={styles.editableBadge}>
-                        <Text style={styles.editableBadgeText}>
-                          Editable ({channel === 'sms' ? 'SMS' : '1-Tap WhatsApp'})
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => {
-                          const tpl =
-                            lang === 'hi'
-                              ? `नमस्ते {firstName},\n\nकृपया *${cleanBusinessName}* में अपने हाल के अनुभव पर अपना फीडबैक शेयर करें:\n${effectiveReviewUrl}\n\n*${cleanBusinessName}* टीम`
-                              : `Hello {firstName},\n\nPlease share your feedback on your recent experience at *${cleanBusinessName}*:\n${effectiveReviewUrl}\n\n*${cleanBusinessName}* Team`;
-                          setCustomBulkMessage(tpl);
-                        }}
-                        style={[styles.smallChip, styles.smallChipActive]}
-                      >
-                        <MaterialIcons name="verified" size={13} color={colors.brand} />
-                        <Text style={[styles.smallChipText, styles.smallChipTextActive]}>
-                          Insert Meta-Approved Clean Template
-                        </Text>
-                      </Pressable>
-                    </View>
-                    <TextInput
-                      value={customBulkMessage}
-                      onChangeText={setCustomBulkMessage}
-                      multiline
-                      style={styles.bulkMsgInput}
-                    />
-                    <Text style={styles.channelHint}>
-                      Use {'{firstName}'} to personalize each customer automatically.
-                    </Text>
-                  </View>
-                )}
+                  <TextInput
+                    value={customBulkMessage}
+                    onChangeText={setCustomBulkMessage}
+                    multiline
+                    style={styles.bulkMsgInput}
+                  />
+                  <Text style={styles.channelHint}>
+                    Use {'{firstName}'} to personalize each customer automatically. Google review link is included automatically.
+                  </Text>
+                </View>
 
                 {/* Live Schedule Breakdown Banner */}
                 {activeBulkRecipients.length > 0 ? (
@@ -1632,9 +1274,9 @@ export function ReviewRequestSheet({
                       <Text style={{ fontWeight: '800' }}>{activeBulkRecipients.length}</Text>{' '}
                       customer{activeBulkRecipients.length === 1 ? '' : 's'} →{' '}
                       <Text style={{ fontWeight: '800' }}>
-                        {scheduleDays} day{scheduleDays === 1 ? '' : 's'} ({dailyLimit}/day)
+                        {scheduleDays} day{scheduleDays === 1 ? '' : 's'} (5/day)
                       </Text>{' '}
-                      around {SEND_TIMES.find((s) => s.value === preferredTime)?.label || preferredTime} {tzShort}
+                      around 10:00 AM {tzShort}
                     </Text>
                   </View>
                 ) : null}
@@ -1675,10 +1317,10 @@ export function ReviewRequestSheet({
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => void scheduleBulkInvites()}
-                  disabled={bulkBusy || activeBulkRecipients.length === 0 || (channel === 'sms' && !smsReady)}
+                  disabled={bulkBusy || activeBulkRecipients.length === 0}
                   style={[
                     styles.scheduleBtn,
-                    (bulkBusy || activeBulkRecipients.length === 0 || (channel === 'sms' && !smsReady)) && {
+                    (bulkBusy || activeBulkRecipients.length === 0) && {
                       opacity: 0.55,
                     },
                   ]}
@@ -1691,7 +1333,7 @@ export function ReviewRequestSheet({
                   <Text style={styles.scheduleBtnText}>
                     {bulkBusy
                       ? 'Scheduling Invites…'
-                      : `Schedule ${activeBulkRecipients.length || ''} Invites (${dailyLimit}/Day)`}
+                      : `Schedule ${activeBulkRecipients.length || ''} Invites (5/Day)`}
                   </Text>
                 </Pressable>
 

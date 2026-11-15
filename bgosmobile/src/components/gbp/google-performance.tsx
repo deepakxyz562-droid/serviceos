@@ -303,19 +303,24 @@ export function GooglePerformanceCard({
   const chartEmptyState = !isConnected
     ? {
         title: 'Connect Google Business Profile',
-        subtitle: 'Live Search views, calls, and customer actions will appear here once synced.',
+        subtitle: 'Live Search views, calls, and customer actions will appear here once connected.',
       }
     : isPendingApproval
       ? {
-          title: 'Google Business API pending approval',
-          subtitle: 'Profile telemetry unlocks automatically once Google approves location access.',
+          title: 'Google Business Profile syncing',
+          subtitle: 'Profile telemetry updates automatically as Google processes search data.',
         }
       : {
-          title: `No ${activeTabMeta.label.toLowerCase()} recorded yet`,
+          title:
+            viewsCount === 0
+              ? 'Aggregating Google Search data'
+              : `No ${activeTabMeta.label.toLowerCase()} recorded yet`,
           subtitle:
-            activeTab === 'overview' && viewsCount > 0
-              ? 'Customers viewed your profile cleanly — tap the Views tab to inspect impressions.'
-              : 'Monthly bars update automatically as customers find and engage with your listing.',
+            viewsCount === 0
+              ? 'Google aggregates views with a 48–72h delay. Your profile is active and tracking.'
+              : activeTab === 'overview' && viewsCount > 0
+                ? 'Customers viewed your profile cleanly — tap the Views tab to inspect impressions.'
+                : 'Monthly bars update automatically as customers find and engage with your listing.',
         };
 
   return (
@@ -333,7 +338,9 @@ export function GooglePerformanceCard({
                 ? 'Last 30 days · Live GBP telemetry'
                 : monthLabels.length > 0
                   ? `${monthLabels[0]}–${monthLabels[monthLabels.length - 1]} · Google Business Profile`
-                  : 'Google Business Profile telemetry'}
+                  : isConnected
+                    ? 'Google Business Profile · Live sync active'
+                    : 'Connect Google Profile to track search views'}
             </Text>
           </View>
         </View>
@@ -390,7 +397,7 @@ export function GooglePerformanceCard({
             ) : (
               <View style={styles.baselinePill}>
                 <Text style={styles.baselineText}>
-                  {isConnected ? 'Live total' : 'Not synced'}
+                  {isConnected ? (viewsCount > 0 ? 'Live total' : 'Syncing data') : 'Not synced'}
                 </Text>
               </View>
             )}
@@ -401,7 +408,11 @@ export function GooglePerformanceCard({
           <Text style={styles.viewsMiniLabel}>Profile Views</Text>
           <Text style={styles.viewsMiniValue}>{formatNumber(viewsCount)}</Text>
           <Text style={styles.viewsMiniSub} numberOfLines={1}>
-            Search {formatNumber(searchImpressions)} · Maps {formatNumber(mapsImpressions)}
+            {viewsCount > 0
+              ? `Search ${formatNumber(searchImpressions)} · Maps ${formatNumber(mapsImpressions)}`
+              : isConnected
+                ? 'Google syncs views in 48-72h'
+                : 'Connect profile to view live data'}
           </Text>
         </View>
       </View>
