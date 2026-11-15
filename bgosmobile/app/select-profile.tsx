@@ -367,6 +367,7 @@ export default function SelectProfileScreen() {
       );
       if (session?.user && session?.token) {
         await applyWorkspaceSession(session);
+        invalidateResourceScope();
       }
       setStatusNotice(`✓ Switched to ${label || 'business workspace'}`);
       router.replace('/(tabs)');
@@ -1064,7 +1065,7 @@ export default function SelectProfileScreen() {
                 <TextInput
                   value={editName}
                   onChangeText={setEditName}
-                  placeholder="e.g. shiv-ganga market"
+                  placeholder="e.g. FieserOS, Apex Care"
                   placeholderTextColor="#94A3B8"
                   style={{
                     borderWidth: 1,

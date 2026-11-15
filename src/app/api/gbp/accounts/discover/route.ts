@@ -178,29 +178,52 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    const currentWs = userWorkspaces.find((w) => w.tenantId === user.tenantId || w.workspaceId === user.workspaceId);
+    const tenantName = (tenant?.name || currentWs?.name || '').trim().toLowerCase();
+
     const boundProfileId =
       typeof tenantSettings.boundGbpLocationId === 'string' && tenantSettings.boundGbpLocationId
         ? tenantSettings.boundGbpLocationId
         : null;
 
-    const activeProfileId = String(
-      boundProfileId ||
-        tenantSettings.activeGbpLocationId ||
-        profiles.find((p) => p.isPrimary)?.id ||
-        profiles[0]?.id || '',
+    // 1. Explicitly bound to this tenant
+    const boundToCurrent = enrichedProfiles.find(
+      (p) => p.isBoundToCurrentWorkspace || (boundProfileId && p.id === boundProfileId),
     );
-    const activeProfile = enrichedProfiles.find((p) => p.id === activeProfileId) || enrichedProfiles[0] || null;
+    // 2. Saved active location for this tenant (as long as it's not bound to another workspace)
+    const activeSettingProfile = tenantSettings.activeGbpLocationId
+      ? enrichedProfiles.find((p) => p.id === tenantSettings.activeGbpLocationId && !p.isBoundToOtherWorkspace)
+      : null;
+    // 3. Name-matched profile (e.g. "FieserOS" matches profile "FieserOS")
+    const nameMatchedProfile = tenantName
+      ? enrichedProfiles.find(
+          (p) =>
+            !p.isBoundToOtherWorkspace &&
+            (p.name.toLowerCase().includes(tenantName) || tenantName.includes(p.name.toLowerCase())),
+        )
+      : null;
 
-    const activeSocialAccount = socialAccounts.find((sa) => {
-      let meta: Record<string, any> = {};
-      if (sa.metadata) {
-        try {
-          meta = typeof sa.metadata === 'string' ? JSON.parse(sa.metadata) : sa.metadata;
-        } catch {}
-      }
-      const id = String(sa.accountId || meta.locationId || sa.id);
-      return id === activeProfileId || sa.id === activeProfileId;
-    });
+    const matchedProfile = boundToCurrent || activeSettingProfile || nameMatchedProfile;
+    // Only fall back to first profile if there is only 1 profile or if none are bound to another workspace
+    const activeProfile =
+      matchedProfile ||
+      (enrichedProfiles.length === 1 && !enrichedProfiles[0].isBoundToOtherWorkspace
+        ? enrichedProfiles[0]
+        : null);
+    const activeProfileId = activeProfile ? activeProfile.id : null;
+
+    const activeSocialAccount = activeProfileId
+      ? socialAccounts.find((sa) => {
+          let meta: Record<string, any> = {};
+          if (sa.metadata) {
+            try {
+              meta = typeof sa.metadata === 'string' ? JSON.parse(sa.metadata) : sa.metadata;
+            } catch {}
+          }
+          const id = String(sa.accountId || meta.locationId || sa.id);
+          return id === activeProfileId || sa.id === activeProfileId;
+        })
+      : null;
 
     return NextResponse.json({
       email: googleEmail,

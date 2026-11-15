@@ -122,7 +122,15 @@ interface DiscoverResponse {
   email: string;
   phone: string;
   version: string;
-  activeProfile?: { id: string; name: string; shortId: string; initial: string };
+  activeProfile?: {
+    id: string;
+    name: string;
+    shortId: string;
+    initial: string;
+    isBoundToCurrentWorkspace?: boolean;
+    isBoundToOtherWorkspace?: boolean;
+    boundWorkspaceId?: string | null;
+  };
 }
 
 interface HomeBootstrapResponse {
@@ -664,12 +672,16 @@ export default function HomeScreen() {
   }
 
   const activeProfile = discover.data?.activeProfile;
+  const isBoundToActive = Boolean(activeProfile?.isBoundToCurrentWorkspace);
+  const workspaceName =
+    workspace.data?.name && workspace.data.name !== 'My Business' ? workspace.data.name : null;
   const profileName =
-    activeProfile?.name ||
+    (isBoundToActive ? activeProfile?.name : null) ||
+    workspaceName ||
     gbpPlace.data?.place?.title ||
     gbpPlace.data?.tenantFallback?.name ||
-    workspace.data?.name ||
-    'My Business';
+    activeProfile?.name ||
+    'FieserOS';
 
   const resolvedReviewUrl = useMemo(() => {
     return (
@@ -1509,9 +1521,10 @@ export default function HomeScreen() {
         onOpenPosters={() => router.push('/(tabs)/marketing?mode=posters')}
       />
 
-      {/* Five Autonomous AI Marketing Agents Hub */}
+      {/* Four Autonomous AI Marketing Agents Hub */}
       <GbpAiAgentHomeCard
         businessName={profileName || workspace.data?.name || 'My Business'}
+        city={city && city !== 'your area' ? city : undefined}
         seoUpdatesCount={growthActions.data?.actions?.length || 11}
         publishedPhotosCount={growthActions.data?.actions?.find((a) => a.id === 'upload_media')?.doneCount || 2}
         scheduledPhotosCount={0}

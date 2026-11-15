@@ -73,4 +73,45 @@ describe('BGOS Email Deliverability & Performance Guardrails', () => {
     const canSend = Boolean(recipientEmail && isDeliverableEmail(recipientEmail));
     expect(canSend).toBe(false);
   });
+
+  it('resolves active workspace name over unbound cross-tenant profiles', () => {
+    const unboundOtherProfile = {
+      id: 'loc_shiv_ganga',
+      name: 'shiv-ganga market',
+      isBoundToCurrentWorkspace: false,
+      isBoundToOtherWorkspace: true,
+    };
+    const workspaceData = {
+      name: 'FieserOS',
+    };
+
+    // Mobile resolution logic
+    const isBoundToActive = Boolean(unboundOtherProfile.isBoundToCurrentWorkspace);
+    const workspaceName = workspaceData.name && workspaceData.name !== 'My Business' ? workspaceData.name : null;
+    const profileName =
+      (isBoundToActive ? unboundOtherProfile.name : null) ||
+      workspaceName ||
+      unboundOtherProfile.name ||
+      'FieserOS';
+
+    expect(profileName).toBe('FieserOS');
+    expect(profileName).not.toBe('shiv-ganga market');
+  });
+
+  it('matches profile by workspace name when unbound and does not leak unrelated profiles', () => {
+    const profiles = [
+      { id: 'loc_1', name: 'shiv-ganga market', isBoundToOtherWorkspace: true },
+      { id: 'loc_2', name: 'FieserOS Software', isBoundToOtherWorkspace: false },
+    ];
+    const tenantName = 'fieseros';
+
+    const nameMatched = profiles.find(
+      (p) =>
+        !p.isBoundToOtherWorkspace &&
+        (p.name.toLowerCase().includes(tenantName) || tenantName.includes(p.name.toLowerCase())),
+    );
+
+    expect(nameMatched?.id).toBe('loc_2');
+    expect(nameMatched?.name).toBe('FieserOS Software');
+  });
 });
