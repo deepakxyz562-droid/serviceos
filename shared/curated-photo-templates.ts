@@ -196,7 +196,7 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
       { keyword: 'software company greetings', volume: 100 },
     ],
     estimatedViews: 50,
-    referenceUrl: 'https://images.unsplash.com/photo-1605647540924-852290f6b0d5?w=1200&auto=format&fit=crop&q=80',
+    referenceUrl: 'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
     aspectRatio: '4:5',
     ctaText: 'CELEBRATE WITH US',
     sourceName: 'pinterest',
@@ -420,6 +420,87 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
     defaultCaption:
       'Say goodbye to dull, frizzy hair! Treat yourself to a revitalizing Keratin treatment and luxury hair spa at {businessName} with our special 25% discount.\n\n#keratintreatment #hairspa #glossyhair #salonoffer #{city}',
   },
+  {
+    id: 'salon-barber-grooming',
+    categoryId: 'salon_spa',
+    bucketKey: 'services_products',
+    title: 'Precision Haircut & Beard Crafting',
+    headlinePattern: 'Sharp Cuts & Classic Beard Sculpting — Grooming Lounge',
+    subtitle: 'Step in for a revitalizing haircut, soothing hot towel shave, and premium facial refresh.',
+    defaultBullets: [
+      'Certified Senior Stylists',
+      'Hot Towel Beard Detailing',
+      'Charcoal De-Tan & Skin Therapy',
+      'Walk-ins & Appointments Welcome',
+    ],
+    targetKeywords: [
+      { keyword: 'best saloon near me', volume: 1500 },
+      { keyword: 'barber shop in Patna', volume: 600 },
+      { keyword: 'mens grooming salon', volume: 450 },
+    ],
+    estimatedViews: 65,
+    referenceUrl: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1200&auto=format&fit=crop&q=80',
+    aspectRatio: '4:5',
+    ctaText: 'BOOK GROOMING SLOT',
+    sourceName: 'pinterest',
+    defaultCaption:
+      'Elevate your daily presence with {businessName}. From precision taper fades to luxurious beard grooming and skin therapy, we keep you looking sharp.\n\n#saloon #barbering #mensgrooming #taperfade #{city}',
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // SWEETS, MITHAI & CONFECTIONERY
+  // ──────────────────────────────────────────────────────────────────────────
+  {
+    id: 'sweet-festive-gift-box',
+    categoryId: 'sweet_shop',
+    bucketKey: 'festivals',
+    title: 'Festive Mithai & Dryfruit Gift Boxes',
+    headlinePattern: 'Royal Desi Ghee Sweets & Festive Hampers — {businessName}',
+    subtitle: 'Freshly prepared pure desi ghee Kaju Katli, Motichoor Ladoo, and luxury dry fruit assortments.',
+    defaultBullets: [
+      '100% Pure Desi Ghee Preparation',
+      'Customized Corporate & Family Hampers',
+      'Hygienic Sealed Vacuum Packaging',
+      'Bulk Pre-Orders at Best Rates',
+    ],
+    targetKeywords: [
+      { keyword: 'best sweet shop near me', volume: 3200 },
+      { keyword: 'mithai box Patna', volume: 900 },
+      { keyword: 'desi ghee sweets', volume: 1400 },
+    ],
+    estimatedViews: 90,
+    referenceUrl: 'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=1200&auto=format&fit=crop&q=80',
+    aspectRatio: '4:5',
+    ctaText: 'ORDER FESTIVE BOX',
+    sourceName: 'meta_ads',
+    defaultCaption:
+      'Celebrate every sweet moment with authentic taste from {businessName}! Prepared with 100% pure desi ghee and handpicked ingredients for family and corporate gifting.\n\n#mithai #sweetshop #desighee #festivebox #{city}',
+  },
+  {
+    id: 'sweet-daily-specials',
+    categoryId: 'sweet_shop',
+    bucketKey: 'special_offers',
+    title: 'Fresh Hot Jalebi & Morning Sweets',
+    headlinePattern: 'Melt-in-Mouth Hot Sweets & Snacks — Fresh Every Morning',
+    subtitle: 'Savor crispy piping hot jalebis, soft gulab jamuns, and authentic Bengali rasgullas.',
+    defaultBullets: [
+      'Prepared Fresh Hourly',
+      'Zero Artificial Preservatives',
+      'Authentic Traditional Recipe',
+      'Piping Hot & Ready for Takeaway',
+    ],
+    targetKeywords: [
+      { keyword: 'fresh sweets near me', volume: 1800 },
+      { keyword: 'hot jalebi shop', volume: 800 },
+    ],
+    estimatedViews: 60,
+    referenceUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=1200&auto=format&fit=crop&q=80',
+    aspectRatio: '4:5',
+    ctaText: 'VISIT SWEET SHOP',
+    sourceName: 'pinterest',
+    defaultCaption:
+      'Start your mornings with pure joy! Drop by {businessName} for piping hot sweets made fresh with love and pure ingredients.\n\n#freshsweets #jalebi #gulabjamun #sweetshop #{city}',
+  },
 
   // ──────────────────────────────────────────────────────────────────────────
   // RESTAURANTS & CAFES
@@ -502,7 +583,7 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
       { keyword: 'diwali festive offers', volume: 1200 },
     ],
     estimatedViews: 85,
-    referenceUrl: 'https://images.unsplash.com/photo-1605647540924-852290f6b0d5?w=1200&auto=format&fit=crop&q=80',
+    referenceUrl: 'https://images.unsplash.com/photo-1572798089532-487718bc9d26?w=1200&auto=format&fit=crop&q=80',
     aspectRatio: '4:5',
     ctaText: 'HAPPY DIWALI',
     sourceName: 'pinterest',
@@ -550,7 +631,7 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
       { keyword: 'holi greetings', volume: 1100 },
     ],
     estimatedViews: 75,
-    referenceUrl: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=1200&auto=format&fit=crop&q=80',
+    referenceUrl: 'https://images.unsplash.com/photo-1583083527882-4bee9aba2eea?w=1200&auto=format&fit=crop&q=80',
     aspectRatio: '4:5',
     ctaText: 'HAPPY HOLI',
     sourceName: 'pinterest',
@@ -636,13 +717,14 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
  */
 export function resolveCuratedCategoryId(rawText: string): string {
   const lower = rawText.toLowerCase();
+  if (/sweet|mithai|halwai|ladoo|laddu|jalebi|gulab jamun|kaju katli|confection|namkeen/i.test(lower)) return 'sweet_shop';
+  if (/plywood|ply|timber|hardware|laminate|sunmica|tools|screw|wood|pipe|veneer/i.test(lower)) return 'hardware_plywood';
+  if (/salon|saloon|barber|grooming|beauty|hair|makeup|spa|nail|parlour|parlor|bridal/i.test(lower)) return 'salon_spa';
   if (/software|it |tech|developer|code|app dev|saas|digital/i.test(lower)) return 'it_software';
-  if (/plywood|timber|hardware|laminate|tools|screw|wood|pipe/i.test(lower)) return 'hardware_plywood';
   if (/dental|dentist|tooth|teeth|smile|clinic/i.test(lower)) return 'dental_clinic';
-  if (/salon|beauty|hair|makeup|spa|nail|parlour|bridal/i.test(lower)) return 'salon_spa';
   if (/restaurant|cafe|food|dining|bakery|bistro|kitchen/i.test(lower)) return 'restaurant_cafe';
   if (/car|auto|garage|mechanic|tyre|wheel|bike/i.test(lower)) return 'auto_repair';
-  return 'it_software'; // default fallback
+  return 'hardware_plywood'; // safe tangible SMB fallback
 }
 
 /**

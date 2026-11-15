@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { listGoogleBusinessMedia } from '@/lib/social/adapters/googlebusiness';
 import { generateDesignImage } from '@/lib/designs/image-provider';
+import { normalizeCategoryContext } from './category-taxonomy';
 
 /**
  * 35+ Curated SMB Industry Visual Registries
@@ -9,6 +10,21 @@ import { generateDesignImage } from '@/lib/designs/image-provider';
  * optimized for Google Business Profile posts, local SEO hero images, and social cards.
  */
 export const CURATED_SMB_IMAGE_REGISTRY: Record<string, string[]> = {
+  plywood_timber: [
+    'https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1541123437800-1bb1317badc2?w=1200&auto=format&fit=crop&q=80',
+  ],
+  indian_sweets: [
+    'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=1200&auto=format&fit=crop&q=80',
+  ],
   welding_fabrication: [
     'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1200&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=1200&auto=format&fit=crop&q=80',
@@ -29,8 +45,11 @@ export const CURATED_SMB_IMAGE_REGISTRY: Record<string, string[]> = {
   ],
   salon_spa: [
     'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=1200&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1562322140-8baeececf3df?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=1200&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1200&auto=format&fit=crop&q=80',
   ],
   auto_repair: [
@@ -201,13 +220,15 @@ export const CURATED_SMB_IMAGE_REGISTRY: Record<string, string[]> = {
 };
 
 const CATEGORY_MATCHERS: Array<{ key: string; regex: RegExp }> = [
+  { key: 'plywood_timber', regex: /(plywood|ply|timber|laminate|sunmica|veneer|shuttering|mdf|blockboard|flush door|teak|hardwood|woodwork|wood sheet)/i },
+  { key: 'indian_sweets', regex: /(sweet shop|sweets|mithai|halwai|ladoo|laddu|jalebi|gulab jamun|kaju katli|rasgulla|barfi|peda|namkeen|confectioner)/i },
   { key: 'welding_fabrication', regex: /(weld|fabricat|iron|steel|metal work|blacksmith|grating|shutter|gate)/i },
   { key: 'solar_energy', regex: /(solar|pv panel|rooftop solar|inverter|clean energy|renewable)/i },
   { key: 'dental_clinic', regex: /(dent|teeth|tooth|orthodont|oral care|cavity|implant)/i },
-  { key: 'salon_spa', regex: /(salon|spa|beauty|parlour|parlor|haircut|hair style|makeup|facial|barber|grooming)/i },
+  { key: 'salon_spa', regex: /(salon|saloon|spa|beauty|parlour|parlor|haircut|hair style|makeup|facial|barber|grooming|mehendi|makeover|bridal)/i },
   { key: 'auto_repair', regex: /(auto|car |garage|mechanic|vehicle|detailing|tire|tyre|service station|wheel|motor)/i },
   { key: 'fitness_gym', regex: /(gym|fitness|crossfit|workout|bodybuild|trainer|aerobic|zumba|physique)/i },
-  { key: 'bakery_sweets', regex: /(cake|bakery|bake|pastry|dessert|mithai|sweet|cupcake|baker|patisserie|confection)/i },
+  { key: 'bakery_sweets', regex: /(cake|bakery|bake|pastry|dessert|cupcake|baker|patisserie|confection)/i },
   { key: 'restaurant_dining', regex: /(restaurant|dining|cafe|bistro|diner|eatery|food court|culinary|chef|meal|fast food)/i },
   { key: 'plumbing', regex: /(plumb|pipe|drain|leak|water heater|sanitary|faucet|sewer)/i },
   { key: 'electrical', regex: /(electr|wiring|circuit|lighting|multimeter|switchboard|appliance repair)/i },
@@ -235,15 +256,40 @@ const CATEGORY_MATCHERS: Array<{ key: string; regex: RegExp }> = [
 
 /**
  * Maps any industry, topic or query string to the best matching SMB category key.
+ * Scales dynamically to all 4,000+ Google Business Profile categories.
  */
 export function scoreIndustryMatch(text: string): string {
   const normalized = (text || '').trim();
+  if (!normalized) return 'generic_business';
+
+  // 1. Check direct regex matchers
   for (const matcher of CATEGORY_MATCHERS) {
     if (matcher.regex.test(normalized)) {
       return matcher.key;
     }
   }
-  return 'generic_business';
+
+  // 2. Semantic mapping across all 4,000+ Google Business Profile categories
+  const context = normalizeCategoryContext(normalized);
+  const verticalMap: Record<string, string> = {
+    building_materials_hardware: 'plywood_timber',
+    food_sweets_confectionery: 'indian_sweets',
+    beauty_personal_care: 'salon_spa',
+    health_medical_wellness: 'healthcare_medical',
+    automotive_vehicles: 'auto_repair',
+    fitness_sports: 'fitness_gym',
+    fashion_apparel_jewellery: 'fashion_boutique',
+    grocery_retail_fmcg: 'grocery_supermarket',
+    home_electrical_services: 'electrical',
+    real_estate_interiors: 'real_estate',
+    it_software_digital: 'it_software',
+    professional_legal_finance: 'legal_accounting',
+    education_coaching: 'education_academy',
+    events_hospitality: 'event_decor',
+    logistics_industrial: 'welding_fabrication',
+  };
+
+  return verticalMap[context.verticalKey] || 'generic_business';
 }
 
 /**

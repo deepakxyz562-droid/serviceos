@@ -8,11 +8,22 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../../lib/api';
+
+const QUICK_SEARCH_CHIPS = [
+  { id: 'all', label: '⚡ All Topics', query: '' },
+  { id: 'diwali', label: '🪔 Diwali', query: 'diwali' },
+  { id: 'holi', label: '🎨 Holi', query: 'holi' },
+  { id: 'plywood', label: '🪵 Plywood & Timber', query: 'plywood' },
+  { id: 'sweets', label: '🍬 Sweets & Mithai', query: 'sweets' },
+  { id: 'salon', label: '✂️ Salon & Grooming', query: 'saloon' },
+  { id: 'offers', label: '🏷️ Special Offers', query: 'discount offer' },
+];
 
 export type StudioTabKey = 'all' | 'promotions' | 'for_business' | 'reviews' | 'festivals';
 
@@ -54,6 +65,8 @@ export function AiStudioFeed({
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<StudioTabKey>('all');
   const [brandFrame, setBrandFrame] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [templates, setTemplates] = useState<StudioTemplateItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState({
@@ -64,11 +77,20 @@ export function AiStudioFeed({
     festivals: 14,
   });
 
+  // Debounce search query to prevent rapid network requests
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim());
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
   useEffect(() => {
     let cancelled = false;
     async function fetchTemplates() {
       setLoading(true);
       try {
+        const queryParam = debouncedQuery ? `&q=${encodeURIComponent(debouncedQuery)}` : '';
         const res = await apiRequest<{
           templates: StudioTemplateItem[];
           counts?: {
@@ -78,7 +100,7 @@ export function AiStudioFeed({
             reviews: number;
             festivals: number;
           };
-        }>(`/api/social/designs/templates?tab=${activeTab}&limit=50`);
+        }>(`/api/social/designs/templates?tab=${activeTab}&limit=50${queryParam}`);
         if (!cancelled && res?.templates) {
           setTemplates(res.templates);
           if (res.counts) setCounts(res.counts);
@@ -93,7 +115,7 @@ export function AiStudioFeed({
     return () => {
       cancelled = true;
     };
-  }, [activeTab]);
+  }, [activeTab, debouncedQuery]);
 
   const tabs: Array<{ id: StudioTabKey; label: string; icon: keyof typeof MaterialIcons.glyphMap; count: number }> = [
     { id: 'all', label: 'All Designs', icon: 'auto-awesome', count: counts.total || 50 },
@@ -163,6 +185,56 @@ export function AiStudioFeed({
         </View>
       </View>
 
+      {/* ── SEARCH & TOPIC DISCOVERY BAR ── */}
+      <View style={styles.searchBarWrapper}>
+        <View style={styles.searchBarInner}>
+          <MaterialIcons name="search" size={20} color="#64748B" />
+          <TextInput
+            placeholder="Search e.g. Diwali, Holi, Plywood, Sweets, Salon..."
+            placeholderTextColor="#94A3B8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={styles.searchInput}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+          {searchQuery.length > 0 && (
+            <Pressable
+              onPress={() => setSearchQuery('')}
+              hitSlop={8}
+              style={styles.clearSearchBtn}
+            >
+              <MaterialIcons name="cancel" size={18} color="#94A3B8" />
+            </Pressable>
+          )}
+        </View>
+
+        {/* Quick Topic Chips for 1-Tap Discovery */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickChipsContent}
+        >
+          {QUICK_SEARCH_CHIPS.map((chip) => {
+            const isSelected =
+              chip.query === ''
+                ? searchQuery.trim() === ''
+                : searchQuery.toLowerCase() === chip.query.toLowerCase();
+            return (
+              <Pressable
+                key={chip.id}
+                onPress={() => setSearchQuery(isSelected && chip.query !== '' ? '' : chip.query)}
+                style={[styles.quickChip, isSelected && styles.quickChipActive]}
+              >
+                <Text style={[styles.quickChipText, isSelected && styles.quickChipTextActive]}>
+                  {chip.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       {/* ── CATEGORY FILTER PILLS ── */}
       <View style={styles.tabsTrack}>
         <ScrollView
@@ -207,8 +279,26 @@ export function AiStudioFeed({
             styles.gridContent,
             { paddingBottom: Math.max(insets.bottom, 24) + 60 },
           ]}
-          columnWrapperStyle={styles.columnWrapper}
+          columnWrapperStyle={templates.length > 0 ? styles.columnWrapper : undefined}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptySearchBox}>
+              <MaterialIcons name="search-off" size={44} color="#94A3B8" />
+              <Text style={styles.emptyTitle}>
+                {debouncedQuery
+                  ? `No designs found for "${debouncedQuery}"`
+                  : 'No designs available in this category'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                Try searching for Diwali, Holi, Plywood, Sweets, Salon, or tap Reset.
+              </Text>
+              {debouncedQuery.length > 0 && (
+                <Pressable onPress={() => setSearchQuery('')} style={styles.resetSearchBtn}>
+                  <Text style={styles.resetSearchBtnText}>Reset Search</Text>
+                </Pressable>
+              )}
+            </View>
+          }
           renderItem={({ item }) => (
             <Pressable
               onPress={() => onSelectTemplate(item)}
@@ -412,6 +502,96 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#15803D',
+  },
+  searchBarWrapper: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 8,
+  },
+  searchBarInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 40,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '500',
+    paddingVertical: 0,
+  },
+  clearSearchBtn: {
+    padding: 2,
+  },
+  quickChipsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  quickChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  quickChipActive: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  quickChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  quickChipTextActive: {
+    color: '#166534',
+    fontWeight: '700',
+  },
+  emptySearchBox: {
+    width: '100%',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1E293B',
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 280,
+  },
+  resetSearchBtn: {
+    backgroundColor: '#009F50',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 6,
+  },
+  resetSearchBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   tabsTrack: {
     backgroundColor: '#FFFFFF',

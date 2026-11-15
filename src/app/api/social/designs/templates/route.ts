@@ -13,19 +13,25 @@ import {
   getCategoryVisualPool,
   CURATED_SMB_IMAGE_REGISTRY,
 } from '@/lib/designs/dynamic-visual-resolver';
+import { normalizeCategoryContext } from '@/lib/designs/category-taxonomy';
 import {
   getCuratedTemplatesForBusiness,
   TEMPLATE_BUCKETS,
   type CuratedTemplateItem,
 } from '../../../../../../shared/curated-photo-templates';
 
-export const FESTIVAL_VISUAL_POOL: Record<string, string[]> = {
+const FESTIVAL_VISUAL_POOL: Record<string, string[]> = {
   diwali: [
-    'https://images.unsplash.com/photo-1605647540924-852290f6b0d5?w=1200&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1572798089532-487718bc9d26?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1606293926075-69a00dbfde81?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=1200&auto=format&fit=crop&q=80',
   ],
   holi: [
-    'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1583083527882-4bee9aba2eea?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1615870216519-2f9fa575fa5c?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200&auto=format&fit=crop&q=80',
   ],
   eid: [
     'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=1200&auto=format&fit=crop&q=80',
@@ -43,10 +49,20 @@ export const FESTIVAL_VISUAL_POOL: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1532375810709-75b1da00537c?w=1200&auto=format&fit=crop&q=80',
   ],
   rakhi: [
-    'https://images.unsplash.com/photo-1605647540924-852290f6b0d5?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=1200&auto=format&fit=crop&q=80',
   ],
   navratri: [
-    'https://images.unsplash.com/photo-1605647540924-852290f6b0d5?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1572798089532-487718bc9d26?w=1200&auto=format&fit=crop&q=80',
+  ],
+  dussehra: [
+    'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1606293926075-69a00dbfde81?w=1200&auto=format&fit=crop&q=80',
+  ],
+  chhath_puja: [
+    'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1572798089532-487718bc9d26?w=1200&auto=format&fit=crop&q=80',
   ],
   valentine: [
     'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=1200&auto=format&fit=crop&q=80',
@@ -59,7 +75,7 @@ export const FESTIVAL_VISUAL_POOL: Record<string, string[]> = {
   ],
 };
 
-export interface BusinessTemplateResponseItem {
+interface BusinessTemplateResponseItem {
   id: string;
   layout: string;
   name: string;
@@ -134,10 +150,16 @@ export async function GET(request: NextRequest) {
     } catch {}
   }
 
-  // 2. Identify industry matcher & visual pool
-  const matchedIndustryKey = scoreIndustryMatch(`${industry} ${businessName}`);
-  const visuals = getCategoryVisualPool(matchedIndustryKey);
-  const fallbackUnsplashPhotos = CURATED_SMB_IMAGE_REGISTRY[matchedIndustryKey] || CURATED_SMB_IMAGE_REGISTRY.generic_business;
+  // 2. Identify industry matcher & visual pool with Universal Category Taxonomy
+  const searchContext = normalizeCategoryContext(searchQuery || `${industry} ${businessName}`);
+  const effectiveCategoryText = searchQuery.trim()
+    ? `${searchQuery} ${industry} ${businessName}`
+    : `${industry} ${businessName}`;
+
+  const matchedIndustryKey = scoreIndustryMatch(effectiveCategoryText);
+  const visuals = getCategoryVisualPool(effectiveCategoryText);
+  const fallbackUnsplashPhotos =
+    CURATED_SMB_IMAGE_REGISTRY[matchedIndustryKey] || CURATED_SMB_IMAGE_REGISTRY.generic_business;
 
   // Find business group in BUSINESS_GROUPS with word boundaries
   const groupNames = Object.keys(BUSINESS_GROUPS) as (keyof typeof BUSINESS_GROUPS)[];
@@ -149,7 +171,7 @@ export async function GET(request: NextRequest) {
       .filter(Boolean)
       .join('|');
     const rx = new RegExp(`\\b(${pattern})\\b`, 'i');
-    if (rx.test(`${industry} ${businessName}`)) {
+    if (rx.test(effectiveCategoryText)) {
       matchedGroup = group;
       break;
     }
@@ -160,6 +182,10 @@ export async function GET(request: NextRequest) {
 
   if (searchQuery.trim()) {
     candidates = candidates.filter((tpl) => templateMatches(tpl, searchQuery));
+    if (candidates.length === 0) {
+      // If exact query matches no edition, show editions from the matched group
+      candidates = BUSINESS_EDITIONS.filter((tpl) => tpl.edition?.group === matchedGroup || tpl.edition?.purpose === 'Promotion');
+    }
   }
 
   if (requestedAspect && ['1:1', '4:5', '9:16'].includes(requestedAspect)) {
@@ -201,11 +227,23 @@ export async function GET(request: NextRequest) {
 
   // 3b. Fetch curated trade references (Pinterest / Meta Ad Library benchmarks)
   const curatedList = getCuratedTemplatesForBusiness({
-    categoryOrTitle: `${industry} ${businessName}`,
-    limit: 20,
+    categoryOrTitle: effectiveCategoryText,
+    limit: 25,
   });
 
-  const curatedResponseItems: BusinessTemplateResponseItem[] = curatedList
+  let filteredCuratedList = curatedList;
+  if (searchQuery.trim()) {
+    const qTokens = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+    const matchedCurated = curatedList.filter((tpl) => {
+      const text = `${tpl.title} ${tpl.headlinePattern} ${tpl.subtitle || ''} ${tpl.categoryId} ${(tpl.targetKeywords || []).map((k) => k.keyword).join(' ')}`.toLowerCase();
+      return qTokens.some((tok) => text.includes(tok));
+    });
+    if (matchedCurated.length > 0) {
+      filteredCuratedList = matchedCurated;
+    }
+  }
+
+  const curatedResponseItems: BusinessTemplateResponseItem[] = filteredCuratedList
     .filter((tpl) => {
       if (requestedAspect && ['1:1', '4:5', '9:16'].includes(requestedAspect)) {
         if (tpl.aspectRatio !== requestedAspect) return false;
@@ -297,13 +335,28 @@ export async function GET(request: NextRequest) {
       template.edition?.purpose === 'Festival' ||
       Boolean(template.occasionId) ||
       template.badge?.toLowerCase().includes('festival') ||
-      /diwali|holi|eid|christmas|new year|independence|republic|rakhi|navratri|valentine/i.test(template.headline || '');
+      /diwali|holi|eid|christmas|new year|independence|republic|rakhi|navratri|dussehra|chhath|valentine/i.test(template.headline || '');
 
     let assignedPhoto = template.photo;
     if (isFestival) {
-      const occasion = (template.occasionId || 'diwali').toLowerCase();
+      const textToInspect = `${template.occasionId || ''} ${template.headline || ''} ${template.name || ''}`.toLowerCase();
+      let occasion = 'diwali';
+      if (/holi|gulal/i.test(textToInspect)) occasion = 'holi';
+      else if (/eid/i.test(textToInspect)) occasion = 'eid';
+      else if (/christmas/i.test(textToInspect)) occasion = 'christmas';
+      else if (/new year|nye/i.test(textToInspect)) occasion = 'new_year';
+      else if (/independence/i.test(textToInspect)) occasion = 'independence_day';
+      else if (/republic/i.test(textToInspect)) occasion = 'republic_day';
+      else if (/rakhi/i.test(textToInspect)) occasion = 'rakhi';
+      else if (/navratri|durga/i.test(textToInspect)) occasion = 'navratri';
+      else if (/dussehra/i.test(textToInspect)) occasion = 'dussehra';
+      else if (/chhath/i.test(textToInspect)) occasion = 'chhath_puja';
+      else if (searchContext.isFestival && searchContext.detectedOccasion) {
+        occasion = searchContext.detectedOccasion;
+      }
+
       const festivalPhotos = FESTIVAL_VISUAL_POOL[occasion] || FESTIVAL_VISUAL_POOL.diwali;
-      assignedPhoto = festivalPhotos[idx % festivalPhotos.length] || template.photo;
+      assignedPhoto = festivalPhotos[idx % festivalPhotos.length] || festivalPhotos[0];
     } else {
       assignedPhoto =
         visuals[idx % visuals.length] ||
