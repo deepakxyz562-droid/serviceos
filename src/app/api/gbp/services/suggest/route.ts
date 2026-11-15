@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { callAI } from '@/lib/ai-client';
 import { db } from '@/lib/db';
 import { safeParseJsonObject } from '@/lib/gbp/seo-context';
+import { getGbpCategoryByNameOrAlias } from '@/lib/gbp/master-category-catalog';
 
 export const dynamic = 'force-dynamic';
 
@@ -136,6 +137,32 @@ async function generateDynamicServices({
   query: string;
   searchTerms?: string[];
 }) {
+  // 1. Check Master Category Catalog for instant (<1ms) trade-verified offerings
+  const masterCat = getGbpCategoryByNameOrAlias(category);
+  if (masterCat && masterCat.coreProducts.length > 0) {
+    if (!query) {
+      return NextResponse.json({
+        services: masterCat.coreProducts,
+        category: masterCat.displayName,
+        businessName,
+        source: 'master_catalog',
+      });
+    }
+    // If user is searching within the category
+    const qLower = query.toLowerCase();
+    const matchedProducts = masterCat.coreProducts.filter((p) =>
+      p.toLowerCase().includes(qLower)
+    );
+    if (matchedProducts.length > 0) {
+      return NextResponse.json({
+        services: matchedProducts,
+        category: masterCat.displayName,
+        businessName,
+        source: 'master_catalog',
+      });
+    }
+  }
+
   try {
     const searchHint = searchTerms.length > 0
       ? `\nTop Google Search Terms customers search for this business: ${searchTerms.join(', ')}\nPrioritize clean service offerings matching real customer search demand without stuffing city names into the service titles.`

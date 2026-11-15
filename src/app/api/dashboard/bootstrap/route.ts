@@ -81,7 +81,7 @@ function getCurrentMonthRange() {
   return { startOfMonth, startOfNextMonth };
 }
 
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   try {
     const authUser = await getAuthUser();
 

@@ -8,7 +8,7 @@ import { callAI } from '@/lib/ai-client';
 
 export const dynamic = 'force-dynamic';
 
-export interface GeneratedPostItem {
+interface GeneratedPostItem {
   id: string;
   badge: 'Standard Post' | 'Special Offer' | 'Seasonal Event';
   postType: 'STANDARD' | 'OFFER' | 'EVENT';
@@ -163,7 +163,7 @@ function cleanHash(str: string): string {
   return str.replace(/[^a-zA-Z0-9]/g, '');
 }
 
-export function generate20PostsForBusiness(params: {
+function generate20PostsForBusiness(params: {
   businessName: string;
   category: string;
   city: string;

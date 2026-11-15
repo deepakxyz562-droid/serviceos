@@ -14,6 +14,7 @@ import {
   CURATED_SMB_IMAGE_REGISTRY,
 } from '@/lib/designs/dynamic-visual-resolver';
 import { normalizeCategoryContext } from '@/lib/designs/category-taxonomy';
+import { generateCategoryBlueprints } from '@/lib/gbp/master-category-catalog';
 import {
   getCuratedTemplatesForBusiness,
   TEMPLATE_BUCKETS,
@@ -225,7 +226,64 @@ export async function GET(request: NextRequest) {
     ];
   }
 
-  // 3b. Fetch curated trade references (Pinterest / Meta Ad Library benchmarks)
+  // 3b. Synthesize First-Class Category Blueprints (Tailored specifically to the GBP trade)
+  const categoryBlueprints = generateCategoryBlueprints({
+    categoryOrTitle: effectiveCategoryText,
+    businessName,
+    city,
+    phone,
+  });
+
+  const blueprintResponseItems: BusinessTemplateResponseItem[] = categoryBlueprints
+    .filter((bp) => {
+      if (requestedTab === 'all') return true;
+      return bp.tab === requestedTab;
+    })
+    .map((bp) => {
+      let composedDesign: any = null;
+      if (includeDesign) {
+        try {
+          const fallbackLayout = String(BUSINESS_EDITIONS[0]?.layout || 'business_0');
+          composedDesign = composeBusinessEdition({
+            layout: fallbackLayout,
+            ratio: '4:5',
+            brand: businessName,
+            headline: bp.headline,
+            subtitle: bp.subtitle,
+            badge: bp.badge,
+            cta: bp.cta,
+            phone,
+            website: website ? website.replace(/^https?:\/\//, '') : undefined,
+            logoUrl: logoUrl || undefined,
+            photo: bp.photoUrl,
+            theme: bp.theme as any,
+          });
+        } catch {}
+      }
+
+      return {
+        id: bp.id,
+        layout: bp.layout,
+        name: bp.headline,
+        headline: bp.headline,
+        subtitle: bp.subtitle,
+        badge: bp.badge,
+        cta: bp.cta,
+        tab: bp.tab,
+        purpose: bp.purpose,
+        theme: bp.theme,
+        aspectRatio: '4:5',
+        photoUrl: bp.photoUrl,
+        bgPrompt: bp.headline,
+        design: composedDesign,
+        defaultBullets: bp.bullets,
+        targetKeywords: bp.targetKeywords,
+        estimatedViews: 90,
+        defaultCaption: bp.defaultCaption,
+      };
+    });
+
+  // 3c. Fetch curated trade references (Pinterest / Meta Ad Library benchmarks)
   const curatedList = getCuratedTemplatesForBusiness({
     categoryOrTitle: effectiveCategoryText,
     limit: 25,
@@ -413,7 +471,11 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  const combinedTemplates = [...curatedResponseItems, ...items].slice(0, limit);
+  const combinedTemplates = [
+    ...blueprintResponseItems,
+    ...curatedResponseItems,
+    ...items,
+  ].slice(0, limit);
 
   return NextResponse.json({
     businessContext: {

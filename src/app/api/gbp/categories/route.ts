@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { callAI } from '@/lib/ai-client';
+import {
+  searchGbpCategories,
+  getGbpCategoryByNameOrAlias,
+} from '@/lib/gbp/master-category-catalog';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +46,18 @@ export async function GET(request: NextRequest) {
 
     // ── Scenario A: User is typing a category query (Live search autocomplete) ──
     if (query.length > 0) {
-      // Tier 1: Try official Google MyBusiness Categories API
+      // Tier 1: Search First-Class Master GBP Category Catalog (Instant <1ms lookup)
+      const localMatches = searchGbpCategories(query, 10);
+      if (localMatches.length > 0) {
+        return NextResponse.json({
+          categories: localMatches.map((c) => c.displayName),
+          detailed: localMatches,
+          source: 'master_catalog',
+          query,
+        });
+      }
+
+      // Tier 2: Try official Google MyBusiness Categories API
       try {
         const googleAccount = await prepareGoogleAccount(user.tenantId).catch(() => null);
         if (googleAccount?.accessToken) {
