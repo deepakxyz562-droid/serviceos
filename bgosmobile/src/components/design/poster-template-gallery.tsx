@@ -44,6 +44,8 @@ interface PosterTemplateGalleryProps {
   onApply: (template: PosterTemplate) => void;
   onDescribeIdea?: () => void;
   searchQuery?: string;
+  /** Live-sourced designs hydrated from the dynamic templates API. */
+  liveTemplates?: PosterTemplate[];
 }
 
 const CATEGORY_ICON: Record<string, string> = {
@@ -67,7 +69,7 @@ function formatOptionLabel(str: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searchQuery }: PosterTemplateGalleryProps) {
+export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searchQuery, liveTemplates }: PosterTemplateGalleryProps) {
   const activeSearch = searchQuery || '';
   const [activeCategory, setActiveCategory] = useState<'for_you' | 'all' | string>('for_you');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -79,7 +81,13 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
     else onApply(template);
   }
 
-  const orderedTemplates = useMemo(() => orderTemplatesForGallery(), []);
+  const orderedTemplates = useMemo(() => {
+    const live = Array.isArray(liveTemplates) ? liveTemplates : [];
+    if (live.length === 0) return orderTemplatesForGallery();
+    const staticList = orderTemplatesForGallery();
+    const liveIds = new Set(live.map((t) => t.id));
+    return [...live, ...staticList.filter((t) => !liveIds.has(t.id))];
+  }, [liveTemplates]);
 
   const forYouTemplates = useMemo(() => {
     const scored = [...orderedTemplates]
@@ -307,7 +315,7 @@ export function PosterTemplateGallery({ business, onApply, onDescribeIdea, searc
                 {t.name}
               </Text>
               <Text style={styles.cardMeta} numberOfLines={1}>
-                {t.aspect} · {t.category.replace(/_/g, ' ')}
+                {t.aspect} · {t.category.replace(/_/g, ' ')}{t.id.endsWith('-live') ? ' · Live' : ''}
               </Text>
             </View>
           </Pressable>

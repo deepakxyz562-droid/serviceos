@@ -994,6 +994,64 @@ export default function MarketingScreen() {
 
   const generationEpoch = useRef(0);
   const [templatePickerOpen,setTemplatePickerOpen] = useState(false);
+  const [liveGalleryTemplates, setLiveGalleryTemplates] = useState<PosterTemplate[]>([]);
+
+  // Hydrate the template gallery with dynamic live-sourced designs
+  // (Pinterest / Behance / Meta Ads / Unsplash pool via the shared templates
+  // API). Cached on-device first; the static shared templates always remain
+  // the offline fallback when this request fails or is empty.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const cached = await loadJson<PosterTemplate[]>('bgos-live-gallery-templates');
+        if (!cancelled && Array.isArray(cached) && cached.length > 0) {
+          setLiveGalleryTemplates(cached);
+        }
+      } catch {}
+      try {
+        const data = await apiRequest<{
+          templates?: Array<{
+            id: string;
+            name?: string;
+            headline?: string;
+            subtitle?: string;
+            badge?: string;
+            cta?: string;
+            theme?: string;
+            aspectRatio?: string;
+            photoUrl: string;
+            photoSource?: string;
+            occasionId?: string;
+          }>;
+        }>('/api/social/designs/templates?tab=all&includeDesign=0&limit=48');
+        const remote = (data?.templates || [])
+          .filter((t) => Boolean(t?.photoUrl))
+          .map((t) => ({
+            id: `${t.id}-live`,
+            name: t.headline || t.name || 'Live Design',
+            category: 'service_spotlight' as never,
+            layout: 'editorial' as never,
+            theme: (t.theme || 'emerald') as never,
+            aspect: (['1:1', '4:5', '9:16'].includes(t.aspectRatio || '') ? t.aspectRatio : '4:5') as never,
+            badge: t.badge || t.photoSource || 'Live',
+            headline: t.headline || t.name || '',
+            subtitle: t.subtitle || '',
+            cta: t.cta || 'Learn More',
+            photo: t.photoUrl.startsWith('http') ? t.photoUrl : `${WEB_URL}${t.photoUrl}`,
+            bgPrompt: t.headline || t.name || '',
+            occasionId: t.occasionId,
+          })) as PosterTemplate[];
+        if (!cancelled && remote.length > 0) {
+          setLiveGalleryTemplates(remote);
+          void saveJson('bgos-live-gallery-templates', remote);
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [draftPickerOpen,setDraftPickerOpen]=useState(false);
   const [detailsOpen,setDetailsOpen]=useState(false);
   const [editSheet, setEditSheet] = useState<'none' | 'text' | 'photo' | 'style' | 'brand'>('none');
@@ -3235,6 +3293,7 @@ export default function MarketingScreen() {
             </Pressable>
           </View>
           <PosterTemplateGallery
+            liveTemplates={liveGalleryTemplates}
             business={{
               businessName: effectiveBusinessName,
               category: brandProfile.data?.profile?.industry,
@@ -3478,6 +3537,7 @@ export default function MarketingScreen() {
                     ) : studioCreateTab === 'templates' || studioCreateTab === 'search' ? (
                       <View style={{ flex: 1 }}>
                         <PosterTemplateGallery
+                          liveTemplates={liveGalleryTemplates}
                           searchQuery={studioCreateTab === 'search' ? templateSearch : ''}
                           business={{
                             businessName: effectiveBusinessName,

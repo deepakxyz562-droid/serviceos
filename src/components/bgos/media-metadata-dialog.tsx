@@ -1579,10 +1579,30 @@ export function WebMediaMetadataDialog({
                                     alt={template.headline}
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                     loading="lazy"
+                                    onError={(e) => {
+                                      // Degrade gracefully through verified local assets
+                                      const img = e.currentTarget;
+                                      const fallbacks = [
+                                        '/images/bgos/templates/edition-professional-services.webp',
+                                        '/images/bgos/templates/automotive.webp',
+                                      ];
+                                      const currentIdx = Number(img.dataset.fallbackIdx || '0');
+                                      if (currentIdx < fallbacks.length) {
+                                        img.dataset.fallbackIdx = String(currentIdx + 1);
+                                        img.src = fallbacks[currentIdx];
+                                      } else {
+                                        img.style.visibility = 'hidden';
+                                      }
+                                    }}
                                   />
                                   <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-black/75 text-white uppercase tracking-wider">
                                     {template.badge || template.tab}
                                   </span>
+                                  {template.photoSource && (
+                                    <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded text-[8.5px] font-bold text-white tracking-wide shadow-xs bg-purple-600/90">
+                                      {template.photoSource}
+                                    </span>
+                                  )}
                                   {isSelected && (
                                     <span className="absolute top-1.5 right-1.5 size-5 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-xs">
                                       <Check className="size-3" />

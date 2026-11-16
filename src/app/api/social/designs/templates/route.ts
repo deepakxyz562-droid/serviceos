@@ -13,7 +13,13 @@ import {
   getCategoryVisualPool,
   CURATED_SMB_IMAGE_REGISTRY,
 } from '@/lib/designs/dynamic-visual-resolver';
-import { getMultiSourceCategoryVisuals } from '@/lib/designs/multi-source-creative-engine';
+import {
+  getMultiSourceCategoryVisuals,
+  getFestivalVisuals,
+  getCreativeSourceLabel,
+  type MultiSourceCreativeVisual,
+} from '@/lib/designs/multi-source-creative-engine';
+import { getSeasonalOccasions } from '@/lib/designs/visual-query-builder';
 import { normalizeCategoryContext } from '@/lib/designs/category-taxonomy';
 import { generateCategoryBlueprints, getGbpCategoryByNameOrAlias } from '@/lib/gbp/master-category-catalog';
 import { POSTER_TEMPLATES, type PosterTemplate } from '../../../../../../shared/poster-templates';
@@ -94,6 +100,8 @@ interface BusinessTemplateResponseItem {
   theme: string;
   aspectRatio: '1:1' | '4:5' | '9:16';
   photoUrl: string;
+  photoSource?: string;
+  photoCredit?: string;
   bgPrompt?: string;
   occasionId?: string;
   design?: any;
@@ -142,7 +150,21 @@ export async function GET(request: NextRequest) {
   let address = tenant?.address || '';
   let city = (tenant as any)?.city || brandProfile?.location || 'Patna';
 
-  const baseUrl = getProductAppUrl(request, 'bgos');
+  // Derive the origin from the incoming request (x-forwarded-host aware) so
+  // preview/proxy gateways never receive mismatched absolute image URLs.
+  const resolveRequestOrigin = (): string => {
+    const proto =
+      request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
+      request.nextUrl?.protocol?.replace(/:$/, '') ||
+      'https';
+    const host =
+      request.headers.get('x-forwarded-host')?.split(',')[0]?.trim() ||
+      request.headers.get('host')?.split(',')[0]?.trim();
+    if (host) return `${proto}://${host}`;
+    const envUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+    return envUrl ? envUrl.replace(/\/$/, '') : '';
+  };
+  const baseUrl = resolveRequestOrigin() || getProductAppUrl(request, 'bgos');
   const toAbsoluteUrl = (path?: string | null): string => {
     if (!path) return '';
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
@@ -172,7 +194,115 @@ export async function GET(request: NextRequest) {
     : `${industry} ${businessName}`;
 
   const matchedIndustryKey = scoreIndustryMatch(effectiveCategoryText);
-  const multiSourceVisuals = getMultiSourceCategoryVisuals(effectiveCategoryText, 250);
+
+  // ── Tier 1: the merchant's own photos (brand library + recent post media) ──
+  const [libraryRows, postRows] = await Promise.all([
+    db.imageLibrary
+      .findMany({
+        where: { tenantId: user.tenantId },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: { id: true, name: true, url: true, folder: true, mediaType: true },
+      })
+      .catch(() => [] as Array<{ id: string; name: string | null; url: string; folder: string | null; mediaType: string | null }>),
+    db.socialPost
+      .findMany({
+        where: { tenantId: user.tenantId },
+        orderBy: { createdAt: 'desc' },
+        take: 12,
+        select: { id: true, mediaUrls: true },
+      })
+      .catch(() => [] as Array<{ id: string; mediaUrls: string | null }>),
+  ]);
+
+  const parseMediaList = (raw: unknown): string[] => {
+    if (Array.isArray(raw)) return raw.filter((u): u is string => typeof u === 'string' && Boolean(u.trim()));
+    if (typeof raw !== 'string' || !raw.trim()) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed)
+        ? parsed.filter((u): u is string => typeof u === 'string' && Boolean(u.trim()))
+        : [];
+    } catch {
+      return /^https?:\/\//i.test(raw) || raw.startsWith('/') ? [raw] : [];
+    }
+  };
+
+  const userPhotos: Array<{ url: string; title?: string }> = [];
+  const seenUserPhotoUrls = new Set<string>();
+  for (const row of libraryRows) {
+    const url = typeof row?.url === 'string' ? row.url.trim() : '';
+    if (!url || /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(url)) continue;
+    if (!seenUserPhotoUrls.has(url)) {
+      seenUserPhotoUrls.add(url);
+      userPhotos.push({ url, title: row.name || 'Brand Library Photo' });
+    }
+  }
+  for (const post of postRows) {
+    for (const u of parseMediaList(post?.mediaUrls)) {
+      if (!/^https?:\/\//i.test(u) && !u.startsWith('/')) continue;
+      if (!seenUserPhotoUrls.has(u)) {
+        seenUserPhotoUrls.add(u);
+        userPhotos.push({ url: u, title: 'Your Social Post' });
+      }
+    }
+  }
+
+  // ── Seasonal occasions driving dynamic festival visuals ──
+  const seasonalOccasions = getSeasonalOccasions();
+  if (searchContext.isFestival && searchContext.detectedOccasion) {
+    seasonalOccasions.unshift({ id: searchContext.detectedOccasion, label: searchContext.detectedOccasion });
+  }
+  // Pre-scan template text so the Festivals tab always shows live imagery
+  // (even outside seasonal windows) — top occasions present in the collection.
+  const occasionFrequency = new Map<string, number>();
+  for (const tpl of POSTER_TEMPLATES) {
+    const text = `${tpl.occasionId || ''} ${tpl.headline || ''} ${tpl.name || ''}`.toLowerCase();
+    if (!text.trim()) continue;
+    let occasion = '';
+    if (/diwali|deepavali/.test(text)) occasion = 'diwali';
+    else if (/holi|gulal/.test(text)) occasion = 'holi';
+    else if (/christmas|xmas/.test(text)) occasion = 'christmas';
+    else if (/new year|nye/.test(text)) occasion = 'new_year';
+    else if (/eid|mubarak/.test(text)) occasion = 'eid';
+    else if (/navratri|durga|garba/.test(text)) occasion = 'navratri';
+    else if (/dussehra|vijayadashami/.test(text)) occasion = 'dussehra';
+    else if (/rakhi|raksha/.test(text)) occasion = 'rakhi';
+    else if (/chhath/.test(text)) occasion = 'chhath_puja';
+    else if (/independence|tiranga/.test(text)) occasion = 'independence_day';
+    else if (/republic/.test(text)) occasion = 'republic_day';
+    else if (/valentine|rose day/.test(text)) occasion = 'valentine';
+    if (occasion) occasionFrequency.set(occasion, (occasionFrequency.get(occasion) || 0) + 1);
+  }
+  const templateOccasions = [...occasionFrequency.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([id]) => ({ id, label: id.replace(/_/g, ' ') }));
+  // Seasonal occasions take priority slots; template occasions fill the rest.
+  const uniqueOccasions = [
+    ...new Map([...seasonalOccasions, ...templateOccasions].map((o) => [o.id, o])).values(),
+  ].slice(0, 5);
+
+  const [multiSourceVisuals, ...festivalVisualResults] = await Promise.all([
+    getMultiSourceCategoryVisuals({
+      industryText: effectiveCategoryText,
+      requestedCount: POSTER_TEMPLATES.length + 40,
+      userPhotos,
+      tenantSeed: user.tenantId,
+    }),
+    ...uniqueOccasions.map((occasion) =>
+      getFestivalVisuals(occasion.id, 40, user.tenantId).catch(() => [] as MultiSourceCreativeVisual[]),
+    ),
+  ]);
+  const festivalVisualsByOccasion = new Map<string, MultiSourceCreativeVisual[]>();
+  uniqueOccasions.forEach((occasion, i) => {
+    const occasionVisuals = festivalVisualResults[i];
+    if (Array.isArray(occasionVisuals) && occasionVisuals.length > 0) {
+      festivalVisualsByOccasion.set(occasion.id, occasionVisuals);
+    }
+  });
+  const festivalCursor = new Map<string, number>();
+
   const visuals = getCategoryVisualPool(effectiveCategoryText);
   const fallbackUnsplashPhotos =
     CURATED_SMB_IMAGE_REGISTRY[matchedIndustryKey] || CURATED_SMB_IMAGE_REGISTRY.generic_business;
@@ -258,29 +388,40 @@ export async function GET(request: NextRequest) {
     }
 
     let assignedPhoto = tpl.photo;
+    let photoSourceKey: string = 'curated';
+    let photoCredit: string | undefined;
     if (isFestival) {
-      if (tpl.photo && tpl.photo.startsWith('/images/bgos/templates/')) {
-        assignedPhoto = tpl.photo;
-      } else {
-        const textToInspect = `${tpl.occasionId || ''} ${headline} ${tpl.name || ''}`.toLowerCase();
-        let occasion = 'diwali';
-        if (/holi|gulal/i.test(textToInspect)) occasion = 'holi';
-        else if (/eid/i.test(textToInspect)) occasion = 'eid';
-        else if (/christmas/i.test(textToInspect)) occasion = 'christmas';
-        else if (/new year|nye/i.test(textToInspect)) occasion = 'new_year';
-        else if (/independence/i.test(textToInspect)) occasion = 'independence_day';
-        else if (/republic/i.test(textToInspect)) occasion = 'republic_day';
-        else if (/rakhi/i.test(textToInspect)) occasion = 'rakhi';
-        else if (/navratri|durga/i.test(textToInspect)) occasion = 'navratri';
-        else if (/dussehra/i.test(textToInspect)) occasion = 'dussehra';
-        else if (/chhath/i.test(textToInspect)) occasion = 'chhath_puja';
-        else if (searchContext.isFestival && searchContext.detectedOccasion) {
-          occasion = searchContext.detectedOccasion;
-        }
-
-        const festivalPhotos = FESTIVAL_VISUAL_POOL[occasion] || FESTIVAL_VISUAL_POOL.diwali;
-        assignedPhoto = festivalPhotos[idx % festivalPhotos.length] || festivalPhotos[0];
+      const textToInspect = `${tpl.occasionId || ''} ${headline} ${tpl.name || ''}`.toLowerCase();
+      let occasion = 'diwali';
+      if (/holi|gulal/i.test(textToInspect)) occasion = 'holi';
+      else if (/eid/i.test(textToInspect)) occasion = 'eid';
+      else if (/christmas/i.test(textToInspect)) occasion = 'christmas';
+      else if (/new year|nye/i.test(textToInspect)) occasion = 'new_year';
+      else if (/independence/i.test(textToInspect)) occasion = 'independence_day';
+      else if (/republic/i.test(textToInspect)) occasion = 'republic_day';
+      else if (/rakhi/i.test(textToInspect)) occasion = 'rakhi';
+      else if (/navratri|durga/i.test(textToInspect)) occasion = 'navratri';
+      else if (/dussehra/i.test(textToInspect)) occasion = 'dussehra';
+      else if (/chhath/i.test(textToInspect)) occasion = 'chhath_puja';
+      else if (searchContext.isFestival && searchContext.detectedOccasion) {
+        occasion = searchContext.detectedOccasion;
       }
+
+      const dynamicFestival = festivalVisualsByOccasion.get(occasion);
+      if (dynamicFestival && dynamicFestival.length > 0) {
+          const festivalCounter = (festivalCursor.get(occasion) || 0) + 1;
+          festivalCursor.set(occasion, festivalCounter);
+          const festivalItem = dynamicFestival[(festivalCounter - 1) % dynamicFestival.length];
+          assignedPhoto = festivalItem?.url || assignedPhoto;
+          photoSourceKey = festivalItem?.source || 'curated';
+          photoCredit = festivalItem?.credit;
+        } else if (tpl.photo && tpl.photo.startsWith('/images/bgos/templates/')) {
+          // No dynamic pool for this occasion yet — keep the evergreen local asset
+          assignedPhoto = tpl.photo;
+        } else {
+          const festivalPhotos = FESTIVAL_VISUAL_POOL[occasion] || FESTIVAL_VISUAL_POOL.diwali;
+          assignedPhoto = festivalPhotos[idx % festivalPhotos.length] || festivalPhotos[0];
+        }
     } else {
       const multiSourceItem = multiSourceVisuals[idx % multiSourceVisuals.length];
       assignedPhoto =
@@ -288,6 +429,8 @@ export async function GET(request: NextRequest) {
         visuals[idx % visuals.length] ||
         fallbackUnsplashPhotos[idx % fallbackUnsplashPhotos.length] ||
         tpl.photo;
+      photoSourceKey = multiSourceItem?.source || 'curated';
+      photoCredit = multiSourceItem?.credit;
     }
 
     assignedPhoto = toAbsoluteUrl(assignedPhoto);
@@ -335,6 +478,8 @@ export async function GET(request: NextRequest) {
       theme: (tpl.theme as any) || 'sand',
       aspectRatio: aspect,
       photoUrl: assignedPhoto,
+      photoSource: getCreativeSourceLabel(photoSourceKey),
+      photoCredit,
       bgPrompt: tpl.bgPrompt || headline,
       occasionId: tpl.occasionId,
       design: composedDesign,
@@ -382,7 +527,7 @@ export async function GET(request: NextRequest) {
       return bp.tab === requestedTab;
     })
     .map((bp, bpIdx) => {
-      const msVisual = multiSourceVisuals[bpIdx % multiSourceVisuals.length];
+      const msVisual = multiSourceVisuals[(POSTER_TEMPLATES.length + bpIdx) % multiSourceVisuals.length];
       const photoUrl = toAbsoluteUrl(msVisual?.url || bp.photoUrl);
       let composedDesign: any = null;
       if (includeDesign) {
@@ -418,6 +563,8 @@ export async function GET(request: NextRequest) {
         theme: bp.theme,
         aspectRatio: '4:5',
         photoUrl,
+        photoSource: getCreativeSourceLabel(msVisual?.source),
+        photoCredit: msVisual?.credit,
         bgPrompt: bp.headline,
         design: composedDesign,
         defaultBullets: bp.bullets,
@@ -474,7 +621,36 @@ export async function GET(request: NextRequest) {
               ? 'reviews'
               : 'for_business';
 
-      const photoUrl = toAbsoluteUrl(tpl.referenceUrl);
+      // Hydrate festival curated references from the dynamic festival pools
+      let photoUrl = toAbsoluteUrl(tpl.referenceUrl);
+      let photoSource: string = 'Curated';
+      let photoCredit: string | undefined;
+      if (tab === 'festivals') {
+        const festText = `${tpl.title} ${tpl.headlinePattern} ${tpl.categoryId}`.toLowerCase();
+        let festOccasion = '';
+        if (/diwali|deepavali/.test(festText)) festOccasion = 'diwali';
+        else if (/holi|gulal/.test(festText)) festOccasion = 'holi';
+        else if (/christmas|xmas/.test(festText)) festOccasion = 'christmas';
+        else if (/new year|nye/.test(festText)) festOccasion = 'new_year';
+        else if (/eid|mubarak/.test(festText)) festOccasion = 'eid';
+        else if (/navratri|durga/.test(festText)) festOccasion = 'navratri';
+        else if (/rakhi|raksha/.test(festText)) festOccasion = 'rakhi';
+        else if (/valentine/.test(festText)) festOccasion = 'valentine';
+        else if (/independence|republic/.test(festText)) festOccasion = 'independence_day';
+        const curatedFestivalPool = festOccasion
+          ? festivalVisualsByOccasion.get(festOccasion)
+          : undefined;
+        if (curatedFestivalPool && curatedFestivalPool.length > 0) {
+          const festivalCounter = (festivalCursor.get(festOccasion) || 0) + 1;
+          festivalCursor.set(festOccasion, festivalCounter);
+          const festivalItem = curatedFestivalPool[(festivalCounter - 1) % curatedFestivalPool.length];
+          if (festivalItem?.url) {
+            photoUrl = toAbsoluteUrl(festivalItem.url);
+            photoSource = getCreativeSourceLabel(festivalItem.source);
+            photoCredit = festivalItem.credit;
+          }
+        }
+      }
       let composedCuratedDesign: any = null;
       if (includeDesign) {
         try {
@@ -523,6 +699,8 @@ export async function GET(request: NextRequest) {
         theme: 'emerald',
         aspectRatio: tpl.aspectRatio,
         photoUrl,
+        photoSource,
+        photoCredit,
         bgPrompt: tpl.title,
         design: composedCuratedDesign,
         defaultBullets: tpl.defaultBullets,
