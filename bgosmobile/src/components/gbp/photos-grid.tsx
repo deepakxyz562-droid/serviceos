@@ -316,6 +316,10 @@ export function PhotosBoard({
   onNeedConnect,
   variant = 'default',
   businessName = 'My Business',
+  logoUrl,
+  phone,
+  city,
+  category,
 }: {
   data: PhotosResponse | null;
   loading: boolean;
@@ -327,6 +331,10 @@ export function PhotosBoard({
   onNeedConnect?: () => void;
   variant?: BoardVariant;
   businessName?: string;
+  logoUrl?: string | null;
+  phone?: string;
+  city?: string;
+  category?: string;
 }) {
   const [tab, setTab] = useState<TabKey>('soon');
   const [pendingAssets, setPendingAssets] = useState<PendingUpload[]>([]);
@@ -666,6 +674,10 @@ export function PhotosBoard({
         onClose={() => setPreviewItem(null)}
         onEdit={openEditModal}
         businessName={businessName}
+        logoUrl={logoUrl}
+        phone={phone}
+        city={city}
+        category={category}
       />
 
       <MediaMetadataSheet

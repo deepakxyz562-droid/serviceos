@@ -14,7 +14,8 @@ import {
   CURATED_SMB_IMAGE_REGISTRY,
 } from '@/lib/designs/dynamic-visual-resolver';
 import { normalizeCategoryContext } from '@/lib/designs/category-taxonomy';
-import { generateCategoryBlueprints } from '@/lib/gbp/master-category-catalog';
+import { generateCategoryBlueprints, getGbpCategoryByNameOrAlias } from '@/lib/gbp/master-category-catalog';
+import { POSTER_TEMPLATES, type PosterTemplate } from '../../../../../../shared/poster-templates';
 import {
   getCuratedTemplatesForBusiness,
   TEMPLATE_BUCKETS,
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
   const requestedTab = searchParams.get('tab') || 'all'; // 'for_business' | 'promotions' | 'festivals' | 'reviews' | 'all'
   const requestedAspect = searchParams.get('aspect'); // '1:1' | '4:5' | '9:16'
   const searchQuery = searchParams.get('q') || '';
-  const limit = Math.min(60, Math.max(4, parseInt(searchParams.get('limit') || '32', 10)));
+  const limit = Math.min(300, Math.max(8, parseInt(searchParams.get('limit') || '150', 10)));
   const includeDesign = searchParams.get('includeDesign') !== '0';
 
   // 1. Fetch tenant business context
@@ -190,64 +191,174 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 3. Filter templates from BUSINESS_EDITIONS with strict category isolation
-  const hasActiveSearch = Boolean(searchQuery.trim());
-  let candidates = BUSINESS_EDITIONS;
+  // 3. Trade products & conflict adaptation engine
+  const gbpCat = getGbpCategoryByNameOrAlias(effectiveCategoryText);
+  const tradeProducts =
+    gbpCat?.coreProducts && gbpCat.coreProducts.length > 0 ? gbpCat.coreProducts : [industry];
 
-  if (hasActiveSearch) {
-    candidates = candidates.filter((tpl) => templateMatches(tpl, searchQuery));
-    if (candidates.length === 0) {
-      // If exact query matches no edition, strictly fallback to merchant's trade group & universal festivals
-      candidates = BUSINESS_EDITIONS.filter(
-        (tpl) => tpl.edition?.group === matchedGroup || tpl.edition?.purpose === 'Festival',
-      );
-    }
-  } else {
-    // Default feed browsing: strictly isolate to the merchant's business category group + universal festivals
-    candidates = BUSINESS_EDITIONS.filter(
-      (tpl) => tpl.edition?.group === matchedGroup || tpl.edition?.purpose === 'Festival',
+  const isMerchantTrade = (word: string): boolean => {
+    return new RegExp(`\\b(${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b`, 'i').test(
+      effectiveCategoryText,
     );
-  }
+  };
 
+  const conflictingTradesRegex =
+    /\b(car wash|auto garage|bike repair|tyre shop|plumbing|plumber|electrician|ac repair|pest control|carpenter|plywood|timber|dentist|dental|teeth whitening|root canal|salon|haircut|hair spa|facial|manicure|sweet shop|mithai|halwai|software company|app development)\b/i;
+
+  // 4. Adapt POSTER_TEMPLATES (270+ templates) with strict merchant trade relevance
+  const allAdaptedPosterItems: BusinessTemplateResponseItem[] = POSTER_TEMPLATES.map((tpl, idx) => {
+    const isFestival =
+      tpl.category === 'festival' ||
+      tpl.edition?.purpose === 'Festival' ||
+      Boolean(tpl.occasionId) ||
+      tpl.badge?.toLowerCase().includes('festival') ||
+      /diwali|holi|eid|christmas|new year|independence|republic|rakhi|navratri|dussehra|chhath|valentine/i.test(
+        tpl.headline || '',
+      );
+
+    let tab: 'for_business' | 'promotions' | 'festivals' | 'reviews' = 'for_business';
+    let purpose: Purpose = 'Business profile';
+
+    if (isFestival) {
+      tab = 'festivals';
+      purpose = 'Festival';
+    } else if (tpl.category === 'sale_offer' || tpl.edition?.purpose === 'Promotion') {
+      tab = 'promotions';
+      purpose = 'Promotion';
+    } else if (
+      tpl.category === 'testimonial' ||
+      tpl.category === 'quote' ||
+      tpl.edition?.purpose === 'Trust-building'
+    ) {
+      tab = 'reviews';
+      purpose = 'Trust-building';
+    } else {
+      tab = 'for_business';
+      purpose = tpl.edition?.purpose || 'Business profile';
+    }
+
+    let headline = (tpl.headline || tpl.name)
+      .replace(/\{businessName\}/g, businessName)
+      .replace(/\{city\}/g, city);
+    let subtitle = (tpl.subtitle || '')
+      .replace(/\{businessName\}/g, businessName)
+      .replace(/\{city\}/g, city);
+
+    if (!isFestival) {
+      const match = headline.match(conflictingTradesRegex);
+      if (match && !isMerchantTrade(match[0])) {
+        headline = tradeProducts[idx % tradeProducts.length];
+      }
+      const subMatch = subtitle.match(conflictingTradesRegex);
+      if (subMatch && !isMerchantTrade(subMatch[0])) {
+        subtitle = `Certified ${industry} services in ${city}`;
+      }
+    }
+
+    let assignedPhoto = tpl.photo;
+    if (isFestival) {
+      if (tpl.photo && tpl.photo.startsWith('/images/bgos/templates/')) {
+        assignedPhoto = tpl.photo;
+      } else {
+        const textToInspect = `${tpl.occasionId || ''} ${headline} ${tpl.name || ''}`.toLowerCase();
+        let occasion = 'diwali';
+        if (/holi|gulal/i.test(textToInspect)) occasion = 'holi';
+        else if (/eid/i.test(textToInspect)) occasion = 'eid';
+        else if (/christmas/i.test(textToInspect)) occasion = 'christmas';
+        else if (/new year|nye/i.test(textToInspect)) occasion = 'new_year';
+        else if (/independence/i.test(textToInspect)) occasion = 'independence_day';
+        else if (/republic/i.test(textToInspect)) occasion = 'republic_day';
+        else if (/rakhi/i.test(textToInspect)) occasion = 'rakhi';
+        else if (/navratri|durga/i.test(textToInspect)) occasion = 'navratri';
+        else if (/dussehra/i.test(textToInspect)) occasion = 'dussehra';
+        else if (/chhath/i.test(textToInspect)) occasion = 'chhath_puja';
+        else if (searchContext.isFestival && searchContext.detectedOccasion) {
+          occasion = searchContext.detectedOccasion;
+        }
+
+        const festivalPhotos = FESTIVAL_VISUAL_POOL[occasion] || FESTIVAL_VISUAL_POOL.diwali;
+        assignedPhoto = festivalPhotos[idx % festivalPhotos.length] || festivalPhotos[0];
+      }
+    } else {
+      assignedPhoto =
+        visuals[idx % visuals.length] ||
+        fallbackUnsplashPhotos[idx % fallbackUnsplashPhotos.length] ||
+        tpl.photo;
+    }
+
+    assignedPhoto = toAbsoluteUrl(assignedPhoto);
+
+    let badge = tpl.badge || '';
+    if (!badge || badge.length > 20) {
+      if (tab === 'promotions') badge = 'SPECIAL OFFER';
+      else if (tab === 'festivals') badge = 'FESTIVAL SPECIAL';
+      else if (tab === 'reviews') badge = '5-STAR RATED';
+      else badge = 'CORE SERVICE';
+    }
+
+    const aspect = (tpl.aspect as '1:1' | '4:5' | '9:16') || '4:5';
+
+    let composedDesign: any = null;
+    if (includeDesign) {
+      try {
+        composedDesign = composeBusinessEdition({
+          layout: String(tpl.layout || 'business_0'),
+          ratio: aspect as any,
+          brand: businessName,
+          headline,
+          subtitle,
+          badge,
+          cta: tpl.cta || 'Contact Us',
+          phone,
+          website: website ? website.replace(/^https?:\/\//, '') : undefined,
+          logoUrl: logoUrl || undefined,
+          photo: assignedPhoto,
+          theme: (tpl.theme as any) || 'sand',
+        });
+      } catch {}
+    }
+
+    return {
+      id: tpl.id,
+      layout: String(tpl.layout || 'business_0'),
+      name: tpl.name || headline,
+      headline,
+      subtitle,
+      badge,
+      cta: tpl.cta || 'Learn More',
+      tab,
+      purpose,
+      theme: (tpl.theme as any) || 'sand',
+      aspectRatio: aspect,
+      photoUrl: assignedPhoto,
+      bgPrompt: tpl.bgPrompt || headline,
+      occasionId: tpl.occasionId,
+      design: composedDesign,
+      targetKeywords: [
+        { keyword: `${industry.toLowerCase()} company`, volume: 500 },
+        { keyword: `${industry.toLowerCase()} in ${city}`, volume: 100 },
+      ],
+      estimatedViews: 45,
+      defaultCaption: `${businessName} provides verified ${industry.toLowerCase()} in ${city}.\n\n#${industry.toLowerCase().replace(/[^a-z0-9]/g, '')} #${city.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+    };
+  });
+
+  // Filter aspect ratio if requested
+  let filteredPosterItems = allAdaptedPosterItems;
   if (requestedAspect && ['1:1', '4:5', '9:16'].includes(requestedAspect)) {
-    candidates = candidates.filter((tpl) => tpl.aspect === requestedAspect);
+    filteredPosterItems = filteredPosterItems.filter((tpl) => tpl.aspectRatio === requestedAspect);
   }
 
-  // Group into tabs: strictly guarantee that business profile, promotions, and reviews only belong to matchedGroup
-  const forBusinessList = candidates.filter(
-    (t) =>
-      (hasActiveSearch || t.edition?.group === matchedGroup) &&
-      (t.edition?.purpose === 'Business profile' ||
-        t.edition?.purpose === 'Engagement' ||
-        t.edition?.purpose === 'Conversion'),
-  );
-  const promotionsList = candidates.filter(
-    (t) => (hasActiveSearch || t.edition?.group === matchedGroup) && t.edition?.purpose === 'Promotion',
-  );
-  const festivalsList = candidates.filter((t) => t.edition?.purpose === 'Festival' || Boolean(t.occasionId));
-  const reviewsList = candidates.filter(
-    (t) => (hasActiveSearch || t.edition?.group === matchedGroup) && t.edition?.purpose === 'Trust-building',
-  );
-
-  let selectedTemplates: typeof BUSINESS_EDITIONS = [];
-
-  if (requestedTab === 'for_business') {
-    selectedTemplates = forBusinessList.slice(0, limit);
-  } else if (requestedTab === 'promotions') {
-    selectedTemplates = promotionsList.slice(0, limit);
-  } else if (requestedTab === 'festivals') {
-    selectedTemplates = festivalsList.slice(0, limit);
-  } else if (requestedTab === 'reviews') {
-    selectedTemplates = reviewsList.slice(0, limit);
-  } else {
-    // 'all': Provide balanced representation
-    const perCategory = Math.max(2, Math.floor(limit / 4));
-    selectedTemplates = [
-      ...forBusinessList.slice(0, perCategory),
-      ...promotionsList.slice(0, perCategory),
-      ...festivalsList.slice(0, perCategory),
-      ...reviewsList.slice(0, perCategory),
-    ];
+  // Filter search query if requested
+  if (searchQuery.trim()) {
+    const qTokens = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+    const matched = filteredPosterItems.filter((tpl) => {
+      const text = `${tpl.headline} ${tpl.subtitle} ${tpl.name} ${tpl.badge}`.toLowerCase();
+      return qTokens.some((tok) => text.includes(tok));
+    });
+    if (matched.length > 0) {
+      filteredPosterItems = matched;
+    }
   }
 
   // 3b. Synthesize First-Class Category Blueprints (Tailored specifically to the GBP trade)
@@ -260,6 +371,9 @@ export async function GET(request: NextRequest) {
 
   const blueprintResponseItems: BusinessTemplateResponseItem[] = categoryBlueprints
     .filter((bp) => {
+      if (requestedAspect && ['1:1', '4:5', '9:16'].includes(requestedAspect)) {
+        if (bp.aspect !== requestedAspect) return false;
+      }
       if (requestedTab === 'all') return true;
       return bp.tab === requestedTab;
     })
@@ -308,7 +422,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-  // 3c. Fetch curated trade references (Pinterest / Meta Ad Library benchmarks)
+  // 3c. Fetch curated trade references
   const curatedList = getCuratedTemplatesForBusiness({
     categoryOrTitle: effectiveCategoryText,
     limit: 25,
@@ -413,102 +527,59 @@ export async function GET(request: NextRequest) {
       };
     });
 
-  // 4. Map & compose templates with merchant's branding
-  const items: BusinessTemplateResponseItem[] = selectedTemplates.map((template, idx) => {
-    const isFestival =
-      template.edition?.purpose === 'Festival' ||
-      Boolean(template.occasionId) ||
-      template.badge?.toLowerCase().includes('festival') ||
-      /diwali|holi|eid|christmas|new year|independence|republic|rakhi|navratri|dussehra|chhath|valentine/i.test(template.headline || '');
+  // Group all collections by tab with priority sorting for trade matches
+  const isTradeMatch = (item: BusinessTemplateResponseItem): boolean => {
+    return isMerchantTrade(item.name) || isMerchantTrade(item.headline);
+  };
 
-    let assignedPhoto = template.photo;
-    if (isFestival) {
-      if (template.photo && template.photo.startsWith('/images/bgos/templates/')) {
-        // Keep verified authentic local festival asset
-        assignedPhoto = template.photo;
-      } else {
-        const textToInspect = `${template.occasionId || ''} ${template.headline || ''} ${template.name || ''}`.toLowerCase();
-        let occasion = 'diwali';
-        if (/holi|gulal/i.test(textToInspect)) occasion = 'holi';
-        else if (/eid/i.test(textToInspect)) occasion = 'eid';
-        else if (/christmas/i.test(textToInspect)) occasion = 'christmas';
-        else if (/new year|nye/i.test(textToInspect)) occasion = 'new_year';
-        else if (/independence/i.test(textToInspect)) occasion = 'independence_day';
-        else if (/republic/i.test(textToInspect)) occasion = 'republic_day';
-        else if (/rakhi/i.test(textToInspect)) occasion = 'rakhi';
-        else if (/navratri|durga/i.test(textToInspect)) occasion = 'navratri';
-        else if (/dussehra/i.test(textToInspect)) occasion = 'dussehra';
-        else if (/chhath/i.test(textToInspect)) occasion = 'chhath_puja';
-        else if (searchContext.isFestival && searchContext.detectedOccasion) {
-          occasion = searchContext.detectedOccasion;
-        }
+  const adaptedForBusiness = filteredPosterItems
+    .filter((t) => t.tab === 'for_business')
+    .sort((a, b) => Number(isTradeMatch(b)) - Number(isTradeMatch(a)));
 
-        const festivalPhotos = FESTIVAL_VISUAL_POOL[occasion] || FESTIVAL_VISUAL_POOL.diwali;
-        assignedPhoto = festivalPhotos[idx % festivalPhotos.length] || festivalPhotos[0];
-      }
-    } else {
-      assignedPhoto =
-        visuals[idx % visuals.length] ||
-        fallbackUnsplashPhotos[idx % fallbackUnsplashPhotos.length] ||
-        template.photo;
-    }
+  const forBusinessTemplates: BusinessTemplateResponseItem[] = [
+    ...blueprintResponseItems.filter((bp) => bp.tab === 'for_business'),
+    ...curatedResponseItems.filter((cr) => cr.tab === 'for_business'),
+    ...adaptedForBusiness,
+  ];
 
-    assignedPhoto = toAbsoluteUrl(assignedPhoto);
+  const promotionsTemplates: BusinessTemplateResponseItem[] = [
+    ...blueprintResponseItems.filter((bp) => bp.tab === 'promotions'),
+    ...curatedResponseItems.filter((cr) => cr.tab === 'promotions'),
+    ...filteredPosterItems.filter((t) => t.tab === 'promotions'),
+  ];
 
-    const tab = mapPurposeToTab(template.edition?.purpose);
+  const festivalsTemplates: BusinessTemplateResponseItem[] = [
+    ...blueprintResponseItems.filter((bp) => bp.tab === 'festivals'),
+    ...curatedResponseItems.filter((cr) => cr.tab === 'festivals'),
+    ...filteredPosterItems.filter((t) => t.tab === 'festivals'),
+  ];
 
-    let composedDesign: any = null;
-    if (includeDesign) {
-      try {
-        composedDesign = composeBusinessEdition({
-          layout: template.layout,
-          ratio: template.aspect as any,
-          brand: businessName,
-          headline: template.headline,
-          subtitle: template.subtitle,
-          badge: template.badge,
-          cta: template.cta,
-          phone,
-          website: website ? website.replace(/^https?:\/\//, '') : undefined,
-          logoUrl: logoUrl || undefined,
-          photo: assignedPhoto,
-          theme: template.theme,
-        });
-      } catch (err) {
-        // Fallback without breaking feed
-      }
-    }
+  const reviewsTemplates: BusinessTemplateResponseItem[] = [
+    ...blueprintResponseItems.filter((bp) => bp.tab === 'reviews'),
+    ...curatedResponseItems.filter((cr) => cr.tab === 'reviews'),
+    ...filteredPosterItems.filter((t) => t.tab === 'reviews'),
+  ];
 
-    return {
-      id: template.id,
-      layout: template.layout,
-      name: template.name,
-      headline: template.headline,
-      subtitle: template.subtitle,
-      badge: template.badge || '',
-      cta: template.cta || 'Learn More',
-      tab,
-      purpose: template.edition?.purpose || 'Business profile',
-      theme: template.theme || 'sand',
-      aspectRatio: (template.aspect as '1:1' | '4:5' | '9:16') || '4:5',
-      photoUrl: assignedPhoto,
-      bgPrompt: template.bgPrompt,
-      occasionId: template.occasionId,
-      design: composedDesign,
-      targetKeywords: [
-        { keyword: `${industry.toLowerCase()} company`, volume: 500 },
-        { keyword: `${industry.toLowerCase()} in ${city}`, volume: 100 },
-      ],
-      estimatedViews: 30,
-      defaultCaption: `${businessName} provides professional ${industry.toLowerCase()} in ${city}.\n\n#${industry.toLowerCase().replace(/[^a-z0-9]/g, '')} #${city.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-    };
-  });
+  let selectedTemplates: BusinessTemplateResponseItem[] = [];
 
-  const combinedTemplates = [
-    ...blueprintResponseItems,
-    ...curatedResponseItems,
-    ...items,
-  ].slice(0, limit);
+  if (requestedTab === 'for_business') {
+    selectedTemplates = forBusinessTemplates.slice(0, limit);
+  } else if (requestedTab === 'promotions') {
+    selectedTemplates = promotionsTemplates.slice(0, limit);
+  } else if (requestedTab === 'festivals') {
+    selectedTemplates = festivalsTemplates.slice(0, limit);
+  } else if (requestedTab === 'reviews') {
+    selectedTemplates = reviewsTemplates.slice(0, limit);
+  } else {
+    // 'all': Balanced presentation across categories
+    const perCategory = Math.max(10, Math.floor(limit / 4));
+    selectedTemplates = [
+      ...forBusinessTemplates.slice(0, perCategory),
+      ...promotionsTemplates.slice(0, perCategory),
+      ...festivalsTemplates.slice(0, perCategory),
+      ...reviewsTemplates.slice(0, perCategory),
+    ].slice(0, limit);
+  }
 
   return NextResponse.json({
     businessContext: {
@@ -523,13 +594,17 @@ export async function GET(request: NextRequest) {
       city,
     },
     counts: {
-      total: candidates.length + curatedList.length,
-      for_business: forBusinessList.length,
-      promotions: promotionsList.length,
-      festivals: festivalsList.length,
-      reviews: reviewsList.length,
+      total:
+        forBusinessTemplates.length +
+        promotionsTemplates.length +
+        festivalsTemplates.length +
+        reviewsTemplates.length,
+      for_business: forBusinessTemplates.length,
+      promotions: promotionsTemplates.length,
+      festivals: festivalsTemplates.length,
+      reviews: reviewsTemplates.length,
     },
     buckets: TEMPLATE_BUCKETS,
-    templates: combinedTemplates,
+    templates: selectedTemplates,
   });
 }

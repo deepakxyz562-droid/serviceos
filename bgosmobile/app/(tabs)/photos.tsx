@@ -93,6 +93,22 @@ export default function PhotosScreen() {
     gbpPlace.data?.place?.title ||
     gbpPlace.data?.tenantFallback?.name ||
     'My Business';
+  const brandLogo =
+    gbpPlace.data?.googlePicture ||
+    (gbpPlace.data?.tenantFallback as any)?.logoUrl ||
+    undefined;
+  const brandPhone =
+    gbpPlace.data?.place?.phone ||
+    gbpPlace.data?.tenantFallback?.phone ||
+    undefined;
+  const brandCity =
+    gbpPlace.data?.place?.city ||
+    (gbpPlace.data?.tenantFallback as any)?.city ||
+    'Patna';
+  const brandCategory =
+    gbpPlace.data?.place?.category ||
+    gbpPlace.data?.tenantFallback?.category ||
+    'Retail & Local Services';
 
   const isInitialLoading =
     (photosRes.loading && !photosRes.data) ||
@@ -295,6 +311,10 @@ export default function PhotosScreen() {
             scheduledPhotos={scheduledPhotos}
             draftPhotos={draftPhotos}
             businessName={profileName}
+            logoUrl={brandLogo}
+            phone={brandPhone}
+            city={brandCity}
+            category={brandCategory}
             isConnected={resolvedConnected}
             connectionState={resolvedConnectionState}
             onConnectPress={() => router.push('/select-profile')}

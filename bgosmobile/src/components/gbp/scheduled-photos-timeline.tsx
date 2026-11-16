@@ -40,6 +40,10 @@ interface ScheduledPhotosTimelineProps {
   initialTab?: MediaTabKey;
   focusedMediaId?: string | null;
   onClearFocus?: () => void;
+  logoUrl?: string | null;
+  phone?: string;
+  city?: string;
+  category?: string;
 }
 
 export function ScheduledPhotosTimeline({
@@ -61,6 +65,10 @@ export function ScheduledPhotosTimeline({
   initialTab,
   focusedMediaId,
   onClearFocus,
+  logoUrl,
+  phone,
+  city,
+  category,
 }: ScheduledPhotosTimelineProps) {
   const [activeTab, setActiveTab] = useState<MediaTabKey>(initialTab || 'scheduled');
   const [viewAllOpen, setViewAllOpen] = useState(false);
@@ -762,6 +770,10 @@ export function ScheduledPhotosTimeline({
           await onRefreshNeeded?.();
         }}
         businessName={businessName}
+        logoUrl={logoUrl}
+        phone={phone}
+        city={city}
+        category={category}
       />
     </View>
   );

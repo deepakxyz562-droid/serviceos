@@ -9,6 +9,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
@@ -34,6 +35,10 @@ export function MediaPreviewModal({
   onDeleted,
   onPublished,
   businessName = 'My Business',
+  logoUrl,
+  phone,
+  city,
+  category,
 }: {
   item: GbpPhoto | null;
   visible: boolean;
@@ -42,14 +47,20 @@ export function MediaPreviewModal({
   onDeleted?: (item: GbpPhoto) => void | Promise<void>;
   onPublished?: (item: GbpPhoto) => void | Promise<void>;
   businessName?: string;
+  logoUrl?: string | null;
+  phone?: string;
+  city?: string;
+  category?: string;
 }) {
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [busyAction, setBusyAction] = useState<'delete' | 'publish' | null>(null);
+  const [showBrandDetails, setShowBrandDetails] = useState(false);
 
   useEffect(() => {
     if (!visible) {
       setFullscreenOpen(false);
       setBusyAction(null);
+      setShowBrandDetails(false);
     }
   }, [visible, item?.id, item?.url]);
 
@@ -256,6 +267,53 @@ export function MediaPreviewModal({
                   resizeMode="contain"
                   alt={item.title || item.caption || 'Business media'}
                 />
+
+                {/* Optional Business Details Frame Overlay */}
+                {showBrandDetails && (
+                  <View style={styles.brandOverlayTop}>
+                    <View style={styles.brandOverlayLogoBox}>
+                      {logoUrl ? (
+                        <Image source={{ uri: logoUrl }} style={styles.brandOverlayLogoImg} resizeMode="contain" />
+                      ) : (
+                        <Text style={styles.brandOverlayMonogramText}>
+                          {(businessName || 'B').charAt(0).toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={1} style={styles.brandOverlayName}>
+                        {businessName}
+                      </Text>
+                      {category ? (
+                        <Text numberOfLines={1} style={styles.brandOverlayCategory}>
+                          {category}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                )}
+
+                {showBrandDetails && (phone || city) && (
+                  <View style={styles.brandOverlayBottom}>
+                    {phone ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <MaterialIcons name="phone" size={11} color="#CBD5E1" />
+                        <Text numberOfLines={1} style={styles.brandOverlayContactText}>
+                          {phone}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {city ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <MaterialIcons name="location-on" size={11} color="#CBD5E1" />
+                        <Text numberOfLines={1} style={styles.brandOverlayContactText}>
+                          {city}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                )}
+
                 <View style={styles.fullscreenPillBadge}>
                   <MaterialIcons name="fullscreen" size={14} color="#FFFFFF" />
                   <Text style={styles.fullscreenPillText}>Full Screen</Text>
@@ -263,6 +321,29 @@ export function MediaPreviewModal({
               </Pressable>
             )}
           </View>
+
+          {/* Toggle for Business Details Overlay */}
+          {!isVideo && (
+            <View style={styles.brandToggleCard}>
+              <View style={styles.brandToggleLeft}>
+                <View style={styles.brandToggleIconCircle}>
+                  <MaterialIcons name="branding-watermark" size={18} color="#009F50" />
+                </View>
+                <View style={{ flex: 1, gap: 1 }}>
+                  <Text style={styles.brandToggleTitle}>Show Business Details</Text>
+                  <Text style={styles.brandToggleSub}>
+                    Overlay business name, logo &amp; contact info on this photo
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={showBrandDetails}
+                onValueChange={setShowBrandDetails}
+                trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+                thumbColor={showBrandDetails ? '#009F50' : '#FFFFFF'}
+              />
+            </View>
+          )}
 
           {isVideo ? (
             <Pressable onPress={() => void openVideoPlayer()} style={styles.openPlayerBtn}>
@@ -541,5 +622,104 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '600',
     color: colors.danger,
+  },
+  brandOverlayTop: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    right: 110,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  brandOverlayLogoBox: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  brandOverlayLogoImg: {
+    width: 22,
+    height: 22,
+  },
+  brandOverlayMonogramText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#009F50',
+  },
+  brandOverlayName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  brandOverlayCategory: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#94A3B8',
+  },
+  brandOverlayBottom: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  brandOverlayContactText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#E2E8F0',
+  },
+  brandToggleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 12,
+  },
+  brandToggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  brandToggleIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandToggleTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  brandToggleSub: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
   },
 });

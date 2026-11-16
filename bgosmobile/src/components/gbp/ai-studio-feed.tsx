@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Pressable,
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import { apiRequest } from '../../lib/api';
 import { resolveTemplateSource } from '../design/professional-assets';
 
@@ -58,12 +60,42 @@ export function AiStudioFeed({
   const [templates, setTemplates] = useState<StudioTemplateItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState({
-    total: 50,
-    promotions: 12,
-    for_business: 14,
-    reviews: 10,
-    festivals: 14,
+    total: 250,
+    promotions: 40,
+    for_business: 140,
+    reviews: 50,
+    festivals: 40,
   });
+
+  const handlePickCustomPhoto = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.85,
+        allowsEditing: false,
+      });
+
+      if (!res.canceled && res.assets && res.assets.length > 0) {
+        const asset = res.assets[0];
+        const customTemplate: StudioTemplateItem = {
+          id: `custom-upload-${Date.now()}`,
+          name: 'My Own Photo',
+          headline: businessName,
+          subtitle: industry,
+          badge: 'MY PHOTO',
+          cta: 'Contact Us',
+          tab: 'for_business',
+          aspectRatio: '4:5',
+          photoUrl: asset.uri,
+          defaultBullets: [industry, city, phone].filter(Boolean) as string[],
+          defaultCaption: `${businessName} provides verified ${industry.toLowerCase()} in ${city}.\n\n#${industry.toLowerCase().replace(/[^a-z0-9]/g, '')} #${city.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+        };
+        onSelectTemplate(customTemplate);
+      }
+    } catch (err: any) {
+      Alert.alert('Photo Selection Error', err?.message || 'Could not pick photo.');
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +111,7 @@ export function AiStudioFeed({
             reviews: number;
             festivals: number;
           };
-        }>(`/api/social/designs/templates?tab=${activeTab}&limit=50`);
+        }>(`/api/social/designs/templates?tab=${activeTab}&limit=150`);
         if (!cancelled && res?.templates) {
           setTemplates(res.templates);
           if (res.counts) setCounts(res.counts);
@@ -97,11 +129,11 @@ export function AiStudioFeed({
   }, [activeTab]);
 
   const tabs: Array<{ id: StudioTabKey; label: string; icon: keyof typeof MaterialIcons.glyphMap; count: number }> = [
-    { id: 'all', label: 'All Designs', icon: 'auto-awesome', count: counts.total || 50 },
-    { id: 'promotions', label: 'Special Offers', icon: 'local-offer', count: counts.promotions || 12 },
-    { id: 'for_business', label: 'Core Services', icon: 'inventory', count: counts.for_business || 14 },
-    { id: 'reviews', label: 'Highlights', icon: 'verified', count: counts.reviews || 10 },
-    { id: 'festivals', label: 'Festivals', icon: 'celebration', count: counts.festivals || 14 },
+    { id: 'all', label: 'All Designs', icon: 'auto-awesome', count: counts.total || 250 },
+    { id: 'for_business', label: 'Core Services', icon: 'inventory', count: counts.for_business || 140 },
+    { id: 'promotions', label: 'Special Offers', icon: 'local-offer', count: counts.promotions || 40 },
+    { id: 'reviews', label: 'Highlights', icon: 'verified', count: counts.reviews || 50 },
+    { id: 'festivals', label: 'Festivals', icon: 'celebration', count: counts.festivals || 40 },
   ];
 
   return (
@@ -191,6 +223,28 @@ export function AiStudioFeed({
             );
           })}
         </ScrollView>
+      </View>
+
+      {/* ── TOP ACTION: USE OWN PHOTO + BRAND FRAME ── */}
+      <View style={styles.customUploadBox}>
+        <Pressable
+          onPress={handlePickCustomPhoto}
+          style={({ pressed }) => [
+            styles.customUploadBtn,
+            pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+          ]}
+        >
+          <View style={styles.customUploadIconCircle}>
+            <MaterialIcons name="add-photo-alternate" size={22} color="#009F50" />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.customUploadTitle}>Use My Own Photo + Business Frame</Text>
+            <Text style={styles.customUploadSub}>
+              Pick your shop or work photo — BGOS overlays your logo, name & contact info
+            </Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={20} color="#64748B" />
+        </Pressable>
       </View>
 
       {/* ── 2-COLUMN VISUAL DISCOVERY GRID ── */}
@@ -425,62 +479,42 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#15803D',
   },
-  searchBarWrapper: {
+  customUploadBox: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    gap: 8,
+    borderBottomColor: '#E2E8F0',
   },
-  searchBarInner: {
+  customUploadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 40,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#0F172A',
-    fontWeight: '500',
-    paddingVertical: 0,
-  },
-  clearSearchBtn: {
-    padding: 2,
-  },
-  quickChipsContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 2,
-  },
-  quickChip: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  quickChipActive: {
-    backgroundColor: '#DCFCE7',
+    gap: 12,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
     borderColor: '#86EFAC',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  quickChipText: {
+  customUploadIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customUploadTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  customUploadSub: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  quickChipTextActive: {
+    fontWeight: '500',
     color: '#166534',
-    fontWeight: '700',
+    lineHeight: 15,
   },
   emptySearchBox: {
     width: '100%',
@@ -502,18 +536,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     maxWidth: 280,
-  },
-  resetSearchBtn: {
-    backgroundColor: '#009F50',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 6,
-  },
-  resetSearchBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
   tabsTrack: {
     backgroundColor: '#FFFFFF',

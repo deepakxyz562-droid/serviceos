@@ -205,4 +205,27 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
       expect(headline).not.toContain('salon');
     }
   });
+
+  it('expands core services feed to 100+ category-adapted templates without static 8-item bottleneck', async () => {
+    mockGetAuthUser.mockResolvedValueOnce({ id: 'user-1', tenantId: 'tenant-123' });
+    const { GET } = await import('@/app/api/social/designs/templates/route');
+    const req = new NextRequest('http://localhost:3000/api/social/designs/templates?tab=for_business&limit=150');
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data.counts.for_business).toBeGreaterThanOrEqual(100);
+    expect(data.counts.total).toBeGreaterThanOrEqual(200);
+    expect(data.templates.length).toBeGreaterThanOrEqual(100);
+
+    // Verify all items are for_business and cleanly adapted
+    for (const item of data.templates) {
+      expect(item.tab).toBe('for_business');
+      expect(item.photoUrl).toBeTruthy();
+      expect(item.badge).toBeTruthy();
+      // Ensure no artificial source tagging
+      expect(item.badge).not.toContain('Pinterest');
+      expect(item.badge).not.toContain('Behance');
+    }
+  });
 });
