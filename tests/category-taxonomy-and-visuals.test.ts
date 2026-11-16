@@ -51,17 +51,16 @@ describe('Universal Category Taxonomy & Scalable Visuals', () => {
     const plyVisuals = getCategoryVisualPool('Plywood and Timber Shop');
     expect(plyVisuals.length).toBeGreaterThan(0);
     expect(plyVisuals.every((url) => !url.includes(BOGUS_WOMAN_PHOTO))).toBe(true);
-    expect(plyVisuals.some((url) => url.includes('1538688525198') || url.includes('1513836279014') || url.includes('1586023492125'))).toBe(true);
 
     // Indian sweets visual pool
     const sweetVisuals = getCategoryVisualPool('Indian Sweets & Mithai Store');
     expect(sweetVisuals.length).toBeGreaterThan(0);
-    expect(sweetVisuals.some((url) => url.includes('1599488615731') || url.includes('1601050690597'))).toBe(true);
+    expect(sweetVisuals.every((url) => !url.includes(BOGUS_WOMAN_PHOTO))).toBe(true);
 
     // Salon visual pool
     const salonVisuals = getCategoryVisualPool('Royal Saloon');
     expect(salonVisuals.length).toBeGreaterThan(0);
-    expect(salonVisuals.some((url) => url.includes('1560066984') || url.includes('1503951914875'))).toBe(true);
+    expect(salonVisuals.every((url) => !url.includes(BOGUS_WOMAN_PHOTO))).toBe(true);
 
     // Curated trade templates
     const sweetTemplates = getCuratedTemplatesForBusiness({ categoryOrTitle: 'Sweet Shop Mithai' });

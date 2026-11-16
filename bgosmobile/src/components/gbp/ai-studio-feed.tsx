@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -66,52 +67,190 @@ export function AiStudioFeed({
     festivals: 40,
   });
 
+  // ── Festival Search & Filter State ──
+  const [festivalSearch, setFestivalSearch] = useState('');
+  const [selectedFestival, setSelectedFestival] = useState('all');
+
+  // ── Gemini Business Image Suggestions State (Zero-Prompt Generation) ──
+  const [businessSuggestions, setBusinessSuggestions] = useState<
+    Array<{
+      id: string;
+      title: string;
+      icon: string;
+      badge: string;
+      category: string;
+      sceneDescription: string;
+      promptBlueprint: string;
+    }>
+  >([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [generatingImages, setGeneratingImages] = useState(false);
+
+  // Fetch Gemini Business Scene Suggestions for the selected business
   useEffect(() => {
     let cancelled = false;
-    async function fetchTemplates() {
-      setLoading(true);
+    async function fetchBusinessSuggestions() {
+      setLoadingSuggestions(true);
       try {
         const queryParams = new URLSearchParams({
-          tab: activeTab,
-          limit: '150',
-          ...(industry ? { industry } : {}),
+          ...(industry ? { category: industry } : {}),
           ...(businessName ? { businessName } : {}),
         });
         const res = await apiRequest<{
-          templates: StudioTemplateItem[];
-          counts?: {
-            total: number;
-            promotions: number;
-            for_business: number;
-            reviews: number;
-            festivals: number;
-          };
-        }>(`/api/social/designs/templates?${queryParams.toString()}`);
-        if (!cancelled && res?.templates) {
-          // Filter out any third-party scraped poster artwork with embedded text or pinimg
-          const cleanTemplates = res.templates.filter((item) => {
-            if (item.photoUrl && (
-              item.photoUrl.includes('behance.net') ||
-              item.photoUrl.includes('pinimg.com') ||
-              item.photoUrl.includes('pinterest.com')
-            )) return false;
-            return true;
-          });
-
-          setTemplates(cleanTemplates);
-          if (res.counts) setCounts(res.counts);
+          success: boolean;
+          suggestions: Array<{
+            id: string;
+            title: string;
+            icon: string;
+            badge: string;
+            category: string;
+            sceneDescription: string;
+            promptBlueprint: string;
+          }>;
+        }>(`/api/social/designs/business-images/suggestions?${queryParams.toString()}`);
+        if (!cancelled && res?.suggestions) {
+          setBusinessSuggestions(res.suggestions);
         }
       } catch (err) {
-        console.warn('[AiStudioFeed] Error fetching templates:', err);
+        // fail silently with baseline fallback
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoadingSuggestions(false);
       }
     }
-    void fetchTemplates();
+    void fetchBusinessSuggestions();
     return () => {
       cancelled = true;
     };
-  }, [activeTab, industry, businessName]);
+  }, [businessName, industry]);
+
+  const fetchTemplates = async () => {
+    setLoading(true);
+    try {
+      const queryParams = new URLSearchParams({
+        tab: activeTab,
+        limit: '150',
+        ...(industry ? { industry } : {}),
+        ...(businessName ? { businessName } : {}),
+        ...(activeTab === 'festivals' && festivalSearch ? { q: festivalSearch } : {}),
+        ...(activeTab === 'festivals' && selectedFestival !== 'all' ? { festival: selectedFestival } : {}),
+      });
+      const res = await apiRequest<{
+        templates: StudioTemplateItem[];
+        counts?: {
+          total: number;
+          promotions: number;
+          for_business: number;
+          reviews: number;
+          festivals: number;
+        };
+      }>(`/api/social/designs/templates?${queryParams.toString()}`);
+      if (res?.templates) {
+        const cleanTemplates = res.templates.filter((item) => {
+          if (
+            item.photoUrl &&
+            (item.photoUrl.includes('behance.net') ||
+              item.photoUrl.includes('pinimg.com') ||
+              item.photoUrl.includes('pinterest.com'))
+          )
+            return false;
+          return true;
+        });
+
+        setTemplates(cleanTemplates);
+        if (res.counts) setCounts(res.counts);
+      }
+    } catch (err) {
+      console.warn('[AiStudioFeed] Error fetching templates:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchTemplates();
+  }, [activeTab, industry, businessName, selectedFestival]);
+
+  // 1-Click zero-prompt AI business image generation
+  const handleGenerateBusinessImages = async (suggestionId?: string) => {
+    if (generatingImages) return;
+    setGeneratingImages(true);
+    try {
+      const res = await apiRequest<{
+        success: boolean;
+        urls: string[];
+        count: number;
+        message: string;
+      }>('/api/social/designs/business-images/generate', {
+        method: 'POST',
+        body: JSON.stringify({
+          suggestionId,
+          generateAll: !suggestionId,
+          category: industry,
+        }),
+      });
+
+      if (res?.success && res.urls?.length > 0) {
+        Alert.alert(
+          '✨ Images Generated',
+          `Generated ${res.urls.length} commercial photos for ${businessName}! Refreshed your designs.`,
+        );
+        await fetchTemplates();
+      } else {
+        Alert.alert('Notice', res?.message || 'Images were created and added to library.');
+      }
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to generate images');
+    } finally {
+      setGeneratingImages(false);
+    }
+  };
+
+  const FESTIVAL_FILTER_CHIPS = [
+    { id: 'all', label: 'All Festivals', emoji: '✨' },
+    { id: 'diwali', label: 'Diwali', emoji: '🪔' },
+    { id: 'holi', label: 'Holi', emoji: '🎨' },
+    { id: 'navratri', label: 'Navratri & Garba', emoji: '💃' },
+    { id: 'durga_puja', label: 'Durga Puja', emoji: '🔱' },
+    { id: 'ganesh_chaturthi', label: 'Ganesh Utsav', emoji: '🌼' },
+    { id: 'baisakhi', label: 'Baisakhi & Lohri', emoji: '🌾' },
+    { id: 'chhath_puja', label: 'Chhath Puja', emoji: '🌅' },
+    { id: 'eid', label: 'Eid al-Fitr', emoji: '🌙' },
+    { id: 'christmas', label: 'Christmas', emoji: '🎄' },
+    { id: 'new_year', label: 'New Year', emoji: '🎊' },
+    { id: 'rakhi', label: 'Raksha Bandhan', emoji: '🧵' },
+    { id: 'makar_sankranti', label: 'Makar Sankranti', emoji: '🪁' },
+    { id: 'onam_pongal', label: 'Onam & Pongal', emoji: '🌸' },
+    { id: 'cherry_blossom', label: 'Cherry Blossom', emoji: '🌸' },
+    { id: 'songkran', label: 'Songkran', emoji: '💦' },
+    { id: 'carnival', label: 'Carnivals', emoji: '🎭' },
+    { id: 'oktoberfest', label: 'Oktoberfest', emoji: '🥨' },
+    { id: 'regional_cultural', label: 'Regional Fairs', emoji: '🏮' },
+  ];
+
+  // Dynamic client-side search filtering for festivals
+  const visibleTemplates = useMemo(() => {
+    if (activeTab !== 'festivals') return templates;
+    let list = templates;
+    if (selectedFestival !== 'all') {
+      list = list.filter(
+        (t) =>
+          (t as any).occasionId === selectedFestival ||
+          t.id.includes(selectedFestival) ||
+          t.headline.toLowerCase().includes(selectedFestival) ||
+          t.name.toLowerCase().includes(selectedFestival),
+      );
+    }
+    if (festivalSearch.trim()) {
+      const q = festivalSearch.toLowerCase().trim();
+      list = list.filter(
+        (t) =>
+          t.headline.toLowerCase().includes(q) ||
+          t.name.toLowerCase().includes(q) ||
+          (t.subtitle && t.subtitle.toLowerCase().includes(q)),
+      );
+    }
+    return list;
+  }, [templates, activeTab, selectedFestival, festivalSearch]);
 
   const tabs: Array<{ id: StudioTabKey; label: string; icon: keyof typeof MaterialIcons.glyphMap; count: number }> = [
     { id: 'all', label: 'All Designs', icon: 'auto-awesome', count: counts.total || 250 },
@@ -210,6 +349,104 @@ export function AiStudioFeed({
         </ScrollView>
       </View>
 
+      {/* ── FESTIVAL SEARCH & FILTER CHIPS (ONLY ON FESTIVALS TAB) ── */}
+      {activeTab === 'festivals' && (
+        <View style={styles.festivalFilterContainer}>
+          <View style={styles.searchBar}>
+            <MaterialIcons name="search" size={20} color="#64748B" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search Diwali, Holi, Eid, Pongal..."
+              placeholderTextColor="#94A3B8"
+              value={festivalSearch}
+              onChangeText={setFestivalSearch}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+            {festivalSearch.length > 0 && (
+              <Pressable onPress={() => setFestivalSearch('')} hitSlop={8}>
+                <MaterialIcons name="close" size={18} color="#94A3B8" />
+              </Pressable>
+            )}
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.festivalChipsScroll}
+          >
+            {FESTIVAL_FILTER_CHIPS.map((chip) => {
+              const active = selectedFestival === chip.id;
+              return (
+                <Pressable
+                  key={chip.id}
+                  onPress={() => setSelectedFestival(chip.id)}
+                  style={[styles.festivalChip, active && styles.festivalChipActive]}
+                >
+                  <Text style={styles.festivalChipEmoji}>{chip.emoji}</Text>
+                  <Text style={[styles.festivalChipText, active && styles.festivalChipTextActive]}>
+                    {chip.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ── 1-CLICK AI BUSINESS IMAGE GENERATOR (Zero typing for merchant) ── */}
+      {activeTab !== 'festivals' && (
+        <View style={styles.businessSuggestionsCard}>
+          <View style={styles.suggestionsHeaderRow}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="auto-awesome" size={15} color="#009F50" />
+                <Text style={styles.suggestionsTitle}>AI Photos for {businessName}</Text>
+              </View>
+              <Text style={styles.suggestionsSubtitle}>
+                Zero typing needed. 1-tap generates commercial photos via Cloudflare AI.
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => handleGenerateBusinessImages()}
+              disabled={generatingImages}
+              style={[styles.generateAllBtn, generatingImages && { opacity: 0.6 }]}
+            >
+              {generatingImages ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <MaterialIcons name="bolt" size={14} color="#FFFFFF" />
+                  <Text style={styles.generateAllBtnText}>Generate All</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+
+          {businessSuggestions.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.suggestionsScroll}
+            >
+              {businessSuggestions.map((sug) => (
+                <Pressable
+                  key={sug.id}
+                  onPress={() => handleGenerateBusinessImages(sug.id)}
+                  disabled={generatingImages}
+                  style={styles.suggestionChip}
+                >
+                  <Text style={styles.suggestionTitle}>{sug.title}</Text>
+                  <View style={styles.generateMiniPill}>
+                    <MaterialIcons name="add-a-photo" size={11} color="#009F50" />
+                    <Text style={styles.generateMiniPillText}>1-Tap</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      )}
+
       {/* ── 2-COLUMN VISUAL DISCOVERY GRID ── */}
       {loading ? (
         <View style={styles.loadingBox}>
@@ -218,24 +455,43 @@ export function AiStudioFeed({
         </View>
       ) : (
         <FlatList
-          data={templates}
+          data={visibleTemplates}
           keyExtractor={(item) => item.id}
           numColumns={2}
           contentContainerStyle={[
             styles.gridContent,
             { paddingBottom: Math.max(insets.bottom, 24) + 60 },
           ]}
-          columnWrapperStyle={templates.length > 0 ? styles.columnWrapper : undefined}
+          columnWrapperStyle={visibleTemplates.length > 0 ? styles.columnWrapper : undefined}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptySearchBox}>
-              <MaterialIcons name="auto-awesome" size={44} color="#94A3B8" />
+              <MaterialIcons
+                name={activeTab === 'festivals' ? 'celebration' : 'auto-awesome'}
+                size={44}
+                color="#94A3B8"
+              />
               <Text style={styles.emptyTitle}>
-                No designs available in this category
+                {activeTab === 'festivals'
+                  ? 'No festival images found'
+                  : 'No designs available in this category'}
               </Text>
               <Text style={styles.emptySubtitle}>
-                Select another category tab above to explore more designs tailored for {businessName}.
+                {activeTab === 'festivals'
+                  ? 'Try clearing your search or picking another festival category above.'
+                  : `Select another category tab above to explore more designs tailored for ${businessName}.`}
               </Text>
+              {activeTab === 'festivals' && (selectedFestival !== 'all' || festivalSearch.trim().length > 0) && (
+                <Pressable
+                  onPress={() => {
+                    setSelectedFestival('all');
+                    setFestivalSearch('');
+                  }}
+                  style={styles.resetFilterBtn}
+                >
+                  <Text style={styles.resetFilterBtnText}>Show All Festivals</Text>
+                </Pressable>
+              )}
             </View>
           }
           renderItem={({ item }) => (
@@ -491,6 +747,144 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   tabPillTextActive: {
+    color: '#FFFFFF',
+  },
+  festivalFilterContainer: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingVertical: 8,
+    gap: 8,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    marginHorizontal: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    paddingVertical: 0,
+  },
+  festivalChipsScroll: {
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  festivalChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  festivalChipActive: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+  },
+  festivalChipEmoji: {
+    fontSize: 12,
+  },
+  festivalChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  festivalChipTextActive: {
+    color: '#B45309',
+    fontWeight: '700',
+  },
+  businessSuggestionsCard: {
+    backgroundColor: '#F0FDF4',
+    borderBottomWidth: 1,
+    borderBottomColor: '#DCFCE7',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  suggestionsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  suggestionsTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  suggestionsSubtitle: {
+    fontSize: 10,
+    color: '#166534',
+    lineHeight: 14,
+  },
+  generateAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#009F50',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  generateAllBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  suggestionsScroll: {
+    gap: 6,
+    paddingTop: 2,
+  },
+  suggestionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  suggestionTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  generateMiniPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  generateMiniPillText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  resetFilterBtn: {
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+  },
+  resetFilterBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
   loadingBox: {

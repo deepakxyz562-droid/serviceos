@@ -11,7 +11,6 @@ import { composeBusinessEdition } from '../../../../../../shared/business-templa
 import {
   scoreIndustryMatch,
   getCategoryVisualPool,
-  CURATED_SMB_IMAGE_REGISTRY,
 } from '@/lib/designs/dynamic-visual-resolver';
 import {
   getMultiSourceCategoryVisuals,
@@ -28,64 +27,22 @@ import {
   TEMPLATE_BUCKETS,
   type CuratedTemplateItem,
 } from '../../../../../../shared/curated-photo-templates';
+import {
+  searchFestivalCatalog,
+  getFestivalGroupsWithCounts,
+} from '../../../../../../shared/festival-catalog';
 
-const FESTIVAL_VISUAL_POOL: Record<string, string[]> = {
-  diwali: [
-    '/images/bgos/templates/diwali.webp',
-    'https://images.unsplash.com/photo-1572798089532-487718bc9d26?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1634401609694-f6ac6dd8474b?w=1200&auto=format&fit=crop&q=80',
-  ],
-  holi: [
-    '/images/bgos/templates/edition-holi.webp',
-    'https://images.unsplash.com/photo-1503127241807-fdc42d3acb95?w=1200&auto=format&fit=crop&q=80',
-  ],
-  eid: [
-    '/images/bgos/templates/edition-eid.webp',
-    'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=1200&auto=format&fit=crop&q=80',
-  ],
-  christmas: [
-    '/images/bgos/templates/edition-christmas.webp',
-    'https://images.unsplash.com/photo-1512389142860-9c449e58a543?w=1200&auto=format&fit=crop&q=80',
-  ],
-  new_year: [
-    '/images/bgos/templates/edition-new-year.webp',
-    'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=1200&auto=format&fit=crop&q=80',
-  ],
-  independence_day: [
-    '/images/bgos/templates/edition-independence-day.webp',
-    'https://images.unsplash.com/photo-1532375810709-75b1da00537c?w=1200&auto=format&fit=crop&q=80',
-  ],
-  republic_day: [
-    '/images/bgos/templates/edition-republic-day.webp',
-    'https://images.unsplash.com/photo-1532375810709-75b1da00537c?w=1200&auto=format&fit=crop&q=80',
-  ],
-  rakhi: [
-    '/images/bgos/templates/edition-rakhi.webp',
-    '/images/bgos/templates/diwali.webp',
-  ],
-  navratri: [
-    '/images/bgos/templates/edition-navratri.webp',
-    'https://images.unsplash.com/photo-1572798089532-487718bc9d26?w=1200&auto=format&fit=crop&q=80',
-  ],
-  dussehra: [
-    '/images/bgos/templates/edition-navratri.webp',
-    '/images/bgos/templates/diwali.webp',
-  ],
-  chhath_puja: [
-    '/images/bgos/templates/diwali.webp',
-    'https://images.unsplash.com/photo-1572798089532-487718bc9d26?w=1200&auto=format&fit=crop&q=80',
-  ],
-  valentine: [
-    '/images/bgos/templates/edition-valentine.webp',
-    'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=1200&auto=format&fit=crop&q=80',
-  ],
-  mothers_day: [
-    '/images/bgos/templates/edition-mothers-day.webp',
-  ],
-  fathers_day: [
-    '/images/bgos/templates/edition-fathers-day.webp',
-  ],
-};
+function getFestivalFallbackPhoto(occasion: string, idx: number): string {
+  const matches = searchFestivalCatalog({ festivalKey: occasion, limit: 10 });
+  if (matches.length > 0) {
+    return matches[idx % matches.length].url;
+  }
+  const general = searchFestivalCatalog({ limit: 10 });
+  if (general.length > 0) {
+    return general[idx % general.length].url;
+  }
+  return '/images/bgos/templates/diwali.webp';
+}
 
 interface BusinessTemplateResponseItem {
   id: string;
@@ -386,8 +343,7 @@ export async function GET(request: NextRequest) {
   const festivalCursor = new Map<string, number>();
 
   const visuals = getCategoryVisualPool(effectiveCategoryText);
-  const fallbackUnsplashPhotos =
-    CURATED_SMB_IMAGE_REGISTRY[matchedIndustryKey] || CURATED_SMB_IMAGE_REGISTRY.generic_business;
+  const fallbackUnsplashPhotos = visuals;
 
   // Find business group in BUSINESS_GROUPS with word boundaries
   const groupNames = Object.keys(BUSINESS_GROUPS) as (keyof typeof BUSINESS_GROUPS)[];
@@ -518,8 +474,7 @@ export async function GET(request: NextRequest) {
           // No dynamic pool for this occasion yet — keep the evergreen local asset
           assignedPhoto = tpl.photo;
         } else {
-          const festivalPhotos = FESTIVAL_VISUAL_POOL[occasion] || FESTIVAL_VISUAL_POOL.diwali;
-          assignedPhoto = festivalPhotos[idx % festivalPhotos.length] || festivalPhotos[0];
+          assignedPhoto = getFestivalFallbackPhoto(occasion, idx);
         }
     } else {
       const multiSourceItem = multiSourceVisuals[idx % multiSourceVisuals.length];
@@ -831,11 +786,58 @@ export async function GET(request: NextRequest) {
     ...filteredPosterItems.filter((t) => t.tab === 'promotions'),
   ];
 
-  const festivalsTemplates: BusinessTemplateResponseItem[] = [
+  const requestedFestival = searchParams.get('festival') || 'all';
+
+  // In festivals tab, dynamically search and map from the 242 authentic festival images catalog
+  const festivalSearchResults = searchFestivalCatalog({
+    query: searchQuery,
+    festivalKey: requestedFestival !== 'all' ? requestedFestival : undefined,
+    limit: 120,
+  });
+
+  const catalogFestivalTemplates: BusinessTemplateResponseItem[] = festivalSearchResults.items.map((item) => ({
+    id: `fest-catalog-${item.id}`,
+    layout: 'business_0',
+    name: `${item.festivalLabel} • ${item.title}`,
+    headline: `Happy ${item.festivalLabel}\nFrom ${businessName}`,
+    subtitle: `${item.title} — Wishing you prosperity and success in ${city}`,
+    badge: 'FESTIVAL SPECIAL',
+    cta: `HAPPY ${item.festivalLabel.toUpperCase()}`,
+    tab: 'festivals',
+    purpose: 'Festival',
+    theme: 'gold',
+    aspectRatio: '4:5',
+    photoUrl: item.url,
+    photoSource: 'Curated Festival Library',
+    occasionId: item.festivalKey,
+    defaultBullets: [
+      `Special ${item.festivalLabel} Greetings`,
+      `Exclusive Seasonal Deals in ${city}`,
+      `Trusted ${industry} Services`,
+    ],
+    defaultCaption: `Wishing you a joyous and blessed ${item.festivalLabel}! May this festive season bring immense prosperity, health, and happiness to you and your loved ones.\n\nWarm regards,\nTeam ${businessName}, ${city}.\n\n#${item.festivalKey} #festivalvibes #festivegreeting #${city.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+  }));
+
+  const rawFestivalsTemplates: BusinessTemplateResponseItem[] = [
     ...blueprintResponseItems.filter((bp) => bp.tab === 'festivals'),
     ...curatedResponseItems.filter((cr) => cr.tab === 'festivals'),
     ...filteredPosterItems.filter((t) => t.tab === 'festivals'),
+    ...catalogFestivalTemplates,
   ];
+
+  let festivalsTemplates = rawFestivalsTemplates;
+  if (requestedFestival !== 'all') {
+    festivalsTemplates = festivalsTemplates.filter(
+      (t) => t.occasionId === requestedFestival || t.id.includes(requestedFestival) || t.headline.toLowerCase().includes(requestedFestival)
+    );
+  }
+  if (searchQuery.trim()) {
+    const qTokens = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+    festivalsTemplates = festivalsTemplates.filter((t) => {
+      const text = `${t.name} ${t.headline} ${t.subtitle || ''} ${t.occasionId || ''}`.toLowerCase();
+      return qTokens.every((token) => text.includes(token));
+    });
+  }
 
   const reviewsTemplates: BusinessTemplateResponseItem[] = [
     ...blueprintResponseItems.filter((bp) => bp.tab === 'reviews'),
@@ -888,6 +890,7 @@ export async function GET(request: NextRequest) {
       reviews: reviewsTemplates.length,
     },
     buckets: TEMPLATE_BUCKETS,
+    festivalGroups: getFestivalGroupsWithCounts(),
     templates: selectedTemplates,
   });
 }

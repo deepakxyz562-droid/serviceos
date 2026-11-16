@@ -9,8 +9,9 @@ import {DESIGN_FONT_CSS,designFontFamily} from '../../../shared/design-fonts';
  * the user sees in the gallery is exactly what they get on the canvas.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Sparkles, Wand2, ArrowRight, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,7 @@ import {
   type PosterCategoryMeta,
   type PosterTemplate,
 } from '../../../shared/poster-templates';
+import { getFestivalGroupsWithCounts } from '../../../shared/festival-catalog';
 import type { DesignLayer, MarketingDesign } from '../../../shared/marketing-design';
 
 export interface PosterGalleryBusinessContext {
@@ -204,6 +206,61 @@ export function PosterTemplateGallery({
 }: PosterTemplateGalleryProps) {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<'for_you' | 'all' | string>('for_you');
+  const [selectedFestivalKey, setSelectedFestivalKey] = useState<string>('all');
+  const [businessSuggestions, setBusinessSuggestions] = useState<Array<{ id: string; title: string; promptBlueprint: string }>>([]);
+  const [generatingImages, setGeneratingImages] = useState(false);
+
+  const festivalGroups = useMemo(() => getFestivalGroupsWithCounts(), []);
+
+  useEffect(() => {
+    if (!business.category && !business.businessName) return;
+    let isMounted = true;
+    const fetchSuggestions = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (business.category) params.set('category', business.category);
+        if (business.businessName) params.set('businessName', business.businessName);
+        const res = await fetch(`/api/social/designs/business-images/suggestions?${params.toString()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && data?.suggestions) {
+          setBusinessSuggestions(data.suggestions);
+        }
+      } catch (err) {
+        console.warn('Failed to load business image suggestions:', err);
+      }
+    };
+    void fetchSuggestions();
+    return () => {
+      isMounted = false;
+    };
+  }, [business.category, business.businessName]);
+
+  const handleGenerateBusinessImages = async (suggestionId?: string) => {
+    if (generatingImages) return;
+    setGeneratingImages(true);
+    try {
+      const res = await fetch('/api/social/designs/business-images/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          suggestionId,
+          generateAll: !suggestionId,
+          category: business.category,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.success) {
+        toast.success(data.message || `Generated ${data.count || 1} commercial photos!`);
+      } else {
+        toast.error(data?.message || 'Failed to generate images');
+      }
+    } catch {
+      toast.error('Network error during image generation');
+    } finally {
+      setGeneratingImages(false);
+    }
+  };
 
   const activeOccasions = useMemo(() => getActivePosterOccasions(), []);
   const activeOccasionIds = useMemo(
@@ -226,7 +283,7 @@ export function PosterTemplateGallery({
   }, [orderedTemplates, business.category]);
 
   const filteredTemplates = useMemo(() => {
-    const base =
+    let base =
       activeCategory === 'for_you'
         ? forYouTemplates
         : activeCategory === 'all'
@@ -234,6 +291,17 @@ export function PosterTemplateGallery({
         : activeOccasionIds.has(activeCategory)
         ? orderedTemplates.filter((t) => t.occasionId === activeCategory)
         : orderedTemplates.filter((t) => t.category === activeCategory || t.collection === activeCategory || (activeCategory==='professional'&&t.id.startsWith('professional-')));
+
+    if (activeCategory === 'festival' && selectedFestivalKey !== 'all') {
+      base = base.filter(
+        (t) =>
+          t.occasionId === selectedFestivalKey ||
+          t.id.includes(selectedFestivalKey) ||
+          t.headline.toLowerCase().includes(selectedFestivalKey) ||
+          t.name.toLowerCase().includes(selectedFestivalKey)
+      );
+    }
+
     if (!search.trim()) return base;
     const q = search.trim().toLowerCase();
     return base.filter(
@@ -242,7 +310,7 @@ export function PosterTemplateGallery({
         t.headline.toLowerCase().includes(q) ||
         t.category.includes(q) || (t.industries || []).some(industry => industry.includes(q))
     );
-  }, [activeCategory, forYouTemplates, orderedTemplates, search]);
+  }, [activeCategory, forYouTemplates, orderedTemplates, search, selectedFestivalKey, activeOccasionIds]);
 
   const docs = useMemo(() => {
     const map = new Map<string, MarketingDesign>();
@@ -380,6 +448,92 @@ export function PosterTemplateGallery({
           ))}
         </div>
       </div>
+
+      {/* Festival Sub-Category Filter (When in Festival mode) */}
+      {activeCategory === 'festival' && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            onClick={() => setSelectedFestivalKey('all')}
+            className={cn(
+              'shrink-0 h-8 px-3 rounded-full text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer',
+              selectedFestivalKey === 'all'
+                ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
+                : 'bg-card text-muted-foreground border-border hover:border-amber-500/40 hover:text-foreground'
+            )}
+          >
+            <span>✨</span> All Festivals (242)
+          </button>
+          {festivalGroups.map((group) => {
+            const active = selectedFestivalKey === group.id;
+            return (
+              <button
+                key={group.id}
+                type="button"
+                onClick={() => setSelectedFestivalKey(group.id)}
+                className={cn(
+                  'shrink-0 h-8 px-3 rounded-full text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer',
+                  active
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
+                    : 'bg-card text-muted-foreground border-border hover:border-amber-500/40 hover:text-foreground'
+                )}
+              >
+                <span>{group.emoji}</span>
+                <span>{group.label}</span>
+                <span className="text-[10px] opacity-75">({group.count})</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 1-Click AI Photography Studio for Business Services (Zero-prompt) */}
+      {activeCategory !== 'festival' && (
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400" />
+              <p className="text-xs font-bold text-foreground">
+                AI Photography Studio for {business.businessName || 'Your Business'}
+              </p>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Zero typing required. Powered by Cloudflare FLUX.2 &amp; Gemini scene suggestions.
+            </p>
+            {businessSuggestions.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {businessSuggestions.map((sug) => (
+                  <button
+                    key={sug.id}
+                    type="button"
+                    disabled={generatingImages}
+                    onClick={() => handleGenerateBusinessImages(sug.id)}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold bg-background hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-foreground border border-emerald-500/30 px-2.5 py-1 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <span>{sug.title}</span>
+                    <span className="text-[9px] bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 font-bold px-1 rounded">
+                      1-Tap
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={generatingImages}
+            onClick={() => handleGenerateBusinessImages()}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {generatingImages ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Wand2 className="size-3.5" />
+            )}
+            <span>Generate All 4 Scenes</span>
+          </button>
+        </div>
+      )}
 
       {/* Template grid */}
       {filteredTemplates.length === 0 ? (

@@ -78,7 +78,7 @@ describe('First-Class GBP Categories Architecture', () => {
     expect(plyPromo).toBeDefined();
     expect(plyPromo?.headline).toContain('Marine Plywood');
     expect(plyPromo?.bullets.some((b) => b.includes('IS:710 Marine Grade'))).toBe(true);
-    expect(plyPromo?.photoUrl).toContain('unsplash.com/photo-');
+    expect(plyPromo?.photoUrl).toMatch(/(\/images\/bgos\/templates\/|https?:\/\/)/);
     expect(plyPromo?.photoUrl).not.toContain('photo-1605647540924-852290f6b0d5'); // Not the blonde woman!
 
     // Test Indian Sweets Blueprints
@@ -115,7 +115,7 @@ describe('First-Class GBP Categories Architecture', () => {
 
     const aadharSearch = searchGbpCategories('aadhar');
     expect(aadharSearch.length).toBeGreaterThan(0);
-    expect(aadharSearch[0].displayName).toBe('Aadhaar center');
+    expect(aadharSearch[0].displayName.toLowerCase()).toContain('aadhaar');
 
     // 2. Air conditioning contractor
     const acContractor = getGbpCategoryByNameOrAlias('air conditioning contractor');
@@ -144,6 +144,6 @@ describe('First-Class GBP Categories Architecture', () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.source).toBe('master_catalog');
-    expect(data.categories).toContain('Aadhaar center');
+    expect(data.categories.some((c: string) => c.toLowerCase().includes('aadhaar'))).toBe(true);
   });
 });

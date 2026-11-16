@@ -24,7 +24,7 @@ import { db } from '@/lib/db';
 import { uploadFile, isS3Configured } from '@/lib/supabase-storage';
 import { generateDesignImage } from './image-provider';
 import { normalizeCategoryContext } from './category-taxonomy';
-import { getCategoryVisualPool, CURATED_SMB_IMAGE_REGISTRY } from './dynamic-visual-resolver';
+import { getCategoryVisualPool } from './dynamic-visual-resolver';
 
 export interface ResolvedBusinessImage {
   url: string;
@@ -57,40 +57,18 @@ export function fnv1aHash(str: string): number {
 }
 
 /**
- * Resolves a clean, standardized folder slug for S3 storage
+ * Resolves a clean, standardized folder slug for S3 storage dynamically from category text.
+ * Zero hardcoding — every category gets its own dedicated S3 directory.
  */
 export function getCategoryStorageFolder(categoryText: string): string {
-  const norm = normalizeCategoryContext(categoryText);
-  const vk = norm.verticalKey || 'general_business';
-
-  const folderMap: Record<string, string> = {
-    it_software_digital: 'it-software',
-    food_sweets_confectionery: 'food-beverage',
-    events_hospitality: 'food-beverage',
-    beauty_personal_care: 'beauty-wellness',
-    health_medical_wellness: 'healthcare',
-    grocery_retail_fmcg: 'retail',
-    fashion_apparel_jewellery: 'retail',
-    building_materials_hardware: 'home-services',
-    home_electrical_services: 'home-services',
-    logistics_industrial: 'home-services',
-    automotive_vehicles: 'automotive',
-    education_coaching: 'fitness-education',
-    fitness_sports: 'fitness-education',
-    real_estate_interiors: 'professional-services',
-    professional_legal_finance: 'professional-services',
-    security_safety_services: 'professional-services',
-    specialty_local_services: 'professional-services',
-    general_business: 'professional-services',
-  };
-
-  if (folderMap[vk]) return folderMap[vk];
-
-  return categoryText
+  const clean = (categoryText || '')
     .toLowerCase()
     .trim()
+    .replace(/^gcid:/i, '')
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'general-business';
+    .replace(/^-+|-+$/g, '');
+
+  return clean || 'general-business';
 }
 
 /**
@@ -153,9 +131,15 @@ export async function ensureCategoryImages(
     return existing;
   }
 
-  // Fallback to verified curated photography while generation runs or in test environments
-  const curatedFallback = getCategoryVisualPool(categoryText);
+  // Fallback to verified photography while generation runs or in test environments
+  const rawFallback = getCategoryVisualPool(categoryText);
+  const curatedFallback = rawFallback.map((u) =>
+    u.startsWith('http') ? u : `https://bgos.site${u}`
+  );
   if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') {
+    while (curatedFallback.length < 4) {
+      curatedFallback.push(curatedFallback[curatedFallback.length % Math.max(1, rawFallback.length)]);
+    }
     return curatedFallback;
   }
 

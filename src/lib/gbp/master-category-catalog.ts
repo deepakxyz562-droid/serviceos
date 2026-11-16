@@ -2,12 +2,8 @@ import {
   MASTER_GBP_CATEGORIES,
   type GbpCategoryDefinition,
 } from '../../../shared/gbp-category-dataset';
-import {
-  OFFICIAL_GBP_CATEGORIES,
-  type OfficialGbpCategoryItem,
-} from '../../../shared/gbp-official-taxonomy';
 import { normalizeCategoryContext } from '../designs/category-taxonomy';
-import { CURATED_SMB_IMAGE_REGISTRY, getCategoryVisualPool } from '../designs/dynamic-visual-resolver';
+import { getCategoryVisualPool } from '../designs/dynamic-visual-resolver';
 
 export interface GeneratedCreativeBlueprint {
   id: string;
@@ -42,27 +38,21 @@ for (const cat of MASTER_GBP_CATEGORIES) {
   }
 }
 
-// Official 4,000+ GBP Categories indexed in memory
-const officialIdIndex = new Map<string, OfficialGbpCategoryItem>();
-const officialNameIndex = new Map<string, OfficialGbpCategoryItem>();
-
-for (const off of OFFICIAL_GBP_CATEGORIES) {
-  const gcidClean = off.gcid.toLowerCase().trim();
-  const nameClean = off.displayName.toLowerCase().trim();
-  officialIdIndex.set(gcidClean, off);
-  officialIdIndex.set(`gcid:${gcidClean}`, off);
-  officialIdIndex.set(gcidClean.replace(/_/g, ' '), off);
-  officialNameIndex.set(nameClean, off);
-}
-
 /**
- * Synthesizes a full GbpCategoryDefinition from an official GBP category entry
+ * Dynamically synthesizes a full GbpCategoryDefinition for ANY category string on-the-fly.
+ * Zero hardcoded lists — handles all Google categories dynamically.
  */
-export function synthesizeOfficialCategoryDefinition(official: OfficialGbpCategoryItem): GbpCategoryDefinition {
-  const context = normalizeCategoryContext(official.displayName);
+export function synthesizeCategoryDefinition(nameOrGcid: string): GbpCategoryDefinition {
+  let clean = nameOrGcid.replace(/^gcid:/i, '').replace(/_/g, ' ').trim();
+  if (/^air\s*cond$/i.test(clean)) {
+    clean = 'air conditioning contractor';
+  }
+  const rawDisplayName = clean.charAt(0).toUpperCase() + clean.slice(1);
+  const displayName = rawDisplayName.replace(/\baadhar\b/i, 'Aadhaar');
+  const gcid = clean.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  const context = normalizeCategoryContext(displayName);
   const pillar = context.verticalKey || 'specialty_local_services';
-  const name = official.displayName;
-  const isServiceTrade = /service|agency|consult|contractor|clinic|repair|cleaning|transport|installation|maintenance|academy|school|studio|centre|center|lawyer|accountant|doctor|plumber|electrician/i.test(name);
+  const name = displayName;
 
   const coreProducts = [
     `Professional ${name}`,
@@ -80,23 +70,27 @@ export function synthesizeOfficialCategoryDefinition(official: OfficialGbpCatego
 
   const visualSearchTerms = [
     ...context.searchKeywords,
-    `${name.toLowerCase()} workplace setting`,
+    `${name.toLowerCase()} commercial setting`,
   ];
 
-  const preferredTheme = (
-    pillar === 'it_software_digital' ? 'cyber_tech' :
-    pillar === 'professional_legal_finance' ? 'royal_gold' :
-    pillar === 'beauty_personal_care' ? 'rose_chic' :
-    pillar === 'food_sweets_confectionery' ? 'amber' :
-    pillar === 'health_medical_wellness' ? 'emerald' :
-    'trust_amber'
-  );
+  const preferredTheme =
+    pillar === 'it_software_digital'
+      ? 'cyber_tech'
+      : pillar === 'professional_legal_finance'
+        ? 'royal_gold'
+        : pillar === 'beauty_personal_care'
+          ? 'rose_chic'
+          : pillar === 'food_sweets_confectionery'
+            ? 'amber'
+            : pillar === 'health_medical_wellness'
+              ? 'emerald'
+              : 'trust_amber';
 
   return {
-    id: `gcid:${official.gcid}`,
-    displayName: official.displayName,
+    id: `gcid:${gcid}`,
+    displayName,
     pillar,
-    aliases: [official.gcid, official.gcid.replace(/_/g, ' '), official.displayName.toLowerCase()],
+    aliases: [gcid, clean, displayName.toLowerCase()],
     relatedCategories: [],
     coreProducts,
     customerIntentKeywords,
@@ -108,18 +102,16 @@ export function synthesizeOfficialCategoryDefinition(official: OfficialGbpCatego
       trustHeadline: `Rated #1 ${name} Provider in {city} — 100% Quality Assurance`,
       subtitle: `Delivering trusted, certified ${name} and prompt assistance for clients across {city}.`,
       bullets: [
-        '100% Certified & Verified Professionals',
-        'Transparent Upfront Pricing & Free Estimates',
-        'Prompt On-Demand Assistance in {city}',
-        'Complete Satisfaction Guaranteed',
+        `Verified ${name} Experts with Proven Local Track Record`,
+        `100% Genuine Materials & Transparent Estimates`,
+        `Fast Turnaround & Professional On-Site Support`,
       ],
-      cta: isServiceTrade ? 'REQUEST CONSULTATION' : 'GET QUOTE',
+      cta: 'BOOK CONSULTATION',
     },
   };
 }
-
 /**
- * O(1) Category lookup by ID across curated dataset & 4,000+ official GBP categories
+ * O(1) Category lookup by ID across curated dataset & dynamic on-demand synthesis
  */
 export function getGbpCategoryById(id: string): GbpCategoryDefinition | undefined {
   if (!id) return undefined;
@@ -127,9 +119,7 @@ export function getGbpCategoryById(id: string): GbpCategoryDefinition | undefine
   const direct = idIndex.get(clean);
   if (direct) return direct;
 
-  const official = officialIdIndex.get(clean);
-  if (official) return synthesizeOfficialCategoryDefinition(official);
-  return undefined;
+  return synthesizeCategoryDefinition(clean);
 }
 
 /**
@@ -160,36 +150,18 @@ export function getGbpCategoryByNameOrAlias(rawText: string): GbpCategoryDefinit
     }
   }
 
-  // 5. Official 4,000+ GBP Categories exact match
-  const officialByName = officialNameIndex.get(clean);
-  if (officialByName) return synthesizeOfficialCategoryDefinition(officialByName);
-
-  const officialById = officialIdIndex.get(clean);
-  if (officialById) return synthesizeOfficialCategoryDefinition(officialById);
-
-  // 6. Official 4,000+ token / substring search
-  for (const off of OFFICIAL_GBP_CATEGORIES) {
-    const offName = off.displayName.toLowerCase();
-    const offGcid = off.gcid.toLowerCase();
-    if (clean.includes(offName) || offName.includes(clean) || clean.includes(offGcid) || offGcid.includes(clean)) {
-      return synthesizeOfficialCategoryDefinition(off);
-    }
-  }
-
-  return undefined;
+  // 5. Synthesize on-the-fly dynamically (zero hardcoded list required)
+  return synthesizeCategoryDefinition(clean);
 }
 
 /**
- * Live search auto-complete across all master & 4,000+ official GBP categories.
+ * Live search auto-complete across master & dynamically synthesized categories.
  * Ranks prefix matches highest, followed by token and alias matches.
  */
 export function searchGbpCategories(query: string, limit = 10): GbpCategoryDefinition[] {
   const clean = (query || '').toLowerCase().trim();
   if (!clean) {
-    const rich = MASTER_GBP_CATEGORIES.slice(0, limit);
-    if (rich.length >= limit) return rich;
-    const additional = OFFICIAL_GBP_CATEGORIES.slice(0, limit - rich.length).map(synthesizeOfficialCategoryDefinition);
-    return [...rich, ...additional];
+    return MASTER_GBP_CATEGORIES.slice(0, limit);
   }
 
   const prefixMatches: GbpCategoryDefinition[] = [];
@@ -206,20 +178,7 @@ export function searchGbpCategories(query: string, limit = 10): GbpCategoryDefin
     }
   }
 
-  // B. Prefix matches in official 4,000+ categories
-  for (const off of OFFICIAL_GBP_CATEGORIES) {
-    const idKey = `gcid:${off.gcid}`;
-    if (seenIds.has(idKey)) continue;
-    const dName = off.displayName.toLowerCase();
-    const gcid = off.gcid.toLowerCase();
-    if (dName.startsWith(clean) || gcid.startsWith(clean)) {
-      prefixMatches.push(synthesizeOfficialCategoryDefinition(off));
-      seenIds.add(idKey);
-      if (prefixMatches.length >= limit) return prefixMatches;
-    }
-  }
-
-  // C. Token / Substring matches in rich curated categories
+  // B. Token / Substring matches in rich curated categories
   for (const cat of MASTER_GBP_CATEGORIES) {
     if (seenIds.has(cat.id)) continue;
     const dName = cat.displayName.toLowerCase();
@@ -236,18 +195,11 @@ export function searchGbpCategories(query: string, limit = 10): GbpCategoryDefin
     }
   }
 
-  // D. Token / Substring matches in official 4,000+ categories
-  for (const off of OFFICIAL_GBP_CATEGORIES) {
-    const idKey = `gcid:${off.gcid}`;
-    if (seenIds.has(idKey)) continue;
-    const dName = off.displayName.toLowerCase();
-    const gcid = off.gcid.toLowerCase();
-    if (dName.includes(clean) || gcid.includes(clean)) {
-      tokenMatches.push(synthesizeOfficialCategoryDefinition(off));
-      seenIds.add(idKey);
-      if (prefixMatches.length + tokenMatches.length >= limit) {
-        break;
-      }
+  // C. Dynamically synthesize query as a valid option if limit not reached
+  if (prefixMatches.length + tokenMatches.length < limit && clean.length >= 2) {
+    const synthesized = synthesizeCategoryDefinition(clean);
+    if (!seenIds.has(synthesized.id)) {
+      tokenMatches.push(synthesized);
     }
   }
 

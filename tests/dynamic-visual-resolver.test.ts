@@ -67,22 +67,21 @@ describe('Dynamic Visual Resolver', () => {
     it('returns valid arrays of royalty-free image URLs for any category', () => {
       const dentalPool = getCategoryVisualPool('dental clinic');
       expect(dentalPool.length).toBeGreaterThan(0);
-      expect(dentalPool[0]).toContain('images.unsplash.com');
+      expect(dentalPool[0]).toMatch(/(\/images\/bgos\/templates\/|images\.unsplash\.com)/);
 
       const solarPool = getCategoryVisualPool('solar rooftop');
       expect(solarPool.length).toBeGreaterThan(0);
-      expect(solarPool[0]).toContain('images.unsplash.com');
+      expect(solarPool[0]).toMatch(/(\/images\/bgos\/templates\/|images\.unsplash\.com)/);
 
       const weldingPool = getCategoryVisualPool('steel welding');
       expect(weldingPool.length).toBeGreaterThan(0);
-      expect(weldingPool[0]).toContain('images.unsplash.com');
+      expect(weldingPool[0]).toMatch(/(\/images\/bgos\/templates\/|images\.unsplash\.com)/);
     });
 
-    it('shuffles the returned pool so consecutive requests do not return identical arrays', () => {
+    it('returns stable pool arrays so consecutive requests return consistent assets', () => {
       const poolA = getCategoryVisualPool('gym fitness');
       const poolB = getCategoryVisualPool('gym fitness');
       expect(poolA.length).toBe(poolB.length);
-      // Both pools contain the same items but can be shuffled
       expect(new Set(poolA)).toEqual(new Set(poolB));
     });
   });

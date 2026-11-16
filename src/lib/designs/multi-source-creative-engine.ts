@@ -222,7 +222,7 @@ export async function getFestivalVisuals(
   });
 
   const liveVisuals = livePhotos.map((p, i) => toVisual(p, i));
-  const curatedVisuals = getCategoryVisualPool('festival greeting').map((url, i) =>
+  const curatedVisuals = getCategoryVisualPool(occasionLabel).map((url, i) =>
     toCuratedVisual(url, i),
   );
 

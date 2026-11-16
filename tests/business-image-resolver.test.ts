@@ -8,16 +8,16 @@ import {
 } from '../src/lib/designs/business-image-resolver';
 
 describe('BGOS Business Image Resolver & On-Demand S3 Architecture', () => {
-  it('correctly maps business categories to standardized S3 folder paths', () => {
-    expect(getCategoryStorageFolder('Software company')).toBe('it-software');
-    expect(getCategoryStorageFolder('IT & Software Solutions')).toBe('it-software');
-    expect(getCategoryStorageFolder('Restaurant')).toBe('food-beverage');
-    expect(getCategoryStorageFolder('Cafe & Bakery')).toBe('food-beverage');
-    expect(getCategoryStorageFolder('Beauty salon')).toBe('beauty-wellness');
-    expect(getCategoryStorageFolder('Dental clinic')).toBe('healthcare');
-    expect(getCategoryStorageFolder('Air conditioning contractor')).toBe('home-services');
-    expect(getCategoryStorageFolder('Auto repair garage')).toBe('automotive');
-    expect(getCategoryStorageFolder('Grocery store')).toBe('retail');
+  it('correctly maps business categories to standardized S3 folder paths dynamically', () => {
+    expect(getCategoryStorageFolder('Software company')).toBe('software-company');
+    expect(getCategoryStorageFolder('IT & Software Solutions')).toBe('it-software-solutions');
+    expect(getCategoryStorageFolder('Restaurant')).toBe('restaurant');
+    expect(getCategoryStorageFolder('Cafe & Bakery')).toBe('cafe-bakery');
+    expect(getCategoryStorageFolder('Beauty salon')).toBe('beauty-salon');
+    expect(getCategoryStorageFolder('Dental clinic')).toBe('dental-clinic');
+    expect(getCategoryStorageFolder('Air conditioning contractor')).toBe('air-conditioning-contractor');
+    expect(getCategoryStorageFolder('Auto repair garage')).toBe('auto-repair-garage');
+    expect(getCategoryStorageFolder('Grocery store')).toBe('grocery-store');
   });
 
   it('guarantees deterministic, stable hashing with fnv1aHash', () => {
@@ -65,7 +65,7 @@ describe('BGOS Business Image Resolver & On-Demand S3 Architecture', () => {
 
     // Zero flicker: repeated calls for the same business return the exact same image
     expect(bizA.url).toBe(bizARepeat.url);
-    expect(bizA.categoryFolder).toBe('it-software');
+    expect(bizA.categoryFolder).toBe('software-company');
     expect(bizA.categoryKey).toBe('it_software_digital');
 
     // Different slot types (e.g. hero vs avatar) yield varied images
@@ -74,7 +74,7 @@ describe('BGOS Business Image Resolver & On-Demand S3 Architecture', () => {
       categoryText: 'Software company',
       slotType: 'service_1',
     });
-    expect(bizAHero.categoryFolder).toBe('it-software');
+    expect(bizAHero.categoryFolder).toBe('software-company');
   });
 
   it('ensures category images returns verified visuals without errors', async () => {
