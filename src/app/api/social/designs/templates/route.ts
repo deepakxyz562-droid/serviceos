@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, getProductAppUrl } from '@/lib/auth';
 import { db } from '@/lib/db';
 import {
   BUSINESS_EDITIONS,
@@ -140,6 +140,15 @@ export async function GET(request: NextRequest) {
   let address = tenant?.address || '';
   let city = (tenant as any)?.city || brandProfile?.location || 'Patna';
 
+  const baseUrl = getProductAppUrl(request, 'bgos');
+  const toAbsoluteUrl = (path?: string | null): string => {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    return `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+  };
+
+  if (logoUrl) logoUrl = toAbsoluteUrl(logoUrl);
+
   // Parse GBP / Brand Brain overrides from settingsJson if available
   if (tenant?.settingsJson) {
     try {
@@ -255,6 +264,7 @@ export async function GET(request: NextRequest) {
       return bp.tab === requestedTab;
     })
     .map((bp) => {
+      const photoUrl = toAbsoluteUrl(bp.photoUrl);
       let composedDesign: any = null;
       if (includeDesign) {
         try {
@@ -270,7 +280,7 @@ export async function GET(request: NextRequest) {
             phone,
             website: website ? website.replace(/^https?:\/\//, '') : undefined,
             logoUrl: logoUrl || undefined,
-            photo: bp.photoUrl,
+            photo: photoUrl,
             theme: bp.theme as any,
           });
         } catch {}
@@ -288,7 +298,7 @@ export async function GET(request: NextRequest) {
         purpose: bp.purpose,
         theme: bp.theme,
         aspectRatio: '4:5',
-        photoUrl: bp.photoUrl,
+        photoUrl,
         bgPrompt: bp.headline,
         design: composedDesign,
         defaultBullets: bp.bullets,
@@ -345,6 +355,7 @@ export async function GET(request: NextRequest) {
               ? 'reviews'
               : 'for_business';
 
+      const photoUrl = toAbsoluteUrl(tpl.referenceUrl);
       let composedCuratedDesign: any = null;
       if (includeDesign) {
         try {
@@ -365,7 +376,7 @@ export async function GET(request: NextRequest) {
             phone,
             website: website ? website.replace(/^https?:\/\//, '') : undefined,
             logoUrl: logoUrl || undefined,
-            photo: tpl.referenceUrl,
+            photo: photoUrl,
             theme: 'emerald',
           });
         } catch {}
@@ -392,7 +403,7 @@ export async function GET(request: NextRequest) {
             : 'Business profile') as Purpose,
         theme: 'emerald',
         aspectRatio: tpl.aspectRatio,
-        photoUrl: tpl.referenceUrl,
+        photoUrl,
         bgPrompt: tpl.title,
         design: composedCuratedDesign,
         defaultBullets: tpl.defaultBullets,
@@ -441,6 +452,8 @@ export async function GET(request: NextRequest) {
         fallbackUnsplashPhotos[idx % fallbackUnsplashPhotos.length] ||
         template.photo;
     }
+
+    assignedPhoto = toAbsoluteUrl(assignedPhoto);
 
     const tab = mapPurposeToTab(template.edition?.purpose);
 

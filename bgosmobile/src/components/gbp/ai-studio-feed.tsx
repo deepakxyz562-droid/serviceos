@@ -13,6 +13,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../../lib/api';
+import { resolveTemplateSource } from '../design/professional-assets';
 
 export type StudioTabKey = 'all' | 'promotions' | 'for_business' | 'reviews' | 'festivals';
 
@@ -230,7 +231,7 @@ export function AiStudioFeed({
             >
               {/* Background Photo */}
               <Image
-                source={{ uri: item.photoUrl }}
+                source={resolveTemplateSource(item.photoUrl)}
                 style={styles.cardImage}
                 resizeMode="cover"
               />

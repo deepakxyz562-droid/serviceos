@@ -2,7 +2,7 @@ import { framedPhoto } from '../../../../shared/photo-framing';
 import React, { useState } from 'react';
 import { Image, PixelRatio, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { PROFESSIONAL_ASSETS } from './professional-assets';
+import { PROFESSIONAL_ASSETS, resolveTemplateSource } from './professional-assets';
 import { WEB_URL } from '../../lib/constants';
 import type { MarketingDesign } from '../../../../shared/marketing-design';
 
@@ -91,13 +91,9 @@ export function PosterPreview({ doc }: { doc: MarketingDesign }) {
                   ) : (
                     <Image
                       source={
-                        PROFESSIONAL_ASSETS[l.src || ''] || {
-                          uri: l.src?.startsWith('/images/bgos/templates/')
-                            ? `${WEB_URL.replace(/\/$/, '')}${l.src}`
-                            : l.src?.startsWith('https://images.unsplash.com/')
-                            ? l.src.replace(/w=\d+/, `w=${Math.min(2160, Math.max(360, Math.round(width * PixelRatio.get())))}`)
-                            : l.src,
-                        }
+                        l.src?.startsWith('https://images.unsplash.com/')
+                          ? { uri: l.src.replace(/w=\d+/, `w=${Math.min(2160, Math.max(360, Math.round(width * PixelRatio.get())))}`) }
+                          : resolveTemplateSource(l.src)
                       }
                       onError={() => setFailed((p) => ({ ...p, [l.src || '']: true }))}
                       onLoad={({nativeEvent:{source}}) => {

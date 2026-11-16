@@ -21,6 +21,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../ui';
 import { apiRequest } from '../../lib/api';
+import { resolvePhotoUrl } from '../../lib/constants';
+import { resolveTemplateSource } from '../design/professional-assets';
 import {
   normalizePendingUpload,
   uploadFileToStorage,
@@ -210,7 +212,7 @@ export function MediaMetadataSheet({
 
     // Initial image selection
     if (editingItem) {
-      setCurrentPhotoUrl(editingItem.thumbnailUrl || editingItem.url || null);
+      setCurrentPhotoUrl(resolvePhotoUrl(editingItem.thumbnailUrl || editingItem.url || null));
       if (editingItem.title) setTitle(editingItem.title);
       if (editingItem.description) setDescription(editingItem.description);
       if (Array.isArray(editingItem.tags)) setTags(editingItem.tags);
@@ -322,7 +324,7 @@ export function MediaMetadataSheet({
     if (!tpl) return;
     setSelectedTemplateId(tpl.id);
     const photo = tpl.photoUrl || tpl.previewUrl || tpl.referenceUrl || tpl.url;
-    if (photo) setCurrentPhotoUrl(photo);
+    if (photo) setCurrentPhotoUrl(resolvePhotoUrl(photo));
 
     const hLine = tpl.headline || tpl.name || '';
     setActiveHeadline(hLine);
@@ -564,7 +566,7 @@ export function MediaMetadataSheet({
                 <View style={styles.photoCanvas}>
                   {currentPhotoUrl ? (
                     <Image
-                      source={{ uri: currentPhotoUrl }}
+                      source={resolveTemplateSource(currentPhotoUrl)}
                       style={styles.heroPosterImage}
                       resizeMode="cover"
                     />
@@ -744,7 +746,7 @@ export function MediaMetadataSheet({
                           style={[styles.templateThumbCard, selected && styles.templateThumbCardSelected]}
                         >
                           <Image
-                            source={{ uri: tpl.photoUrl }}
+                            source={resolveTemplateSource(tpl.photoUrl)}
                             style={styles.templateThumbImage}
                             resizeMode="cover"
                           />

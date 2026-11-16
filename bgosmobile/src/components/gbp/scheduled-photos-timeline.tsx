@@ -14,6 +14,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../ui';
 import { apiRequest } from '../../lib/api';
+import { resolveTemplateSource } from '../design/professional-assets';
 import { detectDeviceCountryAndTimezone, getTimeZoneShortLabel } from '../../lib/country-codes';
 import { MediaPreviewModal, isVideoMediaAsset } from './media-preview-modal';
 import type { GbpConnectionState, GbpPhoto } from './types';
@@ -461,7 +462,7 @@ export function ScheduledPhotosTimeline({
               }}
               style={styles.creativeCard}
             >
-              <Image source={{ uri: tpl.photoUrl }} style={styles.creativeImage} resizeMode="cover" />
+              <Image source={resolveTemplateSource(tpl.photoUrl)} style={styles.creativeImage} resizeMode="cover" />
               <View style={styles.creativeTopBadge}>
                 <Text numberOfLines={1} style={styles.creativeTopBadgeText}>
                   {tpl.badge || 'Ready'}

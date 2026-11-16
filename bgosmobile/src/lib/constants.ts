@@ -40,6 +40,24 @@ export const BGOS_PUBLIC_WEB_URL = (
   process.env.EXPO_PUBLIC_BGOS_WEB_URL || 'https://bgos.site'
 ).replace(/\/$/, '');
 
+/**
+ * Resolves any image URL or relative path (e.g. `/images/bgos/templates/...`) to a fully-qualified absolute URL
+ * so React Native image loaders (Fresco on Android / NSURLSession on iOS) and GBP APIs can safely load it.
+ */
+export function resolvePhotoUrl(url?: string | null): string {
+  if (!url) return '';
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('file://') ||
+    url.startsWith('data:')
+  ) {
+    return url;
+  }
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  return `${BGOS_PUBLIC_WEB_URL}${cleanPath}`;
+}
+
 // BGOS Support details (Meta Verified WhatsApp Business)
 export const BGOS_SUPPORT_WHATSAPP_DIGITS = '916127967087';
 export const BGOS_SUPPORT_PHONE_DISPLAY = '+91 61279 67087';

@@ -20,6 +20,7 @@ const { mockGetAuthUser, tenantStore, brandProfileStore } = vi.hoisted(() => ({
 
 vi.mock('@/lib/auth', () => ({
   getAuthUser: mockGetAuthUser,
+  getProductAppUrl: vi.fn(() => 'https://bgos.site'),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -122,14 +123,14 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     expect(diwaliTemplate.photoUrl).not.toContain('photo-1508214751196-bcfd4ca60f91');
 
     // Must use authentic festival photography (diya/lights/festive)
-    expect(diwaliTemplate.photoUrl).toBe('/images/bgos/templates/diwali.webp');
+    expect(diwaliTemplate.photoUrl).toBe('https://bgos.site/images/bgos/templates/diwali.webp');
 
     // Specifically test Holi template
     const holiTemplate = data.templates.find(
       (t: any) => t.id === 'festival-holi-universal' || /holi/i.test(t.headline)
     );
     expect(holiTemplate).toBeDefined();
-    expect(holiTemplate.photoUrl).toBe('/images/bgos/templates/edition-holi.webp');
+    expect(holiTemplate.photoUrl).toBe('https://bgos.site/images/bgos/templates/edition-holi.webp');
 
     // Check that every festival template photo URL is festival-themed or webp, never dental/trade clinic photo
     for (const item of data.templates) {

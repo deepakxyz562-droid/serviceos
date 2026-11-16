@@ -20,7 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Crypto from 'expo-crypto';
 import { apiRequest } from '../../lib/api';
 import { layersAtPoint, toolForLayer } from '../../../../shared/design-selection';
-import { PROFESSIONAL_ASSETS } from './professional-assets';
+import { PROFESSIONAL_ASSETS, resolveTemplateSource } from './professional-assets';
 import { PosterPreview } from './poster-preview';
 import { gestureLayer } from '../../../../shared/design-gestures';
 import {
@@ -1567,7 +1567,7 @@ export function PosterEditor({
                   >
                     {l.type === 'image' && !l.src?.startsWith('data:image/svg+xml') && !l.id.includes('divider') ? (
                       <Image
-                        source={PROFESSIONAL_ASSETS[l.src || ''] || { uri: l.src }}
+                        source={resolveTemplateSource(l.src)}
                         style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#E2E8F0' }}
                       />
                     ) : (

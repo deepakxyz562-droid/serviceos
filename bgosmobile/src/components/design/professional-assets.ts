@@ -1,3 +1,5 @@
+import { resolvePhotoUrl } from '../../lib/constants';
+
 // Bundled so gallery artwork works offline and before the web deployment.
 export const PROFESSIONAL_ASSETS:Record<string,number>={
   '/images/bgos/templates/plumbing.webp':require('../../../assets/poster-templates/plumbing.webp'),
@@ -28,3 +30,19 @@ export const PROFESSIONAL_ASSETS:Record<string,number>={
   '/images/bgos/templates/it_software.webp':require('../../../assets/poster-templates/it_software.webp'),
   '/images/bgos/templates/security_cctv.webp':require('../../../assets/poster-templates/security_cctv.webp'),
 };
+
+/**
+ * Resolves a template image reference into an Image source suitable for React Native `<Image source={...} />`.
+ * Prefers the offline pre-bundled asset from PROFESSIONAL_ASSETS if matched, otherwise returns `{ uri: absoluteHttpsUrl }`.
+ */
+export function resolveTemplateSource(url?: string | null): any {
+  if (!url) return { uri: '' };
+  if (PROFESSIONAL_ASSETS[url]) {
+    return PROFESSIONAL_ASSETS[url];
+  }
+  const match = url.match(/\/images\/bgos\/templates\/[^?#]+/);
+  if (match && PROFESSIONAL_ASSETS[match[0]]) {
+    return PROFESSIONAL_ASSETS[match[0]];
+  }
+  return { uri: resolvePhotoUrl(url) };
+}
