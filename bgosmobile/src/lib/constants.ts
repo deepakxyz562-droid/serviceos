@@ -7,12 +7,19 @@ export const BRAND = {
   inkColor: '#070B2D',     // Ink Navy
 };
 
+export const CLOUD_FALLBACK_API_URL = 'https://bgos.site';
+
 function resolveDefaultHost(): string {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, '');
   }
-  // When running locally in Expo, dynamically connect to the dev machine LAN IP
-  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+  // Only connect to dev machine LAN IP if explicitly opted in via EXPO_PUBLIC_USE_LOCAL_BACKEND
+  if (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    (process.env.EXPO_PUBLIC_USE_LOCAL_BACKEND === 'true' ||
+      process.env.EXPO_PUBLIC_USE_LOCAL_BACKEND === '1')
+  ) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const Constants = require('expo-constants')?.default || require('expo-constants');
@@ -25,7 +32,7 @@ function resolveDefaultHost(): string {
       }
     } catch {}
   }
-  return 'https://bgos.site';
+  return CLOUD_FALLBACK_API_URL;
 }
 
 // Default backend API base URL for BGOS (API endpoints can use local LAN dev IP during development)

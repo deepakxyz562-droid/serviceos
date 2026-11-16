@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './constants';
+import { API_BASE_URL, CLOUD_FALLBACK_API_URL } from './constants';
 import { clearTokens, getToken, getRefreshToken, setTokens, sessionRevision } from './auth';
 import { detectDeviceCountryAndTimezone } from './country-codes';
 
@@ -101,12 +101,24 @@ async function performApiRequest<T = any>(
 ): Promise<T> {
   const { method = 'GET', body, params, headers = {}, skipAuth = false } = options;
 
-  let url = path.startsWith('http') ? path : `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+  const currentBaseUrl = API_BASE_URL;
+  const isLocalDevHost =
+    typeof currentBaseUrl === 'string' &&
+    /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.)/i.test(currentBaseUrl);
 
-  if (new URL(url).origin !== new URL(API_BASE_URL).origin) throw new ApiError('Untrusted API destination.', 400);
+  let url = path.startsWith('http') ? path : `${currentBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+
+  const allowedOrigins = new Set([
+    new URL(API_BASE_URL).origin,
+    new URL(CLOUD_FALLBACK_API_URL).origin,
+  ]);
+  if (!allowedOrigins.has(new URL(url).origin)) {
+    throw new ApiError('Untrusted API destination.', 400);
+  }
 
   const revision = sessionRevision();
   let requestToken: string | null = null;
+  let queryString = '';
   if (params) {
     const searchParams = new URLSearchParams();
     for (const [key, val] of Object.entries(params)) {
@@ -114,7 +126,7 @@ async function performApiRequest<T = any>(
         searchParams.append(key, String(val));
       }
     }
-    const queryString = searchParams.toString();
+    queryString = searchParams.toString();
     if (queryString) {
       url += (url.includes('?') ? '&' : '?') + queryString;
     }
@@ -159,10 +171,28 @@ async function performApiRequest<T = any>(
       signal: controller.signal,
     });
   } catch (error) {
-    if (controller.signal.aborted) throw new ApiError('The request timed out. Refresh to check whether changes were saved before trying again.', 408);
-    const friendly = formatNetworkError(error, API_BASE_URL);
-    if (friendly) throw friendly;
-    throw error;
+    // If local dev host is unreachable (e.g. port 3000 is not started or device on cellular 5G), auto-failover to cloud
+    if (isLocalDevHost && !controller.signal.aborted && currentBaseUrl !== CLOUD_FALLBACK_API_URL) {
+      try {
+        const fallbackUrl = `${CLOUD_FALLBACK_API_URL}${path.startsWith('/') ? path : `/${path}`}${queryString ? (path.includes('?') ? '&' : '?') + queryString : ''}`;
+        response = await fetch(fallbackUrl, {
+          method,
+          headers: reqHeaders,
+          body: hasJsonBody ? (typeof body === 'string' ? body : JSON.stringify(body)) : isFormData ? body : undefined,
+          signal: controller.signal,
+        });
+      } catch (fallbackError) {
+        if (controller.signal.aborted) throw new ApiError('The request timed out. Refresh to check whether changes were saved before trying again.', 408);
+        const friendly = formatNetworkError(fallbackError, CLOUD_FALLBACK_API_URL);
+        if (friendly) throw friendly;
+        throw fallbackError;
+      }
+    } else {
+      if (controller.signal.aborted) throw new ApiError('The request timed out. Refresh to check whether changes were saved before trying again.', 408);
+      const friendly = formatNetworkError(error, currentBaseUrl);
+      if (friendly) throw friendly;
+      throw error;
+    }
   } finally {
     clearTimeout(timeout);
     options.signal?.removeEventListener('abort',cancel);
