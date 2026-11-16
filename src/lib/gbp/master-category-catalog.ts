@@ -2,8 +2,12 @@ import {
   MASTER_GBP_CATEGORIES,
   type GbpCategoryDefinition,
 } from '../../../shared/gbp-category-dataset';
+import {
+  OFFICIAL_GBP_CATEGORIES,
+  type OfficialGbpCategoryItem,
+} from '../../../shared/gbp-official-taxonomy';
 import { normalizeCategoryContext } from '../designs/category-taxonomy';
-import { CURATED_SMB_IMAGE_REGISTRY } from '../designs/dynamic-visual-resolver';
+import { CURATED_SMB_IMAGE_REGISTRY, getCategoryVisualPool } from '../designs/dynamic-visual-resolver';
 
 export interface GeneratedCreativeBlueprint {
   id: string;
@@ -38,28 +42,110 @@ for (const cat of MASTER_GBP_CATEGORIES) {
   }
 }
 
-/**
- * O(1) Category lookup by ID
- */
-export function getGbpCategoryById(id: string): GbpCategoryDefinition | undefined {
-  if (!id) return undefined;
-  return idIndex.get(id.toLowerCase().trim());
+// Official 4,000+ GBP Categories indexed in memory
+const officialIdIndex = new Map<string, OfficialGbpCategoryItem>();
+const officialNameIndex = new Map<string, OfficialGbpCategoryItem>();
+
+for (const off of OFFICIAL_GBP_CATEGORIES) {
+  const gcidClean = off.gcid.toLowerCase().trim();
+  const nameClean = off.displayName.toLowerCase().trim();
+  officialIdIndex.set(gcidClean, off);
+  officialIdIndex.set(`gcid:${gcidClean}`, off);
+  officialIdIndex.set(gcidClean.replace(/_/g, ' '), off);
+  officialNameIndex.set(nameClean, off);
 }
 
 /**
- * O(1) Category lookup by Name or common Trade Alias (e.g. "ply shop", "saloon", "sweet shop")
+ * Synthesizes a full GbpCategoryDefinition from an official GBP category entry
+ */
+export function synthesizeOfficialCategoryDefinition(official: OfficialGbpCategoryItem): GbpCategoryDefinition {
+  const context = normalizeCategoryContext(official.displayName);
+  const pillar = context.verticalKey || 'specialty_local_services';
+  const name = official.displayName;
+  const isServiceTrade = /service|agency|consult|contractor|clinic|repair|cleaning|transport|installation|maintenance|academy|school|studio|centre|center|lawyer|accountant|doctor|plumber|electrician/i.test(name);
+
+  const coreProducts = [
+    `Professional ${name}`,
+    `Certified ${name} Solutions`,
+    `Premium ${name} Services`,
+    `Emergency & Express Support`,
+  ];
+
+  const customerIntentKeywords = [
+    `best ${name.toLowerCase()} in {city}`,
+    `${name.toLowerCase()} near me`,
+    `${name.toLowerCase()} rates and charges`,
+    `verified ${name.toLowerCase()} contact number`,
+  ];
+
+  const visualSearchTerms = [
+    ...context.searchKeywords,
+    `${name.toLowerCase()} workplace setting`,
+  ];
+
+  const preferredTheme = (
+    pillar === 'it_software_digital' ? 'cyber_tech' :
+    pillar === 'professional_legal_finance' ? 'royal_gold' :
+    pillar === 'beauty_personal_care' ? 'rose_chic' :
+    pillar === 'food_sweets_confectionery' ? 'amber' :
+    pillar === 'health_medical_wellness' ? 'emerald' :
+    'trust_amber'
+  );
+
+  return {
+    id: `gcid:${official.gcid}`,
+    displayName: official.displayName,
+    pillar,
+    aliases: [official.gcid, official.gcid.replace(/_/g, ' '), official.displayName.toLowerCase()],
+    relatedCategories: [],
+    coreProducts,
+    customerIntentKeywords,
+    visualSearchTerms,
+    preferredTheme,
+    defaultHooks: {
+      offerHeadline: `Top-Rated ${name} in {city} — Special Limited Offer`,
+      showcaseHeadline: `Certified & Trusted ${name} Services in {city}`,
+      trustHeadline: `Rated #1 ${name} Provider in {city} — 100% Quality Assurance`,
+      subtitle: `Delivering trusted, certified ${name} and prompt assistance for clients across {city}.`,
+      bullets: [
+        '100% Certified & Verified Professionals',
+        'Transparent Upfront Pricing & Free Estimates',
+        'Prompt On-Demand Assistance in {city}',
+        'Complete Satisfaction Guaranteed',
+      ],
+      cta: isServiceTrade ? 'REQUEST CONSULTATION' : 'GET QUOTE',
+    },
+  };
+}
+
+/**
+ * O(1) Category lookup by ID across curated dataset & 4,000+ official GBP categories
+ */
+export function getGbpCategoryById(id: string): GbpCategoryDefinition | undefined {
+  if (!id) return undefined;
+  const clean = id.toLowerCase().trim();
+  const direct = idIndex.get(clean);
+  if (direct) return direct;
+
+  const official = officialIdIndex.get(clean);
+  if (official) return synthesizeOfficialCategoryDefinition(official);
+  return undefined;
+}
+
+/**
+ * O(1) Category lookup by Name or common Trade Alias (e.g. "ply shop", "saloon", "sweet shop", "accountant")
  */
 export function getGbpCategoryByNameOrAlias(rawText: string): GbpCategoryDefinition | undefined {
   if (!rawText) return undefined;
   const clean = rawText.toLowerCase().trim();
 
-  // 1. Direct name match
+  // 1. Direct name match in rich curated list
   if (nameIndex.has(clean)) return nameIndex.get(clean);
 
-  // 2. Direct alias match
+  // 2. Direct alias match in rich curated list
   if (aliasIndex.has(clean)) return aliasIndex.get(clean);
 
-  // 3. Substring / Token match across aliases and display names
+  // 3. Substring / Token match across aliases and display names in rich curated list
   for (const cat of MASTER_GBP_CATEGORIES) {
     if (clean.includes(cat.displayName.toLowerCase())) return cat;
     if (cat.aliases?.some((a) => clean.includes(a.toLowerCase()) || a.toLowerCase().includes(clean))) {
@@ -67,10 +153,26 @@ export function getGbpCategoryByNameOrAlias(rawText: string): GbpCategoryDefinit
     }
   }
 
-  // 4. Token search in keywords
+  // 4. Token search in keywords in rich curated list
   for (const cat of MASTER_GBP_CATEGORIES) {
     if (cat.customerIntentKeywords.some((k) => clean.includes(k.toLowerCase()))) {
       return cat;
+    }
+  }
+
+  // 5. Official 4,000+ GBP Categories exact match
+  const officialByName = officialNameIndex.get(clean);
+  if (officialByName) return synthesizeOfficialCategoryDefinition(officialByName);
+
+  const officialById = officialIdIndex.get(clean);
+  if (officialById) return synthesizeOfficialCategoryDefinition(officialById);
+
+  // 6. Official 4,000+ token / substring search
+  for (const off of OFFICIAL_GBP_CATEGORIES) {
+    const offName = off.displayName.toLowerCase();
+    const offGcid = off.gcid.toLowerCase();
+    if (clean.includes(offName) || offName.includes(clean) || clean.includes(offGcid) || offGcid.includes(clean)) {
+      return synthesizeOfficialCategoryDefinition(off);
     }
   }
 
@@ -78,26 +180,46 @@ export function getGbpCategoryByNameOrAlias(rawText: string): GbpCategoryDefinit
 }
 
 /**
- * Live search auto-complete across all master GBP categories.
+ * Live search auto-complete across all master & 4,000+ official GBP categories.
  * Ranks prefix matches highest, followed by token and alias matches.
  */
 export function searchGbpCategories(query: string, limit = 10): GbpCategoryDefinition[] {
   const clean = (query || '').toLowerCase().trim();
-  if (!clean) return MASTER_GBP_CATEGORIES.slice(0, limit);
+  if (!clean) {
+    const rich = MASTER_GBP_CATEGORIES.slice(0, limit);
+    if (rich.length >= limit) return rich;
+    const additional = OFFICIAL_GBP_CATEGORIES.slice(0, limit - rich.length).map(synthesizeOfficialCategoryDefinition);
+    return [...rich, ...additional];
+  }
 
   const prefixMatches: GbpCategoryDefinition[] = [];
   const tokenMatches: GbpCategoryDefinition[] = [];
   const seenIds = new Set<string>();
 
+  // A. Prefix matches in rich curated categories
   for (const cat of MASTER_GBP_CATEGORIES) {
     const dName = cat.displayName.toLowerCase();
     if (dName.startsWith(clean)) {
       prefixMatches.push(cat);
       seenIds.add(cat.id);
-      continue;
+      if (prefixMatches.length >= limit) return prefixMatches;
     }
   }
 
+  // B. Prefix matches in official 4,000+ categories
+  for (const off of OFFICIAL_GBP_CATEGORIES) {
+    const idKey = `gcid:${off.gcid}`;
+    if (seenIds.has(idKey)) continue;
+    const dName = off.displayName.toLowerCase();
+    const gcid = off.gcid.toLowerCase();
+    if (dName.startsWith(clean) || gcid.startsWith(clean)) {
+      prefixMatches.push(synthesizeOfficialCategoryDefinition(off));
+      seenIds.add(idKey);
+      if (prefixMatches.length >= limit) return prefixMatches;
+    }
+  }
+
+  // C. Token / Substring matches in rich curated categories
   for (const cat of MASTER_GBP_CATEGORIES) {
     if (seenIds.has(cat.id)) continue;
     const dName = cat.displayName.toLowerCase();
@@ -108,6 +230,24 @@ export function searchGbpCategories(query: string, limit = 10): GbpCategoryDefin
     if (dName.includes(clean) || aliasHit || productHit || keywordHit) {
       tokenMatches.push(cat);
       seenIds.add(cat.id);
+      if (prefixMatches.length + tokenMatches.length >= limit) {
+        return [...prefixMatches, ...tokenMatches].slice(0, limit);
+      }
+    }
+  }
+
+  // D. Token / Substring matches in official 4,000+ categories
+  for (const off of OFFICIAL_GBP_CATEGORIES) {
+    const idKey = `gcid:${off.gcid}`;
+    if (seenIds.has(idKey)) continue;
+    const dName = off.displayName.toLowerCase();
+    const gcid = off.gcid.toLowerCase();
+    if (dName.includes(clean) || gcid.includes(clean)) {
+      tokenMatches.push(synthesizeOfficialCategoryDefinition(off));
+      seenIds.add(idKey);
+      if (prefixMatches.length + tokenMatches.length >= limit) {
+        break;
+      }
     }
   }
 
@@ -132,15 +272,7 @@ export function generateCategoryBlueprints(params: {
   const matchedPillar = category?.pillar || context.verticalKey;
   const displayName = category?.displayName || (context.detectedSubject ? `${context.detectedSubject} Service` : categoryOrTitle.trim());
 
-  const visuals =
-    (category?.pillar && CURATED_SMB_IMAGE_REGISTRY[category.pillar]) ||
-    CURATED_SMB_IMAGE_REGISTRY[matchedPillar] ||
-    (matchedPillar === 'it_software_digital' && CURATED_SMB_IMAGE_REGISTRY.it_software) ||
-    (matchedPillar === 'building_materials_hardware' && CURATED_SMB_IMAGE_REGISTRY.plywood_timber) ||
-    (matchedPillar === 'food_sweets_confectionery' && CURATED_SMB_IMAGE_REGISTRY.indian_sweets) ||
-    (matchedPillar === 'beauty_personal_care' && CURATED_SMB_IMAGE_REGISTRY.salon_spa) ||
-    (matchedPillar === 'security_safety_services' && CURATED_SMB_IMAGE_REGISTRY.security_services) ||
-    CURATED_SMB_IMAGE_REGISTRY.generic_business;
+  const visuals = getCategoryVisualPool(categoryOrTitle);
 
   const primaryPhoto = visuals[0];
   const secondaryPhoto = visuals[1] || visuals[0];
@@ -181,30 +313,35 @@ export function generateCategoryBlueprints(params: {
 
   const blueprints: GeneratedCreativeBlueprint[] = [];
 
-  // Dedicated first-class blueprints for the merchant's real added services
-  if (Array.isArray(realServices) && realServices.length > 0) {
-    for (const [sIdx, sName] of realServices.slice(0, 5).entries()) {
-      blueprints.push({
-        id: `bp-real-service-${sIdx}`,
-        categoryName: displayName,
-        pillar: matchedPillar,
-        purpose: 'Business profile',
-        tab: 'for_business',
-        layout: sIdx % 2 === 0 ? 'business_1' : 'business_0',
-        theme,
-        headline: sName,
-        subtitle: `Expert ${sName} and professional solutions delivered by ${businessName} in ${city}.`,
-        badge: 'CORE SERVICE',
-        cta: isServiceTrade ? 'REQUEST CONSULTATION' : 'GET QUOTE',
-        bullets: formattedBullets,
-        photoUrl: visuals[sIdx % visuals.length] || primaryPhoto,
-        targetKeywords: [
-          { keyword: `${sName.toLowerCase()} in ${city}`, volume: 450 },
-          { keyword: `${sName.toLowerCase()} company`, volume: 600 },
-        ],
-        defaultCaption: `${businessName} provides verified ${sName} in ${city}. Contact us today to get started.\n\n#${sName.toLowerCase().replace(/[^a-z0-9]/g, '')} #${city.toLowerCase()}`,
-      });
-    }
+  // Dedicated first-class blueprints for the merchant's real added services or category core offerings
+  const tradeOfferings =
+    Array.isArray(realServices) && realServices.length > 0
+      ? realServices
+      : category?.coreProducts && category.coreProducts.length > 0
+        ? category.coreProducts
+        : [primaryProduct, secondaryProduct];
+
+  for (const [sIdx, sName] of tradeOfferings.slice(0, 6).entries()) {
+    blueprints.push({
+      id: `bp-service-${category?.id || 'core'}-${sIdx}`,
+      categoryName: displayName,
+      pillar: matchedPillar,
+      purpose: 'Business profile',
+      tab: 'for_business',
+      layout: sIdx % 2 === 0 ? 'business_1' : 'business_0',
+      theme,
+      headline: sName,
+      subtitle: `Expert ${sName} and professional solutions delivered by ${businessName} in ${city}.`,
+      badge: 'CORE SERVICE',
+      cta: isServiceTrade ? 'REQUEST CONSULTATION' : 'GET QUOTE',
+      bullets: formattedBullets,
+      photoUrl: visuals[sIdx % visuals.length] || primaryPhoto,
+      targetKeywords: [
+        { keyword: `${sName.toLowerCase()} in ${city}`, volume: 450 },
+        { keyword: `${sName.toLowerCase()} company`, volume: 600 },
+      ],
+      defaultCaption: `${businessName} provides verified ${sName} in ${city}. Contact us today to get started.\n\n#${sName.toLowerCase().replace(/[^a-z0-9]/g, '')} #${city.toLowerCase()}`,
+    });
   }
 
   blueprints.push(

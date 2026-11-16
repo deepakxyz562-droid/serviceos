@@ -379,20 +379,12 @@ async function searchPinterest(
   limit: number,
   signalTimeout = DEFAULT_SOURCE_TIMEOUT_MS,
 ): Promise<{ photos: LivePhoto[]; candidates: Map<string, string[]> }> {
-  const photos: LivePhoto[] = [];
-  const candidates = new Map<string, string[]>();
-  const results = await Promise.allSettled(
-    boards.map((b) => fetchPinterestBoardPins(b, Math.ceil(limit / Math.max(1, boards.length)) + 10)),
-  );
-  for (const r of results) {
-    if (r.status === 'fulfilled') photos.push(...r.value);
-  }
-  for (const p of photos) {
-    const fallback = p.url.replace(/\/736x\//, '/564x/');
-    candidates.set(p.url, [p.url, fallback]);
-  }
+  // Pinterest boards return user-submitted pins containing graphic text,
+  // illustrations, memes, and opera flyers unsuitable for professional SMB marketing.
+  void boards;
+  void limit;
   void signalTimeout;
-  return { photos, candidates };
+  return { photos: [], candidates: new Map() };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -429,22 +421,10 @@ async function fetchBehanceHtml(searchUrl: string): Promise<string | null> {
 }
 
 async function searchBehance(query: string, limit: number): Promise<LivePhoto[]> {
-  const searchUrl = `https://www.behance.net/search/projects?search=${encodeURIComponent(query)}`;
-  const html = await fetchBehanceHtml(searchUrl);
-  if (!html) return [];
-
-  const out: LivePhoto[] = [];
-  const coverRe =
-    /mir-s3-cdn-cf\.behance\.net(?:\\\/|\/)projects(?:\\\/|\/)(original_webp|max_1200|max_632|source)(?:\\\/|\/)([A-Za-z0-9._%-]+?\.(?:png|jpe?g|webp))/g;
-  const seen = new Set<string>();
-  let match: RegExpExecArray | null;
-  while ((match = coverRe.exec(html)) !== null && out.length < limit) {
-    const url = `https://mir-s3-cdn-cf.behance.net/projects/${match[1]}/${match[2]}`;
-    if (seen.has(url)) continue;
-    seen.add(url);
-    out.push({ url, source: 'behance' });
-  }
-  return out;
+  // Behance hosts finished graphic artwork, portfolios, and illustrated project covers
+  // with embedded text (e.g. opera flyers, student portfolios) that are unsuitable
+  // as background photography for business marketing designs.
+  return [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -507,22 +487,10 @@ async function fetchAdLibraryHtml(query: string): Promise<string | null> {
 }
 
 async function searchMetaAds(query: string, limit: number): Promise<LivePhoto[]> {
-  const html = await fetchAdLibraryHtml(query);
-  if (!html) return [];
-
-  const out: LivePhoto[] = [];
-  const seen = new Set<string>();
-  const imgRe = /"(original_image_url|resized_image_url|video_thumbnail_url)":"(https:[^"]{20,700}?)"/g;
-  let match: RegExpExecArray | null;
-  while ((match = imgRe.exec(html)) !== null && out.length < limit) {
-    const url = decodeJsonStringLiteral(match[2]);
-    if (!/scontent[^"']*\.fbcdn\.net/.test(url) && !/fbcdn\.net/.test(url)) continue;
-    const key = normalizeUrlKey(url);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ url, source: 'meta_ads' });
-  }
-  return out;
+  // Facebook Ad Library creatives contain promotional text and marketing overlays.
+  void query;
+  void limit;
+  return [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -563,33 +531,9 @@ async function searchUnsplashNapi(query: string, limit: number): Promise<LivePho
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function searchFlickr(query: string, limit: number): Promise<LivePhoto[]> {
-  const tags = query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((w) => w.length > 2)
-    .slice(0, 4)
-    .join(',');
-  if (!tags) return [];
-  const url = `https://www.flickr.com/services/feeds/photos_public.gne?tags=${encodeURIComponent(tags)}&tagmode=all&format=json&nojsoncallback=1`;
-  const res = await fetchWithTimeout(url, { headers: { accept: 'application/json' } });
-  if (!res.ok) return [];
-  const data = (await res.json()) as {
-    items?: Array<{ media?: { m?: string }; title?: string; link?: string; author?: string }>;
-  };
-  return (data.items || [])
-    .slice(0, limit)
-    .map((item) => {
-      const mUrl = item.media?.m || '';
-      if (!mUrl) return null;
-      return {
-        url: mUrl.replace(/_m\.jpg$/, '_b.jpg'), // upgrade 240px -> 1024px
-        source: 'flickr' as LivePhotoSource,
-        title: (item.title || '').slice(0, 90) || undefined,
-        author: (item.author || '').replace(/nobody@flickr\.com \("/, '').replace(/"\)$/, '') || undefined,
-        sourcePageUrl: item.link,
-      };
-    })
-    .filter((p): p is LivePhoto => Boolean(p && p.url));
+  void query;
+  void limit;
+  return [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -597,27 +541,9 @@ async function searchFlickr(query: string, limit: number): Promise<LivePhoto[]> 
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function searchWikimedia(query: string, limit: number): Promise<LivePhoto[]> {
-  const url =
-    `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}` +
-    `&gsrnamespace=6&gsrlimit=${Math.min(30, limit)}&prop=imageinfo&iiprop=url|mime&iiurlwidth=1200&format=json&origin=*`;
-  const res = await fetchWithTimeout(url, { headers: { accept: 'application/json' } });
-  if (!res.ok) return [];
-  const data = (await res.json()) as {
-    query?: {
-      pages?: Record<string, { imageinfo?: Array<{ thumburl?: string; mime?: string; descriptionurl?: string }> }>;
-    };
-  };
-  const pages = Object.values(data.query?.pages || {});
-  return pages
-    .map((p) => p.imageinfo?.[0])
-    .filter((info): info is NonNullable<typeof info> => Boolean(info?.thumburl))
-    .filter((info) => !info.mime || /image\/(jpeg|png|webp)/.test(info.mime))
-    .slice(0, limit)
-    .map((info) => ({
-      url: info.thumburl as string,
-      source: 'wikimedia' as LivePhotoSource,
-      sourcePageUrl: info.descriptionurl,
-    }));
+  void query;
+  void limit;
+  return [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

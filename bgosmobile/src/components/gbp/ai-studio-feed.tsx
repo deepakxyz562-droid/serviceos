@@ -71,6 +71,12 @@ export function AiStudioFeed({
     async function fetchTemplates() {
       setLoading(true);
       try {
+        const queryParams = new URLSearchParams({
+          tab: activeTab,
+          limit: '150',
+          ...(industry ? { industry } : {}),
+          ...(businessName ? { businessName } : {}),
+        });
         const res = await apiRequest<{
           templates: StudioTemplateItem[];
           counts?: {
@@ -80,9 +86,19 @@ export function AiStudioFeed({
             reviews: number;
             festivals: number;
           };
-        }>(`/api/social/designs/templates?tab=${activeTab}&limit=150`);
+        }>(`/api/social/designs/templates?${queryParams.toString()}`);
         if (!cancelled && res?.templates) {
-          setTemplates(res.templates);
+          // Filter out any third-party scraped poster artwork with embedded text or pinimg
+          const cleanTemplates = res.templates.filter((item) => {
+            if (item.photoUrl && (
+              item.photoUrl.includes('behance.net') ||
+              item.photoUrl.includes('pinimg.com') ||
+              item.photoUrl.includes('pinterest.com')
+            )) return false;
+            return true;
+          });
+
+          setTemplates(cleanTemplates);
           if (res.counts) setCounts(res.counts);
         }
       } catch (err) {
@@ -95,7 +111,7 @@ export function AiStudioFeed({
     return () => {
       cancelled = true;
     };
-  }, [activeTab]);
+  }, [activeTab, industry, businessName]);
 
   const tabs: Array<{ id: StudioTabKey; label: string; icon: keyof typeof MaterialIcons.glyphMap; count: number }> = [
     { id: 'all', label: 'All Designs', icon: 'auto-awesome', count: counts.total || 250 },

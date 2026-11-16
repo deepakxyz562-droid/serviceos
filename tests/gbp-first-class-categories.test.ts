@@ -106,4 +106,44 @@ describe('First-Class GBP Categories Architecture', () => {
     expect(data.categories).toBeDefined();
     expect(data.categories).toContain('Plywood supplier');
   });
+
+  it('resolves and autocompletes across the entire 4,000+ official GBP categories (Aadhaar center, Accountant, AC contractor, etc.)', async () => {
+    // 1. Aadhaar center
+    const aadharById = getGbpCategoryById('gcid:aadhar_center');
+    expect(aadharById).toBeDefined();
+    expect(aadharById?.displayName).toBe('Aadhaar center');
+
+    const aadharSearch = searchGbpCategories('aadhar');
+    expect(aadharSearch.length).toBeGreaterThan(0);
+    expect(aadharSearch[0].displayName).toBe('Aadhaar center');
+
+    // 2. Air conditioning contractor
+    const acContractor = getGbpCategoryByNameOrAlias('air conditioning contractor');
+    expect(acContractor).toBeDefined();
+    expect(acContractor?.id).toBe('gcid:air_conditioning_contractor');
+
+    const acSearch = searchGbpCategories('air cond', 5);
+    expect(acSearch.length).toBeGreaterThan(0);
+    expect(acSearch.some((c) => c.displayName.toLowerCase().includes('air conditioning'))).toBe(true);
+
+    // 3. Accountant
+    const accountant = getGbpCategoryByNameOrAlias('accountant');
+    expect(accountant).toBeDefined();
+    expect(accountant?.pillar).toBe('professional_legal_finance');
+
+    // 4. Abrasives supplier
+    const abrasive = getGbpCategoryById('abrasives_supplier');
+    expect(abrasive).toBeDefined();
+    expect(abrasive?.displayName).toBe('Abrasives supplier');
+
+    // 5. Test API route for official categories
+    const { GET } = await import('@/app/api/gbp/categories/route');
+    const req = new NextRequest('http://localhost:3000/api/gbp/categories?query=aadhar');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.source).toBe('master_catalog');
+    expect(data.categories).toContain('Aadhaar center');
+  });
 });

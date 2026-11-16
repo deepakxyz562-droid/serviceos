@@ -52,6 +52,13 @@ vi.mock('@/lib/db', () => ({
 describe('Business Templates Feed API (/api/social/designs/templates)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    tenantStore.name = 'Apex Dental Care';
+    tenantStore.industry = 'Dental Clinic';
+    tenantStore.settingsJson = JSON.stringify({ activeGbpTitle: 'Apex Dental Care', activeGbpCategory: 'Dentist' });
+    brandProfileStore.businessName = 'Apex Dental Care';
+    brandProfileStore.industry = 'Dental Clinic';
+    socialAccountStore.value = null;
+    servicesStore.value = [];
   });
 
   it('rejects unauthenticated requests with 401', async () => {
@@ -332,13 +339,18 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     expect(allHeadlines).toContain('custom software development');
     expect(allHeadlines).toContain('web & mobile app development');
 
-    // 3. ZERO party flyers, ZERO rent flyers, ZERO cleaning flyers
+    // 3. ZERO party flyers, ZERO rent flyers, ZERO cleaning flyers, ZERO education flyers
     for (const item of data.templates) {
       const combined = `${item.name} ${item.headline} ${item.subtitle || ''} ${item.photoUrl || ''}`.toLowerCase();
       expect(combined).not.toContain('dance party');
       expect(combined).not.toContain('night club');
       expect(combined).not.toContain('for rent');
       expect(combined).not.toContain('professional cleaning services');
+      expect(combined).not.toContain('curiosity is a good beginning');
+      expect(combined).not.toContain('bring your questions. find your direction');
+      expect(item.photoUrl).not.toContain('behance.net');
+      expect(item.photoUrl).not.toContain('pinimg.com');
+      expect(item.badge?.toLowerCase()).not.toContain('education & coaching');
     }
 
     // 4. Must prioritize Unsplash photography (pure photography with no text)

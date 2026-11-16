@@ -173,9 +173,10 @@ export const UNIVERSAL_VERTICALS: Record<string, UniversalVerticalConfig> = {
     key: 'home_electrical_services',
     label: 'Electrical, Plumbing & Home Services',
     keywords: [
+      'air conditioning', 'ac contractor', 'air conditioner', 'ac repair', 'air duct', 'hvac',
       'electr', 'wiring', 'circuit', 'lighting', 'switchboard', 'inverter', 'solar',
-      'plumb', 'pipe', 'drain', 'leak', 'sanitary', 'faucet', 'hvac', 'ac repair',
-      'air condition', 'appliance repair', 'washing machine', 'refrigerator', 'pest control',
+      'plumb', 'pipe', 'drain', 'leak', 'sanitary', 'faucet',
+      'appliance repair', 'washing machine', 'refrigerator', 'pest control',
       'cleaning service', 'ro water', 'water purifier'
     ],
     visualSearchTerms: ['electrician repair maintenance', 'solar panel installation roof', 'plumbing pipe tools'],
@@ -226,9 +227,10 @@ export const UNIVERSAL_VERTICALS: Record<string, UniversalVerticalConfig> = {
     key: 'professional_legal_finance',
     label: 'Finance, Legal & Accounting',
     keywords: [
-      'legal', 'law', 'lawyer', 'advocate', 'attorney', 'notary', 'chartered accountant',
-      'ca ', 'audit', 'tax', 'gst', 'income tax', 'accounting', 'bookkeeping',
-      'insurance', 'loan', 'finance', 'consultant'
+      'accountant', 'accounting', 'auditor', 'chartered accountant', 'cpa', 'ca ',
+      'tax', 'gst', 'income tax', 'bookkeeping', 'finance', 'financial',
+      'legal', 'law', 'lawyer', 'advocate', 'attorney', 'notary',
+      'insurance', 'loan', 'consultant', 'administrative attorney'
     ],
     visualSearchTerms: ['professional business meeting desk', 'financial accounting documents', 'legal consultation office'],
     defaultOfferCopy: {
@@ -320,6 +322,7 @@ export const UNIVERSAL_VERTICALS: Record<string, UniversalVerticalConfig> = {
     key: 'specialty_local_services',
     label: 'Specialty Local Trades & Services',
     keywords: [
+      'aadhar', 'aadhaar', 'civic', 'passport', 'government',
       'astrolog', 'horoscope', 'vastu', 'kundali', 'pet', 'veterin', 'vet', 'dog',
       'cat', 'laundry', 'dry clean', 'printing', 'framing', 'tailoring', 'security guard',
       'billiards', 'aquarium', 'nursery', 'plants', 'gardening'
@@ -375,14 +378,14 @@ export function normalizeCategoryContext(rawText: string): NormalizedTradeContex
 
   // 2. Score text against all 16 Universal Verticals
   let bestVerticalKey = 'specialty_local_services';
-  let bestScore = -1;
+  let bestScore = 0;
 
   for (const [key, config] of Object.entries(UNIVERSAL_VERTICALS)) {
     let score = 0;
     for (const kw of config.keywords) {
       if (text.includes(kw)) {
-        // Boost multi-word or exact keyword matches
-        score += kw.length > 4 ? 3 : 1;
+        // Boost longer matching phrases for higher domain specificity
+        score += kw.length;
       }
     }
     if (score > bestScore) {

@@ -8,6 +8,10 @@ if (typeof (globalThis as any).__DEV__ === 'undefined') {
   (globalThis as any).__DEV__ = false;
 }
 
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = 'postgresql://mock_user:mock_pass@localhost:5432/mock_db?schema=public';
+}
+
 try {
   const rn = require('react-native');
   if (rn && !rn.NativeModules) {

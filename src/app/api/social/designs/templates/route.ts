@@ -153,6 +153,15 @@ export async function GET(request: NextRequest) {
 
   let businessName = brandProfile?.businessName || tenant?.name || 'My Business';
   let industry = brandProfile?.industry || tenant?.industry || 'Retail & Local Services';
+
+  const paramBusinessName = searchParams.get('businessName')?.trim();
+  const paramIndustry = searchParams.get('industry')?.trim();
+  if (paramBusinessName && (!businessName || businessName === 'My Business')) {
+    businessName = paramBusinessName;
+  }
+  if (paramIndustry && (!industry || /retail & local services|services|^other$/i.test(industry))) {
+    industry = paramIndustry;
+  }
   let phone = tenant?.phone || '';
   let website = brandProfile?.website || '';
   let logoUrl = (brandProfile as any)?.logoUrl || '';
@@ -204,10 +213,12 @@ export async function GET(request: NextRequest) {
           ? JSON.parse(gbpAccount.metadata)
           : (gbpAccount.metadata as any);
       const gbpCategory =
-        gbpMeta?.primaryCategory ||
-        gbpMeta?.category ||
-        gbpMeta?.categoryName ||
-        gbpMeta?.location?.primaryCategory?.displayName;
+        (typeof gbpMeta?.primaryCategory === 'string' ? gbpMeta.primaryCategory : gbpMeta?.primaryCategory?.displayName) ||
+        gbpMeta?.raw?.categories?.primaryCategory?.displayName ||
+        gbpMeta?.categories?.primaryCategory?.displayName ||
+        gbpMeta?.location?.primaryCategory?.displayName ||
+        (typeof gbpMeta?.category === 'string' ? gbpMeta.category : gbpMeta?.category?.displayName) ||
+        gbpMeta?.categoryName;
       const gbpTitle = gbpMeta?.locationTitle || gbpMeta?.name || gbpAccount.accountName;
       if (gbpTitle && (businessName === 'My Business' || !businessName)) {
         businessName = gbpTitle;
@@ -230,21 +241,21 @@ export async function GET(request: NextRequest) {
     .map((s: any) => (typeof s?.name === 'string' ? s.name.trim() : ''))
     .filter(Boolean);
 
-  // If business name or added services indicate Fieseros / IT / Software, anchor industry to IT & Software
-  const allTextContext = `${businessName} ${industry} ${realServiceNames.join(' ')}`.toLowerCase();
-  if (/fieseros|serviceos/i.test(allTextContext)) {
-    if (!industry || /retail & local services|services|^other$/i.test(industry)) {
-      industry = 'Software & IT Services';
-    }
-  } else if (
-    realServiceNames.some((n) =>
-      /software|web dev|app dev|cloud|coding|programming|full stack|devops|saas|it support|it service/i.test(
-        n,
-      ),
-    )
-  ) {
-    if (!industry || /retail & local services|services|^other$/i.test(industry)) {
-      industry = 'Software & IT Services';
+  // If industry is unset or a generic fallback placeholder, dynamically derive the merchant's trade
+  // from their real added services or business title via the Universal Category Taxonomy
+  if (!industry || /corporate|holding|community|retail & local services|services|^other$/i.test(industry)) {
+    if (realServiceNames.length > 0) {
+      const derived = normalizeCategoryContext(realServiceNames.join(' '));
+      if (derived.detectedSubject) {
+        industry = `${derived.detectedSubject} Services`;
+      } else if (derived.verticalLabel) {
+        industry = derived.verticalLabel;
+      }
+    } else if (businessName && businessName !== 'My Business') {
+      const derivedFromTitle = normalizeCategoryContext(businessName);
+      if (derivedFromTitle.detectedSubject) {
+        industry = `${derivedFromTitle.detectedSubject} Services`;
+      }
     }
   }
 
@@ -451,13 +462,26 @@ export async function GET(request: NextRequest) {
       .replace(/\{businessName\}/g, businessName)
       .replace(/\{city\}/g, city);
 
+    // Dynamically detect if template badge or industry belongs to an incompatible trade
+    const isConflictingBadge = Boolean(
+      tpl.badge &&
+      !/^(featured|showcase|core service|special offer|5-star rated|top rated|limited offer|verified|exclusive)$/i.test(tpl.badge.trim()) &&
+      normalizeCategoryContext(tpl.badge).verticalKey !== searchContext.verticalKey
+    );
+
+    const isConflictingIndustry = Boolean(
+      tpl.industries && tpl.industries.length > 0 &&
+      !tpl.industries.some((i) => /^(any|universal|none|all)$/i.test(i.trim())) &&
+      !tpl.industries.some((i) => normalizeCategoryContext(i).verticalKey === searchContext.verticalKey)
+    );
+
     if (!isFestival) {
       const match = headline.match(conflictingTradesRegex);
-      if (match && !isMerchantTrade(match[0])) {
+      if ((match && !isMerchantTrade(match[0])) || isConflictingBadge || isConflictingIndustry) {
         headline = tradeProducts[idx % tradeProducts.length];
       }
       const subMatch = subtitle.match(conflictingTradesRegex);
-      if (subMatch && !isMerchantTrade(subMatch[0])) {
+      if ((subMatch && !isMerchantTrade(subMatch[0])) || isConflictingBadge || isConflictingIndustry) {
         subtitle = `Certified ${industry} services in ${city}`;
       }
     }
@@ -511,7 +535,7 @@ export async function GET(request: NextRequest) {
     assignedPhoto = toAbsoluteUrl(assignedPhoto);
 
     let badge = tpl.badge || '';
-    if (!badge || badge.length > 20) {
+    if (isConflictingBadge || isConflictingIndustry || !badge || badge.length > 20) {
       if (tab === 'promotions') badge = 'SPECIAL OFFER';
       else if (tab === 'festivals') badge = 'FESTIVAL SPECIAL';
       else if (tab === 'reviews') badge = '5-STAR RATED';
@@ -604,7 +628,7 @@ export async function GET(request: NextRequest) {
     })
     .map((bp, bpIdx) => {
       const msVisual = multiSourceVisuals[bpIdx % multiSourceVisuals.length];
-      const photoUrl = toAbsoluteUrl(bp.photoUrl || msVisual?.url);
+      const photoUrl = toAbsoluteUrl(msVisual?.url || bp.photoUrl);
       let composedDesign: any = null;
       if (includeDesign) {
         try {

@@ -186,7 +186,7 @@ export async function getMultiSourceCategoryVisuals(
 
   // Tier 1: User's own photos
   // Tier 2: Pure Unsplash photography (clean, zero text, high resolution)
-  // Tier 3: Secondary verified sources
+  // Tier 3: Secondary verified visual sources (Flickr, Pinterest, Wikimedia)
   const pool = dedupeByUrKey([...rotatedUser, ...rotatedUnsplash, ...rotatedOther]);
   if (pool.length === 0) return [];
 
