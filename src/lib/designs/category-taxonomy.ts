@@ -210,7 +210,8 @@ export const UNIVERSAL_VERTICALS: Record<string, UniversalVerticalConfig> = {
     keywords: [
       'software', 'it ', 'tech', 'developer', 'code', 'web dev', 'app dev', 'cloud',
       'saas', 'digital marketing', 'seo', 'computer', 'laptop repair', 'network',
-      'cctv', 'surveillance', 'biometric'
+      'cctv', 'surveillance', 'biometric', 'fieseros', 'serviceos', 'information technology',
+      'it service', 'it services'
     ],
     visualSearchTerms: ['modern technology software workspace', 'cloud digital analytics laptop', 'programming code screen'],
     defaultOfferCopy: {
@@ -286,6 +287,32 @@ export const UNIVERSAL_VERTICALS: Record<string, UniversalVerticalConfig> = {
       subtitle: 'Precision engineering, certified welders, and on-schedule doorstep logistics across India.',
       bullets: ['High Tensile Certified Steel', 'On-Time Project Delivery', 'Custom Engineering Specs'],
       cta: 'REQUEST INDUSTRIAL QUOTE',
+    },
+  },
+
+  security_safety_services: {
+    key: 'security_safety_services',
+    label: 'Security & Safety Services',
+    keywords: [
+      'security', 'security service', 'security guard', 'sos', 'emergency security',
+      'patrol', 'bodyguard', 'bouncer', 'surveillance', 'guard agency', 'protection',
+      'cctv installation', 'alarm system', 'safety services', 'facility security'
+    ],
+    visualSearchTerms: [
+      'professional security guard uniform officer',
+      'security operations surveillance control room',
+      'emergency patrol vehicle security team',
+      'access control biometric security gate'
+    ],
+    defaultOfferCopy: {
+      headline: '24/7 Professional Security & Emergency SOS Protection in {city}',
+      subtitle: 'Trained, verified security personnel and rapid-response safety solutions for commercial and residential premises.',
+      bullets: [
+        'Verified & Trained Security Personnel',
+        '24/7 Rapid SOS Emergency Response',
+        'Government PSARA Licensed & Insured'
+      ],
+      cta: 'HIRE SECURITY GUARDS',
     },
   },
 

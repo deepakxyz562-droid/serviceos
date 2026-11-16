@@ -168,11 +168,17 @@ function normalizeUrlKey(url: string): string {
   }
 }
 
+const JUNK_FLYER_PATTERN =
+  /\b(dance\s*party|night\s*club|nightclub|dj\s*party|for\s*rent|house\s*rent|apartment\s*rent|room\s*rent|cleaning\s*service|maid\s*service|disco|club\s*flyer|party\s*flyer|editable\s*flyer)\b/i;
+
 export function dedupeLivePhotos(photos: LivePhoto[]): LivePhoto[] {
   const seen = new Set<string>();
   const out: LivePhoto[] = [];
   for (const p of photos) {
     if (!p?.url || !/^https?:\/\//i.test(p.url)) continue;
+    // Reject irrelevant pre-printed third-party flyers (e.g. dance parties, rental signs, cleaning ads)
+    if (p.title && JUNK_FLYER_PATTERN.test(p.title)) continue;
+    if (p.url && JUNK_FLYER_PATTERN.test(p.url)) continue;
     const key = normalizeUrlKey(p.url);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -264,16 +270,24 @@ const PINTEREST_BOARD_MAP: Array<{ keywords: RegExp; boards: string[] }> = [
     boards: ['easil/davids-bridal'],
   },
   {
+    keywords: /\b(software|it\b|it\s+service|information technology|tech|developer|coding|web dev|app dev|saas|cloud|programming|fieseros|serviceos)\b/i,
+    boards: ['envato/web-design', 'envato/design-trends'],
+  },
+  {
     keywords: /\b(sale|offer|discount|deal|promo|clearance| fest)\b/i,
-    boards: ['venngage/sale-flyer-templates', 'venngage/top-editable-flyer-templates'],
+    boards: ['envato/design-trends'],
   },
   {
     keywords: /\b(pet|dog|cat|clinic|vet)\b/i,
-    boards: ['venngage/dog-flyer-templates'],
+    boards: ['easil/exercise'],
   },
   {
     keywords: /\b(design|graphic|creative|branding|agency|studio|marketing)\b/i,
     boards: ['envato/graphic-design', 'envato/design-trends'],
+  },
+  {
+    keywords: /\b(security|guard|surveillance|cctv|patrol|protection|bouncer|sos|safety)\b/i,
+    boards: ['postermywall/security-flyers', 'postermywall/cctv-camera-posters'],
   },
 ];
 
@@ -289,9 +303,7 @@ export const PINTEREST_FESTIVAL_BOARDS: Record<string, string[]> = {
 };
 
 const PINTEREST_GENERIC_BOARDS = [
-  'venngage/top-editable-flyer-templates',
   'envato/design-trends',
-  'postermywall/new-year-flyers-posters',
 ];
 
 /** Matches a business/festival context to verified Pinterest boards. */
@@ -624,13 +636,14 @@ export interface LiveSearchOptions {
 }
 
 function interleaveBySource(buckets: LivePhoto[][]): LivePhoto[] {
+  // Unsplash is prioritized first: clean, pure photography with no pre-printed text or irrelevant flyers
   const order: LivePhotoSource[] = [
-    'pinterest',
-    'behance',
-    'meta_ads',
     'unsplash',
+    'behance',
     'flickr',
     'wikimedia',
+    'meta_ads',
+    'pinterest',
   ];
   const cursors = new Map<LivePhotoSource, number>();
   const out: LivePhoto[] = [];

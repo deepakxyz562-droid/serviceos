@@ -131,8 +131,8 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(300, Math.max(8, parseInt(searchParams.get('limit') || '150', 10)));
   const includeDesign = searchParams.get('includeDesign') !== '0';
 
-  // 1. Fetch tenant business context
-  const [tenant, brandProfile] = await Promise.all([
+  // 1. Fetch tenant business context, connected GBP account, and real added services
+  const [tenant, brandProfile, gbpAccount, merchantServices] = await Promise.all([
     db.tenant.findUnique({
       where: { id: user.tenantId },
       select: { name: true, industry: true, phone: true, address: true, city: true, settingsJson: true },
@@ -140,6 +140,15 @@ export async function GET(request: NextRequest) {
     db.brandProfile.findUnique({
       where: { id: user.tenantId },
     }).catch(() => null),
+    (db.socialAccount?.findFirst({
+      where: { tenantId: user.tenantId, platform: 'googlebusiness', isActive: true },
+    }) ?? Promise.resolve(null)).catch(() => null),
+    (db.service?.findMany({
+      where: { tenantId: user.tenantId, isActive: true },
+      select: { name: true, description: true, category: true, basePrice: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 40,
+    }) ?? Promise.resolve([])).catch(() => []),
   ]);
 
   let businessName = brandProfile?.businessName || tenant?.name || 'My Business';
@@ -187,32 +196,94 @@ export async function GET(request: NextRequest) {
     } catch {}
   }
 
+  // Parse connected Google Business Profile account if present
+  if (gbpAccount) {
+    try {
+      const gbpMeta =
+        typeof gbpAccount.metadata === 'string'
+          ? JSON.parse(gbpAccount.metadata)
+          : (gbpAccount.metadata as any);
+      const gbpCategory =
+        gbpMeta?.primaryCategory ||
+        gbpMeta?.category ||
+        gbpMeta?.categoryName ||
+        gbpMeta?.location?.primaryCategory?.displayName;
+      const gbpTitle = gbpMeta?.locationTitle || gbpMeta?.name || gbpAccount.accountName;
+      if (gbpTitle && (businessName === 'My Business' || !businessName)) {
+        businessName = gbpTitle;
+      }
+      if (
+        gbpCategory &&
+        (!industry ||
+          /corporate|holding|community|retail & local services|services|^other$/i.test(industry))
+      ) {
+        industry = gbpCategory;
+      }
+      if (gbpMeta?.phone && !phone) phone = gbpMeta.phone;
+      if (gbpMeta?.address && !address) address = gbpMeta.address;
+      if (gbpMeta?.city && (!city || city === 'Patna')) city = gbpMeta.city;
+    } catch {}
+  }
+
+  // Real merchant services added to ServiceOS/BGOS
+  const realServiceNames: string[] = (merchantServices || [])
+    .map((s: any) => (typeof s?.name === 'string' ? s.name.trim() : ''))
+    .filter(Boolean);
+
+  // If business name or added services indicate Fieseros / IT / Software, anchor industry to IT & Software
+  const allTextContext = `${businessName} ${industry} ${realServiceNames.join(' ')}`.toLowerCase();
+  if (/fieseros|serviceos/i.test(allTextContext)) {
+    if (!industry || /retail & local services|services|^other$/i.test(industry)) {
+      industry = 'Software & IT Services';
+    }
+  } else if (
+    realServiceNames.some((n) =>
+      /software|web dev|app dev|cloud|coding|programming|full stack|devops|saas|it support|it service/i.test(
+        n,
+      ),
+    )
+  ) {
+    if (!industry || /retail & local services|services|^other$/i.test(industry)) {
+      industry = 'Software & IT Services';
+    }
+  }
+
   // 2. Identify industry matcher & visual pool with Universal Category Taxonomy
-  const searchContext = normalizeCategoryContext(searchQuery || `${industry} ${businessName}`);
+  const servicesContext = realServiceNames.slice(0, 5).join(' ');
+  const searchContext = normalizeCategoryContext(
+    searchQuery || `${servicesContext} ${industry} ${businessName}`,
+  );
   const effectiveCategoryText = searchQuery.trim()
-    ? `${searchQuery} ${industry} ${businessName}`
-    : `${industry} ${businessName}`;
+    ? `${searchQuery} ${servicesContext} ${industry} ${businessName}`
+    : `${servicesContext} ${industry} ${businessName}`.trim();
 
   const matchedIndustryKey = scoreIndustryMatch(effectiveCategoryText);
 
   // ── Tier 1: the merchant's own photos (brand library + recent post media) ──
   const [libraryRows, postRows] = await Promise.all([
-    db.imageLibrary
-      .findMany({
-        where: { tenantId: user.tenantId },
-        orderBy: { createdAt: 'desc' },
-        take: 20,
-        select: { id: true, name: true, url: true, folder: true, mediaType: true },
-      })
-      .catch(() => [] as Array<{ id: string; name: string | null; url: string; folder: string | null; mediaType: string | null }>),
-    db.socialPost
-      .findMany({
-        where: { tenantId: user.tenantId },
-        orderBy: { createdAt: 'desc' },
-        take: 12,
-        select: { id: true, mediaUrls: true },
-      })
-      .catch(() => [] as Array<{ id: string; mediaUrls: string | null }>),
+    (db.imageLibrary?.findMany({
+      where: { tenantId: user.tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: { id: true, name: true, url: true, folder: true, mediaType: true },
+    }) ?? Promise.resolve([])).catch(
+      () =>
+        [] as Array<{
+          id: string;
+          name: string | null;
+          url: string;
+          folder: string | null;
+          mediaType: string | null;
+        }>,
+    ),
+    (db.socialPost?.findMany({
+      where: { tenantId: user.tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: 12,
+      select: { id: true, mediaUrls: true },
+    }) ?? Promise.resolve([])).catch(
+      () => [] as Array<{ id: string; mediaUrls: string | null }>,
+    ),
   ]);
 
   const parseMediaList = (raw: unknown): string[] => {
@@ -325,8 +396,12 @@ export async function GET(request: NextRequest) {
 
   // 3. Trade products & conflict adaptation engine
   const gbpCat = getGbpCategoryByNameOrAlias(effectiveCategoryText);
-  const tradeProducts =
+  const baseTradeProducts =
     gbpCat?.coreProducts && gbpCat.coreProducts.length > 0 ? gbpCat.coreProducts : [industry];
+  const tradeProducts =
+    realServiceNames.length > 0
+      ? [...realServiceNames, ...baseTradeProducts]
+      : baseTradeProducts;
 
   const isMerchantTrade = (word: string): boolean => {
     return new RegExp(`\\b(${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b`, 'i').test(
@@ -510,12 +585,13 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 3b. Synthesize First-Class Category Blueprints (Tailored specifically to the GBP trade)
+  // 3b. Synthesize First-Class Category Blueprints (Tailored specifically to the GBP trade & real services)
   const categoryBlueprints = generateCategoryBlueprints({
     categoryOrTitle: effectiveCategoryText,
     businessName,
     city,
     phone,
+    realServices: realServiceNames,
   });
 
   const blueprintResponseItems: BusinessTemplateResponseItem[] = categoryBlueprints
@@ -527,8 +603,8 @@ export async function GET(request: NextRequest) {
       return bp.tab === requestedTab;
     })
     .map((bp, bpIdx) => {
-      const msVisual = multiSourceVisuals[(POSTER_TEMPLATES.length + bpIdx) % multiSourceVisuals.length];
-      const photoUrl = toAbsoluteUrl(msVisual?.url || bp.photoUrl);
+      const msVisual = multiSourceVisuals[bpIdx % multiSourceVisuals.length];
+      const photoUrl = toAbsoluteUrl(bp.photoUrl || msVisual?.url);
       let composedDesign: any = null;
       if (includeDesign) {
         try {

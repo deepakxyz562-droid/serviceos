@@ -99,16 +99,16 @@ export function buildVisualQueryPlan(ctx: VisualQueryContext): VisualQueryPlan {
   const occasion = ctx.occasionId || '';
 
   const querySet = [
-    `${core} poster design`,
-    `${core} flyer template`,
-    `${core} social media post`,
-    `${core} advertisement banner`,
-    `${core} ${PURPOSE_PHRASES[purpose]} design`,
-    `${core} shop branding creative`,
+    `${core} professional photography`,
+    `${core} modern workplace`,
+    `${core} commercial photography`,
+    `${core} services`,
+    `${core} ${PURPOSE_PHRASES[purpose]}`,
+    `${core} brand showcase`,
   ];
   if (occasion) {
-    querySet.unshift(`${occasion.replace(/_/g, ' ')} ${core} poster`);
-    querySet.unshift(`${occasion.replace(/_/g, ' ')} offer banner design`);
+    querySet.unshift(`${occasion.replace(/_/g, ' ')} ${core} celebration`);
+    querySet.unshift(`${occasion.replace(/_/g, ' ')} festival greeting`);
   }
 
   const queries = [...new Set(querySet.filter(Boolean))].slice(0, occasion ? 7 : 6);

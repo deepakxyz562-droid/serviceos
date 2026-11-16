@@ -136,9 +136,17 @@ export const CURATED_SMB_IMAGE_REGISTRY: Record<string, string[]> = {
   ],
   it_software: [
     'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1504639725590-34d0984388bd?w=1200&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1555774698-0b77e0d5fac6?w=1200&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=1200&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1563986768609-322da13575f3?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=1200&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=1200&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=1200&auto=format&fit=crop&q=80',
   ],
@@ -153,6 +161,14 @@ export const CURATED_SMB_IMAGE_REGISTRY: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=1200&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=1200&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=1200&auto=format&fit=crop&q=80',
+  ],
+  security_services: [
+    'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1582139329536-e7284fece509?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1563986768609-322da13575f3?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=1200&auto=format&fit=crop&q=80',
   ],
   security_cctv: [
     'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=1200&auto=format&fit=crop&q=80',
@@ -239,10 +255,10 @@ const CATEGORY_MATCHERS: Array<{ key: string; regex: RegExp }> = [
   { key: 'real_estate', regex: /(real estate|realtor|property|builder|apartment|flat|housing|villa sale|plot)/i },
   { key: 'cleaning_services', regex: /(clean|janitor|maid|housekeep|disinfect|sanitiz|mop|deep clean)/i },
   { key: 'farmhouse_resort', regex: /(pool|swimming|farmhouse|resort|villa|cottage|homestay|retreat|staycation|banquet|lawn)/i },
-  { key: 'it_software', regex: /(software|it |tech|developer|code|web dev|app dev|cloud|saas|cyber|digital marketing)/i },
+  { key: 'it_software', regex: /(software|it\b|it\s+service|information technology|tech|developer|code|web dev|app dev|cloud|saas|cyber|digital marketing|fieseros|serviceos)/i },
   { key: 'legal_accounting', regex: /(legal|law|lawyer|advocate|attorney|notary|chartered accountant|ca |audit|tax)/i },
   { key: 'healthcare_medical', regex: /(health|doctor|clinic|medical|hospital|pharmacy|physio|pathology|nursing)/i },
-  { key: 'security_cctv', regex: /(cctv|surveillance|security guard|camera install|burglar)/i },
+  { key: 'security_services', regex: /(security|security service|security guard|sos|patrol|surveillance|cctv|bouncer|bodyguard|guard)/i },
   { key: 'grocery_supermarket', regex: /(grocery|supermarket|market|bazaar|mandi|kirana|general store|provision|mart|vegetable|retail|hypermarket|departmental)/i },
   { key: 'pet_vet', regex: /(pet|veterin|vet |dog|cat|puppy|animal care|grooming pet)/i },
   { key: 'photography_studio', regex: /(photograph|photo studio|portrait|cameraman|videograph)/i },
@@ -287,6 +303,7 @@ export function scoreIndustryMatch(text: string): string {
     education_coaching: 'education_academy',
     events_hospitality: 'event_decor',
     logistics_industrial: 'welding_fabrication',
+    security_safety_services: 'security_services',
   };
 
   return verticalMap[context.verticalKey] || 'generic_business';

@@ -563,8 +563,83 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
   },
 
   // ──────────────────────────────────────────────────────────────────────────
-  // UNIVERSAL FESTIVALS & SEASONAL CELEBRATIONS (Available to all businesses)
+  // SECURITY & EMERGENCY SERVICES
   // ──────────────────────────────────────────────────────────────────────────
+  {
+    id: 'sec-247-patrol',
+    categoryId: 'security_services',
+    bucketKey: 'services_products',
+    title: '24/7 Security Guard & Patrol Services',
+    headlinePattern: '24/7 Professional Security & Emergency SOS in {city}',
+    subtitle: 'Verified armed and unarmed security guards, rapid emergency response, and commercial perimeter protection.',
+    defaultBullets: [
+      'Verified & Trained Security Personnel',
+      'Rapid 24/7 SOS Emergency Response',
+      'Government PSARA Licensed & Insured',
+      'Residential & Commercial Patrol Safety',
+    ],
+    targetKeywords: [
+      { keyword: 'security service in {city}', volume: 550 },
+      { keyword: 'security guard agency', volume: 420 },
+    ],
+    estimatedViews: 45,
+    referenceUrl: 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=1200&auto=format&fit=crop&q=80',
+    aspectRatio: '4:5',
+    ctaText: 'HIRE GUARDS NOW',
+    sourceName: 'behance',
+    defaultCaption:
+      'Ensure total peace of mind for your premises and family with certified 24/7 security services from {businessName}. Contact our dispatch command center today.\n\n#securityservices #securityguards #sos #safety #{city}',
+  },
+  {
+    id: 'sec-corporate-protection',
+    categoryId: 'security_services',
+    bucketKey: 'services_products',
+    title: 'Corporate Protection & Surveillance',
+    headlinePattern: 'Elite Corporate Security & Event Safety in {city}',
+    subtitle: 'Comprehensive surveillance, access control, and trained security personnel for offices, tech parks, and venues.',
+    defaultBullets: [
+      'Access Gate & Biometric Entry Security',
+      'Trained Corporate Security Officers',
+      '24/7 Central Operations Monitoring',
+      'Incident Reporting & Quick SOS Response',
+    ],
+    targetKeywords: [
+      { keyword: 'corporate security services {city}', volume: 380 },
+      { keyword: 'event security guard agency', volume: 290 },
+    ],
+    estimatedViews: 35,
+    referenceUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=1200&auto=format&fit=crop&q=80',
+    aspectRatio: '4:5',
+    ctaText: 'EXPLORE SAFETY SOLUTIONS',
+    sourceName: 'pinterest',
+    defaultCaption:
+      'Safeguard your workplace, employees, and corporate assets with elite protection solutions from {businessName}.\n\n#corporatesecurity #facilitysafety #businessprotection #{city}',
+  },
+  {
+    id: 'sec-trust-licensed',
+    categoryId: 'security_services',
+    bucketKey: 'new_highlights',
+    title: 'PSARA Licensed & Verified Agency',
+    headlinePattern: '{city}’s Most Trusted Licensed Security Agency',
+    subtitle: 'Protecting residential societies, commercial complexes, and retail stores with zero-compromise vigilance.',
+    defaultBullets: [
+      '100% Police Verified Background Checks',
+      'Government PSARA Licensed Agency',
+      'Rigorous Physical & Emergency Training',
+      'Dedicated Field Operations Commander',
+    ],
+    targetKeywords: [
+      { keyword: 'licensed security agency {city}', volume: 310 },
+      { keyword: 'best security guards', volume: 240 },
+    ],
+    estimatedViews: 40,
+    referenceUrl: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?w=1200&auto=format&fit=crop&q=80',
+    aspectRatio: '4:5',
+    ctaText: 'CONTACT SECURITY TEAM',
+    sourceName: 'meta_ads',
+    defaultCaption:
+      'Zero compromise on safety. {businessName} is proud to be {city}’s trusted PSARA-licensed security provider. Call today for a free on-site safety audit.\n\n#trustedsecurity #psaralicensed #safetyfirst #{city}',
+  },
   {
     id: 'festival-diwali-universal',
     categoryId: 'festivals',
@@ -713,10 +788,11 @@ export const CURATED_TEMPLATES: CuratedTemplateItem[] = [
 ];
 
 /**
- * Match tenant category or title to the closest category ID
+ * Match tenant category or title to the closest category ID.
+ * Returns null if no strict trade match exists — NEVER defaults unrelated trades to hardware/kitchen!
  */
-export function resolveCuratedCategoryId(rawText: string): string {
-  const lower = rawText.toLowerCase();
+export function resolveCuratedCategoryId(rawText: string): string | null {
+  const lower = (rawText || '').toLowerCase();
   if (/sweet|mithai|halwai|ladoo|laddu|jalebi|gulab jamun|kaju katli|confection|namkeen/i.test(lower)) return 'sweet_shop';
   if (/plywood|ply|timber|hardware|laminate|sunmica|tools|screw|wood|pipe|veneer/i.test(lower)) return 'hardware_plywood';
   if (/salon|saloon|barber|grooming|beauty|hair|makeup|spa|nail|parlour|parlor|bridal/i.test(lower)) return 'salon_spa';
@@ -724,11 +800,14 @@ export function resolveCuratedCategoryId(rawText: string): string {
   if (/dental|dentist|tooth|teeth|smile|clinic/i.test(lower)) return 'dental_clinic';
   if (/restaurant|cafe|food|dining|bakery|bistro|kitchen/i.test(lower)) return 'restaurant_cafe';
   if (/car|auto|garage|mechanic|tyre|wheel|bike/i.test(lower)) return 'auto_repair';
-  return 'hardware_plywood'; // safe tangible SMB fallback
+  if (/security|guard|patrol|sos|bouncer|bodyguard|cctv|surveillance/i.test(lower)) return 'security_services';
+  return null;
 }
 
 /**
- * Filter curated templates for a business profile
+ * Filter curated templates for a business profile.
+ * When a business category has no curated niche collection, only returns
+ * universal festival & celebration templates — never someone else's hardware, dental or bakery items!
  */
 export function getCuratedTemplatesForBusiness(params: {
   categoryOrTitle: string;
@@ -736,9 +815,9 @@ export function getCuratedTemplatesForBusiness(params: {
   limit?: number;
 }): CuratedTemplateItem[] {
   const targetCategory = resolveCuratedCategoryId(params.categoryOrTitle);
-  const matched = CURATED_TEMPLATES.filter(
-    (t) => t.categoryId === targetCategory || t.categoryId === 'festivals',
-  );
+  const matched = targetCategory
+    ? CURATED_TEMPLATES.filter((t) => t.categoryId === targetCategory || t.categoryId === 'festivals')
+    : CURATED_TEMPLATES.filter((t) => t.categoryId === 'festivals');
 
   const fallback =
     matched.length > 0

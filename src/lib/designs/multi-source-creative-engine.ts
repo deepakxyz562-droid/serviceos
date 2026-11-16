@@ -161,26 +161,38 @@ export async function getMultiSourceCategoryVisuals(
     limit: Math.max(120, requestedCount),
   });
 
-  // ── Tier stack: user photos -> live -> curated ──
+  // ── Tier stack: Merchant photos -> Unsplash First (curated + live) -> Secondary sources ──
   const userVisuals = (ctx.userPhotos || []).slice(0, 12).map((p, i) => toUserPhotoVisual(p, i));
-  const liveVisuals = livePhotos.map((p, i) => toVisual(p, i));
+  const unsplashLive = livePhotos
+    .filter((p) => p.source === 'unsplash')
+    .map((p, i) => toVisual(p, i));
   const curatedVisuals = getCategoryVisualPool(ctx.industryText).map((url, i) =>
     toCuratedVisual(url, i),
   );
+  const otherLive = livePhotos
+    .filter((p) => p.source !== 'unsplash')
+    .map((p, i) => toVisual(p, i));
 
-  let pool = dedupeByUrKey([...userVisuals, ...liveVisuals, ...curatedVisuals]);
-  if (pool.length === 0) return [];
+  const unsplashPool = dedupeByUrKey([...curatedVisuals, ...unsplashLive]);
+  const otherPool = dedupeByUrKey(otherLive);
 
-  // ── Daily deterministic rotation ──
+  // Rotate each tier internally with a daily seed so photos refresh daily
+  // without allowing secondary sources to jump ahead of Unsplash photography.
   const dayKey = new Date().toISOString().slice(0, 10);
   const seed = fnv1aHash(`${ctx.tenantSeed || ''}|${ctx.industryText}|${dayKey}`);
-  pool = rotate(pool, seed % pool.length);
+  const rotatedUser = rotate(userVisuals, seed);
+  const rotatedUnsplash = rotate(unsplashPool, seed);
+  const rotatedOther = rotate(otherPool, seed);
 
-  // ── Unique-per-slot assignment with far-spread stride ──
-  const stride = pickStride(pool.length, requestedCount);
+  // Tier 1: User's own photos
+  // Tier 2: Pure Unsplash photography (clean, zero text, high resolution)
+  // Tier 3: Secondary verified sources
+  const pool = dedupeByUrKey([...rotatedUser, ...rotatedUnsplash, ...rotatedOther]);
+  if (pool.length === 0) return [];
+
   const out: MultiSourceCreativeVisual[] = [];
   for (let i = 0; i < requestedCount; i++) {
-    out.push(pool[(i * stride) % pool.length]);
+    out.push(pool[i % pool.length]);
   }
   return out;
 }
