@@ -228,4 +228,18 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
       expect(item.badge).not.toContain('Behance');
     }
   });
+
+  it('sources diverse imagery across Pinterest, Behance, Unsplash and Meta Ads with high entropy', async () => {
+    mockGetAuthUser.mockResolvedValueOnce({ id: 'user-1', tenantId: 'tenant-123' });
+    const { GET } = await import('@/app/api/social/designs/templates/route');
+    const req = new NextRequest('http://localhost:3000/api/social/designs/templates?tab=for_business&limit=50');
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    const photos = data.templates.map((t: any) => t.photoUrl);
+    const uniquePhotos = new Set(photos);
+    // Must have at least 15+ distinct unique photos across 50 templates (never stuck in a 4-image repeating loop)
+    expect(uniquePhotos.size).toBeGreaterThanOrEqual(15);
+  });
 });

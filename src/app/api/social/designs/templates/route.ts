@@ -13,6 +13,7 @@ import {
   getCategoryVisualPool,
   CURATED_SMB_IMAGE_REGISTRY,
 } from '@/lib/designs/dynamic-visual-resolver';
+import { getMultiSourceCategoryVisuals } from '@/lib/designs/multi-source-creative-engine';
 import { normalizeCategoryContext } from '@/lib/designs/category-taxonomy';
 import { generateCategoryBlueprints, getGbpCategoryByNameOrAlias } from '@/lib/gbp/master-category-catalog';
 import { POSTER_TEMPLATES, type PosterTemplate } from '../../../../../../shared/poster-templates';
@@ -171,6 +172,7 @@ export async function GET(request: NextRequest) {
     : `${industry} ${businessName}`;
 
   const matchedIndustryKey = scoreIndustryMatch(effectiveCategoryText);
+  const multiSourceVisuals = getMultiSourceCategoryVisuals(effectiveCategoryText, 250);
   const visuals = getCategoryVisualPool(effectiveCategoryText);
   const fallbackUnsplashPhotos =
     CURATED_SMB_IMAGE_REGISTRY[matchedIndustryKey] || CURATED_SMB_IMAGE_REGISTRY.generic_business;
@@ -280,7 +282,9 @@ export async function GET(request: NextRequest) {
         assignedPhoto = festivalPhotos[idx % festivalPhotos.length] || festivalPhotos[0];
       }
     } else {
+      const multiSourceItem = multiSourceVisuals[idx % multiSourceVisuals.length];
       assignedPhoto =
+        multiSourceItem?.url ||
         visuals[idx % visuals.length] ||
         fallbackUnsplashPhotos[idx % fallbackUnsplashPhotos.length] ||
         tpl.photo;
@@ -377,8 +381,9 @@ export async function GET(request: NextRequest) {
       if (requestedTab === 'all') return true;
       return bp.tab === requestedTab;
     })
-    .map((bp) => {
-      const photoUrl = toAbsoluteUrl(bp.photoUrl);
+    .map((bp, bpIdx) => {
+      const msVisual = multiSourceVisuals[bpIdx % multiSourceVisuals.length];
+      const photoUrl = toAbsoluteUrl(msVisual?.url || bp.photoUrl);
       let composedDesign: any = null;
       if (includeDesign) {
         try {

@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
 import { apiRequest } from '../../lib/api';
 import { resolveTemplateSource } from '../design/professional-assets';
 
@@ -66,36 +65,6 @@ export function AiStudioFeed({
     reviews: 50,
     festivals: 40,
   });
-
-  const handlePickCustomPhoto = async () => {
-    try {
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.85,
-        allowsEditing: false,
-      });
-
-      if (!res.canceled && res.assets && res.assets.length > 0) {
-        const asset = res.assets[0];
-        const customTemplate: StudioTemplateItem = {
-          id: `custom-upload-${Date.now()}`,
-          name: 'My Own Photo',
-          headline: businessName,
-          subtitle: industry,
-          badge: 'MY PHOTO',
-          cta: 'Contact Us',
-          tab: 'for_business',
-          aspectRatio: '4:5',
-          photoUrl: asset.uri,
-          defaultBullets: [industry, city, phone].filter(Boolean) as string[],
-          defaultCaption: `${businessName} provides verified ${industry.toLowerCase()} in ${city}.\n\n#${industry.toLowerCase().replace(/[^a-z0-9]/g, '')} #${city.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-        };
-        onSelectTemplate(customTemplate);
-      }
-    } catch (err: any) {
-      Alert.alert('Photo Selection Error', err?.message || 'Could not pick photo.');
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -223,28 +192,6 @@ export function AiStudioFeed({
             );
           })}
         </ScrollView>
-      </View>
-
-      {/* ── TOP ACTION: USE OWN PHOTO + BRAND FRAME ── */}
-      <View style={styles.customUploadBox}>
-        <Pressable
-          onPress={handlePickCustomPhoto}
-          style={({ pressed }) => [
-            styles.customUploadBtn,
-            pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
-          ]}
-        >
-          <View style={styles.customUploadIconCircle}>
-            <MaterialIcons name="add-photo-alternate" size={22} color="#009F50" />
-          </View>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={styles.customUploadTitle}>Use My Own Photo + Business Frame</Text>
-            <Text style={styles.customUploadSub}>
-              Pick your shop or work photo — BGOS overlays your logo, name & contact info
-            </Text>
-          </View>
-          <MaterialIcons name="chevron-right" size={20} color="#64748B" />
-        </Pressable>
       </View>
 
       {/* ── 2-COLUMN VISUAL DISCOVERY GRID ── */}
@@ -478,43 +425,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#15803D',
-  },
-  customUploadBox: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  customUploadBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1.5,
-    borderColor: '#86EFAC',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  customUploadIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  customUploadTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: '#15803D',
-  },
-  customUploadSub: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#166534',
-    lineHeight: 15,
   },
   emptySearchBox: {
     width: '100%',
