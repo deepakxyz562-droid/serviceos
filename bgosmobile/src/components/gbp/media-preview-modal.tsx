@@ -19,6 +19,8 @@ import { colors } from '../ui';
 import { apiRequest } from '../../lib/api';
 import type { GbpPhoto } from './types';
 import { FullscreenImageModal } from './fullscreen-image-modal';
+import { resolvePhotoUrl } from '../../lib/constants';
+import { resolveTemplateSource } from '../design/professional-assets';
 
 const VIDEO_URL_RE = /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i;
 
@@ -239,7 +241,7 @@ export function MediaPreviewModal({
                 <Pressable onPress={() => void openVideoPlayer()} style={styles.nativeVideoFrame}>
                   {item.thumbnailUrl ? (
                     <Image
-                      source={{ uri: item.thumbnailUrl }}
+                      source={resolveTemplateSource(item.thumbnailUrl)}
                       style={styles.nativePosterImg}
                       resizeMode="cover"
                       alt={item.title || 'Video thumbnail'}
@@ -262,7 +264,7 @@ export function MediaPreviewModal({
                 style={styles.photoTapWrap}
               >
                 <Image
-                  source={{ uri: item.url }}
+                  source={resolveTemplateSource(item.url)}
                   style={styles.photoPreviewImg}
                   resizeMode="contain"
                   alt={item.title || item.caption || 'Business media'}
@@ -273,7 +275,7 @@ export function MediaPreviewModal({
                   <View style={styles.brandOverlayTop}>
                     <View style={styles.brandOverlayLogoBox}>
                       {logoUrl ? (
-                        <Image source={{ uri: logoUrl }} style={styles.brandOverlayLogoImg} resizeMode="contain" />
+                        <Image source={resolveTemplateSource(logoUrl)} style={styles.brandOverlayLogoImg} resizeMode="contain" />
                       ) : (
                         <Text style={styles.brandOverlayMonogramText}>
                           {(businessName || 'B').charAt(0).toUpperCase()}
@@ -399,7 +401,7 @@ export function MediaPreviewModal({
           asOverlay
           visible={fullscreenOpen}
           onClose={() => setFullscreenOpen(false)}
-          imageUrl={item.url}
+          imageUrl={resolvePhotoUrl(item.url)}
           title={item.title || `${businessName} Photo`}
           subtitle={`${statusLabel}${item.category ? ` · ${item.category}` : ''}`}
         />

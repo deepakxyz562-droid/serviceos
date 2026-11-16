@@ -233,7 +233,7 @@ export async function POST(req: NextRequest) {
       const recipients = await db.user.findMany({
         where: {
           ...(effectiveTenantId ? { tenantId: effectiveTenantId } : { workspaceId: effectiveWorkspaceId }),
-          role: { in: ['owner', 'admin'] },
+          role: { not: 'customer' },
           isActive: true,
         },
         select: { id: true, email: true },
@@ -258,7 +258,7 @@ export async function POST(req: NextRequest) {
             category: 'customer',
             title: 'New live chat request',
             message: messageText,
-            priority: 'high',
+            priority: 'urgent',
             actionUrl: `/?view=liveChat&session=${session.id}`,
             actionLabel: 'Open Live Chat',
             senderType: 'system',
@@ -267,7 +267,7 @@ export async function POST(req: NextRequest) {
               visitorName,
               visitorPhone,
               visitorEmail,
-              source: 'public_chat',
+              source: 'live_chat_escalation',
             }),
           })
 
@@ -281,9 +281,10 @@ export async function POST(req: NextRequest) {
               requireInteraction: true,
               data: {
                 type: 'live_chat_session',
+                route: '/inbox',
                 sessionId: session.id,
                 view: 'liveChat',
-                source: 'public_chat',
+                source: 'live_chat_escalation',
               },
             })
           } catch (pushErr) {

@@ -219,92 +219,72 @@ export async function POST(
       }
     }
 
-    // --- Notify tenant admins (owners + admins) -----------------------------
-    // Only fire when the admin had previously caught up (unreadCount was 0).
-    // If unreadCount was already > 0, the tenant already has an unread live-
-    // chat notification from session creation or a prior message — the admin
-    // LiveChatView polls every 5s and the bell badge already reflects the
-    // unread state, so a duplicate notification would just be noise.
-    //
-    // The header bell polls /api/notifications/unread-count every 60s, so
-    // the tenant sees the alert within a minute of the visitor's message —
-    // without needing socket.io.
-    if (session.unreadCount === 0) {
-      try {
-        const recipients = await db.user.findMany({
-          where: {
-            ...(session.tenantId ? { tenantId: session.tenantId } : { workspaceId: session.workspaceId }),
-            role: { in: ['owner', 'admin'] },
-            isActive: true,
-          },
-          select: { id: true },
-        })
+    // --- Notify business operators (WhatsApp-style real-time device push & in-app) ---
+    // Every visitor message alerts the merchant. Device push uses tag=`livechat-{sessionId}`
+    // which cleanly updates the existing notification shade item in place without spamming.
+    try {
+      const recipients = await db.user.findMany({
+        where: {
+          ...(session.tenantId ? { tenantId: session.tenantId } : { workspaceId: session.workspaceId }),
+          role: { not: 'customer' },
+          isActive: true,
+        },
+        select: { id: true },
+      })
 
-        const visitorLabel = session.visitorName || session.visitorEmail || 'A visitor'
-        // Trim the message body for the notification preview (max 120 chars).
-        const preview = text.length > 120 ? text.slice(0, 117) + '...' : text
-        const messageText = `${visitorLabel}: ${preview}`
+      const visitorLabel = session.visitorName || session.visitorEmail || 'A visitor'
+      // Trim the message body for the notification preview (max 120 chars).
+      const preview = text.length > 120 ? text.slice(0, 117) + '...' : text
+      const messageText = `${visitorLabel}: ${preview}`
 
-        await Promise.all(
-          recipients.map(async (r) => {
-            await createNotification({
-              tenantId: session.tenantId || undefined,
-              workspaceId: session.workspaceId || undefined,
-              recipientId: r.id,
-              type: 'reminder',
-              category: 'customer',
-              title: 'New live chat message',
-              message: messageText,
-              priority: 'normal',
-              actionUrl: '/?view=liveChat',
-              actionLabel: 'Open Live Chat',
-              senderType: 'system',
-              metadataJson: JSON.stringify({
+      await Promise.all(
+        recipients.map(async (r) => {
+          await createNotification({
+            tenantId: session.tenantId || undefined,
+            workspaceId: session.workspaceId || undefined,
+            recipientId: r.id,
+            type: 'reminder',
+            category: 'customer',
+            title: `Message from ${visitorLabel}`,
+            message: messageText,
+            priority: 'urgent',
+            actionUrl: `/?view=liveChat&session=${session.id}`,
+            actionLabel: 'Open Live Chat',
+            senderType: 'system',
+            metadataJson: JSON.stringify({
+              sessionId: session.id,
+              visitorName: session.visitorName,
+              visitorEmail: session.visitorEmail,
+              source: 'live_chat_escalation',
+            }),
+          }).catch(() => null)
+
+          // WhatsApp-style device push (FCM on Android / APNs on iOS / Web Push)
+          try {
+            await sendWebPushToUser(r.id, session.tenantId, {
+              title: visitorLabel,
+              body: preview,
+              url: `/?view=liveChat&session=${session.id}`,
+              tag: `livechat-${session.id}`,
+              requireInteraction: true,
+              data: {
+                type: 'live_chat_message',
+                route: '/inbox',
                 sessionId: session.id,
+                view: 'liveChat',
+                source: 'live_chat_escalation',
                 visitorName: session.visitorName,
                 visitorEmail: session.visitorEmail,
-                source: 'public_chat_message',
-              }),
+              },
             })
-
-            // WhatsApp-style device push. The title is the VISITOR's name
-            // (like WhatsApp shows the sender) and the body is the actual
-            // message preview — so the admin sees "John: Hi, I need help
-            // with a plumbing issue" in the system notification, exactly
-            // like a WhatsApp message alert.
-            //
-            // tag=`livechat-{sessionId}` is the SAME tag used by the
-            // session-creation push, so this message notification REPLACES
-            // the "New live chat request" notification in place — the
-            // admin sees one notification per conversation that updates
-            // with the latest message, instead of stacking one per message.
-            // requireInteraction=true keeps it on screen (WhatsApp-style)
-            // until the admin clicks "View" to open the Live Chat view.
-            try {
-              await sendWebPushToUser(r.id, session.tenantId, {
-                title: visitorLabel,
-                body: preview,
-                url: '/?view=liveChat',
-                tag: `livechat-${session.id}`,
-                requireInteraction: true,
-                data: {
-                  type: 'live_chat_message',
-                  sessionId: session.id,
-                  view: 'liveChat',
-                  source: 'public_chat_message',
-                  visitorName: session.visitorName,
-                  visitorEmail: session.visitorEmail,
-                },
-              })
-            } catch (pushErr) {
-              console.warn('[public-chat/messages POST] push send failed:', pushErr)
-            }
-          }),
-        )
-      } catch (notifErr) {
-        // Notification failures must never break message delivery.
-        console.warn('[public-chat/messages POST] notification create failed:', notifErr)
-      }
+          } catch (pushErr) {
+            console.warn('[public-chat/messages POST] push send failed:', pushErr)
+          }
+        }),
+      )
+    } catch (notifErr) {
+      // Notification failures must never break message delivery.
+      console.warn('[public-chat/messages POST] notification create failed:', notifErr)
     }
 
     // --- Auto-reply when tenant is offline ────────────────────────────────

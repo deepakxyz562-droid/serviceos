@@ -236,7 +236,9 @@ export function MediaMetadataSheet({
         folder: 'gbp-media',
         visibility: 'public',
       });
-      setCurrentPhotoUrl(cloudUrl);
+      if (cloudUrl) {
+        setCurrentPhotoUrl(resolvePhotoUrl(cloudUrl));
+      }
     } catch (err) {
       console.warn('[handleUploadPending] Cloud upload notice:', err);
     } finally {
@@ -303,8 +305,8 @@ export function MediaMetadataSheet({
       if (reqKey !== sessionKeyRef.current) return;
       if (Array.isArray(res?.templates)) {
         setTemplates(res.templates);
-        // If no photo currently selected and in create mode, select first template
-        if (!currentPhotoUrl && !editingItem && !selectedTemplate && res.templates.length > 0) {
+        // If no photo currently selected, no pending uploads, and in fresh create mode, select first template
+        if (!currentPhotoUrl && pendingAssets.length === 0 && !activeUploadItem && !editingItem && !selectedTemplate && res.templates.length > 0) {
           applyTemplate(res.templates[0]);
         }
       }
@@ -470,6 +472,8 @@ export function MediaMetadataSheet({
           tags,
           category,
           mediaUrls: currentPhotoUrl ? [currentPhotoUrl] : [],
+          photos: currentPhotoUrl ? [currentPhotoUrl] : [],
+          photoUrl: currentPhotoUrl || undefined,
           scheduleMode,
           preferredTime,
           country: selectedCountry.code,

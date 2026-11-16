@@ -469,13 +469,15 @@ export async function POST(request: NextRequest) {
       ? body.items.filter((it: any) => it && typeof it.url === 'string' && it.url.trim())
       : [];
 
-    const fallbackUrls: string[] = Array.isArray(body.photos)
+    const fallbackUrls: string[] = Array.isArray(body.photos) && body.photos.length > 0
       ? body.photos.filter((u: unknown): u is string => typeof u === 'string' && u.trim().length > 0)
-      : typeof body.photoUrl === 'string' && body.photoUrl.trim()
-        ? [body.photoUrl.trim()]
-        : typeof body.url === 'string' && body.url.trim()
-          ? [body.url.trim()]
-          : [];
+      : Array.isArray(body.mediaUrls) && body.mediaUrls.length > 0
+        ? body.mediaUrls.filter((u: unknown): u is string => typeof u === 'string' && u.trim().length > 0)
+        : typeof body.photoUrl === 'string' && body.photoUrl.trim()
+          ? [body.photoUrl.trim()]
+          : typeof body.url === 'string' && body.url.trim()
+            ? [body.url.trim()]
+            : [];
 
     const sharedTitle = typeof body.title === 'string' ? body.title.trim() : '';
     const sharedDescription =

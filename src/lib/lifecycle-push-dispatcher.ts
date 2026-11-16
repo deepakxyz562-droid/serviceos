@@ -503,7 +503,7 @@ function derivePushContent(event: ServiceEvent, data: Record<string, any>): Push
     // ── Conversation events ───────────────────────────────────────
     case 'conversation.message_received': {
       return {
-        title: truncate(`New message from ${pick(data.customerName, data.phone, 'customer')}`, 80),
+        title: truncate(`New message from ${pick(data.customerName, data.customerPhone, data.phone, 'customer')}`, 80),
         body: truncate(pick(data.message, data.preview, 'New message'), 200),
         url: data.conversationId ? `/?view=messages&conversation=${data.conversationId}` : '/?view=messages',
         inAppType: 'reminder',
@@ -670,12 +670,19 @@ async function pushToRecipient(
 
   // 2. Web Push (device notification)
   try {
+    const isConv = event.startsWith('conversation.')
     await sendWebPushToUser(recipient.userId, recipient.tenantId, {
       title: content.title,
       body: content.body,
       url: content.url,
       tag: `lifecycle_${event}_${resourceId || recipient.userId}`,
-      data: { event, resourceId, role: recipient.role },
+      data: {
+        event,
+        resourceId,
+        role: recipient.role,
+        route: isConv ? '/inbox' : undefined,
+        conversationId: isConv ? (resourceId || data.conversationId) : undefined,
+      },
     })
   } catch (err) {
     console.error('[lifecycle-push] sendWebPushToUser failed:', err)

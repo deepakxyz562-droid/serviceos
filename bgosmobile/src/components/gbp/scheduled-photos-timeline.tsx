@@ -223,7 +223,7 @@ export function ScheduledPhotosTimeline({
     if (!isVideo) {
       return (
         <Image
-          source={{ uri: item.thumbnailUrl || item.url }}
+          source={resolveTemplateSource(item.thumbnailUrl || item.url)}
           style={boxStyle}
           resizeMode="cover"
           alt={item.title || 'Google Business media'}
@@ -235,7 +235,7 @@ export function ScheduledPhotosTimeline({
       return (
         <View style={[boxStyle, { overflow: 'hidden', position: 'relative' }]}>
           <Image
-            source={{ uri: item.thumbnailUrl }}
+            source={resolveTemplateSource(item.thumbnailUrl)}
             style={{ width: '100%', height: '100%' }}
             resizeMode="cover"
             alt={item.title || 'Video thumbnail'}

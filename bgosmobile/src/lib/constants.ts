@@ -41,20 +41,30 @@ export const BGOS_PUBLIC_WEB_URL = (
 ).replace(/\/$/, '');
 
 /**
- * Resolves any image URL or relative path (e.g. `/images/bgos/templates/...`) to a fully-qualified absolute URL
- * so React Native image loaders (Fresco on Android / NSURLSession on iOS) and GBP APIs can safely load it.
+ * Resolves any image URL or relative path (e.g. `/images/bgos/templates/...` or `/uploads/...`)
+ * to a fully-qualified absolute URL so React Native image loaders (Fresco on Android / NSURLSession on iOS)
+ * and GBP APIs can safely load it without corrupting native device URIs.
  */
 export function resolvePhotoUrl(url?: string | null): string {
   if (!url) return '';
+  const trimmed = url.trim();
   if (
-    url.startsWith('http://') ||
-    url.startsWith('https://') ||
-    url.startsWith('file://') ||
-    url.startsWith('data:')
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('file://') ||
+    trimmed.startsWith('content://') ||
+    trimmed.startsWith('ph://') ||
+    trimmed.startsWith('assets-library://') ||
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('data:')
   ) {
-    return url;
+    return trimmed;
   }
-  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  // User uploads (/uploads/...) are served from the main application host (WEB_URL).
+  if (cleanPath.startsWith('/uploads/')) {
+    return `${WEB_URL}${cleanPath}`;
+  }
   return `${BGOS_PUBLIC_WEB_URL}${cleanPath}`;
 }
 

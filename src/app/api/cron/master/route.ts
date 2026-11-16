@@ -125,6 +125,11 @@ const DAILY_CRONS: Array<{ name: string; path: string; description: string }> = 
     path: '/api/cron/bgos-lifecycle',
     description: 'Evaluates BGOS registered tenants and sends trial, review-growth, post-trial rescue emails, plus unreplied-review push/in-app notifications',
   },
+  {
+    name: 'bgos-daily-push',
+    path: '/api/cron/bgos-daily-push',
+    description: 'Evaluates active BGOS businesses and sends daily post reminder, promotion checklist, and review rush notifications',
+  },
 ]
 
 // ── Monthly cron (only runs on the 1st of each month) ────────────────────

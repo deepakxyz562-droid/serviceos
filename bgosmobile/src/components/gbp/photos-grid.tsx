@@ -8,6 +8,7 @@ import { useMediaUploadStore } from '../../stores/media-upload-store';
 import { gbpColors, shortDate } from './bits';
 import { MediaMetadataSheet } from './media-metadata-sheet';
 import { MediaPreviewModal, isVideoMediaAsset } from './media-preview-modal';
+import { resolveTemplateSource } from '../design/professional-assets';
 import type { GbpConnectionState, GbpPhoto, PhotosResponse } from './types';
 
 type TabKey = 'soon' | 'published' | 'unposted';
@@ -47,7 +48,7 @@ function PhotoCell({
       {isVideo ? (
         photo.thumbnailUrl ? (
           <Image
-            source={{ uri: photo.thumbnailUrl }}
+            source={resolveTemplateSource(photo.thumbnailUrl)}
             style={{ width: '100%', height: '100%' }}
             resizeMode="cover"
             accessibilityIgnoresInvertColors
@@ -83,7 +84,7 @@ function PhotoCell({
         )
       ) : (
         <Image
-          source={{ uri: photo.thumbnailUrl || photo.url }}
+          source={resolveTemplateSource(photo.thumbnailUrl || photo.url)}
           style={{ width: '100%', height: '100%' }}
           resizeMode="cover"
           accessibilityIgnoresInvertColors

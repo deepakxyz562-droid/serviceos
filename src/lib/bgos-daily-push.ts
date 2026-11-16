@@ -563,8 +563,8 @@ export async function runBgosDailyPushBatch(
 
       const localParts = getLocalDateParts(now, locale.timeZone);
       const localMinutes = localParts.hour * 60 + localParts.minute;
-      // Local morning window: 09:30 (570m) to 11:30 (690m)
-      if (!ignoreTimeWindow && (localMinutes < 570 || localMinutes > 690)) {
+      // Local business morning window: 07:30 (450m) to 12:30 (750m)
+      if (!ignoreTimeWindow && (localMinutes < 450 || localMinutes > 750)) {
         skippedTenants++;
         results.push({
           tenantId: tenant.id,
@@ -598,15 +598,15 @@ export async function runBgosDailyPushBatch(
       const tenantPosts = (Array.isArray(recentPosts) ? recentPosts : []).filter(
         (p: any) => p.tenantId === tenant.id,
       );
-      const hasPostToday = tenantPosts.some(
+      const hasPublishedPostToday = tenantPosts.some(
         (p: any) =>
-          isWithinLocalWindow(p.publishedAt, dayStartMs, dayEndMs) ||
-          isWithinLocalWindow(p.scheduledAt, dayStartMs, dayEndMs) ||
-          isWithinLocalWindow(p.createdAt, dayStartMs, dayEndMs),
+          p.status === 'published' &&
+          (isWithinLocalWindow(p.publishedAt, dayStartMs, dayEndMs) ||
+            isWithinLocalWindow(p.createdAt, dayStartMs, dayEndMs)),
       );
 
-      // If tenant already posted today AND has no unreplied reviews, skip to avoid over-notifying
-      if (hasPostToday && unrepliedCount === 0) {
+      // If tenant already published a live post today AND has no unreplied reviews, skip to avoid over-notifying
+      if (hasPublishedPostToday && unrepliedCount === 0) {
         skippedTenants++;
         results.push({
           tenantId: tenant.id,

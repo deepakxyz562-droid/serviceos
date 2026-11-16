@@ -148,7 +148,12 @@ export default function RootLayout() {
           }
           const isLiveChat =
             meta.source === 'live_chat_escalation' ||
-            (item.priority === 'urgent' && item.category === 'customer');
+            meta.source === 'live_chat_message' ||
+            meta.source === 'public_chat_message' ||
+            meta.source === 'public_chat' ||
+            meta.sessionId ||
+            meta.conversationId ||
+            (item.category === 'customer' && (item.priority === 'urgent' || item.priority === 'high'));
           if (!isLiveChat) continue;
 
           const createdMs = item.createdAt ? new Date(item.createdAt).getTime() : nowMs;
