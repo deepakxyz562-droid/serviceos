@@ -1,5 +1,4 @@
 'use client';
-import dynamic from 'next/dynamic';
 import { BgosBrand } from '@/components/bgos/brand';
 import { BgosHeaderTools } from '@/components/bgos/header-tools';
 import { BGOS_NAVIGATION, bgosNavigationView } from '../../../shared/bgos-navigation';
@@ -50,14 +49,6 @@ import { authFetch } from '@/lib/api';
 import { BusinessBlueprintWizard } from '@/components/onboarding/business-blueprint-wizard';
 import { BUSINESS_TYPE_LABELS } from '@/lib/blueprint';
 import { performClientLogout } from '@/lib/client-auth';
-
-const TestNotificationDialog = dynamic(
-  () =>
-    import('@/components/views/notifications-view').then((m) => ({
-      default: m.TestNotificationDialog,
-    })),
-  { ssr: false }
-);
 
 // ─── View label mapping ─────────────────────────────────────────────────────
 
@@ -238,7 +229,6 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
   const isCanvas = currentView === 'canvas';
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [testSuiteOpen, setTestSuiteOpen] = useState(false);
   const [hasInstallPrompt, setHasInstallPrompt] = useState(false);
   const [messageDrawerOpen, setMessageDrawerOpen] = useState(false);
   const aiDrawerOpen = useAppStore(s => s.aiDrawerOpen);
@@ -655,16 +645,6 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              className="cursor-pointer text-blue-600 dark:text-blue-400 gap-2 font-medium"
-              onClick={() => {
-                setNotifOpen(false);
-                setTestSuiteOpen(true);
-              }}
-            >
-              <Sparkles className="size-4 text-blue-600" />
-              Test Alerts &amp; Mailer
-            </DropdownMenuItem>
-            <DropdownMenuItem
               className="text-center cursor-pointer text-[#009F50] dark:text-emerald-400 justify-center"
               onClick={goNotifications}
             >
@@ -821,12 +801,6 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
     <BusinessBlueprintWizard
       open={blueprintWizardOpen}
       onOpenChange={setBlueprintWizardOpen}
-    />
-
-    {/* ─── Test Notification & Mailer Dialog ─────────────────────────── */}
-    <TestNotificationDialog
-      open={testSuiteOpen}
-      onOpenChange={setTestSuiteOpen}
     />
     </>
   );

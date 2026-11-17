@@ -14,8 +14,6 @@ import {
   ClipboardCheck,
   Share2,
   Sparkles,
-  Camera,
-  Send,
   PlayCircle,
   Truck,
   FileText,
@@ -152,7 +150,6 @@ const NOTIFICATION_TYPES = [
   { value: 'workflow_executed', label: 'Workflow Executed' },
   { value: 'social_post', label: 'Social Post Published' },
   { value: 'daily_growth_tips', label: 'Daily Post & Growth Tips' },
-  { value: 'gbp_photo_nudge', label: 'Google Photo Growth Nudge' },
   { value: 'reminder', label: 'Reminder' },
   { value: 'support_ticket_update', label: 'Support Ticket Update' },
 ] as const;
@@ -193,7 +190,6 @@ const TYPE_ICON_MAP: Record<
   workflow_executed: { icon: Workflow, color: 'text-purple-600', bg: 'bg-purple-50' },
   social_post: { icon: Share2, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   daily_growth_tips: { icon: Sparkles, color: 'text-purple-600', bg: 'bg-purple-50' },
-  gbp_photo_nudge: { icon: Camera, color: 'text-blue-600', bg: 'bg-blue-50' },
   reminder: { icon: Bell, color: 'text-slate-600', bg: 'bg-slate-100' },
   support_ticket_update: { icon: LifeBuoy, color: 'text-orange-600', bg: 'bg-orange-50' },
 };
@@ -742,158 +738,6 @@ function PreferencesDialog({ open, onOpenChange }: PreferencesDialogProps) {
   );
 }
 
-// ─── Test Suite Dialog ───────────────────────────────────────────────────────
-
-export interface TestNotificationDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
-
-export function TestNotificationDialog({ open, onOpenChange }: TestNotificationDialogProps) {
-  const queryClient = useQueryClient();
-  const [action, setAction] = useState<string>('all');
-  const [recipientEmail, setRecipientEmail] = useState('');
-  const [isPhoneUser, setIsPhoneUser] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [lastResult, setLastResult] = useState<any>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setLastResult(null);
-    fetch('/api/notifications/test-suite')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.user?.isPhoneLogin) {
-          setIsPhoneUser(true);
-        }
-        if (data.user?.suggestedEmail && !recipientEmail) {
-          setRecipientEmail(data.user.suggestedEmail);
-        } else if (data.user?.email && !data.user?.isPhoneLogin && !recipientEmail) {
-          setRecipientEmail(data.user.email);
-        }
-      })
-      .catch(() => {});
-  }, [open, recipientEmail]);
-
-  const handleSend = async () => {
-    setSending(true);
-    setLastResult(null);
-    try {
-      const res = await fetch('/api/notifications/test-suite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action,
-          to: recipientEmail || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to dispatch test suite');
-      }
-      setLastResult(data);
-      toast.success(data.summary || 'Test notifications and email dispatched!');
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      queryClient.invalidateQueries({ queryKey: ['unread-count'] });
-    } catch (err: any) {
-      toast.error(err.message || 'Error running test suite');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="size-5 text-blue-600" />
-            Notification &amp; Email Test Suite
-          </DialogTitle>
-          <DialogDescription>
-            Send test in-app notifications, web push alerts, and Google Business Profile growth mailers to verify your setup end-to-end.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Select Test Scenario</Label>
-            <Select value={action} onValueChange={setAction}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose test scenario" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">🚀 All Tests (Photo Mailer, Alerts &amp; Push)</SelectItem>
-                <SelectItem value="photo_email">📸 Google Photo Growth Mailer &amp; Nudge</SelectItem>
-                <SelectItem value="review_email">⭐ Google Review Booster Mailer &amp; Alert</SelectItem>
-                <SelectItem value="checklist">📋 Checklist Completed Notification</SelectItem>
-                <SelectItem value="post">📱 Social / GBP Post Published Notification</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {isPhoneUser && (
-            <div className="rounded-lg bg-blue-50 border border-blue-200 p-2.5 text-xs text-blue-900">
-              📱 Logged in with mobile number. Enter your real email address below to receive the Google Photo Growth email in your inbox.
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Recipient Email (Optional Override)</Label>
-            <Input
-              type="email"
-              placeholder="Leave blank to use account email"
-              value={recipientEmail}
-              onChange={(e) => setRecipientEmail(e.target.value)}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Receives the Google-styled HTML action email (&ldquo;Attract more customers with photos&rdquo;).
-            </p>
-          </div>
-
-          {lastResult && (
-            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-900 space-y-1">
-              <p className="font-semibold flex items-center gap-1.5">
-                <CheckCircle2 className="size-4 text-emerald-600" />
-                Dispatch Successful
-              </p>
-              <p>{lastResult.summary}</p>
-              {lastResult.emailsSent?.length > 0 && (
-                <p className="text-[11px] text-emerald-700">
-                  Email: {lastResult.emailsSent[0]?.subject} ({lastResult.emailsSent[0]?.status})
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-          <Button
-            onClick={handleSend}
-            disabled={sending}
-            className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
-          >
-            {sending ? (
-              <>
-                <RefreshCw className="size-4 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              <>
-                <Send className="size-4" />
-                Dispatch Test
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function ChannelToggle({
   icon: Icon,
   label,
@@ -951,7 +795,6 @@ export function NotificationsView() {
   const [search, setSearch] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
   const [prefsOpen, setPrefsOpen] = useState(false);
-  const [testSuiteOpen, setTestSuiteOpen] = useState(false);
 
   // Debounce search input so we don't refetch on every keystroke.
   useEffect(() => {
@@ -1110,15 +953,6 @@ export function NotificationsView() {
           >
             <CheckCheck className="size-4" />
             Mark all read
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-            onClick={() => setTestSuiteOpen(true)}
-          >
-            <Sparkles className="size-4" />
-            Test Alerts &amp; Mailer
           </Button>
           <Button
             variant="outline"
@@ -1283,7 +1117,6 @@ export function NotificationsView() {
 
       {/* ─── Preferences dialog ─────────────────────────────────────────────── */}
       <PreferencesDialog open={prefsOpen} onOpenChange={setPrefsOpen} />
-      <TestNotificationDialog open={testSuiteOpen} onOpenChange={setTestSuiteOpen} />
     </div>
   );
 }

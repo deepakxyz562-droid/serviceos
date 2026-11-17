@@ -33,7 +33,6 @@ export const NOTIFICATION_TYPES = [
   'workflow_executed',
   'social_post',
   'daily_growth_tips',
-  'gbp_photo_nudge',
   'reminder',
   'support_ticket_update',
 ] as const;
@@ -181,7 +180,7 @@ export function categoryForType(type: string): string {
   if (type.startsWith('invoice_')) return 'invoice';
   if (type === 'customer_review') return 'customer';
   if (type === 'employee_login') return 'employee';
-  if (type === 'workflow_executed' || type === 'social_post' || type === 'daily_growth_tips' || type === 'gbp_photo_nudge') return 'workflow';
+  if (type === 'workflow_executed' || type === 'social_post' || type === 'daily_growth_tips') return 'workflow';
   if (type === 'support_ticket_update') return 'support';
   if (type === 'reminder') return 'system';
   return 'system';
@@ -235,8 +234,6 @@ export function iconForType(type: string): {
       return { icon: 'Share2', color: 'text-indigo-600', bg: 'bg-indigo-50' };
     case 'daily_growth_tips':
       return { icon: 'Sparkles', color: 'text-purple-600', bg: 'bg-purple-50' };
-    case 'gbp_photo_nudge':
-      return { icon: 'Camera', color: 'text-blue-600', bg: 'bg-blue-50' };
     case 'reminder':
       return { icon: 'Bell', color: 'text-slate-600', bg: 'bg-slate-100' };
     case 'support_ticket_update':
