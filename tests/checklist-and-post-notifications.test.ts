@@ -12,8 +12,15 @@ import { db } from '@/lib/db';
 import * as authLib from '@/lib/auth';
 import * as pushLib from '@/lib/web-push-send';
 
+vi.mock('@/lib/email-send', () => ({
+  sendEmail: vi.fn().mockResolvedValue({ success: true, messageId: 'msg-test-123' }),
+}));
+
 vi.mock('@/lib/db', () => ({
   db: {
+    tenant: {
+      findUnique: vi.fn(),
+    },
     job: {
       findUnique: vi.fn(),
     },
@@ -64,6 +71,7 @@ describe('Checklist and Social Post Notifications', () => {
       expect(NOTIFICATION_TYPES).toContain('checklist_reminder');
       expect(NOTIFICATION_TYPES).toContain('social_post');
       expect(NOTIFICATION_TYPES).toContain('daily_growth_tips');
+      expect(NOTIFICATION_TYPES).toContain('gbp_photo_nudge');
     });
 
     it('maps checklist types to job category and social post to workflow category', () => {
@@ -72,6 +80,7 @@ describe('Checklist and Social Post Notifications', () => {
       expect(categoryForType('checklist_reminder')).toBe('job');
       expect(categoryForType('social_post')).toBe('workflow');
       expect(categoryForType('daily_growth_tips')).toBe('workflow');
+      expect(categoryForType('gbp_photo_nudge')).toBe('workflow');
     });
 
     it('provides icons for checklist and social post types', () => {
@@ -87,6 +96,10 @@ describe('Checklist and Social Post Notifications', () => {
 
       const dailyTips = iconForType('daily_growth_tips');
       expect(dailyTips.icon).toBe('Sparkles');
+
+      const photoNudge = iconForType('gbp_photo_nudge');
+      expect(photoNudge.icon).toBe('Camera');
+      expect(photoNudge.color).toContain('blue');
     });
 
     it('evaluates delivery preferences for checklist and social post notifications', async () => {
@@ -232,6 +245,61 @@ describe('Checklist and Social Post Notifications', () => {
           }),
         }),
       );
+    });
+  });
+
+  describe('4. Google-Style Photo Growth Mailer & Test Suite', () => {
+    it('renders Google Business Profile photo growth template matching the official style', async () => {
+      const { renderBgosPhotoGrowthEmail } = await import('@/lib/emails/bgos/templates');
+      const email = renderBgosPhotoGrowthEmail({
+        businessName: 'Fieseros Auto Care',
+        category: 'Automotive',
+        rating: 4.8,
+        reviewCount: 95,
+      });
+
+      expect(email.subject).toContain('Attract more customers with photos, Fieseros Auto Care');
+      expect(email.html).toContain('Attract more customers with <span style="color:#1a73e8;">photos</span>');
+      expect(email.html).toContain('Google Business Profile');
+      expect(email.html).toContain('Add photos');
+      expect(email.html).toContain('Get more views');
+      expect(email.html).toContain('Need help?');
+      expect(email.text).toContain('Attract more customers with photos');
+    });
+
+    it('dispatches full test suite via POST /api/notifications/test-suite', async () => {
+      const { POST: postTestSuite } = await import('@/app/api/notifications/test-suite/route');
+      vi.mocked(authLib.getAuthUser).mockResolvedValue({
+        id: 'usr-admin',
+        email: 'owner@fieseros.com',
+        name: 'Deepak',
+        tenantId: 'tenant-999',
+      } as any);
+
+      vi.mocked(db.tenant.findUnique).mockResolvedValue({
+        id: 'tenant-999',
+        name: 'Fieseros Dental Clinic',
+        email: 'clinic@fieseros.com',
+        industry: 'Healthcare',
+        settingsJson: '{}',
+      } as any);
+
+      vi.mocked(db.appNotification.create).mockResolvedValue({ id: 'notif-test-1' } as any);
+
+      const req = new NextRequest('http://localhost/api/notifications/test-suite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'all' }),
+      });
+
+      const res = await postTestSuite(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data.ok).toBe(true);
+      expect(data.emailsSent.length).toBeGreaterThanOrEqual(1);
+      expect(data.notificationsCreated.length).toBeGreaterThanOrEqual(1);
+      expect(pushLib.sendWebPushToUser).toHaveBeenCalled();
     });
   });
 });

@@ -21,6 +21,7 @@ import {
   isDeliverableEmail,
   isSyntheticPlaceholderEmail,
   renderBgosPasswordResetEmail,
+  renderBgosPhotoGrowthEmail,
   renderBgosVerificationEmail,
   renderBgosWelcomeEmail,
   resolveBgosBaseUrl,
@@ -519,4 +520,41 @@ export async function dispatchBgosEmail(params: {
   return res.success
     ? { sent: true, messageId: res.messageId }
     : { sent: false, error: res.error || 'Email send failed' };
+}
+
+export async function sendBgosPhotoGrowthEmail(params: {
+  tenantId: string;
+  to: string;
+  businessName: string;
+  ownerName?: string | null;
+  category?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  photos?: string[];
+  settingsJson?: string | null;
+  appUrl?: string;
+}): Promise<BgosSendOutcome> {
+  const rendered = renderBgosPhotoGrowthEmail({
+    businessName: params.businessName,
+    ownerName: params.ownerName,
+    category: params.category,
+    rating: params.rating,
+    reviewCount: params.reviewCount,
+    photos: params.photos,
+    appUrl: params.appUrl,
+  });
+
+  return dispatchBgosEmail({
+    tenantId: params.tenantId,
+    to: params.to,
+    recipientName: params.ownerName || params.businessName,
+    settingsJson: params.settingsJson,
+    emailKey: 'bgos_photo_growth',
+    cycleKey: `photo_growth:${params.tenantId}:${Date.now()}`,
+    category: 'nudge',
+    subject: rendered.subject,
+    html: rendered.html,
+    text: rendered.text,
+    appUrl: params.appUrl,
+  });
 }
