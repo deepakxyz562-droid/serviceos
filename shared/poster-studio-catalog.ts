@@ -1,9 +1,10 @@
 import type { PosterTemplate } from './poster-templates';
+import { toSpecializationSlug } from './category-slugs';
 
 const S3_BASE = 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library';
 
 /** Sixty authored campaign briefs; every entry has its own composition ID. */
-export const STUDIO_POSTERS: PosterTemplate[] = [
+const RAW_STUDIO_POSTERS: PosterTemplate[] = [
   {
     "id": "studio-cafe-1",
     "name": "The morning ritual",
@@ -871,7 +872,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Curiosity is\na good beginning.",
     "subtitle": "Explore a course that helps you take your next step.",
     "cta": "Explore courses",
-    "photo": `${S3_BASE}/it_software/it_software-001.webp`,
+    "photo": `${S3_BASE}/education_academy/education_academy-001.webp`,
     "bgPrompt": "Art-directed education & coaching campaign photograph: next chapter. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "education",
@@ -890,7 +891,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Bring your questions.\nFind your direction.",
     "subtitle": "Speak to our team about learning options and course content.",
     "cta": "Ask about a course",
-    "photo": `${S3_BASE}/it_software/it_software-001.webp`,
+    "photo": `${S3_BASE}/education_academy/education_academy-001.webp`,
     "bgPrompt": "Art-directed education & coaching campaign photograph: meet the mentor. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "education",
@@ -909,7 +910,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Make time\nfor a new skill.",
     "subtitle": "Discover our upcoming workshops and session details.",
     "cta": "View workshops",
-    "photo": `${S3_BASE}/it_software/it_software-001.webp`,
+    "photo": `${S3_BASE}/education_academy/education_academy-001.webp`,
     "bgPrompt": "Art-directed education & coaching campaign photograph: workshop invitation. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "education",
@@ -928,7 +929,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "A learning plan\nthat starts with you.",
     "subtitle": "Tell us about your interests and the skills you want to build.",
     "cta": "Discuss your goals",
-    "photo": `${S3_BASE}/it_software/it_software-001.webp`,
+    "photo": `${S3_BASE}/education_academy/education_academy-001.webp`,
     "bgPrompt": "Art-directed education & coaching campaign photograph: study your way. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "education",
@@ -947,7 +948,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Turn interest\ninto practice.",
     "subtitle": "Take a closer look at what you’ll explore in our featured course.",
     "cta": "See course details",
-    "photo": `${S3_BASE}/it_software/it_software-001.webp`,
+    "photo": `${S3_BASE}/education_academy/education_academy-001.webp`,
     "bgPrompt": "Art-directed education & coaching campaign photograph: course spotlight. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "education",
@@ -966,7 +967,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Your next decision.\nA clearer perspective.",
     "subtitle": "Discuss your priorities with our team.",
     "cta": "Start a conversation",
-    "photo": `${S3_BASE}/it_software/it_software-002.webp`,
+    "photo": `${S3_BASE}/professional_services/professional_services-001.webp`,
     "bgPrompt": "Art-directed professional & b2b campaign photograph: a clearer plan. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "professional",
@@ -985,7 +986,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Less guesswork.\nMore direction.",
     "subtitle": "Explore practical support for your next business challenge.",
     "cta": "Explore our services",
-    "photo": `${S3_BASE}/it_software/it_software-002.webp`,
+    "photo": `${S3_BASE}/professional_services/professional_services-001.webp`,
     "bgPrompt": "Art-directed professional & b2b campaign photograph: the business edit. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "professional",
@@ -1004,7 +1005,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "A worthwhile idea\ndeserves a plan.",
     "subtitle": "Tell us what you’re building and where you need support.",
     "cta": "Discuss your project",
-    "photo": `${S3_BASE}/it_software/it_software-002.webp`,
+    "photo": `${S3_BASE}/professional_services/professional_services-001.webp`,
     "bgPrompt": "Art-directed professional & b2b campaign photograph: project invitation. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "professional",
@@ -1023,7 +1024,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "People behind\nthe progress.",
     "subtitle": "Get to know the team and how we approach our work.",
     "cta": "Meet our team",
-    "photo": `${S3_BASE}/it_software/it_software-002.webp`,
+    "photo": `${S3_BASE}/professional_services/professional_services-001.webp`,
     "bgPrompt": "Art-directed professional & b2b campaign photograph: meet the team. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "professional",
@@ -1042,7 +1043,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Good questions.\nUseful next steps.",
     "subtitle": "Learn how our services can fit your organisation’s needs.",
     "cta": "Request an introduction",
-    "photo": `${S3_BASE}/it_software/it_software-002.webp`,
+    "photo": `${S3_BASE}/professional_services/professional_services-001.webp`,
     "bgPrompt": "Art-directed professional & b2b campaign photograph: service overview. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "professional",
@@ -1145,3 +1146,13 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     ]
   }
 ];
+
+export const STUDIO_POSTERS: PosterTemplate[] = RAW_STUDIO_POSTERS.map((t) => {
+  const folder = toSpecializationSlug(
+    (t.industries && t.industries.length > 0) ? t.industries.join(' ') : (t.badge || t.name)
+  );
+  return {
+    ...t,
+    photo: `${S3_BASE}/${folder}/${folder}-001.webp`,
+  };
+});

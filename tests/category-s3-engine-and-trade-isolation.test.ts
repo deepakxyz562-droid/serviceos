@@ -36,33 +36,102 @@ vi.mock('@/lib/db', () => ({
 
 import {
   getCategoryStorageFolder,
+  toSpecializationSlug,
   getCategoryImagesFromS3,
   ensureOnboardingCategoryPack,
   buildCategorySceneBlueprints,
+  prewarmSubscribedMerchantCategory,
 } from '@/lib/designs/category-image-engine';
-import { POSTER_TEMPLATES } from '../../shared/poster-templates';
-import { CURATED_TEMPLATES } from '../../shared/curated-photo-templates';
+import { POSTER_TEMPLATES } from '../shared/poster-templates';
+import { CURATED_TEMPLATES } from '../shared/curated-photo-templates';
+import { getCategoryPhotoFolder } from '../shared/business-template-collection';
 
 describe('Dedicated S3 Category Engine & Strict Trade Isolation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('Trade Canonical Folder Mapping', () => {
-    it('maps tech, SaaS, and Fieseros OS businesses to it_software', () => {
-      expect(getCategoryStorageFolder('Fieseros OS')).toBe('it_software');
-      expect(getCategoryStorageFolder('ServiceOS')).toBe('it_software');
-      expect(getCategoryStorageFolder('Cloud Software Solutions')).toBe('it_software');
-      expect(getCategoryStorageFolder('Mobile App & Web Development')).toBe('it_software');
+  describe('Universal Taxonomy & Canonical Specialization Slug Resolver (4,000+ Categories)', () => {
+    it('maps tech, SaaS, and platform businesses to isolated software specialization slugs', () => {
+      expect(toSpecializationSlug('Fieseros OS')).toBe('fieseros_os');
+      expect(toSpecializationSlug('ServiceOS')).toBe('serviceos');
+      expect(toSpecializationSlug('Cloud Software Solutions')).toBe('cloud_software');
+      expect(toSpecializationSlug('Mobile App & Web Development')).toBe('mobile_app_web_development');
     });
 
-    it('maps diverse service trades to their respective isolated folders', () => {
-      expect(getCategoryStorageFolder('Plumbing and Sanitary Work')).toBe('plumbing');
-      expect(getCategoryStorageFolder('Dentist & Orthodontic Clinic')).toBe('dental_clinic');
-      expect(getCategoryStorageFolder('Luxury Beauty Salon & Spa')).toBe('salon_spa');
-      expect(getCategoryStorageFolder('Auto Repair & Multi-brand Car Garage')).toBe('auto_repair');
-      expect(getCategoryStorageFolder('Plywood & Hardware Mart')).toBe('plywood_timber');
-      expect(getCategoryStorageFolder('Desi Ghee Sweets and Namkeen')).toBe('indian_sweets');
+    it('maps diverse service trades to their respective isolated slugs without hardcoding', () => {
+      expect(toSpecializationSlug('Plumbing and Sanitary Work')).toBe('plumbing_sanitary_work');
+      expect(toSpecializationSlug('Dentist & Orthodontic Clinic')).toBe('dentist_orthodontic_clinic');
+      expect(toSpecializationSlug('Luxury Beauty Salon & Spa')).toBe('luxury_beauty_salon_spa');
+      expect(toSpecializationSlug('Auto Repair & Multi-brand Car Garage')).toBe('auto_repair_multi_brand_car_garage');
+      expect(toSpecializationSlug('Plywood & Hardware Mart')).toBe('plywood_hardware_mart');
+      expect(toSpecializationSlug('Desi Ghee Sweets and Namkeen')).toBe('desi_ghee_sweets_namkeen');
+      expect(toSpecializationSlug('Education & Coaching Institute')).toBe('education_coaching_institute');
+      expect(toSpecializationSlug('Vogue Fashion Boutique & Apparel')).toBe('vogue_fashion_boutique_apparel');
+      expect(toSpecializationSlug('Gold & Diamond Jewellery Mart')).toBe('gold_diamond_jewellery_mart');
+      expect(toSpecializationSlug('Security Guard & CCTV Surveillance')).toBe('security_guard_cctv_surveillance');
+      expect(toSpecializationSlug('Solar Panel & Inverter Installation')).toBe('solar_panel_inverter_installation');
+      expect(toSpecializationSlug('AC Repair & HVAC Services')).toBe('ac_repair_hvac');
+      expect(toSpecializationSlug('Yoga & Meditation Sanctuary')).toBe('yoga_meditation_sanctuary');
+      expect(toSpecializationSlug('Chartered Accountant & Tax Consulting')).toBe('chartered_accountant_tax_consulting');
+      expect(toSpecializationSlug('Wedding Decoration & Event Planner')).toBe('wedding_decoration_event_planner');
+      expect(toSpecializationSlug('Commercial Pest Control & Fumigation')).toBe('commercial_pest_control_fumigation');
+      expect(toSpecializationSlug('Pet Care & Veterinary Hospital')).toBe('pet_care_veterinary_hospital');
+    });
+
+    it('automatically supports long-tail 4,000+ Google Business Profile categories dynamically', () => {
+      const gbpSamples = [
+        { raw: 'Acupuncture Clinic', expected: 'acupuncture_clinic' },
+        { raw: 'Borewell Drilling Contractor', expected: 'borewell_drilling_contractor' },
+        { raw: 'Solar Water Heater Supplier', expected: 'solar_water_heater_supplier' },
+        { raw: 'Ayurvedic Panchakarma Clinic', expected: 'ayurvedic_panchakarma_clinic' },
+        { raw: 'Dry Fruit Wholesaler', expected: 'dry_fruit_wholesaler' },
+        { raw: 'Modular Kitchen Manufacturer', expected: 'modular_kitchen_manufacturer' },
+        { raw: 'Handmade Leather Goods', expected: 'handmade_leather_goods' },
+        { raw: 'Bicycle Repair Shop', expected: 'bicycle_repair' },
+      ];
+
+      for (const sample of gbpSamples) {
+        const slug = toSpecializationSlug(sample.raw);
+        expect(slug).toBe(sample.expected);
+        expect(slug).not.toBe('it_software');
+        expect(slug).not.toBe('general_business');
+      }
+    });
+  });
+
+  describe('Business Template Collection & Studio Posters Dynamic Resolution', () => {
+    it('resolves distinct, isolated trade photo folders for all business groups dynamically', () => {
+      expect(getCategoryPhotoFolder('Education & coaching')).toBe('education_coaching');
+      expect(getCategoryPhotoFolder('Fashion & Retail')).toBe('fashion_retail');
+      expect(getCategoryPhotoFolder('Events & lifestyle')).toBe('events_lifestyle');
+      expect(getCategoryPhotoFolder('Professional services')).toBe('professional');
+      expect(getCategoryPhotoFolder('Security & Facility services')).toBe('security_facility');
+      expect(getCategoryPhotoFolder('IT & Software solutions')).toBe('it_software');
+      expect(getCategoryPhotoFolder('Beauty & personal care')).toBe('beauty_personal_care');
+      expect(getCategoryPhotoFolder('Food & hospitality')).toBe('food_hospitality');
+      expect(getCategoryPhotoFolder('Auto & transport')).toBe('auto_transport');
+      expect(getCategoryPhotoFolder('Health & wellness')).toBe('health_wellness');
+    });
+
+    it('guarantees that POSTER_TEMPLATES for Education, Fashion, Events do NOT leak to IT or Salon', () => {
+      const educationTemplates = POSTER_TEMPLATES.filter((tpl) =>
+        (tpl.industries || []).some((i) => /\beducation\b|\bcoaching\b|\btuition\b/.test(i)),
+      );
+      expect(educationTemplates.length).toBeGreaterThan(0);
+      for (const tpl of educationTemplates) {
+        expect(tpl.photo).not.toContain('/it_software/');
+        expect(tpl.photo.includes('aida-public') || /education|coaching|school|academy/.test(tpl.photo)).toBe(true);
+      }
+
+      const eventsTemplates = POSTER_TEMPLATES.filter((tpl) =>
+        (tpl.industries || []).some((i) => /event|wedding/.test(i)),
+      );
+      expect(eventsTemplates.length).toBeGreaterThan(0);
+      for (const tpl of eventsTemplates) {
+        expect(tpl.photo).not.toContain('/salon_spa/');
+        expect(tpl.photo.includes('aida-public') || /event|wedding|lifestyle/.test(tpl.photo)).toBe(true);
+      }
     });
   });
 
@@ -151,13 +220,82 @@ describe('Dedicated S3 Category Engine & Strict Trade Isolation', () => {
       }
     });
 
-    it('enforces strict trade negative prompts (e.g. IT software bans fruits, vegetables, cafes, food)', () => {
-      const techBlueprints = buildCategorySceneBlueprints('it_software', 'Fieseros OS', 'Patna', 50);
-      for (const prompt of techBlueprints) {
-        expect(prompt.toLowerCase()).toContain('no vegetables');
-        expect(prompt.toLowerCase()).toContain('no fruits');
-        expect(prompt.toLowerCase()).toContain('no grocery');
-        expect(prompt.toLowerCase()).toContain('no restaurant');
+    it('enforces strict trade negative prompts across all non-food trades (no vegetables, no fruits, no grocery)', () => {
+      const tradesToTest = [
+        'it_software',
+        'fashion_boutique',
+        'education_academy',
+        'dental_clinic',
+        'solar_energy',
+        'plumbing',
+        'auto_repair',
+        'real_estate',
+      ];
+
+      for (const trade of tradesToTest) {
+        const blueprints = buildCategorySceneBlueprints(trade, 'Test Business', 'Delhi', 10);
+        for (const prompt of blueprints) {
+          const lower = prompt.toLowerCase();
+          expect(lower).toContain('no vegetables');
+          expect(lower).toContain('no fruits');
+          expect(lower).toContain('no grocery');
+          expect(lower).toContain('absolutely no text');
+        }
+      }
+    });
+
+    it('enforces industry-specific authentic scenes for different trades', () => {
+      const fashionBlueprints = buildCategorySceneBlueprints('fashion_boutique', 'Vogue Boutique', 'Mumbai', 5);
+      expect(fashionBlueprints.some((p) => /fashion|boutique|mannequin|apparel/i.test(p))).toBe(true);
+
+      const educationBlueprints = buildCategorySceneBlueprints('education_academy', 'Bright Academy', 'Kota', 5);
+      expect(educationBlueprints.some((p) => /classroom|library|study|lecture/i.test(p))).toBe(true);
+
+      const dentalBlueprints = buildCategorySceneBlueprints('dental_clinic', 'Smile Dental', 'Bangalore', 5);
+      expect(dentalBlueprints.some((p) => /dental|chair|instruments/i.test(p))).toBe(true);
+
+      const solarBlueprints = buildCategorySceneBlueprints('solar_energy', 'SunPower Solar', 'Jaipur', 5);
+      expect(solarBlueprints.some((p) => /solar|rooftop|photovoltaic|inverter/i.test(p))).toBe(true);
+    });
+  });
+
+  describe('Subscribed Merchant JIT On-Demand S3 Generation', () => {
+    it('generates 5 images in dedicated trade folder when an already subscribed merchant with cold trade visits', async () => {
+      mocks.imageLibraryFindMany.mockResolvedValueOnce([]); // cold DB
+      mocks.listFiles.mockResolvedValueOnce([]); // cold S3
+
+      mocks.generateDesignImage.mockResolvedValue({
+        bytes: Buffer.from('fake-fashion-image'),
+        model: 'cloudflare-flux',
+        cost: 0,
+      });
+
+      mocks.optimizeAndCompressImage.mockResolvedValue({
+        buffer: Buffer.from('fake-optimized-fashion'),
+        contentType: 'image/webp',
+        width: 1080,
+        height: 1350,
+      });
+
+      mocks.uploadFile.mockImplementation((params: any) =>
+        Promise.resolve({
+          path: `${params.companyId}/${params.folder}/${params.fileName}`,
+          url: `https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/${params.bucket}/${params.companyId}/${params.folder}/${params.fileName}`,
+        })
+      );
+
+      const result = await ensureOnboardingCategoryPack({
+        category: 'Vogue Fashion Boutique & Apparel',
+        businessName: 'Vogue Trends',
+        city: 'Mumbai',
+        targetCount: 5,
+      });
+
+      expect(result).toHaveLength(5);
+      expect(mocks.uploadFile).toHaveBeenCalled();
+      for (const call of mocks.uploadFile.mock.calls) {
+        expect(call[0].bucket).toBe('bgos-business-images');
+        expect(call[0].folder).toBe('vogue_fashion_boutique_apparel');
       }
     });
   });

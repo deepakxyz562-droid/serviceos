@@ -1,4 +1,5 @@
 import { BUSINESS_EDITIONS, type BusinessEdition } from './business-template-collection';
+import { toSpecializationSlug } from './category-slugs';
 import { PROFESSIONAL_POSTERS } from './professional-posters';
 import { STUDIO_POSTERS } from './poster-studio-catalog';
 import { LAYERED_KIT_POSTERS } from './layered-templates-kit';
@@ -122,27 +123,9 @@ export interface PosterTemplate {
 
 const S3_CATEGORY_BASE = 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library';
 
-const S3_DEFAULT_CATEGORY_FOLDERS = [
-  'it_software',
-  'salon_spa',
-  'restaurant_dining',
-  'auto_repair',
-  'plumbing',
-  'electrical',
-  'dental_clinic',
-  'real_estate',
-  'fitness_gym',
-  'security_services',
-];
-
-const U = (id: string) => {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  }
-  const folder = S3_DEFAULT_CATEGORY_FOLDERS[hash % S3_DEFAULT_CATEGORY_FOLDERS.length];
-  const fileIdx = String((hash % 10) + 1).padStart(3, '0');
-  return `${S3_CATEGORY_BASE}/${folder}/${folder}-${fileIdx}.webp`;
+const U = (id: string, hint?: string) => {
+  const folder = hint ? toSpecializationSlug(hint) : 'general_business';
+  return `${S3_CATEGORY_BASE}/${folder}/${folder}-001.webp`;
 };
 
 const NO_TEXT =
@@ -1131,14 +1114,21 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
  ...LAYERED_KIT_POSTERS,
  ...PROFESSIONAL_POSTERS,
  ...STUDIO_POSTERS,
- ...ORIGINAL_POSTER_TEMPLATES.map((t,index):PosterTemplate=>({
-  ...t, layout:`studio_${index%60}`, collection:index%2?'creative':'standard',
-  headline:unsupported.test(t.headline)?neutralCopy[t.category][0]:t.headline,
-  subtitle:neutralCopy[t.category][1],
-  badge:unsupported.test(t.badge)?POSTER_CATEGORIES.find(c=>c.id===t.category)!.name.toUpperCase():t.badge,
-  photo:t.photo.replace('w=1080&q=80','w=2160&q=90'),
-  bgPrompt:`${t.bgPrompt} Compose with a clear focal subject, natural textures and negative space for separately editable text.`,
- })),
+ ...ORIGINAL_POSTER_TEMPLATES.map((t,index):PosterTemplate=>{
+  const hint = (t.industries && t.industries.length > 0)
+    ? t.industries.join(' ')
+    : (t.name || t.headline || '');
+  const folder = toSpecializationSlug(hint);
+  const photo = `${S3_CATEGORY_BASE}/${folder}/${folder}-001.webp`;
+  return {
+    ...t, layout:`studio_${index%60}`, collection:index%2?'creative':'standard',
+    headline:unsupported.test(t.headline)?neutralCopy[t.category][0]:t.headline,
+    subtitle:neutralCopy[t.category][1],
+    badge:unsupported.test(t.badge)?POSTER_CATEGORIES.find(c=>c.id===t.category)!.name.toUpperCase():t.badge,
+    photo,
+    bgPrompt:`${t.bgPrompt} Compose with a clear focal subject, natural textures and negative space for separately editable text.`,
+  };
+ }),
 ];
 
 // ─── Composition helpers ──────────────────────────────────────────────────────

@@ -87,20 +87,8 @@ const briefs: Record<typeof editionPurposes[number], string[]> = {
 };
 const S3_CATEGORY_BASE = 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library';
 
-const GROUP_DEFAULT_PHOTOS: Record<string, string> = {
-  'IT & Software': `${S3_CATEGORY_BASE}/it_software/it_software-001.webp`,
-  'Security & CCTV': `${S3_CATEGORY_BASE}/security_services/security_services-001.webp`,
-  'Dental & Health': `${S3_CATEGORY_BASE}/dental_clinic/dental_clinic-001.webp`,
-  'Salon & Beauty': `${S3_CATEGORY_BASE}/salon_spa/salon_spa-001.webp`,
-  'Restaurant & Cafe': `${S3_CATEGORY_BASE}/restaurant_dining/restaurant_dining-001.webp`,
-  'Education & Coaching': `${S3_CATEGORY_BASE}/it_software/it_software-002.webp`,
-  'Plumbing & Repair': `${S3_CATEGORY_BASE}/plumbing/plumbing-001.webp`,
-  'Auto & Garage': `${S3_CATEGORY_BASE}/auto_repair/auto_repair-001.webp`,
-  'Fashion & Retail': `${S3_CATEGORY_BASE}/salon_spa/salon_spa-002.webp`,
-  'Real Estate & Property': `${S3_CATEGORY_BASE}/real_estate/real_estate-001.webp`,
-  'Professional Services': `${S3_CATEGORY_BASE}/it_software/it_software-003.webp`,
-  'Events & Lifestyle': `${S3_CATEGORY_BASE}/salon_spa/salon_spa-003.webp`,
-};
+import { toSpecializationSlug, getCategoryPhotoFolder } from './category-slugs';
+export { toSpecializationSlug, getCategoryPhotoFolder };
 const groups=Object.keys(BUSINESS_GROUPS) as (keyof typeof BUSINESS_GROUPS)[];
 const slug=(value:string)=>value.toLowerCase().replace(/[’']/g,'').replace(/[^a-z0-9]+/g,'-').replace(/-$/,'');
 const supporting:Record<Purpose,string[]>={
@@ -163,12 +151,14 @@ for (const [purposeIndex,purpose] of editionPurposes.entries()) {
         ['Bring your reference material','Compare the trade-offs','Gather your references'][variant],
         ['Agree on the next step','Choose your next step','Share your timeline'][variant],
       ];
+      const folder = getCategoryPhotoFolder(group);
+      const defaultPhoto = `${S3_CATEGORY_BASE}/${folder}/${folder}-001.webp`;
       BUSINESS_EDITIONS.push({
         id,name:headline,layout:`business_${id}`,collection:variant%2?'creative':'standard',category:categories[purpose],
         edition,theme:themes[(briefIndex+variant*3+purposeIndex)%themes.length],aspect:TEMPLATE_FORMATS[format],
         headline,badge:intent,subtitle:copyByIntent[intent] || subtitle,
         cta:purpose==='Conversion'?intent:purpose==='Promotion'?'Explore the offer':purpose==='Trust-building'?'Read the story':cta,
-        photo:GROUP_DEFAULT_PHOTOS[group] || `${S3_CATEGORY_BASE}/it_software/it_software-001.webp`,
+        photo: defaultPhoto,
         industries:BUSINESS_GROUPS[group].toLowerCase().split('|'),
         bgPrompt:`${intent} for ${group}: ${headline}. Editorial photography, clear focal point, no text or lettering.`,
       });
