@@ -217,6 +217,7 @@ const ownerNavSections: NavSection[] = [
     collapsible: true,
     defaultCollapsed: true,
     items: [
+      { view: 'notifications', label: 'Notifications', icon: Bell },
       { view: 'settings', label: 'Settings', icon: Settings },
       // Brand Brain moved INTO the Settings page (as a settings section).
       // It was previously hidden inside this collapsed section, making it

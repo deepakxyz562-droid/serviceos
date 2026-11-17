@@ -11,6 +11,8 @@ import {
   renderBgosPhotoGrowthEmail,
   renderBgosReviewGrowthEmail,
   resolveBgosBaseUrl,
+  isSyntheticPlaceholderEmail,
+  isDeliverableEmail,
 } from '@/lib/emails/bgos/templates';
 import { sendBgosPhotoGrowthEmail } from '@/lib/emails/bgos/sender';
 import { sendEmail } from '@/lib/email-send';
@@ -34,6 +36,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
+    const tenant = user.tenantId
+      ? await db.tenant.findUnique({
+          where: { id: user.tenantId },
+          select: { email: true, name: true, industry: true },
+        })
+      : null;
+
+    const isPhoneLogin = isSyntheticPlaceholderEmail(user.email);
+    const suggestedEmail = !isPhoneLogin
+      ? user.email
+      : isDeliverableEmail(tenant?.email)
+      ? tenant?.email
+      : '';
+
     return NextResponse.json({
       ok: true,
       user: {
@@ -41,6 +57,8 @@ export async function GET(request: NextRequest) {
         email: user.email,
         name: user.name,
         tenantId: user.tenantId,
+        isPhoneLogin,
+        suggestedEmail,
       },
       availableActions: [
         {
@@ -122,8 +140,12 @@ export async function POST(request: NextRequest) {
 
     const businessName =
       body.businessName || tenant?.name || user.name || 'Your Business';
-    const targetEmail =
-      body.to?.trim() || user.email || tenant?.email || 'test@example.com';
+    const isUserSynthetic = isSyntheticPlaceholderEmail(user.email);
+    const candidateEmail =
+      body.to?.trim() ||
+      (!isUserSynthetic ? user.email : null) ||
+      (tenant?.email && !isSyntheticPlaceholderEmail(tenant.email) ? tenant.email : null);
+    const isDeliverable = isDeliverableEmail(candidateEmail);
     const appUrl = resolveBgosBaseUrl(request.nextUrl.origin);
 
     const emailOutcomes: Array<{
@@ -199,34 +221,44 @@ export async function POST(request: NextRequest) {
         appUrl,
       });
 
-      try {
-        const mailRes = await sendEmail({
-          to: targetEmail,
-          subject: photoEmail.subject,
-          html: photoEmail.html,
-          text: photoEmail.text,
-          usageType: 'marketing',
-          platformMarketing: true,
-          skipTenantQuota: true,
-          tenantId: user.tenantId,
-          campaignId: 'test_bgos_photo_growth',
-        });
+      if (isDeliverable && candidateEmail) {
+        try {
+          const mailRes = await sendEmail({
+            to: candidateEmail,
+            subject: photoEmail.subject,
+            html: photoEmail.html,
+            text: photoEmail.text,
+            usageType: 'marketing',
+            platformMarketing: true,
+            skipTenantQuota: true,
+            tenantId: user.tenantId,
+            campaignId: 'test_bgos_photo_growth',
+          });
 
+          emailOutcomes.push({
+            template: 'bgos_photo_growth',
+            to: candidateEmail,
+            subject: photoEmail.subject,
+            status: mailRes.success ? 'sent' : 'simulated_or_failed',
+            messageId: mailRes.messageId,
+            error: mailRes.error,
+          });
+        } catch (err: any) {
+          emailOutcomes.push({
+            template: 'bgos_photo_growth',
+            to: candidateEmail,
+            subject: photoEmail.subject,
+            status: 'error',
+            error: err?.message,
+          });
+        }
+      } else {
         emailOutcomes.push({
           template: 'bgos_photo_growth',
-          to: targetEmail,
+          to: user.email || 'phone_login',
           subject: photoEmail.subject,
-          status: mailRes.success ? 'sent' : 'simulated_or_failed',
-          messageId: mailRes.messageId,
-          error: mailRes.error,
-        });
-      } catch (err: any) {
-        emailOutcomes.push({
-          template: 'bgos_photo_growth',
-          to: targetEmail,
-          subject: photoEmail.subject,
-          status: 'error',
-          error: err?.message,
+          status: 'skipped_phone_login',
+          error: `Logged in with phone number (${user.email || '8505945123'}). Please enter a real recipient email address in the test modal to receive the HTML mailer.`,
         });
       }
 
@@ -256,34 +288,44 @@ export async function POST(request: NextRequest) {
         appUrl,
       });
 
-      try {
-        const mailRes = await sendEmail({
-          to: targetEmail,
-          subject: reviewEmail.subject,
-          html: reviewEmail.html,
-          text: reviewEmail.text,
-          usageType: 'marketing',
-          platformMarketing: true,
-          skipTenantQuota: true,
-          tenantId: user.tenantId,
-          campaignId: 'test_bgos_review_growth',
-        });
+      if (isDeliverable && candidateEmail) {
+        try {
+          const mailRes = await sendEmail({
+            to: candidateEmail,
+            subject: reviewEmail.subject,
+            html: reviewEmail.html,
+            text: reviewEmail.text,
+            usageType: 'marketing',
+            platformMarketing: true,
+            skipTenantQuota: true,
+            tenantId: user.tenantId,
+            campaignId: 'test_bgos_review_growth',
+          });
 
+          emailOutcomes.push({
+            template: 'bgos_review_growth',
+            to: candidateEmail,
+            subject: reviewEmail.subject,
+            status: mailRes.success ? 'sent' : 'simulated_or_failed',
+            messageId: mailRes.messageId,
+            error: mailRes.error,
+          });
+        } catch (err: any) {
+          emailOutcomes.push({
+            template: 'bgos_review_growth',
+            to: candidateEmail,
+            subject: reviewEmail.subject,
+            status: 'error',
+            error: err?.message,
+          });
+        }
+      } else {
         emailOutcomes.push({
           template: 'bgos_review_growth',
-          to: targetEmail,
+          to: user.email || 'phone_login',
           subject: reviewEmail.subject,
-          status: mailRes.success ? 'sent' : 'simulated_or_failed',
-          messageId: mailRes.messageId,
-          error: mailRes.error,
-        });
-      } catch (err: any) {
-        emailOutcomes.push({
-          template: 'bgos_review_growth',
-          to: targetEmail,
-          subject: reviewEmail.subject,
-          status: 'error',
-          error: err?.message,
+          status: 'skipped_phone_login',
+          error: `Logged in with phone number (${user.email || '8505945123'}). Please enter a real recipient email address in the test modal to receive the HTML mailer.`,
         });
       }
 
@@ -342,7 +384,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       action,
-      targetEmail,
+      targetEmail: candidateEmail || user.email || 'phone_user',
       businessName,
       emailsSent: emailOutcomes,
       notificationsCreated: createdNotifications,

@@ -27,6 +27,7 @@ export const BGOS_NAVIGATION = [
   {
     title: 'Manage',
     items: [
+      { view: 'notifications', label: 'Notifications', iconName: 'Bell' },
       { view: 'integrations', label: 'Integrations', iconName: 'Megaphone' },
       { view: 'settings', label: 'Settings', iconName: 'Settings' },
     ],

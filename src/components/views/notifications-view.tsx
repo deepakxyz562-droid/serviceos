@@ -744,15 +744,16 @@ function PreferencesDialog({ open, onOpenChange }: PreferencesDialogProps) {
 
 // ─── Test Suite Dialog ───────────────────────────────────────────────────────
 
-interface TestNotificationDialogProps {
+export interface TestNotificationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-function TestNotificationDialog({ open, onOpenChange }: TestNotificationDialogProps) {
+export function TestNotificationDialog({ open, onOpenChange }: TestNotificationDialogProps) {
   const queryClient = useQueryClient();
   const [action, setAction] = useState<string>('all');
   const [recipientEmail, setRecipientEmail] = useState('');
+  const [isPhoneUser, setIsPhoneUser] = useState(false);
   const [sending, setSending] = useState(false);
   const [lastResult, setLastResult] = useState<any>(null);
 
@@ -762,7 +763,12 @@ function TestNotificationDialog({ open, onOpenChange }: TestNotificationDialogPr
     fetch('/api/notifications/test-suite')
       .then((res) => res.json())
       .then((data) => {
-        if (data.user?.email && !recipientEmail) {
+        if (data.user?.isPhoneLogin) {
+          setIsPhoneUser(true);
+        }
+        if (data.user?.suggestedEmail && !recipientEmail) {
+          setRecipientEmail(data.user.suggestedEmail);
+        } else if (data.user?.email && !data.user?.isPhoneLogin && !recipientEmail) {
           setRecipientEmail(data.user.email);
         }
       })
@@ -825,6 +831,12 @@ function TestNotificationDialog({ open, onOpenChange }: TestNotificationDialogPr
               </SelectContent>
             </Select>
           </div>
+
+          {isPhoneUser && (
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-2.5 text-xs text-blue-900">
+              📱 Logged in with mobile number. Enter your real email address below to receive the Google Photo Growth email in your inbox.
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold">Recipient Email (Optional Override)</Label>
