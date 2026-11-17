@@ -23,6 +23,7 @@ import {
   renderBgosPasswordResetEmail,
   renderBgosVerificationEmail,
   renderBgosWelcomeEmail,
+  renderBgosDailyActionChecklistEmail,
   resolveBgosBaseUrl,
 } from './templates';
 
@@ -519,4 +520,62 @@ export async function dispatchBgosEmail(params: {
   return res.success
     ? { sent: true, messageId: res.messageId }
     : { sent: false, error: res.error || 'Email send failed' };
+}
+
+/**
+ * Send the Actionable Daily Growth & Checklist Email to a BGOS business owner.
+ */
+export async function sendBgosDailyActionChecklistEmail(params: {
+  to: string;
+  businessName: string;
+  tenantId?: string | null;
+  appUrl?: string;
+  unrepliedReviewsCount?: number;
+  daysSinceLastPhoto?: number;
+  posterHeadline?: string;
+  posterImageUrl?: string;
+  todayTasksCount?: number;
+}): Promise<BgosSendOutcome> {
+  if (isSyntheticPlaceholderEmail(params.to)) {
+    return { sent: false, skipped: true, reason: 'undeliverable_email' };
+  }
+  const baseUrl = resolveBgosBaseUrl(params.appUrl);
+  const rendered = renderBgosDailyActionChecklistEmail({
+    businessName: params.businessName,
+    appUrl: baseUrl,
+    unrepliedReviewsCount: params.unrepliedReviewsCount,
+    daysSinceLastPhoto: params.daysSinceLastPhoto,
+    posterHeadline: params.posterHeadline,
+    posterImageUrl: params.posterImageUrl,
+    todayTasksCount: params.todayTasksCount,
+  });
+
+  const res = await sendEmail({
+    to: params.to.trim(),
+    subject: rendered.subject,
+    html: rendered.html,
+    text: rendered.text,
+    usageType: 'marketing',
+    platformMarketing: true,
+    tenantId: params.tenantId || undefined,
+    skipTenantQuota: true,
+    trackingBaseUrl: baseUrl || DEFAULT_BGOS_URL,
+    recipientSource: 'bgos_daily_checklist',
+  });
+
+  await logBgosEmailDispatch({
+    tenantId: params.tenantId,
+    recipient: params.to,
+    recipientName: params.businessName,
+    subject: rendered.subject,
+    emailKey: 'bgos_daily_action_checklist',
+    status: res.success ? 'sent' : 'failed',
+    messageId: res.messageId,
+    providerUsed: res.providerUsed,
+    error: res.error,
+  });
+
+  return res.success
+    ? { sent: true, messageId: res.messageId }
+    : { sent: false, error: res.error || 'Failed to send BGOS daily action checklist email' };
 }

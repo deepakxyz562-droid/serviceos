@@ -20,7 +20,8 @@ export type BgosEmailKey =
   | 'bgos_post_trial_inactive_3d'
   | 'bgos_post_trial_winback_14d'
   | 'bgos_promo_broadcast'
-  | 'bgos_weekly_digest';
+  | 'bgos_weekly_digest'
+  | 'bgos_daily_action_checklist';
 
 export interface RenderedBgosEmail {
   subject: string;
@@ -846,6 +847,137 @@ ${subheadline ? `\n${subheadline}\n` : ''}
 ${params.bodyParagraphs.map(replaceBiz).join('\n\n')}
 ${params.highlights && params.highlights.length > 0 ? `\nHighlights:\n${params.highlights.map((h) => `- ${replaceBiz(h)}`).join('\n')}\n` : ''}
 ${params.ctaLabel}: ${params.ctaUrl}
+
+Unsubscribe: {{unsubscribe_url}}`;
+
+  return { subject, html, text };
+}
+
+// ─── 10. BGOS Daily Action Checklist Mailer ────────────────────────────────
+
+export function renderBgosDailyActionChecklistEmail(params: {
+  businessName: string;
+  appUrl?: string;
+  unrepliedReviewsCount?: number;
+  daysSinceLastPhoto?: number;
+  posterHeadline?: string;
+  posterImageUrl?: string;
+  todayTasksCount?: number;
+}): RenderedBgosEmail {
+  const appUrl = resolveBgosBaseUrl(params.appUrl);
+  const biz = params.businessName.trim() || 'your business';
+  const unreplied = Math.max(0, params.unrepliedReviewsCount ?? 0);
+  const daysPhoto = Math.max(1, params.daysSinceLastPhoto ?? 4);
+  const posterTitle = params.posterHeadline || 'Exclusive Seasonal Special';
+  const tasksCount = Math.max(1, params.todayTasksCount ?? 3);
+
+  const studioUrl = `${appUrl}/app?product=bgos&view=socialMedia&socialTab=ai-content`;
+  const reviewsUrl = `${appUrl}/app?product=bgos&view=reviews`;
+  const photosUrl = `${appUrl}/app?product=bgos&view=photos`;
+  const dashboardUrl = `${appUrl}/app?product=bgos&view=dashboard`;
+
+  const subject = `📋 Today's 3-Minute Growth Checklist — ${biz}`;
+  const preheader = `1 poster ready to publish • ${unreplied > 0 ? `${unreplied} reviews waiting` : '2 review invites to send'} • Boost ${biz}'s Google rank.`;
+
+  const posterPreviewHtml = params.posterImageUrl
+    ? `<div style="text-align:center;margin:12px 0 16px;">
+         <img src="${escapeHtml(params.posterImageUrl)}" alt="Daily Poster" style="max-width:280px;width:100%;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 4px 12px rgba(0,0,0,0.06);" />
+       </div>`
+    : '';
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;font-size:15px;color:#334155;">
+      Here is your quick, 3-minute morning checklist for <strong>${escapeHtml(biz)}</strong>. Completing these high-impact tasks keeps your profile active, improves Google Maps ranking, and attracts nearby customers:
+    </p>
+
+    <!-- Checklist Card 1: Marketing Poster -->
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #009F50;border-radius:12px;padding:16px 18px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+      <div style="display:flex;align-items:center;margin-bottom:6px;">
+        <span style="font-size:16px;margin-right:8px;">📸</span>
+        <strong style="font-size:15px;color:#0f172a;">Task 1: Publish Today's Branded Poster</strong>
+      </div>
+      <p style="margin:4px 0 10px;font-size:13px;color:#64748b;line-height:1.5;">
+        AI Studio created a fresh promotional visual: <em>"${escapeHtml(posterTitle)}"</em>. Publishing weekly Google updates boosts direction clicks and calls.
+      </p>
+      ${posterPreviewHtml}
+      <a href="${escapeHtml(studioUrl)}" style="display:inline-block;background:#009F50;color:#ffffff;font-size:13px;font-weight:600;padding:8px 18px;border-radius:8px;text-decoration:none;">
+        Publish Poster in 1-Tap &rarr;
+      </a>
+    </div>
+
+    <!-- Checklist Card 2: Reviews & Reputation -->
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #d97706;border-radius:12px;padding:16px 18px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+      <div style="display:flex;align-items:center;margin-bottom:6px;">
+        <span style="font-size:16px;margin-right:8px;">⭐</span>
+        <strong style="font-size:15px;color:#0f172a;">Task 2: Customer Reviews &amp; Reputation</strong>
+      </div>
+      <p style="margin:4px 0 10px;font-size:13px;color:#64748b;line-height:1.5;">
+        ${unreplied > 0
+          ? `You have <strong>${unreplied} unreplied review${unreplied === 1 ? '' : 's'}</strong> waiting. Replying fast signals strong service to Google algorithms.`
+          : `Send 2 quick 1-tap WhatsApp review invite links to today's customers before closing to hit your 5★ target.`}
+      </p>
+      <a href="${escapeHtml(reviewsUrl)}" style="display:inline-block;background:#d97706;color:#ffffff;font-size:13px;font-weight:600;padding:8px 18px;border-radius:8px;text-decoration:none;">
+        ${unreplied > 0 ? 'Reply to Reviews &rarr;' : 'Ask Reviews via WhatsApp &rarr;'}
+      </a>
+    </div>
+
+    <!-- Checklist Card 3: Photo Freshness Check -->
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #2563eb;border-radius:12px;padding:16px 18px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+      <div style="display:flex;align-items:center;margin-bottom:6px;">
+        <span style="font-size:16px;margin-right:8px;">📍</span>
+        <strong style="font-size:15px;color:#0f172a;">Task 3: Google Maps Freshness (Photo Check)</strong>
+      </div>
+      <p style="margin:4px 0 10px;font-size:13px;color:#64748b;line-height:1.5;">
+        Your last photo was uploaded ${daysPhoto} day${daysPhoto === 1 ? '' : 's'} ago. Profiles with weekly fresh photos receive <strong>42% more direction requests</strong>.
+      </p>
+      <a href="${escapeHtml(photosUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;font-size:13px;font-weight:600;padding:8px 18px;border-radius:8px;text-decoration:none;">
+        Upload Fresh Photo &rarr;
+      </a>
+    </div>
+
+    <!-- Checklist Card 4: Operations & Dashboard -->
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #7c3aed;border-radius:12px;padding:16px 18px;margin-bottom:18px;box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+      <div style="display:flex;align-items:center;margin-bottom:6px;">
+        <span style="font-size:16px;margin-right:8px;">📋</span>
+        <strong style="font-size:15px;color:#0f172a;">Task 4: Check Daily Inquiries &amp; Tasks</strong>
+      </div>
+      <p style="margin:4px 0 10px;font-size:13px;color:#64748b;line-height:1.5;">
+        Inspect new customer chat messages, phone inquiries, and mark off your daily business follow-up checklist.
+      </p>
+      <a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;background:#7c3aed;color:#ffffff;font-size:13px;font-weight:600;padding:8px 18px;border-radius:8px;text-decoration:none;">
+        Open BGOS Dashboard &rarr;
+      </a>
+    </div>
+  `;
+
+  const html = renderBgosEmailShell({
+    title: subject,
+    preheader,
+    eyebrow: "Daily Growth Routine",
+    headline: `Today's 3-Minute Growth Checklist`,
+    subheadline: `Complete these 4 simple steps to keep ${biz} on top of Google Maps search.`,
+    appUrl,
+    includeUnsubscribe: true,
+    reasonLine: `You received this daily growth checklist as the registered owner of ${biz}.`,
+    bodyHtml,
+  });
+
+  const text = `Today's 3-Minute Growth Checklist — ${biz}
+
+Here is your daily action checklist to keep ${biz} winning nearby customers on Google:
+
+1. [ ] Publish Today's Branded Poster: ${posterTitle}
+   Open AI Studio: ${studioUrl}
+
+2. [ ] Customer Reviews & Reputation:
+   ${unreplied > 0 ? `${unreplied} unreplied reviews waiting.` : 'Send 2 WhatsApp review invite links.'}
+   Manage Reviews: ${reviewsUrl}
+
+3. [ ] Google Maps Freshness (Photo Check):
+   Upload a fresh photo to boost local search views: ${photosUrl}
+
+4. [ ] Daily Inquiries & Checklist:
+   Open Business Dashboard: ${dashboardUrl}
 
 Unsubscribe: {{unsubscribe_url}}`;
 
