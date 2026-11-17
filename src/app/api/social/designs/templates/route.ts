@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser, getProductAppUrl } from '@/lib/auth';
 import { db } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
 import {
   BUSINESS_EDITIONS,
   BUSINESS_GROUPS,
@@ -34,12 +36,12 @@ import {
 
 function getFestivalFallbackPhoto(occasion: string, idx: number): string {
   const matches = searchFestivalCatalog({ festivalKey: occasion, limit: 10 });
-  if (matches.length > 0) {
-    return matches[idx % matches.length].url;
+  if (matches.items.length > 0) {
+    return matches.items[idx % matches.items.length].url;
   }
   const general = searchFestivalCatalog({ limit: 10 });
-  if (general.length > 0) {
-    return general[idx % general.length].url;
+  if (general.items.length > 0) {
+    return general.items[idx % general.items.length].url;
   }
   return '/images/bgos/festivals/diwali/Clay_oil_lamps_on_balcony_6c4c0407.webp';
 }

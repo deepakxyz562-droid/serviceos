@@ -108,6 +108,9 @@ async function fetchProvidersCached(
   filters: ProviderFilterOptions,
   sort: MarketplaceSort,
 ): Promise<SsrProviderPage> {
+  if (process.env.BUILDING === '1' || process.env.CI === '1') {
+    return { items: [], nextCursor: null, total: 0 };
+  }
   const cacheKey = [
     'fieseros:marketplace:page1',
     `sort:${sort}`,

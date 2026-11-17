@@ -6,7 +6,7 @@
     "rembg:start": "server/rembg-service/.venv/bin/uvicorn rembg_service:app --app-dir server/rembg-service --host 127.0.0.1 --port 8008",
     "rembg:install": "/opt/homebrew/bin/python3.13 -m venv server/rembg-service/.venv && server/rembg-service/.venv/bin/pip install -r server/rembg-service/requirements.txt",
     "dev": "next dev -p 3000 -H 0.0.0.0",
-    "build": "node scripts/patch-next.js && NODE_OPTIONS=\"--max-old-space-size=4096 --no-warnings\" node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build --webpack && bun scripts/standalone-cleanup.js && bash scripts/sync-public-to-standalone.sh",
+    "build": "node scripts/patch-next.js && BUILDING=1 CI=1 NODE_OPTIONS=\"--max-old-space-size=4096 --no-warnings\" node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build --webpack && bun scripts/standalone-cleanup.js && bash scripts/sync-public-to-standalone.sh",
     "sync-public": "bash scripts/sync-public-to-standalone.sh",
     "start": "next start",
     "lint": "eslint .",

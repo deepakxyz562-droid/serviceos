@@ -39,6 +39,8 @@ import { db } from "@/lib/db";
 import { sharedCacheWrap } from "@/lib/shared-cache";
 import { rethrowIfCircuitOpen } from "@/lib/circuit-breaker";
 
+const isBuildTime = () => process.env.BUILDING === '1' || process.env.CI === '1';
+
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export interface ContractorHubCity {
@@ -75,6 +77,9 @@ export interface DirectoryLocationLookup {
 export async function fetchContractorHubCities(
   industryId: string,
 ): Promise<ContractorHubCity[]> {
+  if (isBuildTime()) {
+    return [];
+  }
   const cacheKey = `fieseros:contractors:hub:${industryId}:cities`;
   const result = await sharedCacheWrap<ContractorHubCity[]>(
     cacheKey,
@@ -154,6 +159,9 @@ export async function fetchContractorCityProviders(
   citySlug: string,
   cityName: string,
 ): Promise<unknown[]> {
+  if (isBuildTime()) {
+    return [];
+  }
   const cacheKey = `fieseros:contractors:city:${industryId}:${citySlug}:providers`;
   const result = await sharedCacheWrap<unknown[]>(
     cacheKey,
@@ -242,6 +250,9 @@ export async function fetchContractorCityProviders(
 export async function fetchDirectoryLocation(
   citySlug: string,
 ): Promise<DirectoryLocationLookup | null> {
+  if (isBuildTime()) {
+    return null;
+  }
   const cacheKey = `fieseros:directory:location:${citySlug}`;
   const result = await sharedCacheWrap<DirectoryLocationLookup | null>(
     cacheKey,
@@ -296,6 +307,9 @@ export async function fetchIndustryHubTopProviders(
   industryId: string,
   take: number = 12,
 ): Promise<unknown[]> {
+  if (isBuildTime()) {
+    return [];
+  }
   const cacheKey = `fieseros:plural-hub:${industryId}:top${take}`;
   const result = await sharedCacheWrap<unknown[]>(
     cacheKey,
@@ -361,6 +375,9 @@ export async function fetchIndustryHubTopProviders(
 export async function fetchTopDirectoryCities(
   take: number = 24,
 ): Promise<Array<{ city: string; citySlug: string; countryCode: string }>> {
+  if (isBuildTime()) {
+    return [];
+  }
   const cacheKey = `fieseros:directory:top-cities:${take}`;
   const result = await sharedCacheWrap<
     Array<{ city: string; citySlug: string; countryCode: string }>
@@ -408,6 +425,9 @@ export async function fetchPluralCityProviders(
   citySlug: string,
   cityName: string,
 ): Promise<unknown[]> {
+  if (isBuildTime()) {
+    return [];
+  }
   const cacheKey = `fieseros:plural-city:${industryId}:${citySlug}:providers`;
   const result = await sharedCacheWrap<unknown[]>(
     cacheKey,
@@ -500,6 +520,9 @@ export async function fetchDirectoryLocationFull(
   latitude: number | null;
   longitude: number | null;
 } | null> {
+  if (isBuildTime()) {
+    return null;
+  }
   const cacheKey = `fieseros:directory:location-full:${citySlug}`;
   const result = await sharedCacheWrap<{
     city: string | null;

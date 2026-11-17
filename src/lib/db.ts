@@ -38,11 +38,7 @@ function createPrismaClient() {
 
   return new PrismaClient({
     log: process.env.NODE_ENV === 'production' ? ['error'] : ['error', 'warn'],
-    datasources: {
-      db: {
-        url: databaseUrl,
-      },
-    },
+    ...(databaseUrl ? { datasources: { db: { url: databaseUrl } } } : {}),
   })
 }
 
