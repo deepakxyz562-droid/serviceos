@@ -145,14 +145,14 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     expect(diwaliTemplate.photoUrl).not.toContain('photo-1508214751196-bcfd4ca60f91');
 
     // Must use authentic festival photography (diya/lights/festive or verified webp/multi-source)
-    expect(diwaliTemplate.photoUrl).toMatch(/(diwali\.webp|behance\.net|pinimg\.com|fbcdn\.net|postermywall|unsplash\.com|staticflickr\.com|wikimedia\.org)/i);
+    expect(diwaliTemplate.photoUrl).toMatch(/(diwali|behance\.net|pinimg\.com|fbcdn\.net|postermywall|unsplash\.com|staticflickr\.com|wikimedia\.org)/i);
 
     // Specifically test Holi template
     const holiTemplate = data.templates.find(
       (t: any) => t.id === 'festival-holi-universal' || /holi/i.test(t.headline)
     );
     expect(holiTemplate).toBeDefined();
-    expect(holiTemplate.photoUrl).toMatch(/(edition-holi\.webp|behance\.net|pinimg\.com|fbcdn\.net|postermywall|unsplash\.com|staticflickr\.com|wikimedia\.org)/i);
+    expect(holiTemplate.photoUrl).toMatch(/(holi|edition-holi\.webp|behance\.net|pinimg\.com|fbcdn\.net|postermywall|unsplash\.com|staticflickr\.com|wikimedia\.org)/i);
 
     // Check that every festival template photo URL is festival-themed or webp, never dental/trade clinic photo
     for (const item of data.templates) {
@@ -167,7 +167,7 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     expect(CURATED_TEMPLATES.length).toBeGreaterThanOrEqual(16);
 
     for (const tpl of CURATED_TEMPLATES) {
-      expect(tpl.referenceUrl).toMatch(/^(https:\/\/images\.unsplash\.com\/photo-|\/images\/bgos\/templates\/)/);
+      expect(tpl.referenceUrl).toMatch(/^(https:\/\/images\.unsplash\.com\/photo-|\/images\/bgos\/festivals\/|\/images\/bgos\/templates\/)/);
       // Ensure the old 404 URL is gone
       expect(tpl.referenceUrl).not.toContain('photo-1486006920555-c77dce18193b');
       // Ensure the mismatched Diwali photo is gone and replaced with verified authentic diya
@@ -175,11 +175,11 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
         expect(tpl.referenceUrl).not.toContain('photo-1508214751196-bcfd4ca60f91');
         expect(tpl.referenceUrl).not.toContain('photo-1605647540924-852290f6b0d5');
         expect(tpl.referenceUrl).not.toContain('photo-1577083552431-6e5fd01aa342');
-        expect(tpl.referenceUrl).toBe('/images/bgos/templates/diwali.webp');
+        expect(tpl.referenceUrl).toMatch(/\/images\/bgos\/festivals\/diwali\/.*\.webp/);
       }
       if (tpl.id === 'festival-holi-universal') {
         expect(tpl.referenceUrl).not.toContain('photo-1583083527882-4bee9aba2eea'); // elf cat
-        expect(tpl.referenceUrl).toBe('/images/bgos/templates/edition-holi.webp');
+        expect(tpl.referenceUrl).toMatch(/\/images\/bgos\/festivals\/holi\/.*\.webp/);
       }
     }
   });
@@ -355,7 +355,7 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
 
     // 4. Must prioritize clean commercial photography (pure photography with no text)
     const validTemplates = data.templates.filter((t: any) =>
-      t.photoUrl.includes('/images/bgos/templates/') || t.photoUrl.includes('images.unsplash.com') || t.photoUrl.startsWith('https://'),
+      t.photoUrl.includes('/images/bgos/festivals/') || t.photoUrl.includes('/images/bgos/templates/') || t.photoUrl.includes('images.unsplash.com') || t.photoUrl.startsWith('https://'),
     );
     expect(validTemplates.length).toBeGreaterThanOrEqual(15);
   }, 20000);

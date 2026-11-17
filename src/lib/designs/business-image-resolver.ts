@@ -267,7 +267,7 @@ export async function selectBusinessImage(params: {
   const curatedPool = getCategoryVisualPool(categoryText);
   const fallbackIndex = fnv1aHash(`${businessId}::fallback::${slotType}`) % curatedPool.length;
   return {
-    url: curatedPool[fallbackIndex] || '/images/bgos/templates/it_software.webp',
+    url: curatedPool[fallbackIndex] || 'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=1200&auto=format&fit=crop&q=80',
     source: 'curated_fallback',
     categoryKey: normalizeCategoryContext(categoryText).verticalKey,
     categoryFolder: folder,

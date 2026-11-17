@@ -1583,7 +1583,7 @@ export function WebMediaMetadataDialog({
                                       // Degrade gracefully through verified local assets
                                       const img = e.currentTarget;
                                       const fallbacks = [
-                                        '/images/bgos/templates/edition-professional-services.webp',
+                                        'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=1200&auto=format&fit=crop&q=80',
                                         '/images/bgos/templates/automotive.webp',
                                       ];
                                       const currentIdx = Number(img.dataset.fallbackIdx || '0');

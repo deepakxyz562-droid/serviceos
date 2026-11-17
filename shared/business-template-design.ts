@@ -65,7 +65,7 @@ export function composeBusinessEdition(input:StudioPosterInput) {
     return (
       trimmed.length > 0 &&
       (/^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,|data:image\/svg\+xml)/i.test(trimmed) ||
-        /^\/images\/bgos\/templates\/[a-z0-9-_]+\.webp$/i.test(trimmed))
+        /^\/images\/bgos\/(templates\/[a-z0-9-_]+|festivals\/[a-z0-9-_]+\/[a-z0-9-_\.…]+)\.webp$/i.test(trimmed))
     );
   };
   const safeLogo = isEligibleImage(input.logoUrl) ? input.logoUrl!.trim() : undefined;

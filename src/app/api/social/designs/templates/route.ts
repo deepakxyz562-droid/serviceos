@@ -41,7 +41,7 @@ function getFestivalFallbackPhoto(occasion: string, idx: number): string {
   if (general.length > 0) {
     return general[idx % general.length].url;
   }
-  return '/images/bgos/templates/diwali.webp';
+  return '/images/bgos/festivals/diwali/Clay_oil_lamps_on_balcony_6c4c0407.webp';
 }
 
 interface BusinessTemplateResponseItem {
@@ -470,8 +470,8 @@ export async function GET(request: NextRequest) {
           assignedPhoto = festivalItem?.url || assignedPhoto;
           photoSourceKey = festivalItem?.source || 'curated';
           photoCredit = festivalItem?.credit;
-        } else if (tpl.photo && tpl.photo.startsWith('/images/bgos/templates/')) {
-          // No dynamic pool for this occasion yet — keep the evergreen local asset
+        } else if (tpl.photo && (tpl.photo.startsWith('/images/bgos/festivals/') || tpl.photo.startsWith('https://'))) {
+          // Dynamic pool or curated festival catalog asset
           assignedPhoto = tpl.photo;
         } else {
           assignedPhoto = getFestivalFallbackPhoto(occasion, idx);
@@ -795,6 +795,10 @@ export async function GET(request: NextRequest) {
     limit: 120,
   });
 
+  const festivalAspect = (requestedAspect && ['1:1', '4:5', '9:16'].includes(requestedAspect))
+    ? (requestedAspect as '1:1' | '4:5' | '9:16')
+    : '4:5';
+
   const catalogFestivalTemplates: BusinessTemplateResponseItem[] = festivalSearchResults.items.map((item) => ({
     id: `fest-catalog-${item.id}`,
     layout: 'business_0',
@@ -806,7 +810,7 @@ export async function GET(request: NextRequest) {
     tab: 'festivals',
     purpose: 'Festival',
     theme: 'gold',
-    aspectRatio: '4:5',
+    aspectRatio: festivalAspect,
     photoUrl: item.url,
     photoSource: 'Curated Festival Library',
     occasionId: item.festivalKey,
@@ -826,6 +830,9 @@ export async function GET(request: NextRequest) {
   ];
 
   let festivalsTemplates = rawFestivalsTemplates;
+  if (requestedAspect && ['1:1', '4:5', '9:16'].includes(requestedAspect)) {
+    festivalsTemplates = festivalsTemplates.filter((t) => t.aspectRatio === requestedAspect);
+  }
   if (requestedFestival !== 'all') {
     festivalsTemplates = festivalsTemplates.filter(
       (t) => t.occasionId === requestedFestival || t.id.includes(requestedFestival) || t.headline.toLowerCase().includes(requestedFestival)

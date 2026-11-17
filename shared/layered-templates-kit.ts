@@ -156,7 +156,7 @@ export const LAYERED_KIT_DEFINITIONS: KitPosterDefinition[] = [
     subtitle: 'May the festival of lights illuminate your path with joy, good health and abundance.',
     bullets: ['Joy • Harmony • Prosperity'],
     cta: 'Celebrate with Us 🪔',
-    photo: '/images/bgos/templates/diwali.webp',
+    photo: '/images/bgos/festivals/diwali/Clay_oil_lamps_on_balcony_6c4c0407.webp',
     graphicEmblem: KIT_SVG_EMBLEMS.glowingDiyaFlame,
     bgPrompt: 'Traditional clay diyas glowing with golden flames, marigold flowers, deep maroon and amber bokeh background, festive photography, no text.',
     ink: '#FFF3D6',

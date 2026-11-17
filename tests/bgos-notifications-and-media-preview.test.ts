@@ -35,9 +35,9 @@ describe('BGOS Photo URI Resolution & Media Preview', () => {
   });
 
   it('resolves template assets to bgos.site domain', () => {
-    const templatePath = '/images/bgos/templates/edition-holi.webp';
+    const templatePath = '/images/bgos/templates/diwali.webp';
     const resolved = resolvePhotoUrl(templatePath);
-    expect(resolved).toBe('https://bgos.site/images/bgos/templates/edition-holi.webp');
+    expect(resolved).toBe('https://bgos.site/images/bgos/templates/diwali.webp');
   });
 });
 

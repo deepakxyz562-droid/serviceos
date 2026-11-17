@@ -144,7 +144,7 @@ export function validateDesign(value: unknown): MarketingDesign {
         l.src.length > 6_000_000 ||
         !(
           /^(https:\/\/|data:image\/(png|jpeg|jpg|webp);base64,|data:image\/svg\+xml(;utf8,|;base64,|,))/i.test(l.src) ||
-          /^\/images\/bgos\/templates\/[a-z0-9-_]+\.webp$/i.test(l.src)
+          /^\/images\/bgos\/(templates\/[a-z0-9-_]+|festivals\/[a-z0-9-_]+\/[a-z0-9-_\.…]+)\.webp$/i.test(l.src)
         ))
     ) {
       throw new Error('Use an HTTPS image, SVG vector, or upload a PNG, JPEG or WebP');

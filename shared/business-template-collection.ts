@@ -27,13 +27,13 @@ const subjectGroups:Record<string,number> = {
  'Choose your session':0,'Ready for your order':2,'Choose your favourites':6,
  'Plan a walkthrough':7,'See it in person':7,'Start your membership':0,
 };
-const purposes = ['Promotion','Trust-building','Business profile','Engagement','Conversion','Festival'] as const;
-export type Purpose = typeof purposes[number];
-export const TEMPLATE_PURPOSES = [...purposes];
+const editionPurposes = ['Promotion','Trust-building','Business profile','Engagement','Conversion'] as const;
+export type Purpose = typeof editionPurposes[number] | 'Festival';
+export const TEMPLATE_PURPOSES = [...editionPurposes, 'Festival'] as const;
 const categories: Record<Purpose,PosterCategoryId> = {Promotion:'sale_offer','Trust-building':'testimonial','Business profile':'service_spotlight',Engagement:'quote',Conversion:'appointment',Festival:'festival'};
 const themes: CommercialTheme[] = ['emerald','rose_chic','trust_amber','cyber_tech','sand','dark','royal_gold','luxe_dark'];
 // Each row is one brief. Each headline is a separate edition, in publication order.
-const briefs: Record<Purpose,string[]> = {
+const briefs: Record<typeof editionPurposes[number], string[]> = {
   Promotion:[
     'Discount offer|A cut above|The weekend edit|Good finds for less',
     'Seasonal sale|Summer shelf reset|An autumn refresh|Spring, in store',
@@ -84,17 +84,21 @@ const briefs: Record<Purpose,string[]> = {
     'Order now|Choose your favourites|Ready for your order',
     'Join today|Find your community|Start your membership',
   ],
-  Festival:[
-    'Diwali|An evening of light|The Diwali gift edit','Holi|A sky full of colour|The Holi palette',
-    'Eid|Under the Eid moon|An Eid invitation','Christmas|The Christmas table|Wrapped for Christmas',
-    'New Year|A fresh page|Your New Year invitation','Independence Day|Colours of freedom|A community gathering',
-    'Republic Day|In celebration of the Republic|The Republic Day edition','Raksha Bandhan|A thread between us|The Rakhi gift guide',
-    'Dussehra|Light after dusk|The Dussehra collection',"Valentine’s Day|A note for someone special|The Valentine edit",
-    'Mother’s Day|For the ones who nurture|A Mother’s Day invitation','Father’s Day|For the ones who guide|The Father’s Day edit',
-  ],
 };
-const occasionIds=['diwali','holi','eid','christmas','new_year','independence_day','republic_day','rakhi','navratri','valentine','mothers_day','fathers_day'];
-const backgrounds=['it_software','security_cctv','dental','salon','restaurant','coaching','plumbing','automotive','fashion','property','edition-professional-services','edition-events-lifestyle'];
+const GROUP_DEFAULT_PHOTOS: Record<string, string> = {
+  'IT & Software': 'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=1200&auto=format&fit=crop&q=80',
+  'Security & CCTV': 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=1200&auto=format&fit=crop&q=80',
+  'Dental & Health': 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=1200&auto=format&fit=crop&q=80',
+  'Salon & Beauty': 'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1200&auto=format&fit=crop&q=80',
+  'Restaurant & Cafe': 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&auto=format&fit=crop&q=80',
+  'Education & Coaching': 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1200&auto=format&fit=crop&q=80',
+  'Plumbing & Repair': 'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=1200&auto=format&fit=crop&q=80',
+  'Auto & Garage': 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=1200&auto=format&fit=crop&q=80',
+  'Fashion & Retail': 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200&auto=format&fit=crop&q=80',
+  'Real Estate & Property': 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&auto=format&fit=crop&q=80',
+  'Professional Services': 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=1200&auto=format&fit=crop&q=80',
+  'Events & Lifestyle': 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=1200&auto=format&fit=crop&q=80',
+};
 const groups=Object.keys(BUSINESS_GROUPS) as (keyof typeof BUSINESS_GROUPS)[];
 const slug=(value:string)=>value.toLowerCase().replace(/[’']/g,'').replace(/[^a-z0-9]+/g,'-').replace(/-$/,'');
 const supporting:Record<Purpose,string[]>={
@@ -140,7 +144,7 @@ const copyByIntent:Record<string,string> = {
 };
 export interface BusinessEdition {purpose:Purpose; group:string; format:string; intent:string; variant:number; direction:number; slides?:string[]}
 export const BUSINESS_EDITIONS: PosterTemplate[] = [];
-for (const [purposeIndex,purpose] of purposes.entries()) {
+for (const [purposeIndex,purpose] of editionPurposes.entries()) {
   for (const [briefIndex,row] of briefs[purpose].entries()) {
     const [intent,...headlines]=row.split('|');
     for (const [variant,headline] of headlines.entries()) {
@@ -160,12 +164,11 @@ for (const [purposeIndex,purpose] of purposes.entries()) {
       BUSINESS_EDITIONS.push({
         id,name:headline,layout:`business_${id}`,collection:variant%2?'creative':'standard',category:categories[purpose],
         edition,theme:themes[(briefIndex+variant*3+purposeIndex)%themes.length],aspect:TEMPLATE_FORMATS[format],
-        headline,badge:intent,subtitle:purpose==='Festival' && variant===0 ? 'Warm wishes from our team to yours.' : (copyByIntent[intent] || subtitle),
+        headline,badge:intent,subtitle:copyByIntent[intent] || subtitle,
         cta:purpose==='Conversion'?intent:purpose==='Promotion'?'Explore the offer':purpose==='Trust-building'?'Read the story':cta,
-        photo:`/images/bgos/templates/${purpose==='Festival' ? (briefIndex===0?'diwali':'edition-'+occasionIds[briefIndex].replace(/_/g,'-')) : backgrounds[groupIndex]}.webp`,
+        photo:GROUP_DEFAULT_PHOTOS[group] || 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=1200&auto=format&fit=crop&q=80',
         industries:BUSINESS_GROUPS[group].toLowerCase().split('|'),
         bgPrompt:`${intent} for ${group}: ${headline}. Editorial photography, clear focal point, no text or lettering.`,
-        ...(purpose==='Festival'?{occasionId:occasionIds[briefIndex]}:{}),
       });
     }
   }

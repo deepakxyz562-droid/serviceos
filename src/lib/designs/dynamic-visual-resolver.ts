@@ -3,59 +3,128 @@ import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { listGoogleBusinessMedia } from '@/lib/social/adapters/googlebusiness';
 import { generateDesignImage } from '@/lib/designs/image-provider';
 import { normalizeCategoryContext } from './category-taxonomy';
+import { searchFestivalCatalog } from '../../../shared/festival-catalog';
 
 /**
  * Dynamic SMB Category Visual Mapping.
- * Instead of hardcoding hundreds of external Unsplash links in source code,
- * BGOS serves verified local WebP template assets and dynamic S3-cached AI assets.
+ * Instead of hardcoding static mockup files,
+ * BGOS serves verified high-resolution commercial assets and dynamic S3-cached AI assets.
  */
 const DEFAULT_FALLBACK_VISUALS = [
-  '/images/bgos/templates/it_software.webp',
-  '/images/bgos/templates/restaurant.webp',
-  '/images/bgos/templates/dental.webp',
-  '/images/bgos/templates/salon.webp',
-  '/images/bgos/templates/property.webp',
-  '/images/bgos/templates/automotive.webp',
-  '/images/bgos/templates/fitness.webp',
-  '/images/bgos/templates/plumbing.webp',
-  '/images/bgos/templates/coaching.webp',
-  '/images/bgos/templates/security_cctv.webp',
+  'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=1200&auto=format&fit=crop&q=80',
 ];
 
 const LOCAL_CATEGORY_TEMPLATES: Record<string, string[]> = {
-  plywood_timber: ['/images/bgos/templates/property.webp', '/images/bgos/templates/plumbing.webp'],
-  indian_sweets: ['/images/bgos/templates/cafe.webp', '/images/bgos/templates/restaurant.webp'],
-  welding_fabrication: ['/images/bgos/templates/automotive.webp', '/images/bgos/templates/plumbing.webp'],
-  solar_energy: ['/images/bgos/templates/plumbing.webp', '/images/bgos/templates/it_software.webp'],
-  dental_clinic: ['/images/bgos/templates/dental.webp', '/images/bgos/templates/physio.webp'],
-  salon_spa: ['/images/bgos/templates/salon.webp'],
-  auto_repair: ['/images/bgos/templates/automotive.webp'],
-  fitness_gym: ['/images/bgos/templates/fitness.webp'],
-  restaurant_dining: ['/images/bgos/templates/restaurant.webp', '/images/bgos/templates/cafe.webp'],
-  bakery_sweets: ['/images/bgos/templates/cafe.webp', '/images/bgos/templates/restaurant.webp'],
-  plumbing: ['/images/bgos/templates/plumbing.webp'],
-  electrical: ['/images/bgos/templates/plumbing.webp', '/images/bgos/templates/security_cctv.webp'],
-  hardware_tools: ['/images/bgos/templates/plumbing.webp'],
-  paint_decor: ['/images/bgos/templates/property.webp'],
-  jewellery: ['/images/bgos/templates/fashion.webp'],
-  fashion_boutique: ['/images/bgos/templates/fashion.webp'],
-  real_estate: ['/images/bgos/templates/property.webp'],
-  cleaning_services: ['/images/bgos/templates/plumbing.webp'],
-  farmhouse_resort: ['/images/bgos/templates/property.webp'],
-  it_software: ['/images/bgos/templates/it_software.webp'],
-  legal_accounting: ['/images/bgos/templates/edition-professional-services.webp'],
-  healthcare_medical: ['/images/bgos/templates/dental.webp', '/images/bgos/templates/physio.webp'],
-  security_services: ['/images/bgos/templates/security_cctv.webp'],
-  security_cctv: ['/images/bgos/templates/security_cctv.webp'],
-  grocery_supermarket: ['/images/bgos/templates/cafe.webp'],
-  pet_vet: ['/images/bgos/templates/physio.webp'],
-  photography_studio: ['/images/bgos/templates/edition-events-lifestyle.webp'],
-  hvac_aircon: ['/images/bgos/templates/plumbing.webp'],
-  roofing: ['/images/bgos/templates/property.webp'],
-  landscaping_lawn: ['/images/bgos/templates/property.webp'],
-  logistics_courier: ['/images/bgos/templates/automotive.webp'],
-  education_academy: ['/images/bgos/templates/coaching.webp'],
-  event_decor: ['/images/bgos/templates/edition-events-lifestyle.webp'],
+  plywood_timber: [
+    'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?w=1200&auto=format&fit=crop&q=80',
+  ],
+  indian_sweets: [
+    'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=1200&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1541832676-9b763b0239ab?w=1200&auto=format&fit=crop&q=80',
+  ],
+  welding_fabrication: [
+    'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1200&auto=format&fit=crop&q=80',
+  ],
+  solar_energy: [
+    'https://images.unsplash.com/photo-1509391365360-2e959784a276?w=1200&auto=format&fit=crop&q=80',
+  ],
+  dental_clinic: [
+    'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=1200&auto=format&fit=crop&q=80',
+  ],
+  salon_spa: [
+    'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1200&auto=format&fit=crop&q=80',
+  ],
+  auto_repair: [
+    'https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=1200&auto=format&fit=crop&q=80',
+  ],
+  fitness_gym: [
+    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1200&auto=format&fit=crop&q=80',
+  ],
+  restaurant_dining: [
+    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&auto=format&fit=crop&q=80',
+  ],
+  bakery_sweets: [
+    'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=1200&auto=format&fit=crop&q=80',
+  ],
+  plumbing: [
+    'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=1200&auto=format&fit=crop&q=80',
+  ],
+  electrical: [
+    'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=1200&auto=format&fit=crop&q=80',
+  ],
+  hardware_tools: [
+    'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=1200&auto=format&fit=crop&q=80',
+  ],
+  paint_decor: [
+    'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=1200&auto=format&fit=crop&q=80',
+  ],
+  jewellery: [
+    'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=1200&auto=format&fit=crop&q=80',
+  ],
+  fashion_boutique: [
+    'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200&auto=format&fit=crop&q=80',
+  ],
+  real_estate: [
+    'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&auto=format&fit=crop&q=80',
+  ],
+  cleaning_services: [
+    'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&auto=format&fit=crop&q=80',
+  ],
+  farmhouse_resort: [
+    'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&auto=format&fit=crop&q=80',
+  ],
+  it_software: [
+    'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=1200&auto=format&fit=crop&q=80',
+  ],
+  legal_accounting: [
+    'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=1200&auto=format&fit=crop&q=80',
+  ],
+  healthcare_medical: [
+    'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=1200&auto=format&fit=crop&q=80',
+  ],
+  security_services: [
+    'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=1200&auto=format&fit=crop&q=80',
+  ],
+  security_cctv: [
+    'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=1200&auto=format&fit=crop&q=80',
+  ],
+  grocery_supermarket: [
+    'https://images.unsplash.com/photo-1542838132-92c53300491e?w=1200&auto=format&fit=crop&q=80',
+  ],
+  pet_vet: [
+    'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=1200&auto=format&fit=crop&q=80',
+  ],
+  photography_studio: [
+    'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=1200&auto=format&fit=crop&q=80',
+  ],
+  hvac_aircon: [
+    'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=1200&auto=format&fit=crop&q=80',
+  ],
+  roofing: [
+    'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&auto=format&fit=crop&q=80',
+  ],
+  landscaping_lawn: [
+    'https://images.unsplash.com/photo-1558904541-efa8c4a08931?w=1200&auto=format&fit=crop&q=80',
+  ],
+  logistics_courier: [
+    'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&auto=format&fit=crop&q=80',
+  ],
+  education_academy: [
+    'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1200&auto=format&fit=crop&q=80',
+  ],
+  event_decor: [
+    'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=1200&auto=format&fit=crop&q=80',
+  ],
   generic_business: DEFAULT_FALLBACK_VISUALS,
 };
 
@@ -138,30 +207,29 @@ export function scoreIndustryMatch(text: string): string {
   return verticalMap[context.verticalKey] || 'generic_business';
 }
 
-const FESTIVAL_ASSET_MAP: Record<string, string[]> = {
-  diwali: ['/images/bgos/templates/diwali.webp'],
-  holi: ['/images/bgos/templates/edition-holi.webp'],
-  eid: ['/images/bgos/templates/edition-eid.webp'],
-  christmas: ['/images/bgos/templates/edition-christmas.webp'],
-  new_year: ['/images/bgos/templates/edition-new-year.webp'],
-  independence_day: ['/images/bgos/templates/edition-independence-day.webp'],
-  republic_day: ['/images/bgos/templates/edition-republic-day.webp'],
-  rakhi: ['/images/bgos/templates/edition-rakhi.webp'],
-  navratri: ['/images/bgos/templates/edition-navratri.webp'],
-  dussehra: ['/images/bgos/templates/edition-navratri.webp'],
-  chhath_puja: ['/images/bgos/templates/diwali.webp'],
-  valentine: ['/images/bgos/templates/edition-valentine.webp'],
-  mothers_day: ['/images/bgos/templates/edition-mothers-day.webp'],
-  fathers_day: ['/images/bgos/templates/edition-fathers-day.webp'],
-};
+/**
+ * Resolves festival visual pool directly from the authentic 242-photo master catalog.
+ */
+export function getFestivalVisualPool(occasion: string): string[] {
+  const matches = searchFestivalCatalog({ festivalKey: occasion, limit: 10 });
+  if (matches.items.length > 0) {
+    return matches.items.map((m) => m.url);
+  }
+  const general = searchFestivalCatalog({ limit: 10 });
+  if (general.items.length > 0) {
+    return general.items.map((m) => m.url);
+  }
+  return ['/images/bgos/festivals/diwali/Clay_oil_lamps_on_balcony_6c4c0407.webp'];
+}
 
 /**
  * Returns a randomized visual pool for any business industry or query.
  */
 export function getCategoryVisualPool(industryOrQuery: string): string[] {
   const norm = normalizeCategoryContext(industryOrQuery);
-  if (norm.isFestival && norm.detectedOccasion && FESTIVAL_ASSET_MAP[norm.detectedOccasion]) {
-    return [...FESTIVAL_ASSET_MAP[norm.detectedOccasion]];
+  if (norm.isFestival && norm.detectedOccasion) {
+    const festPool = getFestivalVisualPool(norm.detectedOccasion);
+    if (festPool.length > 0) return festPool;
   }
   const key = scoreIndustryMatch(industryOrQuery);
   const pool = CURATED_SMB_IMAGE_REGISTRY[key] || CURATED_SMB_IMAGE_REGISTRY.generic_business;
