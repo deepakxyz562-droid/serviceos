@@ -13,7 +13,7 @@ import { db } from '@/lib/db';
  *   - getVapidKeys()              — read VAPID public/private keys from env
  */
 
-// ─── Notification types (15) ─────────────────────────────────────────────────
+// ─── Notification types (20) ─────────────────────────────────────────────────
 export const NOTIFICATION_TYPES = [
   'lead_assigned',
   'lead_updated',
@@ -23,11 +23,16 @@ export const NOTIFICATION_TYPES = [
   'job_started',
   'technician_on_route',
   'job_completed',
+  'checklist_assigned',
+  'checklist_completed',
+  'checklist_reminder',
   'invoice_created',
   'invoice_paid',
   'customer_review',
   'employee_login',
   'workflow_executed',
+  'social_post',
+  'daily_growth_tips',
   'reminder',
   'support_ticket_update',
 ] as const;
@@ -171,11 +176,11 @@ export async function createNotification(
 export function categoryForType(type: string): string {
   if (type.startsWith('lead_')) return 'lead';
   if (type.startsWith('quote_')) return 'quote';
-  if (type.startsWith('job_') || type === 'technician_on_route') return 'job';
+  if (type.startsWith('job_') || type === 'technician_on_route' || type.startsWith('checklist_')) return 'job';
   if (type.startsWith('invoice_')) return 'invoice';
   if (type === 'customer_review') return 'customer';
   if (type === 'employee_login') return 'employee';
-  if (type === 'workflow_executed') return 'workflow';
+  if (type === 'workflow_executed' || type === 'social_post' || type === 'daily_growth_tips') return 'workflow';
   if (type === 'support_ticket_update') return 'support';
   if (type === 'reminder') return 'system';
   return 'system';
@@ -203,6 +208,12 @@ export function iconForType(type: string): {
       return { icon: 'XCircle', color: 'text-red-600', bg: 'bg-red-50' };
     case 'job_assigned':
       return { icon: 'ClipboardList', color: 'text-violet-600', bg: 'bg-violet-50' };
+    case 'checklist_assigned':
+      return { icon: 'ClipboardCheck', color: 'text-teal-600', bg: 'bg-teal-50' };
+    case 'checklist_completed':
+      return { icon: 'CheckCircle2', color: 'text-emerald-600', bg: 'bg-emerald-50' };
+    case 'checklist_reminder':
+      return { icon: 'Clock', color: 'text-amber-600', bg: 'bg-amber-50' };
     case 'job_started':
       return { icon: 'PlayCircle', color: 'text-blue-600', bg: 'bg-blue-50' };
     case 'technician_on_route':
@@ -219,6 +230,10 @@ export function iconForType(type: string): {
       return { icon: 'LogIn', color: 'text-teal-600', bg: 'bg-teal-50' };
     case 'workflow_executed':
       return { icon: 'Workflow', color: 'text-purple-600', bg: 'bg-purple-50' };
+    case 'social_post':
+      return { icon: 'Share2', color: 'text-indigo-600', bg: 'bg-indigo-50' };
+    case 'daily_growth_tips':
+      return { icon: 'Sparkles', color: 'text-purple-600', bg: 'bg-purple-50' };
     case 'reminder':
       return { icon: 'Bell', color: 'text-slate-600', bg: 'bg-slate-100' };
     case 'support_ticket_update':
@@ -235,7 +250,7 @@ export function iconForType(type: string): {
 function mapTypeToTimelineEntryType(type: string): string {
   if (type.startsWith('lead_')) return 'lead';
   if (type.startsWith('quote_')) return 'quote';
-  if (type.startsWith('job_') || type === 'technician_on_route') return 'job';
+  if (type.startsWith('job_') || type === 'technician_on_route' || type.startsWith('checklist_')) return 'job';
   if (type.startsWith('invoice_')) return 'invoice';
   if (type === 'customer_review') return 'review';
   if (type === 'support_ticket_update') return 'ticket';

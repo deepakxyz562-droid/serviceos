@@ -259,7 +259,7 @@ async function discoverBgosTenantWorkspaces(
 
   if (hasWorkspace || hasProdWs) {
     const tenantIdSet = new Set<string>();
-    const [wss, pws] = await Promise.all([
+    const [wss, pws, bgosTenants] = await Promise.all([
       hasWorkspace
         ? (db as any).workspace
             .findMany({ where: { productType: 'bgos' }, select: { id: true, tenantId: true } })
@@ -270,7 +270,27 @@ async function discoverBgosTenantWorkspaces(
             .findMany({ where: { product: 'bgos' }, select: { workspaceId: true, tenantId: true } })
             .catch(() => [])
         : Promise.resolve([]),
+      typeof (db as any).tenant?.findMany === 'function'
+        ? (db as any).tenant
+            .findMany({
+              where: {
+                suspendedAt: null,
+                OR: [
+                  { signupMode: 'bgos' },
+                  { plan: { startsWith: 'bgos' } },
+                  { socialAccounts: { some: { platform: 'googlebusiness', isActive: true } } },
+                ],
+              },
+              select: { id: true },
+              take: Math.max(1, limit),
+            })
+            .catch(() => [])
+        : Promise.resolve([]),
     ]);
+
+    for (const bt of Array.isArray(bgosTenants) ? bgosTenants : []) {
+      if (bt?.id) tenantIdSet.add(bt.id);
+    }
 
     for (const w of Array.isArray(wss) ? wss : []) {
       if (!w?.tenantId) continue;

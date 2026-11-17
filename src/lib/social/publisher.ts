@@ -310,21 +310,18 @@ export async function publishPost(postId: string): Promise<void> {
 
     if (targets.length === 0) {
       const noTargetReason = isMediaPost
-        ? 'Google Business Profile not connected yet — connect Google to publish this scheduled media.'
+        ? 'Google Business Profile not connected yet — connect Google to publish this media.'
         : 'No publish targets defined for this post.';
       await finalizePost(postId, [], noTargetReason);
-      const isMediaOnlyPost =
-        publishParams.gbpPostType === 'photo_media' || publishParams.gbpPostType === 'media';
-      if (post.status === 'scheduled' && !isMediaOnlyPost) {
-        await notifyScheduledPostCompleted({
-          postId,
-          tenantId: post.tenantId,
-          content: post.content,
-          results: [],
-          finalStatus: 'failed',
-          failureReason: noTargetReason,
-        });
-      }
+      await notifyScheduledPostCompleted({
+        postId,
+        tenantId: post.tenantId,
+        content: post.content,
+        results: [],
+        finalStatus: 'failed',
+        failureReason: noTargetReason,
+        isScheduled: post.status === 'scheduled',
+      });
       return;
     }
   } else {
@@ -419,19 +416,16 @@ export async function publishPost(postId: string): Promise<void> {
 
   await finalizePost(postId, results, failureReason, finalStatus);
 
-  // Notify tenant team when a scheduled post finishes publishing so the user can view/verify it on Google.
-  const isMediaOnlyPost =
-    publishParams.gbpPostType === 'photo_media' || publishParams.gbpPostType === 'media';
-  if (post.status === 'scheduled' && !isMediaOnlyPost) {
-    await notifyScheduledPostCompleted({
-      postId,
-      tenantId: post.tenantId,
-      content: post.content,
-      results,
-      finalStatus,
-      failureReason,
-    });
-  }
+  // Notify tenant team when post finishes publishing (both immediate and scheduled) so the user can view/verify it on Google.
+  await notifyScheduledPostCompleted({
+    postId,
+    tenantId: post.tenantId,
+    content: post.content,
+    results,
+    finalStatus,
+    failureReason,
+    isScheduled: post.status === 'scheduled',
+  });
 }
 
 // ─── Single-target publish ─────────────────────────────────────────────────
@@ -682,6 +676,7 @@ async function notifyScheduledPostCompleted(params: {
   results: PublishTarget[];
   finalStatus: 'published' | 'partial' | 'failed';
   failureReason: string | null;
+  isScheduled?: boolean;
 }): Promise<void> {
   try {
     if (typeof (db as any).user?.findMany !== 'function') {
@@ -708,13 +703,14 @@ async function notifyScheduledPostCompleted(params: {
       params.finalStatus,
     );
 
-    const cleanSnippet = (params.content || 'Scheduled post').replace(/\s+/g, ' ').trim().slice(0, 75);
+    const cleanSnippet = (params.content || (params.isScheduled ? 'Scheduled post' : 'Post')).replace(/\s+/g, ' ').trim().slice(0, 75);
+    const prefix = params.isScheduled ? 'Scheduled post' : 'Post';
     const title =
       params.finalStatus === 'published'
-        ? 'Scheduled post published'
+        ? `${prefix} published`
         : params.finalStatus === 'partial'
-        ? 'Scheduled post partially published'
-        : 'Scheduled post failed to publish';
+        ? `${prefix} partially published`
+        : `${prefix} failed to publish`;
 
     const message =
       params.finalStatus === 'published'

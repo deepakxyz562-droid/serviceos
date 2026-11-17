@@ -132,6 +132,9 @@ export default function RootLayout() {
           id: string;
           title: string;
           message: string;
+          targetRoute: string;
+          actionButtonLabel: string;
+          meta: Record<string, unknown>;
           conversationId?: string;
           sessionId?: string;
         }> = [];
@@ -154,17 +157,43 @@ export default function RootLayout() {
             meta.sessionId ||
             meta.conversationId ||
             (item.category === 'customer' && (item.priority === 'urgent' || item.priority === 'high'));
-          if (!isLiveChat) continue;
+
+          const isPostOrChecklistOrGrowth =
+            (item as any).type === 'social_post' ||
+            (item as any).type === 'daily_growth_tips' ||
+            (typeof (item as any).type === 'string' && (item as any).type.startsWith('checklist_')) ||
+            item.category === 'workflow' ||
+            item.category === 'job';
+
+          if (!isLiveChat && !isPostOrChecklistOrGrowth && item.priority !== 'high' && item.priority !== 'urgent') {
+            continue;
+          }
 
           const createdMs = item.createdAt ? new Date(item.createdAt).getTime() : nowMs;
           if (isFirstRun && Number.isFinite(createdMs) && nowMs - createdMs > 120_000) {
             continue;
           }
 
+          let targetRoute = '/inbox';
+          let actionButtonLabel = 'Open Inbox';
+          if ((item as any).type === 'social_post' || meta.route === '/(tabs)/marketing') {
+            targetRoute = '/(tabs)/marketing';
+            actionButtonLabel = 'View Posts';
+          } else if ((item as any).type === 'daily_growth_tips') {
+            targetRoute = typeof meta.route === 'string' ? meta.route : '/(tabs)/marketing';
+            actionButtonLabel = 'Open Studio';
+          } else if (typeof (item as any).type === 'string' && (item as any).type.startsWith('checklist_')) {
+            targetRoute = typeof meta.route === 'string' ? meta.route : '/(tabs)/tools';
+            actionButtonLabel = 'View Checklist';
+          }
+
           freshEscalations.push({
             id: item.id,
-            title: item.title || 'Live Chat Escalation',
-            message: item.message || 'A customer wants to chat with a human agent.',
+            title: item.title || 'Notification',
+            message: item.message || '',
+            targetRoute,
+            actionButtonLabel,
+            meta,
             conversationId: typeof meta.conversationId === 'string' ? meta.conversationId : undefined,
             sessionId: typeof meta.sessionId === 'string' ? meta.sessionId : undefined,
           });
@@ -181,10 +210,10 @@ export default function RootLayout() {
               body: latest.message,
               sound: 'default',
               data: {
-                route: '/inbox',
+                route: latest.targetRoute,
                 conversationId: latest.conversationId,
                 sessionId: latest.sessionId,
-                source: 'live_chat_escalation',
+                ...latest.meta,
               },
             },
             trigger: null,
@@ -193,14 +222,14 @@ export default function RootLayout() {
           Alert.alert(latest.title, latest.message, [
             { text: 'Later', style: 'cancel' },
             {
-              text: 'Open Inbox',
+              text: latest.actionButtonLabel,
               onPress: () => {
                 void apiRequest('/api/notifications', {
                   method: 'PATCH',
                   body: { id: latest.id, isRead: true },
                 }).catch(() => {});
                 router.push({
-                  pathname: '/inbox',
+                  pathname: latest.targetRoute as any,
                   params: latest.conversationId
                     ? {
                         conversationId: latest.conversationId,

@@ -4,9 +4,11 @@ import { getAuthUser } from '@/lib/auth';
 import {
   createNotification,
   categoryForType,
+  shouldDeliverNotification,
   NOTIFICATION_TYPES,
   NOTIFICATION_CATEGORIES,
 } from '@/lib/notifications';
+import { sendWebPushToUser } from '@/lib/web-push-send';
 
 /**
  * GET /api/notifications
@@ -196,6 +198,20 @@ export async function POST(request: NextRequest) {
     const created = await db.appNotification.findUnique({
       where: { id: result.id },
     });
+
+    const canPush = typeof (db as any).pushSubscription?.findMany === 'function';
+    if (canPush) {
+      const allowed = await shouldDeliverNotification(recipientId, type, priority || 'normal').catch(() => true);
+      if (allowed) {
+        sendWebPushToUser(recipientId, user.tenantId, {
+          title,
+          body: message,
+          url: actionUrl || '/',
+          tag: `notif-${result.id}`,
+          data: typeof metadataJson === 'object' && metadataJson ? metadataJson : {},
+        }).catch((e) => console.warn('[notifications] POST push error:', e));
+      }
+    }
 
     return NextResponse.json(created, { status: 201 });
   } catch (error) {

@@ -1,6 +1,8 @@
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { createNotification, shouldDeliverNotification } from '@/lib/notifications';
+import { sendWebPushToUser } from '@/lib/web-push-send';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -65,6 +67,76 @@ async function resolveTenantIdForJob(
     if (ws?.tenantId) return ws.tenantId;
   }
   return userTenantId;
+}
+
+/**
+ * Dispatch in-app notification and Web/Expo push to tenant team when a
+ * job checklist is completed by a field technician or manager.
+ */
+async function dispatchChecklistCompletedNotification(params: {
+  tenantId: string;
+  jobId: string;
+  checklistId: string;
+  checklistName: string;
+  completedByUserId: string;
+  completedByName?: string | null;
+}) {
+  try {
+    if (typeof (db as any).user?.findMany !== 'function') {
+      return;
+    }
+    const managers = await db.user.findMany({
+      where: {
+        tenantId: params.tenantId,
+        isActive: true,
+        role: { not: 'customer' },
+      },
+      select: { id: true },
+      take: 20,
+    });
+
+    const title = `Checklist Completed: ${params.checklistName}`;
+    const performer = params.completedByName?.trim() || 'Technician';
+    const shortJob = params.jobId.slice(-6);
+    const message = `${performer} marked the checklist "${params.checklistName}" as completed for Job #${shortJob}.`;
+    const actionUrl = `/app?view=jobs&jobId=${params.jobId}`;
+
+    for (const m of managers) {
+      const allowed = await shouldDeliverNotification(m.id, 'checklist_completed', 'normal').catch(() => true);
+      if (!allowed) continue;
+
+      await createNotification({
+        tenantId: params.tenantId,
+        recipientId: m.id,
+        type: 'checklist_completed',
+        category: 'job',
+        title,
+        message,
+        actionUrl,
+        actionLabel: 'View Job',
+        metadataJson: JSON.stringify({
+          jobId: params.jobId,
+          checklistId: params.checklistId,
+          checklistName: params.checklistName,
+          completedByUserId: params.completedByUserId,
+        }),
+      }).catch((e) => console.warn('[checklist] in-app notification error:', e));
+
+      await sendWebPushToUser(m.id, params.tenantId, {
+        title,
+        body: message,
+        url: actionUrl,
+        tag: `checklist-${params.checklistId}`,
+        data: {
+          route: `/(tabs)/jobs?id=${params.jobId}`,
+          jobId: params.jobId,
+          checklistId: params.checklistId,
+        },
+      }).catch((e) => console.warn('[checklist] push error:', e));
+    }
+  } catch (err) {
+    console.error('[checklist] Failed to dispatch completion notifications:', err);
+  }
 }
 
 // ─── GET /api/jobs/[id]/checklist ──────────────────────────────────────────
@@ -260,6 +332,16 @@ export async function POST(
 
       if (body.status === 'completed') {
         const tenantId = await resolveTenantIdForJob(job.workspaceId, user.tenantId);
+        if (tenantId) {
+          await dispatchChecklistCompletedNotification({
+            tenantId,
+            jobId: id,
+            checklistId: updated.id,
+            checklistName: updated.name,
+            completedByUserId: user.id,
+            completedByName: user.name,
+          }).catch(() => {});
+        }
         if (tenantId && job.customerId) {
           try {
             await db.customerTimelineEntry.create({
@@ -348,6 +430,17 @@ export async function POST(
       },
     });
 
+    if (isCompleted) {
+      await dispatchChecklistCompletedNotification({
+        tenantId,
+        jobId: id,
+        checklistId: jobChecklist.id,
+        checklistName: name,
+        completedByUserId: user.id,
+        completedByName: user.name,
+      }).catch(() => {});
+    }
+
     if (isCompleted && job.customerId) {
       try {
         await db.customerTimelineEntry.create({
@@ -434,6 +527,16 @@ export async function PATCH(
       updateData.completedByName = user.name || null;
 
       const tenantId = await resolveTenantIdForJob(job.workspaceId, user.tenantId);
+      if (tenantId) {
+        await dispatchChecklistCompletedNotification({
+          tenantId,
+          jobId: id,
+          checklistId: existing.id,
+          checklistName: existing.name,
+          completedByUserId: user.id,
+          completedByName: user.name,
+        }).catch(() => {});
+      }
       if (tenantId && job.customerId) {
         try {
           await db.customerTimelineEntry.create({
