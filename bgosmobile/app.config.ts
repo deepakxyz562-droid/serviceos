@@ -18,7 +18,7 @@ export default ({ config, projectRoot }: ConfigContext): any => {
   name: APP_NAME,
   description: FULL_TITLE,
   slug: 'bgos',
-  owner: 'deepakchandra076',
+  owner: process.env.EXPO_PUBLIC_EAS_OWNER || 'deepakchandra076',
   version: '1.0.0',
   icon: './assets/icon.png',
   splash: { image: './assets/icon-squircle.png', resizeMode: 'contain', backgroundColor: '#F5FBF8' },
@@ -37,7 +37,7 @@ export default ({ config, projectRoot }: ConfigContext): any => {
   },
   android: {
     package: 'com.fieseros.bgos',
-    versionCode: 36,
+    versionCode: 37,
     googleServicesFile: './google-services.json',
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#0B9042' },
     compileSdkVersion: 37,
