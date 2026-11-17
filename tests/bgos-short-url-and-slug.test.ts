@@ -133,6 +133,14 @@ describe('BGOS Short URL & Slug Service', () => {
       const m3 = '/kanvi/reviews/all'.match(pathRegex);
       expect(m3?.[1]).toBe('kanvi');
       expect(m3?.[2]).toBe('/reviews/all');
+
+      const m4 = '/fieseros'.match(pathRegex);
+      expect(m4?.[1]).toBe('fieseros');
+      expect(m4?.[2]).toBeUndefined();
+
+      const m5 = '/fieseros/book'.match(pathRegex);
+      expect(m5?.[1]).toBe('fieseros');
+      expect(m5?.[2]).toBe('/book');
     });
 
     it('identifies static assets with file extensions to prevent hijacking', () => {
