@@ -31,9 +31,54 @@ export interface GeneratedSeoMetadata {
  */
 function getBaselineSuggestions(ctx: BusinessContextForSuggestions): BusinessSceneSuggestion[] {
   const norm = normalizeCategoryContext(ctx.category);
-  const label = norm.verticalLabel || ctx.category;
   const name = ctx.businessName || 'Local Business';
   const city = ctx.city || 'India';
+  const isTech =
+    norm.verticalKey === 'it_software_digital' ||
+    /\b(fieseros|serviceos|bgos|bos|saas|crm|software|it company|technologies|app)\b/i.test(`${name} ${ctx.category}`);
+
+  if (isTech) {
+    return [
+      {
+        id: 'scene-tech-dashboard',
+        title: 'Cloud Dashboard & Analytics',
+        icon: '💻',
+        badge: 'PRODUCT SHOWCASE',
+        category: 'workplace',
+        sceneDescription: `Modern dual-screen software engineering workstation displaying elegant real-time cloud analytics and operational dashboards.`,
+        promptBlueprint: `High-end commercial technology product photography of a modern software engineering workstation for ${name} in ${city}. Dual high-resolution frameless monitors displaying crisp UI cloud dashboards and analytics graphs, clean ergonomic minimalist desk, soft natural daylight and subtle ambient blue rim lighting, shallow depth of field. NO TEXT, no words, no letters, no logos, no typography, photorealistic 8k.`,
+      },
+      {
+        id: 'scene-tech-workspace',
+        title: 'Contemporary Engineering Hub',
+        icon: '🏢',
+        badge: 'TECH WORKSPACE',
+        category: 'storefront',
+        sceneDescription: `Contemporary glass-walled tech studio and collaborative workspace with natural sunlight.`,
+        promptBlueprint: `Architectural commercial photography of a modern high-tech software engineering studio at ${name} in ${city}. Contemporary glass partitions, collaborative standing desks, sleek laptops, bright natural window daylight, lush indoor architectural plants, aspirational tech company atmosphere. NO TEXT, no words, no letters, no logos, no typography, photorealistic 8k.`,
+      },
+      {
+        id: 'scene-tech-mobile',
+        title: 'Smart Operations & Mobile Dispatch',
+        icon: '📱',
+        badge: 'MOBILE DISPATCH',
+        category: 'equipment',
+        sceneDescription: `Floating contemporary smartphone mockup displaying an intuitive business dispatch and field management interface.`,
+        promptBlueprint: `Commercial studio product photography of a sleek floating smartphone mockup displaying an intuitive mobile application interface for ${name} in ${city}. Modern UI cards, live route status indicators, soft studio shadow, minimalist architectural background. NO TEXT, no words, no letters, no logos, no typography, 4k.`,
+      },
+      {
+        id: 'scene-tech-trust',
+        title: 'Enterprise Client Partnership',
+        icon: '⭐',
+        badge: 'CLIENT SUCCESS',
+        category: 'client_result',
+        sceneDescription: `Professional consultative business meeting in a bright conference room discussing scalable digital solutions.`,
+        promptBlueprint: `Warm commercial documentary photography of a professional business consultation and technology review meeting at ${name} in ${city}. Modern conference room with clean glass aesthetic, engaged professionals, natural daylight, inspiring client partnership. NO TEXT, no words, no letters, no logos, no typography, 4k.`,
+      },
+    ];
+  }
+
+  const label = norm.verticalLabel || ctx.category;
   const topService = ctx.services?.[0] || label;
   const secondService = ctx.services?.[1] || 'customer care';
 
@@ -176,7 +221,7 @@ These scenes will be rendered by an AI image diffusion generator (Flux.2) to sho
 
 CRITICAL RULES:
 1. Every suggestion must be directly relevant to the business's trade (${label}), name (${ctx.businessName}), and services (${servicesList || label}).
-2. Do NOT suggest generic or unrelated trades (e.g. if a software company, DO NOT suggest food or dental; if a sweet shop, DO NOT suggest software).
+2. Do NOT suggest generic or unrelated trades (e.g. if a software/SaaS/platform business like Fieseros or ServiceOS, NEVER suggest groceries, vegetables, fruits, food, or dental; suggest sleek workstations, cloud dashboards, dispatch apps, and modern engineering studios).
 3. The promptBlueprint must be pure visual scene instruction: describe subject, lighting, angle, depth of field, and atmosphere.
 4. Always end the promptBlueprint with: "NO TEXT, no words, no letters, no logos, no typography, 4k, photorealistic."
 5. Return ONLY a strict JSON array of objects with keys:

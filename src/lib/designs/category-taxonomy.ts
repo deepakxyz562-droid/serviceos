@@ -154,13 +154,14 @@ export const UNIVERSAL_VERTICALS: Record<string, UniversalVerticalConfig> = {
 
   grocery_retail_fmcg: {
     key: 'grocery_retail_fmcg',
-    label: 'Grocery, Supermarket & Retail',
+    label: 'Grocery & Supermarket',
     keywords: [
-      'grocery', 'supermarket', 'market', 'bazaar', 'mandi', 'kirana', 'general store',
-      'provision', 'mart', 'vegetable', 'fruit', 'retail', 'hypermarket', 'departmental',
-      'dry fruit', 'fmcg', 'stationery', 'gift shop'
+      'grocery', 'supermarket', 'kirana', 'general store', 'provision store',
+      'provisions store', 'provisions', 'sabzi mandi', 'vegetable market', 'vegetable store',
+      'fruit store', 'fruit market', 'fresh produce', 'hypermarket', 'fmcg',
+      'daily needs', 'dry fruit', 'spices', 'organic grocery'
     ],
-    visualSearchTerms: ['supermarket fresh grocery display', 'organic fruits retail store', 'provision store'],
+    visualSearchTerms: ['supermarket fresh grocery display', 'organic produce grocery store', 'provision store'],
     defaultOfferCopy: {
       headline: 'Daily Essentials & Fresh Groceries at Wholesale Rates',
       subtitle: 'Best quality grains, farm-fresh vegetables, and branded household goods delivered home.',
@@ -211,8 +212,10 @@ export const UNIVERSAL_VERTICALS: Record<string, UniversalVerticalConfig> = {
     keywords: [
       'software', 'it ', 'tech', 'developer', 'code', 'web dev', 'app dev', 'cloud',
       'saas', 'digital marketing', 'seo', 'computer', 'laptop repair', 'network',
-      'cctv', 'surveillance', 'biometric', 'fieseros', 'serviceos', 'information technology',
-      'it service', 'it services'
+      'cctv', 'surveillance', 'biometric', 'fieseros', 'serviceos', 'bgos', 'bos',
+      'crm', 'field service', 'field operations', 'dispatch', 'workflow automation',
+      'platform', 'business software', 'b2b saas', 'information technology',
+      'it service', 'it services', 'tech startup', 'mobile app'
     ],
     visualSearchTerms: ['modern technology software workspace', 'cloud digital analytics laptop', 'programming code screen'],
     defaultOfferCopy: {
@@ -322,6 +325,7 @@ export const UNIVERSAL_VERTICALS: Record<string, UniversalVerticalConfig> = {
     key: 'specialty_local_services',
     label: 'Specialty Local Trades & Services',
     keywords: [
+      'retail', 'local service', 'local services', 'commercial service', 'business service',
       'aadhar', 'aadhaar', 'civic', 'passport', 'government',
       'astrolog', 'horoscope', 'vastu', 'kundali', 'pet', 'veterin', 'vet', 'dog',
       'cat', 'laundry', 'dry clean', 'printing', 'framing', 'tailoring', 'security guard',
@@ -392,6 +396,11 @@ export function normalizeCategoryContext(rawText: string): NormalizedTradeContex
       bestScore = score;
       bestVerticalKey = key;
     }
+  }
+
+  // Explicit priority guard for software, SaaS, and Fieseros/ServiceOS platforms
+  if (/\b(fieseros|serviceos|saas|crm|b2b saas|field service|dispatch software)\b/i.test(text)) {
+    bestVerticalKey = 'it_software_digital';
   }
 
   // 3. Extract primary trade subject (e.g. "Plywood", "Mithai", "Salon", "Dentist")

@@ -762,24 +762,38 @@ export function buildHighQualityImagePrompt(
 
   const scores = { tech: 0, food: 0, fashion: 0, jewellery: 0, trades: 0, hospitality: 0, paint: 0, hardware: 0, market: 0 };
 
-  const isPhysicalRetailOrTrade = hasWord(nameLower, [
-    'market', 'grocery', 'supermarket', 'mart', 'kirana', 'retail', 'store',
-    'bazaar', 'paint', 'cake', 'pool', 'hardware', 'bakery', 'farmhouse', 'resort', 'clinic'
+  const isTechBrand = hasWord(nameLower, [
+    'fieseros', 'serviceos', 'bgos', 'bos', 'saas', 'crm', 'software'
   ]);
+
+  const hasProduceOfferings = hasWord(offLower, [
+    'fresh produce', 'produce', 'groceries', 'grocery', 'vegetables', 'fruits', 'daily needs', 'spices'
+  ]);
+
+  const isPhysicalRetailOrTrade = !isTechBrand && (
+    hasProduceOfferings ||
+    hasWord(nameLower, [
+      'market', 'grocery', 'supermarket', 'mart', 'kirana', 'bazaar', 'paint', 'cake', 'pool', 'hardware', 'bakery', 'farmhouse', 'resort', 'clinic', 'sweet shop'
+    ])
+  );
+
+  // Tech brand high priority boost
+  if (isTechBrand) scores.tech += 15;
 
   // Category matching (primary signal)
   if (hasWord(catLower, ['jewel', 'jewelry', 'jewellery', 'jeweller', 'jewellers', 'diamond', 'diamonds', 'gold ornament', 'solitaire', 'gemstone', 'gemstones'])) scores.jewellery += 10;
   if (hasWord(catLower, ['sweet', 'sweets', 'mithai', 'bakery', 'confectionery', 'cake', 'cakes', 'restaurant', 'cafe', 'food', 'dessert', 'desserts'])) scores.food += 10;
   if (hasWord(catLower, ['saree', 'sarees', 'ethnic wear', 'bridal lehenga', 'boutique', 'apparel', 'clothing', 'fashion', 'garment', 'garments', 'textile', 'textiles'])) scores.fashion += 10;
-  if (!isPhysicalRetailOrTrade && hasWord(catLower, ['software', 'saas', 'tech', 'technology', 'it ', 'cloud', 'app', 'apps', 'telemetry', 'gps', 'developer', 'workforce'])) scores.tech += 10;
+  if (!isPhysicalRetailOrTrade && hasWord(catLower, ['software', 'saas', 'tech', 'technology', 'it ', 'cloud', 'app', 'apps', 'telemetry', 'gps', 'developer', 'workforce', 'crm', 'field service', 'automation', 'platform', 'dispatch'])) scores.tech += 10;
   if (hasWord(catLower, ['paint', 'paints', 'wall finish', 'coating', 'coatings', 'texture', 'primer', 'asian paints', 'berger', 'nerolac', 'wall decor'])) scores.paint += 10;
   if (hasWord(catLower, ['hardware', 'tool', 'tools', 'fastener', 'fasteners', 'plywood', 'sanitary', 'pipe', 'pipes', 'machinery', 'building supply'])) scores.hardware += 10;
   if (hasWord(catLower, ['hvac', 'plumb', 'plumbing', 'electric', 'repair', 'repairs', 'contractor', 'trade', 'clean', 'cleaning', 'heating', 'cooling', 'air conditioning'])) scores.trades += 10;
   if (hasWord(catLower, ['farmhouse', 'farm house', 'resort', 'villa', 'cottage', 'homestay', 'retreat', 'banquet', 'staycation', 'glamping', 'hotel', 'hospitality', 'venue', 'pool', 'swimming'])) scores.hospitality += 10;
-  if (hasWord(catLower, ['market', 'grocery', 'supermarket', 'mart', 'kirana', 'retail', 'provision', 'provisions', 'bazaar', 'store', 'department store', 'fmcg', 'produce', 'daily needs'])) scores.market += 10;
+  if (!isTechBrand && hasWord(catLower, ['grocery', 'supermarket', 'kirana', 'provision store', 'provisions store', 'sabzi mandi', 'vegetable store', 'fruit store', 'fresh produce', 'hypermarket', 'fmcg', 'daily needs'])) scores.market += 10;
 
   // Name matching (strong physical identity signal)
-  if (hasWord(nameLower, ['grocery', 'supermarket', 'kirana', 'provision', 'provisions', 'bazaar', 'sabzi mandi', 'vegetable store'])) scores.market += 10;
+  if (hasWord(nameLower, ['fieseros', 'serviceos', 'bgos', 'saas', 'crm', 'software'])) scores.tech += 15;
+  if (!isTechBrand && (hasWord(nameLower, ['grocery', 'supermarket', 'kirana', 'provision store', 'sabzi mandi', 'vegetable store', 'fruit market']) || (hasWord(nameLower, ['market', 'mart', 'bazaar']) && hasProduceOfferings))) scores.market += 10;
   if (hasWord(nameLower, ['bakery', 'cake', 'mithai', 'sweets', 'cafe', 'restaurant'])) scores.food += 10;
   if (hasWord(nameLower, ['farmhouse', 'resort', 'villa', 'homestay', 'pool'])) scores.hospitality += 10;
   if (hasWord(nameLower, ['hardware', 'tools', 'fasteners'])) scores.hardware += 10;
@@ -789,15 +803,16 @@ export function buildHighQualityImagePrompt(
   if (hasWord(offLower, ['jewel', 'jewelry', 'jewellery', 'diamond', 'diamonds', 'necklace', 'necklaces', 'gold necklace', 'bangles', 'solitaire', 'earrings', 'chokers'])) scores.jewellery += 4;
   if (hasWord(offLower, ['mithai', 'kaju katli', 'gulab jamun', 'ladoo', 'pastry', 'croissant', 'rasgulla', 'sweets'])) scores.food += 4;
   if (hasWord(offLower, ['saree', 'sarees', 'lehenga', 'lehengas', 'dupatta', 'banarasi', 'suit', 'dress'])) scores.fashion += 4;
-  if (!isPhysicalRetailOrTrade && hasWord(offLower, ['employee tracking', 'tracking app', 'gps', 'telemetry', 'route map', 'punch in', 'attendance', 'mobile app', 'cloud migration', 'software'])) scores.tech += 4;
+  if (!isPhysicalRetailOrTrade && hasWord(offLower, ['employee tracking', 'tracking app', 'gps', 'telemetry', 'route map', 'punch in', 'attendance', 'mobile app', 'cloud migration', 'software', 'crm', 'saas', 'dispatch', 'workflow automation'])) scores.tech += 6;
   if (hasWord(offLower, ['paint', 'emulsion', 'distemper', 'primer', 'enamel', 'texture finish', 'wall painting'])) scores.paint += 4;
   if (hasWord(offLower, ['power tools', 'drill', 'grinder', 'fasteners', 'plumbing pipe', 'sanitary fittings'])) scores.hardware += 4;
   if (hasWord(offLower, ['ac repair', 'furnace', 'duct cleaning', 'plumbing', 'technician', 'boiler'])) scores.trades += 4;
   if (hasWord(offLower, ['farmhouse', 'villa', 'swimming pool', 'lawn', 'staycation', 'weekend stay', 'banquet', 'garden venue', 'private pool'])) scores.hospitality += 4;
-  if (hasWord(offLower, ['grocery', 'groceries', 'fresh produce', 'vegetables', 'fruits', 'packaged food', 'spices', 'pulses', 'household', 'dairy', 'provisions', 'snacks', 'fmcg', 'daily needs'])) scores.market += 6;
+  if (!isTechBrand && hasProduceOfferings) scores.market += 10;
+  if (!isTechBrand && hasWord(offLower, ['grocery', 'groceries', 'fresh produce', 'vegetables', 'fruits', 'packaged food', 'spices', 'pulses', 'household', 'dairy', 'provisions', 'snacks', 'fmcg', 'daily needs'])) scores.market += 6;
 
   // Prompt contextual matching (tertiary signal)
-  if (!isPhysicalRetailOrTrade && hasWord(pLower, ['gps', 'attendance', 'punch', 'workforce', 'telemetry', 'route map', 'software', 'mobile app', 'saas'])) scores.tech += 2;
+  if (!isPhysicalRetailOrTrade && hasWord(pLower, ['gps', 'attendance', 'punch', 'workforce', 'telemetry', 'route map', 'software', 'mobile app', 'saas', 'crm', 'dashboard', 'analytics'])) scores.tech += 4;
   if (hasWord(pLower, ['mithai', 'sweets', 'dessert', 'kaju katli', 'cake', 'pastry'])) scores.food += 2;
   if (hasWord(pLower, ['saree', 'lehenga', 'ethnic wear', 'bridal collection', 'couture'])) scores.fashion += 2;
   if (hasWord(pLower, ['diamond', 'solitaires', 'gold necklace', 'jewellery', 'jewels', 'hallmark'])) scores.jewellery += 2;
@@ -805,7 +820,7 @@ export function buildHighQualityImagePrompt(
   if (hasWord(pLower, ['power tool', 'drill', 'screws', 'hardware tools', 'plumbing fixture'])) scores.hardware += 2;
   if (hasWord(pLower, ['repair', 'hvac', 'plumbing', 'technician', 'air conditioning'])) scores.trades += 2;
   if (hasWord(pLower, ['farmhouse', 'villa', 'resort', 'pool', 'lawn', 'garden', 'cottage', 'patio', 'retreat'])) scores.hospitality += 3;
-  if (hasWord(pLower, ['grocery', 'supermarket', 'fresh produce', 'fruits', 'vegetables', 'daily needs', 'kirana'])) scores.market += 3;
+  if (!isTechBrand && hasWord(pLower, ['grocery', 'supermarket', 'fresh produce', 'fruits', 'vegetables', 'daily needs', 'kirana'])) scores.market += 3;
 
   let maxScore = 0;
   let winningArchetype: 'tech' | 'food' | 'fashion' | 'jewellery' | 'trades' | 'hospitality' | 'paint' | 'hardware' | 'market' | 'custom' = 'custom';
@@ -814,6 +829,11 @@ export function buildHighQualityImagePrompt(
       maxScore = score;
       winningArchetype = key;
     }
+  }
+
+  // Guarantees tech/software businesses (like Fieseros / ServiceOS) resolve to the tech archetype
+  if (isTechBrand && (winningArchetype === 'custom' || winningArchetype === 'market')) {
+    winningArchetype = 'tech';
   }
 
   let domainSubject = '';

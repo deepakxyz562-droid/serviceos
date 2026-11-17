@@ -43,7 +43,7 @@ export async function cleanLegacyAiImages() {
     }
   }
 
-  // Clean DB ImageLibrary entries for bgos_ai_photos
+  // Clean DB ImageLibrary entries for bgos_ai_photos and misclassified retail category library images
   let deletedDbCount = 0;
   try {
     const { db } = await import('../src/lib/db');
@@ -52,7 +52,9 @@ export async function cleanLegacyAiImages() {
         where: {
           OR: [
             { folder: 'bgos_ai_photos' },
+            { folder: { startsWith: 'category_library/retail' } },
             { name: { contains: 'AI Commercial Photo' } },
+            { name: { contains: 'Grocery & Retail Showcase' } },
           ],
         },
       });

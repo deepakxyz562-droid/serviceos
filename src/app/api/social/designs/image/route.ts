@@ -130,9 +130,11 @@ async function buildDynamicBusinessPrompt(params: {
   const localSeoTerms = (params.searchTerms || []).filter(Boolean).slice(0, 4).join(', ');
   const cityLabel = params.city ? params.city.trim() : '';
 
-  // Auto-correct stale or misconfigured "It company" if the business name clearly denotes physical retail or trade
-  if (/(it company|software)/i.test(category) && /(market|mart|grocery|supermarket|kirana|retail|store|bazaar|provisions|hardware|paint|bakery|cake|pool|farmhouse|resort|clinic|salon)/i.test(name)) {
-    if (/(market|mart|grocery|supermarket|kirana|retail|store|bazaar|provisions)/i.test(name)) {
+  const isTechBusiness = /\b(fieseros|serviceos|bgos|bos|saas|crm|software|it company|technologies|app dev|web dev)\b/i.test(`${name} ${category}`);
+
+  // Only auto-correct stale "IT company" if it's NOT a tech business and explicitly a physical retail or trade
+  if (!isTechBusiness && /(it company|software)/i.test(category) && /\b(grocery|supermarket|kirana|provisions store|hardware store|bakery|cake shop|resort|clinic|salon)\b/i.test(name)) {
+    if (/\b(grocery|supermarket|kirana|provisions)\b/i.test(name)) {
       category = 'Grocery & Supermarket';
     } else if (/(hardware|tool|pipe|sanitary)/i.test(name)) {
       category = 'Hardware & Tools';
@@ -173,7 +175,7 @@ async function buildDynamicBusinessPrompt(params: {
         {
           role: 'system',
           content:
-            'You are an expert commercial advertising art director and photographer. Write a concise, 1-2 sentence commercial photography scene description for an image diffusion model. The scene MUST authentically represent the physical storefront, products, customer experience, or craft of this exact business type. CRITICAL: Never depict computers, monitors, code, or IT dashboards unless the business is explicitly a software programming company. Do NOT include text, slogans, letters, or logos in the image. Return ONLY the plain text scene description.',
+            'You are an expert commercial advertising art director and photographer. Write a concise, 1-2 sentence commercial photography scene description for an image diffusion model. The scene MUST authentically represent the business trade, services, products, or modern operations. If the business is a software, SaaS, or tech platform (such as Fieseros / ServiceOS / IT company), depict sleek modern workstations with clean UI dashboards, cloud telemetry, or mobile field app interfaces in a bright contemporary tech studio. For physical trades, depict their authentic craft and storefront. Do NOT include text, slogans, letters, or logos in the image. Return ONLY the plain text scene description.',
         },
         {
           role: 'user',
@@ -203,8 +205,19 @@ async function buildDynamicBusinessPrompt(params: {
   // 2. High-precision semantic category fallback for ANY business
   const blob = `${name} ${category} ${offerings} ${params.topic || ''}`.toLowerCase();
 
-  // Market / Grocery / Supermarket / Mart / Retail / Provisions
-  if (/(market|grocery|supermarket|mart|kirana|retail store|department store|bazaar|provisions|fmcg|produce)/i.test(blob)) {
+  // Software / Tech / SaaS / Platform (HIGH PRIORITY)
+  if (isTechBusiness || /(software|developer|coding|web dev|cloud|saas|crm|fieseros|serviceos|bgos|field service|workflow automation|dispatch)/i.test(blob)) {
+    const scenes = [
+      `High-tech modern software engineering office at ${name}, showing sleek dual-monitor workstations displaying clean UI cloud analytics and workflow dashboards, ergonomic desk, natural daylight, ${chosenLight}, ${chosenAngle}.`,
+      `Modern tech workspace at ${name} showcasing a contemporary smartphone displaying intuitive business dispatch and field management interface, minimalist studio backdrop, ${chosenLight}.`,
+      `Collaborative tech product team working around interactive smart boards in a bright contemporary tech studio at ${name}, clean glass architecture, high-energy startup atmosphere, ${chosenLight}.`,
+      `Sleek laptop open on an executive oak desk at ${name} displaying real-time operational graphs and metrics, wireless keyboard, soft morning daylight, commercial photography.`
+    ];
+    return scenes[Math.floor(Math.random() * scenes.length)];
+  }
+
+  // Grocery / Supermarket / Kirana / Fresh Produce (Only for actual food grocery stores)
+  if (!isTechBusiness && /\b(grocery|supermarket|kirana|sabzi mandi|vegetable store|fruit market|fresh produce|provisions store)\b/i.test(blob)) {
     const scenes = [
       `Vibrant and bountiful fresh produce market aisle at ${name}, colorful rows of crisp apples, oranges, leafy greens, and farm-fresh vegetables neatly arranged under ${chosenLight}, ${chosenAngle}.`,
       `Modern, spotless supermarket grocery store interior at ${name}, fully stocked wooden and chrome shelves with premium packaged foods, organic spices, and daily essentials, warm inviting shopping ambiance, ${chosenLight}.`,
@@ -282,15 +295,6 @@ async function buildDynamicBusinessPrompt(params: {
     const scenes = [
       `Pristine, ultra-clean modern clinic consultation suite at ${name}, soothing ambient lighting, ergonomic design, welcoming health environment, ${chosenLight}, ${chosenAngle}.`,
       `Luxurious wellness and beauty studio reception at ${name}, modern floral accents, natural wood textures, and calming serene spa ambiance.`
-    ];
-    return scenes[Math.floor(Math.random() * scenes.length)];
-  }
-
-  // Software / Tech ONLY if not physical retail or trade
-  if (/(software|developer|coding|web dev|cloud|saas)/i.test(blob) && !/(market|mart|grocery|supermarket|kirana|retail|store|bazaar|paint|cake|pool|hardware)/i.test(blob)) {
-    const scenes = [
-      `High-tech modern software engineering office at ${name}, showing sleek dual-monitor workstations displaying code dashboards, clean ergonomic desks, and ambient blue glow, ${chosenLight}, ${chosenAngle}.`,
-      `Collaborative tech team working around interactive smart boards in a bright contemporary tech studio at ${name}, clean glass architecture, high-energy startup atmosphere.`
     ];
     return scenes[Math.floor(Math.random() * scenes.length)];
   }

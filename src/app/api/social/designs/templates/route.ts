@@ -269,15 +269,43 @@ export async function GET(request: NextRequest) {
     }
   };
 
+  const isMerchantTech =
+    matchedIndustryKey === 'it_software' ||
+    /\b(fieseros|serviceos|bgos|bos|saas|crm|software|it company|technologies)\b/i.test(`${businessName} ${industry}`);
+
   const userPhotos: Array<{ url: string; title?: string }> = [];
   const seenUserPhotoUrls = new Set<string>();
+  const invalidTechPhotoIds: string[] = [];
+
   for (const row of libraryRows) {
     const url = typeof row?.url === 'string' ? row.url.trim() : '';
     if (!url || /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(url)) continue;
+
+    // Filter out legacy produce/vegetable/fruit photos for tech/software merchants
+    if (isMerchantTech) {
+      const rowName = (row.name || '').toLowerCase();
+      const rowFolder = (row.folder || '').toLowerCase();
+      const isGroceryOrProduce =
+        /grocery|supermarket|vegetable|fruit|produce|mandi|retail-local-services/.test(
+          `${rowName} ${rowFolder} ${url.toLowerCase()}`
+        );
+      if (isGroceryOrProduce) {
+        if (row.id) invalidTechPhotoIds.push(row.id);
+        continue;
+      }
+    }
+
     if (!seenUserPhotoUrls.has(url)) {
       seenUserPhotoUrls.add(url);
       userPhotos.push({ url, title: row.name || 'Brand Library Photo' });
     }
+  }
+
+  // Prune invalid legacy AI photos from database asynchronously if any found
+  if (invalidTechPhotoIds.length > 0 && db.imageLibrary?.deleteMany) {
+    void db.imageLibrary.deleteMany({
+      where: { id: { in: invalidTechPhotoIds }, tenantId: user.tenantId },
+    }).catch(() => null);
   }
   for (const post of postRows) {
     for (const u of parseMediaList(post?.mediaUrls)) {

@@ -31,6 +31,25 @@ describe('Universal Category Taxonomy & Scalable Visuals', () => {
     // Automotive
     const autoCtx = normalizeCategoryContext('Multi-Brand Car Repair & Detailing Garage');
     expect(autoCtx.verticalKey).toBe('automotive_vehicles');
+
+    // IT & Software / Fieseros OS / ServiceOS
+    const fieserosCtx = normalizeCategoryContext('Fieseros OS');
+    expect(fieserosCtx.verticalKey).toBe('it_software_digital');
+    expect(scoreIndustryMatch('Fieseros OS')).toBe('it_software');
+
+    const serviceOsCtx = normalizeCategoryContext('ServiceOS B2B SaaS Platform');
+    expect(serviceOsCtx.verticalKey).toBe('it_software_digital');
+    expect(scoreIndustryMatch('ServiceOS')).toBe('it_software');
+
+    // Generic "Retail & Local Services" must NEVER map to grocery / vegetables
+    const retailCtx = normalizeCategoryContext('Retail & Local Services');
+    expect(retailCtx.verticalKey).not.toBe('grocery_retail_fmcg');
+    expect(retailCtx.verticalKey).toBe('specialty_local_services');
+
+    // Real grocery stores must properly map to grocery_retail_fmcg
+    const groceryCtx = normalizeCategoryContext('Fresh Sabzi Mandi & Kirana Supermarket');
+    expect(groceryCtx.verticalKey).toBe('grocery_retail_fmcg');
+    expect(scoreIndustryMatch('Fresh Kirana Supermarket')).toBe('grocery_supermarket');
   });
 
   it('correctly detects festive occasions', () => {
@@ -72,5 +91,29 @@ describe('Universal Category Taxonomy & Scalable Visuals', () => {
       expect(t.referenceUrl).not.toContain(BOGUS_WOMAN_PHOTO);
       expect(t.referenceUrl).not.toContain(BOGUS_ABSTRACT_CANVAS);
     }
+  });
+
+  it('guarantees Fieseros OS baseline suggestions produce high-tech SaaS dashboards and zero produce/food', async () => {
+    const { generateBusinessSceneSuggestions } = await import('@/lib/designs/business-image-suggestions');
+    const suggestions = await generateBusinessSceneSuggestions({
+      businessName: 'Fieseros OS',
+      category: 'Retail & Local Services',
+      services: ['Workflow Automation', 'Field Dispatch'],
+      city: 'Bangalore',
+    });
+
+    expect(suggestions.length).toBeGreaterThanOrEqual(4);
+    const combinedBlueprints = suggestions.map((s) => s.promptBlueprint.toLowerCase()).join(' ');
+
+    // Must contain tech/software keywords
+    expect(combinedBlueprints).toMatch(/software|dashboard|cloud|workstation|smartphone|analytics/);
+
+    // Must NEVER contain vegetable, fruit, grocery, produce, food, or dental keywords
+    expect(combinedBlueprints).not.toContain('vegetable');
+    expect(combinedBlueprints).not.toContain('fruit');
+    expect(combinedBlueprints).not.toContain('apple');
+    expect(combinedBlueprints).not.toContain('grocery');
+    expect(combinedBlueprints).not.toContain('supermarket');
+    expect(combinedBlueprints).not.toContain('dental');
   });
 });
