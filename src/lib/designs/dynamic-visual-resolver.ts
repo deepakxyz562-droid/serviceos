@@ -109,7 +109,13 @@ export function scoreIndustryMatch(text: string): string {
   if (!normalized) return 'it_software';
 
   for (const item of SEMANTIC_KEY_MAP) {
-    if (item.keywords.some((kw) => normalized.includes(kw))) {
+    if (item.keywords.some((kw) => {
+      const cleanKw = kw.trim();
+      if (cleanKw.length <= 4) {
+        return new RegExp(`\\b${cleanKw}\\b`, 'i').test(normalized);
+      }
+      return normalized.includes(cleanKw);
+    })) {
       return item.key;
     }
   }
@@ -135,7 +141,13 @@ export function scoreIndustryMatch(text: string): string {
     generic_business: 'generic_business',
   };
 
-  return verticalMap[context.verticalKey] || 'generic_business';
+  const resolved = verticalMap[context.verticalKey] || 'generic_business';
+  const isExplicitFoodOrGrocery = /\b(grocery|supermarket|kirana|fruit|vegetable|produce|sabzi|mandi|provisions store|fmcg)\b/i.test(normalized);
+  if (!isExplicitFoodOrGrocery && (resolved === 'grocery_supermarket' || resolved === 'indian_sweets')) {
+    return 'generic_business';
+  }
+
+  return resolved;
 }
 
 /**

@@ -107,22 +107,24 @@ export async function POST(request: NextRequest) {
         website: website || null,
         plan: signupPlan,
         planStatus: isFreePlan ? 'active' : 'trial',
-        trialEndsAt: isFreePlan ? null : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7-day trial (skip for free)
+        trialEndsAt: isFreePlan ? null : new Date(Date.now() + (isBgos ? 7 : 14) * 24 * 60 * 60 * 1000), // 7-day trial for BGOS, 14-day trial for Fieseros/BOS (skip for free)
         marketplaceOptIn: false,
         marketplaceTermsAcceptedAt: null,
         // Registered businesses created by owner are claimed by default for CRM,
-        // but standalone AI Forms workspaces are isolated and not listed in directory
+        // but standalone AI Forms workspaces and BGOS accounts are isolated from the Fieseros directory
         claimed: isStandalone ? false : true,
-        listingTier: isStandalone ? 'none' : 'claimed',
+        listingTier: isStandalone || isBgos ? 'none' : 'claimed',
         publicProfileEnabled: isStandalone ? false : true,
         // If a specific plan was requested (e.g. deep-link ?plan=standalone_starter),
         // assign that mode directly. Otherwise set null so the Step 0 Product Picker
         // (SignupModeSelector: CRM vs Listing vs AI Forms) is displayed after verification.
-        signupMode: isStandalone
-          ? 'standalone'
-          : (isFreePlan
-            ? 'free'
-            : (requestedPlan ? 'crm_trial' : null)),
+        signupMode: isBgos
+          ? 'bgos'
+          : (isStandalone
+            ? 'standalone'
+            : (isFreePlan
+              ? 'free'
+              : (requestedPlan ? 'crm_trial' : null))),
         // Standalone users go through the 2-step StandaloneOnboarding wizard
         // (website URL + plan choice), so onboardingCompleted must be false.
         // Only the permanent free plan skips onboarding entirely.
@@ -256,7 +258,7 @@ export async function POST(request: NextRequest) {
           amount: signupPlan === 'standalone_business' ? 19 : (signupPlan === 'standalone_starter' ? 10 : 0),
           currency: isBgos ? geo.currency : (resolvedCountry === 'IN' ? 'INR' : 'USD'),
           billingCycle: 'monthly',
-          trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          trialEndsAt: tenant.trialEndsAt,
           aiQuota: isBgos ? getBgosAiQuotaForPlan(signupPlan) : undefined,
           maxUsers: isStandalone ? (signupPlan === 'standalone_business' ? 10 : 1) : 5,
           maxJobs: isStandalone ? 0 : 200,

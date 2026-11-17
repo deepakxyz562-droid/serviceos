@@ -283,6 +283,7 @@ export async function uploadFile(
           Key: s3Key,
           Body: bytesBuffer,
           ContentType: contentType,
+          CacheControl: 'public, max-age=31536000, immutable',
           ...(usePublicAcl ? { ACL: 'public-read' } : {}),
         })
       )
@@ -300,6 +301,7 @@ export async function uploadFile(
               Key: s3Key,
               Body: bytesBuffer,
               ContentType: contentType,
+              CacheControl: 'public, max-age=31536000, immutable',
             })
           )
           const url = getS3PublicUrl(s3Key)

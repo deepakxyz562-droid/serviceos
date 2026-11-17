@@ -421,7 +421,7 @@ export async function POST(request: NextRequest) {
       } else if (gbpCategory) {
         finalCategory = gbpCategory;
       } else {
-        finalCategory = 'Retail & Local Services';
+        finalCategory = 'Professional Services';
       }
     }
 

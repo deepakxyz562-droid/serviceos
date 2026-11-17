@@ -314,6 +314,8 @@ export async function getBgosPublicBusinessProfileUncached(
           seoTitle: true,
           seoDescription: true,
           marketplaceOptIn: true,
+          signupMode: true,
+          workspaces: { select: { productType: true } },
           settingsJson: true,
           brandProfile: {
             select: {
@@ -330,6 +332,23 @@ export async function getBgosPublicBusinessProfileUncached(
       .catch(() => null);
 
     if (!tenant) return null;
+
+    // Strict product boundary:
+    // Only genuine BGOS merchants should have a BGOS public profile page (/b/[slug]).
+    // Fieseros CRM / Field Service / BOS users must NOT render BGOS pages!
+    const isBgosMerchant =
+      tenant.signupMode === 'bgos' ||
+      tenant.workspaces?.some((w) => w.productType === 'bgos');
+
+    const isExplicitCrmOrBos =
+      tenant.signupMode === 'crm_trial' ||
+      tenant.signupMode === 'standalone' ||
+      tenant.signupMode === 'free' ||
+      tenant.workspaces?.some((w) => w.productType === 'crm' || w.productType === 'bos');
+
+    if (!isBgosMerchant && isExplicitCrmOrBos) {
+      return null;
+    }
 
     const settings = safeJsonObject(tenant.settingsJson);
     const bookingConfig = safeJsonObject(

@@ -99,31 +99,99 @@ export async function GET(request: NextRequest) {
   const [tenant, brandProfile, gbpAccount, merchantServices] = await Promise.all([
     db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { name: true, industry: true, phone: true, address: true, city: true, settingsJson: true },
+      select: {
+        name: true,
+        industry: true,
+        phone: true,
+        address: true,
+        city: true,
+        description: true,
+        tagline: true,
+        settingsJson: true,
+        signupMode: true,
+        workspaces: {
+          select: {
+            industry: true,
+            name: true,
+            productType: true,
+          },
+        },
+      },
     }).catch(() => null),
     (db.brandProfile?.findUnique({
       where: { tenantId: user.tenantId },
+      select: {
+        businessName: true,
+        industry: true,
+        website: true,
+        location: true,
+        services: true,
+        products: true,
+      },
     }) ?? Promise.resolve(null)).catch(() => null),
     (db.socialAccount?.findFirst({
       where: { tenantId: user.tenantId, platform: 'googlebusiness', isActive: true },
     }) ?? Promise.resolve(null)).catch(() => null),
     (db.service?.findMany({
-      where: { tenantId: user.tenantId, isActive: true },
-      select: { name: true, description: true, category: true, basePrice: true },
+      where: { tenantId: user.tenantId },
+      select: { name: true, description: true, longDescription: true, category: true, basePrice: true, isActive: true },
       orderBy: { updatedAt: 'desc' },
-      take: 40,
+      take: 60,
     }) ?? Promise.resolve([])).catch(() => []),
   ]);
 
+  const isFieserosAccount =
+    tenant?.signupMode === 'crm_trial' ||
+    tenant?.signupMode === 'crm' ||
+    tenant?.signupMode === 'free' ||
+    (tenant?.workspaces || []).some((w: any) => w.productType === 'crm') ||
+    /\b(fieseros|serviceos|crm|field service)\b/i.test(`${tenant?.name || ''} ${tenant?.industry || ''}`);
+
+  // Collect ALL services added by the merchant (Service table + BrandProfile.services + settingsJson)
+  const realServiceNames: string[] = [];
+  const rawServiceTokens: string[] = [];
+
+  for (const s of merchantServices || []) {
+    if (s.name?.trim()) {
+      if (!realServiceNames.includes(s.name.trim())) realServiceNames.push(s.name.trim());
+      rawServiceTokens.push(s.name.trim());
+    }
+    if (s.category && s.category !== 'general') {
+      rawServiceTokens.push(s.category.trim());
+    }
+    if (s.description?.trim()) {
+      rawServiceTokens.push(s.description.trim());
+    }
+    if (s.longDescription?.trim()) {
+      rawServiceTokens.push(s.longDescription.trim());
+    }
+  }
+
+  if (brandProfile?.services) {
+    try {
+      const parsed = JSON.parse(brandProfile.services);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (typeof item === 'string' && item.trim()) {
+            if (!realServiceNames.includes(item.trim())) realServiceNames.push(item.trim());
+            rawServiceTokens.push(item.trim());
+          }
+        }
+      }
+    } catch {}
+  }
+
+  const workspaceIndustry = (tenant?.workspaces || []).find((w: any) => w.industry?.trim())?.industry?.trim() || '';
+
   let businessName = brandProfile?.businessName || tenant?.name || 'My Business';
-  let industry = brandProfile?.industry || tenant?.industry || 'Retail & Local Services';
+  let industry = brandProfile?.industry || tenant?.industry || workspaceIndustry || '';
 
   const paramBusinessName = searchParams.get('businessName')?.trim();
   const paramIndustry = searchParams.get('industry')?.trim();
   if (paramBusinessName && (!businessName || businessName === 'My Business')) {
     businessName = paramBusinessName;
   }
-  if (paramIndustry && (!industry || /retail & local services|services|^other$/i.test(industry))) {
+  if (paramIndustry && (!industry || /corporate|holding|community|services|^other$/i.test(industry))) {
     industry = paramIndustry;
   }
   let phone = tenant?.phone || '';
@@ -206,22 +274,36 @@ export async function GET(request: NextRequest) {
     .filter(Boolean);
 
   // If industry is unset or a generic fallback placeholder, dynamically derive the merchant's trade
-  // from their real added services or business title via the Universal Category Taxonomy
+  // from their real added services, workspace industry, or business title via the Universal Category Taxonomy
   if (!industry || /corporate|holding|community|retail & local services|services|^other$/i.test(industry)) {
-    if (realServiceNames.length > 0) {
-      const derived = normalizeCategoryContext(realServiceNames.join(' '));
-      if (derived.detectedSubject) {
-        industry = `${derived.detectedSubject} Services`;
-      } else if (derived.verticalLabel) {
+    if (rawServiceTokens.length > 0) {
+      const derived = normalizeCategoryContext(rawServiceTokens.join(' '));
+      if (derived.verticalLabel && derived.verticalKey !== 'specialty_local_services') {
         industry = derived.verticalLabel;
-      }
-    } else if (businessName && businessName !== 'My Business') {
-      const derivedFromTitle = normalizeCategoryContext(businessName);
-      if (derivedFromTitle.detectedSubject) {
-        industry = `${derivedFromTitle.detectedSubject} Services`;
+      } else if (derived.detectedSubject && derived.detectedSubject !== 'Local Business') {
+        industry = `${derived.detectedSubject} Services`;
       }
     }
+    if (!industry || /corporate|holding|community|retail & local services|services|^other$/i.test(industry)) {
+      if (businessName && businessName !== 'My Business') {
+        const derivedFromTitle = normalizeCategoryContext(businessName);
+        if (derivedFromTitle.verticalLabel && derivedFromTitle.verticalKey !== 'specialty_local_services') {
+          industry = derivedFromTitle.verticalLabel;
+        } else if (derivedFromTitle.detectedSubject && derivedFromTitle.detectedSubject !== 'Local Business') {
+          industry = `${derivedFromTitle.detectedSubject} Services`;
+        }
+      }
+    }
+    if (!industry || /corporate|holding|community|retail & local services|services|^other$/i.test(industry)) {
+      industry = isFieserosAccount ? 'Field Services & Operations' : 'Professional Services';
+    }
   }
+
+  // Universal Non-Food Trade Isolation:
+  // Non-food businesses MUST NEVER receive grocery, fruit, vegetable, produce, or supermarket photos!
+  const isExplicitFoodOrGrocery = /\b(grocery|supermarket|kirana|fruit|vegetable|produce|sabzi|mandi|bazaar|provisions store|fmcg)\b/i.test(
+    `${industry} ${businessName} ${rawServiceTokens.join(' ')}`
+  );
 
   // 2. Identify industry matcher & visual pool with Universal Category Taxonomy
   const servicesContext = realServiceNames.slice(0, 5).join(' ');
@@ -286,15 +368,15 @@ export async function GET(request: NextRequest) {
     const url = typeof row?.url === 'string' ? row.url.trim() : '';
     if (!url || /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(url)) continue;
 
-    // Filter out legacy produce/vegetable/fruit photos and Supabase images for tech/software merchants
-    if (isMerchantTech) {
+    // Filter out legacy produce/vegetable/fruit photos and Supabase images for non-food / tech merchants
+    if (isMerchantTech || !isExplicitFoodOrGrocery) {
       const rowName = (row.name || '').toLowerCase();
       const rowFolder = (row.folder || '').toLowerCase();
       const isLegacySupabase = url.includes('supabase.co');
       const isGroceryOrProduce =
         /grocery|supermarket|vegetable|fruit|produce|mandi|retail-local-services|bazaar/.test(
           `${rowName} ${rowFolder} ${url.toLowerCase()}`
-        ) || url.includes('1542838132-92c53300491e') || isLegacySupabase;
+        ) || url.includes('1542838132-92c53300491e') || url.includes('1533900298318-6b8da08a523e') || isLegacySupabase;
       if (isGroceryOrProduce) {
         if (row.id) invalidTechPhotoIds.push(row.id);
         continue;
@@ -317,7 +399,7 @@ export async function GET(request: NextRequest) {
   for (const post of postRows) {
     for (const u of parseMediaList(post?.mediaUrls)) {
       if (!/^https?:\/\//i.test(u) && !u.startsWith('/')) continue;
-      if (isMerchantTech && (u.includes('1542838132-92c53300491e') || /grocery|vegetable|fruit|produce/.test(u.toLowerCase()))) {
+      if ((isMerchantTech || !isExplicitFoodOrGrocery) && (u.includes('1542838132-92c53300491e') || u.includes('1533900298318-6b8da08a523e') || /grocery|vegetable|fruit|produce/.test(u.toLowerCase()))) {
         continue;
       }
       if (!seenUserPhotoUrls.has(u)) {
@@ -382,16 +464,16 @@ export async function GET(request: NextRequest) {
   });
   const festivalCursor = new Map<string, number>();
 
-  // Trade Isolation & Cloudflare AI S3 Category Library
+  // Trade Isolation & Cloudflare AI S3 Category Library (Minimum 50 images, scaling to 200)
   const categoryFolder = getCategoryStorageFolder(effectiveCategoryText);
   let s3CategoryVisuals = await getCategoryImagesFromS3(effectiveCategoryText, 200);
-  if (s3CategoryVisuals.length < 5) {
+  if (s3CategoryVisuals.length < 50) {
     s3CategoryVisuals = await ensureOnboardingCategoryPack({
       category: effectiveCategoryText,
       businessName,
       city,
       services: realServiceNames,
-      targetCount: 5,
+      targetCount: 50,
     });
   }
   const visuals = s3CategoryVisuals.length > 0 ? s3CategoryVisuals : getCategoryVisualPool(effectiveCategoryText);
@@ -431,14 +513,14 @@ export async function GET(request: NextRequest) {
     /\b(car wash|auto garage|bike repair|tyre shop|plumbing|plumber|electrician|ac repair|pest control|carpenter|plywood|timber|dentist|dental|teeth whitening|root canal|salon|haircut|hair spa|facial|manicure|sweet shop|mithai|halwai|software company|app development)\b/i;
 
   // Incompatible trade conflict elimination:
-  // Software/tech businesses must NEVER see grocery, supermarket, cafe, bakery, restaurant, dining or sweets templates
-  const isConflictingTemplateForTech = (tpl: PosterTemplate): boolean => {
-    if (!isMerchantTech) return false;
+  // Non-food / service businesses must NEVER see grocery, supermarket, cafe, bakery, restaurant, dining or sweets templates
+  const isConflictingTemplateForNonFood = (tpl: PosterTemplate): boolean => {
+    if (isExplicitFoodOrGrocery) return false;
     const text = `${tpl.id} ${tpl.name} ${tpl.headline || ''} ${(tpl.industries || []).join(' ')} ${tpl.bgPrompt || ''}`.toLowerCase();
     return /grocery|supermarket|vegetable|fruit|produce|mandi|bazaar|cafe|bakery|restaurant|food|dining|sweets|mithai|crops|harvest|pumpkins|bistro|cake|dish/.test(text);
   };
 
-  const tradeRelevantPosterTemplates = POSTER_TEMPLATES.filter((tpl) => !isConflictingTemplateForTech(tpl));
+  const tradeRelevantPosterTemplates = POSTER_TEMPLATES.filter((tpl) => !isConflictingTemplateForNonFood(tpl));
 
   // 4. Adapt POSTER_TEMPLATES with strict merchant trade relevance & S3 category photography
   const allAdaptedPosterItems: BusinessTemplateResponseItem[] = tradeRelevantPosterTemplates.map((tpl, idx) => {
@@ -559,13 +641,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Never allow Unsplash or grocery/produce/food photos to leak to tech merchants
-    if (isMerchantTech) {
+    // Never allow Unsplash or grocery/produce/food photos to leak to non-food / tech merchants
+    if (!isExplicitFoodOrGrocery || isMerchantTech) {
       const lowerPhoto = assignedPhoto.toLowerCase();
       if (
         lowerPhoto.includes('unsplash.com') ||
         lowerPhoto.includes('1542838132-92c53300491e') ||
-        /grocery|vegetable|fruit|supermarket|produce|mandi|food|sweets|mithai|dining|restaurant|cafe|bakery|cake/.test(lowerPhoto)
+        lowerPhoto.includes('1533900298318-6b8da08a523e') ||
+        /grocery|vegetable|fruit|supermarket|produce|mandi|retail-local-services|food|sweets|mithai|dining|restaurant|cafe|bakery|cake/.test(lowerPhoto)
       ) {
         assignedPhoto = s3CategoryVisuals[idx % Math.max(1, s3CategoryVisuals.length)] || visuals[idx % Math.max(1, visuals.length)] || assignedPhoto;
       }
@@ -982,35 +1065,23 @@ export async function GET(request: NextRequest) {
     ].slice(0, limit);
   }
 
-  // Multi-card window deduplication:
-  // Ensure cards within a 10-card distance never display the identical photoUrl.
-  const distinctPool = s3CategoryVisuals.length > 0 ? s3CategoryVisuals : visuals;
-  if (distinctPool.length > 0) {
-    const windowSize = Math.min(10, Math.floor(distinctPool.length / 2));
-    const recentWindow: string[] = [];
-    let poolCursor = 0;
+  // Strict Photo Deduplication:
+  // Never repeat identical photos across cards! Each card in the feed gets a unique photo.
+  // Only available unique photos are showcased in distinct template designs.
+  const seenPhotoUrls = new Set<string>();
+  const strictlyUniqueTemplates: typeof selectedTemplates = [];
 
-    for (let i = 0; i < selectedTemplates.length; i++) {
-      let currentPhoto = selectedTemplates[i].photoUrl;
-      if (recentWindow.includes(currentPhoto)) {
-        let replacement = distinctPool[poolCursor % distinctPool.length];
-        let attempts = 0;
-        while (recentWindow.includes(replacement) && attempts < distinctPool.length) {
-          poolCursor++;
-          replacement = distinctPool[poolCursor % distinctPool.length];
-          attempts++;
-        }
-        poolCursor++;
-        selectedTemplates[i].photoUrl = replacement;
-        selectedTemplates[i].photoSource = 'S3 Category Library';
-        currentPhoto = replacement;
-      }
-      recentWindow.push(currentPhoto);
-      if (recentWindow.length > windowSize) {
-        recentWindow.shift();
-      }
+  for (const tpl of selectedTemplates) {
+    if (!tpl.photoUrl) continue;
+    const normUrl = tpl.photoUrl.split('?')[0].toLowerCase();
+    if (!seenPhotoUrls.has(normUrl)) {
+      seenPhotoUrls.add(normUrl);
+      strictlyUniqueTemplates.push(tpl);
     }
   }
+
+  // Strictly return unique templates without padding repetitive duplicate photos
+  selectedTemplates = strictlyUniqueTemplates.slice(0, limit);
 
   return NextResponse.json({
     businessContext: {

@@ -86,7 +86,8 @@ async function createTenantForGoogleUser(
   const onboardingCompleted = isFreePlan;
 
   const productType = isBgos ? 'bgos' : (isBosHost ? 'bos' : (isChatbotly ? 'chatbotly' : (isQuoteFlowHost ? 'quoteflow' : (isStandalone ? 'forms' : 'crm'))));
-  const trialEndsAt = isFreePlan ? null : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const trialDays = isBgos ? 7 : 14;
+  const trialEndsAt = isFreePlan ? null : new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
   const geo = await resolveInstallCountryAndBilling({
     request: request ?? null,
     allowIpLookup: Boolean(request),

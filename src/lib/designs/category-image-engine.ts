@@ -203,114 +203,131 @@ export function buildCategorySceneBlueprints(
   return blueprints.slice(0, targetCount);
 }
 
+export const DEFAULT_MIN_CATEGORY_IMAGES = 50;
+export const DEFAULT_MAX_CATEGORY_IMAGES = 200;
+export const INITIAL_BATCH_CATEGORY_IMAGES = 12;
+
 /**
- * Generates 5 quick foundational onboarding commercial photos via Cloudflare AI FLUX.
+ * Ensures a merchant has a rich commercial image collection for their trade.
+ * Minimum threshold: 50 images, scaling to 200 images in S3.
  *
  * Checks if images already exist for this category:
- * If YES (same business type already onboarded): Returns existing S3 images immediately (0 AI cost, <5ms).
- * If NO: Generates 5 images quickly, uploads to S3, records in DB, and returns them.
+ * If YES (>= 50 images): Returns existing S3 images immediately (0 AI cost, <5ms).
+ * If NO: Generates an immediate rich initial batch (12 images in parallel), uploads to S3 as WebP,
+ * and launches background generation to reach 50–200 images.
  */
 export async function ensureOnboardingCategoryPack(
   params: EnsureCategoryPackParams,
 ): Promise<string[]> {
   const folder = getCategoryStorageFolder(params.category);
+  const minRequired = params.targetCount || DEFAULT_MIN_CATEGORY_IMAGES;
+  const maxTarget = DEFAULT_MAX_CATEGORY_IMAGES;
 
   // 1. Check existing cached S3 category images
-  const existing = await getCategoryImagesFromS3(folder, 200);
-  if (existing.length >= 5) {
-    // Category library already onboarded! If it has < 200 images, trigger background worker to fill up to 200.
-    if (existing.length < 200 && !ACTIVE_BACKGROUND_GENERATIONS.has(folder)) {
+  const existing = await getCategoryImagesFromS3(folder, maxTarget);
+  const cacheHitThreshold = params.targetCount !== undefined ? params.targetCount : 5;
+  if (existing.length >= cacheHitThreshold) {
+    // Category library already onboarded! Immediately return existing images (<5ms).
+    // If under 200 images, trigger background worker to fill up to 200.
+    if (existing.length < maxTarget && !ACTIVE_BACKGROUND_GENERATIONS.has(folder)) {
       void startBackgroundCategoryGeneration({
         category: params.category,
         categoryFolder: folder,
         businessName: params.businessName,
         city: params.city,
         services: params.services,
-        targetCount: 200,
+        targetCount: maxTarget,
       }).catch(() => null);
     }
     return existing;
   }
 
-  const blueprints = buildCategorySceneBlueprints(folder, params.businessName, params.city, 5, params.services);
+  const initialTarget = Math.min(minRequired, Math.max(INITIAL_BATCH_CATEGORY_IMAGES, existing.length + 6));
+  const blueprints = buildCategorySceneBlueprints(folder, params.businessName, params.city, maxTarget, params.services);
   const generatedUrls: string[] = [...existing];
-  const countToGenerate = Math.max(0, 5 - existing.length);
+  const countToGenerate = Math.max(0, initialTarget - existing.length);
   const isTest = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 
-  for (let i = 0; i < countToGenerate; i++) {
-    const prompt = blueprints[i];
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 16000);
+  const batchSize = 3;
+  for (let b = 0; b < countToGenerate; b += batchSize) {
+    const chunk = Array.from({ length: Math.min(batchSize, countToGenerate - b) }, (_, idx) => b + idx);
+    await Promise.all(
+      chunk.map(async (i) => {
+        const prompt = blueprints[i] || blueprints[i % blueprints.length];
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 16000);
 
-    try {
-      const result = await generateDesignImage(
-        prompt,
-        'cloudflare',
-        controller.signal,
-        false,
-        {
-          businessName: params.businessName,
-          category: params.category,
-          city: params.city || 'India',
-        },
-        { aspectRatio: '4:5' },
-      );
-
-      clearTimeout(timeout);
-
-      if (result.bytes && result.bytes.length > 0) {
-        const optimized = await optimizeAndCompressImage(result.bytes, {
-          aspectRatio: '4:5',
-          quality: 82,
-        });
-
-        const fileIndex = String(existing.length + i + 1).padStart(3, '0');
-        const fileName = `${folder}-${fileIndex}.webp`;
-
-        const upload = await uploadFile({
-          bucket: 'bgos-business-images',
-          companyId: 'category_library',
-          folder: folder,
-          fileName,
-          file: optimized.buffer,
-          contentType: 'image/webp',
-          requirePublicUrl: true,
-        });
-
-        if (upload.url) {
-          generatedUrls.push(upload.url);
-
-          // Register in database as universal category library asset
-          await Promise.resolve(db.imageLibrary?.create?.({
-            data: {
-              tenantId: null, // Universal across all merchants in this trade
-              name: `${params.category} Commercial Scene ${fileIndex}`,
-              url: upload.url,
-              folder: `category_library/${folder}`,
-              mediaType: 'image/webp',
-              size: optimized.size,
-              width: 1080,
-              height: 1350,
+        try {
+          const result = await generateDesignImage(
+            prompt,
+            'cloudflare',
+            controller.signal,
+            false,
+            {
+              businessName: params.businessName,
+              category: params.category,
+              city: params.city || 'India',
             },
-          })).catch(() => null);
+            { aspectRatio: '4:5' },
+          );
+
+          clearTimeout(timeout);
+
+          if (result.bytes && result.bytes.length > 0) {
+            const optimized = await optimizeAndCompressImage(result.bytes, {
+              aspectRatio: '4:5',
+              quality: 78,
+            });
+
+            const fileIndex = String(existing.length + i + 1).padStart(3, '0');
+            const fileName = `${folder}-${fileIndex}.webp`;
+
+            const upload = await uploadFile({
+              bucket: 'bgos-business-images',
+              companyId: 'category_library',
+              folder: folder,
+              fileName,
+              file: optimized.buffer,
+              contentType: 'image/webp',
+              requirePublicUrl: true,
+            });
+
+            if (upload.url) {
+              generatedUrls.push(upload.url);
+
+              // Register in database as universal category library asset
+              await Promise.resolve(db.imageLibrary?.create?.({
+                data: {
+                  tenantId: null, // Universal across all merchants in this trade
+                  name: `${params.category} Commercial Scene ${fileIndex}`,
+                  url: upload.url,
+                  folder: `category_library/${folder}`,
+                  mediaType: 'image/webp',
+                  size: optimized.size,
+                  width: 1080,
+                  height: 1350,
+                },
+              })).catch(() => null);
+            }
+          }
+        } catch (err) {
+          clearTimeout(timeout);
+          console.warn(`[category-image-engine] Quick pack image ${i + 1} warning:`, err);
+          if (isTest) {
+            const bucket = process.env.AWS_S3_BUCKET || 'serviceos-assets-prod';
+            const region = process.env.AWS_REGION || 'ap-south-1';
+            generatedUrls.push(
+              `https://${bucket}.s3.${region}.amazonaws.com/bgos-business-images/category_library/${folder}/${folder}-${String(existing.length + i + 1).padStart(3, '0')}.webp`
+            );
+          }
         }
-      }
-    } catch (err) {
-      clearTimeout(timeout);
-      console.warn(`[category-image-engine] Quick pack image ${i + 1} warning:`, err);
-      if (isTest) {
-        const bucket = process.env.AWS_S3_BUCKET || 'serviceos-assets-prod';
-        const region = process.env.AWS_REGION || 'ap-south-1';
-        generatedUrls.push(
-          `https://${bucket}.s3.${region}.amazonaws.com/bgos-business-images/category_library/${folder}/${folder}-${String(existing.length + i + 1).padStart(3, '0')}.webp`
-        );
-      }
-    }
+      })
+    );
   }
 
   MEMORY_CATEGORY_CACHE.set(folder, generatedUrls);
 
-  // Trigger background generator to fill the rest of the 200 images asynchronously
+  // Trigger background generator to fill up to 200 images asynchronously
   if (!ACTIVE_BACKGROUND_GENERATIONS.has(folder)) {
     void startBackgroundCategoryGeneration({
       category: params.category,
@@ -318,7 +335,7 @@ export async function ensureOnboardingCategoryPack(
       businessName: params.businessName,
       city: params.city,
       services: params.services,
-      targetCount: 200,
+      targetCount: maxTarget,
     }).catch(() => null);
   }
 
@@ -474,7 +491,7 @@ export async function prewarmSubscribedMerchantCategory(tenantId: string): Promi
       category,
       businessName,
       city,
-      targetCount: 5,
+      targetCount: DEFAULT_MIN_CATEGORY_IMAGES,
     });
   } catch (err) {
     console.warn(`[category-image-engine] prewarmSubscribedMerchantCategory error for ${tenantId}:`, err);
@@ -528,13 +545,13 @@ export async function prewarmAllActiveSubscribers(): Promise<{ processed: number
     const categoriesSeeded: string[] = [];
 
     for (const [slug, info] of uniqueSpecializations.entries()) {
-      const existing = await getCategoryImagesFromS3(slug, 5);
-      if (existing.length < 5) {
+      const existing = await getCategoryImagesFromS3(slug, DEFAULT_MIN_CATEGORY_IMAGES);
+      if (existing.length < DEFAULT_MIN_CATEGORY_IMAGES) {
         await ensureOnboardingCategoryPack({
           category: info.category,
           businessName: info.businessName,
           city: info.city,
-          targetCount: 5,
+          targetCount: DEFAULT_MIN_CATEGORY_IMAGES,
         });
         seededCount++;
         categoriesSeeded.push(slug);

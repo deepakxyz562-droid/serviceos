@@ -434,6 +434,13 @@ export function buildProviderWhereClause(opts: ProviderFilterOptions): Record<st
     publicProfileEnabled: true,
     marketplaceOptIn: true,
     suspendedAt: null,
+    // Strict product boundary: BGOS subscribers and registered users must NEVER
+    // be shown inside Fieseros Marketplace!
+    NOT: [
+      { signupMode: 'bgos' },
+      { listingTier: 'none' },
+      { workspaces: { some: { productType: 'bgos' } } },
+    ],
   };
 
   if (opts.country) {

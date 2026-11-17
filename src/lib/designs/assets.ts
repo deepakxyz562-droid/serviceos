@@ -59,7 +59,7 @@ async function processImageBuffer(
         }
       }
       const normalized = await jpegPipeline
-        .jpeg({ quality: 92 })
+        .jpeg({ quality: 80, mozjpeg: true })
         .toBuffer({ resolveWithObject: true });
       return {
         data: normalized.data,
@@ -70,7 +70,7 @@ async function processImageBuffer(
       };
     }
     const normalized = await pipeline
-      .webp({ quality: 85, effort: 4 })
+      .webp({ quality: 78, effort: 4 })
       .toBuffer({ resolveWithObject: true });
     return {
       data: normalized.data,

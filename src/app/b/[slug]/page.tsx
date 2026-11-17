@@ -68,6 +68,13 @@ export async function generateMetadata({
   }
 
   if (!profile) {
+    const canonical = await getCanonicalUrlBySlug(slug);
+    if (canonical) {
+      return {
+        robots: { index: false, follow: true },
+        alternates: { canonical },
+      };
+    }
     return {
       title: 'Business Not Found',
       robots: { index: false, follow: false },
@@ -141,6 +148,11 @@ export default async function ShortBusinessUrlPage({
   }
 
   if (!profile) {
+    const marketplaceCanonical = await getCanonicalUrlBySlug(slug);
+    if (marketplaceCanonical) {
+      permanentRedirect(marketplaceCanonical);
+    }
+
     return (
       <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
         <main className="flex-1 flex items-center justify-center px-4">

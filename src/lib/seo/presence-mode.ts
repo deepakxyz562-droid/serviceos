@@ -14,6 +14,8 @@ export interface PresenceTenantInput {
   publicProfileEnabled?: boolean | null;
   marketplaceOptIn?: boolean | null;
   claimed?: boolean | null;
+  signupMode?: string | null;
+  productType?: string | null;
   settingsJson?: string | null;
   brandProfile?: {
     industry?: string | null;
@@ -192,20 +194,38 @@ export function resolveBusinessPresenceMode(params: {
 
   const hostedUrl = candidates.find((u) => isFieserosHostedUrl(u));
   if (publicProfileEnabled || hostedUrl) {
-    const useBgosCardCanonical =
-      tenant.marketplaceOptIn === false ||
-      tenant.marketplaceOptIn === null ||
+    const isBgosMerchant =
+      tenant.signupMode === 'bgos' ||
+      tenant.productType === 'bgos' ||
       Boolean(hostedUrl && /bgos\./i.test(hostedUrl));
-    const effectiveCanonical = useBgosCardCanonical ? shortHostedUrl : hostedCanonicalUrl;
-    const effectiveDomain = useBgosCardCanonical ? 'bgos.site' : 'fieseros.com';
+
+    if (isBgosMerchant) {
+      return {
+        mode: 'bgos_hosted',
+        slug,
+        websiteUrl: hostedUrl || shortHostedUrl,
+        canonicalUrl: shortHostedUrl,
+        shortHostedUrl,
+        hostedCanonicalUrl,
+        domain: 'bgos.site',
+        publicProfileEnabled,
+        claimed,
+        needsActivation: !publicProfileEnabled,
+        isDirectoryOrSocialUrl: false,
+        customDomainRecord: null,
+      };
+    }
+
+    // Fieseros CRM / Marketplace contractor: canonical URL is ALWAYS the Fieseros directory page!
+    // Fieseros contractors NEVER receive bgos.site canonical URLs.
     return {
       mode: 'bgos_hosted',
       slug,
-      websiteUrl: hostedUrl || effectiveCanonical,
-      canonicalUrl: effectiveCanonical,
+      websiteUrl: hostedUrl || hostedCanonicalUrl,
+      canonicalUrl: hostedCanonicalUrl,
       shortHostedUrl,
       hostedCanonicalUrl,
-      domain: effectiveDomain,
+      domain: 'fieseros.com',
       publicProfileEnabled,
       claimed,
       needsActivation: !publicProfileEnabled,

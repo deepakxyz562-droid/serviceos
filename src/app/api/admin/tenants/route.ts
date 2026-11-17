@@ -196,6 +196,10 @@ export async function POST(request: NextRequest) {
     // Create tenant
     // claimed=true + listingTier='claimed' — this is a real registered business
     // created by the SuperAdmin, not seed data.
+    const isBgos = body.product === 'bgos' || body.signupMode === 'bgos';
+    const trialDays = isBgos ? 7 : 14;
+    const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
@@ -204,11 +208,12 @@ export async function POST(request: NextRequest) {
         email: ownerEmail,
         plan: selectedPlan,
         planStatus: 'trial',
-        trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        trialEndsAt,
         claimed: true,
-        listingTier: 'claimed',
-        marketplaceOptIn: true,
-        marketplaceTermsAcceptedAt: new Date(),
+        listingTier: isBgos ? 'none' : 'claimed',
+        marketplaceOptIn: isBgos ? false : true,
+        signupMode: isBgos ? 'bgos' : (body.signupMode || 'crm_trial'),
+        marketplaceTermsAcceptedAt: isBgos ? null : new Date(),
       },
     });
 
@@ -251,7 +256,7 @@ export async function POST(request: NextRequest) {
         amount: config.amount,
         currency: 'USD',
         billingCycle: 'monthly',
-        trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        trialEndsAt: tenant.trialEndsAt,
         maxUsers: config.maxUsers,
         maxJobs: config.maxJobs,
         maxWorkflows: config.maxWorkflows,

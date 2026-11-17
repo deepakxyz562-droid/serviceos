@@ -489,7 +489,7 @@ async function gatherContextAndPhotos(
       } else if (/(paint|color|decor)/i.test(resolvedBusinessName)) {
         resolvedCategory = 'Paint & Home Decor';
       } else {
-        resolvedCategory = 'Retail & Local Services';
+        resolvedCategory = 'Professional Services';
       }
     } else if (rawBpCat) {
       resolvedCategory = rawBpCat;
@@ -498,7 +498,7 @@ async function gatherContextAndPhotos(
     } else if (/(market|grocery|supermarket|mart|store|kirana|bazaar)/i.test(resolvedBusinessName)) {
       resolvedCategory = 'Grocery & Supermarket';
     } else {
-      resolvedCategory = gbpMeta.category || 'Retail & Local Services';
+      resolvedCategory = gbpMeta.category || 'Professional Services';
     }
   }
 

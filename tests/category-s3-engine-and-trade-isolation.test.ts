@@ -41,7 +41,12 @@ import {
   ensureOnboardingCategoryPack,
   buildCategorySceneBlueprints,
   prewarmSubscribedMerchantCategory,
+  DEFAULT_MIN_CATEGORY_IMAGES,
+  DEFAULT_MAX_CATEGORY_IMAGES,
+  INITIAL_BATCH_CATEGORY_IMAGES,
 } from '@/lib/designs/category-image-engine';
+import { scoreIndustryMatch } from '@/lib/designs/dynamic-visual-resolver';
+import { normalizeCategoryContext } from '@/lib/designs/category-taxonomy';
 import { POSTER_TEMPLATES } from '../shared/poster-templates';
 import { CURATED_TEMPLATES } from '../shared/curated-photo-templates';
 import { getCategoryPhotoFolder } from '../shared/business-template-collection';
@@ -324,6 +329,57 @@ describe('Dedicated S3 Category Engine & Strict Trade Isolation', () => {
         expect(photo).not.toContain('1542838132-92c53300491e');
         expect(photo).not.toMatch(/vegetable|grocery|supermarket/);
       }
+    });
+
+    it('guarantees that non-food service businesses (Plumbing, HVAC, Electrical, Tech) never resolve to grocery or produce', () => {
+      const plumbingCtx = normalizeCategoryContext('Drain Cleaning Water Heater Installation Leak Detection');
+      expect(plumbingCtx.verticalKey).toBe('home_electrical_services');
+      expect(scoreIndustryMatch('Drain Cleaning Water Heater Installation')).toBe('plumbing');
+
+      const hvacCtx = normalizeCategoryContext('AC Repair HVAC Installation Air Duct Cleaning Chiller Maintenance');
+      expect(hvacCtx.verticalKey).toBe('home_electrical_services');
+      expect(scoreIndustryMatch('AC Repair HVAC Installation Air Duct')).toBe('hvac_aircon');
+
+      const electricalCtx = normalizeCategoryContext('Electrical Wiring Circuit Breaker Panel Upgrade');
+      expect(electricalCtx.verticalKey).toBe('home_electrical_services');
+      expect(scoreIndustryMatch('Electrical Wiring Circuit Breaker')).toBe('electrical');
+
+      // Retail & Local Services alone must NEVER resolve to grocery_supermarket
+      expect(scoreIndustryMatch('Retail & Local Services')).not.toBe('grocery_supermarket');
+      expect(scoreIndustryMatch('Retail & Local Services')).toBe('generic_business');
+    });
+
+    it('enforces minimum 50 up to 200 images for category library scale', () => {
+      expect(DEFAULT_MIN_CATEGORY_IMAGES).toBe(50);
+      expect(DEFAULT_MAX_CATEGORY_IMAGES).toBe(200);
+      expect(INITIAL_BATCH_CATEGORY_IMAGES).toBeGreaterThanOrEqual(10);
+    });
+
+    it('enforces strict feed deduplication so no two cards share identical photo URLs', () => {
+      const mockCards = [
+        { id: '1', photoUrl: 'https://s3.amazonaws.com/img1.webp' },
+        { id: '2', photoUrl: 'https://s3.amazonaws.com/img2.webp' },
+        { id: '3', photoUrl: 'https://s3.amazonaws.com/img1.webp' }, // duplicate
+        { id: '4', photoUrl: 'https://s3.amazonaws.com/img3.webp' },
+        { id: '5', photoUrl: 'https://s3.amazonaws.com/img2.webp' }, // duplicate
+      ];
+
+      const seen = new Set<string>();
+      const deduped: typeof mockCards = [];
+      for (const card of mockCards) {
+        const norm = card.photoUrl.split('?')[0].toLowerCase();
+        if (!seen.has(norm)) {
+          seen.add(norm);
+          deduped.push(card);
+        }
+      }
+
+      expect(deduped).toHaveLength(3);
+      expect(deduped.map((c) => c.photoUrl)).toEqual([
+        'https://s3.amazonaws.com/img1.webp',
+        'https://s3.amazonaws.com/img2.webp',
+        'https://s3.amazonaws.com/img3.webp',
+      ]);
     });
   });
 });

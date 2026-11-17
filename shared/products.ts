@@ -67,6 +67,18 @@ export function subscriptionAllowsAccess(subscription: {
   return !subscription.currentPeriodEnd || new Date(subscription.currentPeriodEnd).getTime() > now;
 }
 
+/**
+ * Product-aware trial duration in days:
+ * - BGOS: 7-day fast-converting trial (Google Business Profile, Standees, AI Posts).
+ * - Fieseros CRM, BOS & QuoteFlow: 14-day trial (field service operations, scheduling, jobs, invoices).
+ */
+export function getProductTrialDurationDays(product?: string | null): number {
+  if (!product) return 14;
+  const normalized = normalizeProduct(product);
+  if (normalized === 'bgos') return 7;
+  return 14;
+}
+
 /** Only redirect public GET/HEAD pages; API callbacks keep their original method/body. */
 export function marketplaceRedirect(path: string, search = ''): string {
   if (path === '/' || path === '/marketplace') return `https://fieseros.com/marketplace${search}`;

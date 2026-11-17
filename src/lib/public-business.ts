@@ -73,6 +73,8 @@ const PUBLIC_TENANT_SELECT = {
   businessVerified: true,
   insuranceVerified: true,
   licenceNumber: true,
+  signupMode: true,
+  workspaces: { select: { productType: true } },
   insuranceProvider: true,
   emergencyServiceAvailable: true,
   googlePlaceId: true,
@@ -300,6 +302,15 @@ async function _getPublicBusinessByUrl(
     return { business: null, needsRedirect: false, canonicalUrl: null }
   }
 
+  // Strict product boundary: BGOS subscribers and registered users must NEVER
+  // be served as Fieseros Marketplace provider pages!
+  if (
+    tenant.signupMode === 'bgos' ||
+    tenant.workspaces?.some((w) => w.productType === 'bgos')
+  ) {
+    return { business: null, needsRedirect: false, canonicalUrl: null }
+  }
+
   // ── Canonical URL = PLURAL industry slug ─────────────────────────────
   // The canonical URL scheme is now /{pluralIndustry}/{city}/{slug}
   // (e.g. /plumbers/london/abc-plumbing) — see
@@ -402,7 +413,7 @@ export async function invalidatePublicBusinessCache(): Promise<void> {
  * Resolve a tenant by slug only (used by /b/[slug] short URL → redirect).
  */
 export async function getCanonicalUrlBySlug(slugSeg: string): Promise<string | null> {
-  let tenant: Awaited<ReturnType<typeof db.tenant.findFirst>> = null
+  let tenant: any = null
   try {
     tenant = await db.tenant.findFirst({
       where: {
@@ -411,12 +422,19 @@ export async function getCanonicalUrlBySlug(slugSeg: string): Promise<string | n
           { publicSlug: slugSeg },
         ],
       },
+      include: {
+        workspaces: { select: { productType: true } },
+      },
     })
   } catch {
     return null
   }
 
   if (!tenant) return null
+  // Exclude BGOS merchants from Fieseros marketplace canonical URLs
+  if (tenant.signupMode === 'bgos' || tenant.workspaces?.some((w: any) => w.productType === 'bgos')) {
+    return null
+  }
   // PLURAL canonical URL — see _getPublicBusinessByUrl for rationale.
   const expectedIndustry = mapIndustryToPluralSlug(tenant.industry)
   const expectedCity = slugifyCity(tenant.city)
@@ -818,6 +836,11 @@ async function _getSimilarProviders(
     publicProfileEnabled: true,
     marketplaceOptIn: true,
     suspendedAt: null,
+    NOT: [
+      { signupMode: 'bgos' },
+      { listingTier: 'none' },
+      { workspaces: { some: { productType: 'bgos' } } },
+    ],
   }
 
   let tenants = await db.tenant.findMany({
@@ -985,6 +1008,11 @@ export async function listIndexableBusinessUrls(options?: {
           // has no native char-length filter, so the ≥40-char check stays in JS,
           // but `not: null` alone prunes a meaningful chunk of empty rows.
           description: { not: null },
+          NOT: [
+            { signupMode: 'bgos' },
+            { listingTier: 'none' },
+            { workspaces: { some: { productType: 'bgos' } } },
+          ],
         },
         select: {
           id: true,
@@ -1176,6 +1204,11 @@ export async function listAllIndexableBusinessUrls(): Promise<IndexableBusinessU
           publicProfileEnabled: true,
           suspendedAt: null,
           description: { not: null },
+          NOT: [
+            { signupMode: 'bgos' },
+            { listingTier: 'none' },
+            { workspaces: { some: { productType: 'bgos' } } },
+          ],
           ...(lastId ? { id: { gt: lastId } } : {}),
         },
         select: {

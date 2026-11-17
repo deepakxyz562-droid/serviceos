@@ -65,6 +65,10 @@ export async function ensureBgosTenantAndWorkspace(
         trialEndsAt,
         country: geo.countryCode,
         currency: geo.currency,
+        signupMode: 'bgos',
+        listingTier: 'none',
+        marketplaceOptIn: false,
+        marketplaceTermsAcceptedAt: null,
         publicProfileEnabled: true,
         ...(deviceTz
           ? {
