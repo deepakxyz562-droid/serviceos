@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
 import { getBrandContext } from '@/lib/brand-context';
 import { uploadFile } from '@/lib/supabase-storage';
+import { getCategoryStorageFolder } from '@/lib/designs/category-image-engine';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -369,26 +370,8 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
     const finalCta = generated.ctaText || 'Book now';
 
     const getContextPhoto = (tText: string, ind: string) => {
-      const q = (tText + ' ' + ind).toLowerCase();
-      if (q.includes('salon') || q.includes('hair') || q.includes('spa') || q.includes('massage') || q.includes('beauty')) {
-        return 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1200&q=80';
-      }
-      if (q.includes('food') || q.includes('restaurant') || q.includes('cafe') || q.includes('pizza') || q.includes('coffee') || q.includes('dine') || q.includes('menu')) {
-        return 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80';
-      }
-      if (q.includes('auto') || q.includes('car') || q.includes('mechanic') || q.includes('detailing') || q.includes('wash')) {
-        return 'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=1200&q=80';
-      }
-      if (q.includes('plumb') || q.includes('ac') || q.includes('repair') || q.includes('electric') || q.includes('home service') || q.includes('clean')) {
-        return 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80';
-      }
-      if (q.includes('fitness') || q.includes('gym') || q.includes('yoga') || q.includes('workout')) {
-        return 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1200&q=80';
-      }
-      if (q.includes('dental') || q.includes('clinic') || q.includes('doctor') || q.includes('health') || q.includes('care')) {
-        return 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&w=1200&q=80';
-      }
-      return 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1200&q=80';
+      const folder = getCategoryStorageFolder(tText + ' ' + ind);
+      return `https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/${folder}/${folder}-001.webp`;
     };
 
     const chosenPhoto = inputPhoto || getContextPhoto(topic, tenant?.industry || '');

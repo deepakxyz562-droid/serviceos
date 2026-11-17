@@ -167,7 +167,8 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     expect(CURATED_TEMPLATES.length).toBeGreaterThanOrEqual(16);
 
     for (const tpl of CURATED_TEMPLATES) {
-      expect(tpl.referenceUrl).toMatch(/^(https:\/\/images\.unsplash\.com\/photo-|\/images\/bgos\/festivals\/|\/images\/bgos\/templates\/)/);
+      expect(tpl.referenceUrl).toMatch(/^(https:\/\/.*s3.*\.amazonaws\.com\/bgos-business-images\/|\/images\/bgos\/festivals\/|\/images\/bgos\/templates\/)/);
+      expect(tpl.referenceUrl).not.toContain('unsplash.com');
       // Ensure the old 404 URL is gone
       expect(tpl.referenceUrl).not.toContain('photo-1486006920555-c77dce18193b');
       // Ensure the mismatched Diwali photo is gone and replaced with verified authentic diya
@@ -355,8 +356,9 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
 
     // 4. Must prioritize clean commercial photography (pure photography with no text)
     const validTemplates = data.templates.filter((t: any) =>
-      t.photoUrl.includes('/images/bgos/festivals/') || t.photoUrl.includes('/images/bgos/templates/') || t.photoUrl.includes('images.unsplash.com') || t.photoUrl.startsWith('https://'),
+      t.photoUrl.includes('/images/bgos/festivals/') || t.photoUrl.includes('/images/bgos/templates/') || t.photoUrl.includes('bgos-business-images') || t.photoUrl.startsWith('https://'),
     );
     expect(validTemplates.length).toBeGreaterThanOrEqual(15);
+    expect(data.templates.every((t: any) => !t.photoUrl.includes('unsplash.com'))).toBe(true);
   }, 20000);
 });

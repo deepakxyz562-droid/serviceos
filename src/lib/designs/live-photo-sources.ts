@@ -497,33 +497,9 @@ async function searchMetaAds(query: string, limit: number): Promise<LivePhoto[]>
 // Unsplash napi (internal search, no key — best effort)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function searchUnsplashNapi(query: string, limit: number): Promise<LivePhoto[]> {
-  const url = `https://unsplash.com/napi/search/photos?query=${encodeURIComponent(query)}&per_page=${Math.min(30, limit)}`;
-  const res = await fetchWithTimeout(url, { headers: { accept: 'application/json' } });
-  if (!res.ok) return [];
-  const data = (await res.json()) as {
-    results?: Array<{
-      urls?: { raw?: string; regular?: string; full?: string };
-      width?: number;
-      height?: number;
-      alt_description?: string;
-      links?: { html?: string };
-      user?: { name?: string };
-    }>;
-  };
-  const results = data.results || [];
-  return results.slice(0, limit).map((r) => ({
-    url:
-      r.urls?.regular ||
-      (r.urls?.raw ? `${r.urls.raw}&w=1200&auto=format&fit=crop&q=80` : '') ||
-      '',
-    source: 'unsplash' as LivePhotoSource,
-    width: r.width,
-    height: r.height,
-    title: (r.alt_description || '').slice(0, 90) || undefined,
-    author: r.user?.name,
-    sourcePageUrl: r.links?.html,
-  }));
+async function searchUnsplashNapi(_query: string, _limit: number): Promise<LivePhoto[]> {
+  // Unsplash permanently replaced with dedicated S3 Category Library
+  return [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

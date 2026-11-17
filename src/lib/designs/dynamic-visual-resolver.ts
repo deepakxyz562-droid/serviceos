@@ -4,149 +4,70 @@ import { listGoogleBusinessMedia } from '@/lib/social/adapters/googlebusiness';
 import { generateDesignImage } from '@/lib/designs/image-provider';
 import { normalizeCategoryContext } from './category-taxonomy';
 import { searchFestivalCatalog } from '../../../shared/festival-catalog';
+import { getCategoryStorageFolder } from './category-image-engine';
 
 /**
  * Dynamic SMB Category Visual Mapping.
- * Instead of hardcoding static mockup files,
- * BGOS serves verified high-resolution commercial assets and dynamic S3-cached AI assets.
+ * Instead of hardcoding external Unsplash photos,
+ * ServiceOS / BGOS serves verified AWS S3 category library assets generated via Cloudflare Workers AI FLUX.
  */
-const DEFAULT_FALLBACK_VISUALS = [
-  'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=1200&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=1200&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1200&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=1200&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1200&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=1200&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1200&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=1200&auto=format&fit=crop&q=80',
-];
+
+const S3_BUCKET = process.env.AWS_S3_BUCKET || 'serviceos-assets-prod';
+const S3_REGION = process.env.AWS_REGION || 'ap-south-1';
+const S3_BASE = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/bgos-business-images/category_library`;
+
+function buildS3CategoryUrls(folder: string, count = 50): string[] {
+  return Array.from({ length: count }, (_, i) =>
+    `${S3_BASE}/${folder}/${folder}-${String(i + 1).padStart(3, '0')}.webp`
+  );
+}
 
 const LOCAL_CATEGORY_TEMPLATES: Record<string, string[]> = {
-  plywood_timber: [
-    'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?w=1200&auto=format&fit=crop&q=80',
-  ],
-  indian_sweets: [
-    'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1541832676-9b763b0239ab?w=1200&auto=format&fit=crop&q=80',
-  ],
-  welding_fabrication: [
-    'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1200&auto=format&fit=crop&q=80',
-  ],
-  solar_energy: [
-    'https://images.unsplash.com/photo-1509391365360-2e959784a276?w=1200&auto=format&fit=crop&q=80',
-  ],
-  dental_clinic: [
-    'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=1200&auto=format&fit=crop&q=80',
-  ],
-  salon_spa: [
-    'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1200&auto=format&fit=crop&q=80',
-  ],
-  auto_repair: [
-    'https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=1200&auto=format&fit=crop&q=80',
-  ],
-  fitness_gym: [
-    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1200&auto=format&fit=crop&q=80',
-  ],
-  restaurant_dining: [
-    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&auto=format&fit=crop&q=80',
-  ],
-  bakery_sweets: [
-    'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=1200&auto=format&fit=crop&q=80',
-  ],
-  plumbing: [
-    'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=1200&auto=format&fit=crop&q=80',
-  ],
-  electrical: [
-    'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=1200&auto=format&fit=crop&q=80',
-  ],
-  hardware_tools: [
-    'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=1200&auto=format&fit=crop&q=80',
-  ],
-  paint_decor: [
-    'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=1200&auto=format&fit=crop&q=80',
-  ],
-  jewellery: [
-    'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=1200&auto=format&fit=crop&q=80',
-  ],
-  fashion_boutique: [
-    'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200&auto=format&fit=crop&q=80',
-  ],
-  real_estate: [
-    'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&auto=format&fit=crop&q=80',
-  ],
-  cleaning_services: [
-    'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&auto=format&fit=crop&q=80',
-  ],
-  farmhouse_resort: [
-    'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&auto=format&fit=crop&q=80',
-  ],
-  it_software: [
-    'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1555774698-0b77e0d5fac6?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=1200&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1200&auto=format&fit=crop&q=80',
-  ],
-  legal_accounting: [
-    'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=1200&auto=format&fit=crop&q=80',
-  ],
-  healthcare_medical: [
-    'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=1200&auto=format&fit=crop&q=80',
-  ],
-  security_services: [
-    'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=1200&auto=format&fit=crop&q=80',
-  ],
-  security_cctv: [
-    'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=1200&auto=format&fit=crop&q=80',
-  ],
-  grocery_supermarket: [
-    'https://images.unsplash.com/photo-1542838132-92c53300491e?w=1200&auto=format&fit=crop&q=80',
-  ],
-  pet_vet: [
-    'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=1200&auto=format&fit=crop&q=80',
-  ],
-  photography_studio: [
-    'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=1200&auto=format&fit=crop&q=80',
-  ],
-  hvac_aircon: [
-    'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=1200&auto=format&fit=crop&q=80',
-  ],
-  roofing: [
-    'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&auto=format&fit=crop&q=80',
-  ],
-  landscaping_lawn: [
-    'https://images.unsplash.com/photo-1558904541-efa8c4a08931?w=1200&auto=format&fit=crop&q=80',
-  ],
-  logistics_courier: [
-    'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&auto=format&fit=crop&q=80',
-  ],
-  education_academy: [
-    'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1200&auto=format&fit=crop&q=80',
-  ],
-  event_decor: [
-    'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=1200&auto=format&fit=crop&q=80',
-  ],
-  generic_business: DEFAULT_FALLBACK_VISUALS,
+  plywood_timber: buildS3CategoryUrls('plywood_timber'),
+  indian_sweets: buildS3CategoryUrls('indian_sweets'),
+  welding_fabrication: buildS3CategoryUrls('welding_fabrication'),
+  solar_energy: buildS3CategoryUrls('solar_energy'),
+  dental_clinic: buildS3CategoryUrls('dental_clinic'),
+  salon_spa: buildS3CategoryUrls('salon_spa'),
+  auto_repair: buildS3CategoryUrls('auto_repair'),
+  fitness_gym: buildS3CategoryUrls('fitness_gym'),
+  restaurant_dining: buildS3CategoryUrls('restaurant_dining'),
+  bakery_cafe: buildS3CategoryUrls('bakery_cafe'),
+  plumbing: buildS3CategoryUrls('plumbing'),
+  electrical: buildS3CategoryUrls('electrical'),
+  hardware_tools: buildS3CategoryUrls('hardware_tools'),
+  paint_decor: buildS3CategoryUrls('paint_decor'),
+  jewellery: buildS3CategoryUrls('jewellery'),
+  fashion_boutique: buildS3CategoryUrls('fashion_boutique'),
+  real_estate: buildS3CategoryUrls('real_estate'),
+  cleaning_services: buildS3CategoryUrls('cleaning_services'),
+  farmhouse_resort: buildS3CategoryUrls('farmhouse_resort'),
+  it_software: buildS3CategoryUrls('it_software'),
+  legal_accounting: buildS3CategoryUrls('legal_accounting'),
+  healthcare_medical: buildS3CategoryUrls('healthcare_medical'),
+  security_services: buildS3CategoryUrls('security_services'),
+  security_cctv: buildS3CategoryUrls('security_cctv'),
+  grocery_supermarket: buildS3CategoryUrls('grocery_supermarket'),
+  pet_vet: buildS3CategoryUrls('pet_vet'),
+  photography_studio: buildS3CategoryUrls('photography_studio'),
+  hvac_aircon: buildS3CategoryUrls('hvac_aircon'),
+  roofing: buildS3CategoryUrls('roofing'),
+  landscaping_lawn: buildS3CategoryUrls('landscaping_lawn'),
+  logistics_courier: buildS3CategoryUrls('logistics_courier'),
+  education_academy: buildS3CategoryUrls('education_academy'),
+  event_decor: buildS3CategoryUrls('event_decor'),
+  generic_business: buildS3CategoryUrls('it_software'),
 };
 
 export const CURATED_SMB_IMAGE_REGISTRY: Record<string, string[]> = new Proxy(LOCAL_CATEGORY_TEMPLATES, {
   get(target, prop: string) {
     if (prop in target) return target[prop];
-    return DEFAULT_FALLBACK_VISUALS;
+    return target.it_software;
   },
 });
 
 const SEMANTIC_KEY_MAP: Array<{ key: string; keywords: string[] }> = [
+  { key: 'it_software', keywords: ['software', 'it ', 'code', 'developer', 'web dev', 'app dev', 'cloud', 'fieseros', 'serviceos', 'saas', 'crm', 'field service', 'platform', 'automation', 'digital marketing'] },
   { key: 'plywood_timber', keywords: ['plywood', 'timber', 'sunmica', 'laminate', 'veneer'] },
   { key: 'indian_sweets', keywords: ['sweet', 'mithai', 'halwai', 'namkeen', 'ladoo', 'laddu'] },
   { key: 'welding_fabrication', keywords: ['weld', 'fabricat', 'steel', 'iron gate', 'metal work'] },
@@ -155,8 +76,8 @@ const SEMANTIC_KEY_MAP: Array<{ key: string; keywords: string[] }> = [
   { key: 'salon_spa', keywords: ['salon', 'saloon', 'spa', 'haircut', 'makeup', 'parlour', 'parlor'] },
   { key: 'auto_repair', keywords: ['auto', 'car', 'garage', 'mechanic', 'vehicle repair'] },
   { key: 'fitness_gym', keywords: ['gym', 'fitness', 'crossfit', 'workout'] },
-  { key: 'bakery_sweets', keywords: ['cake', 'bakery', 'pastry', 'dessert'] },
-  { key: 'restaurant_dining', keywords: ['restaurant', 'dining', 'cafe', 'bistro'] },
+  { key: 'bakery_cafe', keywords: ['cake', 'bakery', 'pastry', 'dessert', 'cafe', 'bistro'] },
+  { key: 'restaurant_dining', keywords: ['restaurant', 'dining', 'bistro', 'diner'] },
   { key: 'plumbing', keywords: ['plumb', 'pipe', 'drain', 'leak', 'sanitary'] },
   { key: 'electrical', keywords: ['electr', 'wiring', 'circuit', 'switchboard'] },
   { key: 'hardware_tools', keywords: ['hardware', 'power tool', 'fastener', 'bearing'] },
@@ -166,7 +87,6 @@ const SEMANTIC_KEY_MAP: Array<{ key: string; keywords: string[] }> = [
   { key: 'real_estate', keywords: ['real estate', 'realtor', 'property', 'builder', 'apartment'] },
   { key: 'cleaning_services', keywords: ['janitor', 'deep clean', 'disinfect', 'housekeep'] },
   { key: 'farmhouse_resort', keywords: ['farmhouse', 'resort', 'swimming pool', 'villa stay'] },
-  { key: 'it_software', keywords: ['software', 'it ', 'code', 'developer', 'web dev', 'app dev', 'cloud', 'fieseros', 'serviceos', 'saas', 'crm', 'field service', 'platform', 'automation'] },
   { key: 'legal_accounting', keywords: ['legal', 'law', 'lawyer', 'attorney', 'notary', 'chartered accountant', 'ca ', 'audit', 'tax'] },
   { key: 'healthcare_medical', keywords: ['health', 'doctor', 'clinic', 'medical', 'hospital', 'pharmacy'] },
   { key: 'security_services', keywords: ['security', 'guard', 'cctv', 'surveillance', 'patrol'] },
@@ -183,11 +103,10 @@ const SEMANTIC_KEY_MAP: Array<{ key: string; keywords: string[] }> = [
 
 /**
  * Maps any industry, topic or query string to the best matching SMB category key.
- * Scales dynamically to all 4,000+ Google Business Profile categories.
  */
 export function scoreIndustryMatch(text: string): string {
   const normalized = (text || '').trim().toLowerCase();
-  if (!normalized) return 'generic_business';
+  if (!normalized) return 'it_software';
 
   for (const item of SEMANTIC_KEY_MAP) {
     if (item.keywords.some((kw) => normalized.includes(kw))) {
@@ -213,28 +132,15 @@ export function scoreIndustryMatch(text: string): string {
     events_hospitality: 'event_decor',
     logistics_industrial: 'welding_fabrication',
     security_safety_services: 'security_services',
+    generic_business: 'generic_business',
   };
 
   return verticalMap[context.verticalKey] || 'generic_business';
 }
 
 /**
- * Resolves festival visual pool directly from the authentic 242-photo master catalog.
- */
-export function getFestivalVisualPool(occasion: string): string[] {
-  const matches = searchFestivalCatalog({ festivalKey: occasion, limit: 10 });
-  if (matches.items.length > 0) {
-    return matches.items.map((m) => m.url);
-  }
-  const general = searchFestivalCatalog({ limit: 10 });
-  if (general.items.length > 0) {
-    return general.items.map((m) => m.url);
-  }
-  return ['/images/bgos/festivals/diwali/Clay_oil_lamps_on_balcony_6c4c0407.webp'];
-}
-
-/**
- * Returns a randomized visual pool for any business industry or query.
+ * Returns dynamic S3 Category Library images for an industry query.
+ * 100% Unsplash-free.
  */
 export function getCategoryVisualPool(industryOrQuery: string): string[] {
   const norm = normalizeCategoryContext(industryOrQuery);
@@ -243,60 +149,16 @@ export function getCategoryVisualPool(industryOrQuery: string): string[] {
     if (festPool.length > 0) return festPool;
   }
   const key = scoreIndustryMatch(industryOrQuery);
-  const pool = CURATED_SMB_IMAGE_REGISTRY[key] || CURATED_SMB_IMAGE_REGISTRY.generic_business;
+  const pool = CURATED_SMB_IMAGE_REGISTRY[key] || CURATED_SMB_IMAGE_REGISTRY.it_software;
   return [...pool];
 }
 
-/**
- * Live Unsplash Search API integration.
- * Dynamically queries Unsplash by query terms if an access key is configured.
- */
-export async function searchUnsplashApi(
-  query: string,
-  count = 10,
-  signal?: AbortSignal,
-): Promise<string[]> {
-  const accessKey =
-    process.env.UNSPLASH_ACCESS_KEY ||
-    process.env.UNSPLASH_CLIENT_ID ||
-    process.env.UNSPLASH_API_KEY;
-
-  if (!accessKey || !query.trim()) return [];
-
-  try {
-    const url = new URL('https://api.unsplash.com/search/photos');
-    url.searchParams.set('query', query.trim());
-    url.searchParams.set('per_page', String(Math.min(count, 30)));
-    url.searchParams.set('orientation', 'landscape');
-    url.searchParams.set('content_filter', 'high');
-
-    const res = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Client-ID ${accessKey.trim()}`,
-        'Accept-Version': 'v1',
-      },
-      signal,
-    });
-
-    if (!res.ok) {
-      console.warn(`[searchUnsplashApi] HTTP ${res.status}: ${res.statusText}`);
-      return [];
-    }
-
-    const data = (await res.json()) as { results?: Array<{ urls?: { regular?: string; raw?: string } }> };
-    if (!Array.isArray(data.results)) return [];
-
-    return data.results
-      .map((item) => {
-        if (item.urls?.regular) return item.urls.regular;
-        if (item.urls?.raw) return `${item.urls.raw}&w=1200&auto=format&fit=crop&q=80`;
-        return '';
-      })
-      .filter((u): u is string => Boolean(u && u.startsWith('http')));
-  } catch (err: unknown) {
-    console.warn('[searchUnsplashApi] Search failed, falling back:', err instanceof Error ? err.message : err);
-    return [];
-  }
+export function getFestivalVisualPool(occasionId: string): string[] {
+  const catalogResults = searchFestivalCatalog({
+    festivalKey: occasionId,
+    limit: 20,
+  });
+  return catalogResults.items.map((i) => i.url);
 }
 
 export interface ResolveVisualOptions {
@@ -311,11 +173,7 @@ export interface ResolveVisualOptions {
 }
 
 /**
- * High-Level Multi-Tier Dynamic Visual Resolver:
- *  - Tier 1: Real Business Photos First (Google Business Profile + Brand Library)
- *  - Tier 2: Real-time dynamic Unsplash Search API (if UNSPLASH_ACCESS_KEY configured)
- *  - Tier 3: Curated 35+ SMB Semantic Taxonomy (Instant, zero-failure fallback)
- *  - Tier 4: Generative AI on-demand (FLUX / SiliconFlow / NVIDIA via generateDesignImage)
+ * Resolves a trade-appropriate commercial visual without external Unsplash dependencies.
  */
 export async function resolveBusinessPostVisual(opts: ResolveVisualOptions): Promise<string> {
   const {
@@ -328,26 +186,6 @@ export async function resolveBusinessPostVisual(opts: ResolveVisualOptions): Pro
     generateAiImage = false,
     signal,
   } = opts;
-
-  // Tier 4 Option: On-demand AI Generation
-  if (generateAiImage && imagePrompt) {
-    try {
-      const generated = await generateDesignImage(
-        imagePrompt,
-        'gemini',
-        signal || AbortSignal.timeout(60000),
-        false,
-        { category: industry },
-      );
-      if (generated?.bytes) {
-        // Return base64 or upload URL if generated
-        const b64 = generated.bytes.toString('base64');
-        return `data:image/jpeg;base64,${b64}`;
-      }
-    } catch (err) {
-      console.warn('[resolveBusinessPostVisual] AI generation failed, falling back:', err);
-    }
-  }
 
   // Tier 1: Real Business Photos from Google Maps & Brand Library
   if (preferRealPhotos && tenantId) {
@@ -390,16 +228,7 @@ export async function resolveBusinessPostVisual(opts: ResolveVisualOptions): Pro
     }
   }
 
-  // Tier 2: Real-time dynamic Unsplash Search API
-  const searchQuery = (imageKeyword?.trim() || `${industry} ${topic || ''}`).trim();
-  if (searchQuery) {
-    const livePhotos = await searchUnsplashApi(searchQuery, 10, signal);
-    if (livePhotos.length > 0) {
-      return livePhotos[Math.floor(Math.random() * livePhotos.length)];
-    }
-  }
-
-  // Tier 3: Curated 35+ Industry Semantic Registry (Instant fallback)
+  // Tier 2: S3 Category Library Visual Pool
   const fallbackQuery = `${industry} ${topic || ''} ${imageKeyword || ''}`;
   const visualPool = getCategoryVisualPool(fallbackQuery);
   return visualPool[Math.floor(Math.random() * visualPool.length)];

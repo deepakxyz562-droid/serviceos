@@ -35,7 +35,7 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
     tagline: 'Daily essentials, fresh groceries, staples & personal care',
     icon: 'local-grocery-store',
     accentColor: '#059669',
-    bannerUrl: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
+    bannerUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/grocery_supermarket/grocery_supermarket-001.webp',
     categories: ['Atta & Flour', 'Rice & Dals', 'Edible Oils & Ghee', 'Snacks & Biscuits', 'Spices & Masala', 'Dairy & Milk', 'Home & Personal Care'],
     products: [
       {
@@ -167,7 +167,7 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
     tagline: 'Professional hair, beard, skincare & beauty treatments',
     icon: 'content-cut',
     accentColor: '#8b5cf6',
-    bannerUrl: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=800&q=80',
+    bannerUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/salon_spa/salon_spa-001.webp',
     categories: ['Hair Care & Styling', 'Beard & Shave', 'Facial & Cleanup', 'Hair Treatments', 'Hands & Feet'],
     products: [
       {
@@ -251,7 +251,7 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
     tagline: 'Delicious starters, authentic mains, beverages & combos',
     icon: 'restaurant',
     accentColor: '#ea580c',
-    bannerUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
+    bannerUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/restaurant_dining/restaurant_dining-001.webp',
     categories: ['Starters & Snacks', 'Main Course', 'Rice & Biryani', 'Breads', 'Beverages & Shakes', 'Combos'],
     products: [
       {
@@ -344,7 +344,7 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
     tagline: 'Trending ethnic wear, western outfits & everyday fashion',
     icon: 'checkroom',
     accentColor: '#db2777',
-    bannerUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=800&q=80',
+    bannerUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/fashion_boutique/fashion_boutique-001.webp',
     categories: ['Ethnic Wear', 'Western Tops & Tees', 'Bottom Wear', 'Dresses', 'Accessories'],
     products: [
       {
@@ -416,7 +416,7 @@ export const INDUSTRY_TEMPLATES: Record<string, IndustryTemplate> = {
     tagline: 'Artisan cakes, pastries, breads & handmade cookies',
     icon: 'cake',
     accentColor: '#d97706',
-    bannerUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80',
+    bannerUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/bakery_cafe/bakery_cafe-001.webp',
     categories: ['Custom Cakes', 'Pastries & Desserts', 'Artisan Breads', 'Cookies & Savories'],
     products: [
       {

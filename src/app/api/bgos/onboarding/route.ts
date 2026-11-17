@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { trainBgosChatbotKnowledge } from '@/lib/bgos-onboarding-knowledge';
+import { ensureOnboardingCategoryPack } from '@/lib/designs/category-image-engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -317,6 +318,18 @@ export async function POST(request: NextRequest) {
       hours: hours || tenantSettings.businessHours,
     }).catch((trainErr) => {
       console.warn('[api/bgos/onboarding] trainBgosChatbotKnowledge background warning:', trainErr);
+    });
+
+    // 8. Onboarding Category Image Engine:
+    // Generates 5 quick commercial photos via Cloudflare AI -> S3 + 200 in background.
+    // If the same type of business already onboarded, reuses existing S3 images with ZERO new generation.
+    void ensureOnboardingCategoryPack({
+      category: locationCategory || tenantSettings.locationCategory || tenant.industry || 'IT & Software Development',
+      businessName: locationName || tenantSettings.locationName || tenantSettings.activeGbpTitle || tenant.name || 'Business',
+      city: tenant.city || 'India',
+      services: Array.isArray(offerings) ? offerings : tenantSettings.offerings,
+    }).catch((imgErr) => {
+      console.warn('[api/bgos/onboarding] ensureOnboardingCategoryPack background warning:', imgErr);
     });
 
     return NextResponse.json({

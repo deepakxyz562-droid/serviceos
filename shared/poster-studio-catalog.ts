@@ -1,5 +1,7 @@
 import type { PosterTemplate } from './poster-templates';
 
+const S3_BASE = 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library';
+
 /** Sixty authored campaign briefs; every entry has its own composition ID. */
 export const STUDIO_POSTERS: PosterTemplate[] = [
   {
@@ -14,7 +16,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "A little pause.\nA better morning.",
     "subtitle": "Coffee, conversation and something fresh from the oven.",
     "cta": "Explore the menu",
-    "photo": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/bakery_cafe/bakery_cafe-001.webp`,
     "bgPrompt": "Art-directed cafe & bakery campaign photograph: the morning ritual. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "cafe",
@@ -33,7 +35,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Good things\ntake their time.",
     "subtitle": "Discover the bakes our kitchen is making today.",
     "cta": "See today’s bakes",
-    "photo": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/bakery_cafe/bakery_cafe-001.webp`,
     "bgPrompt": "Art-directed cafe & bakery campaign photograph: fresh from the oven. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "cafe",
@@ -52,7 +54,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Make room\nfor something new.",
     "subtitle": "Meet the latest additions to our seasonal menu.",
     "cta": "Discover the menu",
-    "photo": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/bakery_cafe/bakery_cafe-001.webp`,
     "bgPrompt": "Art-directed cafe & bakery campaign photograph: the tasting table. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "cafe",
@@ -71,7 +73,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Your next catch-up\nstarts here.",
     "subtitle": "Bring a friend. Find a table. Settle into the moment.",
     "cta": "Plan your visit",
-    "photo": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/bakery_cafe/bakery_cafe-001.webp`,
     "bgPrompt": "Art-directed cafe & bakery campaign photograph: coffee date. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "cafe",
@@ -90,7 +92,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "A table for\nyour next chapter.",
     "subtitle": "Ask us about hosting your next gathering.",
     "cta": "Enquire about events",
-    "photo": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/bakery_cafe/bakery_cafe-001.webp`,
     "bgPrompt": "Art-directed cafe & bakery campaign photograph: gather around. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "cafe",
@@ -109,7 +111,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "A fresh look.\nStill entirely you.",
     "subtitle": "Talk to our team about a style that fits your everyday.",
     "cta": "Book a consultation",
-    "photo": "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/salon_spa/salon_spa-001.webp`,
     "bgPrompt": "Art-directed salon & beauty campaign photograph: fresh perspective. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "salon",
@@ -128,7 +130,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Find your\nnext shade.",
     "subtitle": "Explore colour ideas with a stylist who listens.",
     "cta": "Explore colour",
-    "photo": "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/salon_spa/salon_spa-001.webp`,
     "bgPrompt": "Art-directed salon & beauty campaign photograph: the colour edit. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "salon",
@@ -147,7 +149,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Time set aside\njust for you.",
     "subtitle": "Choose your service and ask about available appointments.",
     "cta": "Find a time",
-    "photo": "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/salon_spa/salon_spa-001.webp`,
     "bgPrompt": "Art-directed salon & beauty campaign photograph: your appointment. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "salon",
@@ -166,7 +168,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Details make\nthe difference.",
     "subtitle": "Discover the care behind every appointment.",
     "cta": "Meet the team",
-    "photo": "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/salon_spa/salon_spa-001.webp`,
     "bgPrompt": "Art-directed salon & beauty campaign photograph: behind the chair. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "salon",
@@ -185,7 +187,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "For the moments\nyou’ll remember.",
     "subtitle": "Let’s plan your look for your next special occasion.",
     "cta": "Discuss your look",
-    "photo": "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/salon_spa/salon_spa-001.webp`,
     "bgPrompt": "Art-directed salon & beauty campaign photograph: the occasion edit. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "salon",
@@ -204,7 +206,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "A new reason\nto take a seat.",
     "subtitle": "Discover what our kitchen has been working on.",
     "cta": "Explore the menu",
-    "photo": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/restaurant_dining/restaurant_dining-001.webp`,
     "bgPrompt": "Art-directed restaurant campaign photograph: chef’s notebook. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "restaurant",
@@ -223,7 +225,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Good company.\nA memorable table.",
     "subtitle": "Make your next evening out a little more special.",
     "cta": "Enquire about a table",
-    "photo": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/restaurant_dining/restaurant_dining-001.webp`,
     "bgPrompt": "Art-directed restaurant campaign photograph: dinner invitation. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "restaurant",
@@ -242,7 +244,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Let the season\nset the table.",
     "subtitle": "Explore dishes inspired by the ingredients we love.",
     "cta": "See what’s cooking",
-    "photo": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/restaurant_dining/restaurant_dining-001.webp`,
     "bgPrompt": "Art-directed restaurant campaign photograph: the seasonal plate. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "restaurant",
@@ -261,7 +263,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Some things\nare better shared.",
     "subtitle": "Gather your favourite people around the table.",
     "cta": "Plan your visit",
-    "photo": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/restaurant_dining/restaurant_dining-001.webp`,
     "bgPrompt": "Art-directed restaurant campaign photograph: shared plates. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "restaurant",
@@ -280,7 +282,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Your occasion.\nOur attention.",
     "subtitle": "Talk to us about menus and spaces for your gathering.",
     "cta": "Plan an event",
-    "photo": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/restaurant_dining/restaurant_dining-001.webp`,
     "bgPrompt": "Art-directed restaurant campaign photograph: private dining. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "restaurant",
@@ -299,7 +301,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Your pace.\nYour next step.",
     "subtitle": "Find a session that fits your goals and your routine.",
     "cta": "Explore sessions",
-    "photo": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/fitness_gym/fitness_gym-001.webp`,
     "bgPrompt": "Art-directed fitness & yoga campaign photograph: start where you are. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "fitness",
@@ -318,7 +320,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Make space\nfor movement.",
     "subtitle": "A little time in your day can be time for yourself.",
     "cta": "View the schedule",
-    "photo": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/fitness_gym/fitness_gym-001.webp`,
     "bgPrompt": "Art-directed fitness & yoga campaign photograph: the movement edit. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "fitness",
@@ -337,7 +339,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Bring your goals.\nWe’ll make a plan.",
     "subtitle": "Speak with our team about the right place to begin.",
     "cta": "Meet the coaches",
-    "photo": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/fitness_gym/fitness_gym-001.webp`,
     "bgPrompt": "Art-directed fitness & yoga campaign photograph: meet your coach. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "fitness",
@@ -356,7 +358,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Build a routine\nyou look forward to.",
     "subtitle": "Explore classes, coaching and ways to stay consistent.",
     "cta": "Find your session",
-    "photo": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/fitness_gym/fitness_gym-001.webp`,
     "bgPrompt": "Art-directed fitness & yoga campaign photograph: a stronger routine. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "fitness",
@@ -375,7 +377,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Breathe in.\nBegin again.",
     "subtitle": "Discover guided movement and time to reconnect.",
     "cta": "Explore classes",
-    "photo": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/fitness_gym/fitness_gym-001.webp`,
     "bgPrompt": "Art-directed fitness & yoga campaign photograph: the reset. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "fitness",
@@ -394,7 +396,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Questions welcome.\nCare comes first.",
     "subtitle": "Speak with our team about your next appointment.",
     "cta": "Request an appointment",
-    "photo": "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/dental_clinic/dental_clinic-001.webp`,
     "bgPrompt": "Art-directed clinic & dental campaign photograph: care starts here. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "clinic",
@@ -413,7 +415,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Let’s make time\nfor your questions.",
     "subtitle": "Learn about our services and what to expect on your visit.",
     "cta": "Plan your visit",
-    "photo": "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/dental_clinic/dental_clinic-001.webp`,
     "bgPrompt": "Art-directed clinic & dental campaign photograph: your consultation. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "clinic",
@@ -432,7 +434,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "People who listen.\nCare that’s personal.",
     "subtitle": "Get to know our practice before your first appointment.",
     "cta": "Meet our team",
-    "photo": "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/dental_clinic/dental_clinic-001.webp`,
     "bgPrompt": "Art-directed clinic & dental campaign photograph: meet the practice. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "clinic",
@@ -451,7 +453,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Put your next\ncheck-in on the calendar.",
     "subtitle": "Contact the practice to discuss appointment availability.",
     "cta": "Contact the practice",
-    "photo": "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/dental_clinic/dental_clinic-001.webp`,
     "bgPrompt": "Art-directed clinic & dental campaign photograph: a timely reminder. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "clinic",
@@ -470,7 +472,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "A clearer start\nto your first visit.",
     "subtitle": "Ask about preparation, paperwork and available services.",
     "cta": "Ask a question",
-    "photo": "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/dental_clinic/dental_clinic-001.webp`,
     "bgPrompt": "Art-directed clinic & dental campaign photograph: first visit guide. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "clinic",
@@ -489,7 +491,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Give your space\na fresh start.",
     "subtitle": "Tell us what needs attention. We’ll help plan the next step.",
     "cta": "Request a quote",
-    "photo": "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/plumbing/plumbing-001.webp`,
     "bgPrompt": "Art-directed home services campaign photograph: the home reset. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "home services",
@@ -508,7 +510,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "The details\nyou notice every day.",
     "subtitle": "Explore practical services for a home that works for you.",
     "cta": "Explore services",
-    "photo": "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/plumbing/plumbing-001.webp`,
     "bgPrompt": "Art-directed home services campaign photograph: small details. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "home services",
@@ -527,7 +529,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "A little planning.\nA better-kept home.",
     "subtitle": "Ask about maintenance options for your property.",
     "cta": "Discuss a plan",
-    "photo": "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/plumbing/plumbing-001.webp`,
     "bgPrompt": "Art-directed home services campaign photograph: plan ahead. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "home services",
@@ -546,7 +548,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "One less thing\non your list.",
     "subtitle": "Share your service needs and preferred appointment time.",
     "cta": "Check availability",
-    "photo": "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/plumbing/plumbing-001.webp`,
     "bgPrompt": "Art-directed home services campaign photograph: service spotlight. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "home services",
@@ -565,7 +567,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Good work starts\nwith understanding.",
     "subtitle": "Talk through the job with our team before you book.",
     "cta": "Tell us about your job",
-    "photo": "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/plumbing/plumbing-001.webp`,
     "bgPrompt": "Art-directed home services campaign photograph: meet the specialists. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "home services",
@@ -584,7 +586,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Picture your\nnext chapter.",
     "subtitle": "Explore a property with room for the way you live.",
     "cta": "Arrange a viewing",
-    "photo": "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/real_estate/real_estate-001.webp`,
     "bgPrompt": "Art-directed real estate campaign photograph: space to imagine. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "real estate",
@@ -603,7 +605,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "More than an address.\nA place to belong.",
     "subtitle": "Discover the spaces and surroundings that matter to you.",
     "cta": "Explore the area",
-    "photo": "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/real_estate/real_estate-001.webp`,
     "bgPrompt": "Art-directed real estate campaign photograph: the neighbourhood. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "real estate",
@@ -622,7 +624,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Step inside.\nSee the possibilities.",
     "subtitle": "Contact our team for viewing times and property details.",
     "cta": "Request viewing details",
-    "photo": "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/real_estate/real_estate-001.webp`,
     "bgPrompt": "Art-directed real estate campaign photograph: open house edit. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "real estate",
@@ -641,7 +643,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Your next move\ndeserves a conversation.",
     "subtitle": "Talk to us about what you’re looking for in a property.",
     "cta": "Speak with our team",
-    "photo": "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/real_estate/real_estate-001.webp`,
     "bgPrompt": "Art-directed real estate campaign photograph: a considered move. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "real estate",
@@ -660,7 +662,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Space. Light.\nA fresh perspective.",
     "subtitle": "Take a closer look at our featured property.",
     "cta": "View property details",
-    "photo": "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/real_estate/real_estate-001.webp`,
     "bgPrompt": "Art-directed real estate campaign photograph: property journal. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "real estate",
@@ -679,7 +681,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Wear it\nyour way.",
     "subtitle": "Discover pieces to make your everyday feel more personal.",
     "cta": "Explore the collection",
-    "photo": "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/fashion_boutique/fashion_boutique-001.webp`,
     "bgPrompt": "Art-directed fashion & retail campaign photograph: the wardrobe edit. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "fashion",
@@ -698,7 +700,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "A fresh season.\nA new point of view.",
     "subtitle": "Meet the latest additions to our collection.",
     "cta": "See what’s new",
-    "photo": "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/fashion_boutique/fashion_boutique-001.webp`,
     "bgPrompt": "Art-directed fashion & retail campaign photograph: new season notes. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "fashion",
@@ -717,7 +719,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Small details.\nLasting impressions.",
     "subtitle": "Take a closer look at the finishes, textures and silhouettes.",
     "cta": "Discover the details",
-    "photo": "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/fashion_boutique/fashion_boutique-001.webp`,
     "bgPrompt": "Art-directed fashion & retail campaign photograph: details worth keeping. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "fashion",
@@ -736,7 +738,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Find your fit.\nMake it yours.",
     "subtitle": "Visit us to explore the collection and speak with our team.",
     "cta": "Plan your visit",
-    "photo": "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/fashion_boutique/fashion_boutique-001.webp`,
     "bgPrompt": "Art-directed fashion & retail campaign photograph: the fitting room. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "fashion",
@@ -755,7 +757,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "For someone\nworth celebrating.",
     "subtitle": "Explore ideas for a gift with a personal touch.",
     "cta": "Find a gift",
-    "photo": "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/fashion_boutique/fashion_boutique-001.webp`,
     "bgPrompt": "Art-directed fashion & retail campaign photograph: gift thoughtfully. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "fashion",
@@ -774,7 +776,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Your next journey\nstarts with a check.",
     "subtitle": "Tell us about your vehicle and service needs.",
     "cta": "Book a service enquiry",
-    "photo": "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/auto_repair/auto_repair-001.webp`,
     "bgPrompt": "Art-directed automotive campaign photograph: ready for the road. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "automotive",
@@ -793,7 +795,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Understand the work.\nKnow the next step.",
     "subtitle": "Speak to our team about an inspection and service options.",
     "cta": "Discuss your vehicle",
-    "photo": "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/auto_repair/auto_repair-001.webp`,
     "bgPrompt": "Art-directed automotive campaign photograph: under the bonnet. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "automotive",
@@ -812,7 +814,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Keep maintenance\non your calendar.",
     "subtitle": "Ask about a service schedule suited to your vehicle.",
     "cta": "Plan your service",
-    "photo": "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/auto_repair/auto_repair-001.webp`,
     "bgPrompt": "Art-directed automotive campaign photograph: the maintenance edit. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "automotive",
@@ -831,7 +833,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Attention where\nit matters.",
     "subtitle": "Discover our workshop and the services we provide.",
     "cta": "Explore our services",
-    "photo": "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/auto_repair/auto_repair-001.webp`,
     "bgPrompt": "Art-directed automotive campaign photograph: workshop notes. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "automotive",
@@ -850,7 +852,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Before you go,\nlet’s take a look.",
     "subtitle": "Contact us about a vehicle check ahead of your journey.",
     "cta": "Check appointments",
-    "photo": "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/auto_repair/auto_repair-001.webp`,
     "bgPrompt": "Art-directed automotive campaign photograph: before the trip. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "automotive",
@@ -869,7 +871,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Curiosity is\na good beginning.",
     "subtitle": "Explore a course that helps you take your next step.",
     "cta": "Explore courses",
-    "photo": "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/it_software/it_software-001.webp`,
     "bgPrompt": "Art-directed education & coaching campaign photograph: next chapter. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "education",
@@ -888,7 +890,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Bring your questions.\nFind your direction.",
     "subtitle": "Speak to our team about learning options and course content.",
     "cta": "Ask about a course",
-    "photo": "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/it_software/it_software-001.webp`,
     "bgPrompt": "Art-directed education & coaching campaign photograph: meet the mentor. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "education",
@@ -907,7 +909,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Make time\nfor a new skill.",
     "subtitle": "Discover our upcoming workshops and session details.",
     "cta": "View workshops",
-    "photo": "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/it_software/it_software-001.webp`,
     "bgPrompt": "Art-directed education & coaching campaign photograph: workshop invitation. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "education",
@@ -926,7 +928,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "A learning plan\nthat starts with you.",
     "subtitle": "Tell us about your interests and the skills you want to build.",
     "cta": "Discuss your goals",
-    "photo": "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/it_software/it_software-001.webp`,
     "bgPrompt": "Art-directed education & coaching campaign photograph: study your way. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "education",
@@ -945,7 +947,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Turn interest\ninto practice.",
     "subtitle": "Take a closer look at what you’ll explore in our featured course.",
     "cta": "See course details",
-    "photo": "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/it_software/it_software-001.webp`,
     "bgPrompt": "Art-directed education & coaching campaign photograph: course spotlight. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "education",
@@ -964,7 +966,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Your next decision.\nA clearer perspective.",
     "subtitle": "Discuss your priorities with our team.",
     "cta": "Start a conversation",
-    "photo": "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/it_software/it_software-002.webp`,
     "bgPrompt": "Art-directed professional & b2b campaign photograph: a clearer plan. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "professional",
@@ -983,7 +985,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Less guesswork.\nMore direction.",
     "subtitle": "Explore practical support for your next business challenge.",
     "cta": "Explore our services",
-    "photo": "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/it_software/it_software-002.webp`,
     "bgPrompt": "Art-directed professional & b2b campaign photograph: the business edit. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "professional",
@@ -1002,7 +1004,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "A worthwhile idea\ndeserves a plan.",
     "subtitle": "Tell us what you’re building and where you need support.",
     "cta": "Discuss your project",
-    "photo": "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/it_software/it_software-002.webp`,
     "bgPrompt": "Art-directed professional & b2b campaign photograph: project invitation. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "professional",
@@ -1021,7 +1023,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "People behind\nthe progress.",
     "subtitle": "Get to know the team and how we approach our work.",
     "cta": "Meet our team",
-    "photo": "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/it_software/it_software-002.webp`,
     "bgPrompt": "Art-directed professional & b2b campaign photograph: meet the team. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "professional",
@@ -1040,7 +1042,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Good questions.\nUseful next steps.",
     "subtitle": "Learn how our services can fit your organisation’s needs.",
     "cta": "Request an introduction",
-    "photo": "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/it_software/it_software-002.webp`,
     "bgPrompt": "Art-directed professional & b2b campaign photograph: service overview. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "professional",
@@ -1059,7 +1061,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Find a little\nroom to unwind.",
     "subtitle": "Explore our spaces and plan a stay at your own pace.",
     "cta": "Enquire about a stay",
-    "photo": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/salon_spa/salon_spa-002.webp`,
     "bgPrompt": "Art-directed travel & hospitality campaign photograph: a change of scene. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "hospitality",
@@ -1078,7 +1080,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "A different view\nfor your next weekend.",
     "subtitle": "Discover what’s waiting for you on your next visit.",
     "cta": "Explore your stay",
-    "photo": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/salon_spa/salon_spa-002.webp`,
     "bgPrompt": "Art-directed travel & hospitality campaign photograph: the weekend journal. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "hospitality",
@@ -1097,7 +1099,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Arrive curious.\nLeave with stories.",
     "subtitle": "Ask our team about your visit and local experiences.",
     "cta": "Plan your visit",
-    "photo": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/salon_spa/salon_spa-002.webp`,
     "bgPrompt": "Art-directed travel & hospitality campaign photograph: a warm welcome. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "hospitality",
@@ -1116,7 +1118,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Bring your people.\nMake new memories.",
     "subtitle": "Talk to us about stays and spaces for your group.",
     "cta": "Enquire for your group",
-    "photo": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/salon_spa/salon_spa-002.webp`,
     "bgPrompt": "Art-directed travel & hospitality campaign photograph: gather somewhere new. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "hospitality",
@@ -1135,7 +1137,7 @@ export const STUDIO_POSTERS: PosterTemplate[] = [
     "headline": "Make room\nfor a slower morning.",
     "subtitle": "Discover the details of our accommodation and amenities.",
     "cta": "View stay details",
-    "photo": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=2160&q=90",
+    "photo": `${S3_BASE}/salon_spa/salon_spa-002.webp`,
     "bgPrompt": "Art-directed travel & hospitality campaign photograph: stay a little longer. Authentic setting, natural textures, considered lighting, a clear focal subject with generous uncluttered negative space. NO TEXT, no typography, logos, watermarks, offers or text. Do not portray this stock image as the actual business.",
     "industries": [
       "hospitality",

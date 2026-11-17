@@ -33,7 +33,7 @@ const PRESET_COLORS = [
 ];
 
 const DEFAULT_SAMPLE_PHOTO =
-  'https://images.unsplash.com/photo-1584132967334-10e028bd69f7?w=1200&auto=format&fit=crop&q=80';
+  'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp';
 
 export default function LogoManagementScreen() {
   const router = useRouter();

@@ -120,7 +120,30 @@ export interface PosterTemplate {
   occasionId?: string;
 }
 
-const U = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1080&q=80`;
+const S3_CATEGORY_BASE = 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library';
+
+const S3_DEFAULT_CATEGORY_FOLDERS = [
+  'it_software',
+  'salon_spa',
+  'restaurant_dining',
+  'auto_repair',
+  'plumbing',
+  'electrical',
+  'dental_clinic',
+  'real_estate',
+  'fitness_gym',
+  'security_services',
+];
+
+const U = (id: string) => {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  const folder = S3_DEFAULT_CATEGORY_FOLDERS[hash % S3_DEFAULT_CATEGORY_FOLDERS.length];
+  const fileIdx = String((hash % 10) + 1).padStart(3, '0');
+  return `${S3_CATEGORY_BASE}/${folder}/${folder}-${fileIdx}.webp`;
+};
 
 const NO_TEXT =
   'ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO TYPOGRAPHY, NO WATERMARKS, pure visual photography only.';
@@ -948,9 +971,9 @@ const ORIGINAL_POSTER_TEMPLATES: PosterTemplate[] = [
     headline: 'LOWEST PRICE\nGUARANTEE',
     subtitle: 'Found a lower price? We beat it instantly.',
     cta: 'Shop With Confidence',
-    photo: U('photo-1578916171728-46686eac8d58'),
-    bgPrompt: `Modern bright supermarket aisles with tidy displays and clear pricing banners, warm commercial retail photography, ${NO_TEXT}`,
-    industries: ['retail', 'groceries', 'electronics', 'hardware', 'any'],
+    photo: '/images/bgos/templates/retail_store.webp',
+    bgPrompt: `Modern bright commercial showroom aisles with tidy displays and clear pricing banners, warm commercial retail photography, ${NO_TEXT}`,
+    industries: ['retail', 'groceries', 'supermarket'],
   },
   {
     id: 'standard-walkins-welcome',

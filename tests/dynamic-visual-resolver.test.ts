@@ -25,7 +25,6 @@ vi.mock('@/lib/social/adapters/googlebusiness', () => ({
 import {
   scoreIndustryMatch,
   getCategoryVisualPool,
-  searchUnsplashApi,
   resolveBusinessPostVisual,
   CURATED_SMB_IMAGE_REGISTRY,
 } from '@/lib/designs/dynamic-visual-resolver';
@@ -67,15 +66,18 @@ describe('Dynamic Visual Resolver', () => {
     it('returns valid arrays of royalty-free image URLs for any category', () => {
       const dentalPool = getCategoryVisualPool('dental clinic');
       expect(dentalPool.length).toBeGreaterThan(0);
-      expect(dentalPool[0]).toMatch(/(\/images\/bgos\/templates\/|images\.unsplash\.com)/);
+      expect(dentalPool[0]).toMatch(/(bgos-business-images\/category_library\/|\/images\/bgos\/templates\/)/);
+      expect(dentalPool[0]).not.toContain('unsplash.com');
 
       const solarPool = getCategoryVisualPool('solar rooftop');
       expect(solarPool.length).toBeGreaterThan(0);
-      expect(solarPool[0]).toMatch(/(\/images\/bgos\/templates\/|images\.unsplash\.com)/);
+      expect(solarPool[0]).toMatch(/(bgos-business-images\/category_library\/|\/images\/bgos\/templates\/)/);
+      expect(solarPool[0]).not.toContain('unsplash.com');
 
       const weldingPool = getCategoryVisualPool('steel welding');
       expect(weldingPool.length).toBeGreaterThan(0);
-      expect(weldingPool[0]).toMatch(/(\/images\/bgos\/templates\/|images\.unsplash\.com)/);
+      expect(weldingPool[0]).toMatch(/(bgos-business-images\/category_library\/|\/images\/bgos\/templates\/)/);
+      expect(weldingPool[0]).not.toContain('unsplash.com');
     });
 
     it('returns stable pool arrays so consecutive requests return consistent assets', () => {
@@ -86,34 +88,25 @@ describe('Dynamic Visual Resolver', () => {
     });
   });
 
-  describe('searchUnsplashApi', () => {
-    it('returns empty array when access key is not set', async () => {
-      const results = await searchUnsplashApi('solar panel');
-      expect(results).toEqual([]);
-      expect(mocks.fetch).not.toHaveBeenCalled();
+  describe('S3 Category Library Architecture', () => {
+    it('returns verified AWS S3 bucket category library images for all trades', () => {
+      const itPool = getCategoryVisualPool('IT & Software Company');
+      expect(itPool.length).toBeGreaterThan(0);
+      expect(itPool.every((u) => u.includes('bgos-business-images/category_library/it_software'))).toBe(true);
+      expect(itPool.every((u) => !u.includes('unsplash.com'))).toBe(true);
+
+      const plumbingPool = getCategoryVisualPool('Plumber Leak Repair');
+      expect(plumbingPool.every((u) => u.includes('bgos-business-images/category_library/plumbing'))).toBe(true);
+      expect(plumbingPool.every((u) => !u.includes('unsplash.com'))).toBe(true);
     });
 
-    it('queries Unsplash search API when UNSPLASH_ACCESS_KEY is configured', async () => {
-      process.env.UNSPLASH_ACCESS_KEY = 'test-unsplash-key';
-      mocks.fetch.mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            results: [
-              { urls: { regular: 'https://images.unsplash.com/photo-live-1' } },
-              { urls: { raw: 'https://images.unsplash.com/photo-live-2' } },
-            ],
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        ),
-      );
-
-      const results = await searchUnsplashApi('welding fabrication', 5);
-      expect(results).toHaveLength(2);
-      expect(results[0]).toBe('https://images.unsplash.com/photo-live-1');
-      expect(results[1]).toContain('photo-live-2&w=1200');
-      expect(mocks.fetch).toHaveBeenCalledTimes(1);
-      expect(mocks.fetch.mock.calls[0][0]).toContain('query=welding+fabrication');
-      expect(mocks.fetch.mock.calls[0][1].headers.Authorization).toBe('Client-ID test-unsplash-key');
+    it('ensures zero Unsplash URLs exist in any CURATED_SMB_IMAGE_REGISTRY entry', () => {
+      for (const [trade, urls] of Object.entries(CURATED_SMB_IMAGE_REGISTRY)) {
+        for (const url of urls) {
+          expect(url).not.toContain('unsplash.com');
+          expect(url).toContain('bgos-business-images/category_library/');
+        }
+      }
     });
   });
 

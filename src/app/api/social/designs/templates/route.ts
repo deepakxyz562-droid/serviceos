@@ -15,6 +15,11 @@ import {
   getCategoryVisualPool,
 } from '@/lib/designs/dynamic-visual-resolver';
 import {
+  getCategoryStorageFolder,
+  getCategoryImagesFromS3,
+  ensureOnboardingCategoryPack,
+} from '@/lib/designs/category-image-engine';
+import {
   getMultiSourceCategoryVisuals,
   getFestivalVisuals,
   getCreativeSourceLabel,
@@ -377,8 +382,19 @@ export async function GET(request: NextRequest) {
   });
   const festivalCursor = new Map<string, number>();
 
-  const visuals = getCategoryVisualPool(effectiveCategoryText);
-  const fallbackUnsplashPhotos = visuals;
+  // Trade Isolation & Cloudflare AI S3 Category Library
+  const categoryFolder = getCategoryStorageFolder(effectiveCategoryText);
+  let s3CategoryVisuals = await getCategoryImagesFromS3(effectiveCategoryText, 200);
+  if (s3CategoryVisuals.length < 5) {
+    s3CategoryVisuals = await ensureOnboardingCategoryPack({
+      category: effectiveCategoryText,
+      businessName,
+      city,
+      services: realServiceNames,
+      targetCount: 5,
+    });
+  }
+  const visuals = s3CategoryVisuals.length > 0 ? s3CategoryVisuals : getCategoryVisualPool(effectiveCategoryText);
 
   // Find business group in BUSINESS_GROUPS with word boundaries
   const groupNames = Object.keys(BUSINESS_GROUPS) as (keyof typeof BUSINESS_GROUPS)[];
@@ -414,8 +430,18 @@ export async function GET(request: NextRequest) {
   const conflictingTradesRegex =
     /\b(car wash|auto garage|bike repair|tyre shop|plumbing|plumber|electrician|ac repair|pest control|carpenter|plywood|timber|dentist|dental|teeth whitening|root canal|salon|haircut|hair spa|facial|manicure|sweet shop|mithai|halwai|software company|app development)\b/i;
 
-  // 4. Adapt POSTER_TEMPLATES (270+ templates) with strict merchant trade relevance
-  const allAdaptedPosterItems: BusinessTemplateResponseItem[] = POSTER_TEMPLATES.map((tpl, idx) => {
+  // Incompatible trade conflict elimination:
+  // Software/tech businesses must NEVER see grocery, supermarket, cafe, bakery, restaurant, dining or sweets templates
+  const isConflictingTemplateForTech = (tpl: PosterTemplate): boolean => {
+    if (!isMerchantTech) return false;
+    const text = `${tpl.id} ${tpl.name} ${tpl.headline || ''} ${(tpl.industries || []).join(' ')} ${tpl.bgPrompt || ''}`.toLowerCase();
+    return /grocery|supermarket|vegetable|fruit|produce|mandi|bazaar|cafe|bakery|restaurant|food|dining|sweets|mithai|crops|harvest|pumpkins|bistro|cake|dish/.test(text);
+  };
+
+  const tradeRelevantPosterTemplates = POSTER_TEMPLATES.filter((tpl) => !isConflictingTemplateForTech(tpl));
+
+  // 4. Adapt POSTER_TEMPLATES with strict merchant trade relevance & S3 category photography
+  const allAdaptedPosterItems: BusinessTemplateResponseItem[] = tradeRelevantPosterTemplates.map((tpl, idx) => {
     const isFestival =
       tpl.category === 'festival' ||
       tpl.edition?.purpose === 'Festival' ||
@@ -512,14 +538,37 @@ export async function GET(request: NextRequest) {
           assignedPhoto = getFestivalFallbackPhoto(occasion, idx);
         }
     } else {
+      const s3Photo = s3CategoryVisuals[idx % Math.max(1, s3CategoryVisuals.length)];
       const multiSourceItem = multiSourceVisuals[idx % multiSourceVisuals.length];
       assignedPhoto =
+        s3Photo ||
         multiSourceItem?.url ||
         visuals[idx % visuals.length] ||
-        fallbackUnsplashPhotos[idx % fallbackUnsplashPhotos.length] ||
         tpl.photo;
-      photoSourceKey = multiSourceItem?.source || 'curated';
-      photoCredit = multiSourceItem?.credit;
+      photoSourceKey = s3Photo ? 's3_category_library' : (multiSourceItem?.source || 'curated');
+      photoCredit = s3Photo ? 'Cloudflare AI S3 Library' : multiSourceItem?.credit;
+    }
+
+    // Never allow Unsplash anywhere in creative studio
+    if (assignedPhoto.includes('unsplash.com')) {
+      const s3Fallback = s3CategoryVisuals[idx % Math.max(1, s3CategoryVisuals.length)] || visuals[idx % Math.max(1, visuals.length)];
+      if (s3Fallback) {
+        assignedPhoto = s3Fallback;
+        photoSourceKey = 's3_category_library';
+        photoCredit = 'Cloudflare AI S3 Library';
+      }
+    }
+
+    // Never allow Unsplash or grocery/produce/food photos to leak to tech merchants
+    if (isMerchantTech) {
+      const lowerPhoto = assignedPhoto.toLowerCase();
+      if (
+        lowerPhoto.includes('unsplash.com') ||
+        lowerPhoto.includes('1542838132-92c53300491e') ||
+        /grocery|vegetable|fruit|supermarket|produce|mandi|food|sweets|mithai|dining|restaurant|cafe|bakery|cake/.test(lowerPhoto)
+      ) {
+        assignedPhoto = s3CategoryVisuals[idx % Math.max(1, s3CategoryVisuals.length)] || visuals[idx % Math.max(1, visuals.length)] || assignedPhoto;
+      }
     }
 
     assignedPhoto = toAbsoluteUrl(assignedPhoto);
@@ -617,8 +666,13 @@ export async function GET(request: NextRequest) {
       return bp.tab === requestedTab;
     })
     .map((bp, bpIdx) => {
+      const s3Photo = s3CategoryVisuals[bpIdx % Math.max(1, s3CategoryVisuals.length)];
       const msVisual = multiSourceVisuals[bpIdx % multiSourceVisuals.length];
-      const photoUrl = toAbsoluteUrl(msVisual?.url || bp.photoUrl);
+      let cleanPhoto = s3Photo || msVisual?.url || bp.photoUrl;
+      if (cleanPhoto && cleanPhoto.includes('unsplash.com')) {
+        cleanPhoto = s3Photo || visuals[bpIdx % Math.max(1, visuals.length)] || cleanPhoto;
+      }
+      const photoUrl = toAbsoluteUrl(cleanPhoto);
       let composedDesign: any = null;
       if (includeDesign) {
         try {
@@ -711,10 +765,23 @@ export async function GET(request: NextRequest) {
               ? 'reviews'
               : 'for_business';
 
-      // Hydrate festival curated references from the dynamic festival pools
+      // Hydrate festival curated references from dynamic festival pools or S3 category visuals
       let photoUrl = toAbsoluteUrl(tpl.referenceUrl);
       let photoSource: string = 'Curated';
       let photoCredit: string | undefined;
+
+      // Replace any Unsplash references with verified S3 Category Library images
+      if (photoUrl.includes('unsplash.com') || (tab !== 'festivals' && s3CategoryVisuals.length > 0)) {
+        const s3Photo =
+          s3CategoryVisuals[filteredCuratedList.indexOf(tpl) % Math.max(1, s3CategoryVisuals.length)] ||
+          visuals[filteredCuratedList.indexOf(tpl) % Math.max(1, visuals.length)];
+        if (s3Photo) {
+          photoUrl = toAbsoluteUrl(s3Photo);
+          photoSource = 'S3 Category Library';
+          photoCredit = 'Cloudflare AI Photorealistic Commercial';
+        }
+      }
+
       if (tab === 'festivals') {
         const festText = `${tpl.title} ${tpl.headlinePattern} ${tpl.categoryId}`.toLowerCase();
         let festOccasion = '';
@@ -881,6 +948,13 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  if (isMerchantTech) {
+    festivalsTemplates = festivalsTemplates.filter((t) => {
+      const text = `${t.id} ${t.name} ${t.headline} ${t.photoUrl}`.toLowerCase();
+      return !/crops|harvest|pumpkins|feast|food|sweets|mithai|plate|bistro|cafe/.test(text);
+    });
+  }
+
   const reviewsTemplates: BusinessTemplateResponseItem[] = [
     ...blueprintResponseItems.filter((bp) => bp.tab === 'reviews'),
     ...curatedResponseItems.filter((cr) => cr.tab === 'reviews'),
@@ -908,23 +982,32 @@ export async function GET(request: NextRequest) {
     ].slice(0, limit);
   }
 
-  // Adjacent card deduplication:
-  // Ensure neighboring cards never display the identical photoUrl.
-  const distinctPool = visuals.length > 0 ? visuals : fallbackUnsplashPhotos;
+  // Multi-card window deduplication:
+  // Ensure cards within a 10-card distance never display the identical photoUrl.
+  const distinctPool = s3CategoryVisuals.length > 0 ? s3CategoryVisuals : visuals;
   if (distinctPool.length > 0) {
+    const windowSize = Math.min(10, Math.floor(distinctPool.length / 2));
+    const recentWindow: string[] = [];
     let poolCursor = 0;
-    for (let i = 1; i < selectedTemplates.length; i++) {
-      if (selectedTemplates[i].photoUrl === selectedTemplates[i - 1].photoUrl) {
+
+    for (let i = 0; i < selectedTemplates.length; i++) {
+      let currentPhoto = selectedTemplates[i].photoUrl;
+      if (recentWindow.includes(currentPhoto)) {
         let replacement = distinctPool[poolCursor % distinctPool.length];
         let attempts = 0;
-        while (replacement === selectedTemplates[i - 1].photoUrl && attempts < distinctPool.length) {
+        while (recentWindow.includes(replacement) && attempts < distinctPool.length) {
           poolCursor++;
           replacement = distinctPool[poolCursor % distinctPool.length];
           attempts++;
         }
         poolCursor++;
         selectedTemplates[i].photoUrl = replacement;
-        selectedTemplates[i].photoSource = 'Curated Photography';
+        selectedTemplates[i].photoSource = 'S3 Category Library';
+        currentPhoto = replacement;
+      }
+      recentWindow.push(currentPhoto);
+      if (recentWindow.length > windowSize) {
+        recentWindow.shift();
       }
     }
   }

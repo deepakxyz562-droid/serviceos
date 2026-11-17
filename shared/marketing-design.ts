@@ -213,7 +213,7 @@ export function createCommercialPosterDesign(input: {
   const cleanLogoUrl = isEligibleImage(input.logoUrl) ? input.logoUrl!.trim() : undefined;
   const cleanPhoto = isEligibleImage(input.photo)
     ? input.photo!.trim()
-    : 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1200&auto=format&fit=crop&q=80';
+    : 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp';
 
   const sanitizedInput = {
     ...input,

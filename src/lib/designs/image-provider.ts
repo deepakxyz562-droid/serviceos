@@ -4,7 +4,7 @@ import dns from 'node:dns/promises';
 import fs from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
-import { getCategoryVisualPool } from './dynamic-visual-resolver';
+import { getCategoryVisualPool, getFestivalVisualPool } from './dynamic-visual-resolver';
 import type { ImageGenerationSourceType } from '../../../shared/image-review';
 
 export type ImageProvider = 'gemini' | 'openrouter' | 'cloudflare' | 'siliconflow' | 'nvidia';
@@ -1718,70 +1718,20 @@ export async function resolveCuratedImageFallback(
   const isHardware = hasWord(category + ' ' + offerings + ' ' + pLower, ['hardware', 'tool', 'tools', 'fastener', 'pipe', 'plumb']);
   const isPool = hasWord(category + ' ' + offerings + ' ' + pLower, ['pool', 'swimming', 'resort', 'farmhouse', 'villa', 'lawn']);
 
-  const pickOne = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+  const pickOne = (arr: string[]) => (arr.length > 0 ? arr[Math.floor(Math.random() * arr.length)] : '');
 
-  const dynamicFallbackPool = getCategoryVisualPool(`${category} ${offerings} ${pLower}`);
-  let stockUrl = pickOne(dynamicFallbackPool);
-
+  let stockUrl = '';
   if (isDiwali) {
-    stockUrl = pickOne([
-      'https://images.unsplash.com/photo-1605379399642-870262d3d051?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1574870111867-089730e5a72b?auto=format&fit=crop&w=1400&q=85',
-    ]);
+    stockUrl = pickOne(getFestivalVisualPool('diwali'));
   } else if (isEid) {
-    stockUrl = pickOne([
-      'https://images.unsplash.com/photo-1564769625905-50e93615e769?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&w=1400&q=85',
-    ]);
+    stockUrl = pickOne(getFestivalVisualPool('eid'));
   } else if (isChristmas) {
-    stockUrl = pickOne([
-      'https://images.unsplash.com/photo-1543258103-a62bdc069871?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1512389142860-9c449e58a543?auto=format&fit=crop&w=1400&q=85',
-    ]);
-  } else if (isFood) {
-    stockUrl = pickOne([
-      'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=1400&q=85',
-    ]);
-  } else if (isJewellery) {
-    stockUrl = pickOne([
-      'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=1400&q=85',
-    ]);
-  } else if (isTech) {
-    stockUrl = pickOne([
-      'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1400&q=85',
-    ]);
-  } else if (isPaint) {
-    stockUrl = pickOne([
-      'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1400&q=85',
-    ]);
-  } else if (isHardware) {
-    stockUrl = pickOne([
-      'https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?auto=format&fit=crop&w=1400&q=85',
-    ]);
-  } else if (isPool) {
-    stockUrl = pickOne([
-      'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1584132967334-10e028bd69f7?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1400&q=85',
-    ]);
+    stockUrl = pickOne(getFestivalVisualPool('christmas'));
+  }
+
+  if (!stockUrl) {
+    const dynamicFallbackPool = getCategoryVisualPool(`${category} ${offerings} ${pLower}`);
+    stockUrl = pickOne(dynamicFallbackPool);
   }
 
   let fallbackFetchErr: unknown = null;

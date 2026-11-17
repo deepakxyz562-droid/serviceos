@@ -159,20 +159,7 @@ export function AiStudioFeed({
         };
       }>(`/api/social/designs/templates?${queryParams.toString()}`);
       if (res?.templates) {
-        const fallbackPhoto = 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1200&auto=format&fit=crop&q=80';
-        const cleanTemplates = res.templates.map((item) => {
-          if (
-            item.photoUrl &&
-            (item.photoUrl.includes('behance.net') ||
-              item.photoUrl.includes('pinimg.com') ||
-              item.photoUrl.includes('pinterest.com'))
-          ) {
-            return { ...item, photoUrl: fallbackPhoto };
-          }
-          return item;
-        });
-
-        setTemplates(cleanTemplates);
+        setTemplates(res.templates);
         if (res.counts) setCounts(res.counts);
       }
     } catch (err) {

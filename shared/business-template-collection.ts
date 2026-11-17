@@ -85,19 +85,21 @@ const briefs: Record<typeof editionPurposes[number], string[]> = {
     'Join today|Find your community|Start your membership',
   ],
 };
+const S3_CATEGORY_BASE = 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library';
+
 const GROUP_DEFAULT_PHOTOS: Record<string, string> = {
-  'IT & Software': 'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=1200&auto=format&fit=crop&q=80',
-  'Security & CCTV': 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=1200&auto=format&fit=crop&q=80',
-  'Dental & Health': 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=1200&auto=format&fit=crop&q=80',
-  'Salon & Beauty': 'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1200&auto=format&fit=crop&q=80',
-  'Restaurant & Cafe': 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&auto=format&fit=crop&q=80',
-  'Education & Coaching': 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1200&auto=format&fit=crop&q=80',
-  'Plumbing & Repair': 'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=1200&auto=format&fit=crop&q=80',
-  'Auto & Garage': 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=1200&auto=format&fit=crop&q=80',
-  'Fashion & Retail': 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200&auto=format&fit=crop&q=80',
-  'Real Estate & Property': 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&auto=format&fit=crop&q=80',
-  'Professional Services': 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=1200&auto=format&fit=crop&q=80',
-  'Events & Lifestyle': 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=1200&auto=format&fit=crop&q=80',
+  'IT & Software': `${S3_CATEGORY_BASE}/it_software/it_software-001.webp`,
+  'Security & CCTV': `${S3_CATEGORY_BASE}/security_services/security_services-001.webp`,
+  'Dental & Health': `${S3_CATEGORY_BASE}/dental_clinic/dental_clinic-001.webp`,
+  'Salon & Beauty': `${S3_CATEGORY_BASE}/salon_spa/salon_spa-001.webp`,
+  'Restaurant & Cafe': `${S3_CATEGORY_BASE}/restaurant_dining/restaurant_dining-001.webp`,
+  'Education & Coaching': `${S3_CATEGORY_BASE}/it_software/it_software-002.webp`,
+  'Plumbing & Repair': `${S3_CATEGORY_BASE}/plumbing/plumbing-001.webp`,
+  'Auto & Garage': `${S3_CATEGORY_BASE}/auto_repair/auto_repair-001.webp`,
+  'Fashion & Retail': `${S3_CATEGORY_BASE}/salon_spa/salon_spa-002.webp`,
+  'Real Estate & Property': `${S3_CATEGORY_BASE}/real_estate/real_estate-001.webp`,
+  'Professional Services': `${S3_CATEGORY_BASE}/it_software/it_software-003.webp`,
+  'Events & Lifestyle': `${S3_CATEGORY_BASE}/salon_spa/salon_spa-003.webp`,
 };
 const groups=Object.keys(BUSINESS_GROUPS) as (keyof typeof BUSINESS_GROUPS)[];
 const slug=(value:string)=>value.toLowerCase().replace(/[’']/g,'').replace(/[^a-z0-9]+/g,'-').replace(/-$/,'');
@@ -166,7 +168,7 @@ for (const [purposeIndex,purpose] of editionPurposes.entries()) {
         edition,theme:themes[(briefIndex+variant*3+purposeIndex)%themes.length],aspect:TEMPLATE_FORMATS[format],
         headline,badge:intent,subtitle:copyByIntent[intent] || subtitle,
         cta:purpose==='Conversion'?intent:purpose==='Promotion'?'Explore the offer':purpose==='Trust-building'?'Read the story':cta,
-        photo:GROUP_DEFAULT_PHOTOS[group] || 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=1200&auto=format&fit=crop&q=80',
+        photo:GROUP_DEFAULT_PHOTOS[group] || `${S3_CATEGORY_BASE}/it_software/it_software-001.webp`,
         industries:BUSINESS_GROUPS[group].toLowerCase().split('|'),
         bgPrompt:`${intent} for ${group}: ${headline}. Editorial photography, clear focal point, no text or lettering.`,
       });

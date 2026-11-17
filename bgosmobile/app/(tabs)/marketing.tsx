@@ -78,7 +78,7 @@ import {
 import { normalizePendingUpload, uploadFileToStorage } from '../../src/lib/upload';
 
 const DEFAULT_FALLBACK_PHOTO =
-  'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1080&q=80';
+  'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp';
 
 const TIME_SLOTS = [
   { label: '08:00 AM (Early Rush)', value: '08:00' },
@@ -1204,7 +1204,7 @@ export default function MarketingScreen() {
   const [subtitle, setSubtitle] = useState('Quality & Service You Can Trust.');
   const [ctaText, setCtaText] = useState('Learn More');
   const [bgPhotoUrl, setBgPhotoUrl] = useState(
-    'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1080&q=80'
+    'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp'
   );
 
   // Caption & copy
@@ -1859,7 +1859,7 @@ export default function MarketingScreen() {
         subtitle,
         badge: discountBadge,
         cta: ctaText,
-        photo: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1080&q=80',
+        photo: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp',
         ratio: aspectRatio,
         theme: colorTheme,
         layout: posterLayout,

@@ -20,6 +20,7 @@
  */
 
 import { scoreIndustryMatch, getCategoryVisualPool } from './dynamic-visual-resolver';
+import { getCategoryImagesFromS3 } from './category-image-engine';
 import {
   searchLivePhotos,
   matchPinterestBoards,
@@ -161,33 +162,31 @@ export async function getMultiSourceCategoryVisuals(
     limit: Math.max(120, requestedCount),
   });
 
-  // ── Tier stack: Merchant photos -> Unsplash First (curated + live) -> Secondary sources ──
+  // ── Tier stack: Merchant photos -> Cloudflare AI S3 Category Library -> Verified curated pool ──
   const userVisuals = (ctx.userPhotos || []).slice(0, 12).map((p, i) => toUserPhotoVisual(p, i));
-  const unsplashLive = livePhotos
-    .filter((p) => p.source === 'unsplash')
-    .map((p, i) => toVisual(p, i));
+
+  // Retrieve AWS S3 category library images
+  const s3Urls = await getCategoryImagesFromS3(ctx.industryText, Math.max(40, requestedCount));
+  const s3Visuals = s3Urls.map((url, i) => ({
+    id: `s3_${i}`,
+    url,
+    source: 'curated' as const,
+    credit: 'Cloudflare AI S3 Library',
+  }));
+
   const curatedVisuals = getCategoryVisualPool(ctx.industryText).map((url, i) =>
     toCuratedVisual(url, i),
   );
-  const otherLive = livePhotos
-    .filter((p) => p.source !== 'unsplash')
-    .map((p, i) => toVisual(p, i));
-
-  const unsplashPool = dedupeByUrKey([...curatedVisuals, ...unsplashLive]);
-  const otherPool = dedupeByUrKey(otherLive);
 
   // Rotate each tier internally with a daily seed so photos refresh daily
-  // without allowing secondary sources to jump ahead of Unsplash photography.
   const dayKey = new Date().toISOString().slice(0, 10);
   const seed = fnv1aHash(`${ctx.tenantSeed || ''}|${ctx.industryText}|${dayKey}`);
   const rotatedUser = rotate(userVisuals, seed);
-  const rotatedUnsplash = rotate(unsplashPool, seed);
-  const rotatedOther = rotate(otherPool, seed);
+  const rotatedS3 = rotate(s3Visuals.length > 0 ? s3Visuals : curatedVisuals, seed);
 
   // Tier 1: User's own photos
-  // Tier 2: Pure Unsplash photography (clean, zero text, high resolution)
-  // Tier 3: Secondary verified visual sources (Flickr, Pinterest, Wikimedia)
-  let pool = dedupeByUrKey([...rotatedUser, ...rotatedUnsplash, ...rotatedOther]);
+  // Tier 2: Cloudflare AI S3 Category Library
+  let pool = dedupeByUrKey([...rotatedUser, ...rotatedS3]);
 
   // Augment pool with industry photography if pool is small (< 8) to prevent visual repetition
   if (pool.length < 8) {
@@ -198,9 +197,25 @@ export async function getMultiSourceCategoryVisuals(
 
   if (pool.length === 0) return [];
 
-  // Spaced distribution: when requestedCount > pool.length, step by a coprime stride
-  // so adjacent template cards never show the same image.
-  const stride = pool.length > 2 ? Math.max(1, Math.floor(pool.length / 2) + 1) : 1;
+  // Guaranteed coprime stride: visits every element in the pool once before repeating
+  function gcd(a: number, b: number): number {
+    while (b) {
+      const t = b;
+      b = a % b;
+      a = t;
+    }
+    return a;
+  }
+
+  function getCoprimeStride(len: number): number {
+    if (len <= 2) return 1;
+    for (let s = Math.max(3, Math.floor(len / 2)); s < len; s++) {
+      if (gcd(s, len) === 1) return s;
+    }
+    return 1;
+  }
+
+  const stride = getCoprimeStride(pool.length);
   const out: MultiSourceCreativeVisual[] = [];
   for (let i = 0; i < requestedCount; i++) {
     const idx = (i * stride + Math.floor(i / pool.length)) % pool.length;
