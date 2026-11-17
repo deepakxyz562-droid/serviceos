@@ -314,8 +314,27 @@ export async function uploadFile(
         cloudErrors.push(`S3: ${msg}`)
         console.error('[Storage] S3 upload error:', msg)
       }
-      // Fall through to Supabase or local
+      // Fall through to other storage if allowed
     }
+  }
+
+  // ── Business Images / Marketing Assets: Strictly AWS S3 Only ─────────────
+  // Per architecture policy, commercial & merchant images must ONLY be stored in AWS S3,
+  // never in Supabase storage or local ephemeral disk.
+  const isBusinessImageBucket =
+    bucket === 'bgos-business-images' ||
+    bucket === STORAGE_BUCKETS.bgosBusinessImages ||
+    bucket === STORAGE_BUCKETS.templateAssets;
+
+  if (isBusinessImageBucket) {
+    if (!isS3Configured()) {
+      throw new Error(
+        `Business images must be stored strictly in AWS S3, but AWS S3 credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_BUCKET) are not configured. Supabase storage fallback is disabled for business images.`
+      );
+    }
+    throw new Error(
+      `Failed to upload business image to AWS S3 bucket: ${cloudErrors.join('; ') || 'S3 upload rejected'}`
+    );
   }
 
   // ── Priority 2: Supabase Storage ────────────────────────────────────────
@@ -717,4 +736,71 @@ export async function ensureS3Bucket(): Promise<{ ok: boolean; message: string }
     console.error('[Storage] S3 bucket setup error:', message)
     return { ok: false, message: `S3 bucket setup failed: ${message}` }
   }
+}
+
+// ── Supabase Cleanup Helper ────────────────────────────────────────────────
+/**
+ * Clean / Purge all files in a Supabase storage bucket.
+ * Used to remove legacy files mistakenly saved to Supabase storage.
+ */
+export async function purgeSupabaseStorageBucket(
+  bucket: string,
+  prefix = ''
+): Promise<{ deleted: number; errors: string[] }> {
+  const errors: string[] = []
+  let deleted = 0
+
+  if (!isSupabaseStorageConfigured()) {
+    return { deleted: 0, errors: ['Supabase storage not configured'] }
+  }
+
+  const supabaseAdmin = getSupabaseAdmin()
+  if (!supabaseAdmin) {
+    return { deleted: 0, errors: ['Supabase admin client unavailable'] }
+  }
+
+  async function listRecursive(dir: string): Promise<string[]> {
+    const { data, error } = await supabaseAdmin!.storage
+      .from(bucket)
+      .list(dir, { limit: 1000 })
+
+    if (error) {
+      errors.push(`List error in ${dir || '/'}: ${error.message}`)
+      return []
+    }
+
+    if (!data || data.length === 0) return []
+
+    const fileList: string[] = []
+    for (const item of data) {
+      const itemPath = dir ? `${dir}/${item.name}` : item.name
+      // In Supabase storage, folders have item.id === null or no metadata/mimetype
+      if (!item.id || item.metadata === null) {
+        const subFiles = await listRecursive(itemPath)
+        fileList.push(...subFiles)
+      } else {
+        fileList.push(itemPath)
+      }
+    }
+    return fileList
+  }
+
+  try {
+    const allFiles = await listRecursive(prefix)
+    if (allFiles.length > 0) {
+      for (let i = 0; i < allFiles.length; i += 100) {
+        const batch = allFiles.slice(i, i + 100)
+        const { data, error } = await supabaseAdmin.storage.from(bucket).remove(batch)
+        if (error) {
+          errors.push(`Remove batch error: ${error.message}`)
+        } else {
+          deleted += data?.length || batch.length
+        }
+      }
+    }
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : String(err))
+  }
+
+  return { deleted, errors }
 }

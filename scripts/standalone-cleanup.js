@@ -23,9 +23,8 @@ function rm(target) {
 
 console.log('Cleaning up standalone output...');
 
-// Remove sharp/image processing (not needed - images.unoptimized = true)
+// Keep @img for sharp native image processing in standalone production
 rm(path.join(standaloneModules, 'typescript'));
-rm(path.join(standaloneModules, '@img'));
 
 // Remove Prisma engines for platforms we don't deploy to
 // KEEP: libquery_engine-debian-openssl-3.0.x.so.node (needed for production)

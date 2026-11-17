@@ -1,4 +1,14 @@
-import sharp from 'sharp';
+let _sharpPromise: Promise<any> | null = null;
+async function getSharp() {
+  if (_sharpPromise) return _sharpPromise;
+  _sharpPromise = import('sharp')
+    .then((mod) => mod.default || mod)
+    .catch((err) => {
+      console.warn('[image-compressor] Sharp module unavailable, will use original buffer:', err?.message || err);
+      return null;
+    });
+  return _sharpPromise;
+}
 
 export interface ImageOptimizationOptions {
   maxWidth?: number;
@@ -17,6 +27,7 @@ export interface OptimizedImageResult {
  * High-performance WebP compression & responsive resizing.
  * Converts raw heavy PNGs (3–6 MB) from AI diffusion models into lightweight,
  * ultra-sharp WebP assets (120–250 KB) suitable for instantaneous mobile and web loading.
+ * Resilient against missing native binary platforms (safe dynamic import fallback).
  */
 export async function optimizeAndCompressImage(
   inputBuffer: Buffer,
@@ -38,7 +49,16 @@ export async function optimizeAndCompressImage(
   }
 
   try {
-    const buffer = await sharp(inputBuffer, { limitInputPixels: 24_000_000 })
+    const sharpFn = await getSharp();
+    if (!sharpFn) {
+      return {
+        buffer: inputBuffer,
+        contentType: 'image/webp',
+        size: inputBuffer.length,
+      };
+    }
+
+    const buffer = await sharpFn(inputBuffer, { limitInputPixels: 24_000_000 })
       .resize({
         width: targetWidth,
         height: targetHeight,

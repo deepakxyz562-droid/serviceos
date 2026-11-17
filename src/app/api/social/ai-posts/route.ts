@@ -129,7 +129,11 @@ const CATEGORY_IMAGE_PRESETS: Record<string, string[]> = {
 
 function resolveCategoryKey(blob: string): 'market' | 'pool' | 'cake' | 'hardware' | 'paint' | 'software' | 'fashion' | 'salon' | 'restaurant' | 'generic' {
   const lower = blob.toLowerCase();
-  if (/(market|grocery|supermarket|kirana|general store|provision|mart|vegetable|fruit|bazaar|mandi|retail|departmental)/.test(lower)) {
+  // Software & Tech MUST be evaluated first so SaaS / tech businesses are never misclassified as retail markets
+  if (/(software|it company|tech|developer|code|web development|app development|cloud|saas|fieseros|serviceos|bgos|bos|crm|platform|digital marketing)/.test(lower)) {
+    return 'software';
+  }
+  if (/(market|grocery|supermarket|kirana|general store|provision|mart|vegetable|fruit|bazaar|mandi|departmental)/.test(lower)) {
     return 'market';
   }
   if (/(fashion|boutique|cloth|garment|apparel|saree|lehenga|textile|tailor)/.test(lower)) {

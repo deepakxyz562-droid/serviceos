@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import sharp from 'sharp';
 import { getAuthUser } from '@/lib/auth';
+
+async function getSharp() {
+  try {
+    const mod = await import('sharp');
+    return mod.default || mod;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * POST /api/media/remove-bg
@@ -118,17 +126,20 @@ export async function POST(request: NextRequest) {
         } else {
           // Sharp auto-trim safety fallback
           try {
-            const trimmed = await sharp(cutoutBuffer).trim().toBuffer({ resolveWithObject: true });
-            finalBuffer = trimmed.data;
-            const origMeta = await sharp(cutoutBuffer).metadata();
-            bounds = {
-              left: Math.abs(trimmed.info.trimOffsetLeft || 0),
-              top: Math.abs(trimmed.info.trimOffsetTop || 0),
-              width: trimmed.info.width,
-              height: trimmed.info.height,
-              origWidth: origMeta.width || trimmed.info.width,
-              origHeight: origMeta.height || trimmed.info.height,
-            };
+            const sharp = await getSharp();
+            if (sharp) {
+              const trimmed = await sharp(cutoutBuffer).trim().toBuffer({ resolveWithObject: true });
+              finalBuffer = trimmed.data;
+              const origMeta = await sharp(cutoutBuffer).metadata();
+              bounds = {
+                left: Math.abs(trimmed.info.trimOffsetLeft || 0),
+                top: Math.abs(trimmed.info.trimOffsetTop || 0),
+                width: trimmed.info.width,
+                height: trimmed.info.height,
+                origWidth: origMeta.width || trimmed.info.width,
+                origHeight: origMeta.height || trimmed.info.height,
+              };
+            }
           } catch {
             // Proceed with raw buffer if trim fails
           }
@@ -170,17 +181,20 @@ export async function POST(request: NextRequest) {
           let finalBuffer = cutoutBuffer;
           let bounds = { left: 0, top: 0, width: 0, height: 0, origWidth: 0, origHeight: 0 };
           try {
-            const trimmed = await sharp(cutoutBuffer).trim().toBuffer({ resolveWithObject: true });
-            finalBuffer = trimmed.data;
-            const origMeta = await sharp(cutoutBuffer).metadata();
-            bounds = {
-              left: Math.abs(trimmed.info.trimOffsetLeft || 0),
-              top: Math.abs(trimmed.info.trimOffsetTop || 0),
-              width: trimmed.info.width,
-              height: trimmed.info.height,
-              origWidth: origMeta.width || trimmed.info.width,
-              origHeight: origMeta.height || trimmed.info.height,
-            };
+            const sharp = await getSharp();
+            if (sharp) {
+              const trimmed = await sharp(cutoutBuffer).trim().toBuffer({ resolveWithObject: true });
+              finalBuffer = trimmed.data;
+              const origMeta = await sharp(cutoutBuffer).metadata();
+              bounds = {
+                left: Math.abs(trimmed.info.trimOffsetLeft || 0),
+                top: Math.abs(trimmed.info.trimOffsetTop || 0),
+                width: trimmed.info.width,
+                height: trimmed.info.height,
+                origWidth: origMeta.width || trimmed.info.width,
+                origHeight: origMeta.height || trimmed.info.height,
+              };
+            }
           } catch {}
 
           return NextResponse.json({

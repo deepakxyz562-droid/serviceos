@@ -281,14 +281,15 @@ export async function GET(request: NextRequest) {
     const url = typeof row?.url === 'string' ? row.url.trim() : '';
     if (!url || /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(url)) continue;
 
-    // Filter out legacy produce/vegetable/fruit photos for tech/software merchants
+    // Filter out legacy produce/vegetable/fruit photos and Supabase images for tech/software merchants
     if (isMerchantTech) {
       const rowName = (row.name || '').toLowerCase();
       const rowFolder = (row.folder || '').toLowerCase();
+      const isLegacySupabase = url.includes('supabase.co');
       const isGroceryOrProduce =
-        /grocery|supermarket|vegetable|fruit|produce|mandi|retail-local-services/.test(
+        /grocery|supermarket|vegetable|fruit|produce|mandi|retail-local-services|bazaar/.test(
           `${rowName} ${rowFolder} ${url.toLowerCase()}`
-        ) || url.includes('1542838132-92c53300491e');
+        ) || url.includes('1542838132-92c53300491e') || isLegacySupabase;
       if (isGroceryOrProduce) {
         if (row.id) invalidTechPhotoIds.push(row.id);
         continue;
@@ -905,6 +906,27 @@ export async function GET(request: NextRequest) {
       ...festivalsTemplates.slice(0, perCategory),
       ...reviewsTemplates.slice(0, perCategory),
     ].slice(0, limit);
+  }
+
+  // Adjacent card deduplication:
+  // Ensure neighboring cards never display the identical photoUrl.
+  const distinctPool = visuals.length > 0 ? visuals : fallbackUnsplashPhotos;
+  if (distinctPool.length > 0) {
+    let poolCursor = 0;
+    for (let i = 1; i < selectedTemplates.length; i++) {
+      if (selectedTemplates[i].photoUrl === selectedTemplates[i - 1].photoUrl) {
+        let replacement = distinctPool[poolCursor % distinctPool.length];
+        let attempts = 0;
+        while (replacement === selectedTemplates[i - 1].photoUrl && attempts < distinctPool.length) {
+          poolCursor++;
+          replacement = distinctPool[poolCursor % distinctPool.length];
+          attempts++;
+        }
+        poolCursor++;
+        selectedTemplates[i].photoUrl = replacement;
+        selectedTemplates[i].photoSource = 'Curated Photography';
+      }
+    }
   }
 
   return NextResponse.json({

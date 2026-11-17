@@ -159,15 +159,17 @@ export function AiStudioFeed({
         };
       }>(`/api/social/designs/templates?${queryParams.toString()}`);
       if (res?.templates) {
-        const cleanTemplates = res.templates.filter((item) => {
+        const fallbackPhoto = 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1200&auto=format&fit=crop&q=80';
+        const cleanTemplates = res.templates.map((item) => {
           if (
             item.photoUrl &&
             (item.photoUrl.includes('behance.net') ||
               item.photoUrl.includes('pinimg.com') ||
               item.photoUrl.includes('pinterest.com'))
-          )
-            return false;
-          return true;
+          ) {
+            return { ...item, photoUrl: fallbackPhoto };
+          }
+          return item;
         });
 
         setTemplates(cleanTemplates);
