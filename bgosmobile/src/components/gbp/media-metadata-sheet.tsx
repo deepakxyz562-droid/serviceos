@@ -204,7 +204,11 @@ export function MediaMetadataSheet({
 
   // ── Load Business Details & Templates on Open ──
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      setScheduledCelebration(false);
+      return;
+    }
+    setScheduledCelebration(false);
     sessionKeyRef.current += 1;
     const reqKey = sessionKeyRef.current;
     setErrorMsg(null);
@@ -502,9 +506,26 @@ export function MediaMetadataSheet({
         style={styles.root}
       >
         {scheduledCelebration ? (
-          <View style={styles.celebrationWrapper}>
+          <View
+            style={[
+              styles.celebrationWrapper,
+              {
+                paddingTop: Math.max(insets.top, 24),
+                paddingBottom: Math.max(insets.bottom, 24),
+              },
+            ]}
+          >
             <View style={styles.celebrationHeader}>
-              <Pressable onPress={onClose} style={styles.iconCircleBtn}>
+              <Pressable
+                onPress={() => {
+                  setScheduledCelebration(false);
+                  onClose();
+                }}
+                hitSlop={16}
+                accessibilityRole="button"
+                accessibilityLabel="Close celebration"
+                style={styles.iconCircleBtn}
+              >
                 <MaterialIcons name="close" size={22} color="#0F172A" />
               </Pressable>
             </View>
@@ -514,11 +535,18 @@ export function MediaMetadataSheet({
               </View>
               <Text style={styles.celebrationTitle}>Scheduled to Publish!</Text>
               <Text style={styles.celebrationSubtitle}>
-                Your branded post has been added to the calendar with high-converting local keywords.
+                {celebrationMessage ||
+                  'Your branded post has been added to the calendar with high-converting local keywords.'}
               </Text>
             </View>
             <View style={styles.celebrationFooter}>
-              <Pressable onPress={onClose} style={styles.celebrationCta}>
+              <Pressable
+                onPress={() => {
+                  setScheduledCelebration(false);
+                  onClose();
+                }}
+                style={styles.celebrationCta}
+              >
                 <Text style={styles.celebrationCtaText}>Go to Media &amp; Posts</Text>
               </Pressable>
             </View>
