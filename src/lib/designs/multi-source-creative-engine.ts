@@ -187,12 +187,24 @@ export async function getMultiSourceCategoryVisuals(
   // Tier 1: User's own photos
   // Tier 2: Pure Unsplash photography (clean, zero text, high resolution)
   // Tier 3: Secondary verified visual sources (Flickr, Pinterest, Wikimedia)
-  const pool = dedupeByUrKey([...rotatedUser, ...rotatedUnsplash, ...rotatedOther]);
+  let pool = dedupeByUrKey([...rotatedUser, ...rotatedUnsplash, ...rotatedOther]);
+
+  // Augment pool with industry photography if pool is small (< 8) to prevent visual repetition
+  if (pool.length < 8) {
+    const fallbackCategoryUrls = getCategoryVisualPool(ctx.industryText);
+    const fallbackVisuals = fallbackCategoryUrls.map((url, i) => toCuratedVisual(url, i + 100));
+    pool = dedupeByUrKey([...pool, ...fallbackVisuals]);
+  }
+
   if (pool.length === 0) return [];
 
+  // Spaced distribution: when requestedCount > pool.length, step by a coprime stride
+  // so adjacent template cards never show the same image.
+  const stride = pool.length > 2 ? Math.max(1, Math.floor(pool.length / 2) + 1) : 1;
   const out: MultiSourceCreativeVisual[] = [];
   for (let i = 0; i < requestedCount; i++) {
-    out.push(pool[i % pool.length]);
+    const idx = (i * stride + Math.floor(i / pool.length)) % pool.length;
+    out.push(pool[idx]);
   }
   return out;
 }

@@ -1732,7 +1732,7 @@ export async function resolveCuratedImageFallback(
   } else if (isEid) {
     stockUrl = pickOne([
       'https://images.unsplash.com/photo-1564769625905-50e93615e769?auto=format&fit=crop&w=1400&q=85',
-      'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=85',
+      'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&w=1400&q=85',
     ]);
   } else if (isChristmas) {
     stockUrl = pickOne([

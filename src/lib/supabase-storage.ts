@@ -69,6 +69,7 @@ export const STORAGE_BUCKETS = {
   invoiceFiles: 'invoice-files',
   templateAssets: 'template-assets',
   campaignAssets: 'campaign-assets',
+  bgosBusinessImages: 'bgos-business-images',
   exports: 'exports',
 } as const
 
@@ -79,6 +80,7 @@ const PUBLIC_STORAGE_BUCKETS = new Set<StorageBucket>([
   STORAGE_BUCKETS.companyAssets,
   STORAGE_BUCKETS.templateAssets,
   STORAGE_BUCKETS.campaignAssets,
+  STORAGE_BUCKETS.bgosBusinessImages,
 ])
 
 const BUCKET_MAX_SIZE_BYTES = 100 * 1024 * 1024 // 100MB for video/photo uploads

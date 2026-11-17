@@ -55,6 +55,7 @@ export async function cleanLegacyAiImages() {
             { folder: { startsWith: 'category_library/retail' } },
             { name: { contains: 'AI Commercial Photo' } },
             { name: { contains: 'Grocery & Retail Showcase' } },
+            { url: { contains: '1542838132-92c53300491e' } },
           ],
         },
       });

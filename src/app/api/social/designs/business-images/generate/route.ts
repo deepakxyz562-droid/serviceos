@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { generateDesignImage } from '@/lib/designs/image-provider';
+import { generateDesignImage, resolveCuratedImageFallback } from '@/lib/designs/image-provider';
 import { uploadFile } from '@/lib/supabase-storage';
 import { getCategoryStorageFolder } from '@/lib/designs/business-image-resolver';
 import {
@@ -13,6 +13,7 @@ import { optimizeAndCompressImage } from '@/lib/designs/image-compressor';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
 /**
  * POST /api/social/designs/business-images/generate
@@ -42,9 +43,9 @@ export async function POST(request: NextRequest) {
         where: { id: user.tenantId },
         select: { name: true, industry: true, city: true, settingsJson: true },
       }).catch(() => null),
-      db.brandProfile.findUnique({
-        where: { id: user.tenantId },
-      }).catch(() => null),
+      (db.brandProfile?.findUnique({
+        where: { tenantId: user.tenantId },
+      }) ?? Promise.resolve(null)).catch(() => null),
       (db.socialAccount?.findFirst({
         where: { tenantId: user.tenantId, platform: 'googlebusiness', isActive: true },
       }) ?? Promise.resolve(null)).catch(() => null),
@@ -160,6 +161,9 @@ export async function POST(request: NextRequest) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 25000);
 
+      let imageBytes: Buffer | null = null;
+      let directFallbackUrl: string | null = null;
+
       try {
         const result = await generateDesignImage(
           prompt,
@@ -175,11 +179,38 @@ export async function POST(request: NextRequest) {
           { aspectRatio: targetAspectRatio },
         );
 
-        clearTimeout(timeout);
-
         if (result.bytes && result.bytes.length > 0) {
+          imageBytes = result.bytes;
+        }
+      } catch (genErr) {
+        console.warn(`[business-images/generate] Scene ${i + 1} AI diffusion warning:`, genErr);
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      // If AI diffusion generated no bytes (or encountered an issue), fall back to curated SMB photography
+      if (!imageBytes || imageBytes.length === 0) {
+        try {
+          const fallback = await resolveCuratedImageFallback(prompt, {
+            businessName,
+            category,
+            city,
+            services,
+          });
+          if (fallback.bytes && fallback.bytes.length > 0) {
+            imageBytes = fallback.bytes;
+          } else if (fallback.url) {
+            directFallbackUrl = fallback.url;
+          }
+        } catch (fbErr) {
+          console.warn(`[business-images/generate] Scene ${i + 1} fallback warning:`, fbErr);
+        }
+      }
+
+      try {
+        if (imageBytes && imageBytes.length > 0) {
           // Compress heavy PNG (3–6MB) down to optimized WebP (~150–220KB)
-          const optimized = await optimizeAndCompressImage(result.bytes, {
+          const optimized = await optimizeAndCompressImage(imageBytes, {
             aspectRatio: targetAspectRatio,
             quality: 82,
           });
@@ -187,34 +218,43 @@ export async function POST(request: NextRequest) {
           const hash = crypto.randomBytes(4).toString('hex');
           const fileName = `${folder}-ai-${Date.now()}-${hash}.webp`;
 
-          const upload = await uploadFile({
-            bucket: 'bgos-business-images',
-            companyId: 'bgos_merchants',
-            folder: folder,
-            fileName: fileName,
-            file: optimized.buffer,
-            contentType: 'image/webp',
-            requirePublicUrl: true,
-          });
+          let uploadedUrl: string | null = null;
+          try {
+            const upload = await uploadFile({
+              bucket: 'bgos-business-images',
+              companyId: 'bgos_merchants',
+              folder: folder,
+              fileName: fileName,
+              file: optimized.buffer,
+              contentType: 'image/webp',
+              requirePublicUrl: false,
+            });
+            uploadedUrl = upload.url || null;
+          } catch (uploadErr) {
+            console.warn(`[business-images/generate] Storage upload warning:`, uploadErr);
+          }
 
-          if (upload.url) {
-            generatedUrls.push(upload.url);
+          const finalUrl = uploadedUrl || directFallbackUrl;
+          if (finalUrl) {
+            generatedUrls.push(finalUrl);
 
             // Record into merchant's ImageLibrary
-            await db.imageLibrary.create({
+            await db.imageLibrary?.create?.({
               data: {
                 tenantId: user.tenantId,
                 name: `${businessName} AI Commercial Photo ${i + 1}`,
-                url: upload.url,
+                url: finalUrl,
                 folder: 'bgos_ai_photos',
                 mediaType: 'image/webp',
                 size: optimized.size,
               },
             }).catch(() => null);
           }
+        } else if (directFallbackUrl) {
+          generatedUrls.push(directFallbackUrl);
         }
-      } catch (genErr) {
-        console.warn(`[business-images/generate] Scene ${i + 1} generation error:`, genErr);
+      } catch (saveErr) {
+        console.warn(`[business-images/generate] Scene ${i + 1} save warning:`, saveErr);
       }
     }
 
@@ -235,7 +275,11 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error('[business-images/generate] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to generate business images' },
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate business images',
+        message: 'Could not generate commercial image right now. Please try another scene.',
+      },
       { status: 500 },
     );
   }

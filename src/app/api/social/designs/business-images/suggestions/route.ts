@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { generateBusinessSceneSuggestions } from '@/lib/designs/business-image-suggestions';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 /**
  * GET /api/social/designs/business-images/suggestions
@@ -27,9 +28,9 @@ export async function GET(request: NextRequest) {
         where: { id: user.tenantId },
         select: { name: true, industry: true, city: true, settingsJson: true },
       }).catch(() => null),
-      db.brandProfile.findUnique({
-        where: { id: user.tenantId },
-      }).catch(() => null),
+      (db.brandProfile?.findUnique({
+        where: { tenantId: user.tenantId },
+      }) ?? Promise.resolve(null)).catch(() => null),
       (db.socialAccount?.findFirst({
         where: { tenantId: user.tenantId, platform: 'googlebusiness', isActive: true },
       }) ?? Promise.resolve(null)).catch(() => null),

@@ -96,9 +96,9 @@ export async function GET(request: NextRequest) {
       where: { id: user.tenantId },
       select: { name: true, industry: true, phone: true, address: true, city: true, settingsJson: true },
     }).catch(() => null),
-    db.brandProfile.findUnique({
-      where: { id: user.tenantId },
-    }).catch(() => null),
+    (db.brandProfile?.findUnique({
+      where: { tenantId: user.tenantId },
+    }) ?? Promise.resolve(null)).catch(() => null),
     (db.socialAccount?.findFirst({
       where: { tenantId: user.tenantId, platform: 'googlebusiness', isActive: true },
     }) ?? Promise.resolve(null)).catch(() => null),
@@ -288,7 +288,7 @@ export async function GET(request: NextRequest) {
       const isGroceryOrProduce =
         /grocery|supermarket|vegetable|fruit|produce|mandi|retail-local-services/.test(
           `${rowName} ${rowFolder} ${url.toLowerCase()}`
-        );
+        ) || url.includes('1542838132-92c53300491e');
       if (isGroceryOrProduce) {
         if (row.id) invalidTechPhotoIds.push(row.id);
         continue;
@@ -307,9 +307,13 @@ export async function GET(request: NextRequest) {
       where: { id: { in: invalidTechPhotoIds }, tenantId: user.tenantId },
     }).catch(() => null);
   }
+
   for (const post of postRows) {
     for (const u of parseMediaList(post?.mediaUrls)) {
       if (!/^https?:\/\//i.test(u) && !u.startsWith('/')) continue;
+      if (isMerchantTech && (u.includes('1542838132-92c53300491e') || /grocery|vegetable|fruit|produce/.test(u.toLowerCase()))) {
+        continue;
+      }
       if (!seenUserPhotoUrls.has(u)) {
         seenUserPhotoUrls.add(u);
         userPhotos.push({ url: u, title: 'Your Social Post' });
