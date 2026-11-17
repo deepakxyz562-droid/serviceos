@@ -32,7 +32,7 @@ export async function syncFestivalsToS3(options: { maxConcurrent?: number } = {}
         folder: item.festivalKey,
         fileName: item.fileName,
         file: fileBuffer,
-        contentType: 'image/jpeg',
+        contentType: 'image/webp',
         requirePublicUrl: true,
       });
 

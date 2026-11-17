@@ -4,6 +4,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -71,7 +72,20 @@ export function AiStudioFeed({
   const [festivalSearch, setFestivalSearch] = useState('');
   const [selectedFestival, setSelectedFestival] = useState('all');
 
-  // ── Gemini Business Image Suggestions State (Zero-Prompt Generation) ──
+  // ── AI Image & Post Studio Modal State ──
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<'4:5' | '1:1' | '9:16'>('4:5');
+  const [generatedPhotoUrl, setGeneratedPhotoUrl] = useState<string | null>(null);
+  const [generatedSeo, setGeneratedSeo] = useState<{
+    title: string;
+    description: string;
+    tags: string[];
+    category?: string;
+  } | null>(null);
+  const [activeGeneratingStep, setActiveGeneratingStep] = useState<string>('');
+  const [refreshingSuggestions, setRefreshingSuggestions] = useState(false);
+
+  // ── Gemini Business Image Suggestions State ──
   const [businessSuggestions, setBusinessSuggestions] = useState<
     Array<{
       id: string;
@@ -87,40 +101,40 @@ export function AiStudioFeed({
   const [generatingImages, setGeneratingImages] = useState(false);
 
   // Fetch Gemini Business Scene Suggestions for the selected business
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchBusinessSuggestions() {
-      setLoadingSuggestions(true);
-      try {
-        const queryParams = new URLSearchParams({
-          ...(industry ? { category: industry } : {}),
-          ...(businessName ? { businessName } : {}),
-        });
-        const res = await apiRequest<{
-          success: boolean;
-          suggestions: Array<{
-            id: string;
-            title: string;
-            icon: string;
-            badge: string;
-            category: string;
-            sceneDescription: string;
-            promptBlueprint: string;
-          }>;
-        }>(`/api/social/designs/business-images/suggestions?${queryParams.toString()}`);
-        if (!cancelled && res?.suggestions) {
-          setBusinessSuggestions(res.suggestions);
-        }
-      } catch (err) {
-        // fail silently with baseline fallback
-      } finally {
-        if (!cancelled) setLoadingSuggestions(false);
+  const fetchBusinessSuggestions = async (refresh = false) => {
+    if (refresh) setRefreshingSuggestions(true);
+    else setLoadingSuggestions(true);
+    try {
+      const queryParams = new URLSearchParams({
+        ...(industry ? { category: industry } : {}),
+        ...(businessName ? { businessName } : {}),
+        ...(refresh ? { refresh: 'true' } : {}),
+      });
+      const res = await apiRequest<{
+        success: boolean;
+        suggestions: Array<{
+          id: string;
+          title: string;
+          icon: string;
+          badge: string;
+          category: string;
+          sceneDescription: string;
+          promptBlueprint: string;
+        }>;
+      }>(`/api/social/designs/business-images/suggestions?${queryParams.toString()}`);
+      if (res?.suggestions && res.suggestions.length > 0) {
+        setBusinessSuggestions(res.suggestions);
       }
+    } catch (err) {
+      // fail silently with baseline fallback
+    } finally {
+      setLoadingSuggestions(false);
+      setRefreshingSuggestions(false);
     }
-    void fetchBusinessSuggestions();
-    return () => {
-      cancelled = true;
-    };
+  };
+
+  useEffect(() => {
+    void fetchBusinessSuggestions(false);
   }, [businessName, industry]);
 
   const fetchTemplates = async () => {
@@ -170,39 +184,94 @@ export function AiStudioFeed({
     void fetchTemplates();
   }, [activeTab, industry, businessName, selectedFestival]);
 
-  // 1-Click zero-prompt AI business image generation
-  const handleGenerateBusinessImages = async (suggestionId?: string) => {
+  // Generate commercial image + SEO metadata from a selected scene suggestion
+  const handleGenerateScene = async (sug: {
+    id: string;
+    title: string;
+    promptBlueprint: string;
+  }) => {
     if (generatingImages) return;
     setGeneratingImages(true);
+    setActiveGeneratingStep('1. Generating scene with Cloudflare FLUX.2...');
+
+    const timer1 = setTimeout(() => {
+      setActiveGeneratingStep('2. Compressing & optimizing WebP...');
+    }, 4500);
+    const timer2 = setTimeout(() => {
+      setActiveGeneratingStep('3. Crafting SEO title, caption & tags with Gemini...');
+    }, 7500);
+
     try {
       const res = await apiRequest<{
         success: boolean;
         urls: string[];
-        count: number;
+        url?: string;
+        seo?: {
+          title: string;
+          description: string;
+          tags: string[];
+          category?: string;
+        };
         message: string;
       }>('/api/social/designs/business-images/generate', {
         method: 'POST',
         body: JSON.stringify({
-          suggestionId,
-          generateAll: !suggestionId,
+          suggestionId: sug.id,
+          sceneTitle: sug.title,
+          promptBlueprint: sug.promptBlueprint,
           category: industry,
+          aspectRatio: selectedAspectRatio,
         }),
       });
 
-      if (res?.success && res.urls?.length > 0) {
-        Alert.alert(
-          '✨ Images Generated',
-          `Generated ${res.urls.length} commercial photos for ${businessName}! Refreshed your designs.`,
-        );
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+
+      const finalUrl = res?.url || res?.urls?.[0];
+      if (res?.success && finalUrl) {
+        setGeneratedPhotoUrl(finalUrl);
+        if (res.seo) {
+          setGeneratedSeo(res.seo);
+        } else {
+          setGeneratedSeo({
+            title: `${sug.title} | ${businessName}`,
+            description: `Quality ${industry} solutions at ${businessName}. Visit us in ${city} for expert service!`,
+            tags: [
+              `#${businessName.replace(/[^a-zA-Z0-9]/g, '')}`,
+              `#${industry.replace(/[^a-zA-Z0-9]/g, '')}`,
+              `#TopRated`,
+            ],
+          });
+        }
         await fetchTemplates();
       } else {
-        Alert.alert('Notice', res?.message || 'Images were created and added to library.');
+        Alert.alert('Notice', res?.message || 'Failed to generate image. Please try another scene.');
       }
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to generate images');
+      Alert.alert('Error', err instanceof Error ? err.message : 'Generation failed');
     } finally {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       setGeneratingImages(false);
+      setActiveGeneratingStep('');
     }
+  };
+
+  // Publish / Dispatch generated post to Google Business Profile & social publisher
+  const handlePublishGeneratedPost = () => {
+    if (!generatedPhotoUrl) return;
+    setCreateModalVisible(false);
+    onSelectTemplate({
+      id: `ai-gen-${Date.now()}`,
+      name: generatedSeo?.title || `${businessName} Commercial Showcase`,
+      headline: generatedSeo?.title || `${businessName} Commercial Solutions`,
+      defaultCaption: generatedSeo?.description,
+      defaultBullets: generatedSeo?.tags,
+      badge: 'AI PHOTO',
+      tab: 'for_business',
+      aspectRatio: selectedAspectRatio,
+      photoUrl: generatedPhotoUrl,
+    });
   };
 
   const FESTIVAL_FILTER_CHIPS = [
@@ -290,34 +359,19 @@ export function AiStudioFeed({
         </View>
       </View>
 
-      {/* ── HEADER BANNER: BUSINESS IDENTITY ── */}
-      <View style={styles.businessHeader}>
-        <View style={styles.businessHeaderLeft}>
-          {logoUrl ? (
-            <Image source={{ uri: logoUrl }} style={styles.businessLogo} resizeMode="contain" />
-          ) : (
-            <View style={styles.businessMonogram}>
-              <Text style={styles.businessMonogramText}>
-                {(businessName || 'B').charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text numberOfLines={1} style={styles.businessNameText}>
-              {businessName}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text numberOfLines={1} style={styles.businessMetaText}>
-                {industry}
-              </Text>
-              <Text style={styles.dotSeparator}>•</Text>
-              <View style={styles.statusPill}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusPillText}>Brand Connected</Text>
-              </View>
-            </View>
-          </View>
-        </View>
+      {/* ── SINGLE ACTION CTA: CREATE IMAGE WITH AI ── */}
+      <View style={styles.createAiBannerWrap}>
+        <Pressable
+          onPress={() => setCreateModalVisible(true)}
+          style={({ pressed }) => [
+            styles.createAiBtn,
+            pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+          ]}
+        >
+          <MaterialIcons name="auto-awesome" size={17} color="#FFFFFF" />
+          <Text style={styles.createAiBtnText}>Create Image with AI</Text>
+          <MaterialIcons name="arrow-forward" size={16} color="#FFFFFF" />
+        </Pressable>
       </View>
 
       {/* ── CATEGORY FILTER PILLS ── */}
@@ -393,59 +447,206 @@ export function AiStudioFeed({
         </View>
       )}
 
-      {/* ── 1-CLICK AI BUSINESS IMAGE GENERATOR (Zero typing for merchant) ── */}
-      {activeTab !== 'festivals' && (
-        <View style={styles.businessSuggestionsCard}>
-          <View style={styles.suggestionsHeaderRow}>
-            <View style={{ flex: 1, gap: 2 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialIcons name="auto-awesome" size={15} color="#009F50" />
-                <Text style={styles.suggestionsTitle}>AI Photos for {businessName}</Text>
-              </View>
-              <Text style={styles.suggestionsSubtitle}>
-                Zero typing needed. 1-tap generates commercial photos via Cloudflare AI.
-              </Text>
+      {/* ── AI PHOTO & POST CREATOR STUDIO MODAL ── */}
+      <Modal
+        visible={createModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setCreateModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          {/* Modal Header */}
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHeaderTitleWrap}>
+              <MaterialIcons name="auto-awesome" size={20} color="#009F50" />
+              <Text style={styles.modalHeaderTitle}>AI Photo &amp; Post Studio</Text>
             </View>
             <Pressable
-              onPress={() => handleGenerateBusinessImages()}
-              disabled={generatingImages}
-              style={[styles.generateAllBtn, generatingImages && { opacity: 0.6 }]}
+              onPress={() => setCreateModalVisible(false)}
+              hitSlop={10}
+              style={styles.modalCloseBtn}
             >
-              {generatingImages ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <MaterialIcons name="bolt" size={14} color="#FFFFFF" />
-                  <Text style={styles.generateAllBtnText}>Generate All</Text>
-                </>
-              )}
+              <MaterialIcons name="close" size={22} color="#64748B" />
             </Pressable>
           </View>
 
-          {businessSuggestions.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.suggestionsScroll}
+          <ScrollView
+            style={styles.modalScrollView}
+            contentContainerStyle={styles.modalScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Aspect Ratio Selector */}
+            <View style={styles.aspectRatioSection}>
+              <Text style={styles.sectionMiniLabel}>ASPECT RATIO</Text>
+              <View style={styles.aspectRatioRow}>
+                {(['4:5', '1:1', '9:16'] as const).map((ratio) => {
+                  const active = selectedAspectRatio === ratio;
+                  const label = ratio === '4:5' ? '4:5 Post' : ratio === '1:1' ? '1:1 Square' : '9:16 Story';
+                  return (
+                    <Pressable
+                      key={ratio}
+                      onPress={() => setSelectedAspectRatio(ratio)}
+                      style={[styles.aspectRatioPill, active && styles.aspectRatioPillActive]}
+                    >
+                      <Text style={[styles.aspectRatioPillText, active && styles.aspectRatioPillTextActive]}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Canvas / Image Preview Area */}
+            <View
+              style={[
+                styles.canvasPreviewContainer,
+                selectedAspectRatio === '1:1' && { height: 310 },
+                selectedAspectRatio === '4:5' && { height: 350 },
+                selectedAspectRatio === '9:16' && { height: 420 },
+              ]}
             >
-              {businessSuggestions.map((sug) => (
-                <Pressable
-                  key={sug.id}
-                  onPress={() => handleGenerateBusinessImages(sug.id)}
-                  disabled={generatingImages}
-                  style={styles.suggestionChip}
-                >
-                  <Text style={styles.suggestionTitle}>{sug.title}</Text>
-                  <View style={styles.generateMiniPill}>
-                    <MaterialIcons name="add-a-photo" size={11} color="#009F50" />
-                    <Text style={styles.generateMiniPillText}>1-Tap</Text>
+              {generatingImages ? (
+                <View style={styles.generatingStateBox}>
+                  <ActivityIndicator size="large" color="#009F50" />
+                  <Text style={styles.generatingStateTitle}>Directing Scene</Text>
+                  <Text style={styles.generatingStateStepText}>{activeGeneratingStep}</Text>
+                </View>
+              ) : generatedPhotoUrl ? (
+                <View style={styles.generatedImageBox}>
+                  <Image source={{ uri: generatedPhotoUrl }} style={styles.generatedImagePreview} resizeMode="cover" />
+                  <View style={styles.imageSuccessBadge}>
+                    <MaterialIcons name="check-circle" size={14} color="#22C55E" />
+                    <Text style={styles.imageSuccessBadgeText}>WebP Optimized (~180 KB)</Text>
                   </View>
+                </View>
+              ) : (
+                <View style={styles.blankCanvasBox}>
+                  <View style={styles.blankCanvasIconBox}>
+                    <MaterialIcons name="photo-camera" size={34} color="#94A3B8" />
+                  </View>
+                  <Text style={styles.blankCanvasTitle}>Blank Canvas</Text>
+                  <Text style={styles.blankCanvasSubtitle}>
+                    Select a scene idea below to generate a photorealistic commercial photo for {businessName}.
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* SEO Content Section (Reveals once generated) */}
+            {generatedSeo && (
+              <View style={styles.seoContentCard}>
+                <View style={styles.seoCardHeader}>
+                  <MaterialIcons name="travel-explore" size={16} color="#009F50" />
+                  <Text style={styles.seoCardTitle}>SEO Post Content</Text>
+                </View>
+
+                {/* Editable SEO Title */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>SEO TITLE (GBP &amp; LOCAL SEARCH)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={generatedSeo.title}
+                    onChangeText={(val) => setGeneratedSeo({ ...generatedSeo, title: val })}
+                    placeholder="SEO Title"
+                  />
+                </View>
+
+                {/* Editable Caption */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>POST CAPTION &amp; CONTENT</Text>
+                  <TextInput
+                    style={[styles.textInput, styles.textArea]}
+                    value={generatedSeo.description}
+                    onChangeText={(val) => setGeneratedSeo({ ...generatedSeo, description: val })}
+                    placeholder="Caption"
+                    multiline
+                    numberOfLines={4}
+                  />
+                </View>
+
+                {/* Hashtags */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>TAGS &amp; KEYWORDS</Text>
+                  <View style={styles.tagsContainer}>
+                    {generatedSeo.tags.map((tag, idx) => (
+                      <View key={`t-${idx}`} style={styles.tagChip}>
+                        <Text style={styles.tagChipText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Scene Suggestions Tray with 🔄 Refresh Button */}
+            <View style={styles.sceneSuggestionsSection}>
+              <View style={styles.sceneSuggestionsHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="lightbulb" size={18} color="#D97706" />
+                  <Text style={styles.sceneSuggestionsTitle}>Scene Ideas for {industry}</Text>
+                </View>
+                <Pressable
+                  onPress={() => fetchBusinessSuggestions(true)}
+                  disabled={refreshingSuggestions || generatingImages}
+                  style={styles.refreshIdeasBtn}
+                >
+                  {refreshingSuggestions ? (
+                    <ActivityIndicator size="small" color="#009F50" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="refresh" size={16} color="#009F50" />
+                      <Text style={styles.refreshIdeasBtnText}>Refresh Ideas</Text>
+                    </>
+                  )}
                 </Pressable>
-              ))}
-            </ScrollView>
+              </View>
+
+              <Text style={styles.sceneSuggestionsSubtitle}>
+                Tap any idea to generate an authentic commercial photo with SEO copy:
+              </Text>
+
+              <View style={styles.sceneChipsGrid}>
+                {businessSuggestions.map((sug) => (
+                  <Pressable
+                    key={sug.id}
+                    onPress={() => handleGenerateScene(sug)}
+                    disabled={generatingImages}
+                    style={styles.sceneCardItem}
+                  >
+                    <View style={styles.sceneCardTop}>
+                      <Text style={styles.sceneEmoji}>{sug.icon}</Text>
+                      <View style={styles.sceneBadge}>
+                        <Text style={styles.sceneBadgeText}>{sug.badge}</Text>
+                      </View>
+                    </View>
+                    <Text numberOfLines={2} style={styles.sceneTitleText}>
+                      {sug.title}
+                    </Text>
+                    <View style={styles.sceneTapCta}>
+                      <Text style={styles.sceneTapCtaText}>Tap to Generate</Text>
+                      <MaterialIcons name="bolt" size={13} color="#009F50" />
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* Action Footer: Publish Button */}
+          {generatedPhotoUrl && (
+            <View style={styles.modalFooterBar}>
+              <Pressable
+                onPress={handlePublishGeneratedPost}
+                style={styles.publishMainBtn}
+              >
+                <MaterialIcons name="send" size={18} color="#FFFFFF" />
+                <Text style={styles.publishMainBtnText}>🚀 Publish Post</Text>
+              </Pressable>
+            </View>
           )}
         </View>
-      )}
+      </Modal>
 
       {/* ── 2-COLUMN VISUAL DISCOVERY GRID ── */}
       {loading ? (
@@ -630,73 +831,356 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#64748B',
   },
-  businessHeader: {
+  createAiBannerWrap: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
-  businessHeaderLeft: {
+  createAiBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#009F50',
+    paddingVertical: 11,
+    borderRadius: 12,
+    shadowColor: '#009F50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  businessLogo: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
+  createAiBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
-  businessMonogram: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#E0F2FE',
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  modalHeaderTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#BAE6FD',
   },
-  businessMonogramText: {
-    fontSize: 18,
+  modalScrollView: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    padding: 16,
+    gap: 16,
+    paddingBottom: 40,
+  },
+  aspectRatioSection: {
+    gap: 6,
+  },
+  sectionMiniLabel: {
+    fontSize: 11,
     fontWeight: '800',
-    color: '#0369A1',
+    color: '#64748B',
+    letterSpacing: 0.5,
   },
-  businessNameText: {
+  aspectRatioRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  aspectRatioPill: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aspectRatioPillActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  aspectRatioPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  aspectRatioPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  canvasPreviewContainer: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  blankCanvasBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    gap: 8,
+  },
+  blankCanvasIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  blankCanvasTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  blankCanvasSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 280,
+  },
+  generatingStateBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    gap: 12,
+  },
+  generatingStateTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
   },
-  businessMetaText: {
+  generatingStateStepText: {
     fontSize: 12,
+    fontWeight: '600',
+    color: '#009F50',
+    textAlign: 'center',
+  },
+  generatedImageBox: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  generatedImagePreview: {
+    width: '100%',
+    height: '100%',
+  },
+  imageSuccessBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  imageSuccessBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  seoContentCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  seoCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  seoCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  inputGroup: {
+    gap: 4,
+  },
+  inputLabel: {
+    fontSize: 10,
+    fontWeight: '800',
     color: '#64748B',
-    fontWeight: '500',
+    letterSpacing: 0.4,
   },
-  dotSeparator: {
+  textInput: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     fontSize: 12,
-    color: '#CBD5E1',
+    color: '#0F172A',
   },
-  statusPill: {
+  textArea: {
+    minHeight: 70,
+    textAlignVertical: 'top',
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  tagChip: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  tagChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+  sceneSuggestionsSection: {
+    gap: 8,
+  },
+  sceneSuggestionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sceneSuggestionsTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  refreshIdeasBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#F0FDF4',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#BBF7D0',
   },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#16A34A',
-  },
-  statusPillText: {
-    fontSize: 10,
+  refreshIdeasBtnText: {
+    fontSize: 11,
     fontWeight: '700',
     color: '#15803D',
+  },
+  sceneSuggestionsSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  sceneChipsGrid: {
+    gap: 8,
+  },
+  sceneCardItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  sceneCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sceneEmoji: {
+    fontSize: 18,
+  },
+  sceneBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  sceneBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  sceneTitleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  sceneTapCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 3,
+  },
+  sceneTapCtaText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#009F50',
+  },
+  modalFooterBar: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    padding: 14,
+  },
+  publishMainBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#009F50',
+    paddingVertical: 13,
+    borderRadius: 12,
+    shadowColor: '#009F50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  publishMainBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   emptySearchBox: {
     width: '100%',
@@ -802,78 +1286,6 @@ const styles = StyleSheet.create({
   festivalChipTextActive: {
     color: '#B45309',
     fontWeight: '700',
-  },
-  businessSuggestionsCard: {
-    backgroundColor: '#F0FDF4',
-    borderBottomWidth: 1,
-    borderBottomColor: '#DCFCE7',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  suggestionsHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  suggestionsTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#15803D',
-  },
-  suggestionsSubtitle: {
-    fontSize: 10,
-    color: '#166534',
-    lineHeight: 14,
-  },
-  generateAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#009F50',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  generateAllBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  suggestionsScroll: {
-    gap: 6,
-    paddingTop: 2,
-  },
-  suggestionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  suggestionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#1E293B',
-  },
-  generateMiniPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  generateMiniPillText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#15803D',
   },
   resetFilterBtn: {
     marginTop: 8,

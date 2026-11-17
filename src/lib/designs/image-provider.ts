@@ -779,7 +779,7 @@ export function buildHighQualityImagePrompt(
   if (hasWord(catLower, ['market', 'grocery', 'supermarket', 'mart', 'kirana', 'retail', 'provision', 'provisions', 'bazaar', 'store', 'department store', 'fmcg', 'produce', 'daily needs'])) scores.market += 10;
 
   // Name matching (strong physical identity signal)
-  if (hasWord(nameLower, ['market', 'grocery', 'supermarket', 'mart', 'kirana', 'retail', 'provision', 'provisions', 'bazaar', 'store'])) scores.market += 10;
+  if (hasWord(nameLower, ['grocery', 'supermarket', 'kirana', 'provision', 'provisions', 'bazaar', 'sabzi mandi', 'vegetable store'])) scores.market += 10;
   if (hasWord(nameLower, ['bakery', 'cake', 'mithai', 'sweets', 'cafe', 'restaurant'])) scores.food += 10;
   if (hasWord(nameLower, ['farmhouse', 'resort', 'villa', 'homestay', 'pool'])) scores.hospitality += 10;
   if (hasWord(nameLower, ['hardware', 'tools', 'fasteners'])) scores.hardware += 10;
@@ -805,7 +805,7 @@ export function buildHighQualityImagePrompt(
   if (hasWord(pLower, ['power tool', 'drill', 'screws', 'hardware tools', 'plumbing fixture'])) scores.hardware += 2;
   if (hasWord(pLower, ['repair', 'hvac', 'plumbing', 'technician', 'air conditioning'])) scores.trades += 2;
   if (hasWord(pLower, ['farmhouse', 'villa', 'resort', 'pool', 'lawn', 'garden', 'cottage', 'patio', 'retreat'])) scores.hospitality += 3;
-  if (hasWord(pLower, ['grocery', 'market', 'supermarket', 'fresh produce', 'fruits', 'vegetables', 'daily needs', 'store', 'kirana'])) scores.market += 3;
+  if (hasWord(pLower, ['grocery', 'supermarket', 'fresh produce', 'fruits', 'vegetables', 'daily needs', 'kirana'])) scores.market += 3;
 
   let maxScore = 0;
   let winningArchetype: 'tech' | 'food' | 'fashion' | 'jewellery' | 'trades' | 'hospitality' | 'paint' | 'hardware' | 'market' | 'custom' = 'custom';
@@ -1548,7 +1548,14 @@ export async function generateDesignImage(
   options?: GenerateDesignImageOptions
 ): Promise<GeneratedImageResult> {
   const isPosterMode = isPoster || prompt.startsWith('[POSTER]');
-  const text = await synthesizeDynamicVisualPrompt(prompt, isPosterMode, context, signal);
+  const isAlreadyArtDirected = prompt.length > 70 && (
+    prompt.includes('NO TEXT') ||
+    prompt.includes('commercial photography') ||
+    prompt.includes('photorealistic')
+  );
+  const text = isAlreadyArtDirected
+    ? prompt
+    : await synthesizeDynamicVisualPrompt(prompt, isPosterMode, context, signal);
   const referenceUrls = options?.referenceImageUrls || context?.referenceImageUrls || [];
   const aspectRatio = options?.aspectRatio || context?.aspectRatio;
   const aspectHint = aspectRatio ? ` Frame for ${aspectRatio} aspect ratio.` : '';

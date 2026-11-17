@@ -125,12 +125,12 @@ describe('Festival Catalog & Business Image Suggestion System', () => {
   });
 
   describe('1-Click Business Image Generator API (/api/social/designs/business-images/generate)', () => {
-    it('generates commercial images for the selected business with zero prompt entry required', async () => {
+    it('generates commercial images and SEO metadata for the selected business with zero prompt entry required', async () => {
       const { POST } = await import('@/app/api/social/designs/business-images/generate/route');
       const req = new NextRequest('http://localhost:3000/api/social/designs/business-images/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ generateAll: true }),
+        body: JSON.stringify({ generateAll: true, sceneTitle: 'Modern Clinic Setup' }),
       });
       const res = await POST(req);
       expect(res.status).toBe(200);
@@ -140,6 +140,10 @@ describe('Festival Catalog & Business Image Suggestion System', () => {
       expect(data.businessName).toBe('Apex Dental Care');
       expect(data.urls.length).toBeGreaterThan(0);
       expect(data.urls[0]).toMatch(/^https?:\/\//);
+      expect(data.seo).toBeDefined();
+      expect(data.seo.title).toBeDefined();
+      expect(data.seo.description).toBeDefined();
+      expect(Array.isArray(data.seo.tags)).toBe(true);
     });
   });
 });

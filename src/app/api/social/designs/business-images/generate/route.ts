@@ -4,7 +4,12 @@ import { db } from '@/lib/db';
 import { generateDesignImage } from '@/lib/designs/image-provider';
 import { uploadFile } from '@/lib/supabase-storage';
 import { getCategoryStorageFolder } from '@/lib/designs/business-image-resolver';
-import { generateBusinessSceneSuggestions } from '@/lib/designs/business-image-suggestions';
+import {
+  generateBusinessSceneSuggestions,
+  generateSeoMetadataForScene,
+  type GeneratedSeoMetadata,
+} from '@/lib/designs/business-image-suggestions';
+import { optimizeAndCompressImage } from '@/lib/designs/image-compressor';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +17,7 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/social/designs/business-images/generate
  * Zero-prompt commercial photography generation for the merchant's business.
- * Powered by Gemini prompt blueprints + Cloudflare Workers AI FLUX.2.
+ * Powered by Gemini prompt blueprints + Cloudflare Workers AI FLUX.2 + Sharp WebP compression.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -23,10 +28,14 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json().catch(() => ({}))) as {
       suggestionId?: string;
+      sceneTitle?: string;
       promptBlueprint?: string;
       generateAll?: boolean;
       category?: string;
+      aspectRatio?: '1:1' | '4:5' | '9:16' | '16:9';
     };
+
+    const targetAspectRatio = body.aspectRatio || '4:5';
 
     const [tenant, brandProfile, gbpAccount, merchantServices] = await Promise.all([
       db.tenant.findUnique({
@@ -85,8 +94,9 @@ export async function POST(request: NextRequest) {
     const services = merchantServices.map((s) => s.name).filter(Boolean);
     const folder = getCategoryStorageFolder(category);
 
-    // 1. Gather scene prompts to generate
+    // 1. Gather scene prompts and active scene title
     const scenesToGenerate: string[] = [];
+    let activeSceneTitle = body.sceneTitle || '';
 
     if (body.promptBlueprint?.trim()) {
       scenesToGenerate.push(body.promptBlueprint.trim());
@@ -100,34 +110,49 @@ export async function POST(request: NextRequest) {
 
       if (body.suggestionId) {
         const target = suggestions.find((s) => s.id === body.suggestionId);
-        if (target) scenesToGenerate.push(target.promptBlueprint);
+        if (target) {
+          scenesToGenerate.push(target.promptBlueprint);
+          if (!activeSceneTitle) activeSceneTitle = target.title;
+        }
       }
 
       if (scenesToGenerate.length === 0) {
-        // Generate all or top 3 suggestions
-        const count = body.generateAll ? suggestions.length : Math.min(3, suggestions.length);
+        const count = body.generateAll ? suggestions.length : 1;
         for (let i = 0; i < count; i++) {
           scenesToGenerate.push(suggestions[i].promptBlueprint);
+          if (i === 0 && !activeSceneTitle) activeSceneTitle = suggestions[i].title;
         }
       }
     }
 
-    // In test environment, return mock URLs
+    // 2. Concurrently generate SEO metadata via Gemini
+    const seoPromise = generateSeoMetadataForScene({
+      businessName,
+      category,
+      sceneTitle: activeSceneTitle,
+      services,
+      city,
+    });
+
+    // In test environment, return mock URLs + SEO metadata
     if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') {
       const mockUrls = scenesToGenerate.map((_, i) =>
         `https://bgos.site/images/bgos/templates/${folder}-${i + 1}.webp`
       );
+      const seo = await seoPromise;
       return NextResponse.json({
         success: true,
         businessName,
         category,
         urls: mockUrls,
+        url: mockUrls[0] || null,
         count: mockUrls.length,
+        seo,
         message: `Generated ${mockUrls.length} commercial photos for ${businessName}.`,
       });
     }
 
-    // 2. Generate images via Cloudflare Workers AI FLUX model and upload to S3
+    // 3. Generate image via Cloudflare FLUX model, compress with Sharp, and upload to S3
     const generatedUrls: string[] = [];
 
     for (let i = 0; i < scenesToGenerate.length; i++) {
@@ -147,12 +172,18 @@ export async function POST(request: NextRequest) {
             city,
             searchTerms: services,
           },
-          { aspectRatio: '4:5' },
+          { aspectRatio: targetAspectRatio },
         );
 
         clearTimeout(timeout);
 
         if (result.bytes && result.bytes.length > 0) {
+          // Compress heavy PNG (3–6MB) down to optimized WebP (~150–220KB)
+          const optimized = await optimizeAndCompressImage(result.bytes, {
+            aspectRatio: targetAspectRatio,
+            quality: 82,
+          });
+
           const hash = crypto.randomBytes(4).toString('hex');
           const fileName = `${folder}-ai-${Date.now()}-${hash}.webp`;
 
@@ -161,7 +192,7 @@ export async function POST(request: NextRequest) {
             companyId: 'bgos_merchants',
             folder: folder,
             fileName: fileName,
-            file: result.bytes,
+            file: optimized.buffer,
             contentType: 'image/webp',
             requirePublicUrl: true,
           });
@@ -177,7 +208,7 @@ export async function POST(request: NextRequest) {
                 url: upload.url,
                 folder: 'bgos_ai_photos',
                 mediaType: 'image/webp',
-                size: result.bytes.length,
+                size: optimized.size,
               },
             }).catch(() => null);
           }
@@ -187,14 +218,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const seo = await seoPromise;
+
     return NextResponse.json({
       success: true,
       businessName,
       category,
       urls: generatedUrls,
+      url: generatedUrls[0] || null,
       count: generatedUrls.length,
+      seo,
       message: generatedUrls.length > 0
-        ? `Successfully generated ${generatedUrls.length} new photos for ${businessName}.`
+        ? `Successfully generated ${generatedUrls.length} commercial photo(s) for ${businessName}.`
         : 'Image generation completed without new assets.',
     });
   } catch (error: unknown) {

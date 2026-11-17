@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const categoryParam = searchParams.get('category');
     const businessNameParam = searchParams.get('businessName');
+    const refreshParam = searchParams.get('refresh') === 'true';
 
     const [tenant, brandProfile, gbpAccount, merchantServices] = await Promise.all([
       db.tenant.findUnique({
@@ -87,6 +88,7 @@ export async function GET(request: NextRequest) {
         category,
         services,
         city,
+        isRefresh: refreshParam,
       },
       controller.signal,
     );

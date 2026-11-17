@@ -10,10 +10,11 @@ import {DESIGN_FONT_CSS,designFontFamily} from '../../../shared/design-fonts';
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Sparkles, Wand2, ArrowRight, Loader2 } from 'lucide-react';
+import { Search, Sparkles, Wand2, ArrowRight, Loader2, RefreshCw, Send, CheckCircle2, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import {
   POSTER_CATEGORIES,
@@ -207,59 +208,121 @@ export function PosterTemplateGallery({
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<'for_you' | 'all' | string>('for_you');
   const [selectedFestivalKey, setSelectedFestivalKey] = useState<string>('all');
-  const [businessSuggestions, setBusinessSuggestions] = useState<Array<{ id: string; title: string; promptBlueprint: string }>>([]);
+
+  // ── AI Image & Post Studio Modal State ──
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<'4:5' | '1:1' | '9:16'>('4:5');
+  const [generatedPhotoUrl, setGeneratedPhotoUrl] = useState<string | null>(null);
+  const [generatedSeo, setGeneratedSeo] = useState<{
+    title: string;
+    description: string;
+    tags: string[];
+    category?: string;
+  } | null>(null);
+  const [activeGeneratingStep, setActiveGeneratingStep] = useState<string>('');
+  const [refreshingSuggestions, setRefreshingSuggestions] = useState(false);
+
+  const [businessSuggestions, setBusinessSuggestions] = useState<
+    Array<{ id: string; title: string; promptBlueprint: string; icon?: string; badge?: string }>
+  >([]);
   const [generatingImages, setGeneratingImages] = useState(false);
 
   const festivalGroups = useMemo(() => getFestivalGroupsWithCounts(), []);
 
-  useEffect(() => {
+  const fetchSuggestions = async (refresh = false) => {
     if (!business.category && !business.businessName) return;
-    let isMounted = true;
-    const fetchSuggestions = async () => {
-      try {
-        const params = new URLSearchParams();
-        if (business.category) params.set('category', business.category);
-        if (business.businessName) params.set('businessName', business.businessName);
-        const res = await fetch(`/api/social/designs/business-images/suggestions?${params.toString()}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (isMounted && data?.suggestions) {
-          setBusinessSuggestions(data.suggestions);
-        }
-      } catch (err) {
-        console.warn('Failed to load business image suggestions:', err);
+    if (refresh) setRefreshingSuggestions(true);
+    try {
+      const params = new URLSearchParams();
+      if (business.category) params.set('category', business.category);
+      if (business.businessName) params.set('businessName', business.businessName);
+      if (refresh) params.set('refresh', 'true');
+      const res = await fetch(`/api/social/designs/business-images/suggestions?${params.toString()}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.suggestions && data.suggestions.length > 0) {
+        setBusinessSuggestions(data.suggestions);
       }
-    };
-    void fetchSuggestions();
-    return () => {
-      isMounted = false;
-    };
+    } catch (err) {
+      console.warn('Failed to load business image suggestions:', err);
+    } finally {
+      setRefreshingSuggestions(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchSuggestions(false);
   }, [business.category, business.businessName]);
 
-  const handleGenerateBusinessImages = async (suggestionId?: string) => {
+  const handleGenerateScene = async (sug: { id: string; title: string; promptBlueprint: string }) => {
     if (generatingImages) return;
     setGeneratingImages(true);
+    setActiveGeneratingStep('1. Directing scene with Cloudflare FLUX.2...');
+
+    const timer1 = setTimeout(() => {
+      setActiveGeneratingStep('2. Compressing & optimizing WebP (~180 KB)...');
+    }, 4500);
+    const timer2 = setTimeout(() => {
+      setActiveGeneratingStep('3. Crafting SEO title, caption & tags with Gemini...');
+    }, 7500);
+
     try {
       const res = await fetch('/api/social/designs/business-images/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          suggestionId,
-          generateAll: !suggestionId,
+          suggestionId: sug.id,
+          sceneTitle: sug.title,
+          promptBlueprint: sug.promptBlueprint,
           category: business.category,
+          aspectRatio: selectedAspectRatio,
         }),
       });
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+
       const data = await res.json();
-      if (res.ok && data?.success) {
-        toast.success(data.message || `Generated ${data.count || 1} commercial photos!`);
+      const finalUrl = data?.url || data?.urls?.[0];
+      if (res.ok && data?.success && finalUrl) {
+        setGeneratedPhotoUrl(finalUrl);
+        if (data.seo) {
+          setGeneratedSeo(data.seo);
+        } else {
+          setGeneratedSeo({
+            title: `${sug.title} | ${business.businessName || 'Local Business'}`,
+            description: `Quality commercial solutions at ${business.businessName || 'our business'}. Top rated services and dedicated customer care.`,
+            tags: ['#LocalBusiness', '#TopRated', '#ServiceExcellence'],
+          });
+        }
+        toast.success(data.message || 'Commercial photo & SEO content created!');
       } else {
-        toast.error(data?.message || 'Failed to generate images');
+        toast.error(data?.message || 'Failed to generate image');
       }
     } catch {
       toast.error('Network error during image generation');
     } finally {
       setGeneratingImages(false);
+      setActiveGeneratingStep('');
     }
+  };
+
+  const handlePublishPost = () => {
+    if (!generatedPhotoUrl) return;
+    setCreateModalOpen(false);
+    const createdTemplate: PosterTemplate = {
+      id: `ai-gen-${Date.now()}`,
+      name: generatedSeo?.title || `${business.businessName || 'Business'} Showcase`,
+      category: 'service_spotlight',
+      aspect: selectedAspectRatio as PosterAspect,
+      photo: generatedPhotoUrl,
+      headline: generatedSeo?.title || `${business.businessName || 'Business'} Showcase`,
+      badge: 'AI PHOTO',
+      cta: 'Book Now',
+      theme: 'clean_light',
+      layout: 'editorial',
+      defaultBullets: generatedSeo?.tags || [],
+    };
+    onSelect(createdTemplate);
   };
 
   const activeOccasions = useMemo(() => getActivePosterOccasions(), []);
@@ -487,53 +550,197 @@ export function PosterTemplateGallery({
         </div>
       )}
 
-      {/* 1-Click AI Photography Studio for Business Services (Zero-prompt) */}
-      {activeCategory !== 'festival' && (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      {/* Single Clean AI Creation Entry Banner */}
+      <div className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/25">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="size-8 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <Sparkles className="size-4" />
+          </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400" />
-              <p className="text-xs font-bold text-foreground">
-                AI Photography Studio for {business.businessName || 'Your Business'}
-              </p>
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Zero typing required. Powered by Cloudflare FLUX.2 &amp; Gemini scene suggestions.
+            <p className="text-xs font-bold text-foreground">AI Photo &amp; Post Studio</p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              Create commercial photos &amp; SEO posts with zero typing
             </p>
-            {businessSuggestions.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setCreateModalOpen(true)}
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 shadow-xs transition-colors cursor-pointer"
+        >
+          <Sparkles className="size-3.5" />
+          <span>Create Image with AI</span>
+        </button>
+      </div>
+
+      {/* AI Photo & Post Creator Studio Modal Dialog */}
+      <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <Sparkles className="size-4 text-emerald-600" />
+              <span>AI Photo &amp; Post Studio</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Aspect Ratio Row */}
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Aspect Ratio</p>
+              <div className="grid grid-cols-3 gap-2">
+                {(['4:5', '1:1', '9:16'] as const).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setSelectedAspectRatio(r)}
+                    className={cn(
+                      'py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer',
+                      selectedAspectRatio === r
+                        ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                        : 'bg-card text-muted-foreground border-border hover:border-primary/40'
+                    )}
+                  >
+                    {r === '4:5' ? '4:5 Post' : r === '1:1' ? '1:1 Square' : '9:16 Story'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Canvas Preview Area */}
+            <div
+              className={cn(
+                'w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 overflow-hidden flex items-center justify-center relative transition-all',
+                selectedAspectRatio === '1:1'
+                  ? 'aspect-square max-h-[320px]'
+                  : selectedAspectRatio === '4:5'
+                  ? 'aspect-[4/5] max-h-[360px]'
+                  : 'aspect-[9/16] max-h-[400px]'
+              )}
+            >
+              {generatingImages ? (
+                <div className="flex flex-col items-center justify-center p-6 text-center gap-3">
+                  <Loader2 className="size-8 text-emerald-600 animate-spin" />
+                  <p className="text-sm font-bold text-foreground">Directing Commercial Scene</p>
+                  <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                    {activeGeneratingStep}
+                  </p>
+                </div>
+              ) : generatedPhotoUrl ? (
+                <div className="relative w-full h-full">
+                  <img src={generatedPhotoUrl} alt="AI Generated" className="w-full h-full object-cover" />
+                  <div className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 bg-black/75 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                    <CheckCircle2 className="size-3 text-emerald-400" />
+                    <span>WebP Optimized (~180 KB)</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-6 text-center gap-2">
+                  <div className="size-12 rounded-full bg-background border border-border flex items-center justify-center text-muted-foreground">
+                    <ImageIcon className="size-6" />
+                  </div>
+                  <p className="text-xs font-bold text-foreground">Blank Canvas</p>
+                  <p className="text-[11px] text-muted-foreground max-w-xs">
+                    Select a scene idea below to generate a photorealistic commercial photo for{' '}
+                    {business.businessName || 'your business'}.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* SEO Content (Once Generated) */}
+            {generatedSeo && (
+              <div className="rounded-xl border border-border bg-card p-3 space-y-2.5">
+                <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="size-3.5 text-emerald-600" />
+                  <span>Generated SEO Content</span>
+                </p>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">SEO Title</label>
+                  <Input
+                    value={generatedSeo.title}
+                    onChange={(e) => setGeneratedSeo({ ...generatedSeo, title: e.target.value })}
+                    className="h-8 text-xs font-medium"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Post Caption</label>
+                  <textarea
+                    value={generatedSeo.description}
+                    onChange={(e) => setGeneratedSeo({ ...generatedSeo, description: e.target.value })}
+                    rows={3}
+                    className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Keywords &amp; Tags</label>
+                  <div className="flex flex-wrap gap-1">
+                    {generatedSeo.tags.map((tag, i) => (
+                      <span
+                        key={i}
+                        className="text-[10px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-md"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Scene Suggestions Tray */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-foreground">
+                  Scene Ideas for {business.category || 'Business'}
+                </p>
+                <button
+                  type="button"
+                  disabled={refreshingSuggestions || generatingImages}
+                  onClick={() => fetchSuggestions(true)}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={cn('size-3', refreshingSuggestions && 'animate-spin')} />
+                  <span>Refresh Ideas</span>
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {businessSuggestions.map((sug) => (
                   <button
                     key={sug.id}
                     type="button"
                     disabled={generatingImages}
-                    onClick={() => handleGenerateBusinessImages(sug.id)}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold bg-background hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-foreground border border-emerald-500/30 px-2.5 py-1 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                    onClick={() => handleGenerateScene(sug)}
+                    className="p-2.5 rounded-xl border border-border/80 bg-card hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all text-left flex flex-col justify-between gap-1.5 cursor-pointer disabled:opacity-50"
                   >
-                    <span>{sug.title}</span>
-                    <span className="text-[9px] bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 font-bold px-1 rounded">
-                      1-Tap
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-base">{sug.icon || '🏢'}</span>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                        {sug.badge || 'SCENE'}
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-foreground leading-snug">{sug.title}</p>
+                    <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+                      Tap to generate <Wand2 className="size-2.5" />
                     </span>
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Publish Post CTA */}
+            {generatedPhotoUrl && (
+              <button
+                type="button"
+                onClick={handlePublishPost}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 px-4 shadow-sm transition-colors cursor-pointer"
+              >
+                <Send className="size-3.5" />
+                <span>🚀 Publish / Use on Canvas</span>
+              </button>
             )}
           </div>
-          <button
-            type="button"
-            disabled={generatingImages}
-            onClick={() => handleGenerateBusinessImages()}
-            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-          >
-            {generatingImages ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Wand2 className="size-3.5" />
-            )}
-            <span>Generate All 4 Scenes</span>
-          </button>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Template grid */}
       {filteredTemplates.length === 0 ? (
