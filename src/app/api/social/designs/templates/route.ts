@@ -268,11 +268,6 @@ export async function GET(request: NextRequest) {
     } catch {}
   }
 
-  // Real merchant services added to ServiceOS/BGOS
-  const realServiceNames: string[] = (merchantServices || [])
-    .map((s: any) => (typeof s?.name === 'string' ? s.name.trim() : ''))
-    .filter(Boolean);
-
   // If industry is unset or a generic fallback placeholder, dynamically derive the merchant's trade
   // from their real added services, workspace industry, or business title via the Universal Category Taxonomy
   if (!industry || /corporate|holding|community|retail & local services|services|^other$/i.test(industry)) {
