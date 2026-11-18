@@ -10,13 +10,7 @@ import { fetchGoogleBusinessPerformanceMetrics } from '@/lib/social/adapters/goo
 
 export const dynamic = 'force-dynamic';
 
-interface CachedBootstrap {
-  data: any;
-  expiresAt: number;
-}
-
-const BOOTSTRAP_CACHE = new Map<string, CachedBootstrap>();
-const CACHE_TTL_MS = 60_000; // 60 seconds
+import { getCachedBootstrap, setCachedBootstrap } from '@/lib/bgos/bootstrap-cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,9 +23,9 @@ export async function GET(request: NextRequest) {
     const forceRefresh = request.nextUrl.searchParams.get('refresh') === 'true';
 
     if (!forceRefresh) {
-      const cached = BOOTSTRAP_CACHE.get(tenantId);
-      if (cached && cached.expiresAt > Date.now()) {
-        return NextResponse.json(cached.data, {
+      const cachedData = getCachedBootstrap(tenantId);
+      if (cachedData) {
+        return NextResponse.json(cachedData, {
           headers: {
             'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
             'X-Cache': 'HIT',
@@ -348,7 +342,22 @@ export async function GET(request: NextRequest) {
         phase: 'foundation',
         phaseDays: 'Days 1–7',
         cta: m.actionRequired || 'Fix Now',
-        actionType: m.id === 'business_address' ? 'add_address' : m.id === 'phone_number' ? 'add_phone' : m.id === 'website_url' ? 'add_website' : 'auto_optimize_seo',
+        actionType:
+          m.id === 'services_catalog'
+            ? 'add_services'
+            : m.id === 'business_address'
+              ? 'add_address'
+              : m.id === 'phone_number'
+                ? 'add_phone'
+                : m.id === 'website_url'
+                  ? 'add_website'
+                  : m.id === 'business_hours'
+                    ? 'set_hours'
+                    : m.id === 'booking_link'
+                      ? 'enable_booking'
+                      : m.id === 'fresh_photos'
+                        ? 'upload_photos'
+                        : 'auto_optimize_seo',
       })),
     };
 
@@ -380,10 +389,7 @@ export async function GET(request: NextRequest) {
       cachedAt: new Date().toISOString(),
     };
 
-    BOOTSTRAP_CACHE.set(tenantId, {
-      data: payload,
-      expiresAt: Date.now() + CACHE_TTL_MS,
-    });
+    setCachedBootstrap(tenantId, payload);
 
     return NextResponse.json(payload, {
       headers: {

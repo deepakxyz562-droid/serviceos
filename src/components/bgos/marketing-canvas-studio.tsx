@@ -585,7 +585,7 @@ export function MarketingCanvasStudio({
         data.caption ||
         `${activeTopic}\n\nExperience high-quality service at ${businessName}. Contact us today to learn more!\n\n#${businessName.replace(/\W+/g, '')} #LocalBusiness`;
       const finalImg =
-        attachedImageUrl || data.photoUrl || data.imageUrl || photoUrl || posterUrl || brandLogo || '';
+        attachedImageUrl || data.imageUrl || data.photoUrl || photoUrl || posterUrl || brandLogo || '';
 
       setAiGeneratedPost({
         headline: genHeadline,
@@ -609,16 +609,17 @@ export function MarketingCanvasStudio({
   };
 
   const handleAiDirectPublish = async (isScheduled = false) => {
-    if (!aiGeneratedPost && !headline && !caption) {
+    const effHeadline = (aiGeneratedPost?.headline || headline || '').trim();
+    const effCaption = (aiGeneratedPost?.caption || caption || effectiveCaption || '').trim();
+    const fullContent = effHeadline ? `${effHeadline}\n\n${effCaption}` : effCaption;
+
+    if (!fullContent.trim()) {
       toast.error('Please generate or enter post content before publishing');
       return;
     }
     setIsAiPublishing(true);
     try {
       const targets = getResolvedTargets();
-      const effHeadline = (aiGeneratedPost?.headline || headline || '').trim();
-      const effCaption = (aiGeneratedPost?.caption || caption || effectiveCaption || '').trim();
-      const fullContent = effHeadline ? `${effHeadline}\n\n${effCaption}` : effCaption;
       const rawImage =
         aiGeneratedPost?.imageUrl ||
         attachedImageUrl ||
@@ -635,9 +636,9 @@ export function MarketingCanvasStudio({
           scheduledAt: isScheduled ? scheduledDateTime : null,
           content: fullContent.trim(),
           mediaUrls: finalImage ? [finalImage] : [],
-          isPoster: activeVisualFormat === 'poster',
-          isPreRendered: false,
-          design: activeVisualFormat === 'poster' ? design : undefined,
+          isPoster: false,
+          isPreRendered: Boolean(finalImage),
+          design: undefined,
           platforms: selectedChannels,
           targets: targets.length > 0 ? targets : undefined,
           headline: effHeadline,

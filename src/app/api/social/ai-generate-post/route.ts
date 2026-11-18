@@ -350,19 +350,26 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
 
         const arrayBuffer = await imageResponse.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
+        const base64DataUri = `data:image/png;base64,${buffer.toString('base64')}`;
 
-        // Upload directly to S3 / Supabase storage
-        const uploaded = await uploadFile({
-          bucket: 'company-assets',
-          file: buffer,
-          companyId: tenantId,
-          folder: 'social-posts',
-          fileName: `${Date.now()}_ai_post.png`,
-          contentType: 'image/png',
-        });
+        // Attempt cloud upload; fall back seamlessly to high-res data URI
+        try {
+          const uploaded = await uploadFile({
+            bucket: 'company-assets',
+            file: buffer,
+            companyId: tenantId,
+            folder: 'social-posts',
+            fileName: `${Date.now()}_ai_post.png`,
+            contentType: 'image/png',
+          });
 
-        if (uploaded?.url) {
-          imageUrl = uploaded.url;
+          if (uploaded?.url) {
+            imageUrl = uploaded.url;
+          } else {
+            imageUrl = base64DataUri;
+          }
+        } catch {
+          imageUrl = base64DataUri;
         }
       } catch (renderErr) {
         console.warn('[ai-generate-post] ImageResponse render/upload warning:', renderErr);
@@ -371,12 +378,8 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
 
     const finalCta = generated.ctaText || 'Book now';
 
-    const getContextPhoto = (tText: string, ind: string) => {
-      const folder = getCategoryStorageFolder(tText + ' ' + ind);
-      return `https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/${folder}/${folder}-001.webp`;
-    };
-
-    const chosenPhoto = inputPhoto || getContextPhoto(topic, tenant?.industry || '');
+    // Resolved photo: use input photo if provided, otherwise the generated graphic
+    const chosenPhoto = inputPhoto || imageUrl || '';
 
     const gbpPostType = body.postType || (body.theme === 'promo' ? 'offer' : 'standard');
     const gbpCtaAction = gbpPostType === 'offer' ? 'GET_OFFER' : 'CALL';
@@ -433,8 +436,8 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       caption: finalCaption,
       hashtags: hashtagsArray,
       hashtagsText,
-      imageUrl: inputPhoto || imageUrl || chosenPhoto,
-      photoUrl: inputPhoto || chosenPhoto,
+      imageUrl: inputPhoto || imageUrl || '',
+      photoUrl: inputPhoto || imageUrl || '',
       layouts,
       bookingUrl:
         tenant?.brandProfile?.website ||

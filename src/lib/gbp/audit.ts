@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { resolveBusinessPresenceMode, type BusinessPresenceMode } from '@/lib/seo/presence-mode';
+import { mergeStructuredServices } from '@/lib/gbp/seo-context';
 
 export interface AuditCheckItem {
   id: string;
@@ -62,7 +63,7 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
     googleReviewScope(tenantId),
   ]);
 
-  const [reviewsCount, photosCount, servicesCount] = await Promise.all([
+  const [reviewsCount, photosCount, servicesCount, dbServices] = await Promise.all([
     db.review?.count?.({ where: { tenantId, ...reviewScope } }).catch(() => 0) ?? 0,
     db.socialPost
       ?.count?.({
@@ -70,6 +71,21 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
       })
       .catch(() => 0) ?? 0,
     db.service?.count?.({ where: { tenantId } }).catch(() => 0) ?? 0,
+    db.service
+      ?.findMany?.({
+        where: { tenantId, isActive: true },
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          description: true,
+          longDescription: true,
+          category: true,
+          basePrice: true,
+          duration: true,
+        },
+      })
+      .catch(() => []) ?? [],
   ]);
 
   const brand = tenant.brandProfile;
@@ -86,13 +102,14 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
   const effectiveSecondaryCount = additionalCats.length > 0 ? additionalCats.length : legacyServices.length;
 
   const seoServicesArr = Array.isArray(settings.seoServices) ? settings.seoServices : [];
-  const optimizedServiceDescCount = seoServicesArr.filter(
+  const mergedServices = mergeStructuredServices(settings, dbServices);
+  const optimizedServiceDescCount = mergedServices.filter(
     (s: any) => typeof s?.description === 'string' && s.description.trim().length >= 300,
   ).length;
   const effectiveServicesCount = Math.max(
     servicesCount,
     Array.isArray(settings.services) ? settings.services.length : 0,
-    seoServicesArr.length,
+    mergedServices.length,
   );
   const longDescValue =
     (brand?.aiGeneratedSummary && brand.aiGeneratedSummary.trim()) ||

@@ -16,6 +16,7 @@ import {
   syncGooglePlaceActionsForTenant,
   resolveTenantPublicUrls,
 } from '@/lib/gbp/place-actions-sync';
+import { invalidateBootstrapCache } from '@/lib/bgos/bootstrap-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -1000,6 +1001,7 @@ export async function POST(request: NextRequest) {
             : stepId === 'description'
               ? 'Local SEO description'
               : stepId.replace('_', ' ');
+      invalidateBootstrapCache(user.tenantId);
       const scoreDiff = result.scoreAfter - result.scoreBefore;
       const scoreNote = scoreDiff > 0 ? ` (+${scoreDiff}% SEO boost)` : '';
       return NextResponse.json({
@@ -1014,6 +1016,7 @@ export async function POST(request: NextRequest) {
       if (rollbackResult.notFound) {
         return NextResponse.json({ error: rollbackResult.error }, { status: 404 });
       }
+      invalidateBootstrapCache(user.tenantId);
       return NextResponse.json({
         ...rollbackResult,
         message: `Reverted last SEO auto-optimization. Score restored to ${rollbackResult.scoreAfter}%.`,
@@ -1040,6 +1043,8 @@ export async function POST(request: NextRequest) {
         pushToGoogle: body?.pushToGoogle !== false,
         locationId: typeof body?.locationId === 'string' ? body.locationId : undefined,
       });
+
+      invalidateBootstrapCache(user.tenantId);
 
       return NextResponse.json({
         success: true,
@@ -1232,6 +1237,7 @@ export async function POST(request: NextRequest) {
         pushToGoogle: body?.pushToGoogle !== false,
         locationId: typeof body?.locationId === 'string' ? body.locationId : undefined,
       });
+      invalidateBootstrapCache(user.tenantId);
       return NextResponse.json({
         success: true,
         services: svcRes.services,
