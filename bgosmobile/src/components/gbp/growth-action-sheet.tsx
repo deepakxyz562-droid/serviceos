@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -30,8 +31,24 @@ export interface AutopilotGrowthActionItem {
   phase: 'foundation' | 'trust' | 'visibility' | 'conversions';
   phaseDays: string;
   cta: string;
-  actionType: 'add_address' | 'add_phone' | 'add_website' | 'set_hours' | 'approve_reviews' | 'approve_posts' | 'auto_optimize_seo' | 'upload_photos' | 'enable_booking' | 'add_services';
+  actionType:
+    | 'add_address'
+    | 'add_phone'
+    | 'add_website'
+    | 'set_hours'
+    | 'approve_reviews'
+    | 'approve_posts'
+    | 'auto_optimize_seo'
+    | 'upload_photos'
+    | 'enable_booking'
+    | 'add_services'
+    | 'enable_whatsapp'
+    | 'scan_grid'
+    | 'competitor_gap';
   readyCount?: number;
+  whatsappUrl?: string;
+  phone?: string;
+  bookingUrl?: string;
 }
 
 export interface RoadmapTask {
@@ -147,6 +164,19 @@ export function GrowthActionSheet({
   const [quickInputType, setQuickInputType] = useState<'address' | 'phone' | 'website' | null>(null);
   const [quickInputValue, setQuickInputValue] = useState('');
   const [savingQuickInput, setSavingQuickInput] = useState(false);
+
+  // WhatsApp Modal state (Video 6)
+  const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
+  const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [savingWhatsapp, setSavingWhatsapp] = useState(false);
+
+  // Booking Modal state (Video 3)
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [bookingType, setBookingType] = useState<'bgos' | 'google_calendar'>('bgos');
+  const [customBookingUrl, setCustomBookingUrl] = useState('');
+  const [defaultBookingUrl, setDefaultBookingUrl] = useState('');
+  const [savingBooking, setSavingBooking] = useState(false);
+
   const [inAppNotice, setInAppNotice] = useState<{ title: string; message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
@@ -180,13 +210,14 @@ export function GrowthActionSheet({
     {
       phase: 1,
       title: 'Days 1–7: Fix the Foundation',
-      objective: 'Ensure Google verification, primary category, verified phone, website, and operating hours.',
+      objective: 'Ensure Google verification, primary category, verified phone, website, WhatsApp button, and booking link.',
       status: autopilotActions.filter((a) => a.phase === 'foundation' && a.status !== 'completed').length === 0 ? 'completed' : 'in_progress',
-      itemsCount: 5,
-      completedCount: Math.max(1, 5 - autopilotActions.filter((a) => a.phase === 'foundation' && a.status !== 'completed').length),
+      itemsCount: 6,
+      completedCount: Math.max(1, 6 - autopilotActions.filter((a) => a.phase === 'foundation' && a.status !== 'completed').length),
       tasks: [
         { id: 't_cat', label: 'Primary business category configured', done: true },
         { id: 't_phone', label: 'Verified business phone number for calls', done: !autopilotActions.some((a) => a.id === 'add_phone'), cta: 'Add Phone', actionType: 'add_phone' },
+        { id: 't_wa', label: 'Google Maps WhatsApp chat button', done: !autopilotActions.some((a) => a.id === 'whatsapp_button'), cta: 'Setup WhatsApp', actionType: 'enable_whatsapp' },
         { id: 't_web', label: 'Official website / storefront URL', done: !autopilotActions.some((a) => a.id === 'add_website'), cta: 'Add Website', actionType: 'add_website' },
         { id: 't_hours', label: 'Regular & weekend operating hours', done: !autopilotActions.some((a) => a.id === 'set_hours'), cta: 'Set Hours', actionType: 'set_hours' },
         { id: 't_book', label: 'Google Maps dedicated booking link', done: !autopilotActions.some((a) => a.id === 'booking_link'), cta: 'Enable Booking', actionType: 'enable_booking' },
@@ -209,13 +240,14 @@ export function GrowthActionSheet({
     {
       phase: 3,
       title: 'Days 31–60: Expand Visibility',
-      objective: 'Target local search demand queries, 300-char service descriptions, and local SEO.',
+      objective: 'Target local search demand queries, 300-char service descriptions, and Geo-Grid rank monitoring.',
       status: 'in_progress',
-      itemsCount: 4,
+      itemsCount: 5,
       completedCount: 2,
       tasks: [
         { id: 't_svc', label: '300-500 char localized service descriptions', done: !autopilotActions.some((a) => a.id === 'categories_and_services'), cta: 'Auto-Write', actionType: 'add_services' },
         { id: 't_kw', label: 'Target top nearby search queries in profile', done: !autopilotActions.some((a) => a.id === 'local_keywords'), cta: 'Optimize', actionType: 'add_services' },
+        { id: 't_grid', label: '5km Geo-Grid rank & competitor spy scan', done: false, cta: 'Scan Grid', actionType: 'scan_grid' },
         { id: 't_desc', label: '750-char SEO description with city name', done: !autopilotActions.some((a) => a.id === 'business_description'), cta: 'AI Description', actionType: 'auto_optimize_seo' },
         { id: 't_nap', label: 'Website NAP (Name, Address, Phone) consistency', done: true },
       ],
@@ -364,8 +396,87 @@ export function GrowthActionSheet({
     }
   };
 
+  const handleSaveWhatsapp = async () => {
+    if (!whatsappPhone.trim()) return;
+    setSavingWhatsapp(true);
+    try {
+      const res = await apiRequest<{ success: boolean; whatsappUrl: string; message: string }>('/api/gbp/growth-actions', {
+        method: 'POST',
+        body: { action: 'update_whatsapp_chat', phone: whatsappPhone.trim() },
+      });
+      showNotice('✓ WhatsApp Connected', res.message || 'WhatsApp chat link configured for Google Maps.', 'success');
+      setWhatsappModalOpen(false);
+      await onRefresh();
+    } catch (e: any) {
+      showNotice('WhatsApp Setup Issue', e?.message || 'Could not save WhatsApp chat link.', 'error');
+    } finally {
+      setSavingWhatsapp(false);
+    }
+  };
+
+  const handleSaveBooking = async () => {
+    setSavingBooking(true);
+    try {
+      const res = await apiRequest<{ success: boolean; bookingUrl: string; syncedToGoogle: boolean; message: string }>('/api/gbp/growth-actions', {
+        method: 'POST',
+        body: {
+          action: 'update_booking_button',
+          bookingType,
+          customUrl: bookingType === 'google_calendar' ? customBookingUrl.trim() : undefined,
+        },
+      });
+      showNotice('✓ Booking Button Set', res.message || 'Booking action updated.', 'success');
+      setBookingModalOpen(false);
+      await onRefresh();
+    } catch (e: any) {
+      showNotice('Booking Setup Issue', e?.message || 'Could not save booking link.', 'error');
+    } finally {
+      setSavingBooking(false);
+    }
+  };
+
+  const handleAutoWriteAllServices = async () => {
+    setApproving('auto_write_all_services');
+    try {
+      const res = await apiRequest<{ success: boolean; services: any[]; syncedToGoogle: boolean; message: string }>('/api/gbp/growth-actions', {
+        method: 'POST',
+        body: { action: 'auto_write_all_services', pushToGoogle: true },
+      });
+      showNotice('✓ Services Optimized', res.message || 'Generated 300-500 char localized SEO copy and synced to Google.', 'success');
+      await onRefresh();
+    } catch (e: any) {
+      showNotice('Service Optimization Issue', e?.message || 'Could not auto-write service copy.', 'error');
+    } finally {
+      setApproving(null);
+    }
+  };
+
   const handleExecuteAction = async (action: AutopilotGrowthActionItem) => {
     switch (action.actionType) {
+      case 'enable_whatsapp':
+        setWhatsappPhone(action.phone || '');
+        setWhatsappModalOpen(true);
+        break;
+      case 'enable_booking':
+        if (action.bookingUrl) {
+          setDefaultBookingUrl(action.bookingUrl);
+          if (action.bookingUrl.includes('google') || action.bookingUrl.includes('calendar')) {
+            setBookingType('google_calendar');
+            setCustomBookingUrl(action.bookingUrl);
+          } else {
+            setBookingType('bgos');
+          }
+        }
+        setBookingModalOpen(true);
+        break;
+      case 'scan_grid':
+        onClose();
+        router.push('/seo-growth?tab=grid');
+        break;
+      case 'competitor_gap':
+        onClose();
+        router.push('/seo-growth?tab=gap');
+        break;
       case 'add_address':
         setQuickInputType('address');
         setQuickInputValue('');
@@ -391,11 +502,8 @@ export function GrowthActionSheet({
       case 'auto_optimize_seo':
         await handleRunSeoStep('description');
         break;
-      case 'enable_booking':
-        await handleRunSeoStep('booking_link');
-        break;
       case 'add_services':
-        await handleRunSeoStep('services');
+        await handleAutoWriteAllServices();
         break;
       case 'upload_photos':
         onClose();
@@ -975,12 +1083,16 @@ export function GrowthActionSheet({
                                     if (task.actionType === 'add_phone') {
                                       setQuickInputType('phone');
                                       setQuickInputValue('');
+                                    } else if (task.actionType === 'enable_whatsapp') {
+                                      setWhatsappModalOpen(true);
                                     } else if (task.actionType === 'add_website') {
                                       setQuickInputType('website');
                                       setQuickInputValue('');
                                     } else if (task.actionType === 'set_hours') {
                                       onClose();
                                       router.push('/manage-profile');
+                                    } else if (task.actionType === 'enable_booking') {
+                                      setBookingModalOpen(true);
                                     } else if (task.actionType === 'upload_photos') {
                                       onClose();
                                       router.push('/(tabs)/photos');
@@ -988,12 +1100,16 @@ export function GrowthActionSheet({
                                       handleApproveSegment('reviews');
                                     } else if (task.actionType === 'approve_posts') {
                                       handleApproveSegment('posts');
-                                    } else if (task.actionType === 'enable_booking') {
-                                      handleRunSeoStep('booking_link');
+                                    } else if (task.actionType === 'scan_grid') {
+                                      onClose();
+                                      router.push('/seo-growth?tab=grid');
+                                    } else if (task.actionType === 'competitor_gap') {
+                                      onClose();
+                                      router.push('/seo-growth?tab=gap');
                                     } else if (task.actionType === 'auto_optimize_seo') {
                                       handleRunSeoStep('description');
                                     } else if (task.actionType === 'add_services') {
-                                      handleRunSeoStep('services');
+                                      handleAutoWriteAllServices();
                                     }
                                   }}
                                   style={{
@@ -1466,6 +1582,382 @@ export function GrowthActionSheet({
                     }}
                   >
                     {savingQuickInput ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                        Save &amp; Sync to Google
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* WhatsApp Chat Button Setup Modal (Video 6) */}
+          {whatsappModalOpen && (
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+                backgroundColor: 'rgba(0,0,0,0.65)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                paddingHorizontal: 20,
+                borderTopLeftRadius: 28,
+                borderTopRightRadius: 28,
+              }}
+            >
+              <View
+                style={{
+                  width: '100%',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 20,
+                  padding: 20,
+                  gap: 14,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 10,
+                  elevation: 10,
+                }}
+              >
+                <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: '#DCFCE7',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <MaterialIcons name="chat" size={18} color="#16A34A" />
+                    </View>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
+                      Google Maps WhatsApp Button
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setWhatsappModalOpen(false)} hitSlop={10}>
+                    <MaterialIcons name="close" size={20} color={colors.muted} />
+                  </Pressable>
+                </View>
+
+                <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 17 }}>
+                  Link your WhatsApp Business chat to your Google Maps listing. Mobile searchers can tap &ldquo;Chat&rdquo; or WhatsApp to message your business instantly.
+                </Text>
+
+                <View style={{ gap: 4 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>
+                    WhatsApp Phone Number (with Country Code)
+                  </Text>
+                  <TextInput
+                    value={whatsappPhone}
+                    onChangeText={setWhatsappPhone}
+                    placeholder="e.g. 919876543210 or 8505945123"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="phone-pad"
+                    autoFocus
+                    style={{
+                      backgroundColor: '#F8FAFC',
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                      fontSize: 14,
+                      color: colors.ink,
+                    }}
+                  />
+                </View>
+
+                {(() => {
+                  const clean = whatsappPhone.replace(/[^0-9]/g, '');
+                  const normalized = clean.length === 10 ? `91${clean}` : clean;
+                  const liveWa = normalized ? `https://wa.me/${normalized}` : '';
+                  if (!liveWa) return null;
+                  return (
+                    <View
+                      style={{
+                        backgroundColor: '#F0FDF4',
+                        borderColor: '#BBF7D0',
+                        borderWidth: 1,
+                        borderRadius: 10,
+                        padding: 10,
+                        gap: 6,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#15803D' }}>
+                          ✓ Live WhatsApp Link Preview:
+                        </Text>
+                        <Pressable
+                          onPress={() => Linking.openURL(liveWa).catch(() => {})}
+                          hitSlop={8}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#059669' }}>
+                            Test WhatsApp ↗
+                          </Text>
+                        </Pressable>
+                      </View>
+                      <Text style={{ fontSize: 11.5, color: '#166534', fontFamily: 'monospace' }} numberOfLines={1}>
+                        {liveWa}
+                      </Text>
+                    </View>
+                  );
+                })()}
+
+                <View
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    borderRadius: 10,
+                    padding: 9,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 15 }}>
+                    💡 <Text style={{ fontWeight: '700' }}>Google Maps Tip:</Text> In Google Business Profile under Edit profile &gt; Contact &gt; Chat, third-party messaging links route directly to WhatsApp.
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                  <Pressable
+                    onPress={() => setWhatsappModalOpen(false)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#F1F5F9',
+                      paddingVertical: 12,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: colors.ink, fontSize: 13, fontWeight: '700' }}>Cancel</Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={handleSaveWhatsapp}
+                    disabled={savingWhatsapp || !whatsappPhone.trim()}
+                    style={{
+                      flex: 2,
+                      backgroundColor: '#16A34A',
+                      paddingVertical: 12,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: savingWhatsapp || !whatsappPhone.trim() ? 0.6 : 1,
+                    }}
+                  >
+                    {savingWhatsapp ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                        Save &amp; Sync WhatsApp
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Booking / Appointment Place Action Setup Modal (Video 3) */}
+          {bookingModalOpen && (
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+                backgroundColor: 'rgba(0,0,0,0.65)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                paddingHorizontal: 20,
+                borderTopLeftRadius: 28,
+                borderTopRightRadius: 28,
+              }}
+            >
+              <View
+                style={{
+                  width: '100%',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 20,
+                  padding: 20,
+                  gap: 14,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 10,
+                  elevation: 10,
+                }}
+              >
+                <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: '#EFF6FF',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <MaterialIcons name="event-available" size={18} color="#2563EB" />
+                    </View>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
+                      Google Maps Booking Button
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setBookingModalOpen(false)} hitSlop={10}>
+                    <MaterialIcons name="close" size={20} color={colors.muted} />
+                  </Pressable>
+                </View>
+
+                <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 17 }}>
+                  Add a 1-tap &ldquo;Book Online&rdquo; button directly on your Google Maps listing without paying for Calendly.
+                </Text>
+
+                {/* Choice 1: BGOS Free Online Booking Page */}
+                <Pressable
+                  onPress={() => setBookingType('bgos')}
+                  style={{
+                    backgroundColor: bookingType === 'bgos' ? '#F0FDF4' : '#F8FAFC',
+                    borderColor: bookingType === 'bgos' ? '#16A34A' : '#E2E8F0',
+                    borderWidth: 1.5,
+                    borderRadius: 12,
+                    padding: 12,
+                    gap: 4,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons
+                        name={bookingType === 'bgos' ? 'radio-button-checked' : 'radio-button-unchecked'}
+                        size={18}
+                        color={bookingType === 'bgos' ? '#16A34A' : '#94A3B8'}
+                      />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
+                        ⚡ BGOS Free Booking Page (Recommended)
+                      </Text>
+                    </View>
+                    <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#15803D' }}>FREE</Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11, color: '#64748B', marginLeft: 24, lineHeight: 15 }}>
+                    Zero monthly fee. Live appointment calendar, SMS/WhatsApp alerts, and CRM customer tracking built in.
+                  </Text>
+                  {defaultBookingUrl ? (
+                    <Text style={{ fontSize: 10.5, color: '#0369A1', marginLeft: 24, fontFamily: 'monospace' }}>
+                      {defaultBookingUrl}
+                    </Text>
+                  ) : null}
+                </Pressable>
+
+                {/* Choice 2: Google Calendar Appointment Schedule */}
+                <Pressable
+                  onPress={() => setBookingType('google_calendar')}
+                  style={{
+                    backgroundColor: bookingType === 'google_calendar' ? '#EFF6FF' : '#F8FAFC',
+                    borderColor: bookingType === 'google_calendar' ? '#2563EB' : '#E2E8F0',
+                    borderWidth: 1.5,
+                    borderRadius: 12,
+                    padding: 12,
+                    gap: 6,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons
+                        name={bookingType === 'google_calendar' ? 'radio-button-checked' : 'radio-button-unchecked'}
+                        size={18}
+                        color={bookingType === 'google_calendar' ? '#2563EB' : '#94A3B8'}
+                      />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
+                        📅 Google Calendar Appointment Schedule
+                      </Text>
+                    </View>
+                    <View style={{ backgroundColor: '#DBEAFE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#1D4ED8' }}>FREE</Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11, color: '#64748B', marginLeft: 24, lineHeight: 15 }}>
+                    Free Google feature (Calendar &gt; Create &gt; Appointment Schedule). Paste your link below.
+                  </Text>
+
+                  {bookingType === 'google_calendar' && (
+                    <TextInput
+                      value={customBookingUrl}
+                      onChangeText={setCustomBookingUrl}
+                      placeholder="https://calendar.app.google/..."
+                      placeholderTextColor="#94A3B8"
+                      keyboardType="url"
+                      autoCapitalize="none"
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        borderRadius: 10,
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        fontSize: 13,
+                        color: colors.ink,
+                        marginTop: 4,
+                      }}
+                    />
+                  )}
+                </Pressable>
+
+                {(() => {
+                  const testUrl = bookingType === 'bgos' ? defaultBookingUrl : customBookingUrl;
+                  if (!testUrl) return null;
+                  return (
+                    <Pressable
+                      onPress={() => Linking.openURL(testUrl).catch(() => {})}
+                      style={{ alignSelf: 'flex-start', paddingVertical: 2 }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#2563EB' }}>
+                        Test Booking Page ↗
+                      </Text>
+                    </Pressable>
+                  );
+                })()}
+
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                  <Pressable
+                    onPress={() => setBookingModalOpen(false)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#F1F5F9',
+                      paddingVertical: 12,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: colors.ink, fontSize: 13, fontWeight: '700' }}>Cancel</Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={handleSaveBooking}
+                    disabled={savingBooking || (bookingType === 'google_calendar' && !customBookingUrl.trim())}
+                    style={{
+                      flex: 2,
+                      backgroundColor: colors.brand,
+                      paddingVertical: 12,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: savingBooking || (bookingType === 'google_calendar' && !customBookingUrl.trim()) ? 0.6 : 1,
+                    }}
+                  >
+                    {savingBooking ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
                       <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>

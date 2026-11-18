@@ -229,7 +229,7 @@ export default function ServicesManagementScreen() {
     await fetchDynamicSuggestions(serviceQuery.trim(), true);
   }
 
-  async function handleOptimizeWithAi(singleServiceName?: string, pushToGoogleAfter = false) {
+  async function handleOptimizeWithAi(singleServiceName?: string, pushToGoogleAfter = true) {
     const targets = singleServiceName
       ? [singleServiceName]
       : selectedServices;
@@ -268,19 +268,17 @@ export default function ServicesManagementScreen() {
       setKeywordsByName(nextKw);
       if (singleServiceName) setExpandedService(singleServiceName);
 
-      if (pushToGoogleAfter) {
-        await placeRes.refresh();
-        const warnNote =
-          res.googleWarnings && res.googleWarnings.length > 0
-            ? `\n\nGoogle notice: ${res.googleWarnings[0]}`
-            : '';
-        Alert.alert(
-          res.syncedToGoogle ? 'Synced to Google!' : 'Saved Locally',
-          res.syncedToGoogle
-            ? `Generated 300–500 char localized SEO descriptions and synced ${targets.length} services to Google.${warnNote}`
-            : `Generated 300–500 char descriptions and saved locally.${warnNote}`,
-        );
-      }
+      await placeRes.refresh();
+      const warnNote =
+        res.googleWarnings && res.googleWarnings.length > 0
+          ? `\n\nGoogle notice: ${res.googleWarnings[0]}`
+          : '';
+      Alert.alert(
+        res.syncedToGoogle ? 'Synced to Google!' : 'Saved to Profile',
+        res.syncedToGoogle
+          ? `Generated 300–500 char localized SEO descriptions and synced ${targets.length} service(s) to Google Maps.${warnNote}`
+          : `Generated 300–500 char localized SEO descriptions and saved to your profile.${warnNote}`,
+      );
     } catch (err: unknown) {
       Alert.alert('AI Writer Error', err instanceof Error ? err.message : 'Could not optimize descriptions.');
     } finally {
@@ -388,7 +386,7 @@ export default function ServicesManagementScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => handleOptimizeWithAi(undefined, false)}
+              onPress={() => handleOptimizeWithAi(undefined, true)}
               disabled={Boolean(optimizingTarget)}
               style={({ pressed }) => [styles.primaryAiBtn, { opacity: pressed ? 0.85 : 1 }]}
             >
@@ -397,17 +395,42 @@ export default function ServicesManagementScreen() {
               ) : (
                 <MaterialIcons name="bolt" size={16} color="#FFFFFF" />
               )}
-              <Text style={styles.primaryAiBtnText}>AI Write All (300–500)</Text>
+              <Text style={styles.primaryAiBtnText}>AI Write All &amp; Sync</Text>
             </Pressable>
           </View>
         </View>
 
-        {/* Real Google Search Terms -> 1-Tap Service */}
+        {/* Real Google Search Terms -> 1-Tap Service (Video 1 & 4) */}
         {searchTerms.length > 0 && (
           <View style={styles.searchTermsCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={styles.searchTermsTitle}>Top Google Search Terms</Text>
-              <Text style={styles.searchTermsHint}>Tap to add as service</Text>
+              <View>
+                <Text style={styles.searchTermsTitle}>🔥 Google Performance Search Keywords</Text>
+                <Text style={styles.searchTermsHint}>Actual keywords local customers search to find you</Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  let addedCount = 0;
+                  for (const term of searchTerms) {
+                    const serviceTitle = formatServiceTitleFromKeyword(term.keyword);
+                    addOrSelectService(serviceTitle, term.keyword);
+                    addedCount++;
+                  }
+                  Alert.alert(
+                    'Search Keywords Added',
+                    `Added ${addedCount} customer search keywords to your service list. Tap "AI Write All & Sync" to generate localized 300–500 char SEO descriptions for Google.`,
+                  );
+                }}
+                hitSlop={8}
+                style={{
+                  backgroundColor: '#E0F2FE',
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#0369A1' }}>+ Add All</Text>
+              </Pressable>
             </View>
             <View style={styles.chipsContainer}>
               {searchTerms.map((term) => {
@@ -563,23 +586,52 @@ export default function ServicesManagementScreen() {
                       color="#64748B"
                     />
                   </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Delete ${name}`}
-                    onPress={() => confirmRemoveService(name)}
-                    hitSlop={8}
-                    style={({ pressed }) => ({
-                      width: 32,
-                      height: 32,
-                      borderRadius: 16,
-                      backgroundColor: '#FEF2F2',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: pressed ? 0.7 : 1,
-                    })}
-                  >
-                    <MaterialIcons name="delete-outline" size={18} color="#DC2626" />
-                  </Pressable>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`AI Write description for ${name}`}
+                      onPress={() => handleOptimizeWithAi(name, true)}
+                      disabled={isBusy}
+                      hitSlop={8}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 3,
+                        backgroundColor: '#ECFDF5',
+                        borderWidth: 1,
+                        borderColor: '#A7F3D0',
+                        paddingHorizontal: 8,
+                        paddingVertical: 5,
+                        borderRadius: 8,
+                        opacity: isBusy ? 0.6 : pressed ? 0.7 : 1,
+                      })}
+                    >
+                      {isBusy ? (
+                        <ActivityIndicator size="small" color="#047857" />
+                      ) : (
+                        <MaterialIcons name="auto-awesome" size={13} color="#047857" />
+                      )}
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#047857' }}>AI</Text>
+                    </Pressable>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete ${name}`}
+                      onPress={() => confirmRemoveService(name)}
+                      hitSlop={8}
+                      style={({ pressed }) => ({
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: '#FEF2F2',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: pressed ? 0.7 : 1,
+                      })}
+                    >
+                      <MaterialIcons name="delete-outline" size={18} color="#DC2626" />
+                    </Pressable>
+                  </View>
                 </View>
 
                 {isOpen && (
@@ -601,7 +653,7 @@ export default function ServicesManagementScreen() {
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Text style={styles.fieldLabel}>Localized Description (300–500 chars)</Text>
                         <Pressable
-                          onPress={() => handleOptimizeWithAi(name, false)}
+                          onPress={() => handleOptimizeWithAi(name, true)}
                           disabled={isBusy}
                           style={styles.miniAiBtn}
                         >
@@ -610,7 +662,7 @@ export default function ServicesManagementScreen() {
                           ) : (
                             <MaterialIcons name="auto-awesome" size={14} color="#047857" />
                           )}
-                          <Text style={styles.miniAiBtnText}>AI Write</Text>
+                          <Text style={styles.miniAiBtnText}>AI Write &amp; Sync</Text>
                         </Pressable>
                       </View>
 

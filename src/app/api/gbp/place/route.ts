@@ -792,6 +792,25 @@ export async function PATCH(request: NextRequest) {
           appliedMasks = pushRes.appliedMasks;
           googleWarnings = pushRes.warnings;
           syncedToGoogle = appliedMasks.length > 0;
+
+          // Also sync Place Actions (Booking / Appointment) if configured
+          try {
+            const { syncGooglePlaceActionsForTenant } = await import('@/lib/gbp/place-actions-sync');
+            const actionSync = await syncGooglePlaceActionsForTenant({
+              tenantId: user.tenantId,
+              includeAppointment: true,
+              googleAccount,
+            });
+            if (actionSync?.syncedActions && actionSync.syncedActions.length > 0) {
+              syncedToGoogle = true;
+              appliedMasks.push(...actionSync.syncedActions);
+            }
+            if (actionSync?.warnings && actionSync.warnings.length > 0) {
+              googleWarnings.push(...actionSync.warnings);
+            }
+          } catch (actionErr: unknown) {
+            console.warn('[PATCH /api/gbp/place] Place Action sync notice:', actionErr);
+          }
         }
       } catch (gErr: unknown) {
         googleWarnings.push(gErr instanceof Error ? gErr.message : 'Google Business sync notice');

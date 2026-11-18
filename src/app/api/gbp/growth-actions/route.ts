@@ -12,6 +12,10 @@ import { generateLocalizedServiceDescriptions } from '@/lib/gbp/service-optimize
 import { callAI } from '@/lib/ai-client';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { replyToGoogleBusinessReview } from '@/lib/social/adapters/googlebusiness';
+import {
+  syncGooglePlaceActionsForTenant,
+  resolveTenantPublicUrls,
+} from '@/lib/gbp/place-actions-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,7 +116,7 @@ export async function GET(request: NextRequest) {
       }).catch(() => []),
       db.tenant.findUnique({
         where: { id: tenantId },
-        select: { settingsJson: true, name: true, industry: true },
+        select: { settingsJson: true, name: true, industry: true, phone: true, slug: true, publicSlug: true },
       }),
     ]);
 
@@ -198,7 +202,31 @@ export async function GET(request: NextRequest) {
     const hasCategories = checks.find((c) => c.id === 'secondary_categories')?.passed ?? true;
     const hasServices = checks.find((c) => c.id === 'services_catalog')?.passed ?? true;
 
-    // Build the prioritized 10 Growth Actions matching the BGOS Growth Autopilot Spec:
+    let tenantSettings: Record<string, any> = {};
+    try {
+      tenantSettings = JSON.parse(tenant?.settingsJson || '{}');
+    } catch {}
+
+    const effectivePhone = String(
+      tenantSettings.communicationPhone ||
+      tenantSettings.whatsappNumber ||
+      tenant?.phone ||
+      ''
+    ).trim();
+    const cleanPhoneDigits = effectivePhone.replace(/[^0-9]/g, '');
+    const normalizedWhatsappDigits = cleanPhoneDigits.length === 10 ? `91${cleanPhoneDigits}` : cleanPhoneDigits;
+    const defaultWhatsappUrl = normalizedWhatsappDigits ? `https://wa.me/${normalizedWhatsappDigits}` : '';
+    const activeWhatsappUrl = String(tenantSettings.googlePlaceActions?.whatsappUri || tenantSettings.whatsappChatLink || defaultWhatsappUrl).trim();
+    const hasWhatsappChat = Boolean(tenantSettings.googlePlaceActions?.whatsappUri || tenantSettings.whatsappChatLink);
+    const resolvedUrls = resolveTenantPublicUrls(tenant || {}, tenantSettings);
+    const effectiveBookingUrl = String(
+      tenantSettings.googlePlaceActions?.appointmentUri ||
+      tenantSettings.bookingLink ||
+      resolvedUrls.bookingUrl ||
+      ''
+    ).trim();
+
+    // Build the prioritized Growth Actions matching the BGOS Growth Autopilot Spec:
     // Priority Score formula: (Impact * Confidence) / Effort
     interface AutopilotGrowthActionItem {
       id: string;
@@ -216,11 +244,51 @@ export async function GET(request: NextRequest) {
       phase: 'foundation' | 'trust' | 'visibility' | 'conversions';
       phaseDays: string;
       cta: string;
-      actionType: 'add_address' | 'add_phone' | 'add_website' | 'set_hours' | 'approve_reviews' | 'approve_posts' | 'auto_optimize_seo' | 'upload_photos' | 'enable_booking' | 'add_services';
+      actionType:
+        | 'add_address'
+        | 'add_phone'
+        | 'add_website'
+        | 'set_hours'
+        | 'approve_reviews'
+        | 'approve_posts'
+        | 'auto_optimize_seo'
+        | 'upload_photos'
+        | 'enable_booking'
+        | 'add_services'
+        | 'enable_whatsapp'
+        | 'scan_grid'
+        | 'competitor_gap';
       readyCount?: number;
+      whatsappUrl?: string;
+      phone?: string;
+      bookingUrl?: string;
     }
 
     const autopilotActions: AutopilotGrowthActionItem[] = [];
+
+    // WhatsApp Chat Button on Google Maps (Video 6)
+    if (!hasWhatsappChat) {
+      autopilotActions.push({
+        id: 'whatsapp_button',
+        category: 'P1_conversion',
+        priorityLevel: 'P0',
+        priorityScore: (5 * 5) / 1, // 25
+        impact: 5,
+        confidence: 5,
+        effort: 1,
+        title: 'Add WhatsApp Chat Button on Google Maps',
+        finding: 'No direct WhatsApp chat button linked to your Google Maps listing.',
+        evidence: 'Mobile searchers convert 3x faster when they can chat with your business directly on WhatsApp from Google Maps.',
+        status: 'action_required',
+        executionMode: 'authorized_execution',
+        phase: 'foundation',
+        phaseDays: 'Days 1–7',
+        cta: 'Setup WhatsApp Button',
+        actionType: 'enable_whatsapp',
+        whatsappUrl: activeWhatsappUrl,
+        phone: effectivePhone,
+      });
+    }
 
     // 0. Storefront Address & GPS Location (P0 Foundation)
     if (!hasAddress) {
@@ -374,10 +442,11 @@ export async function GET(request: NextRequest) {
         phaseDays: 'Days 1–7',
         cta: 'Enable Booking Link',
         actionType: 'enable_booking',
+        bookingUrl: effectiveBookingUrl,
       });
     }
 
-    // 7. Complete Service Details & Categories
+    // 7. Complete Service Details & Categories (300-500 char localized descriptions)
     if (!hasServices || !hasCategories || seoPendingFixes.length > 0) {
       autopilotActions.push({
         id: 'categories_and_services',
@@ -387,17 +456,37 @@ export async function GET(request: NextRequest) {
         impact: 4,
         confidence: 5,
         effort: 2,
-        title: 'Complete Service Details & Categories',
+        title: 'Auto-Write 300–500 Char Localized Service Descriptions',
         finding: `${seoPendingFixes.length || 2} services need 300-500 char localized SEO descriptions.`,
-        evidence: 'Detailed service descriptions index your profile for high-intent local searches.',
+        evidence: 'Targeted service descriptions with your city name index your profile for high-intent local customer searches.',
         status: 'ready_for_review',
         executionMode: 'automatic_preparation',
         phase: 'foundation',
         phaseDays: 'Days 1–7',
-        cta: 'Apply 1-Click AI Fix',
+        cta: 'Auto-Write All Services',
         actionType: 'add_services',
       });
     }
+
+    // 8. 5km Geo-Grid Rank & Competitor Spy Scan
+    autopilotActions.push({
+      id: 'geogrid_scan',
+      category: 'P1_seo',
+      priorityLevel: 'P1',
+      priorityScore: (4 * 4) / 1, // 16
+      impact: 4,
+      confidence: 4,
+      effort: 1,
+      title: '5km Geo-Grid & Competitor Spy Scan',
+      finding: 'Audit your local Google Maps rankings across a 5km radius to discover competitor gaps.',
+      evidence: 'See exact rank positions #1-#20 across multiple GPS coordinates and analyze top competitors.',
+      status: 'ready_for_review',
+      executionMode: 'automatic_preparation',
+      phase: 'visibility',
+      phaseDays: 'Days 31–60',
+      cta: 'Run Geo-Grid Scan',
+      actionType: 'scan_grid',
+    });
 
     // 8. Google Posts Publishing & Scheduling
     autopilotActions.push({
@@ -477,26 +566,47 @@ export async function GET(request: NextRequest) {
       {
         phase: 1,
         title: 'Days 1–7: Fix the Foundation',
-        objective: 'Verification, primary category, contact information, hours, website, and booking link.',
-        status: (hasPhone && hasWebsite && hasHours && hasBooking) ? 'completed' : 'in_progress',
-        itemsCount: 5,
-        completedCount: [hasPhone, hasWebsite, hasHours, hasBooking, hasCategories].filter(Boolean).length,
+        objective: 'Verification, primary category, contact information, hours, website, WhatsApp, and booking link.',
+        status: (hasPhone && hasWebsite && hasHours && hasBooking && hasWhatsappChat) ? 'completed' : 'in_progress',
+        itemsCount: 6,
+        completedCount: [hasPhone, hasWebsite, hasHours, hasBooking, hasCategories, hasWhatsappChat].filter(Boolean).length,
+        tasks: [
+          { id: 't_cat', label: 'Primary business category configured', done: true },
+          { id: 't_phone', label: 'Verified business phone number for calls', done: hasPhone, cta: 'Add Phone', actionType: 'add_phone' },
+          { id: 't_wa', label: 'Google Maps WhatsApp chat button', done: hasWhatsappChat, cta: 'Setup WhatsApp', actionType: 'enable_whatsapp' },
+          { id: 't_web', label: 'Official website / storefront URL', done: hasWebsite, cta: 'Add Website', actionType: 'add_website' },
+          { id: 't_hours', label: 'Regular & weekend operating hours', done: hasHours, cta: 'Set Hours', actionType: 'set_hours' },
+          { id: 't_book', label: 'Google Maps dedicated booking link', done: hasBooking, cta: 'Enable Booking', actionType: 'enable_booking' },
+        ],
       },
       {
         phase: 2,
         title: 'Days 8–30: Improve Customer Trust',
         objective: 'Review replies, authentic real photos, and weekly Google Posts publishing schedule.',
         status: (unrepliedReviews.length === 0 && mediaPosts7d >= targets.weeklyPhotos) ? 'completed' : 'in_progress',
-        itemsCount: 3,
-        completedCount: (unrepliedReviews.length === 0 ? 1 : 0) + (mediaPosts7d >= targets.weeklyPhotos ? 1 : 0) + (pendingPostsCount === 0 ? 1 : 0),
+        itemsCount: 4,
+        completedCount: (unrepliedReviews.length === 0 ? 1 : 0) + (mediaPosts7d >= targets.weeklyPhotos ? 1 : 0) + (pendingPostsCount === 0 ? 1 : 0) + 1,
+        tasks: [
+          { id: 't_rev', label: '100% Google review response rate with AI', done: unrepliedReviews.length === 0, cta: 'Reply Reviews', actionType: 'approve_reviews' },
+          { id: 't_photos', label: 'Upload 5 authentic storefront & work photos', done: mediaPosts7d >= targets.weeklyPhotos, cta: 'Upload Photos', actionType: 'upload_photos' },
+          { id: 't_posts', label: 'Publish weekly Google updates & offers', done: pendingPostsCount === 0, cta: 'Review Posts', actionType: 'approve_posts' },
+          { id: 't_standee', label: 'Download counter QR Review Standee PDF', done: true },
+        ],
       },
       {
         phase: 3,
         title: 'Days 31–60: Expand Visibility',
-        objective: 'Discover keyword search demand, localized 300-char service descriptions, and local SEO.',
+        objective: 'Discover keyword search demand, localized 300-char service descriptions, and Geo-Grid rank monitoring.',
         status: (hasServices && uncoveredSearchTerms.length === 0) ? 'completed' : 'in_progress',
-        itemsCount: 4,
-        completedCount: hasServices ? 2 : 1,
+        itemsCount: 5,
+        completedCount: (hasServices ? 2 : 1) + (uncoveredSearchTerms.length === 0 ? 1 : 0),
+        tasks: [
+          { id: 't_svc', label: '300-500 char localized service descriptions', done: !autopilotActions.some((a) => a.id === 'categories_and_services'), cta: 'Auto-Write', actionType: 'add_services' },
+          { id: 't_kw', label: 'Target top nearby search queries in profile', done: !autopilotActions.some((a) => a.id === 'local_keywords'), cta: 'Optimize', actionType: 'add_services' },
+          { id: 't_grid', label: '5km Geo-Grid rank & competitor spy scan', done: false, cta: 'Scan Grid', actionType: 'scan_grid' },
+          { id: 't_desc', label: '750-char SEO description with city name', done: hasDesc, cta: 'AI Description', actionType: 'auto_optimize_seo' },
+          { id: 't_nap', label: 'Website NAP (Name, Address, Phone) consistency', done: true },
+        ],
       },
       {
         phase: 4,
@@ -505,6 +615,11 @@ export async function GET(request: NextRequest) {
         status: 'in_progress',
         itemsCount: 3,
         completedCount: 2,
+        tasks: [
+          { id: 't_maps', label: 'Google Search & Maps impressions tracking', done: true },
+          { id: 't_calls', label: 'Track direct phone calls & direction clicks', done: true },
+          { id: 't_leads', label: 'Connect inquiries & booking conversions in CRM', done: true },
+        ],
       },
     ];
 
@@ -580,6 +695,11 @@ export async function GET(request: NextRequest) {
           searchTermsUsed: autoPlan?.keywords?.slice(0, 6) || [],
           items: seoActions,
           uncoveredSearchTerms,
+        },
+        whatsapp: {
+          hasChat: hasWhatsappChat,
+          url: activeWhatsappUrl,
+          phone: effectivePhone,
         },
       },
     });
@@ -979,7 +1099,116 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ─── 5. Legacy Task Dismiss / Undismiss ───────────────────────────────────
+    // ─── 5. Google Maps WhatsApp Chat Button ─────────────────────────────────
+    if (action === 'update_whatsapp_chat') {
+      const rawPhone = typeof body?.phone === 'string' ? body.phone.trim() : '';
+      const rawUrl = typeof body?.whatsappUrl === 'string' ? body.whatsappUrl.trim() : '';
+
+      const tenant = await db.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { settingsJson: true, phone: true },
+      });
+      let settings: Record<string, any> = {};
+      try {
+        settings = JSON.parse(tenant?.settingsJson || '{}');
+      } catch {}
+
+      const phoneToUse = rawPhone || settings.communicationPhone || settings.whatsappNumber || tenant?.phone || '';
+      const cleanDigits = phoneToUse.replace(/[^0-9]/g, '');
+      const normalizedDigits = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
+      const resolvedUrl = rawUrl || (normalizedDigits ? `https://wa.me/${normalizedDigits}` : '');
+
+      settings.communicationPhone = phoneToUse;
+      settings.whatsappNumber = phoneToUse;
+      settings.whatsappChatLink = resolvedUrl;
+      if (!settings.googlePlaceActions) settings.googlePlaceActions = {};
+      settings.googlePlaceActions.whatsappUri = resolvedUrl;
+
+      await db.tenant.update({
+        where: { id: user.tenantId },
+        data: { settingsJson: JSON.stringify(settings) },
+      });
+
+      return NextResponse.json({
+        success: true,
+        whatsappUrl: resolvedUrl,
+        phone: phoneToUse,
+        message: `WhatsApp chat link configured (${resolvedUrl}).`,
+      });
+    }
+
+    // ─── 6. Google Maps Booking / Appointment Place Action Link ───────────────
+    if (action === 'update_booking_button') {
+      const bookingType = String(body?.bookingType || 'bgos');
+      const customUrl = typeof body?.customUrl === 'string' ? body.customUrl.trim() : '';
+
+      const tenant = await db.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { id: true, name: true, slug: true, publicSlug: true, settingsJson: true },
+      });
+      if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+
+      let settings: Record<string, any> = {};
+      try {
+        settings = JSON.parse(tenant.settingsJson || '{}');
+      } catch {}
+
+      const urls = resolveTenantPublicUrls(tenant, settings);
+      let selectedBookingUrl = urls.bookingUrl;
+      if (bookingType === 'google_calendar' || bookingType === 'custom') {
+        if (!customUrl || !/^https?:\/\//i.test(customUrl)) {
+          return NextResponse.json({ error: 'Please enter a valid https:// booking URL' }, { status: 400 });
+        }
+        selectedBookingUrl = customUrl;
+        settings.bookingLink = customUrl;
+      } else {
+        // Default to BGOS free booking page
+        settings.bookingLink = urls.bookingUrl;
+      }
+
+      if (!settings.googlePlaceActions) settings.googlePlaceActions = {};
+      settings.googlePlaceActions.appointmentUri = selectedBookingUrl;
+
+      await db.tenant.update({
+        where: { id: user.tenantId },
+        data: { settingsJson: JSON.stringify(settings) },
+      });
+
+      // Sync to Google GBP Place Actions API if connected
+      const syncRes = await syncGooglePlaceActionsForTenant({
+        tenantId: user.tenantId,
+        includeAppointment: true,
+      }).catch(() => null);
+
+      return NextResponse.json({
+        success: true,
+        bookingUrl: selectedBookingUrl,
+        syncedToGoogle: Boolean(syncRes?.syncedActions?.includes('APPOINTMENT')),
+        message: syncRes?.syncedActions?.includes('APPOINTMENT')
+          ? `Booking button synced to Google Maps (${selectedBookingUrl}).`
+          : `Booking URL saved (${selectedBookingUrl}).`,
+      });
+    }
+
+    // ─── 7. Auto-Write All Services (300-500 Char Local SEO Copy) ─────────────
+    if (action === 'auto_write_all_services') {
+      const svcRes = await generateLocalizedServiceDescriptions({
+        tenantId: user.tenantId,
+        services: [], // loads all services from tenant context
+        save: true,
+        pushToGoogle: body?.pushToGoogle !== false,
+        locationId: typeof body?.locationId === 'string' ? body.locationId : undefined,
+      });
+      return NextResponse.json({
+        success: true,
+        services: svcRes.services,
+        syncedToGoogle: svcRes.syncedToGoogle,
+        googleWarnings: svcRes.googleWarnings,
+        message: `Generated 300-500 char localized SEO descriptions for ${svcRes.services.length} services${svcRes.syncedToGoogle ? ' and synced to Google' : ''}.`,
+      });
+    }
+
+    // ─── 8. Legacy Task Dismiss / Undismiss ───────────────────────────────────
     const id = String(body?.id || '');
     const VALID_IDS = ['complete_profile', 'upload_media', 'approve_post'];
     if (!VALID_IDS.includes(id)) {
